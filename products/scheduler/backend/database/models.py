@@ -1214,12 +1214,15 @@ class Submission(Base):
     fee total — or have to be reconstructed later by grouping on a
     timestamp.
 
-    ``uq_submissions_tournament_idempotency_key`` is ruling D4 carried up a
-    level intact: **tenant-scoped**, unlike the solve rail's global index.
+    ``uq_submissions_tournament_account_idempotency_key`` is ruling D4
+    carried up a level and then narrowed to the principal (Phase 6 §4):
+    **tenant- and account-scoped**, unlike the solve rail's global index.
     The submit route is reachable by anyone holding a public slug, so
     resolving a client-supplied key globally would let an outsider probe
-    another tenant's keyspace and learn that some other workspace used the
-    same key. NULL keys stay exempt on both dialects.
+    another tenant's keyspace; resolving it tenant-wide would let one
+    entrant's guessed key collide with — and, through the replay lookup,
+    read back — another entrant's submission. NULL keys stay exempt on
+    both dialects.
     """
 
     __tablename__ = "submissions"
@@ -1269,10 +1272,17 @@ class Submission(Base):
     account = relationship("EntrantAccount", lazy="joined")
 
     __table_args__ = (
-        # Ruling D4, one level up. NULLs compare distinct on both dialects.
+        # Ruling D4, one level up, narrowed to the principal (Phase 6 §4).
+        # It must match ``services.submissions.find_by_idempotency_key``
+        # column for column: that function is what the IntegrityError
+        # recovery re-reads with, and an index wider than the lookup turns
+        # a foreign entrant's key collision into an unhandled 500 instead
+        # of a fresh submission. NULLs compare distinct on both dialects,
+        # so a NULL key is still exempt (``account_id`` is NOT NULL).
         Index(
-            "uq_submissions_tournament_idempotency_key",
+            "uq_submissions_tournament_account_idempotency_key",
             "tournament_id",
+            "account_id",
             "idempotency_key",
             unique=True,
         ),

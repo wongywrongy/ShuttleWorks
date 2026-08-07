@@ -16,16 +16,34 @@ Two entrants legitimately entering the same event is a different thing
 entirely and is not a collision at all (Q12; no natural key is unique at
 any level).
 
-**The lookup is tenant-scoped, always** (ruling D4, carried up a level).
-The submit route is reachable by anyone holding a public slug, so resolving
-a client-supplied key globally would let an outsider probe another tenant's
-keyspace and learn that some other workspace used the same key.
+**The lookup is scoped to the workspace AND to the account, always**
+(ruling D4, carried up a level; narrowed to the principal by SP-PROGRAM-1
+Phase 6 §4). The submit route is reachable by anyone holding a public slug,
+so resolving a client-supplied key globally would let an outsider probe
+another tenant's keyspace and learn that some other workspace used the same
+key. Tenant scope alone was enough only while no real key ever arrived — a
+native HTML form cannot send a header, so the key was NULL for every real
+entrant — and Phase 6 makes keys flow, at which point a *guessed* key
+resolves to another entrant's submission and hands the guesser their
+receipt. The account is part of the identity of the retry, not a filter
+applied to it, and the unique index moved with the lookup for a mechanical
+reason: the ``IntegrityError`` recovery below re-reads with the caller's
+account and re-raises on a miss, so an index wider than the lookup would
+turn a foreign key into an unhandled 500.
+
+The same narrowing governs reading an act back **by id** —
+``find_for_account`` — because the 303 the persist path answers with names
+a submission id in a ``Location`` header. Closing the replay door alone
+would leave the identical disclosure standing behind the receipt route.
 
 **The race is handled by re-reading, not by 409.** Two identical posts in
 flight both miss the lookup and one wins the unique index. Answering 409 to
 the loser would be a correct-looking error to a client that did nothing
 wrong — so the loser re-reads and receives the winner's submission, which
-is what it asked for in the first place.
+is what it asked for in the first place. A *different* account presenting
+the same key is not that case and is not told anything either: it gets a
+fresh act, because a conflict status would be the existence oracle D4
+narrowed the index to prevent.
 
 **Acceptance is recorded at that moment, on the submission** (Q11): the
 timestamp *and* the version agreed to. "They agreed to something at some
@@ -98,12 +116,16 @@ class SubmissionResult:
 
 
 def find_by_idempotency_key(
-    session: Session, tournament_id: uuid.UUID, key: str
+    session: Session,
+    tournament_id: uuid.UUID,
+    key: str,
+    account_id: uuid.UUID,
 ) -> Optional[Submission]:
-    """Ruling D4 — scoped to the workspace, always."""
+    """Ruling D4, narrowed to the principal (Phase 6 §4)."""
     return session.execute(
         select(Submission).where(
             Submission.tournament_id == tournament_id,
+            Submission.account_id == account_id,
             Submission.idempotency_key == key,
         )
     ).scalar_one_or_none()
@@ -131,12 +153,53 @@ def entries_for(
 
 
 def replay(
-    session: Session, tournament_id: uuid.UUID, key: Optional[str]
+    session: Session,
+    tournament_id: uuid.UUID,
+    key: Optional[str],
+    account_id: uuid.UUID,
 ) -> Optional[SubmissionResult]:
-    """The original act, whole, or ``None`` if this key is new here."""
+    """The original act, whole, or ``None`` if this key is new *to this
+    account* here."""
     if not key:
         return None
-    existing = find_by_idempotency_key(session, tournament_id, key)
+    existing = find_by_idempotency_key(session, tournament_id, key, account_id)
+    if existing is None:
+        return None
+    return SubmissionResult(
+        submission=existing,
+        entries=entries_for(session, tournament_id, existing.id),
+        replayed=True,
+    )
+
+
+def find_for_account(
+    session: Session,
+    tournament_id: uuid.UUID,
+    submission_id: uuid.UUID,
+    account_id: uuid.UUID,
+) -> Optional[SubmissionResult]:
+    """One act, by id, **for the account that made it** — or ``None``.
+
+    The receipt door. The persist path answers ``303`` with
+    ``/e/{slug}/receipt/{submission_id}``, so a submission id travels in a
+    ``Location`` header and then sits in an address bar: it is a handle,
+    never a capability. Whoever writes the receipt loader must read through
+    this function, because it is the only read that returns one act by id
+    and there is no way to call it without naming the account — scoping a
+    loader is then not something that can be forgotten, only something that
+    can be deliberately routed around.
+
+    Same shape as ``replay`` on purpose (``replayed=True``): a receipt is a
+    re-display of an act that already happened, so the caller renders it
+    with the same code path that rendered it the first time.
+    """
+    existing = session.execute(
+        select(Submission).where(
+            Submission.tournament_id == tournament_id,
+            Submission.account_id == account_id,
+            Submission.id == submission_id,
+        )
+    ).scalar_one_or_none()
     if existing is None:
         return None
     return SubmissionResult(
@@ -208,7 +271,7 @@ def create_submission(
     key arriving concurrently is answered after the unique index refuses
     the second insert: re-read and return the winner.
     """
-    replayed = replay(session, tournament_id, idempotency_key)
+    replayed = replay(session, tournament_id, idempotency_key, account_id)
     if replayed is not None:
         return replayed
 
@@ -229,7 +292,7 @@ def create_submission(
         # any entry exists, so the whole write is inside this guard rather
         # than only its commit.
         session.rollback()
-        winner = replay(session, tournament_id, idempotency_key)
+        winner = replay(session, tournament_id, idempotency_key, account_id)
         if winner is None:
             raise
         log.info(

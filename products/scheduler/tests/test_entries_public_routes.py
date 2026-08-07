@@ -248,7 +248,12 @@ def _submissions(tid=None):
         stmt = select(Submission)
         if tid is not None:
             stmt = stmt.where(Submission.tournament_id == uuid.UUID(tid))
-        return list(session.scalars(stmt.order_by(Submission.submitted_at)))
+        # ``submitted_at`` alone ties: two submissions of one test land in
+        # the same tick, and this helper is now indexed into ([0]) by a test
+        # that makes exactly that happen. ``id`` is the house tiebreaker.
+        return list(
+            session.scalars(stmt.order_by(Submission.submitted_at, Submission.id))
+        )
     finally:
         session.close()
 
@@ -1295,6 +1300,50 @@ def test_a_key_is_scoped_to_the_tournament_the_slug_resolves_to(
     r = _submit(client, page, headers={"Idempotency-Key": "shared"})
     assert r.status_code == 201
     assert len(_submissions(page["tid"])) == 1
+
+
+def test_a_key_is_scoped_to_the_account_that_minted_it(client, page, entrant, turnstile):
+    """The disclosure the tenant-only scope left open (Phase 6 §4).
+
+    Phase 6 mints the ``Idempotency-Key`` in the loader and carries it as a
+    hidden field, so for the first time a real key travels. A second
+    entrant posting a key they guessed must not be handed the first
+    entrant's submission reference — the receipt names who entered what.
+
+    ``201`` and a *second* submission is the whole answer: the guesser
+    learns nothing, because a used key and an unused key look identical
+    from outside.
+    """
+    assert _submit(client, page, headers={"Idempotency-Key": "key-1"}).status_code == 201
+    mine = str(_submissions(page["tid"])[0].id)
+
+    assert client.post("/e/account/logout", headers=CSRF).status_code == 204
+    assert (
+        client.post(
+            "/e/account/signup",
+            json={
+                "email": "stranger@example.com",
+                "password": GOOD_PW,
+                "turnstileToken": "a-solved-token",
+            },
+            headers=CSRF,
+        ).status_code
+        == 202
+    )
+    assert (
+        client.post(
+            "/e/account/login",
+            json={"email": "stranger@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+
+    guessed = _submit(client, page, headers={"Idempotency-Key": "key-1"})
+
+    assert guessed.status_code == 201
+    assert mine not in guessed.text, "the guesser was handed the other entrant's receipt"
+    assert len(_submissions(page["tid"])) == 2
 
 
 # ---- submit: the soft flags ---------------------------------------------

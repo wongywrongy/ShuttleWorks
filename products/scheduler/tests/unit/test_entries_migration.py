@@ -37,8 +37,10 @@ from _helpers import purge_backend_modules
 
 _BACKEND = Path(__file__).resolve().parents[2] / "backend"
 
-# The revision this stage adds, and the one it must follow.
+# The revision that creates the entries family, the one that narrows its
+# idempotency scope (the new head), and the one the family must follow.
 ENTRIES_REVISION = "s3d8f2b5c0e1"
+HEAD_REVISION = "t4e9a3c6d1f2"
 PREVIOUS_REVISION = "r2c7e1f4a9b3"
 
 # Every table the Entries family owns after the R13 reshape. The account
@@ -114,7 +116,7 @@ def test_upgrade_head_creates_the_whole_entries_family(alembic_cfg):
     cfg, url = alembic_cfg
     command.upgrade(cfg, "head")
 
-    assert _head_revision(url) == ENTRIES_REVISION
+    assert _head_revision(url) == HEAD_REVISION
     inspector, _ = _inspector(url)
     tables = set(inspector.get_table_names())
     for table in ENTRIES_TABLES:
@@ -139,10 +141,15 @@ def test_upgrade_creates_the_ruled_indexes_with_the_ruled_uniqueness(alembic_cfg
     inspector, _ = _inspector(url)
 
     submissions = _index_map(inspector, "submissions")
-    idem = submissions["uq_submissions_tournament_idempotency_key"]
+    idem = submissions["uq_submissions_tournament_account_idempotency_key"]
     assert idem["unique"], "D4: idempotency uniqueness must be enforced"
-    assert idem["column_names"] == ["tournament_id", "idempotency_key"], (
-        "D4: the idempotency index must be tenant-scoped, not global"
+    assert idem["column_names"] == [
+        "tournament_id",
+        "account_id",
+        "idempotency_key",
+    ], "D4 + Phase 6 §4: the index is tenant- AND account-scoped, not global"
+    assert "uq_submissions_tournament_idempotency_key" not in submissions, (
+        "the tenant-only index is superseded, not kept alongside"
     )
 
     flag = _index_map(inspector, "entries")["ix_entries_event_player"]
@@ -325,7 +332,9 @@ def test_downgrade_one_step_lands_back_on_the_previous_revision(alembic_cfg):
     before, _ = _inspector(url)
     pre_existing = set(before.get_table_names()) - set(ENTRIES_TABLES)
 
-    command.downgrade(cfg, "-1")
+    # Named rather than stepped: "-1" stopped meaning r2c7e1f4a9b3 the day a
+    # revision was added on top of the entries family.
+    command.downgrade(cfg, PREVIOUS_REVISION)
 
     assert _head_revision(url) == PREVIOUS_REVISION
     after, _ = _inspector(url)
@@ -356,7 +365,7 @@ def test_upgrade_is_replayable_after_a_downgrade(alembic_cfg):
 
     cfg, url = alembic_cfg
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "-1")
+    command.downgrade(cfg, PREVIOUS_REVISION)
     command.upgrade(cfg, "head")
 
     inspector, _ = _inspector(url)
@@ -364,7 +373,7 @@ def test_upgrade_is_replayable_after_a_downgrade(alembic_cfg):
     for table in ENTRIES_TABLES:
         assert table in tables
     assert _index_map(inspector, "submissions")[
-        "uq_submissions_tournament_idempotency_key"
+        "uq_submissions_tournament_account_idempotency_key"
     ]["unique"]
     assert "uq_entries_tournament_idempotency_key" not in _index_map(
         inspector, "entries"

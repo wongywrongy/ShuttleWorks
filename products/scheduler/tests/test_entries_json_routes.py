@@ -658,6 +658,51 @@ def test_the_idempotency_key_is_also_honoured_in_the_header(client, page, entran
     assert len(_submissions()) == 1
 
 
+def test_a_guessed_key_does_not_redirect_to_another_entrants_receipt(
+    client, page, entrant, turnstile
+):
+    """This route is where the defect became reachable (Phase 6 §4).
+
+    The key is minted in the loader and carried as a hidden field, so real
+    receipts are keyed for the first time — and the 303 ``Location`` names
+    a submission id. A guesser must be redirected to a receipt of their
+    own, not handed the first entrant's id in a header.
+    """
+    key = "3f2e3d4c-5b6a-4798-8899-aabbccddeeff"
+    mine = _submit(client, page, idempotencyKey=key)
+    assert mine.status_code == 303, mine.text
+
+    assert client.post("/e/account/logout", headers=CSRF).status_code == 204
+    assert (
+        client.post(
+            "/e/account/signup",
+            json={
+                "email": "stranger@example.com",
+                "password": GOOD_PW,
+                "turnstileToken": "a-solved-token",
+            },
+            headers=CSRF,
+        ).status_code
+        == 202
+    )
+    assert (
+        client.post(
+            "/e/account/login",
+            json={"email": "stranger@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+
+    guessed = _submit(client, page, idempotencyKey=key)
+
+    assert guessed.status_code == 303, guessed.text
+    assert guessed.headers["location"] != mine.headers["location"], (
+        "the guesser was redirected at the other entrant's receipt"
+    )
+    assert len(_submissions()) == 2
+
+
 def test_two_submissions_without_a_key_are_two_acts(client, page, entrant):
     """Non-vacuity for the replay above: the route is not collapsing
     everything onto one row. A NULL key is not a key."""
