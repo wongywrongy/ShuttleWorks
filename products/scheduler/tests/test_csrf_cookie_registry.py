@@ -40,11 +40,22 @@ GOOD_PW = "a perfectly fine passphrase"
 _API_DIR = Path(__file__).resolve().parents[1] / "backend" / "api"
 
 # Cookies that are deliberately NOT credentials — a locale or theme
-# preference, say. Empty today, and an addition here is a claim that the
-# cookie cannot authenticate anything. Kept as an explicit escape hatch so
-# a future non-session cookie is a reviewed edit rather than a reason to
-# weaken the assertion below.
-_NON_SESSION_COOKIES: set[str] = set()
+# preference, say. An addition here is a claim that the cookie cannot
+# authenticate anything. Kept as an explicit escape hatch so a future
+# non-session cookie is a reviewed edit rather than a reason to weaken the
+# assertion below.
+#
+# ``sw_play_csrf`` (SP-PROGRAM-1 Phase 6, R8-B) is the pre-session
+# double-submit nonce minted by ``app/form_csrf.py::issue_play_csrf``. It
+# is a random value handed to an *anonymous* visitor so that a login or
+# signup form has something unreadable to derive a token from; it names no
+# principal and grants no access. Registering it would be actively wrong,
+# not merely redundant: the registry is the CSRF middleware's trigger for
+# "this write is cookie-authenticated", so it would make the middleware
+# demand a header from callers who have not signed in.
+# ``tests/unit/test_form_csrf.py::test_the_nonce_cookie_authenticates_nothing``
+# pins that exclusion from the other side.
+_NON_SESSION_COOKIES: set[str] = {"sw_play_csrf"}
 
 
 @pytest.fixture

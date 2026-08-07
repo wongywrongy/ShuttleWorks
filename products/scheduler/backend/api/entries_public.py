@@ -63,7 +63,7 @@ no field behind it at all until ``entry_pages`` grew two columns for it.
 2. Slug → page → tournament, or the uniform 404. An unknown slug must cost
    a caller one query and tell them nothing.
 3. **The form CSRF token**, because this write is a native HTML form post
-   and a form cannot send a custom header (see ``_form_csrf`` below).
+   and a form cannot send a custom header (see ``app/form_csrf.py``).
 4. **Per-IP throttle**, the ``AuthThrottle`` engine on its own ``entry:``
    namespace so an entry flood cannot lock a venue out of *signing in*.
    Turnstile is **gone from here** — it guards signup now, which is the
@@ -105,7 +105,6 @@ recorded for the next slice rather than decided quietly here.
 """
 from __future__ import annotations
 
-import hashlib
 import html
 import logging
 import re
@@ -122,6 +121,8 @@ from app.client_ip import client_ip
 from app.config import settings
 from app.dependencies import AuthEntrant, get_current_entrant
 from app.error_codes import ErrorCode, http_error
+from app.form_csrf import FORM_FIELD
+from app.form_csrf import form_csrf_token as _form_csrf
 from database.models import Entry, EntryEvent, EntryPage, EntryPlayer, Org, Tournament
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
@@ -139,11 +140,6 @@ log = logging.getLogger("scheduler.api.entries_public")
 # ``/e`` — short because it is typed off a poster and read aloud at a club
 # night. Deliberately NOT under ``/api``: this is a page, not an endpoint.
 router = APIRouter(prefix="/e", tags=["entries-public"])
-
-# Domain separator for the form CSRF token. Any constant works; naming it
-# means the digest can never collide with another sha256 of the same
-# session token computed somewhere else for another purpose.
-_FORM_CSRF_PREFIX = "sw-play-form-csrf:"
 
 # States that appear on the public entrant list. Withdrawn and rejected are
 # absent because they are not entrants any more; ``unverified`` is absent
@@ -209,36 +205,14 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
-def _form_csrf(session_token: Optional[str]) -> str:
-    """The hidden-field CSRF token for a native HTML form post.
-
-    **Why this exists at all.** The app's CSRF defense is a custom request
-    header (``X-ShuttleWorks-CSRF``), which a cross-site page cannot attach
-    without a preflight we do not approve. A native ``<form method=post>``
-    cannot attach it either — that is the same property, seen from the
-    other side — so the submit route would be refused by the middleware the
-    moment it started carrying the entrant cookie. Posting via ``fetch``
-    was rejected: this page has ``script-src 'none'`` and no asset
-    pipeline, and a form that needs JavaScript to submit is degraded
-    functionality at exactly the widths ruling R11 makes co-equal.
-
-    So the form carries a **double-submit token derived from the session
-    cookie**: an attacker's page can make the browser send our cookie, but
-    it can never *read* it, so it cannot compute this value. The route
-    compares in constant time. This is strictly stronger than the
-    SameSite=Lax argument alone, which Chrome's "Lax+POST" intervention
-    weakens for cookies under two minutes old — precisely the window right
-    after a login, which is when an entrant submits.
-
-    Stateless on purpose: no second cookie, no server-side token store, and
-    it is invalidated by logging out because it is a function of the
-    session token.
-    """
-    if not session_token:
-        return ""
-    return hashlib.sha256(
-        (_FORM_CSRF_PREFIX + session_token).encode("utf-8")
-    ).hexdigest()
+# ``_form_csrf`` is ``app.form_csrf.form_csrf_token``, imported above under
+# its historical name. **The function moved because the middleware needs
+# it** (Phase 6, R8-B): the double-submit token stopped being this route's
+# private arrangement and became the middleware's second proof channel, so
+# it cannot live inside a route module the middleware must not import. The
+# full argument for the token — what it proves, and why a header is not an
+# option for a native form post — is now in ``app/form_csrf.py``. The alias
+# stays so this module's call sites and their tests read unchanged.
 
 
 def _not_found():
@@ -572,9 +546,11 @@ def _form_markup(
     ask_birth_year = any(_is_age_bracketed(ev) for ev in open_events)
 
     parts = [f'<form method="post" action="/e/{_e(page.slug)}/submit">']
-    # The double-submit CSRF token. ``_form_csrf`` explains why a hidden
-    # field rather than the custom header the rest of the app uses.
-    parts.append(f'<input type="hidden" name="_csrf" value="{_e(csrf)}">')
+    # The double-submit CSRF token. ``app/form_csrf.py`` explains why a
+    # hidden field rather than the custom header the rest of the app uses.
+    # The field name comes from the same constant the checker reads, so the
+    # emitter and the verifier cannot drift apart.
+    parts.append(f'<input type="hidden" name="{FORM_FIELD}" value="{_e(csrf)}">')
     parts.extend(
         _player_block(
             0,
@@ -1134,7 +1110,7 @@ async def submit_entry(
     # 3 — the form CSRF token. Checked before anything is read out of the
     # body: this request carries a session cookie, so until the token is
     # verified it is not known to have been sent deliberately.
-    presented = str(form.get("_csrf") or "")
+    presented = str(form.get(FORM_FIELD) or "")
     expected = _form_csrf(
         request.cookies.get(settings.entrant_session_cookie_name) or ""
     )
