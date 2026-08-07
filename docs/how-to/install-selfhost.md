@@ -242,9 +242,11 @@ re-check them after any Access policy edit.
 The Entries module adds a genuinely public **write**: `/e/{slug}` is an entry
 page a player opens from a poster, and `/e/{slug}/submit` creates an entry with
 no account involved. The edge configuration for it already exists in
-`frontend/nginx.conf` — a `sw_entries` `limit_req` zone (20 r/m, burst 5) plus
-explicit `location /e/` and `location /api/entries/` blocks, the first of which
-also stops the SPA fallback swallowing entry links.
+`frontend/nginx.conf` — a `sw_entries` `limit_req` zone (20 r/m, burst 5) and an
+explicit `location /e/` block, which also stops the SPA fallback swallowing
+entry links. The operator's entries desk needs nothing of its own: it is
+`/tournaments/{id}/entries`, session-guarded, and rides the general `/api/`
+block.
 
 ::: warning Activated at Phase 2 deployment, deliberately not before
 Nothing routes to `/e/` in a shipped deployment today, and nothing should
