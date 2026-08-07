@@ -72,13 +72,26 @@ def workspace(client):
 
 
 def _seed_entries(tid, specs):
-    """Insert entry rows directly.
+    """Insert entry rows directly, at the level boundary ruling R13 drew.
 
-    There is no public submit route yet — it is the next slice — and the
-    desk contract is worth pinning before it exists rather than after.
+    Seeded rather than submitted because the desk contract is worth pinning
+    independently of the public write, which has its own file.
+
+    **SP-E1-2 changed the construction here and nothing else** (ruling
+    R13 / decision D-A4): the contact block moved to ``entrant_accounts``
+    and the player block to ``entry_players``, so one act now builds an
+    account, a submission, a player and an entry. Every assertion below is
+    untouched — the desk projection reads the same fields through the level
+    boundary.
     """
     import uuid as _uuid
-    from database.models import Entry, EntryEvent
+    from database.models import (
+        EntrantAccount,
+        Entry,
+        EntryEvent,
+        EntryPlayer,
+        Submission,
+    )
     from database.session import SessionLocal
 
     session = SessionLocal()
@@ -92,17 +105,46 @@ def _seed_entries(tid, specs):
         session.add(event)
         session.flush()
         ids = []
-        for index, spec in enumerate(specs):
+        accounts: dict[str, EntrantAccount] = {}
+        acts: dict[str, Submission] = {}
+        for spec in specs:
+            email = spec.get("email", "parent@example.com")
+            account = accounts.get(email)
+            if account is None:
+                account = EntrantAccount(email=email, password_hash="x")
+                session.add(account)
+                session.flush()
+                accounts[email] = account
+            # Specs sharing an ``act`` label land under one submission —
+            # the parent-with-two-children shape R13 built the level for.
+            act = spec.get("act")
+            submission = acts.get(act) if act is not None else None
+            if submission is None:
+                submission = Submission(
+                    tournament_id=_uuid.UUID(tid),
+                    account_id=account.id,
+                    fee_total_cents=spec.get("fee_total_cents"),
+                )
+                if act is not None:
+                    acts[act] = submission
+            player = EntryPlayer(
+                tournament_id=_uuid.UUID(tid),
+                account_id=account.id,
+                full_name=spec["player_name"],
+                # New fixture data, not a backfill: R12 makes the field
+                # required and no old column could have supplied it.
+                gender=spec.get("gender", "F"),
+                remarks=spec.get("remarks"),
+            )
+            session.add_all([submission, player])
+            session.flush()
             row = Entry(
                 tournament_id=_uuid.UUID(tid),
                 entry_event_id=event.id,
+                submission_id=submission.id,
+                entry_player_id=player.id,
                 state=spec.get("state", "pending"),
                 pending_reasons=spec.get("pending_reasons", []),
-                contact_name="Parent Chen",
-                contact_email=spec.get("email", "parent@example.com"),
-                manage_token_hash=f"{index:064d}",
-                player_name=spec["player_name"],
-                remarks=spec.get("remarks"),
             )
             session.add(row)
             session.flush()
@@ -154,18 +196,148 @@ def test_the_desk_list_carries_state_flags_and_remarks(client, workspace):
     assert row["committedPlayerId"] is None
 
 
-def test_the_desk_list_never_leaks_the_capability_token(client, workspace):
-    """``manage_token_hash`` is the entrant's credential material. It is
-    stored hashed following ``auth_sessions``, and even the hash has no
-    business on an operator screen."""
+def test_the_desk_list_never_leaks_entrant_credential_material(client, workspace):
+    """**The successor to the manage-token control** (ruling R10).
+
+    This test used to assert that ``manage_token_hash`` never reached an
+    operator screen. R10 deleted that column, which would have left the
+    assertion passing for the wrong reason — trivially true against a field
+    that no longer exists. The claim it was making is still worth holding,
+    so it moves to the credential material that *does* exist now: the
+    entrant account's password hash and its session token. Neither has any
+    business on an operator screen, and the projection is what keeps them
+    off it.
+    """
     tid = workspace
     _seed_entries(tid, [{"player_name": "Alice Chen"}])
 
     row = client.get(f"/tournaments/{tid}/entries").json()[0]
-    serialized = repr(row)
-    assert "manage_token" not in serialized
-    assert "manageToken" not in serialized
-    assert "0" * 64 not in serialized
+    serialized = repr(row).lower()
+    for leak in ("password", "token", "hash", "secret"):
+        assert leak not in serialized, f"the desk row mentions {leak!r}"
+    # And the retired column is gone rather than merely hidden.
+    from database.models import Entry
+
+    assert not hasattr(Entry, "manage_token_hash")
+
+
+def test_each_row_names_the_act_that_produced_it(client, workspace):
+    """**Ruling R13's desk delta.** ``contactName`` / ``contactEmail`` were
+    columns on the entry row; they are now one hop out, under the
+    submission, because "who to write to about this" is a property of the
+    act rather than of each event inside it."""
+    tid = workspace
+    _seed_entries(
+        tid,
+        [
+            {
+                "player_name": "Alice Chen",
+                "email": "parent@club.org",
+                "fee_total_cents": 5500,
+            }
+        ],
+    )
+
+    row = client.get(f"/tournaments/{tid}/entries").json()[0]
+    assert row["submission"]["accountEmail"] == "parent@club.org"
+    assert row["submission"]["feeTotalCents"] == 5500
+    assert row["submission"]["id"]
+    # The retired shape is gone from the wire, not merely unread.
+    assert "contactEmail" not in row
+    assert "contactName" not in row
+
+
+def test_entries_from_one_act_share_one_submission_id(client, workspace):
+    """The grouping key, and the case it exists for: one parent, two
+    children, one form. Before R13 the desk had to group by eye on a
+    repeated email address, which is exactly what a shared account makes
+    ambiguous."""
+    tid = workspace
+    _seed_entries(
+        tid,
+        [
+            {"player_name": "Alice Chen", "act": "one", "fee_total_cents": 8000},
+            {"player_name": "Bo Chen", "act": "one", "fee_total_cents": 8000},
+            {"player_name": "Unrelated Person", "email": "other@club.org"},
+        ],
+    )
+
+    rows = client.get(f"/tournaments/{tid}/entries").json()
+    by_name = {r["playerName"]: r["submission"]["id"] for r in rows}
+    assert by_name["Alice Chen"] == by_name["Bo Chen"]
+    assert by_name["Unrelated Person"] != by_name["Alice Chen"]
+
+
+def test_the_act_fee_total_is_the_acts_and_not_the_rows(client, workspace):
+    """Negative control against the tempting per-entry read: tiered pricing
+    prices the **person**, not the event, so two entries of one act carry
+    one total between them rather than one each."""
+    tid = workspace
+    _seed_entries(
+        tid,
+        [
+            {"player_name": "Alice Chen", "act": "one", "fee_total_cents": 5500},
+            {"player_name": "Bo Chen", "act": "one", "fee_total_cents": 5500},
+        ],
+    )
+    rows = client.get(f"/tournaments/{tid}/entries").json()
+    assert {r["submission"]["feeTotalCents"] for r in rows} == {5500}
+    assert len({r["submission"]["id"] for r in rows}) == 1
+
+
+def test_the_desk_surfaces_the_gender_mismatch_flag(client, workspace):
+    """Q14 §5: a mismatch is accepted and **flagged**, and the operator is
+    the one who decides. It rides ``pendingReasons`` next to
+    ``needs_review`` — one list, one truth, no parallel flags array."""
+    tid = workspace
+    _seed_entries(
+        tid,
+        [
+            {
+                "player_name": "Alice Chen",
+                "pending_reasons": ["gender_mismatch"],
+            },
+            {"player_name": "Bo Lin"},
+        ],
+    )
+
+    rows = client.get(f"/tournaments/{tid}/entries").json()
+    flags = {r["playerName"]: r["pendingReasons"] for r in rows}
+    assert flags["Alice Chen"] == ["gender_mismatch"]
+    # NEGATIVE CONTROL: the flag is data, not decoration on every row.
+    assert flags["Bo Lin"] == []
+
+
+def test_the_grouping_costs_no_extra_query_per_row(client, workspace):
+    """The N+1 guard, because "one query" here is a **loader-configuration**
+    decision (``lazy="joined"`` on two relationships) that one edit could
+    silently turn into a query per row — invisible until a desk has four
+    hundred entries on it and the operator is at a venue on hotel wifi.
+    """
+    from sqlalchemy import event
+
+    from database.session import engine
+
+    tid = workspace
+    _seed_entries(
+        tid, [{"player_name": f"Player {i}", "email": f"p{i}@club.org"} for i in range(6)]
+    )
+
+    seen: list[str] = []
+
+    def record(conn, cursor, statement, params, context, executemany):
+        seen.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        rows = client.get(f"/tournaments/{tid}/entries").json()
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert len(rows) == 6
+    assert all(r["submission"]["accountEmail"] for r in rows)
+    entry_reads = [s for s in seen if "FROM entries" in s]
+    assert len(entry_reads) == 1, seen
 
 
 def test_the_desk_list_is_newest_first_with_a_stable_tiebreaker(client, workspace):

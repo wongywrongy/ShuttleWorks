@@ -174,6 +174,13 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = False
     # Blank = host-only cookie (the right default).
     session_cookie_domain: str = ""
+    # The ENTRANT session cookie (SP-E1-2 / ruling R10, D-A3). A distinct
+    # name from the operator's, on the same host-only default: with
+    # ``session_cookie_domain`` blank, ``app.*`` and ``play.*`` keep separate
+    # cookie jars, which is the mechanism actually doing the scoping work.
+    # The distinct NAME is what lets one application serve both hosts
+    # without a request ever carrying an ambiguous credential.
+    entrant_session_cookie_name: str = "sw_play_session"
     # Credential-endpoint throttle: after ``auth_throttle_max_failures``
     # failed attempts inside the window, the key (account or IP) is
     # locked for ``auth_throttle_lock_seconds`` (doubling per further
@@ -251,6 +258,32 @@ class Settings(BaseSettings):
     entries_max_per_ip: int = 20
     entries_window_seconds: float = 600.0
     entries_lock_seconds: float = 300.0
+
+    # ---- Entrant accounts (SP-E1-2, ruling R10) ------------------------
+    # Entrant SIGNUP volume per client IP — a FOURTH bucket
+    # (``esignup:<ip>``), for the reason the three above are separate from
+    # each other and one more besides. The general reason: they count
+    # different things, and a shared budget lets one surface's abuse close
+    # another. The specific one: ``api/auth.py`` guards operator login with
+    # ``ip:<ip>``, so an entrant-facing surface that charged the operator
+    # bucket would let anyone on the internet lock a director out of their
+    # own event from a public form. That is the failure mode
+    # ``tests/unit/test_entrant_throttle_namespaces.py`` exists to refuse.
+    #
+    # Sized between registration's and entries': creating an account is
+    # expensive (an Argon2id hash plus a row) and a human does it once, but
+    # a family or a club secretary legitimately creates several from one
+    # venue address in a sitting — so the budget is a small handful per
+    # hour rather than registration's five, and the lock is short enough
+    # that a mistake costs a coffee break rather than the entry deadline.
+    entrant_signup_max_per_ip: int = 8
+    entrant_signup_window_seconds: float = 3600.0
+    entrant_signup_lock_seconds: float = 300.0
+    # Entrant LOGIN failures reuse the credential triple above
+    # (``auth_throttle_*``) — the same budget for the same kind of event —
+    # but in their own key namespaces (``eacct:`` / ``eip:``). Same
+    # numbers, different buckets: what must not be shared is the *budget*,
+    # not the policy.
 
     @model_validator(mode="before")
     @classmethod
@@ -353,6 +386,32 @@ class Settings(BaseSettings):
                 + ". Set these via your deployment host's secret manager."
             )
         return self
+
+    @property
+    def session_cookie_names(self) -> tuple[str, ...]:
+        """**The registry of cookies that authenticate a request.**
+
+        One place names every session cookie the application sets, because
+        two things have to agree about that list and they used to agree by
+        coincidence: the code that *sets* a cookie, and the CSRF middleware
+        that decides whether a write is cookie-authenticated.
+
+        The trap this closes is written down in spec Q13 §2 and was found
+        before it shipped: the middleware triggered on
+        ``settings.session_cookie_name in request.cookies`` — a **single**
+        name — so the day a second principal's cookie arrived under a second
+        name, every write it authenticated would have fallen silently
+        outside CSRF enforcement. Silently is the operative word: nothing
+        fails, nothing logs, and the check that is supposed to be there
+        simply is not.
+
+        Adding a cookie that authenticates a request means adding it here.
+        ``tests/test_csrf_cookie_registry.py`` derives the set of
+        ``set_cookie`` calls in ``backend/api/`` from the source and fails if
+        one names a cookie this property does not, so the requirement is
+        enforced by the tree rather than by memory.
+        """
+        return (self.session_cookie_name, self.entrant_session_cookie_name)
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -39,6 +39,9 @@ export interface BandedTableGroup<T> {
   label: string;
   /** Optional accent short-code before the label (e.g. "MS"). */
   code?: string;
+  /** Optional band data in normal case after the eyebrow label — see
+   *  `GroupBandHeader`'s `detail`. */
+  detail?: string;
   items: T[];
   testId?: string;
 }
@@ -135,6 +138,7 @@ export function BandedTable<T>({
                 <GroupBandHeader
                   label={g.label}
                   code={g.code}
+                  detail={g.detail}
                   count={g.items.length}
                   collapsed={isCollapsed}
                   onToggle={() => toggle(g.key)}

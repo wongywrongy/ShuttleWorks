@@ -562,3 +562,367 @@ The user confirmed both acts with "confirm":
 
 **Next task:** SP-E1-2 Phase A (audit: account storage, session scoping + CSRF trap,
 player-level physical form, migration data premise → STOP report).
+
+---
+
+## SP-E1-2 Phase A — audit and plan: DONE (2026-08-07). STOP presented; awaiting go-ahead.
+
+**Branch:** `dev/prog1-p5-e1-2`. **Baseline re-confirmed:** backend 1197/66sk, frontend
+1433/175. Audit by fresh-context Opus agent (217k tokens), all citations file-verified.
+
+**The four decisions (evidence in the session STOP report):**
+- **D-A2 — account storage: sibling `entrant_accounts` table; `users` reuse REFUSED.**
+  Decisive evidence beyond the spec: **27 session-gated routes carry no `{tournament_id}`**
+  and sit outside the OpenAPI-derived tenancy test — incl. `POST /tournaments`
+  (`api/tournaments.py:322-395`, an entrant would create and own a workspace) and
+  `POST /invites/{token}/accept` (`api/invites.py:234-275`, an entrant with a leaked token
+  becomes a member). Reuse = discriminator checks on 27 untested routes (fail-open);
+  sibling table makes entrant-membership unrepresentable via the FK to `users`. Password/
+  throttle/token-hash helpers are principal-agnostic module functions — reused, not forked.
+- **D-A3 — sessions: separate `entrant_sessions` table + `sw_play_session` cookie +
+  `get_current_entrant` resolver (no bootstrap fallback).** Unconfusable-by-construction
+  over a fail-open discriminator. CSRF fix: `session_cookie_names` tuple in config,
+  `main.py:250` checks any-of, plus a cookie-name registry guard test.
+- **D-A4 — player level: `entry_players` table.** The spec's §4 index
+  `(entry_event_id, entry_player_id)` requires it; `remarks` at player level demands it.
+- **D-A5 — data premise VERIFIED: 4 entries rows exist in the world, all demo**
+  (`sw-e1-demo` Postgres = the Phase E walkthrough; every dev SQLite predates the entries
+  migration). **Clean rebuild authorised** per rule 6, recorded as an evidence-resolved
+  deviation from spec §4's additive posture.
+
+**New finding F-E1-2 (reported, not patched):** multi-event submissions break the
+per-entry ≡ per-human coincidence — Seam A's `entry-<id>` roster ids will produce
+duplicate roster players per human (one per event). Compounds F-E1 (§9.3); recommend
+ruling in E2/Phase 7; Seam A stays byte-for-byte in this slice.
+
+**Proposal for confirmation:** `gender_mismatch` is an entry-level `pending_reason`
+(R7 `needs_review` precedent), NOT one of Q9's six workspace attention codes.
+
+Landing-zone map, 19-task test-first plan, and the per-ruling unwind inventory are in the
+STOP report. Untouched-by-design list includes `test_entries_commit_seam.py` (edit = STOP).
+
+**Go-ahead recorded (2026-08-07, "yes go ahead"):** the four Phase A decisions, the
+F-E1-2 deferral (Seam A byte-for-byte; ruling owed in E2/Phase 7 with F-E1), and
+`gender_mismatch` as an entry-level pending_reason are all accepted. Phases B-E proceed.
+
+### SP-E1-2 Phase B: DONE (2026-08-07, backend 1305/66sk, +108). Rule-1 STOP at Phase C, resolved.
+
+Phase B landed across two runs (a session-limit outage split it; B0-B2 then B3-B8, commits
+`168a46e`..`80d10b7`): entrant principal (accounts/sessions/service), CSRF any-of fix +
+cookie registry guard, throttle namespaces (director-lockout isolation proven), signup/
+login/logout/me as a JSON API (deliberate D3 divergence, reasoned: a form post cannot send
+the CSRF header its own cookie requires), cross-principal controls both directions,
+auth-surface preamble rewrite, infra docs. Unwound: 0 tests (comment blocks only).
+
+### SP-E1-2 Phases C-D + adversarial verify: DONE (2026-08-07)
+
+Resumed workflow (`wf_dc5cc1bd-c13`): Phase C landed the clean-rebuild migration
+`s3d8f2b5c0e1` (deviation recorded in a 40-line docstring; `r2c7e1f4a9b3` untouched),
+`submissions`/`entry_players`/re-pointed `entries` with association-proxy reads keeping
+Seam A byte-for-byte (verified: 0-byte diff on `services/entries.py`; the 23 seam tests'
+only touched "assert" is in a docstring), the submission service (replay returns the
+original act + all entries), server-side fee seam, policy refusals, `gender_mismatch`
+flag, and the submit re-gate (anonymous-submit controls inverted in the same commits).
+Notable Phase C deviation, accepted: form CSRF via a session-bound double-submit token
+(SameSite=Lax alone rejected on Chrome's Lax+POST evidence; fetch rejected because the
+page ships `script-src 'none'`), with exactly one anchored middleware exemption.
+Phase D landed the multi-event form (R14 §6 IA, gender filter + override, server-computed
+running total, R11 both-width CSS), the manage-token close-out, desk submission grouping,
+and the frontend reshape. Backend **1418/66sk** (+221 over the slice baseline), frontend
+**1442/175**; all eight gates green; depcruise edge count held at 2268.
+
+**Verify:** all four Phase A decisions + D4 + Seam A verified against the tree; **five
+negative controls proven by inversion** (bootstrap resolver, cross-resolver fallback,
+cookie-registry narrowing, second fee implementation, form double-submit). Unwind tally
+reconstructed from git: every modified group ruling-named; the untouchable files all have
+empty diffs. Four minor findings → fix agent (Turnstile fail-closed successors at signup;
+fee-card normalization divergence incl. a public 500; SameSite docstring contradiction;
+**F-E1-2-D1** — config routes lacked the R12/R14 fields Phase E seeds through, extended
+additively per the Phase A plan's own allowance). Fifth finding (entrant-account CASCADE
+pre-decides E2 erasure) recorded in the debt-log as a **ruling owed before E2**.
+
+**Rule-1 STOP (Phase C agent, correct):** SP-E1-2 demanded both "schema removes
+player_name/remarks/contact/manage_token_hash from entries" and "the 23 commit-seam tests
+pass unedited" — the tests' FIXTURES construct Entry with those columns. Measured: the
+collision is 11 construction lines, zero assertions; the seam module needs zero edits
+(association-proxy reads proven by probe). **Orchestrator ruling under delegated
+authority:** fixture construction may be mechanically adapted (dedicated flagged commit,
+R13/D-A4); assertions and services/entries.py remain untouchable. SP-E1-2.md done-condition
+amended in place with the dated ruling; workflow resumed.
+
+### SP-E1-2 Phase C (C1-C6 + the submit re-gate): DONE (2026-08-07, backend 1390/66sk, +85)
+
+Commits `0c0c1a4`..`22684ce` on `dev/prog1-p5-e1-2`. Gates: backend
+**1390 passed / 66 skipped** (Phase B baseline 1305/66 — **+85**, skips
+unchanged, zero regressions); `ruff check backend tests` clean. The
+frontend is untouched by this phase.
+
+**What landed, in commit order.** `entry_fees` (R14 §1 — cumulative totals
+by DISTINCT event count PER PLAYER, per-event fallback, `None` not `0` when
+nothing is priced) → `entry_policy` (caps refuse with the rule stated;
+`check_policy` structurally cannot see a gender, so Q14 §5's soft flag
+cannot be turned hard by a later branch) → the schema levels →
+`services/submissions.py` (one act; replay returns the original submission
+**and all its entries**; the whole write inside the IntegrityError guard,
+because the unique index refuses at the flush that inserts the submission,
+before any entry exists) → the re-gated submit → the narrowing + fixture
+adaptation → migration `s3d8f2b5c0e1`.
+
+**Seam A is byte-for-byte intact.** `git diff` on `services/entries.py`
+across the whole phase is **empty**. The amendment's mechanism worked as
+predicted: `Entry.player_name` / `.remarks` are association proxies onto
+`entry_players`, and `.contact_name` / `.contact_email` are read-through
+properties onto the submitting account, so both the seam and
+`EntryDeskRowDTO` are unedited. In the seam's 23 tests the only line this
+phase touched containing the word "assert" is a docstring sentence saying
+so (verified by diff).
+
+**Two decisions worth the next stage's attention.**
+
+1. **The form CSRF token.** Phase B's handoff flagged that a session-gated
+   native form post would be refused by the CSRF middleware, and listed
+   three options. Chosen: **a double-submit token derived from the session
+   cookie** (`api/entries_public.py::_form_csrf`), plus one anchored
+   middleware exemption for `POST /e/{slug}/submit`. The SameSite=Lax-alone
+   argument was **rejected on evidence**: Chrome's Lax+POST intervention
+   sends Lax cookies on cross-site POST for two minutes after they are set,
+   which is exactly the window after a login. `fetch` was rejected because
+   the page now has `script-src 'none'` and a form needing JavaScript is
+   degraded functionality at the widths R11 makes co-equal. The exemption
+   is pinned as the only one (`test_csrf_cookie_registry.py`, +3).
+2. **The page tightened to `script-src 'none'`** — a second-order effect of
+   the challenge moving to signup, and a real improvement, since the
+   acknowledgment gate was always the HTML `required` attribute.
+
+**Test unwind tally, per ruling.**
+
+| Ruling | File | Change |
+|---|---|---|
+| R10 | `test_auth_surface.py` | allowlist entry for `POST /e/{slug}/submit` **removed**; preamble bullet + note rewritten. **7 tests replaced by 2**: the challenge pair moved with the challenge to `test_entrant_auth_routes.py`, flood/idempotency moved with the route's new shape, and "the always-pass secret WRITES the entry" **inverts** into "an anonymous submit is rejected" + its signed-in control. 14 → 9 |
+| R10/R13/R14 | `test_entries_public_routes.py` | rewritten for the gated surface. 47 → 64 |
+| R10 | `test_cross_principal_sessions.py` | submit joins `ENTRANT_REACHABLE` (a logged-in entrant reaching its own route is the intent) |
+| R13/D-A4 | `test_entries_commit_seam.py` | **fixture construction only, 0 assertions**, in its own flagged commit |
+| R13/D-A4 | `test_entries_desk_routes.py` | same, plus **one negative control replaced**: the manage-token leak test would have survived as a trivial truth about a deleted column, so it becomes a leak test against the credential material that exists now (password hash, session token) |
+| rule 6 | `test_entries_migration.py` | migration-shape unwind. **No assertion weakened; 3 added** — the two superseded indexes asserted ABSENT by name, `entry_players.gender` NOT NULL in the production DDL, and the case-insensitive account index exercised. 6 → 9 |
+
+Superseded negative controls **replaced in the same commit** in all three
+places they arose; none deleted.
+
+**Deviations, all recorded rather than worked around.**
+
+- **Migration posture** — spec §4's "additive then narrowing" backfill was
+  not executed; the clean rebuild authorised by D-A5 was, with the
+  evidence paragraph in the migration docstring. `upgrade` destroys entry
+  data by design and says so.
+- **Known-red window, disclosed in the commit that opened it.** The
+  reshape series carried exactly one failing test —
+  `test_migration_matches_the_models_column_for_column` — from the commit
+  that added the levels until `s3d8f2b5c0e1` landed, because a single
+  clean-rebuild revision can only be written against the final model shape.
+  Nothing else moved. Restored green at `22684ce`.
+- **A transitional dual-write** of the contact/player block existed for two
+  commits so the desk projection kept agreeing with the level boundary;
+  removed in the narrowing commit as promised. It never shipped.
+- **Minimal form markup landed with the route**, not with Phase D: two
+  player blocks, a checkbox per open event carrying the player index, the
+  fee schedule *stated* rather than totalled live, and the venue/payment
+  blocks. The running total, gender filtering, the timeline and the R11
+  both-width pass are Phase D's work on this same markup — the route could
+  not be re-gated without a form that posts the payload it now takes.
+
+**Open for Phase D/E.** `EntryDeskRowDTO` still has no submission grouping
+or fee total (Phase D item 3). `partner_invite_id` from spec §4 is not
+created — it is an E3 column and was outside C2's list. F-E1-2 stands
+unchanged: multi-event submissions produce one roster player per entry, so
+a human in three events reaches the roster three times; the ruling is owed
+in E2/Phase 7 alongside F-E1.
+
+### SP-E1-2 Phase D (D1-D4): DONE (2026-08-07, backend 1418/66sk, frontend 1442/175)
+
+Commits `2f4af8d`..`2c99d5f` on `dev/prog1-p5-e1-2`. Gates: backend
+**1418 passed / 66 skipped** (Phase C baseline 1390/66 — **+28**, skips
+unchanged, zero regressions); frontend **1442 passed / 175 files**
+(baseline 1433 — **+9**); `ruff check backend tests` clean; eslint **0
+errors / 104 warnings** (unchanged); depcruise **14 warnings, 2268 edges**
+(unchanged — see below); `vite build` (with the `tsc -b` gate) green.
+
+**D1 — the multi-event form.** The incumbent's information architecture
+(R14 §6) rendered from fields this design created: a timeline card
+(`opens_at → closes_at → withdraws_until →` tournament date, each stated
+in UTC, and **"Varies by event"** rather than a headline date that would
+be false about the other event), fee schedule + payment prose, venue,
+organiser (`orgs.name` — the only field the audit found behind that card),
+and per-event entry counts drawn from the same projection the public list
+uses so the number and the names cannot disagree.
+
+**The mechanism decision worth carrying forward: gender filtering and the
+running total are server round trips, not script.** The page has
+`script-src 'none'` (Phase C's tightening), so the form's second submit
+button posts `action=filter` and the route re-renders with the list
+narrowed and the total recomputed, writing nothing and spending no entry
+budget. JavaScript was rejected twice over — it would loosen the CSP of a
+page whose whole posture is that it runs no script, and it would make the
+total shown a **second implementation** of the fee rules, which is exactly
+what Seam B's "the total shown is the total recorded" forbids.
+`_total_markup` calls `services.entry_fees.compute_fee_total`, and a test
+asserts the rendered number equals the stored `fee_total_cents` for the
+same selection.
+
+Three things keep the filter a default rather than a gate: an
+already-ticked event is **never hidden** (a selection vanishing off screen
+is R14 §4's silent drop through a side door), the override checkbox puts
+everything back **marked**, and a submitted mismatch is still accepted
+carrying `gender_mismatch` (Q14 §5).
+
+**R11 both-width.** The page keeps its phone-first stylesheet and earns a
+second column at 60rem. The "no horizontal scroll" half is mechanical
+rather than aspirational — nothing is sized in pixels (a test greps the
+stylesheet for `width: <n>px`) and long unbroken strings wrap. Screenshots
+at both widths are Phase E's.
+
+**D2 — manage token.** Verification, mostly: Phase C had already deleted
+the column, the mint and the success card, each with its successor test in
+the same commit. What was left was two docstrings still claiming to
+withhold a column that no longer exists, and a missing guard on the
+**mint** (rather than on the output) — `secrets.token_*` now provably
+absent from the public module.
+
+**D3 — desk delta, minimal.** `GET .../entries` only; confirm and commit
+byte-for-byte unchanged. `EntryDeskRowDTO` loses `contactName` /
+`contactEmail` to a `submission` block (id as the grouping key, account
+address, act fee total). **It costs no extra query** — both hops are
+already `lazy="joined"`, so it stays one SELECT with two joins, and
+`test_the_grouping_costs_no_extra_query_per_row` counts the statements,
+because that is a loader-configuration property one edit away from an N+1.
+
+**D4 — frontend.** Rows band by act (`groupBySubmission`, a pure function
+keeping the **server's** order — re-sorting would compete with the
+documented ordering and move an operator's place between reads); the
+address and total sit on the band once. `GroupBandHeader` gained an
+optional `detail` **string** (an email in the eyebrow's uppercase reads as
+shouting); the first cut typed it `ReactNode` and **raised the depcruise
+edge count by one**, so it was narrowed back — the count is unchanged at
+2268.
+
+**Test unwind tally, per ruling.**
+
+| Ruling | File | Change |
+|---|---|---|
+| — | `test_entries_public_routes.py` | **+23, none unwound** (64 → 87). Every prior assertion holds, including the 390px bar, which R11 widens rather than replaces |
+| — | `test_entries_desk_routes.py` | **+5, none unwound** (17 → 22). No backend test ever asserted the contact block, so the R13 removal had no backend successor to write. `_seed_entries` gained two fixture-only knobs (`act`, `fee_total_cents`); zero assertions touched |
+| R13 | `EntriesDesk.test.tsx` | **1 edited, 0 deleted.** "shows the contact email" → "shows the submitting address on the act": same claim (this is the operator surface, not the public projection), same address asserted on screen, different place. +3 added (banding, once-per-act total, the gender flag *and* its confirmability) |
+| R12 / Q14 §5 | `entryDisplay.test.ts` | **1 edited, 0 deleted.** "hasAttention is true only when needs_review" widens to "the reasons that are a question for the operator". No assertion weakened; the negative control gained two members (`awaiting_payment`, `awaiting_partner` must NOT light up) |
+
+**Deviations and findings, reported rather than worked around.**
+
+1. **FINDING F-E1-2-D1 (blocks Phase E as written).** SP-E1-2's CONTEXT
+   lists the entry-page / entry-event **config routes as explicitly
+   unaffected — "treat a need to touch as a finding"** — while **Phase E
+   step 1 requires seeding through them with the R14 fields**
+   (`PUT entry-page` carrying fee schedule / payment instructions / venue /
+   policy caps; `POST entry-events` carrying `gender_constraint` and
+   `withdraws_until`). `EntryPageUpsertDTO` and `EntryEventCreateDTO` carry
+   none of those fields and the routes write none of them, so today those
+   columns are reachable only by writing SQL — which Phase E's "seeded
+   through real paths only" forbids. Phase D did not touch them. **Phase E
+   needs a ruling:** widen the two config DTOs (a small, additive change
+   this finding recommends), or accept a documented deviation in the
+   walkthrough.
+2. **The birth-year trigger is a heuristic, deliberately.** R12 asks for a
+   birth year "only where an age-bracketed event requires it" and the
+   schema has **no age-bracket field**, so `_AGE_BRACKET_RE` reads the two
+   strings a director already writes (`U15`, `Under-15`, `40+`, `O40`) off
+   the code and the discipline. Broad rather than clever, because the
+   permissive error shows an optional field nobody fills in and the strict
+   error hides one. A structured column is the honest fix and belongs with
+   the config surface.
+3. **`entry_pages.collect_phone` is still unread.** The column exists
+   (Phase C) and the form offers no phone field: the phone lands on the
+   **account**, and editing an account is E2's "my account". Recorded so
+   the column's silence is a decision rather than an oversight.
+4. **Two Phase-D tests were corrected while red**, both written in the same
+   commit and both asserting the wrong thing about my own markup (the
+   hidden positional `birthYear` input; `"0.00"` matching `"40.00"` in the
+   fee card). No pre-existing assertion was involved.
+5. **`install-selfhost.md` §4b's CSP paragraph was false** — it said the
+   entry page allows `challenges.cloudflare.com`. The challenge moved to
+   signup in Phase C and the page is `script-src 'none'`; the open question
+   is now restated against the route it actually applies to (rule 10).
+
+**Open for Phase E.** Finding 1 above is the first thing to settle. F-E1-2
+stands unchanged (multi-event submissions produce one roster player per
+entry, so a human in three events reaches the roster three times — the
+ruling is owed in E2/Phase 7 alongside F-E1). Nothing in this phase touched
+`services/entries.py`, `api/entries.py`'s confirm/commit routes, the module
+system, or the `GET /e/{slug}` allowlist entry.
+
+### SP-E1-2 adversarial-review fix pass: DONE (2026-08-07, backend 1454/66sk)
+
+Commits `da18f19`..`aed00ce` on `dev/prog1-p5-e1-2`, one per finding. Gates:
+backend **1454 passed / 66 skipped** (Phase D baseline 1418/66 — **+36**, skips
+unchanged, zero regressions); `ruff check products/scheduler scheduler_core`
+clean. The frontend is untouched by this pass.
+
+| Finding | Fix | Tests |
+|---|---|---|
+| 1 — coverage regression | Commit `81458f1` moved the Turnstile challenge to signup (R10) and dropped two negative controls that had **no route-level successor**: the unreachable-verifier fail-closed control and the "refusal leaks nothing" control. Restored at `/e/account/signup`, where the challenge now lives. **No production change** — this is coverage the unwind owed | `test_entrant_auth_routes.py` 39 → 43. Includes the `verdict.retryable` branch asserted against the other branch's message rather than a literal. Proven as controls by mutation: with `verify_turnstile`'s transport handler returning `success=True`, three of the four fail |
+| 2 — public 500 + price divergence | `_money_markup` iterated `page.fee_schedule` **raw** while the pricing read it normalized. A string-valued tier reached `_money`'s division → `TypeError` on the one route an anonymous visitor can reach; a dropped tier printed a price the total never charges. `entry_fees._schedule` promoted to the public **`normalize_fee_schedule`** — now the single reader of that column (card, total, and the config route below) | `test_entries_public_routes.py` 87 → 90 (TDD: the first two failed with the `TypeError`). Negative control: a clean three-tier schedule still prints all three |
+| 4 — contradictory docstring | `_set_entrant_cookie` claimed `samesite=lax` means "a cross-site form post never carries it", contradicting `entries_public._form_csrf`'s own Chrome Lax+POST reasoning — on the function that *sets* the cookie, where the next author decides whether a new write needs CSRF proof. Rewritten to state what Lax buys and why it is insufficient alone, pointing at the header and the double-submit token | Docstring-only commit |
+| 5 — **F-E1-2-D1** (blocked Phase E) | The config routes never learned the R12/R14 fields, so Phase E step 1's "seeded through real paths" was impossible. `PUT entry-page` gains all seven page fields; `POST entry-events` gains `genderConstraint` (closed vocabulary) and `withdrawsUntil`. Additive: every field optional, PUT whole-state semantics unchanged. Unusable fee tiers and discipline caps are **refused with the rule stated**, never silently dropped — the writer refuses coercion as well as dropping, and consults `normalize_fee_schedule` for tier collisions a type check cannot see. Validation precedes the write, so a rejected tier cannot cost a director the page they had | `test_entries_config_routes.py` 22 → 51, **the 22 existing tests unedited**; every refusal paired with its control |
+
+**No tests were edited or deleted in this pass** — the four commits are
+additive plus one docstring, so there is no unwind tally. Untouched, as the
+slice requires: `services/entries.py`, the confirm/commit/desk routes, Seam A,
+the module system, the `GET /e/{slug}` allowlist entry. **F-E1-2-D1 is closed;
+Phase E's step 1 can now seed through real routes.**
+
+### SP-E1-2 Phase E — dual-width demo: DONE (2026-08-07), servers left running
+
+**Stack:** `docker compose -p sw-e1-2-demo -f docker-compose.cloud.yml` — fresh disposable
+Postgres (old `sw-e1-demo` torn down with `-v`; its 4 demo rows were the only entries data
+in existence, per D-A5). Migration chain ran clean through `s3d8f2b5c0e1` on first boot.
+Vite dev on :5174 (HMR picked up the branch live).
+
+**Walkthrough (screenshots in `.playwright-mcp/sp-e1-2/`, both widths):**
+1. Seeded through real routes only: operator register + workspace + module enable;
+   `PUT entry-page` with tiered `feeSchedule {1:2500,2:4000,3:5000}`, payment
+   instructions, venue name/address, `maxEventsPerPerson`; three `POST entry-events`
+   with `genderConstraint` (M/F/mixed) and `withdrawsUntil`.
+2. `01-public-page-390px` / `06-public-page-1440px` — the R14 §6 IA at both widths:
+   Timeline (withdrawal deadline distinct), Fees (tier list), Payment, Venue, Organiser,
+   Events with live entered-counts, Regulations, entrant list.
+3. Entrant signup (Turnstile dummy keys, server-side; non-enumerating 202) → login →
+   `sw_play_session`. **Finding F-E1-2-E1:** the logged-out page names the account
+   endpoints but ships no HTML signup/login form (the JSON-API divergence) — a human
+   cannot self-serve an account without the Phase 6 `play.*` scaffold; demo used the API
+   + cookie injection. Recorded as a Phase 6 input (below).
+4. `02-form-total-390px` — the multi-event form: two player blocks, gender-filtered
+   events, override control with honest copy, server-round-trip running total
+   (**80.00 = 40.00 × 2 players at the 2-event tier** — per-person tiered pricing, R14).
+5. `03-submission-received-390px` — **R13's headline: one act → submission `03160a43`,
+   four entries across two players, one acceptance, one total**, payment instructions,
+   and a success page pointing at "my entries" (E2) with no token.
+6. **Replay at submission level:** same `Idempotency-Key` → same submission `3b17a6bd`,
+   201 then 200, one act. **Gender override:** Riley Chen (F) into MS accepted with
+   `gender_mismatch`. **Duplicate:** second "Alex Silva" into MS → `needs_review`.
+   **Anonymous submit → 401** (the E1 headline behavior, inverted).
+7. `04-desk-grouped-1440px` — desk bands by act ("Entered by maria… · 80.00 (4)"),
+   both flag chips. Confirmed the 5 legitimate entries, left both flagged pending.
+8. `05-commit-result-1440px` — "5 committed to the roster."; second commit → "Nothing
+   new" (Seam A idempotent, contract untouched). Roster shows 5 players with
+   `sourceEntryId` + verbatim remarks — **and F-E1-2 demonstrated as predicted:**
+   Alex ×2 / Sam ×2 roster players (one per entry), the E2 ruling input.
+9. **Dual-mode negative retained:** one-off `AUTH_MODE=local` backend on the same DB —
+   no Entries on create/read, PATCH → `409 MODULE_REQUIRES_CLOUD`.
+
+**No tunnel/DNS/Access/dashboard change of any kind** (Amendment A1 asserted again).
+
+**Findings for Phase 6/7:** F-E1-2-E1 (no human-usable entrant auth UI until the play.*
+scaffold — Phase 6 must treat signup/login pages as first-class scope); F-E1-2 (per-entry
+roster duplication, ruling owed in E2/Phase 7 with F-E1); entrant-account CASCADE ruling
+owed before E2 (debt-log).
+
+**Servers running:** public page http://localhost:8600/e/wongworks-open · operator app
+http://localhost:5174 (director@example.com) · entrant maria.silva@example.com · stack
+`sw-e1-2-demo` (`docker compose -p sw-e1-2-demo -f
+products/scheduler/docker-compose.cloud.yml down -v` to discard).

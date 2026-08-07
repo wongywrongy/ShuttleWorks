@@ -761,3 +761,13 @@ a green 1,100-test suite. The real check is the viewer flow in
     v2). Any future seam-written roster field needs either a snapshot round-trip test
     (as `sourceEntryId`/`remarks` have) or a shape that survives normalization. Size S:
     one characterization test in E2. *(Same run.)*
+
+- **2026-08-07 · SP-E1-2 verify finding — the entrant-account CASCADE pre-decides E2's
+  erasure question.** `submissions.account_id` and `entry_players.account_id` both FK
+  `entrant_accounts` with `ondelete=CASCADE` (migration `s3d8f2b5c0e1`), so deleting one
+  entrant account would erase every submission and entry it ever made — including entries
+  a director has confirmed. No delete path exists yet, but E2 builds withdraw-and-erase,
+  and the schema has silently answered its hardest question (entrant erasure right vs
+  organiser's records) in the most destructive direction. **A ruling is owed BEFORE E2**
+  (alternatives: ON DELETE SET NULL + tombstone; soft-delete the account; PII-scrub while
+  keeping rows). Size S now, M after E2 ships against the cascade. *(SP-E1-2 verify.)*

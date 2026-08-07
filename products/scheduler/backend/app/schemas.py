@@ -629,14 +629,65 @@ class WorkspaceModuleDTO(BaseModel):
 
 # ---- Entries (SP-E1-1) -----------------------------------------------
 
+class EntrySubmissionDTO(BaseModel):
+    """The act an entry belongs to, as much of it as a desk needs (R13).
+
+    Four fields, and the restraint is the point. ``id`` is the **grouping
+    key** — the desk shows "these four entries arrived on one form" by
+    reading it, not by grouping on a repeated email string, which is what
+    an operator had to do by eye before R13. The account's address is who
+    to write to. The fee total belongs to the act rather than to any entry
+    under it, because tiered pricing prices the *person*, not the event.
+
+    What is deliberately not here: the idempotency key (a retry mechanism,
+    not information), and anything at all from the account beyond a name
+    and an address — a password hash and a session token are the material
+    this projection exists to keep off an operator screen (a colocated test
+    greps the serialized row for it).
+    """
+    id: str
+    accountEmail: Optional[str] = None
+    accountName: Optional[str] = None
+    feeTotalCents: Optional[int] = None
+    submittedAt: Optional[str] = None
+
+    @classmethod
+    def from_row(cls, row) -> Optional["EntrySubmissionDTO"]:
+        """``None`` for an entry with no act behind it.
+
+        Nothing the writer produces looks like that — ``create_submission``
+        writes the submission first and every entry under it. It stays
+        possible in the type because the column is nullable and a desk that
+        500s on a row it cannot fully explain is worse than one that shows
+        the row.
+        """
+        if row is None:
+            return None
+        account = getattr(row, "account", None)
+        return cls(
+            id=str(row.id),
+            accountEmail=getattr(account, "email", None),
+            accountName=getattr(account, "display_name", None),
+            feeTotalCents=row.fee_total_cents,
+            submittedAt=row.submitted_at.isoformat() if row.submitted_at else None,
+        )
+
+
 class EntryDeskRowDTO(BaseModel):
     """One row of the operator's entries desk.
 
-    A **projection**, not the table. Two fields are deliberately absent:
-    ``manage_token_hash``, because the entrant's capability material has no
-    business on an operator screen even hashed; and the doubles/payment
-    columns, which exist in the schema (created now to avoid migration
-    churn) but mean nothing until E3/E5 and would read as broken features.
+    A **projection**, not the table. The doubles columns are deliberately
+    absent: they exist in the schema (created now to avoid migration churn)
+    but mean nothing until E3 and would read as broken features.
+
+    **The credential material this projection used to exclude no longer
+    exists.** E1 carried ``Entry.manage_token_hash`` and this docstring
+    named it as the field kept off an operator screen; ruling R10 deleted
+    the column, and managing an entry is login-gated "my entries" against
+    an entrant account (E2). The claim survives its column, one level out:
+    the account's password hash and its session token are what must never
+    reach here now, which is why nothing below reaches through
+    ``submission.account`` for anything but a name and an address.
 
     ``eventCode`` is denormalized from ``entry_events`` so the desk can
     render a row without a second lookup per entry — it is the same string
@@ -647,8 +698,12 @@ class EntryDeskRowDTO(BaseModel):
     eventCode: Optional[str] = None
     state: str
     pendingReasons: List[str] = Field(default_factory=list)
-    contactName: str
-    contactEmail: str
+    # R13: the contact block became a level. ``contactName`` /
+    # ``contactEmail`` were columns on this row and are now one hop out,
+    # under the act that carried them — because "who to write to about this"
+    # is a property of the submission, and a desk that shows it per entry
+    # shows the same address three times for one form.
+    submission: Optional[EntrySubmissionDTO] = None
     playerName: str
     remarks: Optional[str] = None
     listOptOut: bool = False
@@ -664,8 +719,7 @@ class EntryDeskRowDTO(BaseModel):
             eventCode=event_code,
             state=row.state,
             pendingReasons=list(row.pending_reasons or []),
-            contactName=row.contact_name,
-            contactEmail=row.contact_email,
+            submission=EntrySubmissionDTO.from_row(row.submission),
             playerName=row.player_name,
             remarks=row.remarks,
             listOptOut=bool(row.list_opt_out),
@@ -715,6 +769,30 @@ class EntryPageUpsertDTO(StrictModel):
     regulationsText: Optional[Regulations] = None
     waiverRequired: bool = False
 
+    # ---- R14 money & payment -------------------------------------------
+    # CUMULATIVE totals in cents by event count — ``{"1": 4000, "2": 5500}``
+    # — the price list a director copies, not increments. Typed as a bare
+    # dict and validated in the route rather than by a Pydantic shape,
+    # because the rule is not "these types" but "every tier this route
+    # accepts is a tier the pricing will honour", which only
+    # ``services.entry_fees.normalize_fee_schedule`` can answer.
+    feeSchedule: Optional[dict] = None
+    paymentInstructions: Optional[Notes] = None
+
+    # ---- R14 §4 entry policy -------------------------------------------
+    # Form-enforced with the rule stated, operator-overridable at the desk
+    # (I4). ``ge=1``: a cap of zero is an entry page nobody may enter, and
+    # ``isOpen=False`` already says that without the confusion.
+    maxEventsPerPerson: Optional[int] = Field(None, ge=1, le=MAX_PLAYERS)
+    disciplineCaps: Optional[dict] = None
+
+    # ---- R12 field policy ----------------------------------------------
+    collectPhone: bool = False
+
+    # ---- R14 §6 public page identity -----------------------------------
+    venueName: Optional[Name] = None
+    venueAddress: Optional[Notes] = None
+
 
 class EntryPageDTO(BaseModel):
     """The stored entry page as the operator sees it back."""
@@ -724,6 +802,13 @@ class EntryPageDTO(BaseModel):
     regulationsText: Optional[str] = None
     waiverRequired: bool
     regulationsVersion: int
+    feeSchedule: Optional[dict] = None
+    paymentInstructions: Optional[str] = None
+    maxEventsPerPerson: Optional[int] = None
+    disciplineCaps: Optional[dict] = None
+    collectPhone: bool = False
+    venueName: Optional[str] = None
+    venueAddress: Optional[str] = None
 
     @classmethod
     def from_row(cls, row) -> "EntryPageDTO":
@@ -734,6 +819,13 @@ class EntryPageDTO(BaseModel):
             regulationsText=row.regulations_text,
             waiverRequired=bool(row.waiver_required),
             regulationsVersion=row.regulations_version,
+            feeSchedule=row.fee_schedule,
+            paymentInstructions=row.payment_instructions,
+            maxEventsPerPerson=row.max_events_per_person,
+            disciplineCaps=row.discipline_caps,
+            collectPhone=bool(row.collect_phone),
+            venueName=row.venue_name,
+            venueAddress=row.venue_address,
         )
 
 
@@ -756,8 +848,18 @@ class EntryEventCreateDTO(StrictModel):
     bracketEventId: Optional[Identifier] = None
     cap: Optional[int] = Field(None, ge=1, le=MAX_PLAYERS)
     feeCents: Optional[int] = Field(None, ge=0, le=100_000_000)
+    # R12: the form's default event filter. A ``Literal`` for
+    # ``entryType``'s reason — the vocabulary is closed
+    # (``services.entry_policy`` folds onto 'M' / 'F' / 'mixed'), and an
+    # unrecognised constraint would not refuse anything, it would silently
+    # flag every entrant who chose the event. ``None`` is open, and is the
+    # default because most events are.
+    genderConstraint: Optional[Literal["M", "F", "mixed"]] = None
     opensAt: Optional[Timestamp] = None
     closesAt: Optional[Timestamp] = None
+    # R14 §3: separate from ``closesAt`` on purpose — organisers use the
+    # gap between closing entries and closing withdrawals.
+    withdrawsUntil: Optional[Timestamp] = None
 
 
 class EntryEventDTO(BaseModel):
@@ -768,8 +870,10 @@ class EntryEventDTO(BaseModel):
     bracketEventId: Optional[str] = None
     cap: Optional[int] = None
     feeCents: Optional[int] = None
+    genderConstraint: Optional[str] = None
     opensAt: Optional[str] = None
     closesAt: Optional[str] = None
+    withdrawsUntil: Optional[str] = None
 
     @classmethod
     def from_row(cls, row) -> "EntryEventDTO":
@@ -781,8 +885,12 @@ class EntryEventDTO(BaseModel):
             bracketEventId=row.bracket_event_id,
             cap=row.cap,
             feeCents=row.fee_cents,
+            genderConstraint=row.gender_constraint,
             opensAt=row.opens_at.isoformat() if row.opens_at else None,
             closesAt=row.closes_at.isoformat() if row.closes_at else None,
+            withdrawsUntil=(
+                row.withdraws_until.isoformat() if row.withdraws_until else None
+            ),
         )
 
 

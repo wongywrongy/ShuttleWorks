@@ -644,8 +644,12 @@ export type EntryState =
 
 /** One row of the operator's entries desk — mirrors the backend
  *  `EntryDeskRowDTO`, which is a PROJECTION rather than the table: the
- *  entrant's `manage_token_hash` and the doubles/payment columns are
- *  deliberately absent.
+ *  doubles columns are deliberately absent, and so is every piece of
+ *  entrant credential material. (This comment used to name
+ *  `manage_token_hash` as the thing being withheld; ruling R10 deleted
+ *  that column outright — managing an entry is login-gated "my entries"
+ *  now, and the material to keep off this screen is the account's
+ *  password hash and session token.)
  *
  *  There is no separate `flags` field on the wire. The R7 soft-duplicate
  *  signal is the `needs_review` member of `pendingReasons` — one list, one
@@ -659,10 +663,18 @@ export interface EntryDTO {
   eventCode: string | null;
   state: EntryState;
   /** Reason codes: `awaiting_partner` | `awaiting_payment` | `over_cap` |
-   *  `needs_review`. E1 only ever writes `needs_review`. */
+   *  `needs_review` | `gender_mismatch`. The last is an ENTRY-level reason
+   *  on the `needs_review` precedent (SP-E1-2 Phase A), deliberately not
+   *  one of the workspace attention codes — a different vocabulary read by
+   *  a different surface. */
   pendingReasons: string[];
-  contactName: string;
-  contactEmail: string;
+  /** The act this entry arrived on (R13). `contactName` / `contactEmail`
+   *  used to be fields on this row; they are one hop out now, because "who
+   *  to write to about this" belongs to the submission and a desk that
+   *  repeated it per entry showed one address three times for one form.
+   *  Null only in the shape the type allows and the writer never
+   *  produces — see the backend DTO. */
+  submission: EntrySubmissionDTO | null;
   playerName: string;
   remarks: string | null;
   listOptOut: boolean;
@@ -670,6 +682,25 @@ export interface EntryDTO {
   committedPlayerId: string | null;
   submittedAt: string | null;
   withdrawnAt: string | null;
+}
+
+/** One form act, as much of it as the desk needs — mirrors the backend
+ *  `EntrySubmissionDTO`.
+ *
+ *  `id` is the GROUPING KEY: the desk bands entries by it to show "these
+ *  arrived on one form", which before R13 an operator had to infer by eye
+ *  from a repeated email address — ambiguous exactly when it mattered,
+ *  because one parent account legitimately submits many times.
+ *
+ *  `feeTotalCents` belongs to the act and not to any entry under it:
+ *  tiered pricing prices the person, not the event, so three events for
+ *  one player have one total between them rather than three. */
+export interface EntrySubmissionDTO {
+  id: string;
+  accountEmail: string | null;
+  accountName: string | null;
+  feeTotalCents: number | null;
+  submittedAt: string | null;
 }
 
 /** One committed entry: which entry became which roster player. */

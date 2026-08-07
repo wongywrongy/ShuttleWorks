@@ -182,6 +182,48 @@ capability token (`display_tokens`; owner mint/rotate via
 ``/tournaments/{id}/display-token``). Never add public routes keyed on
 raw tournament UUIDs.
 
+### The second principal: entrant accounts (SP-E1-2, ruling R10)
+
+Everything above describes **operators**. Entries adds a second, entirely
+separate principal — a member of the public who signs up on the entry
+surface to submit entries for the people they are responsible for.
+
+| | Operator | Entrant |
+|---|---|---|
+| Table | `users` | `entrant_accounts` |
+| Sessions | `auth_sessions` | `entrant_sessions` |
+| Cookie | `sw_session` | `sw_play_session` |
+| Resolver | `get_current_user` (`app/dependencies.py`) | `get_current_entrant` (same file) |
+| Routes | `/auth/*` | `/e/account/*` |
+| Throttle keys | `ip:` `account:` `reg:` `entry:` | `esignup:` `eacct:` `eip:` |
+| Local bootstrap | yes — no session resolves to the zero-UUID operator | **no** — 401 in both modes |
+| Org / role / membership | yes | **never** |
+
+**They are separate by construction, not by a check.** An entrant token is
+not in `auth_sessions` and an operator token is not in `entrant_sessions`,
+so neither resolver can be handed the other's credential — including under
+the other's cookie name. The alternative considered (an audience
+discriminator on `AuthSession`) fails *open* the day a resolver forgets to
+read it, on 27 session-gated routes that carry no `{tournament_id}` and so
+sit outside the tenancy suite. `tests/test_cross_principal_sessions.py`
+proves both directions, including a sweep of every OpenAPI route with an
+entrant cookie in the jar.
+
+What is **shared** is deliberate and is the mechanism, never the identity:
+Argon2id hashing, the NIST password policy, SHA-256 token hashing and the
+throttle engine are principal-agnostic module functions in `services/auth.py`
+and are reused directly. A second authentication stack would be a second set
+of bugs. The ~40 lines of session plumbing in `services/entrants.py` are the
+one deliberate copy: the operator trio is `User`-bound at the type level, and
+generalizing it would produce a function returning "one of two unrelated ORM
+classes", which is the shape where a caller trusts the wrong branch.
+
+**Adding a cookie that authenticates a request** means adding its name to
+`settings.session_cookie_names` — the registry the CSRF middleware reads.
+`tests/test_csrf_cookie_registry.py` derives every `set_cookie` in
+`backend/api/` from the source and fails, by file and line, on a cookie the
+registry does not name.
+
 ## Layout
 
 ```

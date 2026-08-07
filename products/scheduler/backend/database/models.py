@@ -53,6 +53,7 @@ from sqlalchemy import (
     Uuid,
     text,
 )
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -1074,6 +1075,276 @@ class AuthThrottle(Base):
 # (``CLOUD_ONLY_MODULES`` above), so a database that moves cloud → local
 # hides the Entries module but keeps every entry intact and readable when it
 # moves back. Filtering is a projection, never a migration.
+#
+# ---- the account level (SP-E1-2 / ruling R10, Phase A ruling D-A2) -------
+#
+# Entrants are a SECOND PRINCIPAL TYPE, and they live in their own tables —
+# not as rows in ``users``. The audit that decided it (spec Q13 §3 named the
+# four questions; the tree answered them) turned on one measurement: 27
+# session-gated routes carry no ``{tournament_id}`` and therefore sit outside
+# the OpenAPI-derived tenancy test, ``POST /tournaments`` and ``POST
+# /invites/{token}/accept`` among them. Reusing ``users`` would have made an
+# entrant a principal those 27 routes already accept, and the guard would
+# have been a discriminator check on each — a check that is fail-OPEN when
+# forgotten. A sibling table makes entrant membership unrepresentable: the
+# membership tables' FKs point at ``users``, and nothing here can satisfy
+# them.
+
+
+class EntrantAccount(Base):
+    """A public entrant's account — a credential for acting on their own
+    submissions, and nothing else (spec Q13 §5).
+
+    **No org. No role. No ``tournament_members`` row. Ever.** That sentence
+    is what keeps the tenancy model from acquiring a second meaning, and the
+    absence of the columns is how it is enforced rather than remembered.
+
+    Password storage, policy and token hashing are the shipped mechanisms
+    reused verbatim (``services/auth.py``): Argon2id PHC strings, NIST
+    800-63B length-only policy, SHA-256 of a mailed reset token. What is not
+    reused is the session plumbing — see ``EntrantSession``.
+
+    **Not workspace-scoped**, unlike every other table in this block: an
+    account outlives any one tournament, which is the entire point of it.
+    So there is no ``tournament_id`` and no cascade from ``tournaments``.
+
+    Email uniqueness is case-insensitive **within the entrant namespace**
+    only. One human may hold an operator account and an entrant account on
+    the same address; that is a mild product oddity and a deliberate one —
+    a shared namespace would let an entrant signup collide with, or probe
+    for, a director's account.
+    """
+
+    __tablename__ = "entrant_accounts"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    # Argon2id PHC string (contains its own salt + parameters).
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # R12: the ONLY optional contact field, collected only where the director
+    # turned it on (``entry_pages.collect_phone``). It lands on the ACCOUNT
+    # rather than the entry because it is submitter contact data.
+    phone: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Verification and reset are E2 (program Phase 7); the columns exist now
+    # so that slice is feature work rather than migration churn, exactly as
+    # the doubles and payment columns below already do.
+    reset_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    reset_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("uq_entrant_accounts_email_lower", text("lower(email)"), unique=True),
+    )
+
+
+class EntrantSession(Base):
+    """Server-side session record behind the ``play.*`` entrant cookie.
+
+    Structurally a twin of ``AuthSession`` — opaque random token in the
+    cookie, only its SHA-256 stored, revocation as a timestamp — and
+    deliberately **not the same table** (ruling D-A3).
+
+    The alternative was an audience discriminator on ``AuthSession``. Both
+    designs have a failure mode and they are not symmetrical: a discriminator
+    fails *open* the day a resolver forgets to check it, while a second table
+    cannot be confused by construction — this FK points at
+    ``entrant_accounts``, so an entrant session that named a ``users`` row
+    would be a database error rather than a privilege escalation.
+
+    The cost is the ~40 lines of session plumbing in ``services/entrants.py``
+    that mirror ``services/auth.py``. That duplication is the price of the
+    property and is held to the original's behaviour by
+    ``tests/unit/test_entrants_service.py`` against
+    ``tests/unit/test_auth_characterization.py``.
+    """
+
+    __tablename__ = "entrant_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("uq_entrant_sessions_token_hash", "token_hash", unique=True),
+        Index("ix_entrant_sessions_account", "account_id"),
+    )
+
+
+class Submission(Base):
+    """One form act, covering 1–N events (ruling R13, spec Q12 §R3).
+
+    **This table is a level boundary, and the block comments below say
+    which level.** R7 kept the submitter block and the player block
+    structurally separate inside one ``entries`` row and promised the split
+    would then be a column move; R13 collects on that promise, and this is
+    where the *act* half landed.
+
+    Three things moved **up** from ``entries`` and the reason is the same
+    for all three: a form act covering three events is **one** agreement,
+    **one** retry unit and **one** payment. Left on the entry they would
+    either duplicate across N rows — three rows each claiming to be "the"
+    fee total — or have to be reconstructed later by grouping on a
+    timestamp.
+
+    ``uq_submissions_tournament_idempotency_key`` is ruling D4 carried up a
+    level intact: **tenant-scoped**, unlike the solve rail's global index.
+    The submit route is reachable by anyone holding a public slug, so
+    resolving a client-supplied key globally would let an outsider probe
+    another tenant's keyspace and learn that some other workspace used the
+    same key. NULL keys stay exempt on both dialects.
+    """
+
+    __tablename__ = "submissions"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # ---- the act (R13) ------------------------------------------------
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Q11: acknowledgment gates the submission, and the version agreed to is
+    # recorded at that instant. "They agreed to something at some point" is
+    # not a record.
+    regulations_accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    regulations_version_accepted: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+
+    # ---- money (R14; Q8's payment boundary untouched) ------------------
+    # The running total the form showed, snapshotted. Spec Seam B: the total
+    # shown to the entrant IS the total recorded — never recomputed silently
+    # afterwards, because a price that changes after agreement is not a
+    # price.
+    fee_total_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # How the total was derived (the schedule that applied, the per-event
+    # components, the basis name), so a dispute months later is answerable
+    # without re-deriving prices from a config that has since been edited.
+    fee_basis: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    payment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    account = relationship("EntrantAccount", lazy="joined")
+
+    __table_args__ = (
+        # Ruling D4, one level up. NULLs compare distinct on both dialects.
+        Index(
+            "uq_submissions_tournament_idempotency_key",
+            "tournament_id",
+            "idempotency_key",
+            unique=True,
+        ),
+        Index("ix_submissions_account", "account_id"),
+    )
+
+
+class EntryPlayer(Base):
+    """The human being entered (ruling R13's leaf, decision D-A4).
+
+    **Its own table rather than namespaced fields on the entry**, decided
+    against the tree rather than the spec (D-A4): the §4 index the soft
+    duplicate flag runs on is ``(entry_event_id, entry_player_id)``, which
+    needs a player id to point at, and ``remarks`` describes a *human's*
+    availability — three events for one child must not carry three copies
+    of one sentence, because the commit seam writes it onto a roster
+    **player**.
+
+    The invariant R13 states and this table enforces structurally: **player
+    fields are never mixed into contact/account fields.** Contact data
+    lives on ``entrant_accounts`` (the person who *acts*); this is the
+    person who *plays*, and the two are routinely different — a parent
+    entering two children, a club representative entering eight players.
+
+    ``account_id`` says who may act for this player. It is not ownership of
+    a human being; it is the join that lets "my entries" (E2) show a parent
+    their children's entries without a second identity system.
+
+    **R12's never-in-v1 list, recorded because absence is a decision:** no
+    postal address, no federation or member id, no date of birth beyond
+    ``birth_year`` as an eligibility field. GDPR minimization governs
+    (Q10), and a column that does not exist cannot be collected by
+    accident.
+    """
+
+    __tablename__ = "entry_players"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    # Published on the public entrant list (unless the entry opts out).
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # R12: REQUIRED. Without it MS/WD/XD event filtering is impossible,
+    # which is the only reason the field exists. Enforcement of the *match*
+    # is soft (Q14 §5) — the form filters by default, an override path
+    # exists, and a mismatch is an attention flag an operator resolves.
+    # NOT NULL is about the field being collected, not about the match.
+    gender: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Free text, optional, never validated against a club registry we do
+    # not have and are not going to invent.
+    club: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # A plain eligibility field (U15, O40) — never a trigger for automatic
+    # behavior, and emphatically not a GDPR special category.
+    birth_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The free-text availability note, carried verbatim onto the roster
+    # player by the commit seam. Never parsed, never inferred from, never
+    # fed to the solver: a free-text field that silently became a
+    # constraint would be the worst kind of automatic decision (I4). It
+    # lives HERE and not on the entry because it describes a human.
+    remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    __table_args__ = (Index("ix_entry_players_account", "account_id"),)
 
 
 class EntryEvent(Base):
@@ -1108,11 +1379,27 @@ class EntryEvent(Base):
     )
     bracket_event_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     cap: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # R14: the PER-EVENT FALLBACK, kept rather than replaced. It is how
+    # flight-tiered pricing (CAN-AM: $50 A flight, $30 all others) is
+    # expressed, and it is unused when the tournament carries a fee
+    # schedule on ``entry_pages``.
     fee_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # R12: 'M' | 'F' | 'mixed' | NULL (open). Drives the form's default
+    # event filtering. SOFT — never a hard block (Q14 §5).
+    gender_constraint: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
     opens_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     closes_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # R14 §3: SEPARATE from closes_at, because the incumbent models the two
+    # separately and organisers use the gap (Badminton Ontario closes
+    # entries Tuesday and accepts withdrawals until Wednesday). Feeds E2's
+    # withdrawal path and COMMITTED_ENTRY_WITHDREW.
+    withdraws_until: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     retention_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -1129,30 +1416,35 @@ class EntryEvent(Base):
 
 
 class Entry(Base):
-    """One submitted entry (spec §4, Q12).
+    """One entry: one event, for one player-unit, within one act (R13).
 
-    **The block discipline in this class is load-bearing.** Submitter/contact
-    fields and player fields are kept structurally separate and are never
-    interleaved, so extracting an ``entry_players`` table when doubles or a
-    real registry arrives is a column move — a migration, not a redesign.
-    Additions belong *inside* the block they describe.
+    **The block discipline R7 established was load-bearing and it has now
+    been collected on.** The contact block and the player block were kept
+    structurally separate inside this row precisely so that extracting them
+    would be a column move rather than a redesign — and ruling R13 made the
+    move. The contact block became ``entrant_accounts`` (who acts), the
+    player block became ``entry_players`` (who plays), and the act's own
+    fields — the retry key, the acceptance pair, the fee total — became
+    ``submissions``. What is left here is what genuinely belongs to *one
+    event for one player-unit*.
 
-    Two dedup mechanisms, deliberately not conflated (the trap ``SolveJob``
-    already documents from the other side):
+    **The read-through properties below are why Seam A did not have to
+    change.** ``services/entries.py`` reads ``entry.player_name`` and
+    ``entry.remarks``, and the desk projection reads ``contact_name`` /
+    ``contact_email``. Those names now resolve across the level boundary
+    instead of naming columns. The seam's contract is stated as "the seam
+    reads entries", and it still does; where the string physically lives is
+    not part of that contract, which is exactly what made the reshape
+    intake work rather than a rewrite.
 
-    - ``uq_entries_tournament_idempotency_key`` — mechanical retry safety. A
-      form re-posted on a flaky connection returns the original entry. Unlike
-      the solve rail's global index this one is **tenant-scoped** (ruling
-      D4): the submit route is unauthenticated, so a global key lookup would
-      let an outsider probe another tenant's keyspace.
-    - **No** natural-key uniqueness on ``(entry_event_id, contact_email)``.
-      Ruled out in Q12: one parent enters two children, one club rep enters
-      eight players. Duplicate *suspicion* (same event + same normalized
-      email + same player name) is a soft attention flag an operator
-      resolves; the plain index below powers that lookup. ``contact_email``
-      is normalized (lowercased) at write time rather than indexed through a
-      ``lower()`` expression, which keeps the index identical on SQLite and
-      Postgres.
+    **No natural-key uniqueness, at any level.** Ruled out in Q12 and
+    preserved verbatim by R13: one parent enters two children, one club rep
+    enters eight players. Duplicate *suspicion* — same event + same player
+    name across submissions — is a soft attention flag an operator resolves,
+    and ``ix_entries_event_player`` is the non-unique index that powers the
+    lookup. The one surviving uniqueness in this family is the submission's
+    idempotency key, which guards a mechanical retry rather than a human
+    judgement (the trap ``SolveJob`` documents from the other side).
     """
 
     __tablename__ = "entries"
@@ -1162,67 +1454,35 @@ class Entry(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     entry_event_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    # ---- the levels this entry hangs between (R13) ---------------------
+    # The act it belongs to, and the human it enters. Nullable only while
+    # the narrowing half of this reshape is in flight; the writer sets both.
+    submission_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    entry_player_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
     # See the lifecycle state machine in the design spec §6. E1 submissions
     # land directly in 'pending' (ruling D1); 'unverified' exists in the
     # vocabulary but is only entered once E2's email verification ships.
     state: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     pending_reasons: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
-    # ---- submitter / contact block (Q12) ------------------------------
-    # Who submitted and how we reach them. May legitimately repeat across
-    # entries: one parent, several children; one club rep, several players.
-    contact_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    # Stored pre-normalized (lowercased at write time) — see the class
-    # docstring for why this is not a functional index.
-    contact_email: Mapped[str] = mapped_column(String(320), nullable=False)
-    email_verified_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    # SHA-256 of the entrant's capability token, following AuthSession's
-    # hashed storage rather than DisplayToken's plaintext: entrant tokens are
-    # numerous and long-lived, so the stronger precedent wins.
-    manage_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-
-    # ---- player block (Q12) -------------------------------------------
-    # Who is actually playing. Deliberately NOT interleaved with the block
-    # above: these are the columns that move, whole, into `entry_players`
-    # if/when the split happens. Keep additions to this block in this block.
-    player_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    # A plain eligibility field (U15, O40) — never a trigger for automatic
-    # behavior, and emphatically not a GDPR special category.
-    birth_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # Free-text availability note, carried verbatim onto the roster player by
-    # the commit seam. Never parsed, never inferred from, never fed to the
-    # solver: a free-text field that silently became a constraint would be
-    # the worst kind of automatic decision.
-    remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
     # ---- doubles (created now, unused in E1 — doubles is E3) ----------
     partner_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
     partner_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
 
-    # ---- publication & consent ----------------------------------------
-    # Absent from the public entrant list; still fully entered (Q4/I6).
+    # ---- publication ---------------------------------------------------
+    # Absent from the public entrant list; still fully entered (Q4/I6). The
+    # acknowledgment that used to sit beside it is on the submission now
+    # (Q11/R13) — one act, one agreement.
     list_opt_out: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
-    # Q11: acknowledgment gates submission from day one, and the version
-    # agreed to is recorded at that moment — "they agreed to something at
-    # some point" is not a record.
-    regulations_accepted_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    regulations_version_accepted: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True
-    )
-
     # ---- money / traceability -----------------------------------------
-    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # This entry's component of the submission total. Nullable because
+    # tiered pricing prices the PERSON, not the event (Q14 §1) — there is no
+    # true per-event price when three events cost 6000 together. The number
+    # that means something is ``submissions.fee_total_cents``; the payment
+    # record lives up there too, on the act that was paid for.
     fee_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    paid_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    payment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Back-reference into the roster, written by the commit seam. Its
     # presence is what makes re-running the seam idempotent.
     committed_player_id: Mapped[Optional[str]] = mapped_column(
@@ -1244,17 +1504,66 @@ class Entry(Base):
             ["entry_events.tournament_id", "entry_events.id"],
             ondelete="CASCADE",
         ),
-        # Ruling D4 — tenant-scoped, unlike the solve rail's global index.
-        # NULL keys are exempt on both dialects (NULLs compare distinct).
-        Index(
-            "uq_entries_tournament_idempotency_key",
-            "tournament_id",
-            "idempotency_key",
-            unique=True,
-        ),
-        # NON-unique on purpose (Q12). Powers the soft duplicate flag.
-        Index("ix_entries_event_contact_email", "entry_event_id", "contact_email"),
+        # NON-unique on purpose (Q12, preserved verbatim by R13). It powers
+        # the soft duplicate lookup and nothing more: one account
+        # legitimately enters the same event for two different players, and
+        # the *same* player twice is a judgment an operator makes rather
+        # than a 409 a database returns.
+        Index("ix_entries_event_player", "entry_event_id", "entry_player_id"),
+        Index("ix_entries_submission", "submission_id"),
     )
+
+    # ---- read-through to the levels above and below ------------------
+    # Relationships rather than joins at every call site, and lazy="joined"
+    # because the desk reads every entry's player for every row — an N+1
+    # over an entries desk is entirely on the wrong side of that ratio.
+    player = relationship(
+        "EntryPlayer",
+        primaryjoin=(
+            "and_(foreign(Entry.tournament_id) == EntryPlayer.tournament_id,"
+            " foreign(Entry.entry_player_id) == EntryPlayer.id)"
+        ),
+        viewonly=True,
+        lazy="joined",
+    )
+    submission = relationship(
+        "Submission",
+        primaryjoin=(
+            "and_(foreign(Entry.tournament_id) == Submission.tournament_id,"
+            " foreign(Entry.submission_id) == Submission.id)"
+        ),
+        viewonly=True,
+        lazy="joined",
+    )
+
+    # The four names the shipped readers use. They were columns until R13
+    # and are now one hop away; keeping the names is what let Seam A
+    # (``services/entries.py``) and the desk projection stay byte-for-byte
+    # unedited through the reshape. Read-only by construction — writing an
+    # entrant's name onto an entry is not a thing that should typecheck.
+    player_name = association_proxy("player", "full_name")
+    remarks = association_proxy("player", "remarks")
+
+    @property
+    def contact_email(self) -> Optional[str]:
+        """The submitting account's address — who to reach about this act."""
+        submission = self.submission
+        account = submission.account if submission is not None else None
+        return account.email if account is not None else None
+
+    @property
+    def contact_name(self) -> Optional[str]:
+        """A name for the submitter, falling back to their address.
+
+        An entrant account carries an optional display name (nothing forces
+        one at signup), and the desk needs *something* to render. The
+        address is the honest fallback: it is what we actually know.
+        """
+        submission = self.submission
+        account = submission.account if submission is not None else None
+        if account is None:
+            return None
+        return account.display_name or account.email
 
 
 class EntryPage(Base):
@@ -1263,7 +1572,9 @@ class EntryPage(Base):
     One row per workspace. ``slug`` is the discoverable public address of
     the *page* — deliberately not a capability token, because an entry page
     is meant to be shared, which is exactly what a capability URL exists to
-    prevent. Per-entrant capability lives on ``Entry.manage_token_hash``.
+    prevent. Per-entrant capability used to live on
+    ``Entry.manage_token_hash``; ruling R10 retired it, and managing an
+    entry is login-gated "my entries" (E2) against an entrant account.
 
     ``regulations_text`` is the director's own words; ShuttleWorks ships no
     template and no default legal copy. ``waiver_required`` is director
@@ -1287,6 +1598,46 @@ class EntryPage(Base):
     regulations_version: Mapped[int] = mapped_column(
         Integer, default=1, nullable=False
     )
+
+    # ---- money & payment (R14) ----------------------------------------
+    # CUMULATIVE totals in cents by event count — {"1":4000,"2":5500} — not
+    # increments, because that is how directors *publish* them: "$40 / $55 /
+    # $60" is a price list they copy, "$40 then +$15" is a derivation they
+    # would have to perform and get wrong. NULL falls back to summing
+    # ``entry_events.fee_cents``.
+    fee_schedule: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Free text, rendered publicly: Zelle, cash at check-in, a PayPal
+    # address, in the director's own words. v1 payment is manual and Q8's
+    # integration boundary is untouched.
+    payment_instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # ---- entry policy (R14 §4) -----------------------------------------
+    # Form-enforced with the rule stated, operator-overridable at the desk
+    # (I4): the software prevents the accident, the operator decides the
+    # exception.
+    max_events_per_person: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    discipline_caps: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    # ---- field policy (R12) --------------------------------------------
+    # OFF by default. The phone number lands on the ACCOUNT, not the entry,
+    # because it is submitter contact data.
+    collect_phone: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+
+    # ---- public page identity (R14 §6) ---------------------------------
+    # AUDITED FACT: the tree has no venue name or address anywhere —
+    # "venue" in ShuttleWorks is structural scheduling data only
+    # (courtCount / intervalMinutes / dayStart / dayEnd). These two columns
+    # live HERE rather than on ``tournaments`` or in the state blob:
+    # publication data read only by the public page, and deliberately
+    # outside the blob so a venue address can never 409 against the
+    # fail-closed CONFIG_LOCKED guard.
+    venue_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    venue_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

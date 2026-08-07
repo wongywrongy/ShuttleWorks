@@ -140,6 +140,13 @@ class ErrorCode(str, Enum):
     AUTH_NOT_SIGNED_IN = "AUTH_NOT_SIGNED_IN"
     AUTH_RESET_INVALID = "AUTH_RESET_INVALID"
     AUTH_CSRF_REQUIRED = "AUTH_CSRF_REQUIRED"
+    # The bot challenge said no, or could not be reached (SP-E1-2 —
+    # Turnstile moved from submit to entrant signup, spec Q4 R3 restack).
+    # Distinct from AUTH_INVALID_CREDENTIALS because it is not about who
+    # the caller is: retrying with the same details after solving the
+    # widget is the correct response, and a client cannot know that from a
+    # credentials code.
+    AUTH_CHALLENGE_FAILED = "AUTH_CHALLENGE_FAILED"
 
     # Generic fallback
     INTERNAL = "INTERNAL"

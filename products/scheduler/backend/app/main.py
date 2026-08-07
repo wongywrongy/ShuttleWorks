@@ -1,5 +1,6 @@
 """Main FastAPI application - stateless scheduler for school sparring."""
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -14,6 +15,7 @@ from api import (
     display as display_api,  # SP-CLOUD-2 — capability-token spectator display
     entries as entries_api,  # SP-E1-1 — the operator's Entries desk
     entries_public as entries_public_api,  # SP-E1-1 — the public entry page + submit
+    entrants as entrants_api,  # SP-E1-2 — the entrant principal's auth surface
     schedule,
     solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
     match_state,
@@ -232,6 +234,14 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
+# Routes that prove CSRF their own way because they are native HTML form
+# posts and cannot attach a custom header. Anchored at both ends so it
+# matches one route shape and nothing that merely starts like it — a
+# prefix match here would exempt anything an attacker could hang off the
+# same path. See ``csrf_middleware`` for the full argument.
+_FORM_CSRF_ROUTES = re.compile(r"^/e/[^/]+/submit$")
+
+
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
     """Custom-header CSRF check for cookie-authenticated writes.
@@ -244,11 +254,37 @@ async def csrf_middleware(request: Request, call_next):
     bearer-token requests, local bootstrap requests (no cookie), and
     all GET/HEAD/OPTIONS are untouched, so nothing existing breaks
     before the frontend migrates.
+
+    **The trigger reads a registry of cookie names, not one name**
+    (SP-E1-2, ruling D-A3). Until the entrant principal arrived there was
+    exactly one session cookie in the system and this line named it
+    directly. A second principal's cookie under a second name would then
+    have authenticated writes that this middleware never looked at — the
+    concrete defect spec Q13 §2 predicted, fail-open and invisible.
+    ``settings.session_cookie_names`` is the single place that list lives,
+    and a guard test derives every ``set_cookie`` in ``backend/api/`` from
+    the source to hold new cookies to it.
+
+    **One route is exempt, and it is exempt because it is a form, not
+    because it is convenient** (SP-E1-2 Phase C). ``POST /e/{slug}/submit``
+    is a native ``<form method=post>`` on a page with ``script-src 'none'``,
+    and a form cannot attach a custom header — that is the same property
+    this defense rests on, seen from the other side. Posting it with
+    ``fetch`` would mean the public entry form needs JavaScript to work,
+    which is degraded functionality at exactly the widths ruling R11 makes
+    co-equal. So that route carries its **own** CSRF proof instead: a
+    double-submit token derived from the session cookie
+    (``api/entries_public.py::_form_csrf``), checked before it reads
+    anything else out of the body. An attacker's page can make the browser
+    send our cookie; it can never read it, so it cannot compute the token.
+    The exemption is from *this* check, not from CSRF — and
+    ``tests/test_csrf_cookie_registry.py`` pins that it is the only one.
     """
     if (
         request.method in {"POST", "PUT", "PATCH", "DELETE"}
-        and settings.session_cookie_name in request.cookies
+        and any(name in request.cookies for name in settings.session_cookie_names)
         and request.headers.get("X-ShuttleWorks-CSRF") != "1"
+        and not _FORM_CSRF_ROUTES.match(request.url.path)
     ):
         return JSONResponse(
             status_code=403,
@@ -364,17 +400,34 @@ app.include_router(workspace_modules.router, dependencies=_AUTH_DEP)
 # the public surface can never be a side effect of touching the desk.
 app.include_router(entries_api.router, dependencies=_AUTH_DEP)
 # Entries, public surface: registered WITHOUT the auth dep, following the
-# display public_router precedent below — an entrant has no account, by
-# definition, and never will (Q4: no entrant accounts in v1). This is the
-# app's first ANONYMOUS WRITE, so unlike display it is not enough for the
-# route to be read-only and token-shaped; its guards are in the module
-# itself (Turnstile server-side, per-IP throttle, acknowledgment,
-# tenant-scoped idempotency, uniform 404) and the two routes are named
-# individually in tests/test_auth_surface.py with the reason each must be
-# reachable. Deliberately a separate router from the desk above so that
-# widening the public surface can never be a side effect of touching the
-# operator's routes.
+# display public_router precedent below. **This comment described a world
+# that ruling R10 ended** — it used to say an entrant "has no account, by
+# definition, and never will (Q4)", which was true of the shipped E1 and
+# is now false: entrants are a real principal type with accounts, sessions
+# and a login (spec Q13, and the router below this one).
+#
+# What stays true is the *shape* of the risk. ``GET /e/{slug}`` is a
+# public read of workspace data — a poster URL, not a capability URL — and
+# the router is registered without the app-wide dependency so it can be.
+# Its guards live in the module itself (strict projection, uniform 404 for
+# an unknown or closed slug, per-IP throttle, the global body cap) and
+# every session-free route in it is named individually in
+# tests/test_auth_surface.py with the reason it must be reachable.
+# Deliberately a separate router from the desk above so that widening the
+# public surface can never be a side effect of touching the operator's
+# routes.
 app.include_router(entries_public_api.router)
+# Entrant auth (SP-E1-2, ruling R10): the second principal's front door,
+# registered WITHOUT ``_AUTH_DEP`` for the same reason ``auth_api`` below
+# is — signup and login are how a session is *obtained*, so requiring one
+# would make the capability unreachable. This is not a widening of the
+# public surface but a narrowing of it: the act that used to be anonymous
+# (submitting an entry) moves behind a session, and what is left
+# unauthenticated is account creation, which cannot be anything else.
+# ``/e/account/me`` declares ``get_current_entrant`` itself rather than
+# inheriting the operator dependency — the two principals must never be
+# resolvable by the same seam (ruling D-A3).
+app.include_router(entrants_api.router)
 # Invites: registered WITHOUT the router-level auth dep so the public
 # ``GET /invites/{token}`` resolve endpoint stays unauthenticated. The
 # accept + revoke endpoints declare their own auth requirements.
