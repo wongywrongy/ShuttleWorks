@@ -310,7 +310,7 @@ would let a public actor mutate solver inputs directly.
   It exposes **no contact data**: never an email, phone, address, or anything an entrant did
   not knowingly publish.
 - **A per-entrant capability token** addresses *a specific entry* ("manage my entries").
-  Same shape as the display token (`secrets.token_urlsafe(24)`, `api/display.py:49`), same
+  Same shape as the display token (`secrets.token_urlsafe(24)`, `api/display.py:50`), same
   uniform-404 on miss (`api/display.py:90-103`), and the raw tournament UUID never becomes a
   public key.
 
@@ -634,7 +634,7 @@ belong to the operator, not to a constraint that returns 409; (c) it is the expe
 direction to reverse, since dropping it later means reconciling data that could never be
 entered while it existed, whereas adding uniqueness later is a deduplication pass we can do
 deliberately; and (d) it conflates human duplication with retry duplication — the precise
-trap `models.py:785-787` already documents for solve jobs, which R1 correctly identified and
+trap `models.py:778-784` already documents for solve jobs, which R1 correctly identified and
 then walked into from the other side.
 
 **Rejected — a full `entry_players` table in v1.** Correct destination, wrong moment. E1
@@ -880,7 +880,7 @@ from entry data · duplicate-identity merging · refund processing · waitlist l
    string literals at their backend construction sites
    (`api/workspace_signals.py:368-380`, with the vocabulary re-stated in a docstring at
    `workspace_signals.py:89`) and are hand-mirrored on the frontend — since SP-UI-1 in *two*
-   places, `platform/domain/setupChecklist.ts:62` (`REASON_ACTION`) and a literal comparison
+   places, `platform/domain/setupChecklist.ts:58` (`REASON_ACTION`) and a literal comparison
    in `products/workspace/overview/PhasePanels.tsx:92`. E4 (Phase 9) adds six more codes,
    doubling the vocabulary across three hand-maintained mirrors, and Phase 3 is already
    editing exactly these surfaces. Doing it there is a rename inside files that are open;
@@ -911,7 +911,7 @@ Added by the SP-ENTRIES-R2 pass (2026-08-06):
 
 | # | Claim as stated | What the tree actually shows |
 |---|---|---|
-| 9 | R1's Q9: attention codes are "mirrored by hand in `products/hub/nextAction.ts:7-11`" | **Stale as of SP-UI-1.** `nextAction.ts` now imports `REASON_ACTION` from `platform/domain/setupChecklist.ts:62`, and a *third* hand-written mirror appeared at `products/workspace/overview/PhasePanels.tsx:92` (a literal `'NO_MODULES_ENABLED'` comparison). Three mirrors, not two — which strengthens §9.6's resolution rather than weakening it. |
+| 9 | R1's Q9: attention codes are "mirrored by hand in `products/hub/nextAction.ts:7-11`" | **Stale as of SP-UI-1.** `nextAction.ts` now imports `REASON_ACTION` from `platform/domain/setupChecklist.ts:58`, and a *third* hand-written mirror appeared at `products/workspace/overview/PhasePanels.tsx:92` (a literal `'NO_MODULES_ENABLED'` comparison). Three mirrors, not two — which strengthens §9.6's resolution rather than weakening it. |
 | 10 | Program I1 assumes absolute URLs are generated "wherever they are generated today" | **They are not generated at all today.** `app/config.py` has no base-URL setting, and no backend module composes an absolute product URL — the invite route deliberately returns a *relative* path for the frontend to absolutize (`api/invites.py:75`). I1 is therefore a greenfield seam introduced in program Phase 2, not a refactor of existing call sites. Good news, recorded so nobody goes hunting for the call sites. |
 | 11 | R6 assumed the read-path filter might be awkward enough to STOP | **It is not.** All module reads funnel through `_LocalModuleRepo` and there are exactly two queries to filter (`repositories/local.py:1441-1448` and the batched select at `1428-1432`); the settings read sits in a layer that already depends on settings transitively (`database/session.py:20`). Full mechanism in Q1 (R2). The one non-obvious trap: `ensure_modules_for` does **not** route through `_rows_for`, so filtering only `_rows_for` would leave the Hub list path leaking the module. |
 

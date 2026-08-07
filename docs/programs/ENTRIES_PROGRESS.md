@@ -12,7 +12,7 @@ program brief — that file is the plan; deviation is a STOP).
 | Phase | Name | Status | Gate outcome |
 |---|---|---|---|
 | 0 | Consolidate and baseline | **DONE 2026-08-06** | Merge sign-off delegated (see Phase 0 entry) |
-| 1 | SP-ENTRIES-R2 spec delta | **next** | — |
+| 1 | SP-ENTRIES-R2 spec delta | **DONE 2026-08-06** | STOP report presented; spec stays provisional until user confirms (flip = user's act) |
 | 2 | Deploy on wongworks.dev | not started | — |
 | 3 | SP-UI-1 appearance pass | **pre-executed** (see contradiction C1) | — |
 | 4 | Dogfood (floating) | not started | — |
@@ -69,6 +69,53 @@ confirmation are presented for review in the Phase 1 entry.
 - Committed the program master doc as `docs/programs/SP-PROGRAM-1.md`.
 - Merged `feat/sp-ui-1-control-plane` (11 commits ahead, superset of `dev`) into `main`
   (no-ff) and pushed. Merge sign-off: delegated per the operating directive above.
+- **C4 (found while opening Phase 1):** the bare `dev` branch blocked the program's
+  mandated `dev/prog1-p<N>-<slug>` namespace. Local `dev` + `feat/sp-ui-1-control-plane`
+  (both fully merged) deleted; **remote `origin/dev` deletion was permission-blocked** —
+  user follow-up: `git push origin --delete dev` (it is fully merged and will block
+  pushing any `dev/...` phase branch until removed).
+
+---
+
+## Phase 1 — SP-ENTRIES-R2 spec delta pass: DONE (2026-08-06)
+
+**Branch:** `dev/prog1-p1-spec-delta` (local; push blocked by origin's `dev` ref, see C4).
+**Execution:** fresh-context Opus agent workflow (`wf_bab49b2d-2b7`, 3 agents / 268k
+tokens): research → amend → adversarial verify, orchestrated and monitored by the session.
+
+- **Deliverable discipline held:** one commit (`abd1005`), one file changed —
+  `docs/superpowers/specs/2026-08-06-entries-design.md` (+472/−35). Zero production code.
+- **All eight Phase 1 items verified present and faithful** by an independent Opus
+  verifier that checked clause-by-clause against SP-PROGRAM-1's rulings, opened every
+  cited file/line, and confirmed the R1 text contradicting the new rulings (Q4's
+  "no entrant list" bullet, §4's hard email unique index) was genuinely deleted.
+  New sections: Q11 (R5 regulations/waiver), Q12 (R7 contact/player model with the
+  rejected hard-index option and four reasons), §2A (three-surface architecture +
+  R9 cutover checklist + I1 as spec invariant); Q4/§4/§7/§9.6 amended per items 3-7.
+- **R6 feasibility (item 8): feasible, no STOP owed.** Mechanism written into Q1 with
+  fifteen exact citations (all independently re-verified): the read-path filter lives at
+  the three `workspace_modules` read call sites in `repositories/local.py`
+  (`ensure_modules` 1400-1415, `ensure_modules_for` 1428-1432, `_rows_for` 1441-1448);
+  repo-wide grep confirms no fourth reader besides the `seed_modules` create path.
+- **Verifier verdict: DEVIATIONS → fixed.** One real defect: Q12's rejection reason (d)
+  cited `models.py:785-787` for the dedup-conflation trap that actually sits at
+  `models.py:778-784` (range inherited from R1). Fixed, plus two sub-threshold drifts
+  (`setupChecklist.ts:62`→`58`, `api/display.py:49`→`50`), in the follow-up commit.
+- **Gate:** `npm run docs:build` green (run by both amend and verify agents).
+- **R7 confirmation (owed at this STOP):** grounded by the research agent — the
+  incumbent's own stack supports one authenticated submitter acting for many players
+  (BWF Online Group Entry via Member Associations; Badminton Scotland club secretaries
+  creating accounts; Pickleball Brackets manual partner-add), and swim-meet entry is
+  natively multi-player-per-submitter. A hard per-event email-unique index would encode
+  the *consumer* flow of the incumbent and forbid its *delegated* flow. R7 stands as
+  ruled: soft attention flag, operator resolves.
+
+**STOP [USER SIGN-OFF] — presented in the session report.** Spec header remains
+**provisional**; per the program, the provisional→accepted flip is the user's act and is
+NOT taken under delegated authority. On approval, edit the spec header status line.
+
+**Next task:** Phase 2 (deploy on wongworks.dev). Requires access to `cayde`/`neo` and
+the Cloudflare dashboard — cannot proceed from this session without them.
 
 ---
 
