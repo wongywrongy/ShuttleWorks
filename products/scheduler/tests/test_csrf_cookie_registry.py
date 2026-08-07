@@ -37,7 +37,17 @@ from tests._helpers import isolate_test_database
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 GOOD_PW = "a perfectly fine passphrase"
 
-_API_DIR = Path(__file__).resolve().parents[1] / "backend" / "api"
+_BACKEND = Path(__file__).resolve().parents[1] / "backend"
+
+# **Every directory where a cookie can be set, not every directory where one
+# happened to be set when this guard was written.** The scan covered ``api/``
+# alone until SP-PROGRAM-1 Phase 6 put ``issue_play_csrf`` — a real
+# ``set_cookie`` — in ``app/form_csrf.py``, where the glob never looked. That
+# is the same failure mode as the one-hard-wired-cookie-name defect this whole
+# file exists about: not a wrong answer, an unasked question. A cookie set from
+# a directory outside this list is invisible to the gate, so adding a layer
+# that sets cookies means adding it here.
+_SCANNED_DIRS = (_BACKEND / "api", _BACKEND / "app")
 
 # Cookies that are deliberately NOT credentials — a locale or theme
 # preference, say. An addition here is a claim that the cookie cannot
@@ -159,34 +169,64 @@ def test_a_non_session_cookie_still_does_not_trigger_the_check(client):
 # ---- 2. The registry guard --------------------------------------------
 
 
-def _cookie_key_expressions() -> list[tuple[str, int, ast.AST]]:
-    """Every ``key=`` argument of every ``*.set_cookie(...)`` in ``api/``."""
-    found: list[tuple[str, int, ast.AST]] = []
-    for path in sorted(_API_DIR.glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            func = node.func
-            if not isinstance(func, ast.Attribute) or func.attr != "set_cookie":
-                continue
-            key = next(
-                (kw.value for kw in node.keywords if kw.arg == "key"),
-                node.args[0] if node.args else None,
-            )
-            assert key is not None, f"{path.name}:{node.lineno} set_cookie with no key"
-            found.append((path.name, node.lineno, key))
+def _module_constants(tree: ast.Module) -> dict[str, str]:
+    """The module's top-level ``NAME = "literal"`` bindings.
+
+    ``app/form_csrf.py`` sets its cookie as ``key=PLAY_CSRF_COOKIE`` — a
+    named constant, because the middleware and the pages read the same name
+    and a literal repeated three times is how they drift apart. The guard
+    resolves that from the module's own source rather than importing it, so
+    a cookie name is still checkable without the scan having to execute the
+    code it is auditing.
+    """
+    constants: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        value = node.value
+        if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name):
+                constants[target.id] = value.value
+    return constants
+
+
+def _cookie_key_expressions() -> list[tuple[str, int, ast.AST, dict[str, str]]]:
+    """Every ``key=`` argument of every ``*.set_cookie(...)`` under the
+    scanned directories, with the constants of the file it was found in."""
+    found: list[tuple[str, int, ast.AST, dict[str, str]]] = []
+    for directory in _SCANNED_DIRS:
+        for path in sorted(directory.glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            constants = _module_constants(tree)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if not isinstance(func, ast.Attribute) or func.attr != "set_cookie":
+                    continue
+                key = next(
+                    (kw.value for kw in node.keywords if kw.arg == "key"),
+                    node.args[0] if node.args else None,
+                )
+                assert key is not None, (
+                    f"{path.name}:{node.lineno} set_cookie with no key"
+                )
+                label = f"{path.parent.name}/{path.name}"
+                found.append((label, node.lineno, key, constants))
     return found
 
 
-def _resolve(expr: ast.AST) -> str:
+def _resolve(expr: ast.AST, constants: dict[str, str] | None = None) -> str:
     """The cookie name an expression denotes, as a string.
 
-    Handles the two shapes the codebase uses: a literal, and an attribute
-    read off ``settings``. Anything else is refused loudly rather than
-    guessed at — a computed cookie name is a thing this guard genuinely
-    cannot check, and silently skipping it would make the guard a
-    decoration.
+    Handles the three shapes the codebase uses: a literal, an attribute read
+    off ``settings``, and a module-level string constant of the file the call
+    was found in. Anything else is refused loudly rather than guessed at — a
+    computed cookie name is a thing this guard genuinely cannot check, and
+    silently skipping it would make the guard a decoration.
     """
     from app.config import settings
 
@@ -198,9 +238,12 @@ def _resolve(expr: ast.AST) -> str:
         and expr.value.id == "settings"
     ):
         return getattr(settings, expr.attr)
+    if isinstance(expr, ast.Name) and expr.id in (constants or {}):
+        return (constants or {})[expr.id]
     raise AssertionError(
-        "set_cookie(key=…) must be a literal or a settings attribute so the "
-        f"registry guard can check it; got {ast.dump(expr)}"
+        "set_cookie(key=…) must be a literal, a settings attribute or a "
+        "module-level string constant so the registry guard can check it; got "
+        f"{ast.dump(expr)}"
     )
 
 
@@ -214,17 +257,33 @@ def test_every_api_set_cookie_names_a_registered_session_cookie(client):
     assert calls, "found no set_cookie calls at all — the scan is broken"
 
     strays = [
-        f"{name}:{line} sets {_resolve(expr)!r}"
-        for name, line, expr in calls
-        if _resolve(expr) not in registry
+        f"{name}:{line} sets {_resolve(expr, constants)!r}"
+        for name, line, expr, constants in calls
+        if _resolve(expr, constants) not in registry
     ]
 
     assert not strays, (
-        "These cookies are set by the API but are not in "
+        "These cookies are set by the backend but are not in "
         "settings.session_cookie_names, so the CSRF middleware will not "
         "treat writes carrying them as cookie-authenticated:\n  "
         + "\n  ".join(strays)
     )
+
+
+def test_the_scan_reaches_every_directory_that_sets_a_cookie(client):
+    """**The control on the scan's own reach**, which is the part that
+    silently rots. A guard that globs one directory answers "no strays" just
+    as confidently about a directory it never opened, and Phase 6 put a real
+    ``set_cookie`` in ``app/`` — so pin that both layers are actually seen.
+
+    Named by file rather than counted, because a count passes for the wrong
+    reason the moment a call moves between the two directories.
+    """
+    seen = {name for name, _line, _expr, _constants in _cookie_key_expressions()}
+
+    assert "api/auth.py" in seen
+    assert "api/entrants.py" in seen
+    assert "app/form_csrf.py" in seen
 
 
 def test_the_registry_names_both_principals(client):

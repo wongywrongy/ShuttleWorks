@@ -106,6 +106,24 @@ def issue_play_csrf(response: Response) -> str:
     but can never read it. ``secure`` follows the deployment's session
     setting so the nonce is never the weaker half of the pair.
 
+    **Last issuance wins, and that is a decision.** The cookie is set at
+    ``path="/"``, so every call overwrites the previous nonce for the whole
+    origin. Concretely: open the login page in a second tab and the token
+    baked into the *first* tab's form no longer matches the cookie, so
+    submitting that first tab is refused with "This form has expired. Reload
+    the entry page and try again." — a reload, not a lost account and not a
+    silent failure.
+
+    Accepted rather than fixed, on three grounds. Keeping several nonces
+    alive at once means a list in the cookie with an eviction policy, which
+    is a server-side token store in everything but name — the property this
+    whole design exists to avoid. The entrant surface is a phone at a club
+    night, where two concurrent login forms is not the shape of real use.
+    And the failure is loud, recoverable in one action, and says what to do.
+    The cost is real and lands on desktop multi-tab users; it is written down
+    here so that when someone meets it in the wild it is an inherited
+    decision with reasons, not a bug report with a mystery.
+
     Returns the token to embed in the form, not the nonce — the nonce stays
     in the cookie jar and nowhere else.
     """

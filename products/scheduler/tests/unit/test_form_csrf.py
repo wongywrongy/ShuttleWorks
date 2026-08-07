@@ -154,7 +154,61 @@ def test_the_nonce_is_unguessable_and_fresh_per_issue():
         nonces.add(_set_cookie(response)[PLAY_CSRF_COOKIE].value)
 
     assert len(nonces) == 25
-    assert all(len(nonce) >= 32 for nonce in nonces)
+    # 32 bytes through ``token_urlsafe`` is 43 characters. Asserted at the
+    # real width rather than a round ">= 32": 32 *characters* is what
+    # ``token_urlsafe(24)`` produces, so the loose bound would have let the
+    # entropy be quietly cut by a quarter and still passed.
+    assert all(len(nonce) >= 43 for nonce in nonces)
+
+
+def test_the_nonce_cookie_expires_after_four_hours():
+    """The form's lifetime, pinned because it is a judgement call rather
+    than a derived value: long enough to be interrupted mid-signup and come
+    back, short enough that a nonce left in a shared club laptop is not
+    reusable all week. Changing it should be a visible act."""
+    from app.form_csrf import PLAY_CSRF_COOKIE, issue_play_csrf
+
+    response = Response()
+    issue_play_csrf(response)
+
+    assert _set_cookie(response)[PLAY_CSRF_COOKIE]["max-age"] == str(4 * 60 * 60)
+
+
+def test_a_second_issuance_invalidates_the_first_tab_s_token():
+    """**The multi-tab consequence, pinned as an accepted decision.**
+
+    The cookie is set at ``path="/"``, so issuing a second one overwrites
+    the first for the whole origin: a user who opens login in a second tab
+    finds the first tab's embedded token no longer matches the cookie, and
+    submitting it is refused with "This form has expired. Reload the entry
+    page and try again."
+
+    That is deliberate — the alternative is several live nonces with an
+    eviction policy, which is a server-side token store in everything but
+    name. This test exists so the behaviour is inherited knowledge for the
+    pages built in Tasks 8-12 and 19-21 rather than a surprise bug report,
+    and so that anyone who decides to *change* it changes a red test rather
+    than discovering the reasoning afterwards. The full argument is in
+    ``issue_play_csrf``'s docstring.
+    """
+    from app.form_csrf import PLAY_CSRF_COOKIE, form_csrf_token, issue_play_csrf
+
+    first_tab = Response()
+    first_token = issue_play_csrf(first_tab)
+
+    second_tab = Response()
+    second_token = issue_play_csrf(second_tab)
+    live_nonce = _set_cookie(second_tab)[PLAY_CSRF_COOKIE].value
+
+    # The browser now holds only the second nonce, and the first tab's form
+    # still carries the first token.
+    assert form_csrf_token(live_nonce) == second_token
+    assert form_csrf_token(live_nonce) != first_token
+
+    # And the overwrite is total, not scoped to a path — which is the
+    # mechanism that makes it happen at all.
+    assert _set_cookie(first_tab)[PLAY_CSRF_COOKIE]["path"] == "/"
+    assert _set_cookie(second_tab)[PLAY_CSRF_COOKIE]["path"] == "/"
 
 
 def test_the_nonce_cookie_follows_the_deployment_secure_flag():
