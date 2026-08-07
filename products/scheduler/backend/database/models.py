@@ -602,8 +602,24 @@ class BracketResult(Base):
 # enablement) read and mutate first-class state rather than re-deriving.
 
 # Canonical module ids. ``meet`` / ``bracket`` are the data-producing
-# operator modules; ``display`` is the read-only public surface.
-MODULE_IDS = ("meet", "bracket", "display")
+# operator modules; ``display`` is the read-only public surface;
+# ``entries`` is the public *intake* surface (see CLOUD_ONLY_MODULES).
+MODULE_IDS = ("meet", "bracket", "display", "entries")
+
+# Modules that only exist where the deployment can actually operate them.
+# Entries is public self-service registration: it needs real operator
+# accounts and a reachable public surface, so a local-mode deployment can
+# never enable it. ADR 0005 retired ``coming_soon`` precisely so that every
+# module a workspace shows is actionable — a permanently-unenableable module
+# would resurrect the state that ADR deleted. So local mode does not seed
+# these, and filters them out of both module read paths.
+#
+# This module stays SETTINGS-FREE: the mode arrives as the explicit
+# ``include_cloud_only`` argument below, supplied by the caller. The
+# predicate behind it lives in ``app.config.cloud_modules_enabled`` and keys
+# on ``AUTH_MODE`` (ruling D2) — deliberately not ``ENVIRONMENT``, which
+# ``docker-compose.cloud.yml`` pins to ``local`` on purpose.
+CLOUD_ONLY_MODULES = ("entries",)
 
 # Module lifecycle vocabulary. ``enabled`` — active/operable; ``available``
 # — installable but off; ``disabled`` — turned off by the operator;
@@ -617,7 +633,9 @@ MODULE_STATUSES = ("enabled", "available", "disabled", "coming_soon")
 OPERATIONAL_MODULES = ("meet", "bracket")
 
 
-def derive_modules(kind: Optional[str]) -> dict[str, str]:
+def derive_modules(
+    kind: Optional[str], *, include_cloud_only: bool = False
+) -> dict[str, str]:
     """Map a tournament's legacy ``kind`` to its seed module status set.
 
     The kind's own operator is ``enabled``; the foreign operator is
@@ -626,11 +644,22 @@ def derive_modules(kind: Optional[str]) -> dict[str, str]:
     ``display`` is ``available`` for both kinds — the bracket public display
     (SP-B3) renders the draw / live matches / results. Unknown / ``None``
     kinds fall back to the meet shape.
+
+    ``include_cloud_only`` adds ``CLOUD_ONLY_MODULES`` (``entries``, also
+    ``available`` for both kinds). Keyword-only and defaulting to ``False``
+    on purpose: the default is the safe direction — a caller that forgets to
+    ask omits a module, rather than seeding one the deployment cannot
+    operate. The mode is the caller's to know; this layer imports no
+    settings.
     """
     if kind == "bracket":
-        return {"bracket": "enabled", "display": "available", "meet": "available"}
-    # ``meet`` and any unknown / None kind.
-    return {"meet": "enabled", "display": "available", "bracket": "available"}
+        modules = {"bracket": "enabled", "display": "available", "meet": "available"}
+    else:
+        # ``meet`` and any unknown / None kind.
+        modules = {"meet": "enabled", "display": "available", "bracket": "available"}
+    if include_cloud_only:
+        modules.update({module_id: "available" for module_id in CLOUD_ONLY_MODULES})
+    return modules
 
 
 def display_dependency_satisfied(statuses: dict[str, str]) -> bool:
@@ -647,24 +676,42 @@ def display_dependency_satisfied(statuses: dict[str, str]) -> bool:
     return any(statuses.get(m) == "enabled" for m in OPERATIONAL_MODULES)
 
 
-def normalize_module_seed(seeds: list[dict]) -> list[dict]:
+def normalize_module_seed(
+    seeds: list[dict], *, include_cloud_only: bool = False
+) -> list[dict]:
     """Validate and complete an explicit create-time module seed.
 
     ``seeds`` is the create endpoint's optional ``modules[]`` — each item a
     dict with ``moduleId``, ``status``, and optional ``config``. Validates
-    structure (known id, no duplicates, valid status), backfills any of the
-    three modules not named, and returns an ordered (by ``MODULE_IDS``) list
-    of ``{"module_id", "status", "config"}`` rows ready to persist.
+    structure (known id, no duplicates, valid status), backfills any
+    seedable module not named, and returns an ordered (by ``MODULE_IDS``)
+    list of ``{"module_id", "status", "config"}`` rows ready to persist.
 
     Backfill: any unnamed module becomes ``available`` (installable) — display
     included, since it is fully built for both operators (meet + bracket). Raises
     ``ValueError`` on malformed input; the caller maps that to a 400 and separately
     applies ``display_dependency_satisfied``.
+
+    ``include_cloud_only`` mirrors ``derive_modules``: without it,
+    ``CLOUD_ONLY_MODULES`` are neither backfilled nor accepted when named
+    explicitly. Naming one is an error rather than a silent drop — persisting
+    a row the read path would then hide is the confusing outcome. The route
+    catches this case first and answers ``MODULE_REQUIRES_CLOUD``; this
+    ValueError is the defence-in-depth for any other caller.
     """
+    seedable = tuple(
+        module_id
+        for module_id in MODULE_IDS
+        if include_cloud_only or module_id not in CLOUD_ONLY_MODULES
+    )
     named: dict[str, dict] = {}
     for item in seeds:
         module_id = item.get("moduleId")
         status = item.get("status")
+        if module_id in CLOUD_ONLY_MODULES and not include_cloud_only:
+            raise ValueError(
+                f"moduleId {module_id!r} requires a cloud-mode deployment"
+            )
         if module_id not in MODULE_IDS:
             raise ValueError(f"unknown moduleId: {module_id!r}")
         if module_id in named:
@@ -687,7 +734,7 @@ def normalize_module_seed(seeds: list[dict]) -> list[dict]:
     # *enabled* when an operational module is enabled — the dependency rule
     # (display_dependency_satisfied), applied separately by the caller.
     rows: list[dict] = []
-    for module_id in MODULE_IDS:
+    for module_id in seedable:
         if module_id in named:
             rows.append(named[module_id])
         else:

@@ -330,3 +330,24 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def cloud_modules_enabled() -> bool:
+    """Whether this deployment can operate ``CLOUD_ONLY_MODULES``.
+
+    **Ruling D2: the predicate is AUTH_MODE, not ENVIRONMENT.** The Entries
+    design originally keyed the cloud-only module rule on
+    ``settings.environment == "cloud"``, which collides with the tree:
+    ``docker-compose.cloud.yml`` deliberately runs ``ENVIRONMENT=local``
+    (it is a smoke stack, and ``ENVIRONMENT=cloud`` trips the hard
+    start-up validator above). ``AUTH_MODE`` is the honest signal — Entries
+    is public self-service registration and is meaningless without real
+    operator accounts, which is exactly what ``AUTH_MODE=cloud`` means. The
+    smoke and self-host stacks both set it; plain local stacks do not.
+
+    Read at call time, never captured at import, so a test can flip it with
+    ``monkeypatch.setattr(settings, "auth_mode", …)`` — the pattern
+    ``tests/unit/test_dependencies.py`` and ``tests/test_client_ip_trust.py``
+    already use.
+    """
+    return settings.auth_mode == "cloud"

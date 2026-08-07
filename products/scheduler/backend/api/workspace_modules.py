@@ -18,11 +18,13 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Path
 
+from app.config import cloud_modules_enabled
 from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
 from app.limits import Code, StrictModel
 from app.schemas import WorkspaceModuleDTO
 from database.models import (
+    CLOUD_ONLY_MODULES,
     MODULE_STATUSES,
     OPERATIONAL_MODULES,
     WorkspaceModule,
@@ -102,6 +104,8 @@ def patch_module(
     """Update a module's status / config, enforcing the control-plane rules.
 
     Rules (each a 409 with a stable error code):
+    - A cloud-only module (``entries``) cannot be touched on a local-mode
+      deployment.
     - ``coming_soon`` modules are immutable.
     - Enabling ``display`` requires ≥1 enabled operational module.
     - A module with data (meet→matches, bracket→bracket_events) cannot be
@@ -110,6 +114,17 @@ def patch_module(
     Only status / config are writable; omitted fields are preserved.
     """
     modules = _resolve_modules(tournament_id, repo)
+    # BEFORE the generic 404. With the read filter in place the resolved
+    # list has no cloud-only entry in local mode, so ``by_id.get`` would be
+    # None and the route would 404 — correct, but a misleading answer for a
+    # module that plainly exists in the vocabulary. Defence in depth for the
+    # cloud → local database move, and a better message.
+    if module_id in CLOUD_ONLY_MODULES and not cloud_modules_enabled():
+        raise http_error(
+            409,
+            ErrorCode.MODULE_REQUIRES_CLOUD,
+            f"module '{module_id}' requires a cloud-mode deployment",
+        )
     by_id = {m.module_id: m for m in modules}
     target = by_id.get(module_id)
     if target is None:

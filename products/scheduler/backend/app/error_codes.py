@@ -90,6 +90,12 @@ class ErrorCode(str, Enum):
     MODULE_DEPENDENCY_UNMET = "MODULE_DEPENDENCY_UNMET"
     MODULE_LAST_OPERATIONAL = "MODULE_LAST_OPERATIONAL"
     MODULE_HAS_DATA = "MODULE_HAS_DATA"
+    # A cloud-only module (CLOUD_ONLY_MODULES — today just ``entries``)
+    # touched on a local-mode deployment. The read filter already hides
+    # such a module, so the generic MODULE_NOT_FOUND would fire anyway;
+    # this code exists so the answer says *why* instead of implying the
+    # module doesn't exist. Also the create-seed refusal.
+    MODULE_REQUIRES_CLOUD = "MODULE_REQUIRES_CLOUD"
 
     # Tenancy (SP-CLOUD-2) — the uniform cross-tenant answer. A caller
     # without membership can never learn whether the workspace exists.

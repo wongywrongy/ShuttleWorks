@@ -55,8 +55,10 @@ from fastapi import Request
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import cloud_modules_enabled
 from app.time_utils import now_iso
 from database.models import (
+    CLOUD_ONLY_MODULES,
     BracketEvent,
     BracketMatch,
     BracketParticipant,
@@ -1377,6 +1379,19 @@ class _LocalModuleRepo:
     mutate path calls it, so a fresh ``create_all`` DB (tests), a
     freshly-created tournament, and an existing prod row all converge on
     the derived set without depending on the Alembic backfill.
+
+    This class is also where the deployment mode enters the module system
+    (spec Q1 / ruling R6). ``CLOUD_ONLY_MODULES`` rows are seeded only in
+    cloud mode and filtered out of **both** read queries in local mode —
+    the batched ``ensure_modules_for`` reads ``WorkspaceModule`` directly
+    and does not inherit ``_rows_for``'s filter, so applying it to only one
+    of the two leaks the module onto the Hub list.
+
+    Rows are **filtered, never deleted**. An inherited row (a database
+    restored from a cloud backup, or copied onto a laptop) stays in the
+    table untouched, so moving that database back to a cloud deployment
+    restores the module with its status and config intact. Filtering is a
+    projection, not a migration.
     """
 
     def __init__(self, session: Session) -> None:
@@ -1400,7 +1415,10 @@ class _LocalModuleRepo:
         existing = self._rows_for(tournament.id)
         if existing:
             return existing
-        derived = derive_modules(getattr(tournament, "kind", None))
+        derived = derive_modules(
+            getattr(tournament, "kind", None),
+            include_cloud_only=cloud_modules_enabled(),
+        )
         for module_id, status in derived.items():
             self.session.add(
                 WorkspaceModule(
@@ -1425,10 +1443,15 @@ class _LocalModuleRepo:
             return {}
         ids = [t.id for t in tournaments]
         by_tid: dict[uuid.UUID, list[WorkspaceModule]] = {tid: [] for tid in ids}
+        stmt = select(WorkspaceModule).where(WorkspaceModule.tournament_id.in_(ids))
+        # The second of the two filtered queries. This one reads
+        # WorkspaceModule directly rather than going through _rows_for, so
+        # it needs its own copy of the mode filter — missing it here is the
+        # obvious bug, and it leaks the module onto the Hub list only.
+        if not cloud_modules_enabled():
+            stmt = stmt.where(WorkspaceModule.module_id.notin_(CLOUD_ONLY_MODULES))
         rows = self.session.scalars(
-            select(WorkspaceModule)
-            .where(WorkspaceModule.tournament_id.in_(ids))
-            .order_by(WorkspaceModule.module_id.asc())
+            stmt.order_by(WorkspaceModule.module_id.asc())
         )
         for m in rows:
             by_tid.setdefault(m.tournament_id, []).append(m)
@@ -1439,12 +1462,16 @@ class _LocalModuleRepo:
         return by_tid
 
     def _rows_for(self, tournament_id: uuid.UUID) -> list[WorkspaceModule]:
+        """Both branches of ``ensure_modules`` return through here, so this
+        is one of the two places the mode filter lives (the other is the
+        batched select above)."""
+        stmt = select(WorkspaceModule).where(
+            WorkspaceModule.tournament_id == tournament_id
+        )
+        if not cloud_modules_enabled():
+            stmt = stmt.where(WorkspaceModule.module_id.notin_(CLOUD_ONLY_MODULES))
         return list(
-            self.session.scalars(
-                select(WorkspaceModule)
-                .where(WorkspaceModule.tournament_id == tournament_id)
-                .order_by(WorkspaceModule.module_id.asc())
-            )
+            self.session.scalars(stmt.order_by(WorkspaceModule.module_id.asc()))
         )
 
     def get(
