@@ -34,10 +34,15 @@ it.
 
 1. Slug → page → tournament, or the uniform 404. Nothing else runs first;
    an unknown slug must cost a stranger one query and tell them nothing.
-2. **Turnstile, server-side.** A widget nobody verifies is worth nothing —
-   bots post straight here without ever loading the page.
-3. **Per-IP throttle**, the ``AuthThrottle`` engine on its own ``entry:``
+2. **Per-IP throttle**, the ``AuthThrottle`` engine on its own ``entry:``
    namespace so an entry flood cannot lock a venue out of *signing in*.
+   The *lock* is read here, ahead of Turnstile, because it is a local query
+   and siteverify is an outbound request with a 5s timeout — checking the
+   challenge first would let an already-refused IP spend one of our
+   outbound requests per post. The *attempt* is still charged after each
+   guard that refuses, so a failed challenge costs the budget as before.
+3. **Turnstile, server-side.** A widget nobody verifies is worth nothing —
+   bots post straight here without ever loading the page.
 4. **Acknowledgment**, with the version agreed to recorded at that instant
    (Q11). One of the few places this software genuinely refuses.
 5. **Idempotency-Key**, tenant-scoped (ruling D4) — the solve rail's index
@@ -562,7 +567,22 @@ def submit_entry(
     ip = client_ip(request)
     throttle_key = auth_service.entries_key(ip)
 
-    # 2 — the challenge, checked here and not in the browser.
+    # 2 — the per-IP budget, read before anything costs us a network round
+    # trip. The lock is one local query; siteverify is an outbound request
+    # with a 5s timeout. Verifying first would let an IP that is *already*
+    # refused spend one of our outbound requests on every post — the
+    # cheapest possible amplification against the one route whose entire
+    # job is to be cheap to refuse.
+    remaining = auth_service.throttle_check(repo.session, throttle_key)
+    if remaining is not None:
+        raise http_error(
+            429,
+            ErrorCode.AUTH_THROTTLED,
+            "Too many entries from this connection — try again later",
+            extra={"retryAfterSeconds": int(remaining) + 1},
+        )
+
+    # 3 — the challenge, checked here and not in the browser.
     verdict = verify_turnstile(turnstile_token, remote_ip=ip)
     if not verdict.success:
         # Charge the attempt: a bot that fails the challenge repeatedly is
@@ -577,16 +597,6 @@ def submit_entry(
             else "The human check did not pass. Please try again."
         )
         return _refusal(repo, page, tournament, 403, message, values)
-
-    # 3 — the per-IP budget.
-    remaining = auth_service.throttle_check(repo.session, throttle_key)
-    if remaining is not None:
-        raise http_error(
-            429,
-            ErrorCode.AUTH_THROTTLED,
-            "Too many entries from this connection — try again later",
-            extra={"retryAfterSeconds": int(remaining) + 1},
-        )
 
     # 4 — the acknowledgment. An acknowledgment given after the fact is not
     # one, so this refuses rather than recording it later (Q11).

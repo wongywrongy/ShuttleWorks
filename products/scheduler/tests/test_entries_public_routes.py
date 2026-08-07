@@ -494,6 +494,58 @@ def test_under_the_budget_nothing_is_locked(client, page, turnstile, monkeypatch
     assert codes == [201] * 5
 
 
+def test_a_locked_out_ip_is_refused_without_reaching_turnstile(
+    client, page, turnstile, monkeypatch
+):
+    """The lock is a local read; siteverify is an outbound 5s round trip.
+
+    Checking the challenge first let anything already locked out spend one
+    of our outbound requests per post — the cheapest possible amplification
+    against a route whose whole job is to be cheap to refuse. The transport
+    here raises if it is called at all, so this cannot pass by the verdict
+    merely being ignored.
+    """
+    from app.config import settings
+    from services import turnstile as service
+
+    monkeypatch.setattr(settings, "entries_max_per_ip", 1)
+    assert _submit(client, page).status_code == 201
+
+    calls = []
+
+    def must_not_be_called(url, fields, timeout):
+        calls.append(url)
+        raise AssertionError("siteverify called for an IP that is already locked out")
+
+    monkeypatch.setattr(service, "_post", must_not_be_called)
+
+    r = _submit(client, page)
+    assert r.status_code == 429
+    assert calls == []
+    assert len(_entries(page["tid"])) == 1
+
+
+def test_an_unlocked_ip_still_reaches_turnstile(client, page, turnstile, monkeypatch):
+    """Negative control for the ordering: with the budget raised, the same
+    submission does make the siteverify call. Otherwise the test above would
+    pass just as well against a route that never verifies anything."""
+    from app.config import settings
+    from services import turnstile as service
+
+    monkeypatch.setattr(settings, "entries_max_per_ip", 50)
+    calls = []
+    real_post = service._post
+
+    def counting_post(url, fields, timeout):
+        calls.append(url)
+        return real_post(url, fields, timeout)
+
+    monkeypatch.setattr(service, "_post", counting_post)
+
+    assert _submit(client, page).status_code == 201
+    assert len(calls) == 1
+
+
 def test_the_throttle_bucket_is_its_own_namespace():
     """A separate namespace from the credential and registration buckets, so
     an entry flood cannot lock a venue out of signing in."""
