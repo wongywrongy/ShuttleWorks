@@ -6,6 +6,9 @@ const FIXTURES = [
   'app/lib/__boundary_fixture__.server.ts',
   'app/components/__boundary_fixture__.tsx',
   'app/routes/__boundary_fixture__.tsx',
+  'app/lib/__leak__.server.ts',
+  'app/lib/__reexport__.ts',
+  'app/components/__indirect__.tsx',
 ];
 
 function cleanup(): void {
@@ -58,6 +61,27 @@ test('a client-reachable module importing a .server module is an error', () => {
     'app/components/__boundary_fixture__.tsx',
     "import { serverOnly } from '../lib/__boundary_fixture__.server';\n" +
       'export function Fixture() { return serverOnly; }\n',
+  );
+
+  const { code, out } = depcruise();
+  expect(out).toContain('entrant-server-only-stays-server');
+  expect(code).not.toBe(0);
+});
+
+test('a one-hop re-export barrel does not launder a .server import (transitive case)', () => {
+  // Direct-import matching alone (a plain `to.path` restriction) only sees
+  // the edge component -> barrel, not barrel -> *.server.ts, so a re-export
+  // barrel would sail through clean — the exact leak this rule exists to
+  // stop, one hop removed. `to.reachable: true` walks the transitive graph,
+  // not just direct edges, which is what catches this.
+  mkdirSync('app/lib', { recursive: true });
+  mkdirSync('app/components', { recursive: true });
+  writeFileSync('app/lib/__leak__.server.ts', 'export const leaked = 1;\n');
+  writeFileSync('app/lib/__reexport__.ts', "export { leaked } from './__leak__.server';\n");
+  writeFileSync(
+    'app/components/__indirect__.tsx',
+    "import { leaked } from '../lib/__reexport__';\n" +
+      'export function Indirect() { return leaked; }\n',
   );
 
   const { code, out } = depcruise();

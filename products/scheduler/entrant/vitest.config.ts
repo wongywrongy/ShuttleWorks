@@ -19,5 +19,17 @@ export default defineConfig({
     // first run only, which is the worst kind of flake.
     testTimeout: 60_000,
     hookTimeout: 60_000,
+    // Each test file that calls `createServer(...)` (health.test.ts,
+    // design-system.test.ts) boots its own @react-router/dev Vite plugin
+    // instance, and that plugin's typegen watcher unconditionally
+    // `rm(recursive, force)`s + repopulates the SHARED `.react-router/types`
+    // directory on start (see @react-router/dev/dist/vite.js `watch()`).
+    // With vitest's default file-level parallelism, two such instances race
+    // on that one directory — one process's rm/mkdir lands mid another's —
+    // and the loser throws an unhandled `ENOTEMPTY` during teardown even
+    // though every assertion passed. Serializing file execution removes the
+    // race outright: only one Vite/typegen instance touches
+    // .react-router/types at a time.
+    fileParallelism: false,
   },
 });
