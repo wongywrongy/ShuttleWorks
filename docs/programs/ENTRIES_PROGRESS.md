@@ -119,6 +119,23 @@ the Cloudflare dashboard — cannot proceed from this session without them.
 
 ---
 
+## PROGRAM AMENDMENT A1 (user-authorized, 2026-08-06 — recorded verbatim per SP-E1-1)
+
+> **AMENDMENT A1 (user-authorized):** Phase 5 development proceeds locally before Phase 2.
+> The original ordering protected against *public exposure* on an unvalidated deployment;
+> development does not expose anything. The Phase 5 **[USER SIGN-OFF] public-exposure
+> security gate is preserved in full** and now sits after Phase 2 completes: no tunnel
+> ingress, DNS record, or Access change for entries may be made in this or any session
+> until that gate is passed. Phase 2 remains blocked on user-provided infrastructure
+> access; Phase 3's open item (attention-code shared constant) remains Phase 3 scope.
+
+## Phase 5 / SP-E1-1 — E1 walking skeleton, locally: IN PROGRESS (2026-08-06)
+
+**Branch:** `dev/prog1-p5-e1`. **Prompt:** SP-E1-1 (replaces SP-VERIFY-1).
+Phase A (audit + plan) in progress; STOP report owed before any Phase B code.
+
+---
+
 **Context.** ShuttleWorks has no intake capability — operators put players into workspaces
 by hand (Meet: a flat roster in the `tournaments.data` blob; Bracket: a per-event
 participant picker). Entries adds public self-service registration: players sign up for
