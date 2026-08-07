@@ -61,7 +61,7 @@ from app.client_ip import client_ip
 from app.config import settings
 from app.dependencies import AuthEntrant, get_current_entrant
 from app.error_codes import ErrorCode, http_error
-from app.form_csrf import FORM_FIELD
+from app.form_csrf import FORM_FIELD, PLAY_CSRF_COOKIE
 from database.models import Org
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service
@@ -336,12 +336,30 @@ def require_form_csrf(request: Request, form) -> None:
     proceed at all, and this decides whether *this* form was minted for
     *this* session. Removing either leaves a hole, so both have their own
     negative controls.
+
+    **Two candidate secrets, not one (Phase 6, Task 12).** The submit/quote
+    callers always carry an entrant session (``get_current_entrant`` has no
+    bootstrap fallback), so the session cookie alone used to be enough. The
+    entrant auth routes (``api/entrants.py``) call this too, and signup/login
+    are pre-session by construction — there is no session cookie yet, which
+    is exactly what ``PLAY_CSRF_COOKIE`` (``app.form_csrf.issue_play_csrf``)
+    exists to stand in for. Checking both, same as
+    ``app.form_csrf.form_csrf_proves`` does, costs the session-gated callers
+    nothing: they never carry a ``sw_play_csrf`` cookie, so that candidate is
+    simply absent from ``expected`` for them.
     """
     presented = str(form.get(FORM_FIELD) or "")
-    expected = _form_csrf(
-        request.cookies.get(settings.entrant_session_cookie_name) or ""
-    )
-    if not expected or not secrets.compare_digest(presented, expected):
+    expected = [
+        token
+        for token in (
+            _form_csrf(request.cookies.get(settings.entrant_session_cookie_name) or ""),
+            _form_csrf(request.cookies.get(PLAY_CSRF_COOKIE) or ""),
+        )
+        if token
+    ]
+    if not expected or not any(
+        secrets.compare_digest(presented, token) for token in expected
+    ):
         raise http_error(
             403,
             ErrorCode.AUTH_CSRF_REQUIRED,

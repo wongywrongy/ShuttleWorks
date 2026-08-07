@@ -41,12 +41,16 @@ only on the created branch would be as observable as a status code.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+import re
+from typing import Optional, Type
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from pydantic import BaseModel
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import IntegrityError
 
+from api.entries_json import require_form_csrf
 from app.client_ip import client_ip
 from app.config import settings
 from app.dependencies import AuthEntrant, get_current_entrant
@@ -110,6 +114,171 @@ class EntrantDTO(BaseModel):
     email: str
     displayName: Optional[str] = None
     emailVerified: bool = False
+
+
+# ---- the unhydrated HTML path (Phase 6) ------------------------------
+#
+# **Zero new routes.** F-E1-2-E1 is a missing-UI finding: this file already
+# had signup, login and logout, and the logged-out entry page already NAMED
+# them — it just shipped no form, so no human could self-serve an account.
+# What these three gain is a body a browser can post without JavaScript,
+# and the proof-of-intent that a body needs.
+
+_FORM_CONTENT_TYPES = frozenset(
+    {"application/x-www-form-urlencoded", "multipart/form-data"}
+)
+
+# Fields the HTML forms carry that are transport, not domain. ``StrictModel``
+# forbids extras, so they are stripped before the model is built rather than
+# added to it: ``_csrf`` is how a form proves itself and ``next`` is where it
+# goes back to, and neither is a property of an account.
+_TRANSPORT_FIELDS = frozenset({"_csrf", "next"})
+
+# Optional text inputs post ``""`` when left blank, which is a VALUE to a
+# StrictModel and would fail ``Name``'s bounds where a JSON caller simply
+# omits the key. Dropped for these two only — never for ``password``, where
+# an empty string must reach ``validate_password`` and come back as a
+# readable AUTH_WEAK_PASSWORD rather than a 422 about a missing field.
+_OPTIONAL_TEXT = frozenset({"displayName", "phone"})
+
+# The one prefix the entrant tier owns. Anchored, so ``//host`` and
+# ``https://host`` both fail; ``..`` is excluded separately because a
+# browser normalises ``/e/../../api`` to ``/api`` before the request is
+# ever made.
+_SAFE_NEXT = re.compile(r"^/e/[A-Za-z0-9/_.~-]*$")
+
+
+def is_form_post(request: Request) -> bool:
+    return (
+        (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+        in _FORM_CONTENT_TYPES
+    )
+
+
+def next_target(raw: Optional[str], fallback: str) -> str:
+    """Where a form post sends the browser, and nowhere else.
+
+    An open redirect on a login route is a phishing primitive: the victim
+    types real credentials on a real origin and is then handed to an
+    attacker's page carrying whatever the link said. So the target is not
+    *sanitised* — it is matched against the one prefix this tier owns, and
+    anything else is discarded for the fallback. Matching beats stripping
+    because a stripper has to anticipate every encoding and a matcher does
+    not.
+    """
+    value = str(raw or "")
+    if ".." in value or not _SAFE_NEXT.match(value):
+        return fallback
+    return value
+
+
+async def _payload(request: Request) -> dict:
+    """The request body as a plain dict, JSON or urlencoded.
+
+    A dependency rather than a route change so the routes stay ``def`` and
+    keep running in the threadpool — Argon2id on the event loop would stall
+    every other request in the process for the duration of a hash.
+    """
+    if not is_form_post(request):
+        try:
+            body = await request.json()
+        except ValueError as exc:
+            # FastAPI parses the body itself when a route DECLARES a model,
+            # and answers 422 ``json_invalid`` for one it cannot read. Doing
+            # the parse here moved that failure into a dependency, where an
+            # unhandled JSONDecodeError is a 500 — on a pre-session route
+            # anyone can post to. Same status, same code, same shape.
+            raise RequestValidationError(
+                [
+                    {
+                        "type": "json_invalid",
+                        "loc": ("body", 0),
+                        "msg": "JSON decode error",
+                        "input": {},
+                        "ctx": {"error": str(exc)},
+                    }
+                ]
+            ) from exc
+        return body if isinstance(body, dict) else {}
+
+    form = await request.form()
+    data = {
+        key: str(value)
+        for key, value in form.multi_items()
+        if key not in _TRANSPORT_FIELDS
+    }
+    # Cloudflare posts the widget's solution under ``cf-turnstile-response``
+    # in a form; the JSON surface names it ``turnstileToken`` (see
+    # ``SignupRequest``). Mapping it HERE rather than on the node tier keeps
+    # one spelling of one field in one codebase.
+    solution = data.pop("cf-turnstile-response", None)
+    if solution is not None:
+        data.setdefault("turnstileToken", solution)
+    return {
+        key: value
+        for key, value in data.items()
+        if value != "" or key not in _OPTIONAL_TEXT
+    }
+
+
+def _build(data: dict, model: Type[BaseModel]) -> BaseModel:
+    """Construct the DTO, preserving FastAPI's own 422 for a bad body.
+
+    Re-raised as ``RequestValidationError`` deliberately: a bare pydantic
+    ``ValidationError`` has no handler and would 500. The JSON callers'
+    status codes and error bodies are unchanged by this whole change, and
+    ``test_the_json_contract_is_untouched`` is what says so.
+
+    ``loc`` is re-prefixed with ``"body"`` because that prefix is FastAPI's,
+    not pydantic's — it is added by the route's own body parser, which this
+    dependency replaced. Without it a caller that reads ``loc[-1]`` still
+    works and one that reads ``loc[1]`` silently stops finding the field.
+    """
+    try:
+        return model(**data)
+    except ValidationError as exc:
+        raise RequestValidationError(
+            [{**error, "loc": ("body", *error["loc"])} for error in exc.errors()]
+        ) from exc
+
+
+async def signup_body(request: Request) -> SignupRequest:
+    if is_form_post(request):
+        require_form_csrf(request, await request.form())
+    return _build(await _payload(request), SignupRequest)
+
+
+async def login_body(request: Request) -> LoginRequest:
+    if is_form_post(request):
+        require_form_csrf(request, await request.form())
+    return _build(await _payload(request), LoginRequest)
+
+
+async def form_next(request: Request) -> str:
+    """The raw ``next`` field, unvalidated. ``next_target`` validates it at
+    the point of use, so this stays a dumb reader and there is exactly one
+    validator."""
+    if not is_form_post(request):
+        return ""
+    return str((await request.form()).get("next") or "")
+
+
+async def logout_form_csrf(request: Request) -> None:
+    """A logout carries the very cookie it exists to destroy, which is why
+    the JSON surface was made header-carrying in the first place. The form
+    path proves itself with the session-derived digest instead.
+
+    ``require_form_csrf`` accepts *either* candidate secret, not the
+    session in preference to the nonce — the same "any of" that
+    ``app.form_csrf.form_csrf_proves`` has always used, and matching it is
+    the point: one CSRF story, not a route-level rule that diverges from
+    the middleware's. That is not a downgrade. Both cookies are
+    ``httponly``, so a cross-site page can make the browser send either and
+    read neither, which is the whole double-submit claim; an attacker able
+    to *plant* ``sw_play_csrf`` on this origin already has the origin.
+    """
+    if is_form_post(request):
+        require_form_csrf(request, await request.form())
 
 
 # ---- Helpers ---------------------------------------------------------
@@ -197,10 +366,11 @@ def _auth_error(exc: AuthError):
     "/signup", response_model=SignupResponse, status_code=status.HTTP_202_ACCEPTED
 )
 def signup(
-    body: SignupRequest,
     request: Request,
+    body: SignupRequest = Depends(signup_body),
+    next_raw: str = Depends(form_next),
     repo: LocalRepository = Depends(get_repository),
-) -> SignupResponse:
+):
     """Create an entrant account. **The order of the guards is the contract.**
 
     1. **Per-IP throttle**, read first because it is one local query and
@@ -274,16 +444,25 @@ def signup(
 
     auth_service.throttle_record_entrant_signup(repo.session, throttle_key)
     repo.session.commit()
+    if is_form_post(request):
+        # 303 to the login page, not into a session: signup hands out no
+        # cookie on either branch, because a cookie set only on the created
+        # branch would be as observable as a status code (module docstring).
+        return RedirectResponse(
+            url=next_target(next_raw, "/e/account/login"),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
     return SignupResponse()
 
 
-@router.post("/login", response_model=EntrantDTO)
+@router.post("/login")
 def login(
-    body: LoginRequest,
     request: Request,
     response: Response,
+    body: LoginRequest = Depends(login_body),
+    next_raw: str = Depends(form_next),
     repo: LocalRepository = Depends(get_repository),
-) -> EntrantDTO:
+):
     """Credentials → an entrant session cookie.
 
     Two throttle keys, both in the entrant namespaces: the address
@@ -327,6 +506,13 @@ def login(
     auth_service.throttle_record_success(repo.session, account_key)
     token, _ = entrant_service.create_session(repo.session, account.id)
     repo.session.commit()
+    if is_form_post(request):
+        redirect = RedirectResponse(
+            url=next_target(next_raw, "/e/account/login"),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+        _set_entrant_cookie(redirect, token)
+        return redirect
     _set_entrant_cookie(response, token)
     return EntrantDTO(
         id=str(account.id),
@@ -340,6 +526,8 @@ def login(
 def logout(
     request: Request,
     response: Response,
+    next_raw: str = Depends(form_next),
+    csrf_checked: None = Depends(logout_form_csrf),
     repo: LocalRepository = Depends(get_repository),
 ) -> Response:
     """Revoke the presented session and clear the cookie.
@@ -355,6 +543,13 @@ def logout(
         entrant_service.revoke_session(repo.session, token)
         repo.session.commit()
     _clear_entrant_cookie(response)
+    if is_form_post(request):
+        redirect = RedirectResponse(
+            url=next_target(next_raw, "/e/account/login"),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+        _clear_entrant_cookie(redirect)
+        return redirect
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
 

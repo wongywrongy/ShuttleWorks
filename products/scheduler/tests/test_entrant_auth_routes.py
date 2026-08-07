@@ -835,3 +835,447 @@ def test_the_operator_resolver_does_still_bootstrap_in_local_mode(local_client):
     resolver's own posture, not local mode failing to work."""
     assert local_client.get("/auth/me").status_code == 200
 
+
+# ---- the unhydrated HTML path (Phase 6, F-E1-2-E1) -----------------------
+#
+# Until Phase 6 the logged-out entry page NAMED these routes and shipped no
+# form, so no human could self-serve an account. The finding is a missing
+# UI, not a missing route — so these three keep their paths, their guards
+# and their JSON contract, and gain one thing: a body a browser can post
+# without JavaScript.
+#
+# The CSRF channel is form-only ON PURPOSE. A cross-site page can post
+# urlencoded with no preflight and cannot post JSON without one, so
+# urlencoded is the only reachable vector on a pre-session route. Gating
+# exactly it is the defense; gating JSON too would break every existing
+# caller for nothing.
+
+PLAY_CSRF = "sw_play_csrf"
+FORM = {"Content-Type": "application/x-www-form-urlencoded"}
+
+
+def test_a_form_signup_maps_cloudflares_field_name_and_redirects(
+    client, turnstile
+):
+    """Cloudflare's widget posts its solution under ``cf-turnstile-response``
+    in a form; the JSON surface names it ``turnstileToken`` (SignupRequest).
+    Renaming it on the node tier would put a second spelling of one field in
+    a second codebase.
+
+    Deviation from the task brief: the brief's ``_csrf`` value here is the
+    RAW cookie value ("a-minted-opaque-value") rather than the digest
+    ``app.form_csrf.form_csrf_token`` derives from it. That is not what the
+    middleware (``app/main.py``'s ``csrf_middleware`` -> ``form_csrf_proves``)
+    or the route-level ``require_form_csrf`` check for — both compare
+    against the HASHED token, never the secret itself, which is the whole
+    double-submit property (an attacker's page can make the browser send
+    the cookie but can never read it, so it can compute neither the cookie
+    value nor its digest). Run as written, the brief's version 403s at the
+    middleware with "Missing X-ShuttleWorks-CSRF header" before this route
+    is ever reached. Fixed here by posting the derived token, matching the
+    idiom ``tests/test_entries_json_routes.py::_form_token`` and this
+    file's own ``test_a_form_logout_proves_itself_with_the_session_derived_token``
+    already use.
+    """
+    from app.form_csrf import form_csrf_token
+
+    client.cookies.set(PLAY_CSRF, "a-minted-opaque-value")
+    r = client.post(
+        "/e/account/signup",
+        data={
+            "email": "unhydrated@example.com",
+            "password": GOOD_PW,
+            "cf-turnstile-response": "a-solved-token",
+            "next": "/e/account/login",
+            "_csrf": form_csrf_token("a-minted-opaque-value"),
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303, r.text
+    assert r.headers["location"] == "/e/account/login"
+    # The account really exists — a redirect is not evidence of a write.
+    assert (
+        client.post(
+            "/e/account/login",
+            json={"email": "unhydrated@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+
+
+def test_a_form_login_without_the_play_csrf_token_is_refused(client, turnstile):
+    """NEGATIVE CONTROL. Pre-session login CSRF is a live gap today —
+    ``form_csrf`` returns "" for an absent session — and this is the cookie
+    that closes it. To prove it is not vacuous: delete the
+    ``require_form_csrf`` call from the form branch and this goes red while
+    the redirect test above stays green. Put it back.
+    """
+    r = client.post(
+        "/e/account/login",
+        data={"email": "nobody@example.com", "password": GOOD_PW},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+
+
+def test_a_form_login_with_a_mismatched_play_csrf_token_is_refused(
+    client, turnstile
+):
+    """The double-submit's actual claim: the value must have been READ from
+    the cookie. A guessed one is not."""
+    client.cookies.set(PLAY_CSRF, "the-real-value")
+    r = client.post(
+        "/e/account/login",
+        data={
+            "email": "nobody@example.com",
+            "password": GOOD_PW,
+            "_csrf": "a-guessed-value",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "https://evil.example/harvest",
+        "//evil.example/harvest",
+        "/api/tournaments",
+        "/e/../../api/tournaments",
+        "",
+    ],
+)
+def test_a_form_login_never_redirects_off_the_entrant_tier(
+    client, turnstile, hostile
+):
+    """NEGATIVE CONTROL — open redirect.
+
+    An open redirect on a LOGIN route is a phishing primitive: the victim
+    types real credentials on a real origin and is then handed to the
+    attacker's page carrying whatever the link said. ``next`` is therefore
+    not sanitised, it is MATCHED against the one prefix the entrant tier
+    owns, and anything else is discarded for the fallback. ``..`` is
+    excluded explicitly because a browser normalises ``/e/../../api`` to
+    ``/api`` before it ever leaves the address bar.
+
+    To prove this is not vacuous: change ``_next_target`` to
+    ``return str(raw or fallback)`` and all five cases go red.
+
+    Deviation from the task brief: as with the signup test above, ``_csrf``
+    is the token ``form_csrf_token`` derives from the ``sw_play_csrf``
+    cookie, not the raw cookie value the brief's snippet posted (which
+    403s at the CSRF middleware before this route is reached).
+    """
+    from app.form_csrf import form_csrf_token
+
+    client.cookies.set(PLAY_CSRF, "v")
+    assert (
+        client.post(
+            "/e/account/signup",
+            json={
+                "email": "redirect@example.com",
+                "password": GOOD_PW,
+                "turnstileToken": "t",
+            },
+            headers=CSRF,
+        ).status_code
+        == 202
+    )
+    r = client.post(
+        "/e/account/login",
+        data={
+            "email": "redirect@example.com",
+            "password": GOOD_PW,
+            "_csrf": form_csrf_token("v"),
+            "next": hostile,
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303, r.text
+    assert r.headers["location"] == "/e/account/login"
+
+
+def test_a_form_login_honours_a_same_tier_next(client, turnstile):
+    """Non-vacuity for the five refusals above: ``next`` is honoured when it
+    names the entrant tier, so the rejections are a filter and not a
+    hard-coded constant.
+
+    Deviation from the task brief: same fix as the two tests above —
+    ``_csrf`` is the derived token, not the raw cookie value.
+    """
+    from app.form_csrf import form_csrf_token
+
+    client.cookies.set(PLAY_CSRF, "v")
+    assert (
+        client.post(
+            "/e/account/signup",
+            json={
+                "email": "backto@example.com",
+                "password": GOOD_PW,
+                "turnstileToken": "t",
+            },
+            headers=CSRF,
+        ).status_code
+        == 202
+    )
+    r = client.post(
+        "/e/account/login",
+        data={
+            "email": "backto@example.com",
+            "password": GOOD_PW,
+            "_csrf": form_csrf_token("v"),
+            "next": "/e/spring-open",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/e/spring-open"
+    assert client.cookies.get("sw_play_session")
+
+
+def test_a_form_logout_proves_itself_with_the_session_derived_token(
+    client, turnstile
+):
+    """A logout carries the very cookie it exists to destroy, so it trips
+    the CSRF middleware — which is why the JSON surface was made
+    header-carrying in the first place. The form path proves itself with
+    the SESSION-derived digest instead: the session branch of
+    ``check_form_csrf`` wins whenever a session is present.
+
+    Deviation from the task brief: the brief's snippet imports ``form_csrf``
+    from ``services.entry_form`` — that module holds only ``parse_players``
+    and ``parse_year`` (see its own module docstring on why the CSRF
+    derivation was NOT duplicated there). The one derivation lives in
+    ``app.form_csrf.form_csrf_token``, imported under the same local name.
+    """
+    from app.form_csrf import form_csrf_token as form_csrf
+
+    assert (
+        client.post(
+            "/e/account/signup",
+            json={
+                "email": "bye@example.com",
+                "password": GOOD_PW,
+                "turnstileToken": "t",
+            },
+            headers=CSRF,
+        ).status_code
+        == 202
+    )
+    assert (
+        client.post(
+            "/e/account/login",
+            json={"email": "bye@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+    token = form_csrf(client.cookies.get("sw_play_session"))
+    r = client.post(
+        "/e/account/logout",
+        data={"_csrf": token, "next": "/e/account/login"},
+        headers=CSRF,
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/e/account/login"
+    assert client.post("/e/account/me").status_code in (401, 405)
+    assert client.get("/e/account/me").status_code == 401
+
+
+def test_the_json_contract_is_untouched(client, turnstile):
+    """The whole point of "zero new routes" is that the JSON callers do not
+    notice. Status codes and the StrictModel 422 both survive the body
+    dependency."""
+    assert (
+        client.post(
+            "/e/account/signup",
+            json={
+                "email": "json@example.com",
+                "password": GOOD_PW,
+                "turnstileToken": "t",
+            },
+            headers=CSRF,
+        ).status_code
+        == 202
+    )
+    r = client.post(
+        "/e/account/signup",
+        json={
+            "email": "json2@example.com",
+            "password": GOOD_PW,
+            "turnstileToken": "t",
+            "isAdmin": True,
+        },
+        headers=CSRF,
+    )
+    assert r.status_code == 422, r.text
+    assert any(e["type"] == "extra_forbidden" for e in r.json()["detail"]), r.text
+    r = client.post(
+        "/e/account/login",
+        json={"email": "json@example.com", "password": GOOD_PW},
+        headers=CSRF,
+    )
+    assert r.status_code == 200
+    assert r.json()["email"] == "json@example.com"
+
+
+
+# ---- the form path owes the same guarantees as the JSON one -------------
+#
+# Task 12 review pass. The tests above prove the form path WORKS. These
+# prove it did not quietly drop a property the JSON path already had —
+# every one of them exercises the same route through the new body
+# dependency instead of FastAPI's own body parser.
+
+
+def test_a_form_signup_is_not_an_enumeration_oracle(client, turnstile):
+    """THE highest-value control on this route, now on the form path.
+
+    Signup is the classic email-enumeration leak, and a redirect gives an
+    attacker three new channels the JSON surface does not have: the status
+    line, the ``Location``, and any ``Set-Cookie``. All three must be
+    identical for an address that was created and one that already existed
+    — which is why the 303 sits AFTER the branch, at the shared tail, and
+    why login is the target on both branches rather than a session.
+
+    To prove this is not vacuous: move the ``is_form_post`` block inside
+    the ``if ... is None:`` branch of ``signup`` — the second post then
+    falls through to ``SignupResponse()`` and this goes red on the status
+    line. Put it back.
+    """
+    from app.form_csrf import form_csrf_token
+
+    client.cookies.set(PLAY_CSRF, "v")
+    body = {
+        "email": "twice@example.com",
+        "password": GOOD_PW,
+        "cf-turnstile-response": "a-solved-token",
+        "_csrf": form_csrf_token("v"),
+    }
+
+    fresh = client.post(SIGNUP, data=body, follow_redirects=False)
+    already = client.post(
+        SIGNUP, data={**body, "password": OTHER_PW}, follow_redirects=False
+    )
+
+    assert fresh.status_code == already.status_code == 303
+    assert fresh.headers["location"] == already.headers["location"]
+    assert fresh.content == already.content
+    assert fresh.headers.get_list("set-cookie") == already.headers.get_list(
+        "set-cookie"
+    )
+    # Non-vacuity: the first post really did create the row the second one
+    # declined to overwrite, so "identical" is not "the route always fails".
+    assert _accounts("twice@example.com") == 1
+    assert (
+        client.post(
+            LOGIN, json={"email": "twice@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+
+
+def test_a_form_signup_without_the_play_csrf_token_is_refused(client, turnstile):
+    """NEGATIVE CONTROL. ``test_a_form_login_without_...`` covers login;
+    signup is the other pre-session route and owes the same proof. Delete
+    the ``require_form_csrf`` call from ``signup_body`` and this goes red
+    while ``test_a_form_signup_maps_cloudflares_field_name_and_redirects``
+    stays green."""
+    r = client.post(
+        SIGNUP,
+        data={
+            "email": "nocsrf@example.com",
+            "password": GOOD_PW,
+            "cf-turnstile-response": "a-solved-token",
+        },
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+    assert _accounts() == 0
+
+
+def test_a_form_signup_still_needs_the_challenge(client, turnstile):
+    """Turnstile survives the new body dependency, and still refuses
+    locally rather than spending an outbound request — the ordering claim
+    of ``test_the_throttle_is_read_before_the_outbound_call``, restated on
+    the path where the field arrives under Cloudflare's own spelling."""
+    from app.form_csrf import form_csrf_token
+
+    client.cookies.set(PLAY_CSRF, "v")
+    r = client.post(
+        SIGNUP,
+        data={
+            "email": "nochallenge@example.com",
+            "password": GOOD_PW,
+            "_csrf": form_csrf_token("v"),
+        },
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CHALLENGE_FAILED"
+    assert turnstile == []
+    assert _accounts() == 0
+
+
+def test_a_form_logout_without_the_form_token_is_refused(client, turnstile):
+    """NEGATIVE CONTROL, third of three: logout carries a session, so its
+    proof comes from the session-derived digest — but it is still required.
+    Delete the ``require_form_csrf`` call from ``logout_form_csrf`` and this
+    goes red while the logout redirect test stays green."""
+    assert _signup(client, email="stay@example.com").status_code == 202
+    assert (
+        client.post(
+            LOGIN, json={"email": "stay@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+
+    r = client.post(
+        LOGOUT, data={"next": "/e/account/login"}, headers=CSRF, follow_redirects=False
+    )
+
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+    # And the refusal did not revoke anything on the way out.
+    assert client.get(ME).status_code == 200
+
+
+def test_an_unreadable_json_body_is_still_a_422_and_not_a_500(client, turnstile):
+    """REGRESSION CONTROL for the body dependency.
+
+    FastAPI parses the body itself when a route DECLARES a model, and
+    answers 422 ``json_invalid`` for one it cannot read. Moving the parse
+    into a dependency moved that failure with it, where an unhandled
+    ``JSONDecodeError`` is a 500 — on a route anyone can post to with no
+    session. To prove this is not vacuous: drop the ``except ValueError``
+    from ``_payload`` and both cases raise instead of answering.
+    """
+    for content in (b"{not json", b""):
+        r = client.post(
+            SIGNUP, content=content, headers={**CSRF, "Content-Type": "application/json"}
+        )
+        assert r.status_code == 422, r.text
+        assert r.json()["detail"][0]["type"] == "json_invalid", r.text
+
+
+def test_the_422_still_says_which_part_of_the_request_was_wrong(client, turnstile):
+    """REGRESSION CONTROL. ``loc``'s leading ``"body"`` is FastAPI's, added
+    by the route body parser this dependency replaced — pydantic does not
+    emit it. A client that reads ``loc[1]`` to highlight a field silently
+    stops finding one without it, which is a broken form and a green suite.
+    Drop the re-prefix in ``_build`` and this goes red."""
+    r = client.post(
+        LOGIN, json={"email": "someone@example.com"}, headers=CSRF
+    )
+
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"][0]["loc"] == ["body", "password"], r.text

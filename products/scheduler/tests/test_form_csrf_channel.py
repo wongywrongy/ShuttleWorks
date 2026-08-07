@@ -119,14 +119,28 @@ def test_a_csrf_field_minted_from_a_different_session_is_refused(client, entrant
 
 def test_the_matching_csrf_field_is_accepted(client, entrant):
     """**Negative control #3 — non-vacuity.** The same write, the same
-    cookie, the same route, differing only in a correct token: 204. Without
-    this the two refusals above would pass just as well against a channel
-    that was never wired up at all."""
+    cookie, the same route, differing only in a correct token: accepted.
+    Without this the two refusals above would pass just as well against a
+    channel that was never wired up at all.
+
+    **The accepted answer is a 303, not the 204 this asserted before Phase 6
+    Task 12** — that task taught ``/e/account/logout`` to answer an
+    urlencoded post the way a browser needs, which is a redirect. Only the
+    *value* moved; what this test guards did not, and the assertions below
+    make the acceptance claim stronger than a status line did: the session
+    is really gone. ``follow_redirects=False`` because otherwise the client
+    chases the 303 to ``GET /e/account/login``, which no route serves, and
+    the test reports that route's 405 instead of this route's answer.
+    """
     r = client.post(
-        "/e/account/logout", data={"_csrf": _token_for(entrant)}, headers=FORM
+        "/e/account/logout",
+        data={"_csrf": _token_for(entrant)},
+        headers=FORM,
+        follow_redirects=False,
     )
 
-    assert r.status_code == 204
+    assert r.status_code == 303, r.text
+    assert client.get("/e/account/me").status_code == 401
 
 
 def test_a_json_body_cannot_carry_the_second_channel(client, entrant):
@@ -164,10 +178,19 @@ def test_a_login_post_carrying_the_nonce_and_no_token_is_refused(client):
 
 
 def test_a_login_post_with_the_nonce_token_reaches_the_route(client):
-    """Non-vacuity for the pre-session half. 422 rather than 200 is the
-    right assertion and the honest one: the route declares a JSON body, so
-    reaching it *is* the outcome under test — the middleware let it past,
-    which a 403 would not have."""
+    """Non-vacuity for the pre-session half: reaching the route *is* the
+    outcome under test — the middleware let it past, which a 403 would not
+    have.
+
+    **The reached answer is a 401, not the 422 this asserted before Phase 6
+    Task 12.** The old value was a statement about a limitation, spelled out
+    in the assertion's own comment: "the route declares a JSON body", so an
+    urlencoded post could only ever be a validation error. Task 12 removed
+    exactly that limitation, so the body now parses and the route answers
+    what it has always answered for an address that was never registered.
+    A 401 is a *stronger* witness than the 422 was — it proves the request
+    reached the credential check, not merely the body parser.
+    """
     from app.form_csrf import PLAY_CSRF_COOKIE, issue_play_csrf
     from fastapi import Response
 
@@ -182,7 +205,8 @@ def test_a_login_post_with_the_nonce_token_reaches_the_route(client):
         headers=FORM,
     )
 
-    assert r.status_code == 422
+    assert r.status_code == 401, r.text
+    assert r.json()["detail"]["code"] == "AUTH_INVALID_CREDENTIALS"
 
 
 # ---- operator containment ----------------------------------------------
