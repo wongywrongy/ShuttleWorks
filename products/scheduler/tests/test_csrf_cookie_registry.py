@@ -292,6 +292,23 @@ def test_the_registry_names_both_principals(client):
     assert settings.session_cookie_names == ("sw_session", "sw_play_session")
 
 
+def test_the_pre_session_nonce_is_carved_out_and_not_registered(client):
+    """The carve-out, stated as an assertion rather than as a comment.
+
+    Three claims, and all three matter: present in ``_NON_SESSION_COOKIES``
+    (so the structural gate above passes it on purpose rather than by not
+    looking), absent from ``session_cookie_names`` (so nothing ever reads it
+    as a credential), and present in ``csrf_relevant_cookie_names`` (so the
+    exclusion is a carve-out and not a hole — the pre-session login post is
+    still measured by the CSRF check).
+    """
+    from app.config import settings
+
+    assert "sw_play_csrf" in _NON_SESSION_COOKIES
+    assert "sw_play_csrf" not in settings.session_cookie_names
+    assert "sw_play_csrf" in settings.csrf_relevant_cookie_names
+
+
 # ---- 3. The one exemption, and the proof that it is the only one ------
 #
 # SP-E1-2 Phase C carved a single route out of the header check:

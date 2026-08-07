@@ -251,3 +251,82 @@ def test_the_nonce_cookie_authenticates_nothing():
 
     assert PLAY_CSRF_COOKIE == "sw_play_csrf"
     assert PLAY_CSRF_COOKIE not in settings.session_cookie_names
+
+
+def test_the_nonce_is_nevertheless_inside_the_csrf_trigger():
+    """**The other half of the carve-out, and the half that closes the gap.**
+
+    Keeping the nonce out of ``session_cookie_names`` is only safe because a
+    second, wider registry exists: ``csrf_relevant_cookie_names`` answers
+    "must this write prove it was sent deliberately", which is a strictly
+    wider question than "does this request carry a credential". A login post
+    carries no identity at all and still has to present a matching token.
+
+    Without this list the exclusion above would not be a carve-out, it would
+    be a hole: the one write with no session behind it — login, signup —
+    would trigger no CSRF check on either channel.
+    """
+    from app.config import settings
+    from app.form_csrf import PLAY_CSRF_COOKIE
+
+    assert PLAY_CSRF_COOKIE in settings.csrf_relevant_cookie_names
+    for name in settings.session_cookie_names:
+        assert name in settings.csrf_relevant_cookie_names
+
+
+def test_the_trigger_list_is_the_registry_plus_the_nonce_and_nothing_else():
+    """Exact, not a superset check. A widened trigger that quietly grew a
+    third name would make the middleware demand a header from callers
+    holding some unrelated cookie — the failure mode
+    ``test_a_non_session_cookie_still_does_not_trigger_the_check`` guards
+    behaviourally, pinned here at the definition.
+    """
+    from app.config import settings
+    from app.form_csrf import PLAY_CSRF_COOKIE
+
+    assert settings.csrf_relevant_cookie_names == (
+        *settings.session_cookie_names,
+        PLAY_CSRF_COOKIE,
+    )
+
+
+def test_the_trigger_list_reads_the_cookie_name_from_its_owner():
+    """No second literal. ``PLAY_CSRF_COOKIE`` is the module constant the
+    ``set_cookie`` call actually uses and the registry guard resolves from
+    source; if the trigger list carried its own copy of ``"sw_play_csrf"``
+    the two could drift, and the drifted one would be the list the
+    middleware trusts while the cookie went out under the other name.
+    """
+    import ast
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "backend" / "app" / "config.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    # Docstrings are excluded on purpose: naming the cookie in prose is how
+    # the decision stays legible, and it is the *value* being restated in
+    # code that creates the second source of truth.
+    docstrings = {
+        id(node.body[0].value)
+        for node in ast.walk(tree)
+        if isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        )
+        and node.body
+        and isinstance(node.body[0], ast.Expr)
+        and isinstance(node.body[0].value, ast.Constant)
+        and isinstance(node.body[0].value.value, str)
+    }
+
+    literals = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and node.value == "sw_play_csrf"
+        and id(node) not in docstrings
+    ]
+
+    assert not literals, (
+        f"config.py carries its own copy of the nonce cookie name at line(s) "
+        f"{literals}; it must read app.form_csrf.PLAY_CSRF_COOKIE instead"
+    )
