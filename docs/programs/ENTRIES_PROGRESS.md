@@ -132,7 +132,48 @@ the Cloudflare dashboard — cannot proceed from this session without them.
 ## Phase 5 / SP-E1-1 — E1 walking skeleton, locally: IN PROGRESS (2026-08-06)
 
 **Branch:** `dev/prog1-p5-e1`. **Prompt:** SP-E1-1 (replaces SP-VERIFY-1).
-Phase A (audit + plan) in progress; STOP report owed before any Phase B code.
+
+### Phase A — audit + plan: DONE (2026-08-06). STOP report presented; awaiting go-ahead.
+
+**Gates re-confirmed at baseline on the branch:** frontend 1385/172 green, backend
+1018 passed / 66 skipped — exactly the Phase 0 numbers.
+
+**Mapping:** five parallel Opus agents (`wf_18b696b7-a13`, 526k tokens), domains =
+modules / security surface / write paths / infra / Turnstile research. All citations
+verified by the agents opening files. Full maps in the session transcript; the
+load-bearing facts and the contradiction list are in the STOP report (session of
+2026-08-06). Key landing zones confirmed: `MODULE_IDS` `models.py:606` +
+`derive_modules:620` + `normalize_module_seed:650`; module reads at `local.py:1400-1448`
+(3 sites) + `seed_modules:1485`; PATCH rules `api/workspace_modules.py:91-186`;
+auth-surface allowlist `tests/test_auth_surface.py:34-51` (mechanism: OpenAPI-derived,
+pass = 401/403/404); uniform-404 `app/dependencies.py:95-140` +
+`tests/test_tenant_isolation.py` (`_PARAM_FILLERS:25-33` needs an `entry_id` filler);
+hashing precedent `services/auth.py:281-296` (SHA-256 of `token_urlsafe(32)`,
+`AuthSession.token_hash` `models.py:962-992`) vs display plaintext anti-precedent
+(`api/display.py:49-50`); `AuthThrottle` `models.py:995-1015` + engine
+`services/auth.py:387-477` (blessed for reuse, callers own commits); body cap
+`app/body_limit.py` (4 MB, route-agnostic); client IP `app/client_ip.py`
+(CF-Connecting-IP, trusted-proxy gated); CSRF does NOT cover cookie-less public writes
+(`main.py:233-260`); Idempotency-Key replay contract `api/solve_jobs.py:98-156` +
+`services/solve_jobs.py:165-225`; Meet blob CAS `repositories/local.py:199-259` +
+`commit_tournament_state:1555-1606`; bracket participants `models.py:447-481` +
+`bulk_create_participants` `local.py:670-699` (NO additive path exists);
+`build_signals`/`_derive_phase` pure (`workspace_signals.py:297-414`), E1 adds nothing
+there; alembic head `q1b4c8d2e6f7`, next id `r2…`, migrations NOT exercised by tests
+(`tests/_helpers.py` uses `create_all`); email seam `services/email.py` confirmed
+UNUSED by E1; base-URL seam EXISTS (`public_app_origin` `config.py:216-218` — spec
+discrepancy #10 is itself wrong); nginx zones `nginx.conf:47,52` + SPA-fallback trap
+`:171-177` + CSP blocks Turnstile (`security-headers.conf:50`); Turnstile dummy keys +
+siteverify contract confirmed from Cloudflare docs (secret drives outcome; dummy token
+literal usable in tests).
+
+**Decisions proposed at the STOP (see report):** cloud-mode predicate for R6 (spec's
+`environment=="cloud"` collides with `docker-compose.cloud.yml`'s deliberate
+`ENVIRONMENT=local` — S1); E1 lifecycle gap (no email verification + no confirm UI ⇒
+nothing reaches `confirmed` ⇒ Seam A commits nothing — needs a ruling); public page
+via hand-rolled `HTMLResponse` (Jinja2 not installed; rule 8); entries idempotency
+index scoped per-tenant (deliberate divergence from the global solve-job index — a
+cross-tenant disclosure vector on an unauthenticated route otherwise).
 
 ---
 
