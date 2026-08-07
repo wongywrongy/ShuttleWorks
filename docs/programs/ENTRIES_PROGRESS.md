@@ -622,3 +622,90 @@ collision is 11 construction lines, zero assertions; the seam module needs zero 
 authority:** fixture construction may be mechanically adapted (dedicated flagged commit,
 R13/D-A4); assertions and services/entries.py remain untouchable. SP-E1-2.md done-condition
 amended in place with the dated ruling; workflow resumed.
+
+### SP-E1-2 Phase C (C1-C6 + the submit re-gate): DONE (2026-08-07, backend 1390/66sk, +85)
+
+Commits `0c0c1a4`..`22684ce` on `dev/prog1-p5-e1-2`. Gates: backend
+**1390 passed / 66 skipped** (Phase B baseline 1305/66 — **+85**, skips
+unchanged, zero regressions); `ruff check backend tests` clean. The
+frontend is untouched by this phase.
+
+**What landed, in commit order.** `entry_fees` (R14 §1 — cumulative totals
+by DISTINCT event count PER PLAYER, per-event fallback, `None` not `0` when
+nothing is priced) → `entry_policy` (caps refuse with the rule stated;
+`check_policy` structurally cannot see a gender, so Q14 §5's soft flag
+cannot be turned hard by a later branch) → the schema levels →
+`services/submissions.py` (one act; replay returns the original submission
+**and all its entries**; the whole write inside the IntegrityError guard,
+because the unique index refuses at the flush that inserts the submission,
+before any entry exists) → the re-gated submit → the narrowing + fixture
+adaptation → migration `s3d8f2b5c0e1`.
+
+**Seam A is byte-for-byte intact.** `git diff` on `services/entries.py`
+across the whole phase is **empty**. The amendment's mechanism worked as
+predicted: `Entry.player_name` / `.remarks` are association proxies onto
+`entry_players`, and `.contact_name` / `.contact_email` are read-through
+properties onto the submitting account, so both the seam and
+`EntryDeskRowDTO` are unedited. In the seam's 23 tests the only line this
+phase touched containing the word "assert" is a docstring sentence saying
+so (verified by diff).
+
+**Two decisions worth the next stage's attention.**
+
+1. **The form CSRF token.** Phase B's handoff flagged that a session-gated
+   native form post would be refused by the CSRF middleware, and listed
+   three options. Chosen: **a double-submit token derived from the session
+   cookie** (`api/entries_public.py::_form_csrf`), plus one anchored
+   middleware exemption for `POST /e/{slug}/submit`. The SameSite=Lax-alone
+   argument was **rejected on evidence**: Chrome's Lax+POST intervention
+   sends Lax cookies on cross-site POST for two minutes after they are set,
+   which is exactly the window after a login. `fetch` was rejected because
+   the page now has `script-src 'none'` and a form needing JavaScript is
+   degraded functionality at the widths R11 makes co-equal. The exemption
+   is pinned as the only one (`test_csrf_cookie_registry.py`, +3).
+2. **The page tightened to `script-src 'none'`** — a second-order effect of
+   the challenge moving to signup, and a real improvement, since the
+   acknowledgment gate was always the HTML `required` attribute.
+
+**Test unwind tally, per ruling.**
+
+| Ruling | File | Change |
+|---|---|---|
+| R10 | `test_auth_surface.py` | allowlist entry for `POST /e/{slug}/submit` **removed**; preamble bullet + note rewritten. **7 tests replaced by 2**: the challenge pair moved with the challenge to `test_entrant_auth_routes.py`, flood/idempotency moved with the route's new shape, and "the always-pass secret WRITES the entry" **inverts** into "an anonymous submit is rejected" + its signed-in control. 14 → 9 |
+| R10/R13/R14 | `test_entries_public_routes.py` | rewritten for the gated surface. 47 → 64 |
+| R10 | `test_cross_principal_sessions.py` | submit joins `ENTRANT_REACHABLE` (a logged-in entrant reaching its own route is the intent) |
+| R13/D-A4 | `test_entries_commit_seam.py` | **fixture construction only, 0 assertions**, in its own flagged commit |
+| R13/D-A4 | `test_entries_desk_routes.py` | same, plus **one negative control replaced**: the manage-token leak test would have survived as a trivial truth about a deleted column, so it becomes a leak test against the credential material that exists now (password hash, session token) |
+| rule 6 | `test_entries_migration.py` | migration-shape unwind. **No assertion weakened; 3 added** — the two superseded indexes asserted ABSENT by name, `entry_players.gender` NOT NULL in the production DDL, and the case-insensitive account index exercised. 6 → 9 |
+
+Superseded negative controls **replaced in the same commit** in all three
+places they arose; none deleted.
+
+**Deviations, all recorded rather than worked around.**
+
+- **Migration posture** — spec §4's "additive then narrowing" backfill was
+  not executed; the clean rebuild authorised by D-A5 was, with the
+  evidence paragraph in the migration docstring. `upgrade` destroys entry
+  data by design and says so.
+- **Known-red window, disclosed in the commit that opened it.** The
+  reshape series carried exactly one failing test —
+  `test_migration_matches_the_models_column_for_column` — from the commit
+  that added the levels until `s3d8f2b5c0e1` landed, because a single
+  clean-rebuild revision can only be written against the final model shape.
+  Nothing else moved. Restored green at `22684ce`.
+- **A transitional dual-write** of the contact/player block existed for two
+  commits so the desk projection kept agreeing with the level boundary;
+  removed in the narrowing commit as promised. It never shipped.
+- **Minimal form markup landed with the route**, not with Phase D: two
+  player blocks, a checkbox per open event carrying the player index, the
+  fee schedule *stated* rather than totalled live, and the venue/payment
+  blocks. The running total, gender filtering, the timeline and the R11
+  both-width pass are Phase D's work on this same markup — the route could
+  not be re-gated without a form that posts the payload it now takes.
+
+**Open for Phase D/E.** `EntryDeskRowDTO` still has no submission grouping
+or fee total (Phase D item 3). `partner_invite_id` from spec §4 is not
+created — it is an E3 column and was outside C2's list. F-E1-2 stands
+unchanged: multi-event submissions produce one roster player per entry, so
+a human in three events reaches the roster three times; the ruling is owed
+in E2/Phase 7 alongside F-E1.
