@@ -76,6 +76,16 @@ _CONFIRMABLE_FROM = "pending"
 # is additive, narrowing it breaks every printed poster.
 _SLUG_RE = re.compile(r"^[a-z0-9-]{3,60}$")
 
+# Path segments the entrant app (`products/scheduler/entrant`) claims ahead
+# of its `:slug` catch-all, plus the two prefixes ruling R8-A hands to this
+# backend by nginx longest-prefix match (`/e/api/`, `/e/account/`). A slug
+# equal to any of these would be unreachable: node's `app/routes.ts` ranks
+# every static route above `:slug`, and a request for the backend prefixes
+# never reaches node at all. (`sitemap.xml` and `robots.txt` are two more
+# static routes node owns, but the `.` in each already fails `_SLUG_RE`
+# above, so they cannot collide and are not listed here.)
+_RESERVED_SLUGS = frozenset({"api", "account", "health", "signup", "login"})
+
 
 def _event_codes(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
     """``entry_event_id → code`` for one workspace.
@@ -386,6 +396,14 @@ def upsert_entry_page(
             ErrorCode.INVALID_INPUT,
             "slug must be 3-60 characters of lowercase letters, digits and "
             f"hyphens: {body.slug!r}",
+        )
+
+    if slug in _RESERVED_SLUGS:
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            f"the slug {slug!r} is reserved for entrant-app routing and "
+            "cannot be used",
         )
 
     # Slugs are globally unique — the slug alone resolves the public page,

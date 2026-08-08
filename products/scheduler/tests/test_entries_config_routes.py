@@ -227,6 +227,43 @@ def test_a_well_formed_slug_is_accepted(client, workspace):
     assert _put_page(client, workspace, slug="spring-open-2026").status_code == 200
 
 
+@pytest.mark.parametrize(
+    "slug",
+    [
+        "api",  # ruling R8-A: nginx prefix-routes /e/api/ to this backend
+        "account",  # same ruling, /e/account/
+        "health",  # node's static /e/health route ranks above :slug
+        "signup",  # node's static /e/signup route
+        "login",  # node's static /e/login route
+    ],
+)
+def test_a_reserved_slug_is_refused(client, workspace, slug):
+    """Each of these is well-formed by ``_SLUG_RE`` alone — the alphabet
+    check would let it through. It has to be refused anyway: node's
+    `app/routes.ts` ranks these paths (or, for `api`/`account`, nginx's
+    prefix match) above the entrant app's `:slug` catch-all, so a page at
+    one of these addresses would be unreachable behind a route that always
+    wins the match first."""
+    r = _put_page(client, workspace, slug=slug)
+    assert r.status_code == 400, r.text
+    assert _page_row(workspace) is None
+
+
+def test_a_reserved_slug_does_not_touch_an_existing_page(client, workspace):
+    """The same refuse-before-write guarantee the malformed-slug case gets:
+    an operator who fat-fingers a rename into a reserved word must not lose
+    the page they already had."""
+    tid = workspace
+    assert _put_page(client, tid, slug="spring-open", introText="All welcome.").status_code == 200
+
+    r = _put_page(client, tid, slug="api", introText="Changed.")
+    assert r.status_code == 400, r.text
+
+    row = _page_row(tid)
+    assert row.slug == "spring-open"
+    assert row.intro_text == "All welcome."
+
+
 def test_a_slug_another_workspace_holds_is_a_specific_409(
     client, workspace, other_workspace
 ):

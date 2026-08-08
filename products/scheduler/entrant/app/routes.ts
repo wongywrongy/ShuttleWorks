@@ -13,6 +13,10 @@ export default [
   // Static, so it ranks above the `:slug` route below and a workspace can
   // never be called "sitemap.xml".
   route('sitemap.xml', 'routes/sitemap.tsx'),
+  // `/e/robots.txt` — same resource-route shape and same static-above-:slug
+  // reasoning as `sitemap.xml` immediately above; see `routes/robots.tsx`
+  // for why the file lives here rather than at the domain root.
+  route('robots.txt', 'routes/robots.tsx'),
   // The signup PAGE. Deliberately NOT at `/e/account/signup`, which is the
   // FastAPI-owned POST: ruling R8-A gives all of `/e/account/` to the backend
   // by prefix, and nginx does not split one path by method. A node GET there

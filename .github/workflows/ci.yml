@@ -80,6 +80,17 @@ jobs:
       - name: Server-only boundary (react-router build)
         run: npm --prefix products/scheduler/entrant run build
 
+      # Spec §7's no-JS posture, held to a number: the entry page's real
+      # server-rendered HTML plus the critical JS a browser downloads to
+      # hydrate it, gzipped, walked out of the production build this job just
+      # produced above (not asserted against a guess). Budget is 100 KB
+      # gzipped with 10% CI slack — see the script for how "critical" is
+      # derived from the real build manifest, and the SP-E1 Phase 6 report
+      # for the measured figure at the time this gate was added and why it
+      # was over budget then.
+      - name: Page-weight budget (entry page, HTML + critical JS gzipped)
+        run: node products/scheduler/entrant/scripts/measure-page-weight.mjs
+
       # Report-only for the same reason the frontend job gives above: knip's
       # verdict is a hypothesis, and a gate that fails on a false positive
       # trains people to delete load-bearing code.
