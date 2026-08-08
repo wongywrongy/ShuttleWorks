@@ -128,6 +128,52 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
   return loaderHeaders;
 }
 
+/**
+ * Per-route meta/OG tags, derived from the loader's one call (Task 25).
+ *
+ * No second fetch: `data` is the exact `EntryPageDTO` the loader already
+ * fetched, and React Router's own `meta` mechanism renders these via
+ * `<Meta />` in `root.tsx` — attribute values pass through React's
+ * serializer, so a director-supplied name containing `"`, `<`/`>` or `&`
+ * lands escaped rather than breaking out of the tag (see
+ * `entry.meta.test.ts`'s escaping case).
+ *
+ * **`data.page.viewer` is never read here, on purpose (I6).** `viewer.email`
+ * and `viewer.formCsrf` are the one part of this projection that must never
+ * reach the document head — a `<meta>` tag is more public than the page
+ * body, read by crawlers and link-unfurlers with no session at all, and
+ * `formCsrf` in particular is a CSRF token. Only `tournament`, `org`,
+ * `venue` and `page` (the director-authored content fields) are used.
+ *
+ * `data` is `undefined` when the loader threw `notFound()` — an unknown slug
+ * and a closed page both throw before any data exists, so this function
+ * inherits the uniform 404 structurally: there is nothing tournament-shaped
+ * to read, and the fallback title below names no workspace.
+ */
+export const meta: Route.MetaFunction = ({ data }) => {
+  if (!data) {
+    return [{ title: 'Entry page not found' }];
+  }
+
+  const { tournament, org, venue, page } = data.page;
+  const title = tournament.name ? `${tournament.name} — Enter now` : 'Enter now';
+  const description = [tournament.date, venue?.name, page.introText]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ');
+
+  const tags: ReturnType<Route.MetaFunction> = [{ title }];
+  if (description) {
+    tags.push({ name: 'description', content: description });
+    tags.push({ property: 'og:description', content: description });
+  }
+  tags.push({ property: 'og:title', content: title });
+  tags.push({ property: 'og:type', content: 'website' });
+  if (org?.name) {
+    tags.push({ property: 'og:site_name', content: org.name });
+  }
+  return tags;
+};
+
 export default function Entry({ loaderData }: Route.ComponentProps) {
   const { page, idempotencyKey, formCsrf, echo } = loaderData;
   const openEvents = page.events.filter((event) => event.isOpen);
