@@ -22,8 +22,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RouteConfigEntry } from '@react-router/dev/routes';
 
-import config from '../react-router.config';
 import routes from '../app/routes';
+import { nodePaths } from './helpers/nodePaths';
 
 /**
  * The prefixes nginx gives FastAPI. Written out, not derived: they ARE the
@@ -31,17 +31,6 @@ import routes from '../app/routes';
  * ingress pass (Task 22) writes one into `nginx.conf`.
  */
 const BACKEND_PREFIXES = ['/e/api/', '/e/account/'];
-
-/** Every URL path this app serves, basename included, children flattened. */
-function nodePaths(entries: RouteConfigEntry[], prefix = config.basename ?? '/'): string[] {
-  return entries.flatMap((entry) => {
-    const here = entry.path === undefined ? prefix : `${prefix.replace(/\/$/, '')}/${entry.path}`;
-    return [
-      ...(entry.path === undefined ? [] : [here]),
-      ...nodePaths(entry.children ?? [], here),
-    ];
-  });
-}
 
 describe('node routes and the FastAPI prefixes do not overlap (R8-A)', () => {
   const paths = nodePaths(routes as RouteConfigEntry[]);

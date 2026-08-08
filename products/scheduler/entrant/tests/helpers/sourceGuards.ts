@@ -112,9 +112,28 @@ function stripComments(source: string): string {
 export function credentialRelayLines(source: string): string[] {
   const patterns: RegExp[] = [
     /\bcookie\b/i, // reading one, or writing one
-    /headers\s*\.\s*get\s*\(/, // any inbound header read
-    /headers\s*:/, // any header map on an outgoing Response/fetch
-    /\bcredentials\b/,
+    /headers\s*\.\s*get\s*\(/i, // any inbound header read
+    // A header MAP handed to an outgoing Response/fetch. The VALUE shape is
+    // what is matched — an object literal, a constructed `Headers`, or one
+    // read off some other object — rather than every `headers:` on the line.
+    //
+    // This used to be a bare, case-SENSITIVE `/headers\s*:/`, and it passed
+    // `login.tsx` only by luck: the benign signature
+    // `({ loaderHeaders }: { loaderHeaders: Headers })` spells its type with a
+    // capital H, so the pattern missed it. The identical, equally harmless
+    // code written `headers: headers` would have gone red — a guard that
+    // depends on capitalisation is not a guard. So the annotation form is now
+    // excluded STRUCTURALLY, by not being a value shape this cares about, and
+    // both spellings behave the same. Proven in both directions in
+    // `entry.loader.test.ts`.
+    //
+    // **Residual gap, deliberate:** `headers: someBareVariable` is lexically
+    // indistinguishable from `xHeaders: Headers` in a type position, so it is
+    // not matched here. It is not a hole — a relay has to obtain the
+    // credential first, and every way of doing that (`.headers.get(`,
+    // `cookie`, `fetch(`) is matched above.
+    /headers\s*:\s*(\{|\[|new\b|[A-Za-z_$][\w$]*\s*\.)/i,
+    /\bcredentials\b/i,
     /(^|[^.\w])fetch\s*\(/, // must go through apiGet, which owns the allowlist
   ];
 

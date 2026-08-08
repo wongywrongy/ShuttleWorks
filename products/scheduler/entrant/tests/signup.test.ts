@@ -32,8 +32,11 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
+import type { RouteConfigEntry } from '@react-router/dev/routes';
 
 import { formCsrfToken } from '../app/lib/formCsrf.server';
+import routes from '../app/routes';
+import { nodePaths } from './helpers/nodePaths';
 
 /**
  * The REAL `GET /e/api/config` projection — `EntrantConfigDTO` in
@@ -210,15 +213,31 @@ describe('the signup form, unhydrated', () => {
     expect(await render()).toContain('needs JavaScript');
   });
 
-  it('offers no link to a route that is POST-only', async () => {
-    // `/e/account/login` and `/e/account/logout` have no GET until Tasks 20-21;
-    // an <a href> to either is a 405 in the entrant's face. The backend's own
-    // 303 target is `/e/account/login`, which is a redirect, not a link — that
-    // is Task 20's to make land. Fails the day one is pasted back in early.
+  it('posts a `next` that node itself serves, so the 303 is not a 405', async () => {
+    // Without the hidden field the backend falls back to
+    // `next_target(next_raw, "/e/account/login")` (`api/entrants.py:466`),
+    // which is POST-only — so a SUCCESSFUL signup ended on a 405, the last
+    // screen an entrant should ever meet. The field is the fix; this is its
+    // control, and deleting the field turns it red.
+    //
+    // **Derived, not the literal.** Asserting `value="/e/login"` here would
+    // rot the day the login page moves, and would go green again for any
+    // other string somebody typed. What actually matters is the property:
+    // the value is a path THIS app serves as a GET. So it is checked against
+    // `app/routes.ts` through the same `nodePaths` derivation the R8-A
+    // overlap guard uses — which, by that guard, is also proof it is not
+    // inside a FastAPI prefix.
     const html = await render();
+    const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(html)?.[1];
+    const served = nodePaths(routes as RouteConfigEntry[]);
 
-    expect(html).not.toContain('href="/e/account/login"');
-    expect(html).not.toContain('href="/e/account/logout"');
+    // Non-vacuity on both sides: the field really is in the document, and the
+    // route table really was read (an empty list would make `toContain` the
+    // only thing failing, which is the right failure — but a `next` of `''`
+    // must not pass either).
+    expect(next).toBeTruthy();
+    expect(served.length).toBeGreaterThan(0);
+    expect(served).toContain(next);
   });
 
   it('spells its width as a max-w column, never an arbitrary w-[…] value', async () => {

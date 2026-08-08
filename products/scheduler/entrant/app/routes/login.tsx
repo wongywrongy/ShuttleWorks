@@ -87,7 +87,7 @@ const SAFE_NEXT = /^\/e\/[A-Za-z0-9/_.~-]*$/;
  * normalises `/e/../admin` to `/admin` before the request is ever made, so the
  * traversal never even reaches the pattern.
  */
-export function safeNext(raw: string | null): string {
+function safeNext(raw: string | null): string {
   const value = raw ?? '';
   if (value.includes('..') || !SAFE_NEXT.test(value)) return DEFAULT_NEXT;
   return value;

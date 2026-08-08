@@ -319,6 +319,39 @@ describe('entry loader', () => {
     ]);
   });
 
+  it('the relay guard means what it says, not what capitalisation gave it', () => {
+    // The guard passed every route file only because `loaderHeaders: Headers`
+    // capitalises the TYPE and the pattern was case-sensitive. That is luck,
+    // and the same harmless signature written in lower case would have gone
+    // red — so the header-map pattern now matches the VALUE shape and is
+    // case-insensitive. Both directions are proven here, because fixing it in
+    // the permissive direction (drop the pattern) would also make every route
+    // file pass.
+
+    // 1. Genuine relays are still caught, in EITHER casing. None of these
+    //    lines contains the word "cookie", so each one is caught by the
+    //    header-map pattern specifically and not by a neighbour.
+    for (const relay of [
+      'return new Response(b, { headers: { authorization: t } });',
+      'return new Response(b, { HEADERS: { AUTHORIZATION: t } });',
+      'await apiPost(url, { headers: request.headers });',
+      'await apiPost(url, { headers: new Headers(inbound) });',
+    ]) {
+      expect(credentialRelayLines(relay)).toEqual([relay]);
+    }
+
+    // 2. The benign `headers` forwarder — the real signature out of
+    //    `login.tsx`/`signup.tsx`/`entry.tsx` — is not a finding, and is not a
+    //    finding in lower case either. That second line is the whole point:
+    //    before this change it was red.
+    expect(
+      credentialRelayLines('export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {'),
+    ).toEqual([]);
+    expect(
+      credentialRelayLines('export function headers({ loaderheaders }: { loaderheaders: headers }) {'),
+    ).toEqual([]);
+  });
+
 });
 
 // ---- request level: the route as the browser gets it ----------------------

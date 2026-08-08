@@ -66,6 +66,11 @@ _TS_PATH = _TS_LIB / "formCsrf.server.ts"
 # read.
 _TS_FIELD_PATH = _TS_LIB / "formField.ts"
 
+# The `next` allowlist is the OTHER security primitive this phase implemented
+# twice, for the same reason and with the same drift risk — see
+# ``test_the_two_tiers_share_one_next_allowlist``.
+_TS_LOGIN_PATH = _TS_LIB.parent / "routes" / "login.tsx"
+
 
 def _ts_source(path: Path = _TS_PATH) -> str:
     assert path.exists(), (
@@ -210,6 +215,44 @@ def test_no_secret_is_no_token_on_both_sides(candidate):
 
     assert form_csrf_token(candidate) == ""
     assert "if (!secret) return '';" in _ts_source()
+
+
+def test_the_two_tiers_share_one_next_allowlist():
+    """The second primitive implemented twice, pinned the same way.
+
+    ``login.tsx``'s ``SAFE_NEXT`` docstring claims it is byte-identical to
+    ``_SAFE_NEXT`` in ``api/entrants.py``, and it is — but a claim in a
+    comment is not a control. The two validate the same value for the same
+    reason at two tiers, and drift here is worse than drift in the CSRF
+    separator: a node side that *widens* renders a crafted destination into
+    the markup of a page where real credentials are typed (an open redirect
+    is a phishing primitive), and one that *narrows* silently discards a
+    legitimate ``next`` the backend would have honoured.
+
+    Neither failure is visible in a single-tier test, because each tier's
+    own suite asserts its own pattern.
+
+    Extraction is source-text, for the reason the module docstring gives:
+    the backend CI job has no npm. The one transformation applied is
+    unescaping ``\\/`` — a JavaScript regex LITERAL must escape its own
+    delimiter, so ``/^\\/e\\//`` and Python's ``^/e/`` are the same pattern
+    spelled for two parsers. Nothing else is normalised; a real difference
+    survives.
+    """
+    from api.entrants import _SAFE_NEXT
+
+    matches = re.findall(
+        r"^const SAFE_NEXT = /(.*)/;$", _ts_source(_TS_LOGIN_PATH), re.MULTILINE
+    )
+    # Fails CLOSED, exactly like `_ts_constant`: a rename, a reformat that
+    # breaks the one-line shape, or a second declaration must go red rather
+    # than quietly assert nothing.
+    assert len(matches) == 1, (
+        f"expected exactly one `const SAFE_NEXT = /.../;` in "
+        f"{_TS_LOGIN_PATH.name}, found {len(matches)}: {matches}"
+    )
+
+    assert matches[0].replace("\\/", "/") == _SAFE_NEXT.pattern
 
 
 def test_there_is_exactly_one_derivation_in_the_entrant_tier():

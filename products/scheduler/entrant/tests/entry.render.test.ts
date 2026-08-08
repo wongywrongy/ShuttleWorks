@@ -260,18 +260,10 @@ describe('the entry form, unhydrated', () => {
     }
   });
 
-  it('links to no POST-only account route', async () => {
-    // `/e/account/login` and `/e/account/signup` are FastAPI's POST routes
-    // and stay POST-only forever; an <a href> to either is a 405 in the
-    // entrant's face. The signup PAGE is a different URL — `/e/signup`, node's
-    // — and linking THAT is a live option this does not block. Removed rather
-    // than left pending: a dead link is worse than no link, and this fails the
-    // day a POST URL is pasted back in as an href.
-    const html = await render();
-
-    expect(html).not.toContain('/e/account/login');
-    expect(html).not.toContain('/e/account/signup');
-  });
+  // The "no link into a FastAPI-owned prefix" control for THIS page lives in
+  // `login.test.ts`, which reads every href out of the document and covers
+  // login, signup and entry from one derived assertion. The hand-listed copy
+  // that stood here named two URLs and could not see a third.
 
   it('states that submitting needs an account, since it cannot know', async () => {
     // The page CANNOT tell a signed-in reader from a stranger (see the
