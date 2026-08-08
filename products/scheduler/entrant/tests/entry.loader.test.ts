@@ -246,6 +246,29 @@ describe('entry loader', () => {
     });
   });
 
+  // Same enumeration, aimed at the OTHER trap this tier keeps walking into.
+  // React Router's `getDocumentHeaders` copies only `Set-Cookie` out of a
+  // loader's ResponseInit unless the route exports `headers`, so every route
+  // that mints a nonce needs its own forwarder or its document — which
+  // carries BOTH halves of a double-submit — goes out cacheable, and a shared
+  // cache replays one visitor's nonce and matching token to the next. Both
+  // minting routes today happen to export it; nothing detected the third.
+  // This does. Source-level on purpose: the behavioural version needs a real
+  // document per route, which is a request-level test somebody has to write.
+  describe('every route that mints a form nonce forwards its headers', () => {
+    const minting = routeFiles().filter((f) => /\bmintFormCsrf\s*\(/.test(readAppSource(f)));
+
+    it('finds routes to check at all', () => {
+      // Non-vacuity: a renamed helper would empty the list and quietly retire
+      // the guard rather than fail it.
+      expect(minting.length).toBeGreaterThan(0);
+    });
+
+    it.each(minting)('%s exports headers', (relative) => {
+      expect(readAppSource(relative)).toMatch(/^export\s+(function\s+headers\b|const\s+headers\b)/m);
+    });
+  });
+
   // `app/lib/` runs in the same process as the routes and holds the shared
   // helpers, which is where a cache is most likely to be added "just for
   // speed". The relay guard is deliberately NOT applied here — `apiFetch.

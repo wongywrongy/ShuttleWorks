@@ -1,5 +1,5 @@
 /**
- * `GET /e/account/signup` — the page that closes F-E1-2-E1.
+ * `GET /e/signup` — the page that closes F-E1-2-E1.
  *
  * The backend has had `POST /e/account/signup` since SP-E1-2 and the logged-out
  * entry page NAMED it, but nothing ever rendered a form, so no human could
@@ -76,7 +76,7 @@ function stubConfig(body: unknown = CONFIG, status = 200) {
 }
 
 async function fetchSignup(
-  path = '/e/account/signup',
+  path = '/e/signup',
   mode = 'development',
 ): Promise<Response> {
   const build = (await vite.ssrLoadModule(
@@ -99,10 +99,6 @@ describe('the signup form, unhydrated', () => {
 
     expect(html).toMatch(/<form[^>]*method="post"/);
     expect(html).toContain('action="/e/account/signup"');
-    // Case-insensitive: React 19 streams the JSX spelling `encType=` verbatim,
-    // and HTML attribute names are ASCII case-insensitive, so asserting the
-    // lowercase form would be asserting React's serializer.
-    expect(html).toMatch(/enctype="application\/x-www-form-urlencoded"/i);
     // A form with no submit control is unsubmittable without script — the
     // whole point of this tier, and a gap every other assertion here would
     // sail past.
@@ -144,7 +140,6 @@ describe('the signup form, unhydrated', () => {
     expect(html).toMatch(
       /<input[^>]*type="hidden"[^>]*name="_csrf"[^>]*value="[0-9a-f]{64}"/,
     );
-    expect(html).not.toMatch(/name="_csrf" value=""/);
   });
 
   it('renders a token that is the digest of the nonce it just set', async () => {
@@ -226,21 +221,22 @@ describe('the signup form, unhydrated', () => {
     expect(html).not.toContain('href="/e/account/logout"');
   });
 
-  it('reads no width the viewport has to grow to accommodate (R11)', async () => {
-    // Desktop and mobile co-equal: the page is a `max-w-*` column of
-    // full-width controls. A fixed pixel width or a `min-w-` on the container
-    // is what would introduce a horizontal scrollbar at 360px, and it is the
-    // one shape assertable on server-rendered markup.
+  it('spells its width as a max-w column, never an arbitrary w-[…] value', async () => {
+    // **This is a Tailwind SPELLING check, not viewport coverage.** It reads
+    // class attributes in server-rendered markup, so the only thing it can
+    // see is which utilities were written. It cannot fail on any of the ways
+    // this page would really overflow at 360px — a wide table, a long
+    // unbroken string, a `grid-cols-` that does not collapse — because none
+    // of those are a width literal. Real width verification needs layout,
+    // i.e. a browser; this tier has none, and R11 is not closed by this test.
+    //
+    // What it does buy: the column is declared `max-w-*` rather than fixed,
+    // and no `w-[720px]`/`min-w-[40rem]` literal has been pasted in anywhere
+    // in the document. (`min-w-0` is deliberately not a finding — it is the
+    // OPPOSITE hazard, and the design system ships it on `Notice`.)
     const html = await render();
 
     expect(html).toMatch(/<main[^>]*class="[^"]*\bmax-w-/);
-    // Scanned over every class attribute in the document, not just `main`'s:
-    // a fixed pixel width anywhere inside the column overflows it just as
-    // surely as one on the column itself.
-    // Arbitrary pixel/rem values only: `min-w-0` is the OPPOSITE hazard (it is
-    // what lets a flex child shrink below its content), and the design system
-    // ships it on `Notice`. Narrowed after that false positive — the shape
-    // that actually overflows a 360px viewport is a hardcoded `w-[720px]`.
     for (const attr of html.match(/class="[^"]*"/g) ?? []) {
       expect(attr).not.toMatch(/\b(min-)?w-\[\d/);
     }
@@ -252,7 +248,7 @@ describe('the signup form, unhydrated', () => {
     // `window.__reactRouterContext` in development, which does not ship.
     stubConfig({ detail: 'settings read failed at /app/api/entries_json.py:320' }, 500);
 
-    const res = await fetchSignup('/e/account/signup', 'production');
+    const res = await fetchSignup('/e/signup', 'production');
     const body = await res.text();
 
     expect(res.status).toBe(500);
@@ -278,8 +274,8 @@ describe('signup is not an account-enumeration oracle', () => {
     // input and the rendered bytes are compared with nothing masked but the
     // per-render CSRF digest, which is fresh by design. Not "the same input
     // twice": that would be a tautology comparing a constant to itself.
-    const fresh = await render('/e/account/signup?email=nobody-has-this@example.test');
-    const taken = await render('/e/account/signup?email=already-registered@example.test');
+    const fresh = await render('/e/signup?email=nobody-has-this@example.test');
+    const taken = await render('/e/signup?email=already-registered@example.test');
 
     // The digest is the ONE legitimately-per-render value. Masking anything
     // else here would be masking the finding.
@@ -301,7 +297,7 @@ describe('signup is not an account-enumeration oracle', () => {
     // would put the 202/303 in node's hands, and rendering "that address is
     // taken" from it is then one edit away — an edit the byte test cannot see,
     // because the distinguishing document would be the POST response.
-    const route = (await vite.ssrLoadModule('/app/routes/account.signup.tsx')) as Record<
+    const route = (await vite.ssrLoadModule('/app/routes/signup.tsx')) as Record<
       string,
       unknown
     >;
@@ -322,7 +318,7 @@ describe('signup is not an account-enumeration oracle', () => {
     // renders a fixed form and fetches one public projection; it has no
     // business being handed the request at all, and a zero-arity signature is
     // the cheapest possible proof that it is not.
-    const route = (await vite.ssrLoadModule('/app/routes/account.signup.tsx')) as {
+    const route = (await vite.ssrLoadModule('/app/routes/signup.tsx')) as {
       loader: (...args: unknown[]) => unknown;
     };
 

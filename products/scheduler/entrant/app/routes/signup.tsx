@@ -1,5 +1,14 @@
 /**
- * `GET /e/account/signup` — the page that lets a human make an entrant account.
+ * `GET /e/signup` — the page that lets a human make an entrant account.
+ *
+ * **Why the page and the POST are at different URLs.** The form posts to
+ * `/e/account/signup`, which is FastAPI's. Ruling R8-A (see
+ * `react-router.config.ts`) hands nginx the whole `/e/account/` prefix, and a
+ * prefix split cannot be a method split — a node GET inside it answers 405 in
+ * every deployment that implements the ruling. Rather than teach ingress one
+ * per-method exception, the page sits on a node-owned path. The POST target is
+ * untouched; `tests/routeConfig.test.ts` fails any future route that lands
+ * inside a backend prefix.
  *
  * **Why this file exists (F-E1-2-E1).** `POST /e/account/signup` has existed
  * since SP-E1-2 and the logged-out entry page named it, but nothing ever
@@ -22,7 +31,7 @@
  * docstring). This tier must not reintroduce the distinction, so the loader
  * takes **no parameters at all** — it cannot be handed an address, from a
  * `?email=` prefill or from anywhere else, and therefore cannot branch on one.
- * `tests/account.signup.test.ts` compares the rendered documents for a fresh
+ * `tests/signup.test.ts` compares the rendered documents for a fresh
  * and an already-registered address byte for byte.
  *
  * **CSRF on a page with no session.** There is no session yet — obtaining one
@@ -40,12 +49,12 @@
  * pass" after filling the whole form in. Everything else here works unhydrated.
  */
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
-import { data, isRouteErrorResponse, useRouteError } from 'react-router';
+import { data } from 'react-router';
 
 import { apiGet } from '../lib/apiFetch.server';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
-import type { Route } from './+types/account.signup';
+import type { Route } from './+types/signup';
 
 /** `EntrantConfigDTO` — `api/entries_json.py`. Exactly two keys, both public
  * by nature: a sitekey is rendered into every signup page, and the auth mode
@@ -100,7 +109,7 @@ export async function loader() {
  * of a double-submit, the nonce in `Set-Cookie` and its digest in the body —
  * would go out cacheable. A shared cache that stored it replays one visitor's
  * nonce and its matching token to the next. Pinned on the real document
- * response in `tests/account.signup.test.ts`, never on the mint's return
+ * response in `tests/signup.test.ts`, never on the mint's return
  * value: that is the only place the drop is observable.
  *
  * A pass-through, not `{'Cache-Control': 'no-store'}` — the value belongs to
@@ -137,8 +146,10 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
       </Notice>
 
       {/*
-        Posts to its own URL, which is the backend's route: `/e/account/*` is
-        served by FastAPI, and this page is the GET the browser was missing.
+        Posts ACROSS the tier boundary, not to this page's own URL: all of
+        `/e/account/*` is FastAPI's (R8-A), and this page is node's, which is
+        why the two URLs differ. `encType` is omitted — urlencoded is the HTML
+        default for `method=post`.
         A plain `<form>`, never React Router's `<Form>`, so RR7 never
         intercepts and a hydrated browser posts exactly as a scriptless one
         does — one submission path, not two that can drift.
@@ -151,7 +162,6 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
       <form
         method="post"
         action="/e/account/signup"
-        encType="application/x-www-form-urlencoded"
         className="grid gap-4"
       >
         {/* Channel two. There is no session on this page — obtaining one is
@@ -236,21 +246,15 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
  * Renders refusals as copy, never as upstream prose — `entry.tsx`'s boundary,
  * for the same reason: `ApiError` constructs its own message, but a boundary
  * that rendered `error.message` would be one edit away from putting a stack
- * frame or an internal hostname on a public page. Reads the status, nothing
- * else.
+ * frame or an internal hostname on a public page.
+ *
+ * One branch, unlike `entry.tsx`'s two: nothing here can throw an
+ * `ErrorResponse`. The only throw path is `apiGet`, which throws a plain
+ * `ApiError`; `entry.tsx` converts a 404 of those into `notFound()`, which is
+ * what makes a `isRouteErrorResponse` branch live THERE. This route has no
+ * slug to be missing, so it has no such conversion and no such branch.
  */
 export function ErrorBoundary() {
-  const error = useRouteError();
-
-  if (isRouteErrorResponse(error) && error.status === 404) {
-    return (
-      <main>
-        <h1>This page is not available</h1>
-        <p>Check the link, or ask the organiser for the current one.</p>
-      </main>
-    );
-  }
-
   return (
     <main>
       <h1>Something went wrong</h1>

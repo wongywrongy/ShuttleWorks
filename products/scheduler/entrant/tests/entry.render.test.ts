@@ -261,10 +261,12 @@ describe('the entry form, unhydrated', () => {
   });
 
   it('links to no POST-only account route', async () => {
-    // `/e/account/login` and `/e/account/signup` are POST-only until Tasks
-    // 19-21 build the pages; an <a href> to either is a 405 in the
-    // entrant's face. Removed rather than left pending — a dead link is
-    // worse than no link, and this fails the day one is pasted back in.
+    // `/e/account/login` and `/e/account/signup` are FastAPI's POST routes
+    // and stay POST-only forever; an <a href> to either is a 405 in the
+    // entrant's face. The signup PAGE is a different URL — `/e/signup`, node's
+    // — and linking THAT is a live option this does not block. Removed rather
+    // than left pending: a dead link is worse than no link, and this fails the
+    // day a POST URL is pasted back in as an href.
     const html = await render();
 
     expect(html).not.toContain('/e/account/login');
