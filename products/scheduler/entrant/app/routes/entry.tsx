@@ -190,6 +190,23 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
           enter.
         </p>
         {/*
+          The way OUT, and the only page a signed-in entrant is actually on —
+          which is why the link belongs here rather than nowhere. Rendered
+          unconditionally for the same reason as the two above: `signedIn` is
+          `false` on every server-rendered page, so a gate would hide it from
+          everyone, and reaching the logout page while already signed out is
+          harmless (the route is idempotent).
+
+          A LINK to a PAGE, never to `/e/account/logout` itself: that is the
+          POST, and an `<a href>` to it would both 405 under R8-A and — were
+          the ingress ever to answer the GET — turn every prefetch, scanner
+          and `<img src>` into a sign-out. `tests/logout.test.ts` derives that
+          prohibition from every route module on disk.
+        */}
+        <p className="text-sm">
+          Signed in already? <a className="underline" href="/e/logout">Sign out</a>.
+        </p>
+        {/*
           **The form is rendered unconditionally (ruling R8-E).** It used to be
           gated on `page.viewer.signedIn`, which is a value this page cannot
           have: node's fetch of `GET /e/api/page/{slug}` is always anonymous

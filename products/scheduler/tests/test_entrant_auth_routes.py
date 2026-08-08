@@ -1225,6 +1225,68 @@ def test_a_form_signup_still_needs_the_challenge(client, turnstile):
     assert _accounts() == 0
 
 
+def test_a_form_logout_kills_the_session_and_lands_on_a_node_owned_get(
+    client, account
+):
+    """THE POSITIVE HALF of the logout controls, on the channel the page
+    actually uses — and the one that says what "logged out" means.
+
+    The signed-in entrant's browser posts a urlencoded form from
+    ``GET /e/logout`` (``entrant/app/routes/logout.tsx``) carrying no custom
+    header — a native form cannot send one — so the proof of intent is the
+    ``sw_play_csrf`` digest node minted onto that document. Node never reads
+    the session cookie, so the session-derived digest is not available to it;
+    ``logout_form_csrf`` accepting *either* candidate is what makes the page
+    possible at all.
+
+    Two things are then asserted, and the second is the point:
+
+    1. The redirect lands on ``/e/login``, a **node-owned GET**. ``logout``'s
+       own fallback is ``/e/account/login``, which is POST-only — a
+       successful sign-out that ends on a 405. The page therefore always
+       sends a ``next``, and this is the pin on it.
+    2. **The session is genuinely destroyed, not merely un-cookied.** The
+       pre-logout token is replayed on ``/me`` from a cleared jar and must
+       resolve to nothing. A response that only cleared the cookie would pass
+       every other assertion here while anyone holding that token still held
+       the account.
+
+    To prove it is not vacuous: drop the ``entrant_service.revoke_session``
+    call from ``logout`` and the replay goes red while the 303 and the
+    ``Location`` stay green — exactly the defect this exists to catch. Point
+    ``next_target``'s fallback at the token check instead and the ``Location``
+    assertion is the one that moves.
+    """
+    from app.config import settings
+    from app.form_csrf import form_csrf_token
+
+    token = _login(client).cookies[settings.entrant_session_cookie_name]
+
+    # Non-vacuity for the replay below, and the thing that makes it a
+    # SERVER-side claim rather than a cookie-hygiene one: the very same token,
+    # in a jar built by hand, authenticates right now. A ``Set-Cookie`` that
+    # clears the browser's copy cannot reach this jar, so the 401 at the end
+    # can only be the revoked row.
+    client.cookies.clear()
+    client.cookies.set(settings.entrant_session_cookie_name, token)
+    assert client.get(ME).status_code == 200
+
+    client.cookies.set(PLAY_CSRF, "v")
+
+    r = client.post(
+        LOGOUT,
+        data={"next": "/e/login", "_csrf": form_csrf_token("v")},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303, r.text
+    assert r.headers["location"] == "/e/login"
+
+    client.cookies.clear()
+    client.cookies.set(settings.entrant_session_cookie_name, token)
+    assert client.get(ME).status_code == 401
+
+
 def test_a_form_logout_without_the_form_token_is_refused(client, turnstile):
     """NEGATIVE CONTROL, third of three: logout carries a session, so its
     proof comes from the session-derived digest — but it is still required.

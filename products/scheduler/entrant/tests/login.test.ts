@@ -167,7 +167,7 @@ describe('the account pages are reachable by link', () => {
     expect(hrefs(html)).toContain('/e/signup');
   });
 
-  it.each([['login'], ['signup'], ['entry']] as const)(
+  it.each([['login'], ['signup'], ['entry'], ['logout']] as const)(
     'the %s page offers no link into a FastAPI-owned prefix',
     async (page) => {
       // **Derived, not listed.** Every `/e/account/*` URL is POST-only
@@ -175,12 +175,17 @@ describe('the account pages are reachable by link', () => {
       // them is a 405 in the entrant's face — the exact defect R8-E removed.
       // Reading every href out of the document means a link pasted to a route
       // invented tomorrow is a finding too, without a line being added here.
+      // `logout` is here because it is the one account page where an `<a href>`
+      // into the backend prefix would be worse than a 405: were the ingress
+      // ever to answer a GET on `/e/account/logout`, following such a link —
+      // or a browser prefetching it — would destroy the session. Its own file
+      // owns the rest of its behaviour.
       const html =
         page === 'entry'
           ? await fetchEntry()
           : page === 'signup'
             ? await fetchSignup()
-            : await render();
+            : await render(page === 'logout' ? '/e/logout' : '/e/login');
       const links = hrefs(html);
 
       // Non-vacuity, and specifically NOT `links.length > 0`: the dev-mode
