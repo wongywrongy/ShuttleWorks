@@ -13,9 +13,12 @@
  *
  * The number never comes from here. It is `compute_fee_total`'s, read off the
  * query string; the write path runs the same call again
- * (`api/entries_json.py:610`), so a hand-edited URL misleads only its editor
- * and reaches no record.
+ * (`api/entries_json.py:610`), so an edited URL reaches no record — but it is
+ * a GET, so it is also a link someone can be *sent*, and everything it renders
+ * is bounded for that reason (a number, or a refusal code mapped to fixed
+ * copy). The control on that is below.
  */
+import { readFileSync } from 'node:fs';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
@@ -135,6 +138,25 @@ describe('the quote round trip, with no JavaScript', () => {
     expect(html).toContain('action="/e/api/submit/spring-open"');
   });
 
+  it('takes the SAME path hydrated: nothing intercepts the submission', async () => {
+    // Why there is one path and not two. This is a plain `<form>`, not React
+    // Router's `<Form>`, and the button carries no handler — so a hydrated
+    // browser performs the same native document POST to the same
+    // `formaction`, gets the same 303, and lands on the same URL the bytes
+    // above render. A `fetch`-and-navigate enhancement existed here and was
+    // deleted: it produced an identical result through a second copy of the
+    // round trip, and a second copy is a second thing that can drift from
+    // `compute_fee_total` (R14).
+    const source = readFileSync(
+      new URL('../app/routes/entry.form.tsx', import.meta.url),
+      'utf8',
+    ).replace(/\/\*[\s\S]*?\*\//g, '');
+
+    expect(source).not.toMatch(/from ['"]react-router['"]/);
+    expect(source).not.toMatch(/\bon(Click|Submit)=/);
+    expect(source).not.toMatch(/(^|[^.\w])fetch\s*\(/);
+  });
+
   it('never asks the API for a quote while server-rendering', async () => {
     // The quote carries the entrant's session and CSRF proof; the browser
     // sends it, node never does. If SSR reached that route, node would be
@@ -205,9 +227,32 @@ describe('the quote round trip, with no JavaScript', () => {
   });
 
   it('surfaces a policy refusal from the round trip', async () => {
-    const html = await render('?refusal=At+most+2+events+per+person');
+    const html = await render('?refusalCode=MAX_EVENTS_PER_PERSON&refusalSubjects=0');
 
-    expect(html).toContain('At most 2 events per person');
+    expect(html).toContain('more events than this tournament allows');
+    expect(html).toContain('Player 1');
+  });
+
+  it('renders no attacker text from the query string, only fixed copy', async () => {
+    // The owed negative control. This URL is a GET on the tournament's own
+    // host, so it is shareable: a link is read by whoever was sent it. Before
+    // the code mapping, `?refusal=<anything>` printed that text verbatim
+    // inside the warning Notice on the official entry page.
+    const html = await render(
+      '?refusalCode=Pay+%C2%A340+cash+to+the+desk+or+your+entry+is+void&refusalSubjects=%3Cb%3Eyou%3C%2Fb%3E',
+    );
+
+    expect(html).not.toContain('cash to the desk');
+    expect(html).not.toContain('&lt;b&gt;you');
+    // ...and it does not fail silently either: an unknown code still says
+    // something true.
+    expect(html).toContain('cannot be entered as it stands');
+  });
+
+  it('says something safe for a refusal code it does not know', async () => {
+    const html = await render('?refusalCode=SOME_FUTURE_RULE');
+
+    expect(html).toContain('cannot be entered as it stands');
   });
 
   it('renders a hand-edited total as nothing rather than as NaN', async () => {

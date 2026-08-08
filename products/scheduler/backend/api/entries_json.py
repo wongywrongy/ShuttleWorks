@@ -484,8 +484,19 @@ def _echo_redirect(slug: str, form, total, refusal) -> RedirectResponse:
 
     ``totalCents`` rides in the query string as **display**. It is not
     posted onward by the page that receives it, and the write path runs
-    ``compute_fee_total`` again (:610), so a hand-edited URL changes what
-    its editor reads and nothing that is recorded.
+    ``compute_fee_total`` again (:610), so an edited URL reaches no record.
+
+    **The refusal is echoed as a CODE, never as its message.** This target
+    is a GET on the tournament's own host, so the query string is a
+    *shareable link* — whatever it carries is rendered on the official
+    entry page for whoever was sent it, which is not the same person who
+    wrote it. A free-text ``?refusal=`` would therefore let a stranger put
+    a plausible organiser warning on a page about money (no XSS is needed;
+    the page escaping it faithfully is the problem). ``code`` is fixed
+    server vocabulary from ``check_policy`` and ``subjects`` are its
+    player keys, so the client picks the sentence
+    (``app/lib/echo.ts``'s ``refusalText``) and nothing an author of a URL
+    writes can become prose.
     """
     echoed = [
         (name, value[:_ECHO_MAX_LEN])
@@ -495,7 +506,9 @@ def _echo_redirect(slug: str, form, total, refusal) -> RedirectResponse:
     if total is not None:
         echoed.append(("totalCents", str(total)))
     if refusal is not None:
-        echoed.append(("refusal", refusal.message[:_ECHO_MAX_LEN]))
+        echoed.append(("refusalCode", refusal.code))
+        if refusal.subjects:
+            echoed.append(("refusalSubjects", ",".join(refusal.subjects)))
     return RedirectResponse(
         url=f"/e/{quote(slug, safe='')}?{urlencode(echoed)}#enter", status_code=303
     )

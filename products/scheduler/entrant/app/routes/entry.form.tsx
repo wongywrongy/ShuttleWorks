@@ -20,11 +20,15 @@
  * `formAction` to `/e/api/quote/{slug}` with `action=filter` — the incumbent's
  * mechanism (`api/entries_public.py:589`) repointed at a route that writes
  * nothing — and `formNoValidate`, because pressing it is not a claim that the
- * form is finished. With no script that is a real navigation: the quote route
- * answers a browser `Accept` with a 303 back to this page carrying the posted
- * body plus the server's total. With script, `requestQuote` makes the same
- * POST and the route navigates to the same query string, so the two paths
- * share one renderer rather than agreeing by hand.
+ * form is finished. That is a real navigation in every browser: this is a
+ * plain `<form>`, not React Router's `<Form>`, so RR7 never intercepts the
+ * submission and a hydrated browser posts the document exactly as a scriptless
+ * one does. The quote route answers a browser `Accept` with a 303 back to this
+ * page carrying the posted body plus the server's total, and this loader
+ * renders it. **There is deliberately no fetch-and-navigate enhancement**: a
+ * second client path for the same act is a second thing that can drift from
+ * `compute_fee_total`, which is the drift R14 exists to prevent. The cost is a
+ * document reload; the price of the alternative is a wrong number about money.
  *
  * **Gender is a native `<select>`, not the design system's `Select`.** That
  * component wraps Radix, which renders a `<button>` driven by `onValueChange`
@@ -37,8 +41,6 @@
  * the same `compute_fee_total` the write uses, and it is displayed but never
  * posted back.
  */
-import type { MouseEvent } from 'react';
-import { useNavigate } from 'react-router';
 import {
   Button,
   Card,
@@ -50,7 +52,6 @@ import {
 
 import { narrowEvents, type FormEcho, type PlayerEcho } from '../lib/echo';
 import { formatCents } from '../lib/money';
-import { requestQuote } from '../lib/quoteRoundTrip';
 import type { EntryEventDTO, EntryPageDTO } from '../lib/entryPage.types';
 
 export interface EntryFormProps {
@@ -228,7 +229,6 @@ function PlayerBlock({
 }
 
 export function EntryForm({ page, idempotencyKey, echo }: EntryFormProps) {
-  const navigate = useNavigate();
   const openEvents = page.events.filter((event) => event.isOpen);
   const askBirthYear = openEvents.some((event) => event.ageBracketed);
   const cap = page.policy.maxEventsPerPerson;
@@ -238,27 +238,6 @@ export function EntryForm({ page, idempotencyKey, echo }: EntryFormProps) {
   const feeTiers = Object.entries(page.page.feeSchedule).sort(
     ([a], [b]) => Number(a) - Number(b),
   );
-
-  /**
-   * Hydrated: the same round trip without a full page reload.
-   *
-   * Deliberately NOT a client-side recomputation. The browser posts the form
-   * to FastAPI, and the answer is turned into the query string this route's
-   * loader already knows how to render — so the hydrated and unhydrated paths
-   * differ only in whether the navigation was a document load.
-   *
-   * Falls through to the native `formAction` if anything about the event is
-   * not what we expect, so a broken enhancement degrades to the shipped
-   * no-script behaviour rather than to nothing.
-   */
-  async function updateTotal(event: MouseEvent<HTMLButtonElement>) {
-    const form = event.currentTarget.form;
-    if (!form) return;
-    event.preventDefault();
-    navigate(await requestQuote(page.page.slug, new FormData(form)), {
-      replace: true,
-    });
-  }
 
   return (
     <form
@@ -329,15 +308,18 @@ export function EntryForm({ page, idempotencyKey, echo }: EntryFormProps) {
         value="filter"
         formAction={`/e/api/quote/${page.page.slug}`}
         formNoValidate
-        onClick={updateTotal}
         className="justify-self-start"
       >
         Update events and total
       </Button>
 
       {/* The total is the server's. Shown, never posted: the write path
-          recomputes it (`api/entries_json.py:610`), so a hand-edited query
-          string misleads only its editor. */}
+          recomputes it (`api/entries_json.py:610`), so an edited query string
+          reaches no record. It is NOT harmless, though — this URL is a GET,
+          which means it is shareable, and a link is read by whoever was sent
+          it, not by whoever wrote it. `readCents` bounds this one to a
+          non-negative integer, and the refusal beside it is a server code
+          mapped to fixed copy for the same reason. */}
       {echo.totalCents === null ? (
         <p className="text-sm text-muted-foreground">
           The organiser confirms the total when they receive this entry &mdash;

@@ -803,8 +803,16 @@ def test_two_submissions_without_a_key_are_two_acts(client, page, entrant):
 # path rather than a degraded one, and it is the only shape that gets a
 # total onto that page without node relaying the entrant's credential.
 
-_BROWSER = dict(CSRF)
-_BROWSER["accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+# **No X-ShuttleWorks-CSRF here, deliberately.** A native <form method=post>
+# cannot set a header — that is the whole reason channel two (the `_csrf` body
+# field) exists — so a _BROWSER that sent one would be exercising the header
+# path under a name that claims otherwise, and the no-JS wiring would rest on
+# nothing asserted. These posts carry the shape a scriptless browser actually
+# sends: an Accept header the browser sets itself, and the token in the body.
+# The header path is covered by `_quote`.
+_BROWSER = {
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+}
 
 
 def _echo(response):
@@ -882,12 +890,19 @@ def test_the_browser_echo_drops_the_csrf_token_and_the_idempotency_key(
     assert "aaaaaaaa-bbbb" not in r.headers["location"]
 
 
-def test_a_browser_quote_echoes_a_policy_refusal_with_the_rule_stated(
+def test_a_browser_quote_echoes_a_policy_refusal_as_a_code_not_prose(
     client, page, entrant
 ):
     """A refusal the entrant can act on has to survive the redirect too —
     otherwise the no-JS path shows a total for a basket that will be
-    refused at submit, which is the exact lie the quote exists to prevent."""
+    refused at submit, which is the exact lie the quote exists to prevent.
+
+    It survives as ``check_policy``'s **code** plus its player keys, never
+    as the message. The redirect target is a GET on the tournament's own
+    host, so its query string is a shareable link: free text in it is text
+    a stranger can render on the official entry page by sending someone a
+    URL. The client maps the code to fixed copy (``app/lib/echo.ts``).
+    """
     from database.models import EntryPage
     from database.session import SessionLocal
 
@@ -913,8 +928,34 @@ def test_a_browser_quote_echoes_a_policy_refusal_with_the_rule_stated(
 
     assert r.status_code == 303
     echo = _echo(r)
-    # The RULE, not "refused" (R14 §4) — the number survives the round trip.
-    assert "at most 1 event" in echo["refusal"][0]
+    assert echo["refusalCode"] == ["MAX_EVENTS_PER_PERSON"]
+    assert echo["refusalSubjects"] == ["0"]
+    # The message itself must NOT be in the URL: it is the free-text field
+    # a crafted link would abuse. The rule's number reaches the entrant
+    # from the projection the page already renders ("Up to N events per
+    # person"), which is the director's configuration, not a query string.
+    assert "refusal" not in echo
+    assert "at most" not in r.headers["location"]
+
+
+def test_a_headerless_browser_quote_is_refused_without_the_body_token(
+    client, page, entrant
+):
+    """Non-vacuity for `_BROWSER`: these posts really do rest on channel two.
+
+    Nothing above sends `X-ShuttleWorks-CSRF` — a native form cannot — so
+    the only proof carried is the `_csrf` body field. If that field were
+    ignored, every browser test here would pass while the route accepted a
+    cookie-carrying cross-site post. Remove the token and it must refuse.
+    """
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data={"playerName": "Alice Chen", "gender": "F", "events": [f"0:{page['ms']}"]},
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    assert r.status_code in (401, 403), r.text
 
 
 def test_a_fetch_still_gets_json(client, page, entrant):

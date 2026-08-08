@@ -4,16 +4,25 @@
  * `POST /e/api/quote/{slug}` answers a native form post (`Accept: text/html`)
  * with a 303 whose `Location` is this page plus the posted body — minus
  * `_csrf`, `idempotencyKey` and `action` — plus the server's `totalCents` and
- * any refusal. Parsing it here mirrors `parse_players`
+ * any refusal *code*. Parsing it here mirrors `parse_players`
  * (`services/entry_form.py`): the player fields repeat positionally, one entry
  * per rendered block, and each event checkbox is valued
  * `"<player index>:<event id>"`.
  *
+ * **This query string is a shareable GET, and that is the threat model.** It
+ * addresses the real entry page on the real tournament host, so anything it
+ * renders verbatim is content a stranger can put in front of an entrant by
+ * sending them a link — a plausible organiser warning, on a page about money.
+ * React escapes it, so this was never XSS; it is that the URL is *reachable by
+ * someone other than its author*. Hence: no free text crosses this boundary.
+ * `refusalCode` is server vocabulary mapped here to FIXED local copy
+ * (`refusalText`), an unknown code falls back to a generic sentence, and
+ * `readCents` refuses anything that is not a non-negative integer rather than
+ * letting `NaN` — or an invented number — reach the page.
+ *
  * **`totalCents` is DISPLAY.** It is never posted onward, and the write path
  * runs `compute_fee_total` again (`api/entries_json.py:610`), so an edited URL
- * changes what its editor reads and nothing that is recorded. It is also
- * entrant-editable, which is why `readCents` refuses anything that is not a
- * non-negative integer rather than letting `NaN` reach a page about money.
+ * reaches no record. It is still rendered, so it is still bounded above.
  *
  * `narrowEvents` mirrors the incumbent's gender filter
  * (`api/entries_public.py:924`). It is presentational — a default view, not a
@@ -38,7 +47,56 @@ export interface FormEcho {
   players: PlayerEcho[];
   showAllEvents: boolean;
   totalCents: number | null;
+  /** Fixed local copy chosen by `refusalText` — never text off the URL. */
   refusal: string | null;
+}
+
+/**
+ * The generic answer. Shown for a code this build does not recognise, which
+ * includes both a newer server's vocabulary and an invented one — those are
+ * indistinguishable from here, so both get the safe sentence.
+ */
+const REFUSAL_UNKNOWN =
+  'This selection cannot be entered as it stands. Check the limits stated above, then press "Update events and total" again.';
+
+/**
+ * Fixed copy for a refusal code from `check_policy` (`services/entry_policy.py`).
+ *
+ * A chain of literal comparisons rather than a lookup object on purpose: the
+ * key is attacker-supplied, and `COPY[code]` with `code = 'constructor'` finds
+ * something truthy on any plain object's prototype. Two codes do not need a
+ * data structure.
+ *
+ * The copy states no *number*. R14 wants the rule stated, and it is — by the
+ * form itself, from the projection ("Up to N events per person"), which is the
+ * director's own configuration rather than anything that rode in on a URL.
+ */
+function refusalCopy(code: string): string {
+  if (code === 'MAX_EVENTS_PER_PERSON') {
+    return 'That is more events than this tournament allows for one player. Remove some, then update the total again.';
+  }
+  if (code === 'DISCIPLINE_CAP') {
+    return 'That is more events in one discipline than this tournament allows for one player. Remove some, then update the total again.';
+  }
+  return REFUSAL_UNKNOWN;
+}
+
+/**
+ * The sentence to show for `?refusalCode=&refusalSubjects=`.
+ *
+ * `subjects` are `check_policy`'s player keys — the block index, as digits.
+ * Anything that is not digits is dropped rather than rendered, which is the
+ * whole point of this function: nothing an entrant (or a link) writes into the
+ * query string reaches the page as prose.
+ */
+export function refusalText(code: string | null, subjects: string | null): string | null {
+  if (code === null || code.trim() === '') return null;
+  const copy = refusalCopy(code);
+  const players = (subjects ?? '')
+    .split(',')
+    .filter((raw) => /^\d+$/.test(raw))
+    .map((raw) => `Player ${Number(raw) + 1}`);
+  return players.length === 0 ? copy : `${players.join(', ')} — ${copy}`;
 }
 
 /**
@@ -77,7 +135,7 @@ export function parseEcho(params: URLSearchParams): FormEcho {
     })),
     showAllEvents: params.get('showAllEvents') !== null,
     totalCents: readCents(params.get('totalCents')),
-    refusal: params.get('refusal'),
+    refusal: refusalText(params.get('refusalCode'), params.get('refusalSubjects')),
   };
 }
 

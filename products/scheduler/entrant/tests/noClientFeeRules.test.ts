@@ -31,20 +31,29 @@ function sourceFiles(dir: string): string[] {
  * Accumulation or scaling of a cents value — a fee *rule*. A plain read is
  * not.
  *
- * Scans whole *statements*, not lines: a per-line scan is escapable by
- * wrapping the accumulator across a line break (a `reduce(` split from the
- * `+ feeCents` that feeds it lands the "cents" token and the arithmetic
- * marker on different lines, so a line-local filter never sees them
- * together). Whitespace — including newlines — is collapsed first, then the
- * collapsed text is split on statement-terminating `;`, so a multi-line call
- * reassembles into one candidate before either filter runs.
+ * **The `cents` mention gates the FILE; the arithmetic marker gates the
+ * statement.** Both were statement-scoped, and that is escapable by aliasing
+ * across a statement boundary — `const prices = events.map((e) => e.feeCents
+ * ?? 0);` then `const total = prices.reduce((sum, p) => sum + p, 0);` sums a
+ * basket of fees with the word "cents" nowhere near the arithmetic. Nothing
+ * short of type-aware analysis follows that alias, so the scan stops trying:
+ * any file that mentions cents at all and then accumulates or scales *anything*
+ * is a finding. False positives are the intended trade — they are cheap to
+ * rebut, and the thing on the other side is a director's money.
+ *
+ * Statements, not lines, for the arithmetic marker: a per-line scan is
+ * escapable by wrapping the accumulator across a line break. Whitespace —
+ * including newlines — is collapsed first, then the collapsed text is split on
+ * statement-terminating `;`, so a multi-line call reassembles into one
+ * candidate first.
  */
 export function feeArithmeticLines(source: string): string[] {
+  if (!/cents/i.test(source)) return [];
+
   return source
     .replace(/\s+/g, ' ')
     .split(/(?<=;)\s*/)
     .filter(Boolean)
-    .filter((statement) => /cents/i.test(statement))
     .filter((statement) =>
       /(\+=|\breduce\(|[Cc]ents\s*[*+/-]\s|[*+]\s*\w*[Cc]ents)/.test(statement),
     );
@@ -90,12 +99,24 @@ describe('no fee arithmetic exists client-side', () => {
       // a line break, so "cents" and the `reduce(` marker never shared a
       // line.
       'const total = openEvents.reduce(\n  (sum, e) => sum + (e.feeCents ?? 0),\n  0,\n);',
+      // The escape a statement-scoped `cents` filter missed: the fees are
+      // aliased onto a plain-named local in one statement, and the sum happens
+      // in the next, where the word "cents" never appears.
+      'const prices = openEvents.map((e) => e.feeCents ?? 0);',
+      'const total = prices.reduce((sum, p) => sum + p, 0);',
     ].join('\n');
 
     expect(feeArithmeticLines(offending)).toEqual([
       'const totalCents = events.reduce((sum, e) => sum + (e.feeCents ?? 0), 0);',
       'const withLevy = event.feeCents * 1.05;',
       'const total = openEvents.reduce( (sum, e) => sum + (e.feeCents ?? 0), 0, );',
+      'const total = prices.reduce((sum, p) => sum + p, 0);',
     ]);
+  });
+
+  it('is not vacuous the other way: a file with no cents at all is ignored', () => {
+    // The file-scoped gate must not turn every `reduce(` in the tier into a
+    // money finding — the scan is about fee rules, not about arithmetic.
+    expect(feeArithmeticLines('const n = rows.reduce((a, b) => a + b, 0);')).toEqual([]);
   });
 });

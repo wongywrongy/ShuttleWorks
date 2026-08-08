@@ -18,6 +18,7 @@ import { createRequestHandler, type ServerBuild } from 'react-router';
 import { loader } from '../app/routes/entry';
 import {
   credentialRelayLines,
+  libFiles,
   moduleScopedMutableBindings,
   readAppSource,
   routeFiles,
@@ -224,6 +225,17 @@ describe('entry loader', () => {
       // and module scope is shared by all of them. A per-request value cached
       // at module scope here would be a cross-USER leak of somebody's page —
       // or of somebody's idempotency key.
+      expect(moduleScopedMutableBindings(readAppSource(relative))).toEqual([]);
+    });
+  });
+
+  // `app/lib/` runs in the same process as the routes and holds the shared
+  // helpers, which is where a cache is most likely to be added "just for
+  // speed". The relay guard is deliberately NOT applied here — `apiFetch.
+  // server.ts` legitimately calls `fetch` and sets headers; it has its own
+  // dedicated coverage in `apiFetch.server.test.ts`.
+  describe.each(libFiles())('lib-tier module state: %s', (relative) => {
+    it('declares no mutable binding at module scope', () => {
       expect(moduleScopedMutableBindings(readAppSource(relative))).toEqual([]);
     });
   });

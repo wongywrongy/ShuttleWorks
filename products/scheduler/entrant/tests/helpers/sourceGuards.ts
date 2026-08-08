@@ -26,9 +26,25 @@ export function readAppSource(relative: string): string {
  * by the relay guards the moment it lands — no line to remember to add.
  */
 export function routeFiles(): string[] {
-  return readdirSync(new URL('../../app/routes/', import.meta.url))
+  return sourceNames('routes');
+}
+
+/**
+ * Every module under `app/lib/`, same enumeration, same reason.
+ *
+ * The module-state property is about the *process*, not about the route tier:
+ * `app/lib/` runs in the same node process serving the same concurrent
+ * entrants, and it is where shared helpers accumulate. Enumerating only
+ * `routes/` left the half of the tier most likely to hold a cache uncovered.
+ */
+export function libFiles(): string[] {
+  return sourceNames('lib');
+}
+
+function sourceNames(dir: string): string[] {
+  return readdirSync(new URL(`../../app/${dir}/`, import.meta.url))
     .filter((name) => name.endsWith('.ts') || name.endsWith('.tsx'))
-    .map((name) => `routes/${name}`);
+    .map((name) => `${dir}/${name}`);
 }
 
 /**

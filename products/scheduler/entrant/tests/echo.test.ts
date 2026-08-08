@@ -86,14 +86,53 @@ describe('parseEcho', () => {
     expect(parseEcho(params).players[1].events).toEqual([`1:${WD}`]);
   });
 
-  it('reads showAllEvents, totalCents and a refusal off the query', () => {
+  it('reads showAllEvents, totalCents and a refusal code off the query', () => {
     const echo = parseEcho(
-      new URLSearchParams('showAllEvents=on&totalCents=3500&refusal=Too+many+events'),
+      new URLSearchParams(
+        'showAllEvents=on&totalCents=3500&refusalCode=MAX_EVENTS_PER_PERSON&refusalSubjects=0,1',
+      ),
     );
 
     expect(echo.showAllEvents).toBe(true);
     expect(echo.totalCents).toBe(3500);
-    expect(echo.refusal).toBe('Too many events');
+    expect(echo.refusal).toBe(
+      'Player 1, Player 2 — That is more events than this tournament allows for one player. Remove some, then update the total again.',
+    );
+  });
+
+  it('never renders the query string as prose', () => {
+    // The URL is a shareable GET on the tournament's own host, so free text in
+    // it is content a stranger can put on the official entry page by sending
+    // someone a link. Only codes cross this boundary.
+    const crafted = parseEcho(
+      new URLSearchParams(
+        'refusalCode=Pay+%C2%A340+cash+to+the+desk&refusalSubjects=%3Cb%3Eyou%3C%2Fb%3E',
+      ),
+    );
+
+    expect(crafted.refusal).not.toContain('cash to the desk');
+    expect(crafted.refusal).not.toContain('<b>');
+    expect(crafted.refusal).toBe(
+      'This selection cannot be entered as it stands. Check the limits stated above, then press "Update events and total" again.',
+    );
+  });
+
+  it('does not find copy on Object.prototype for a crafted code', () => {
+    // `COPY[code]` with a lookup object answers something truthy for
+    // `constructor`, `toString`, `__proto__`. `refusalCopy` compares literals.
+    for (const code of ['constructor', 'toString', '__proto__', 'valueOf']) {
+      expect(parseEcho(new URLSearchParams(`refusalCode=${code}`)).refusal).toContain(
+        'cannot be entered as it stands',
+      );
+    }
+  });
+
+  it('drops a non-numeric subject rather than naming it', () => {
+    expect(
+      parseEcho(new URLSearchParams('refusalCode=DISCIPLINE_CAP&refusalSubjects=Ada')).refusal,
+    ).toBe(
+      'That is more events in one discipline than this tournament allows for one player. Remove some, then update the total again.',
+    );
   });
 
   it('is empty for a first visit', () => {
