@@ -28,11 +28,13 @@
  * principal, so the no-relay rule is untouched. See
  * `app/lib/formCsrf.server.ts`.
  */
+import { Button } from '@scheduler/design-system/components';
 import { data, isRouteErrorResponse, useRouteError } from 'react-router';
 
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import { parseEcho, type FormEcho } from '../lib/echo';
 import type { EntryPageDTO } from '../lib/entryPage.types';
+import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { formatCents } from '../lib/money';
 import { EntryForm } from './entry.form';
@@ -190,23 +192,6 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
           enter.
         </p>
         {/*
-          The way OUT, and the only page a signed-in entrant is actually on —
-          which is why the link belongs here rather than nowhere. Rendered
-          unconditionally for the same reason as the two above: `signedIn` is
-          `false` on every server-rendered page, so a gate would hide it from
-          everyone, and reaching the logout page while already signed out is
-          harmless (the route is idempotent).
-
-          A LINK to a PAGE, never to `/e/account/logout` itself: that is the
-          POST, and an `<a href>` to it would both 405 under R8-A and — were
-          the ingress ever to answer the GET — turn every prefetch, scanner
-          and `<img src>` into a sign-out. `tests/logout.test.ts` derives that
-          prohibition from every route module on disk.
-        */}
-        <p className="text-sm">
-          Signed in already? <a className="underline" href="/e/logout">Sign out</a>.
-        </p>
-        {/*
           **The form is rendered unconditionally (ruling R8-E).** It used to be
           gated on `page.viewer.signedIn`, which is a value this page cannot
           have: node's fetch of `GET /e/api/page/{slug}` is always anonymous
@@ -262,6 +247,51 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
           {page.entrants.length === 0 ? <li>Nobody yet.</li> : null}
         </ul>
       </section>
+
+      {/*
+        **Signing out lives here, not on a page of its own.** This is the only
+        page a signed-in entrant is ever on, and it already mints the
+        `sw_play_csrf` nonce and already exports `headers` — so the whole
+        control is the form below and nothing else.
+
+        That is not merely fewer lines. A separate `GET /e/logout` had to mint
+        its own nonce at `Path=/`, and last-issuance-wins meant opening it in a
+        second tab silently invalidated the token of a half-filled entry form
+        in the first — one Back away from a 403 "This form has expired". This
+        form mints nothing; it reuses the token this very document rendered.
+
+        Rendered unconditionally, like the links above and for the same reason:
+        `viewer.signedIn` is `false` on every server-rendered page (node's
+        fetch is always anonymous), so a gate would hide it from everyone, and
+        posting it while already signed out is harmless — `logout` is
+        idempotent (`test_logout_without_a_session_is_a_no_op`).
+
+        A `<form method="post">` and never an `<a href>`: signing out is a
+        state change, and a GET that performed it would be CSRF-able by any
+        `<img src>`, link prefetch or URL scanner. It posts ACROSS the tier
+        boundary — all of `/e/account/*` is FastAPI's (R8-A) — as a plain
+        `<form>`, never React Router's `<Form>`, so a scriptless browser posts
+        exactly as a hydrated one does. `encType` is omitted: urlencoded is the
+        HTML default and is what `is_form_post` looks for.
+      */}
+      <footer className="grid gap-1 border-t pt-4 text-sm">
+        <form method="post" action="/e/account/logout" className="flex items-baseline gap-3">
+          {/* The nonce set on THIS response is the secret; this is its digest —
+              the same field the entry form above carries, from the same mint.
+              The NAME comes from `FORM_FIELD`, so the cross-tier pin against
+              `app/form_csrf.FORM_FIELD` stays load-bearing. */}
+          <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+          {/* Never omitted: `logout`'s own fallback is `/e/account/login`
+              (`api/entrants.py:569`), which is POST-only — a 405 in the
+              entrant's face after a *successful* sign-out. */}
+          <input type="hidden" name="next" value={`/e/${encodeURIComponent(page.page.slug)}`} />
+          <Button type="submit">Sign out</Button>
+          <span className="text-muted-foreground">
+            Signs you out on this device only. Entries you have already submitted
+            are unaffected.
+          </span>
+        </form>
+      </footer>
     </main>
   );
 }

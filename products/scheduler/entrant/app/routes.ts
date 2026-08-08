@@ -21,14 +21,13 @@ export default [
   // is FastAPI's POST and a node GET there is a 405 in production and fine in
   // dev, which is the worst pair. Static, so it ranks above `:slug`.
   route('login', 'routes/login.tsx'),
-  // The logout PAGE, node-owned for the reason above AND for a second one that
-  // is specific to it: signing out is a state change, so the only thing that
-  // may do it is a POST. `/e/account/logout` is that POST and stays FastAPI's;
-  // what lives here is the document holding the form. A node GET *at* the
-  // backend's path would be a 405 — and a GET that actually logged anyone out
-  // would be CSRF-able by any prefetch or `<img src>`. Static, so it ranks
-  // above `:slug`.
-  route('logout', 'routes/logout.tsx'),
+  // There is deliberately NO logout page. Signing out is a POST to
+  // `/e/account/logout` (FastAPI's, R8-A) and the form that makes it lives in
+  // the footer of `routes/entry.tsx` — the only page a signed-in entrant is
+  // ever on, and one that already mints the `sw_play_csrf` nonce the form
+  // needs. A standalone page would have to mint its own at `Path=/`, and by
+  // last-issuance-wins that invalidated an in-flight entry form in another
+  // tab. Fewer routes to enumerate, one fewer nonce channel, same POST.
   // The 303 target of POST /e/api/submit/{slug}: a GET, so a reload of the
   // success page re-reads instead of re-posting the entry.
   route(':slug/receipt/:submissionId', 'routes/receipt.tsx'),

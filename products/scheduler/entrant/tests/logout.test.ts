@@ -1,6 +1,14 @@
 /**
- * `GET /e/logout` — the page that turns `POST /e/account/logout` into something
- * a signed-in human can reach.
+ * Signing out — the form in the footer of `/e/{slug}`, and nothing else.
+ *
+ * There is no `/e/logout` page. There was, for one commit; it minted its own
+ * `sw_play_csrf` nonce at `Path=/`, and by the documented last-issuance-wins
+ * rule that invalidated the token of a half-filled entry form open in another
+ * tab — one Back click from a 403 "This form has expired". The entry page is
+ * the only page a signed-in entrant is on, it already mints the nonce and
+ * already exports `headers`, so the control collapsed into six lines of its
+ * footer: a plain `<form method="post">` reusing the token the document has
+ * already rendered. One fewer route to enumerate, one fewer nonce channel.
  *
  * Same shape as `login.test.ts`: the REAL @react-router/dev pipeline through
  * `createRequestHandler`, request in, HTML out, no component mocking. What is
@@ -11,44 +19,52 @@
  * link prefetch, or a scanner walking the site signs the entrant out — and it
  * is exactly the kind of harmless-looking convenience that ships. So:
  *
- * 1. The page's only form is `method="post"`, and no document in this tier
- *    links to `/e/account/logout` with an `<a href>`. The second half is
- *    derived from every route module on disk, not listed, so a link pasted
- *    tomorrow is a finding without a line being added here.
+ * 1. The document's only reference into `/e/account/` is a `method="post"`
+ *    form, and no route module on disk holds a link or a non-POST form action
+ *    reaching that prefix. That half is derived from every route file, not
+ *    listed, so a link — or a `<form method="get">` — pasted tomorrow is a
+ *    finding without a line being added here.
  * 2. The `_csrf` field carries the digest of the `sw_play_csrf` nonce set on
- *    this very response — the same channel `login.tsx` uses, and the one
- *    `logout_form_csrf` (`api/entrants.py:271`) accepts. Node never reads the
- *    session cookie, so a session-derived digest is not available to it and
- *    the nonce is the whole proof-of-intent.
+ *    this very response — the same channel the entry form beside it uses, and
+ *    the one `logout_form_csrf` (`api/entrants.py:271`) accepts. Node never
+ *    reads the session cookie, so a session-derived digest is not available to
+ *    it and the nonce is the whole proof-of-intent.
  * 3. `next` is rendered unconditionally. `logout`'s own fallback is
  *    `/e/account/login` (`api/entrants.py:569`), which is POST-only — a 405 in
- *    the entrant's face after a *successful* logout. The page therefore always
+ *    the entrant's face after a *successful* logout. The form therefore always
  *    names a node-owned GET.
  *
- * That the session is genuinely destroyed — not merely un-cookied — is proved
- * where it can be: against the real backend, in
+ * **What this file cannot hold, and where it lives instead.** The POSITIVE
+ * path — that the form's POST really logs out — and the strong reading of
+ * "logged out" are proved against the real backend in
  * `products/scheduler/tests/test_entrant_auth_routes.py`
  * (`test_a_form_logout_kills_the_session_and_lands_on_a_node_owned_get`),
- * which replays the pre-logout token and requires a 401.
+ * which replays the pre-logout token from a jar cleared and rebuilt by hand —
+ * something no `Set-Cookie` can fake — and requires a 401. Delete
+ * `revoke_session` from `logout` and that replay flips back to 200 while the
+ * 303 and `Location` stay green. A cleared cookie over a live session row is
+ * no logout at all: anyone still holding the token still holds the account.
+ *
+ * The document's `Cache-Control: no-store` is pinned for every minting route,
+ * this one included, in `entry.loader.test.ts`.
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
+import { FORM_FIELD } from '../app/lib/formField';
 import { formCsrfToken } from '../app/lib/formCsrf.server';
 import { readAppSource, routeFiles } from './helpers/sourceGuards';
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 afterAll(() => vite.close());
 
-async function fetchPath(path: string, mode = 'development'): Promise<Response> {
+async function fetchPath(path: string): Promise<Response> {
   const build = (await vite.ssrLoadModule(
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
-  return createRequestHandler(build, mode)(new Request(`http://entrant.test${path}`));
+  return createRequestHandler(build, 'development')(new Request(`http://entrant.test${path}`));
 }
-
-const render = async (path = '/e/logout') => (await fetchPath(path)).text();
 
 /** The tag that declares `name`, whatever order React serialised it in. */
 const inputNamed = (html: string, name: string) =>
@@ -58,48 +74,75 @@ const inputNamed = (html: string, name: string) =>
 const hrefs = (html: string) =>
   [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
 
+/** Just the sign-out form, so assertions cannot be satisfied by the entry
+ * form that shares the page (and shares the token). */
+const logoutForm = (html: string) =>
+  html.match(/<form[^>]*action="\/e\/account\/logout"[^>]*>[\s\S]*?<\/form>/)?.[0] ?? '';
+
 /**
- * Lines that link — rather than post — to the backend's account prefix.
+ * Lines that reach the backend's account prefix by any route OTHER than a POST
+ * form.
  *
- * Both `href="…"` and `href={…}` spellings, because the entry page writes the
- * template-literal form and a guard that only sees one of them is not a guard.
+ * Two shapes, because there are two ways to get it wrong and a guard that sees
+ * one of them is not a guard:
+ *
+ * - `href="…"` and `href={…}` — a link. Both JSX spellings, because the entry
+ *   page writes the template-literal form.
+ * - `action=…` on a line that is not `method="post"` — a GET form, which is
+ *   the same defect wearing a button: the browser turns the fields into a
+ *   query string and any prefetch, scanner or `<img>` that reaches the URL
+ *   signs the entrant out. This half was missing until the Task 21 review:
+ *   the `method="get"` control inspected only one document, so a GET form
+ *   added to any other route file passed clean.
+ *
+ * Every `<form …>` OPENING TAG is collapsed onto one line first, so the
+ * exemption is a property of the tag rather than of how it happens to be
+ * wrapped. Without that, `signup.tsx` — which writes `method` and `action` on
+ * separate lines — was a false positive the moment this widened, which is how
+ * the collapse got written.
  */
-const accountHrefLines = (source: string): string[] =>
+const accountRefLines = (source: string): string[] =>
   source
+    .replace(/<form\b[^>]*>/g, (tag) => tag.replace(/\s+/g, ' '))
     .split('\n')
-    .filter((line) => /href=\{?[`'"][^`'"]*\/e\/account\//.test(line))
+    .filter((line) => {
+      if (/href=\{?[`'"][^`'"]*\/e\/account\//.test(line)) return true;
+      return (
+        /action=\{?[`'"][^`'"]*\/e\/account\//.test(line) && !/method="post"/.test(line)
+      );
+    })
     .map((line) => line.trim());
 
-describe('the logout form, unhydrated', () => {
+describe('the sign-out form, unhydrated', () => {
   it('is a plain form posting straight to the FastAPI logout route', async () => {
-    const html = await render();
+    const form = logoutForm(await fetchEntry());
 
-    expect(html).toMatch(/<form[^>]*method="post"/);
-    expect(html).toContain('action="/e/account/logout"');
+    expect(form).toMatch(/^<form[^>]*method="post"/);
     // A form with no submit control cannot be submitted without script, which
     // every other assertion here would sail straight past.
-    expect(html).toMatch(/<button[^>]*type="submit"/);
+    expect(form).toMatch(/<button[^>]*type="submit"/);
   });
 
   it('offers no way to sign out with a GET', async () => {
-    // The property this page exists to get right. A `method="get"` form is
-    // the same defect as an `<a href>` to the POST route wearing a button:
-    // the browser turns the fields into a query string and any prefetch,
-    // scanner or `<img>` that reaches the URL signs the entrant out.
-    const html = await render();
+    // The property this control exists to get right.
+    const html = await fetchEntry();
 
     expect(html).not.toMatch(/<form[^>]*method="get"/i);
-    // Exactly one form, so "no GET form" is not true merely because a second
-    // form went unnoticed.
-    expect(html.match(/<form\b/g)).toHaveLength(1);
+    // Exactly one form reaches the account prefix, so "it is a POST" is not
+    // true merely because a second one went unnoticed.
+    expect(html.match(/action="\/e\/account\//g)).toHaveLength(1);
     expect(hrefs(html).filter((h) => h.startsWith('/e/account/'))).toEqual([]);
   });
 
   it('carries the double-submit token as a hidden field named by FORM_FIELD', async () => {
-    const html = await render();
+    // The NAME is read from `FORM_FIELD` rather than pasted, so this really
+    // pins "whatever node calls the field" and not one spelling of it. That
+    // node's constant equals the backend's is a separate, cross-tier claim,
+    // held by `products/scheduler/tests/unit/test_form_csrf_cross_tier.py`.
+    const form = logoutForm(await fetchEntry());
 
-    expect(html).toMatch(
-      /<input[^>]*type="hidden"[^>]*name="_csrf"[^>]*value="[0-9a-f]{64}"/,
+    expect(form).toMatch(
+      new RegExp(`<input[^>]*type="hidden"[^>]*name="${FORM_FIELD}"[^>]*value="[0-9a-f]{64}"`),
     );
   });
 
@@ -109,12 +152,12 @@ describe('the logout form, unhydrated', () => {
     // indistinguishable from inside node. `logout_form_csrf` accepts *either*
     // candidate secret, and the play nonce is the only one node can produce —
     // it never reads the session cookie.
-    const res = await fetchPath('/e/logout');
-    const html = await res.text();
+    const res = await fetchEntryResponse();
+    const form = logoutForm(await res.text());
 
     const setCookie = res.headers.get('set-cookie') ?? '';
     const nonce = /sw_play_csrf=([^;]+)/.exec(setCookie)?.[1];
-    const rendered = /name="_csrf" value="([0-9a-f]{64})"/.exec(html)?.[1];
+    const rendered = new RegExp(`name="${FORM_FIELD}" value="([0-9a-f]{64})"`).exec(form)?.[1];
 
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
@@ -123,7 +166,7 @@ describe('the logout form, unhydrated', () => {
     expect(rendered).toBe(formCsrfToken(nonce as string));
     // Non-vacuity: not two undefineds agreeing, and not the empty "no proof
     // available" value, which `require_form_csrf` refuses — shipping it would
-    // make every unhydrated logout a refusal.
+    // make every unhydrated sign-out a refusal.
     expect(rendered).not.toBe('');
     expect(rendered).not.toBe(formCsrfToken('some-other-nonce'));
   });
@@ -131,104 +174,71 @@ describe('the logout form, unhydrated', () => {
   it('names a node-owned GET as the post-logout destination', async () => {
     // `logout`'s own fallback is `/e/account/login` (`api/entrants.py:569`),
     // which is POST-only: a successful sign-out would end on a 405. So the
-    // field is rendered unconditionally and the value is a node route.
-    const html = await render();
+    // field is rendered unconditionally, and the value is this page — a node
+    // route, and the one that then offers "Sign in" again.
+    const form = logoutForm(await fetchEntry());
 
-    expect(inputNamed(html, 'next')).toContain('value="/e/login"');
+    expect(inputNamed(form, 'next')).toContain('value="/e/spring-open"');
   });
 
-  it('sends the document with Cache-Control: no-store', async () => {
-    // **The React Router trap.** `getDocumentHeaders` copies only `Set-Cookie`
-    // out of a loader's ResponseInit unless the route exports `headers`, so
-    // `mintFormCsrf`'s `Cache-Control: no-store` reaches the loader result and
-    // stops there. Asserted on the REAL document response, never on the mint's
-    // return value: that is the only place the drop is observable.
-    const res = await fetchPath('/e/logout');
+  it('says what signing out does, and what it does not', async () => {
+    // Copy, carried over from the deleted page: the scope of the action is
+    // the thing an entrant most needs to know before clicking it.
+    const form = logoutForm(await fetchEntry());
 
-    expect(res.headers.get('cache-control')).toBe('no-store');
-  });
-
-  it('spells its width as a max-w column, never an arbitrary w-[…] value', async () => {
-    // R11, to the extent a Tailwind SPELLING check can carry it (same note as
-    // `login.test.ts`): the column is declared `max-w-*` and no fixed width
-    // literal has been pasted anywhere, so neither width degrades.
-    const html = await render();
-
-    expect(html).toMatch(/<main[^>]*class="[^"]*\bmax-w-/);
-    for (const attr of html.match(/class="[^"]*"/g) ?? []) {
-      expect(attr).not.toMatch(/\b(min-)?w-\[\d/);
-    }
+    expect(form).toContain('this device only');
+    expect(form).toContain('already submitted');
   });
 });
 
-describe('node is never handed the logout answer', () => {
-  it('exports no action, and a loader that cannot read the request', async () => {
-    const route = (await vite.ssrLoadModule('/app/routes/logout.tsx')) as Record<
-      string,
-      unknown
-    >;
+// ---- the derived half: one route file is not the tier ----------------------
 
-    // An `action` here would put node in the credential path: the browser
-    // would post the session cookie to node, which would have to relay it.
-    expect(route.action).toBeUndefined();
-    // Zero-arity, `signup.tsx`'s proof: there is no parameter through which
-    // an inbound cookie could reach this loader at all. Stronger than "it
-    // does not read one today".
-    expect((route.loader as (...args: unknown[]) => unknown).length).toBe(0);
-    // Non-vacuity: the module really loaded and has the exports it should.
-    expect(typeof route.headers).toBe('function');
-    expect(typeof route.default).toBe('function');
-  });
-});
-
-// ---- the reachability half: an unlinked page closes nothing ----------------
-
-describe('signing out is reachable, and only ever by POST', () => {
-  it('the entry page — the page a signed-in entrant is on — links to it', async () => {
-    // Rendered unconditionally, exactly like the sign-in link beside it:
-    // `viewer.signedIn` is `false` on every server-rendered page because
-    // node's fetch is always anonymous, so a gate would hide the link from
-    // everyone. Reaching a logout page while signed out is harmless — the
-    // route is idempotent.
-    const html = await fetchEntry();
-
-    expect(hrefs(html)).toContain('/e/logout');
-  });
-
-  it.each(routeFiles())('%s links to no /e/account/ URL', (relative) => {
+describe('nothing in the tier reaches /e/account/ except by POST', () => {
+  it.each(routeFiles())('%s reaches no /e/account/ URL by link or GET form', (relative) => {
     // **Derived from disk, not listed.** Every `/e/account/*` route is
     // POST-only (R8-A gives nginx the whole prefix), so an `<a href>` to one
     // is a 405 — and for logout specifically it is worse than a 405: were the
-    // ingress ever to answer the GET, following a link would sign the entrant
-    // out. A route file added tomorrow is covered with no line added here.
-    expect(accountHrefLines(readAppSource(relative))).toEqual([]);
+    // ingress ever to answer the GET, following a link, or submitting a GET
+    // form, would sign the entrant out. A route file added tomorrow is
+    // covered with no line added here.
+    expect(accountRefLines(readAppSource(relative))).toEqual([]);
   });
 
-  it('the account-href guard is not vacuous, both JSX spellings included', () => {
-    // Real fixture text of the exact defect, in the two forms this codebase
-    // writes. Without the second line the template-literal spelling — which
-    // `entry.tsx` uses for its sign-in link — would sail straight through.
-    const linked = [
+  it('the guard is not vacuous: links, both JSX spellings, and GET forms', () => {
+    // Real fixture text of the exact defects, in the forms this codebase
+    // writes. The benign POST line must survive, or the guard would forbid
+    // the one thing signing out actually needs.
+    const source = [
       '<a className="underline" href="/e/account/logout">Sign out</a>',
       '<a href={`/e/account/login?next=/e/${slug}`}>Sign in</a>',
-      '<form method="post" action="/e/account/logout">',
+      '<form method="get" action="/e/account/logout">',
+      '<form action={`/e/account/login`}>',
+      '<form method="post" action="/e/account/logout" className="flex gap-3">',
+      // And the wrapped spelling `signup.tsx` actually uses: exempt for the
+      // same reason, which is a property of the tag, not of the line breaks.
+      '<form',
+      '  method="post"',
+      '  action="/e/account/signup"',
+      '>',
     ].join('\n');
 
-    expect(accountHrefLines(linked)).toEqual([
+    expect(accountRefLines(source)).toEqual([
       '<a className="underline" href="/e/account/logout">Sign out</a>',
       '<a href={`/e/account/login?next=/e/${slug}`}>Sign in</a>',
+      '<form method="get" action="/e/account/logout">',
+      '<form action={`/e/account/login`}>',
     ]);
   });
 });
 
-// ---- the entry page fixture, kept at the bottom: it is scaffolding ---------
+// ---- the entry page fixture: it is the page under test now -----------------
 
 /**
- * The entry page's document, for the link assertion above. Needs the real
- * `GET /e/api/page/{slug}` projection, so the shape is the one
- * `entry.loader.test.ts` pins — trimmed to the keys `entry.tsx` reads.
+ * The entry page's document. Needs the real `GET /e/api/page/{slug}`
+ * projection, so the shape is the one `entry.loader.test.ts` pins — trimmed to
+ * the keys `entry.tsx` reads.
  */
-async function fetchEntry(): Promise<string> {
+async function fetchEntryResponse(): Promise<Response> {
   const { vi } = await import('vitest');
   process.env.API_BASE_URL = 'http://backend:8000';
   vi.stubGlobal(
@@ -242,14 +252,18 @@ async function fetchEntry(): Promise<string> {
     ),
   );
   try {
-    const html = await (await fetchPath('/e/spring-open')).text();
-    // The fixture really rendered — otherwise every assertion made against
-    // this document is made against an error page with no links at all.
-    expect(html).toContain('Spring Open');
-    return html;
+    return await fetchPath('/e/spring-open');
   } finally {
     vi.unstubAllGlobals();
   }
+}
+
+async function fetchEntry(): Promise<string> {
+  const html = await (await fetchEntryResponse()).text();
+  // The fixture really rendered — otherwise every assertion made against this
+  // document is made against an error page with no forms at all.
+  expect(html).toContain('Spring Open');
+  return html;
 }
 
 const ENTRY_PAGE = Object.freeze({

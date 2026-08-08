@@ -1232,8 +1232,9 @@ def test_a_form_logout_kills_the_session_and_lands_on_a_node_owned_get(
     actually uses — and the one that says what "logged out" means.
 
     The signed-in entrant's browser posts a urlencoded form from
-    ``GET /e/logout`` (``entrant/app/routes/logout.tsx``) carrying no custom
-    header — a native form cannot send one — so the proof of intent is the
+    the footer of ``GET /e/{slug}`` (``entrant/app/routes/entry.tsx``) carrying
+    no custom header — a native form cannot send one — so the proof of intent is
+    the
     ``sw_play_csrf`` digest node minted onto that document. Node never reads
     the session cookie, so the session-derived digest is not available to it;
     ``logout_form_csrf`` accepting *either* candidate is what makes the page
@@ -1241,10 +1242,11 @@ def test_a_form_logout_kills_the_session_and_lands_on_a_node_owned_get(
 
     Two things are then asserted, and the second is the point:
 
-    1. The redirect lands on ``/e/login``, a **node-owned GET**. ``logout``'s
+    1. The redirect lands on whatever node-owned GET the form sent — here
+       ``/e/login``; the real footer sends its own ``/e/{slug}``. ``logout``'s
        own fallback is ``/e/account/login``, which is POST-only — a
-       successful sign-out that ends on a 405. The page therefore always
-       sends a ``next``, and this is the pin on it.
+       successful sign-out that ends on a 405. The form therefore always
+       sends a ``next``, and this is the pin on the route honouring it.
     2. **The session is genuinely destroyed, not merely un-cookied.** The
        pre-logout token is replayed on ``/me`` from a cleared jar and must
        resolve to nothing. A response that only cleared the cookie would pass
