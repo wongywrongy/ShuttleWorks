@@ -8,6 +8,11 @@ import { type RouteConfig, route } from '@react-router/dev/routes';
  */
 export default [
   route('health', 'routes/health.tsx'),
+  // `/e/sitemap.xml` — a resource route (`routes/sitemap.tsx` exports no
+  // default component, so its loader `Response` is returned verbatim).
+  // Static, so it ranks above the `:slug` route below and a workspace can
+  // never be called "sitemap.xml".
+  route('sitemap.xml', 'routes/sitemap.tsx'),
   // The signup PAGE. Deliberately NOT at `/e/account/signup`, which is the
   // FastAPI-owned POST: ruling R8-A gives all of `/e/account/` to the backend
   // by prefix, and nginx does not split one path by method. A node GET there
