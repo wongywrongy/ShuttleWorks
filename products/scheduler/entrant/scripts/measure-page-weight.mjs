@@ -20,6 +20,29 @@
  * real entry page actually renders, not a stand-in.
  *
  * Run after `npm run build`: `node scripts/measure-page-weight.mjs`.
+ *
+ * **This gate is RED at 126.6 KB against a 110 KB ceiling, and the obvious fix
+ * has been tried and does not work — do not retry it.** The hypothesis was a
+ * `@scheduler/design-system/components` BARREL import dragging `GanttTimeline`
+ * onto a page with no timeline: the critical set contains a chunk literally
+ * named `GanttTimeline-*.js` at 14.8 KB gzipped, which reads like a smoking
+ * gun. It is not one. That is a Rollup CHUNK NAME — the shared design-system
+ * chunk, named after one module in its group — and the Gantt component's own
+ * code is already tree-shaken out: `GANTT_GEOMETRY`, `placementBox` and
+ * `laneOrientation` appear in NO file under `build/client/assets/`. Rewriting
+ * all six route modules to deep-import each component (which needs a
+ * `"./components/*"` subpath export on the package) was measured at 126.9 KB —
+ * 0.3 KB WORSE, because the extra chunk boundaries cost more than the nothing
+ * they removed. Reverted.
+ *
+ * Where the weight actually is: `entry.client-*.js` (57.5 KB) plus
+ * `chunk-*.js` (41.3 KB) = 98.8 KB of the 122.5 KB critical JS is react-dom's
+ * client runtime and the React Router runtime, before a single line of this
+ * app. Total client JS across the whole build is 126.2 KB, so there is almost
+ * no app code to cut: the entry page IS essentially the framework. Closing a
+ * 16.6 KB gap therefore means a framework-level decision — dropping hydration
+ * on this route, or a smaller runtime — not trimming imports. Logged in
+ * `docs/audits/debt-log.md`; the budget number is deliberately NOT moved.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -91,67 +114,17 @@ const criticalJsBytes = criticalAssetPaths.reduce((sum, assetPath) => {
 
 process.env.API_BASE_URL ??= 'http://backend.invalid';
 
-const PAGE = {
-  tournament: { name: 'Spring Open', date: '2026-09-12' },
-  org: { name: 'Kingsway BC' },
-  venue: { name: 'Kingsway Centre', address: '4 Kingsway' },
-  page: {
-    slug: 'spring-open',
-    introText: 'Entries close on the 1st.',
-    regulationsText: 'BWF laws apply.',
-    regulationsVersion: 3,
-    paymentInstructions: 'Bank transfer on the day.',
-    feeSchedule: { '2': 2500 },
-  },
-  policy: {
-    maxEventsPerPerson: 2,
-    disciplineCaps: null,
-    collectPhone: false,
-    waiverRequired: false,
-  },
-  events: [
-    {
-      id: '11111111-1111-4111-8111-111111111111',
-      code: 'MS',
-      discipline: "Men's Singles",
-      feeCents: 1500,
-      genderConstraint: 'M',
-      opensAt: null,
-      closesAt: null,
-      withdrawsUntil: null,
-      isOpen: true,
-      ageBracketed: false,
-      entryCount: 7,
-    },
-    {
-      id: '22222222-2222-4222-8222-222222222222',
-      code: 'WD',
-      discipline: "Women's Doubles",
-      feeCents: 2000,
-      genderConstraint: 'F',
-      opensAt: null,
-      closesAt: null,
-      withdrawsUntil: null,
-      isOpen: true,
-      ageBracketed: false,
-      entryCount: 4,
-    },
-    {
-      id: '33333333-3333-4333-8333-333333333333',
-      code: 'XD',
-      discipline: 'Mixed Doubles',
-      feeCents: 3000,
-      genderConstraint: null,
-      opensAt: null,
-      closesAt: null,
-      withdrawsUntil: null,
-      isOpen: false,
-      ageBracketed: false,
-      entryCount: 1,
-    },
-  ],
-  entrants: [{ name: 'Ada Lovelace', eventId: '11111111-1111-4111-8111-111111111111' }],
-};
+// The SAME fixture `tests/entry.render.test.ts` renders, not a copy of it.
+// These two render the same route through the same handler, and this one turns
+// its HTML into the number the CI gate checks — so a divergence here does not
+// fail, it silently SHRINKS the measured page and buys headroom no real entry
+// page has. It WAS a 60-line verbatim duplicate; hoisted to JSON because these
+// two consumers share no module system (that one is TypeScript under vitest,
+// this is plain node). `viewer` is absent by design; see the fixture's note in
+// `tests/entry.render.test.ts`.
+const PAGE = JSON.parse(
+  fs.readFileSync(path.join(root, 'tests', 'helpers', 'entryPage.fixture.json'), 'utf-8'),
+);
 
 globalThis.fetch = async (input) => {
   const url = typeof input === 'string' ? input : input.url;

@@ -1,11 +1,18 @@
 /**
- * `lib/sitemapCache.server.ts` — the sitemap XML shape, the one-hour cache
- * window, and the module-scope exemption that cache legitimately needs.
+ * `lib/sitemapCache.server.ts` — the sitemap XML shape, its escaping, and the
+ * one-hour cache window.
+ *
+ * The module-scope exemption this cache legitimately needs used to be pinned
+ * from HERE, one file away from the guard that grants it — so deleting or
+ * renaming this file left the guard green and permanently blind. The pin now
+ * lives inside the guard itself (`tests/entry.loader.test.ts`), which cannot
+ * be separated from what it exempts.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getSitemap, renderSitemapXml } from '../app/lib/sitemapCache.server';
-import { moduleScopedMutableBindings, readAppSource } from './helpers/sourceGuards';
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
 describe('renderSitemapXml', () => {
   it('renders the XML envelope and one <url> per slug, nothing more', () => {
@@ -51,13 +58,49 @@ describe('renderSitemapXml', () => {
     expect(xml.match(/<url>/g)).toHaveLength(1);
     expect(xml).toContain('http://localhost:3000/e/only-this-one-9f3a');
   });
+
+  it('escapes both interpolation points, so no input can break the document', () => {
+    // Neither value is trusted here. `slug` is held to `[a-z0-9-]` by
+    // `_SLUG_RE` in `backend/api/entries.py` — a REMOTE invariant this
+    // module never asserts, and whose own comment invites widening.
+    // `baseUrl` is held by nothing at all: it is `new URL(request.url).origin`,
+    // i.e. the Host header, where `&`, `'` and `"` are legal as far as
+    // anything upstream of node knows. Before `xmlEscape` there was no
+    // control on rendered output whatsoever.
+    const xml = renderSitemapXml('http://a&b.test', ['x<y>z', `q"'r`]);
+
+    // Every raw metacharacter is gone from the rendered document...
+    expect(xml).toContain('<loc>http://a&amp;b.test/e/x&lt;y&gt;z</loc>');
+    expect(xml).toContain('<loc>http://a&amp;b.test/e/q&quot;&apos;r</loc>');
+    // ...and, derived rather than hand-listed: outside the `<loc>` element
+    // tags themselves, no unescaped `<` or `&` survives in any URL text.
+    for (const loc of xml.match(/<loc>([\s\S]*?)<\/loc>/g) ?? []) {
+      const text = loc.slice('<loc>'.length, -'</loc>'.length);
+      expect(text).not.toMatch(/[<>"']/);
+      // A bare `&` — one not opening a valid entity — is the malformity that
+      // matters; `&amp;` is fine.
+      expect(text).not.toMatch(/&(?!(amp|lt|gt|quot|apos);)/);
+    }
+  });
 });
 
 describe('getSitemap caching', () => {
+  // The cache is real module-scoped state shared by the whole test file —
+  // the exact property under test, so the tests must not collide on it.
+  // Isolation used to come from a distinct `baseUrl` per test, which worked
+  // only because `baseUrl` was (wrongly) a cache key; now that the origin is
+  // a render input, the only thing that separates tests is AGE. Each test
+  // therefore starts a fresh window more than an hour past the last one, so
+  // whatever a previous test left behind is stale on entry.
+  let epoch = 0;
+  beforeEach(() => {
+    epoch += 10 * ONE_HOUR_MS;
+  });
+
   it('fetches the open-page list and builds the XML on the first call', async () => {
     let calls = 0;
     const xml = await getSitemap('http://localhost:4000', {
-      now: () => 1_000,
+      now: () => epoch,
       listOpenSlugs: async () => {
         calls += 1;
         return ['spring-open'];
@@ -74,13 +117,10 @@ describe('getSitemap caching', () => {
       calls += 1;
       return ['spring-open'];
     };
-    // A distinct baseUrl per test, since the cache this exercises is real
-    // module-scoped state shared by the whole test file — the exact
-    // property under test, so tests must not collide on it either.
     const baseUrl = 'http://cache-hit.test';
 
-    const first = await getSitemap(baseUrl, { now: () => 10_000, listOpenSlugs });
-    const second = await getSitemap(baseUrl, { now: () => 10_000 + 60_000, listOpenSlugs });
+    const first = await getSitemap(baseUrl, { now: () => epoch, listOpenSlugs });
+    const second = await getSitemap(baseUrl, { now: () => epoch + 60_000, listOpenSlugs });
 
     expect(second).toBe(first);
     expect(calls).toBe(1);
@@ -95,14 +135,13 @@ describe('getSitemap caching', () => {
       return slugs;
     };
     const baseUrl = 'http://cache-expiry.test';
-    const ONE_HOUR_MS = 60 * 60 * 1000;
 
-    const first = await getSitemap(baseUrl, { now: () => 0, listOpenSlugs });
+    const first = await getSitemap(baseUrl, { now: () => epoch, listOpenSlugs });
     expect(first).toContain('spring-open');
     expect(first).not.toContain('new-tournament');
 
     const second = await getSitemap(baseUrl, {
-      now: () => ONE_HOUR_MS + 60_000,
+      now: () => epoch + ONE_HOUR_MS + 60_000,
       listOpenSlugs,
     });
 
@@ -111,31 +150,33 @@ describe('getSitemap caching', () => {
     expect(calls).toBe(2);
   });
 
-  it('a different baseUrl is a cache miss, not a wrong-origin hit', async () => {
+  it('serves two origins from ONE backend call, each with its own <loc>s', async () => {
+    // Strictly stronger than the "a different baseUrl is a cache miss" test
+    // this replaces. That one asserted the OLD behaviour — `baseUrl` was part
+    // of the cache entry and of the hit test, so a second Host was a miss.
+    // Correct as a safety property (never a wrong-origin hit), useless as a
+    // cache: with one slot the second Host also EVICTED the first, so anyone
+    // rotating the Host header made every request a fresh backend call and
+    // the cache protected nothing. Apex + www, or a monitor hitting the
+    // container name, does it by accident.
+    //
+    // The origin is now a render input rather than a cache key, so this
+    // asserts both halves at once — ONE fetch across two origins (the cache
+    // works), and each response carrying only its own origin (still never a
+    // wrong-origin body).
     let calls = 0;
     const listOpenSlugs = async () => {
       calls += 1;
       return ['spring-open'];
     };
 
-    await getSitemap('http://origin-a.test', { now: () => 0, listOpenSlugs });
-    const second = await getSitemap('http://origin-b.test', { now: () => 0, listOpenSlugs });
+    const first = await getSitemap('http://origin-a.test', { now: () => epoch, listOpenSlugs });
+    const second = await getSitemap('http://origin-b.test', { now: () => epoch, listOpenSlugs });
 
-    expect(calls).toBe(2);
+    expect(calls).toBe(1);
+    expect(first).toContain('http://origin-a.test/e/spring-open');
+    expect(first).not.toContain('origin-b.test');
     expect(second).toContain('http://origin-b.test/e/spring-open');
     expect(second).not.toContain('origin-a.test');
-  });
-});
-
-describe('the module-scope exemption is exact, not a blanket skip', () => {
-  it('the scanner finds EXACTLY the one documented cache binding here', () => {
-    // Pins the argument in `lib/sitemapCache.server.ts`'s comment: the
-    // exemption `tests/entry.loader.test.ts` grants this file is for this
-    // ONE line. If a second mutable binding is ever added to this module —
-    // anything the general guard would also catch elsewhere — this goes red
-    // even though the entry.loader.test.ts exemption stays blind to it.
-    expect(moduleScopedMutableBindings(readAppSource('lib/sitemapCache.server.ts'))).toEqual([
-      'let cache: CacheEntry | null = null;',
-    ]);
   });
 });

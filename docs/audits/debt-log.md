@@ -817,3 +817,38 @@ a green 1,100-test suite. The real check is the viewer flow in
   by its own unit test. Deliberate no-caller state for now; Phase 7's "my entries" fetch
   is the named consumer that should route submission reads through it. Size S.
   *(SP-PROGRAM-1 Phase 6 Task 18 review.)*
+
+- **2026-08-07 · SP-PROGRAM-1 Phase 6 Task 27 — `/e/robots.txt` is inert until ingress maps
+  the origin root at it. Owner: Task 22 (ingress).** `app/routes/robots.tsx` serves the file
+  at `/e/robots.txt` only, because `react-router.config.ts` mounts the whole entrant app
+  under the `/e/` basename (R8-A) and a route table cannot claim the origin root. Per RFC
+  9309 a crawler fetches `/robots.txt` at the **origin root and nowhere else** — a copy
+  under a subpath is never consulted — and nothing today maps root to it:
+  `products/scheduler/frontend/nginx.conf` has no `location = /robots.txt`. So the file
+  reaches no crawler, its `Sitemap:` line is undiscoverable, and the Access-fronted
+  operator SPA at `/` is exactly as indexable as it was before the file existed. The body
+  is already written for its hoisted position (`Disallow: /` above `Allow: /e/`, longest-
+  match wins), so the whole remaining fix is one `location = /robots.txt` block proxying to
+  `/e/robots.txt` in `nginx.conf` — which Task 22 owns and Task 27 deliberately did not
+  touch. `/e/sitemap.xml` is in the same position and wants the same treatment, though a
+  sitemap at least has a second discovery channel. Size XS. *(SP-PROGRAM-1 Phase 6 Task 27
+  review.)*
+
+- **2026-08-07 · SP-PROGRAM-1 Phase 6 Task 27 — the entrant page-weight gate is RED at
+  126.6 KB against 110 KB, and the cause is the framework, not the app.** `scripts/
+  measure-page-weight.mjs` measures `/e/{slug}` at 4.0 KB HTML + 122.5 KB critical JS
+  (gzipped) against the brief's 100 KB budget + 10% CI slack. The reviewer's hypothesis —
+  a `@scheduler/design-system/components` barrel import dragging `GanttTimeline` onto a
+  page with no timeline — was **tested and disproved**: the 14.8 KB `GanttTimeline-*.js`
+  in the critical set is a Rollup *chunk name* for the shared design-system chunk, and the
+  component's own code (`GANTT_GEOMETRY`, `placementBox`, `laneOrientation`) is tree-shaken
+  out of every file in `build/client/assets/`. Deep-importing each component instead (via a
+  new `"./components/*"` subpath export) measured **126.9 KB — 0.3 KB worse**, the extra
+  chunk boundaries costing more than they saved; reverted. The real breakdown is
+  `entry.client-*.js` 57.5 KB + the shared runtime chunk 41.3 KB = **98.8 KB of react-dom's
+  client runtime and React Router before any app code**, against 126.2 KB of client JS in
+  the whole build. There is essentially no app code left to cut, so closing the 16.6 KB gap
+  is a framework-level call — dropping hydration on this route (it is a no-JS-first page by
+  spec §7 and its form posts natively), or a smaller runtime — not an import cleanup. **The
+  budget was deliberately not moved and the gate not softened**; it needs an owner decision.
+  Size M. *(SP-PROGRAM-1 Phase 6 Task 27 review-fix pass.)*

@@ -19,75 +19,35 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
-const MS = '11111111-1111-4111-8111-111111111111';
-const WD = '22222222-2222-4222-8222-222222222222';
-const SHUT = '33333333-3333-4333-8333-333333333333';
-
 /**
  * The REAL `GET /e/api/page/{slug}` projection (`api/entries_json.py:97-188`):
  * NESTED, `entryCount` not `entered`, `{name, eventId}` entrant rows, a
  * `policy` object and the three deadline fields. See the task report.
+ *
+ * **Shared with `scripts/measure-page-weight.mjs`, on purpose.** That script
+ * renders the SAME route through the SAME handler to produce the number the
+ * CI page-weight gate checks, and it used to carry a 60-line verbatim COPY of
+ * this fixture. Drift there is silent and one-directional in the worst way: a
+ * field dropped from the script's copy shrinks the measured HTML and buys
+ * headroom against the gate that no real entry page has. One copy, in JSON,
+ * because the two consumers share no module system — this file is TypeScript
+ * run by vitest, that one is plain node.
+ *
+ * `viewer` is NOT in the JSON and is spread in below instead. The backend's
+ * `tests/test_entrant_ssr_contract.py` polices every `viewer:` literal in this
+ * directory by globbing `*.ts*` and cannot see a `.json` file; moving the
+ * projection out of TypeScript would have quietly dropped that guard below its
+ * own non-vacuity floor while looking like tidying. The one field under a
+ * cross-tier control stays where the control can read it.
  */
+import entryPageFixture from './helpers/entryPage.fixture.json';
+
+// Derived from the fixture rather than restated, so the ids cannot drift out
+// of step with the events they name.
+const [MS, WD, SHUT] = entryPageFixture.events.map((event) => event.id);
+
 const PAGE = {
-  tournament: { name: 'Spring Open', date: '2026-09-12' },
-  org: { name: 'Kingsway BC' },
-  venue: { name: 'Kingsway Centre', address: '4 Kingsway' },
-  page: {
-    slug: 'spring-open',
-    introText: 'Entries close on the 1st.',
-    regulationsText: 'BWF laws apply.',
-    regulationsVersion: 3,
-    paymentInstructions: 'Bank transfer on the day.',
-    feeSchedule: { '2': 2500 },
-  },
-  policy: {
-    maxEventsPerPerson: 2,
-    disciplineCaps: null,
-    collectPhone: false,
-    waiverRequired: false,
-  },
-  events: [
-    {
-      id: MS,
-      code: 'MS',
-      discipline: "Men's Singles",
-      feeCents: 1500,
-      genderConstraint: 'M',
-      opensAt: null,
-      closesAt: null,
-      withdrawsUntil: null,
-      isOpen: true,
-      ageBracketed: false,
-      entryCount: 7,
-    },
-    {
-      id: WD,
-      code: 'WD',
-      discipline: "Women's Doubles",
-      feeCents: 2000,
-      genderConstraint: 'F',
-      opensAt: null,
-      closesAt: null,
-      withdrawsUntil: null,
-      isOpen: true,
-      ageBracketed: false,
-      entryCount: 4,
-    },
-    {
-      id: SHUT,
-      code: 'XD',
-      discipline: 'Mixed Doubles',
-      feeCents: 3000,
-      genderConstraint: null,
-      opensAt: null,
-      closesAt: null,
-      withdrawsUntil: null,
-      isOpen: false,
-      ageBracketed: false,
-      entryCount: 1,
-    },
-  ],
-  entrants: [{ name: 'Ada Lovelace', eventId: MS }],
+  ...entryPageFixture,
   // **The only viewer projection a server-rendered page can ever receive.**
   // This used to read `{signedIn: true, formCsrf: 'csrf-token-abc'}`, which
   // the real backend cannot return to node: `apiFetch.server.ts` sends a

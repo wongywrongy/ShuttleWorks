@@ -281,13 +281,18 @@ describe('entry loader', () => {
       // sitemap cache, not a per-viewer one. The full argument for why that is
       // safe (and not the `stateEtags`-shaped hazard this guard exists to
       // catch) lives as a comment directly above the binding in that file.
-      // This is not a blanket skip: `tests/sitemapCache.test.ts`'s "the
-      // module-scope exemption is exact" test pins that the scanner finds
-      // EXACTLY that one line there, so anything broader added later still
-      // fails here.
-      if (relative === 'lib/sitemapCache.server.ts') return;
+      //
+      // The exemption is an ALLOWLIST compared for equality, not a `return`
+      // that skips the file. It used to be a skip, with the pin that kept it
+      // honest ("the scanner finds exactly that one line") living over in
+      // `tests/sitemapCache.test.ts` — so deleting or renaming that file left
+      // this guard green and permanently blind to a second binding in the
+      // exempted module. Stated here, a second `let` in that module reddens
+      // the guard itself, and the exemption cannot be separated from its pin.
+      const allowed =
+        relative === 'lib/sitemapCache.server.ts' ? ['let cache: CacheEntry | null = null;'] : [];
 
-      expect(moduleScopedMutableBindings(readAppSource(relative))).toEqual([]);
+      expect(moduleScopedMutableBindings(readAppSource(relative))).toEqual(allowed);
     });
   });
 

@@ -9,6 +9,10 @@
     "types": ["node", "vite/client"],
     "rootDirs": [".", "./.react-router/types"],
     "moduleDetection": "force",
+    // `tests/helpers/entryPage.fixture.json` — the one entry-page projection
+    // shared by `tests/entry.render.test.ts` and `scripts/measure-page-weight.mjs`,
+    // in JSON because those two consumers share no module system.
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "skipLibCheck": true,

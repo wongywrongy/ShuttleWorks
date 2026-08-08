@@ -3,25 +3,34 @@
  * `Response` is returned to the client verbatim). Same shape as
  * `routes/sitemap.tsx`, for the same reason: `react-router.config.ts`
  * mounts this whole app under the `/e/` basename (ruling R8-A), so every
- * route this app declares is reachable only under that prefix. A crawler
- * conventionally looks for `/robots.txt` at the domain root, not
- * `/e/robots.txt` — but routing the root path here is an ingress decision
- * (a `location = /robots.txt` in `nginx.conf` pointing back at
- * `/e/robots.txt`, or similar), not a route table entry, and out of scope
- * here on the same grounds `nginx.conf` is not touched by this task at all
- * (`sitemap.tsx` makes the identical argument about `/sitemap.xml`).
+ * route this app declares is reachable only under that prefix.
  *
- * **What this file can and cannot say.** This app's basename is `/e/`; it
- * has no route, and no business, disallowing anything outside that prefix.
- * The operator SPA living at the domain root — Access-fronted and not
- * meant to be indexed — is out of this file's reach for the same reason
- * `/e/robots.txt` isn't at the root by itself: that is an ingress-level
- * posture, not something this app's own `Disallow` lines can reach past
- * its own prefix. What this file *can* say, and does, is that the two
- * backend prefixes ruling R8-A carves out of `/e/` — `/e/api/` (raw JSON)
- * and `/e/account/` (auth POSTs, no crawlable GET) — are not indexable
- * pages, and that the entry pages under `/e/` are exactly the content this
- * whole tier exists to be found.
+ * **THIS FILE IS INERT UNTIL INGRESS MAPS THE ORIGIN ROOT AT IT.** Per RFC
+ * 9309 a crawler fetches `/robots.txt` at the ORIGIN ROOT and nowhere else;
+ * a file served under a subpath is never consulted, ever. Nothing today
+ * maps `/robots.txt` here — `frontend/nginx.conf` has no
+ * `location = /robots.txt` — so this body reaches no crawler and the
+ * `Sitemap:` line below is undiscoverable. Making it live is an ingress
+ * decision owned by **Task 22** (`location = /robots.txt` proxying to
+ * `/e/robots.txt`), not a route-table entry, and `nginx.conf` is
+ * deliberately untouched here. Logged in `docs/audits/debt-log.md` under
+ * the same owner. `sitemap.tsx` is in the same position for
+ * `/sitemap.xml`, except a sitemap has a second discovery channel (this
+ * file, and manual submission), where robots.txt has none.
+ *
+ * **What the body says, and why the order matters.** Once hoisted to the
+ * root this file speaks for the WHOLE origin, not just `/e/` — robots.txt
+ * has no notion of the basename this app is mounted under. robots.txt
+ * defaults to ALLOW for anything unmatched, so a body that only carved
+ * exclusions out of `/e/` would be an affirmative declaration that the
+ * Access-fronted operator SPA at `/` is crawlable. Hence `Disallow: /`
+ * first, then `Allow: /e/`: RFC 9309 §2.2.2 resolves conflicts by LONGEST
+ * matching path, so `Allow: /e/` (4 chars) beats `Disallow: /` (1) for
+ * every entrant page, and the two longer backend carve-outs — `/e/api/`
+ * (raw JSON) and `/e/account/` (auth POSTs, no crawlable GET) — beat that
+ * in turn. Operator root dark, entry pages crawlable, backend prefixes
+ * out. Dropping `Disallow: /` inverts the posture silently, so
+ * `tests/robots.test.ts` asserts both lines AND their order.
  */
 
 // Same idiom as `sitemap.tsx`'s `XML_RESPONSE_HEADERS`: a hardcoded,
@@ -40,6 +49,10 @@ const TEXT_RESPONSE_HEADERS = Object.freeze({
 function robotsBody(baseUrl: string): string {
   return [
     'User-agent: *',
+    // MUST stay above `Allow: /e/`, and MUST stay present — see the header
+    // comment. Longest-match wins, so this darkens only what nothing below
+    // re-allows.
+    'Disallow: /',
     'Allow: /e/',
     'Disallow: /e/api/',
     'Disallow: /e/account/',

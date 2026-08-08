@@ -38,13 +38,19 @@ async function fetchEntrant(origin: string, path: string): Promise<Response> {
   return createRequestHandler(build, 'development')(new Request(`${origin}${path}`));
 }
 
-// A DISTINCT origin per test. `lib/sitemapCache.server.ts`'s cache is real
-// module-scoped state that survives for the lifetime of this one `vite`
-// instance — i.e. for this whole test file, across every test in it, exactly
-// the property the caching tests below rely on. Reusing one origin across
-// tests would make an EARLIER test's cache hit silently satisfy a LATER
-// test's "does it cache" assertion for the wrong reason; a distinct origin
-// per test keeps each test's cache slot empty when it starts.
+// `lib/sitemapCache.server.ts`'s cache is real module-scoped state that
+// survives for the lifetime of this one `vite` instance — i.e. for this whole
+// file, across every test in it — and its window is an hour of REAL time,
+// which these route-level tests cannot inject a clock into. So the tests below
+// run in declaration order against ONE warming cache, and say so where it
+// matters. (The cold-start, window-boundary and call-counting properties are
+// asserted precisely, with an injected clock, in `tests/sitemapCache.test.ts`.)
+//
+// This used to read "a DISTINCT origin per test keeps each test's cache slot
+// empty when it starts" — true only while `baseUrl` was part of the cache key,
+// which was the very defect fixed here: one slot keyed on origin meant a
+// second Host EVICTED the first, so rotating the Host header defeated the
+// cache entirely. The origin is now a render input, not a key.
 
 test('GET /e/sitemap.xml renders XML built from GET /e/api/pages', async () => {
   vi.stubGlobal('fetch', stubPages(['spring-open', 'summer-invitational']));
@@ -68,16 +74,32 @@ test('GET /e/sitemap.xml renders XML built from GET /e/api/pages', async () => {
   expect(sent[0].headers.get('cookie')).toBeNull();
 });
 
-test('a second request for the same origin does not call the backend again', async () => {
+test('a rotating Host header cannot defeat the cache, and never crosses origins', async () => {
+  // Runs against the cache the test above just warmed (one real backend call,
+  // well inside the one-hour window), which is what makes ZERO the right
+  // number here rather than one.
+  //
+  // The defect this pins: the cache was a single slot KEYED on `baseUrl`, so
+  // every one of these requests was a miss AND evicted the previous entry —
+  // an attacker rotating the Host header turned a crawl-hotspot cache into a
+  // guaranteed backend call per request, and apex + www, or a monitor hitting
+  // the container name, did it by accident. Three distinct origins, zero
+  // backend calls.
   const fetchMock = stubPages(['spring-open']);
   vi.stubGlobal('fetch', fetchMock);
 
-  await fetchEntrant('http://cache-hit.test', '/e/sitemap.xml');
-  await fetchEntrant('http://cache-hit.test', '/e/sitemap.xml');
+  const bodies = [];
+  for (const origin of ['http://a.test', 'http://b.test', 'http://c.test']) {
+    bodies.push(await fetchEntrant(origin, '/e/sitemap.xml').then((r) => r.text()));
+  }
 
-  // Both requests hit the same node process, hence the same module-scoped
-  // cache — the property under test. Two page loads, one backend call.
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledTimes(0);
+  // And sharing the slug list across origins is not sharing the DOCUMENT:
+  // each response carries its own origin's `<loc>`s and no one else's.
+  expect(bodies[0]).toContain('http://a.test/e/spring-open');
+  expect(bodies[0]).not.toContain('b.test');
+  expect(bodies[2]).toContain('http://c.test/e/spring-open');
+  expect(bodies[2]).not.toContain('a.test');
 });
 
 test('is mounted under the /e/ basename, not at the root', async () => {

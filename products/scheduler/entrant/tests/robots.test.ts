@@ -31,6 +31,34 @@ test('GET /e/robots.txt disallows the backend prefixes and allows /e/', async ()
   expect(body).toContain('Sitemap: http://render.test/e/sitemap.xml');
 });
 
+test('darkens the origin root and re-allows only /e/, in that order', async () => {
+  // The defect this pins: the body used to carry `Allow: /e/` with no
+  // `Disallow: /`. robots.txt defaults to ALLOW for anything unmatched, so
+  // once ingress hoists this file to the origin root (Task 22) that body
+  // affirmatively declares the Access-fronted operator SPA at `/`
+  // crawlable — the inverse of what is wanted — and `Allow: /e/` is a pure
+  // no-op besides, having nothing above it to carve out of.
+  //
+  // Asserted as INDEXES, not as two `.toContain`s: RFC 9309 §2.2.2 resolves
+  // a conflict by longest matching path, but a reader (and some
+  // non-conforming crawlers) read top-down, and `Disallow: /` placed AFTER
+  // `Allow: /e/` is the shape most likely to be "tidied" into existence.
+  // Dropping the `Disallow: /` line reddens the first assertion; moving it
+  // below the allow reddens the second.
+  const body = await fetchEntrant('http://order.test', '/e/robots.txt').then((r) => r.text());
+  const lines = body.split('\n');
+
+  const disallowRoot = lines.indexOf('Disallow: /');
+  const allowEntrant = lines.indexOf('Allow: /e/');
+
+  expect(disallowRoot).toBeGreaterThanOrEqual(0);
+  expect(allowEntrant).toBeGreaterThan(disallowRoot);
+  // And `Disallow: /` is the exact line, not a prefix of a longer rule that
+  // happens to start that way — `indexOf` on the split array already gives
+  // exactness, so this pins the count: exactly one such directive.
+  expect(lines.filter((line) => line === 'Disallow: /')).toHaveLength(1);
+});
+
 test('is mounted under the /e/ basename, not at the root', async () => {
   const res = await fetchEntrant('http://root-check.test', '/robots.txt');
 
