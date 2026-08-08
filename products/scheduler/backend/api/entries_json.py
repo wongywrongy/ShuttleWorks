@@ -711,7 +711,26 @@ async def submit_entry_json(
     # 303, not 302: the browser must re-issue as GET. A replay redirects to
     # the SAME receipt — a retrying client that saw a different answer would
     # conclude its first attempt had failed.
+    #
+    # The query string is what the receipt page can SAY. Node renders that
+    # route and holds no entrant credential (spec §3), so it cannot read the
+    # submission back to find the amount; the number has to travel in the
+    # Location the server itself wrote. Display only, exactly as
+    # ``_echo_redirect`` already carries it (:485-487) — nothing on the
+    # receipt is posted onward and no record is derived from it, so an edited
+    # URL misinforms only whoever edited it.
+    #
+    # ``result.replayed`` is deliberately NOT carried. It is true, and putting
+    # it here would make a replay's Location differ from the original's — the
+    # one thing the paragraph above and ``SubmissionResult.replayed``'s own
+    # docstring both rule out, for the reason stated there.
+    #
+    # A tournament that priced nothing has not declared its entries free, so
+    # the key is absent rather than ``0``: ``None`` stringified would read as a
+    # total of "None", and a zero would be a claim about money nobody made.
+    total_cents = result.submission.fee_total_cents
+    query = "" if total_cents is None else f"?{urlencode({'totalCents': total_cents})}"
     return RedirectResponse(
-        url=f"/e/{page.slug}/receipt/{result.submission.id}",
+        url=f"/e/{quote(page.slug, safe='')}/receipt/{result.submission.id}{query}",
         status_code=303,
     )

@@ -565,11 +565,53 @@ def test_a_submission_answers_303_to_the_receipt_route(client, page, entrant):
     assert r.status_code == 303, r.text
     rows = _submissions()
     assert len(rows) == 1
-    assert r.headers["location"] == f"/e/{page['slug']}/receipt/{rows[0].id}"
+    assert r.headers["location"] == (
+        f"/e/{page['slug']}/receipt/{rows[0].id}?totalCents=4000"
+    )
     # The fee is computed server-side in one place and stored as computed.
     assert rows[0].fee_total_cents == 4000
     # Q11: the version agreed to, recorded at that instant.
     assert rows[0].regulations_version_accepted == 3
+
+
+def test_the_receipt_redirect_states_the_recorded_total_and_only_that(
+    client, page, entrant
+):
+    """Phase 6 Task 18. The receipt route is server-rendered by node, which
+    holds no entrant credential (spec §3) and therefore cannot read the
+    submission back — so the one thing the receipt has to say beyond the
+    reference has to travel in the ``Location`` the server itself wrote.
+
+    ``totalCents`` is the number ``compute_fee_total`` stored, carried the
+    same way ``_echo_redirect`` already carries it (:485-507): DISPLAY, never
+    posted onward, never recomputed from. It is asserted against the row
+    rather than a literal, so this is the Seam B property (quoted == recorded
+    == displayed) and not a restatement of the fixture's arithmetic.
+
+    **And ``replayed`` is deliberately absent.** A replay's Location must be
+    byte-identical to the original's, per the ruling on
+    ``SubmissionResult.replayed``. NEGATIVE CONTROL: append
+    ``&replayed={int(result.replayed)}`` in the route and the second half of
+    this test goes red — as do
+    ``test_the_idempotency_key_travels_in_the_HIDDEN_FIELD_and_is_honoured``
+    and its header twin, which is how the ruling was found.
+    """
+    key = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+    first = _submit(client, page, idempotencyKey=key)
+    assert first.status_code == 303, first.text
+    rows = _submissions()
+    assert len(rows) == 1
+    assert first.headers["location"] == (
+        f"/e/{page['slug']}/receipt/{rows[0].id}"
+        f"?totalCents={rows[0].fee_total_cents}"
+    )
+
+    second = _submit(client, page, idempotencyKey=key)
+    assert second.status_code == 303, second.text
+    assert len(_submissions()) == 1
+    assert second.headers["location"] == first.headers["location"], (
+        "a replay's receipt Location must not differ from the original's"
+    )
 
 
 def test_the_quoted_total_is_the_total_the_json_write_records(client, page, entrant):

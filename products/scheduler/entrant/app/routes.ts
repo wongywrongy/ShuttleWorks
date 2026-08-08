@@ -8,6 +8,9 @@ import { type RouteConfig, route } from '@react-router/dev/routes';
  */
 export default [
   route('health', 'routes/health.tsx'),
+  // The 303 target of POST /e/api/submit/{slug}: a GET, so a reload of the
+  // success page re-reads instead of re-posting the entry.
+  route(':slug/receipt/:submissionId', 'routes/receipt.tsx'),
   // Last, and dynamic: React Router ranks the static segment above it, so
   // /e/health stays the health route rather than a workspace called "health".
   route(':slug', 'routes/entry.tsx'),
