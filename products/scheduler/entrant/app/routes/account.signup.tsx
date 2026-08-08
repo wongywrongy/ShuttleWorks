@@ -1,0 +1,260 @@
+/**
+ * `GET /e/account/signup` — the page that lets a human make an entrant account.
+ *
+ * **Why this file exists (F-E1-2-E1).** `POST /e/account/signup` has existed
+ * since SP-E1-2 and the logged-out entry page named it, but nothing ever
+ * rendered a form, so the endpoint was reachable only by a caller who already
+ * knew it was there. **Zero new routes**, front or back: this is the missing
+ * body for a door that was already hung.
+ *
+ * **It posts straight to FastAPI, not to a React Router action.** Same posture
+ * as `entry.form.tsx` and for the same reason — every entrant write is browser
+ * → nginx → FastAPI on one origin, so node holds the credential at no point in
+ * the exchange. There is deliberately **no `action` export in this module**,
+ * and that absence is asserted: an action would hand node the backend's answer,
+ * and the moment node holds the answer, rendering a different page for
+ * "created" than for "already exists" is one edit away. See below.
+ *
+ * **Non-enumeration is the invariant this page inherits.** The backend answers
+ * a uniform 202 (303 for a form post) whether the address was registered or
+ * not, spends an Argon2id hash on both branches so timing is not the oracle
+ * either, and hands out no cookie on either (`api/entrants.py`, module
+ * docstring). This tier must not reintroduce the distinction, so the loader
+ * takes **no parameters at all** — it cannot be handed an address, from a
+ * `?email=` prefill or from anywhere else, and therefore cannot branch on one.
+ * `tests/account.signup.test.ts` compares the rendered documents for a fresh
+ * and an already-registered address byte for byte.
+ *
+ * **CSRF on a page with no session.** There is no session yet — obtaining one
+ * is what this page is for — which is exactly what the `sw_play_csrf` nonce
+ * exists for. `mintFormCsrf()` mints it, the digest goes into `_csrf`, the
+ * nonce goes onto this response, and `require_form_csrf` on `signup_body`
+ * refuses a form post that carries neither candidate secret. The two halves are
+ * minted in one call and cannot be shipped apart.
+ *
+ * **Turnstile needs JavaScript, and the page says so.** `verify_turnstile`
+ * refuses an empty token outright with no round trip, so a scriptless browser
+ * cannot complete a signup — a pre-existing gap in the anti-abuse design (Q4),
+ * not one this page introduces. Stating it in the copy is the difference
+ * between a missing capability and an inscrutable "the human check did not
+ * pass" after filling the whole form in. Everything else here works unhydrated.
+ */
+import { Button, Notice, TextField } from '@scheduler/design-system/components';
+import { data, isRouteErrorResponse, useRouteError } from 'react-router';
+
+import { apiGet } from '../lib/apiFetch.server';
+import { FORM_FIELD } from '../lib/formField';
+import { mintFormCsrf } from '../lib/formCsrf.server';
+import type { Route } from './+types/account.signup';
+
+/** `EntrantConfigDTO` — `api/entries_json.py`. Exactly two keys, both public
+ * by nature: a sitekey is rendered into every signup page, and the auth mode
+ * is observable from whether an anonymous write is refused. */
+interface EntrantConfig {
+  turnstileSiteKey: string;
+  authMode: string;
+}
+
+export interface SignupLoaderData {
+  turnstileSiteKey: string;
+  /** The pre-session double-submit token, minted together with the nonce set
+   * on this very response. Node's own — there is no projection to read one
+   * from here, and there is no session to derive one from. */
+  formCsrf: string;
+}
+
+/**
+ * Reads the request for nothing, because it is not given the request.
+ *
+ * The zero-arity signature is the enumeration control at its cheapest: a
+ * function with no parameters cannot be handed an email address, so no amount
+ * of later editing inside it can make the page differ for a registered address
+ * versus a fresh one without first changing this line — which is a visible,
+ * reviewable act rather than a quiet one. `mintFormCsrf` is pinned the same
+ * way, for the same reason.
+ */
+export async function loader() {
+  // The sitekey is fetched rather than duplicated into a node env var: its
+  // pair, the secret, is validated only in the backend, and a sitekey that
+  // drifts from its secret fails the challenge for every honest entrant while
+  // looking like a Cloudflare outage. A failure here reaches the boundary
+  // below as fixed copy — fail closed, since a signup with no widget is a
+  // signup the backend will refuse anyway.
+  const config = await apiGet<EntrantConfig>('/e/api/config');
+
+  const csrf = mintFormCsrf();
+  const payload: SignupLoaderData = {
+    turnstileSiteKey: config.turnstileSiteKey,
+    formCsrf: csrf.token,
+  };
+  return data(payload, csrf.responseInit);
+}
+
+/**
+ * Forward the loader's headers onto the document — all of them, by reference.
+ *
+ * React Router does NOT do this by default: `getDocumentHeaders` copies only
+ * `Set-Cookie` out of a loader's `ResponseInit` unless the route exports
+ * `headers`, so `mintFormCsrf`'s `Cache-Control: no-store` would reach the
+ * loader result and stop there, and this document — which carries BOTH halves
+ * of a double-submit, the nonce in `Set-Cookie` and its digest in the body —
+ * would go out cacheable. A shared cache that stored it replays one visitor's
+ * nonce and its matching token to the next. Pinned on the real document
+ * response in `tests/account.signup.test.ts`, never on the mint's return
+ * value: that is the only place the drop is observable.
+ *
+ * A pass-through, not `{'Cache-Control': 'no-store'}` — the value belongs to
+ * the mint, which is where the argument for it lives. Copied from
+ * `routes/entry.tsx`, which hit exactly this trap.
+ */
+export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
+  return loaderHeaders;
+}
+
+export default function SignupPage({ loaderData }: Route.ComponentProps) {
+  const { turnstileSiteKey, formCsrf } = loaderData;
+
+  return (
+    <main className="mx-auto grid w-full max-w-md gap-6 p-4">
+      <header className="grid gap-1">
+        <h1 className="text-2xl font-semibold">Create an entrant account</h1>
+        <p className="text-sm text-muted-foreground">
+          One account enters you into any tournament on this site. The organiser
+          sees your name and contact details on the entries they receive.
+        </p>
+      </header>
+
+      {/* The one thing on this page that does not work without script, said
+          before the entrant spends five minutes filling the form in. The
+          backend refuses an empty challenge token with no round trip
+          (`services/turnstile.verify_turnstile`), so a scriptless submission
+          is refused as "the human check did not pass" — which reads as an
+          accusation rather than as a missing capability. */}
+      <Notice tone="info">
+        The human check on this form needs JavaScript. With scripting turned
+        off, everything below still fills in and submits, but the check cannot
+        run — ask the organiser to set your account up instead.
+      </Notice>
+
+      {/*
+        Posts to its own URL, which is the backend's route: `/e/account/*` is
+        served by FastAPI, and this page is the GET the browser was missing.
+        A plain `<form>`, never React Router's `<Form>`, so RR7 never
+        intercepts and a hydrated browser posts exactly as a scriptless one
+        does — one submission path, not two that can drift.
+
+        The answer is a 303 to `/e/account/login` (Task 20) on BOTH branches:
+        account created and account already present are indistinguishable by
+        status, body and target alike. Nothing on this page is allowed to
+        become the distinction the backend refuses to be.
+      */}
+      <form
+        method="post"
+        action="/e/account/signup"
+        encType="application/x-www-form-urlencoded"
+        className="grid gap-4"
+      >
+        {/* Channel two. There is no session on this page — obtaining one is
+            what it is for — so the proof-of-intent is the `sw_play_csrf`
+            nonce set on this very response, and this is its digest. The NAME
+            comes from `FORM_FIELD` rather than a literal, so the cross-tier
+            pin against `app/form_csrf.FORM_FIELD` is load-bearing. */}
+        <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+
+        <TextField
+          id="signup-email"
+          label="Email"
+          name="email"
+          type="email"
+          required
+          maxLength={320}
+          autoComplete="email"
+          hint="Sign-in address, and where the organiser replies."
+        />
+
+        <TextField
+          id="signup-password"
+          label="Password"
+          name="password"
+          type="password"
+          required
+          // Stated before submission rather than discovered on refusal.
+          // `services/auth.validate_password` is the authority
+          // (`settings.password_min_length`, 8); this is the client-side echo
+          // of it and the server decides either way, so a drift is a form that
+          // asks for the wrong thing, never one that lets the wrong thing in.
+          minLength={8}
+          maxLength={128}
+          autoComplete="new-password"
+          hint="At least 8 characters. Very common passwords are refused."
+        />
+
+        <TextField
+          id="signup-name"
+          label="Your name (optional)"
+          name="displayName"
+          maxLength={200}
+          autoComplete="name"
+          hint="How the organiser sees you on an entry."
+        />
+
+        <TextField
+          id="signup-phone"
+          label="Phone (optional)"
+          name="phone"
+          type="tel"
+          maxLength={200}
+          autoComplete="tel"
+          hint="Only used if the organiser needs to reach you about an entry."
+        />
+
+        {/* Cloudflare's widget writes its solution into a hidden input named
+            `cf-turnstile-response`, which `_payload` maps onto the JSON
+            surface's `turnstileToken` — one spelling of one field, in one
+            codebase (`api/entrants.py`). The sitekey comes from the backend's
+            own config so it cannot drift from the secret it is paired with. */}
+        <div
+          className="cf-turnstile"
+          data-sitekey={turnstileSiteKey}
+          data-action="signup"
+        />
+        <script
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+          async
+          defer
+        />
+
+        <Button type="submit" className="justify-self-start">
+          Create account
+        </Button>
+      </form>
+    </main>
+  );
+}
+
+/**
+ * Renders refusals as copy, never as upstream prose — `entry.tsx`'s boundary,
+ * for the same reason: `ApiError` constructs its own message, but a boundary
+ * that rendered `error.message` would be one edit away from putting a stack
+ * frame or an internal hostname on a public page. Reads the status, nothing
+ * else.
+ */
+export function ErrorBoundary() {
+  const error = useRouteError();
+
+  if (isRouteErrorResponse(error) && error.status === 404) {
+    return (
+      <main>
+        <h1>This page is not available</h1>
+        <p>Check the link, or ask the organiser for the current one.</p>
+      </main>
+    );
+  }
+
+  return (
+    <main>
+      <h1>Something went wrong</h1>
+      <p>Please try again in a moment.</p>
+    </main>
+  );
+}
