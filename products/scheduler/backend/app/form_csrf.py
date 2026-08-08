@@ -31,7 +31,7 @@ import hashlib
 import secrets
 from typing import Optional
 
-from fastapi import Request, Response
+from fastapi import Request
 
 from app.config import settings
 
@@ -46,21 +46,22 @@ _FORM_CSRF_PREFIX = "sw-play-form-csrf:"
 # middleware, so the two cannot drift.
 FORM_FIELD = "_csrf"
 
-# The pre-session nonce cookie. **Deliberately absent from
-# ``settings.session_cookie_names``** — see ``issue_play_csrf``.
+# The pre-session nonce cookie, minted by the SSR tier and verified here.
+#
+# **Deliberately absent from ``settings.session_cookie_names``.** That
+# registry is the CSRF middleware's trigger for "this write is
+# cookie-authenticated". This cookie authenticates nothing — it is a random
+# value handed to an anonymous visitor, naming no principal and granting no
+# access — so registering it would make the middleware demand a header from
+# callers who have not signed in, while dressing a nobody-value as a
+# credential. It IS in the wider ``settings.csrf_relevant_cookie_names``,
+# which asks the strictly wider question "must this write prove it was sent
+# deliberately"; both halves are pinned in ``tests/unit/test_form_csrf.py``.
+#
+# Its cookie attributes (HttpOnly, SameSite=Lax, Path=/, 4h Max-Age, 32
+# bytes of entropy) are set where it is minted — see the R8-D note below —
+# and pinned in ``entrant/tests/formCsrf.server.test.ts``.
 PLAY_CSRF_COOKIE = "sw_play_csrf"
-
-# Bytes of entropy behind the nonce, matching the session token's own
-# minting. It only has to survive the life of one open form, but there is
-# no cost to it being unguessable for longer than that.
-_PLAY_CSRF_BYTES = 32
-
-# How long an unsubmitted login/signup form stays valid. Long enough that
-# someone can be interrupted mid-form and come back to it; short enough
-# that a nonce left in a shared browser is not indefinitely reusable. On
-# expiry the post is refused with the existing "this form has expired,
-# reload the page" answer, which is a reload, not a lost account.
-_PLAY_CSRF_MAX_AGE = 60 * 60 * 4
 
 
 def form_csrf_token(secret: Optional[str]) -> str:
@@ -81,63 +82,30 @@ def form_csrf_token(secret: Optional[str]) -> str:
     return hashlib.sha256((_FORM_CSRF_PREFIX + secret).encode("utf-8")).hexdigest()
 
 
-def issue_play_csrf(response: Response) -> str:
-    """Mint a fresh ``sw_play_csrf`` nonce on ``response`` and return its token.
-
-    **The gap this fills.** ``form_csrf_token`` needs an unreadable cookie
-    to derive from, and a login or signup post happens *before* there is a
-    session to supply one. Without a secret the derivation returns ``""``,
-    which every caller must reject — so the pre-session forms would have no
-    proof channel at all and would be left relying on SameSite alone, which
-    Chrome's "Lax+POST" intervention weakens for cookies under two minutes
-    old.
-
-    **This cookie authenticates nothing, and that is enforced.** It is a
-    random value handed to an anonymous visitor; it names no principal and
-    grants no access. It is therefore kept *out* of
-    ``settings.session_cookie_names`` — that registry is the CSRF
-    middleware's trigger for "this write is cookie-authenticated", and
-    registering a cookie every anonymous visitor holds would make the
-    middleware demand a header from callers who have not signed in, while
-    dressing a nobody-value as a credential.
-
-    ``httponly`` is the load-bearing flag: the double-submit argument is
-    precisely that a cross-site page can make the browser send this cookie
-    but can never read it. ``secure`` follows the deployment's session
-    setting so the nonce is never the weaker half of the pair.
-
-    **Last issuance wins, and that is a decision.** The cookie is set at
-    ``path="/"``, so every call overwrites the previous nonce for the whole
-    origin. Concretely: open the login page in a second tab and the token
-    baked into the *first* tab's form no longer matches the cookie, so
-    submitting that first tab is refused with "This form has expired. Reload
-    the entry page and try again." — a reload, not a lost account and not a
-    silent failure.
-
-    Accepted rather than fixed, on three grounds. Keeping several nonces
-    alive at once means a list in the cookie with an eviction policy, which
-    is a server-side token store in everything but name — the property this
-    whole design exists to avoid. The entrant surface is a phone at a club
-    night, where two concurrent login forms is not the shape of real use.
-    And the failure is loud, recoverable in one action, and says what to do.
-    The cost is real and lands on desktop multi-tab users; it is written down
-    here so that when someone meets it in the wild it is an inherited
-    decision with reasons, not a bug report with a mystery.
-
-    Returns the token to embed in the form, not the nonce — the nonce stays
-    in the cookie jar and nowhere else.
-    """
-    nonce = secrets.token_urlsafe(_PLAY_CSRF_BYTES)
-    response.set_cookie(
-        key=PLAY_CSRF_COOKIE,
-        value=nonce,
-        max_age=_PLAY_CSRF_MAX_AGE,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-        path="/",
-    )
-    return form_csrf_token(nonce)
+# **The nonce is minted by node, not here** (SP-PROGRAM-1 Phase 6, ruling
+# R8-D). This module used to carry ``issue_play_csrf``, which set the
+# ``sw_play_csrf`` cookie on a FastAPI ``Response`` and returned its token.
+# It had **zero production call sites** — nothing ever called it — while
+# ``ViewerDTO``'s docstring asserted that "the SSR tier mints" the nonce.
+# A docstring describing a mechanism nobody implemented is exactly what let
+# the entry form ship with an empty ``_csrf`` that could never match, so the
+# function is deleted rather than left as a plausible-looking spare part.
+#
+# The pages that need a pre-session nonce — the entry page now, login and
+# signup in Tasks 19-21 — are all rendered by React Router in
+# ``products/scheduler/entrant/``, so the mint lives there in
+# ``app/lib/formCsrf.server.ts`` and nowhere else. That is a second
+# implementation of a security primitive, which is a real hazard, so the
+# derivation and this file's ``_FORM_CSRF_PREFIX`` are pinned against each
+# other by ``tests/unit/test_form_csrf_cross_tier.py``: it reads the
+# TypeScript source, extracts its constants, and recomputes the golden
+# digests through them. Change the prefix on either side and it goes red.
+#
+# What stays here is the half the server owns: ``PLAY_CSRF_COOKIE`` (read by
+# ``form_csrf_proves`` below, by ``require_form_csrf``, and by
+# ``settings.csrf_relevant_cookie_names``) and ``form_csrf_token``. Nothing
+# in the verification path changed, which is why R8-D needed no backend
+# change to work at all.
 
 
 # Channel two only reads a body it can cheaply understand. A JSON write

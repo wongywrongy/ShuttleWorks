@@ -18,12 +18,22 @@
  * browser either: the form must work with no JavaScript at all (spec §7), so
  * the key travels in the HTML, in the hidden field the backend already reads
  * (`api/entries_json.py:617`).
+ *
+ * **The `_csrf` token is minted here too, and NOT read from the projection**
+ * (ruling R8-D). `viewer.formCsrf` is derived from a cookie node never sends,
+ * so it is `""` on every server-rendered page — for a signed-in entrant as
+ * much as for a stranger — and an empty token can never match. `mintFormCsrf`
+ * mints a `sw_play_csrf` nonce instead, set on this response, which the
+ * backend already accepts as a second candidate secret. The nonce names no
+ * principal, so the no-relay rule is untouched. See
+ * `app/lib/formCsrf.server.ts`.
  */
-import { isRouteErrorResponse, useRouteError } from 'react-router';
+import { data, isRouteErrorResponse, useRouteError } from 'react-router';
 
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import { parseEcho, type FormEcho } from '../lib/echo';
 import type { EntryPageDTO } from '../lib/entryPage.types';
+import { mintFormCsrf } from '../lib/formCsrf.server';
 import { formatCents } from '../lib/money';
 import { EntryForm } from './entry.form';
 import type { Route } from './+types/entry';
@@ -31,6 +41,12 @@ import type { Route } from './+types/entry';
 export interface EntryLoaderData {
   page: EntryPageDTO;
   idempotencyKey: string;
+  /**
+   * The double-submit token for this rendered form — node's own, never the
+   * projection's. Minted together with the nonce set on this very response;
+   * the two cannot be separated.
+   */
+  formCsrf: string;
   /** The "Update events and total" round trip, coming back. Query-string
    * only: the quote route redirects a native form post here with the posted
    * body plus the server's total, and the hydrated path navigates to the same
@@ -57,7 +73,7 @@ export async function loader({
 }: {
   request: Request;
   params: { slug?: string };
-}): Promise<EntryLoaderData> {
+}) {
   const slug = params.slug;
   if (!slug) throw notFound();
 
@@ -75,16 +91,23 @@ export async function loader({
   // The URL is read for its query string and for nothing that carries
   // identity — the relay guards in `tests/entry.loader.test.ts` hold that
   // line structurally.
-  return {
+  //
+  // The nonce and its token are minted in one call and returned together:
+  // the token goes into the form, the nonce goes onto this response, and
+  // nothing here can ship one without the other. `mintFormCsrf` takes no
+  // arguments, so this route still reads no credential of any kind.
+  const csrf = mintFormCsrf();
+  const payload: EntryLoaderData = {
     page,
     idempotencyKey: crypto.randomUUID(),
+    formCsrf: csrf.token,
     echo: parseEcho(new URL(request.url).searchParams),
   };
+  return data(payload, csrf.responseInit);
 }
 
 export default function Entry({ loaderData }: Route.ComponentProps) {
-  const { page, idempotencyKey, echo } = loaderData;
-  const next = encodeURIComponent(`/e/${page.page.slug}`);
+  const { page, idempotencyKey, formCsrf, echo } = loaderData;
   const openEvents = page.events.filter((event) => event.isOpen);
 
   return (
@@ -121,23 +144,34 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
 
       <section id="enter">
         <h2 className="text-lg font-semibold">Enter</h2>
+        {/*
+          **The form is rendered unconditionally (ruling R8-E).** It used to be
+          gated on `page.viewer.signedIn`, which is a value this page cannot
+          have: node's fetch of `GET /e/api/page/{slug}` is always anonymous
+          (`apiFetch.server.ts` sends `accept` and nothing else), so
+          `_optional_entrant` reads no cookie and `signedIn` is `false` for a
+          signed-in entrant exactly as much as for a stranger. The gate
+          therefore hid the form from EVERYONE, and the "sign in" copy it
+          rendered instead pointed at `/e/account/login`, which is POST-only —
+          a 405. Both links are gone until Tasks 19-21 build those pages;
+          a link to a route that 405s is worse than no link.
+
+          Who may submit is decided where it can be decided: by
+          `Depends(get_current_entrant)` on `POST /e/api/submit/{slug}`, which
+          the browser reaches directly, with its cookies, on one origin. An
+          anonymous submitter is navigated back here with a notice — see
+          `entrant_or_back_to_form` in `api/entries_json.py` and the
+          `NOT_SIGNED_IN` copy in `lib/echo.ts`.
+        */}
         {openEvents.length === 0 ? (
           <p className="text-sm">No event is taking entries right now.</p>
-        ) : page.viewer.signedIn ? (
-          <EntryForm page={page} idempotencyKey={idempotencyKey} echo={echo} />
         ) : (
-          // No session is a login path, never a wall.
-          <p className="text-sm">
-            Entries are made from an entrant account.{' '}
-            <a className="underline" href={`/e/account/login?next=${next}`}>
-              Sign in
-            </a>{' '}
-            or{' '}
-            <a className="underline" href={`/e/account/signup?next=${next}`}>
-              create one
-            </a>
-            , then come back to this page.
-          </p>
+          <EntryForm
+            page={page}
+            idempotencyKey={idempotencyKey}
+            formCsrf={formCsrf}
+            echo={echo}
+          />
         )}
       </section>
 

@@ -89,6 +89,16 @@ const REFUSAL_UNKNOWN =
  * on a URL, and the copy below points the entrant at them.
  */
 function refusalCopy(code: string): string {
+  if (code === 'NOT_SIGNED_IN') {
+    // R8-E's outcome for an anonymous submitter, in words. The backend's
+    // `Depends(get_current_entrant)` answers 401 with a JSON body, which a
+    // native form post renders as a raw error page — so `entrant_or_back_to_form`
+    // (`api/entries_json.py`) navigates a browser back here with this code
+    // instead. No link: `/e/account/login` is POST-only until Tasks 19-21
+    // build the page, and a link that 405s is worse than a sentence that
+    // does not lie.
+    return 'You need an entrant account to submit an entry, and this browser is not signed in to one. Nothing was recorded — sign in, then submit again.';
+  }
   if (code === 'MAX_EVENTS_PER_PERSON') {
     return 'That is more events than this tournament allows for one player. Remove some, then update the total again.';
   }

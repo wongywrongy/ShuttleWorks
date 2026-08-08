@@ -183,3 +183,30 @@ describe('narrowEvents', () => {
     expect(narrowEvents(EVENTS, 'M', [], true)).toEqual(EVENTS);
   });
 });
+
+describe('the not-signed-in outcome (R8-E)', () => {
+  it('turns the backend redirect into a sentence, not a JSON blob', () => {
+    // What an anonymous submitter actually sees. `entrant_or_back_to_form`
+    // (`api/entries_json.py`) navigates a browser post back to
+    // `/e/{slug}?refusalCode=NOT_SIGNED_IN#enter`; this is the copy that
+    // renders in the form's `Notice`. It must say three things: that an
+    // account is needed, that NOTHING WAS RECORDED, and what to do next.
+    const copy = parseEcho(new URLSearchParams('refusalCode=NOT_SIGNED_IN')).refusal;
+
+    expect(copy).toContain('entrant account');
+    expect(copy).toContain('Nothing was recorded');
+    expect(copy).toContain('sign in');
+    // Not the generic fallback — that one talks about event selections and
+    // would be actively misleading here.
+    expect(copy).not.toContain('cannot be entered as it stands');
+  });
+
+  it('names no login URL, because there is no login page yet', () => {
+    // Tasks 19-21 own `/e/account/login`; today it is POST-only and answers
+    // 405. Copy that told an entrant to follow a link that 405s is worse
+    // than copy that does not.
+    const copy = parseEcho(new URLSearchParams('refusalCode=NOT_SIGNED_IN')).refusal;
+
+    expect(copy).not.toContain('/e/account');
+  });
+});

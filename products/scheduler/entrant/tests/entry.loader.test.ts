@@ -16,6 +16,7 @@ import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
 import { loader } from '../app/routes/entry';
+import { formCsrfToken } from '../app/lib/formCsrf.server';
 import {
   credentialRelayLines,
   libFiles,
@@ -64,7 +65,16 @@ const PAGE = {
     },
   ],
   entrants: [{ name: 'Ada Lovelace', eventId: '11111111-1111-4111-8111-111111111111' }],
-  viewer: { signedIn: true, email: 'ada@example.com', formCsrf: 'csrf-token-abc' },
+  // **The anonymous viewer, which is the only one node can ever be handed.**
+  // This read `{signedIn: true, formCsrf: 'csrf-token-abc'}` until Task 18b:
+  // a shape the real backend cannot return to a caller that sends no cookie,
+  // and this loader sends none by construction. Asserting against it meant
+  // the suite was green over a projection that does not exist, which is why
+  // an always-hidden form and an always-empty `_csrf` reached a cutover
+  // review. `tests/test_entrant_ssr_contract.py` (backend suite) drives the
+  // REAL `GET /e/api/page/{slug}` with no cookie, asserts exactly this shape,
+  // and fails on any fixture in this directory that claims another.
+  viewer: { signedIn: false, email: null, formCsrf: '' },
 };
 
 const sent: Request[] = [];
@@ -85,11 +95,18 @@ function notFoundBody() {
   return { detail: { code: 'TOURNAMENT_NOT_FOUND', message: 'Tournament not found' } };
 }
 
-function get(slug: string | undefined, headers: HeadersInit = {}) {
+/** The loader's raw answer. It is a `data()` wrapper since R8-D, because the
+ * loader now sets the `sw_play_csrf` nonce on the SSR document response. */
+function getRaw(slug: string | undefined, headers: HeadersInit = {}) {
   return loader({
     request: new Request(`http://entrant.test/e/${slug ?? ''}`, { headers }),
     params: slug === undefined ? {} : { slug },
   });
+}
+
+/** Just the payload, for the assertions that predate the wrapper. */
+async function get(slug: string | undefined, headers: HeadersInit = {}) {
+  return (await getRaw(slug, headers)).data;
 }
 
 beforeEach(() => {
@@ -328,7 +345,54 @@ describe('GET /e/{slug}', () => {
     // returns parsed JSON, so the upstream Response never escapes
     // `apiFetch.server.ts` — this pins that property against a real
     // upstream Set-Cookie, not an absent one.
-    expect(res.headers.get('set-cookie')).toBeNull();
+    //
+    // The document DOES now carry a Set-Cookie of its own (R8-D): the
+    // `sw_play_csrf` nonce node minted. That is not a relay — the nonce
+    // names no principal, node did not read it from anywhere, and the
+    // upstream cookie is still nowhere on this response. Asserted as an
+    // exact allowlist rather than a "does not contain" so a future header
+    // that happens to be appended after it cannot ride through.
+    const cookies = res.headers.get('set-cookie') ?? '';
+    expect(cookies).toContain('sw_play_csrf=');
+    expect(cookies).not.toContain('sw_entrant_session');
+    expect(cookies).not.toContain('leaked');
+  });
+
+  it('renders a token that is the digest of the nonce it just set', async () => {
+    // **The end-to-end control for R8-D, and the one that would have caught
+    // the original defect on its own.** Everything else could be green while
+    // the form carried a token derived from a nonce nobody holds — which is
+    // indistinguishable, from inside node, from carrying the right one. The
+    // browser is the only place the two meet, so they are checked here
+    // against the real document response: the cookie the browser will store,
+    // and the hidden field the browser will post back.
+    vi.stubGlobal('fetch', stubJson(PAGE));
+
+    const res = await fetchEntrant('/e/spring-open');
+    const html = await res.text();
+
+    const nonce = /sw_play_csrf=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')?.[1];
+    const rendered = /name="_csrf" value="([0-9a-f]{64})"/.exec(html)?.[1];
+
+    expect(nonce).toBeTruthy();
+    expect(rendered).toBeTruthy();
+    expect(rendered).toBe(formCsrfToken(nonce as string));
+    // Non-vacuity: the assertion above must not be two undefineds agreeing,
+    // and it must not be satisfiable by the empty "no proof available" value
+    // that `viewer.formCsrf` would have supplied.
+    expect(rendered).not.toBe('');
+    expect(rendered).not.toBe(formCsrfToken('some-other-nonce'));
+  });
+
+  it('renders the form even though the projection says signed out', async () => {
+    // R8-E. `viewer.signedIn` is `false` on every SSR page, so gating on it
+    // hid the form from everyone. The gate is gone; the write decides.
+    vi.stubGlobal('fetch', stubJson(PAGE));
+
+    const html = await (await fetchEntrant('/e/spring-open')).text();
+
+    expect(html).toContain('action="/e/api/submit/spring-open"');
+    expect(html).not.toContain('/e/account/login');
   });
 
   it('renders a not-found page for a 404, leaking neither cause nor topology', async () => {

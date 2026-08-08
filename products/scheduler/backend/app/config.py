@@ -428,7 +428,7 @@ class Settings(BaseSettings):
         Keeping them as two properties rather than one widened list is what
         stops the nonce from ever being mistaken for a credential by code
         reading the registry for the other reason. See
-        ``app/form_csrf.py::issue_play_csrf``.
+        ``app/form_csrf.py::PLAY_CSRF_COOKIE``.
 
         The import is deferred because ``app.form_csrf`` reads ``settings``
         at module scope. Deliberately importing the name rather than
@@ -436,7 +436,9 @@ class Settings(BaseSettings):
         ``set_cookie`` call uses and the one
         ``tests/test_csrf_cookie_registry.py`` resolves out of the source, so
         a second copy here could drift — and the copy the middleware trusted
-        would be the one the browser never received.
+        would be the one the browser never received. (The ``set_cookie`` call
+        itself now lives in the SSR tier under ruling R8-D; this file, that
+        constant and the verification path are unchanged by that.)
         """
         from app.form_csrf import PLAY_CSRF_COOKIE
 

@@ -10,19 +10,18 @@ incumbent's actual output, captured before the move, so a move that
 changed the derivation fails on an equality rather than on a route
 behaving differently three files away.
 
-The second half of the file covers ``issue_play_csrf``, which did not
-exist before: the promoted token needs a secret, and a login or signup
-post happens *before* there is a session to derive one from. That gap is
-filled by a non-authenticating nonce cookie, and the properties that make
-it safe (unreadable to script, unguessable, and outside the session-cookie
-registry) are pinned here with negative controls rather than described in
-prose.
+The second half of the file covers the pre-session nonce cookie
+``sw_play_csrf``, which stands in as a secret when a login, signup or
+server-rendered entry form has no session to derive one from. **Only the
+half the backend still owns is here.** Ruling R8-D moved the *minting* to
+the SSR tier, so the cookie's own properties (unreadable to script,
+unguessable, four-hour life) are asserted in
+``entrant/tests/formCsrf.server.test.ts``, against the code that runs; what
+remains below is the cookie's NAME, the two registries that decide when a
+token is demanded, and a control that the backend does not start minting it
+again.
 """
 from __future__ import annotations
-
-from http.cookies import SimpleCookie
-
-from fastapi import Response
 
 # Captured from api/entries_public._form_csrf before the promotion.
 # sha256("sw-play-form-csrf:" + token).hexdigest()
@@ -99,147 +98,33 @@ def test_the_form_field_name_is_the_one_the_page_emits():
 
 
 # ---- 2. The pre-session nonce cookie ----------------------------------
-
-
-def _set_cookie(response: Response) -> SimpleCookie:
-    jar = SimpleCookie()
-    for header, value in response.raw_headers:
-        if header.decode().lower() == "set-cookie":
-            jar.load(value.decode())
-    return jar
-
-
-def test_issuing_a_play_csrf_returns_the_token_for_the_cookie_it_set():
-    """The contract in one line: the caller embeds the return value in the
-    form, the browser holds the cookie, and the middleware re-derives one
-    from the other. If these two ever stop agreeing, every unhydrated login
-    post is refused."""
-    from app.form_csrf import PLAY_CSRF_COOKIE, form_csrf_token, issue_play_csrf
-
-    response = Response()
-    token = issue_play_csrf(response)
-
-    nonce = _set_cookie(response)[PLAY_CSRF_COOKIE].value
-    assert token == form_csrf_token(nonce)
-    assert token  # not the empty "no proof available" value
-
-
-def test_the_nonce_cookie_is_httponly():
-    """**Negative control.** The whole double-submit argument is that the
-    attacker's page can make the browser *send* the cookie but can never
-    *read* it. Drop ``httponly`` and a cross-site script on any page that
-    can reach this origin reads the nonce and computes the token, so the
-    token proves nothing. This assertion fails the moment that flag goes."""
-    from app.form_csrf import PLAY_CSRF_COOKIE, issue_play_csrf
-
-    response = Response()
-    issue_play_csrf(response)
-
-    morsel = _set_cookie(response)[PLAY_CSRF_COOKIE]
-    assert morsel["httponly"]
-    assert morsel["samesite"].lower() == "lax"
-    assert morsel["path"] == "/"
-
-
-def test_the_nonce_is_unguessable_and_fresh_per_issue():
-    """A predictable nonce is a token anyone can compute at home. Two issues
-    must not collide, and the value must carry real entropy — a counter or a
-    timestamp would satisfy "different" and fail this."""
-    from app.form_csrf import PLAY_CSRF_COOKIE, issue_play_csrf
-
-    nonces = set()
-    for _ in range(25):
-        response = Response()
-        issue_play_csrf(response)
-        nonces.add(_set_cookie(response)[PLAY_CSRF_COOKIE].value)
-
-    assert len(nonces) == 25
-    # 32 bytes through ``token_urlsafe`` is 43 characters. Asserted at the
-    # real width rather than a round ">= 32": 32 *characters* is what
-    # ``token_urlsafe(24)`` produces, so the loose bound would have let the
-    # entropy be quietly cut by a quarter and still passed.
-    assert all(len(nonce) >= 43 for nonce in nonces)
-
-
-def test_the_nonce_cookie_expires_after_four_hours():
-    """The form's lifetime, pinned because it is a judgement call rather
-    than a derived value: long enough to be interrupted mid-signup and come
-    back, short enough that a nonce left in a shared club laptop is not
-    reusable all week. Changing it should be a visible act."""
-    from app.form_csrf import PLAY_CSRF_COOKIE, issue_play_csrf
-
-    response = Response()
-    issue_play_csrf(response)
-
-    assert _set_cookie(response)[PLAY_CSRF_COOKIE]["max-age"] == str(4 * 60 * 60)
-
-
-def test_a_second_issuance_invalidates_the_first_tab_s_token():
-    """**The multi-tab consequence, pinned as an accepted decision.**
-
-    The cookie is set at ``path="/"``, so issuing a second one overwrites
-    the first for the whole origin: a user who opens login in a second tab
-    finds the first tab's embedded token no longer matches the cookie, and
-    submitting it is refused with "This form has expired. Reload the entry
-    page and try again."
-
-    That is deliberate — the alternative is several live nonces with an
-    eviction policy, which is a server-side token store in everything but
-    name. This test exists so the behaviour is inherited knowledge for the
-    pages built in Tasks 8-12 and 19-21 rather than a surprise bug report,
-    and so that anyone who decides to *change* it changes a red test rather
-    than discovering the reasoning afterwards. The full argument is in
-    ``issue_play_csrf``'s docstring.
-    """
-    from app.form_csrf import PLAY_CSRF_COOKIE, form_csrf_token, issue_play_csrf
-
-    first_tab = Response()
-    first_token = issue_play_csrf(first_tab)
-
-    second_tab = Response()
-    second_token = issue_play_csrf(second_tab)
-    live_nonce = _set_cookie(second_tab)[PLAY_CSRF_COOKIE].value
-
-    # The browser now holds only the second nonce, and the first tab's form
-    # still carries the first token.
-    assert form_csrf_token(live_nonce) == second_token
-    assert form_csrf_token(live_nonce) != first_token
-
-    # And the overwrite is total, not scoped to a path — which is the
-    # mechanism that makes it happen at all.
-    assert _set_cookie(first_tab)[PLAY_CSRF_COOKIE]["path"] == "/"
-    assert _set_cookie(second_tab)[PLAY_CSRF_COOKIE]["path"] == "/"
-
-
-def test_the_nonce_cookie_follows_the_deployment_secure_flag():
-    """It rides the same setting as the session cookies rather than a
-    hard-wired ``False``: the cloud profile refuses to start without
-    ``SESSION_COOKIE_SECURE=true``, and a nonce cookie that leaked over
-    plain HTTP while the session cookie did not would be the weakest link
-    in the pair."""
-    from app.config import settings
-    from app.form_csrf import PLAY_CSRF_COOKIE, issue_play_csrf
-
-    original = settings.session_cookie_secure
-    try:
-        settings.session_cookie_secure = True
-        response = Response()
-        issue_play_csrf(response)
-        assert _set_cookie(response)[PLAY_CSRF_COOKIE]["secure"]
-
-        settings.session_cookie_secure = False
-        response = Response()
-        issue_play_csrf(response)
-        assert not _set_cookie(response)[PLAY_CSRF_COOKIE]["secure"]
-    finally:
-        settings.session_cookie_secure = original
+#
+# **The minting half of this file is gone, and that is the point.** It used
+# to cover ``issue_play_csrf`` - httponly, entropy, max-age, secure,
+# last-issuance-wins - seven properties of a function with **zero production
+# call sites**. Nothing ever called it, while ``ViewerDTO``'s docstring
+# asserted that "the SSR tier mints" the nonce. Seven green tests over a
+# mechanism that never ran is how the empty-``_csrf`` defect reached a
+# cutover review.
+#
+# Ruling R8-D put the mint where the pages are: the React Router loader, in
+# ``entrant/app/lib/formCsrf.server.ts``, which sets the cookie on the SSR
+# document response. Those seven properties moved with it and are asserted
+# against the code that actually runs, in
+# ``entrant/tests/formCsrf.server.test.ts``.
+#
+# What the backend still owns - and what stays covered here and in
+# ``tests/test_form_csrf_channel.py`` - is verification: the derivation
+# above, the cookie NAME, and the two registries that decide when a token is
+# demanded. The cross-tier pin against the TypeScript derivation lives in
+# ``tests/unit/test_form_csrf_cross_tier.py``.
 
 
 def test_the_nonce_cookie_authenticates_nothing():
     """**Negative control, and the one global constraint on this task.**
 
     ``sw_play_csrf`` must stay OUT of ``settings.session_cookie_names``.
-    That registry is the CSRF middleware's trigger — put a cookie in it and
+    That registry is the CSRF middleware's trigger - put a cookie in it and
     every write carrying it is treated as cookie-authenticated. This cookie
     is handed to *anonymous* visitors on a page render, so registering it
     would make the middleware demand a header from callers who have not
@@ -263,7 +148,7 @@ def test_the_nonce_is_nevertheless_inside_the_csrf_trigger():
     carries no identity at all and still has to present a matching token.
 
     Without this list the exclusion above would not be a carve-out, it would
-    be a hole: the one write with no session behind it — login, signup —
+    be a hole: the one write with no session behind it - login, signup -
     would trigger no CSRF check on either channel.
     """
     from app.config import settings
@@ -277,7 +162,7 @@ def test_the_nonce_is_nevertheless_inside_the_csrf_trigger():
 def test_the_trigger_list_is_the_registry_plus_the_nonce_and_nothing_else():
     """Exact, not a superset check. A widened trigger that quietly grew a
     third name would make the middleware demand a header from callers
-    holding some unrelated cookie — the failure mode
+    holding some unrelated cookie - the failure mode
     ``test_a_non_session_cookie_still_does_not_trigger_the_check`` guards
     behaviourally, pinned here at the definition.
     """
@@ -290,9 +175,50 @@ def test_the_trigger_list_is_the_registry_plus_the_nonce_and_nothing_else():
     )
 
 
+def test_the_backend_no_longer_mints_the_nonce_itself():
+    """**The dead-code decision, pinned so it cannot quietly come back.**
+
+    Exactly one tier may set ``sw_play_csrf``. Two minters means two sets of
+    cookie attributes and a last-writer-wins race between them, and the tier
+    that lost would be handing out forms whose token no longer matches the
+    cookie - a refusal an entrant reads as "this site is broken".
+
+    Node mints (R8-D); the backend verifies. Re-adding an ``issue_play_csrf``
+    - or any other ``set_cookie`` of this name in the backend - turns this
+    red, and whoever does it has to argue with the paragraph above rather
+    than discover the race in production.
+    """
+    import ast
+    from pathlib import Path
+
+    # AST, not a substring pair: ``config.py`` legitimately says both
+    # "set_cookie" and "sw_play_csrf" in prose, and a guard that a docstring
+    # can trip is a guard someone eventually silences.
+    backend = Path(__file__).resolve().parents[2] / "backend"
+    offenders = []
+    for path in backend.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        if "set_cookie" not in source:
+            continue
+        tree = ast.parse(source, filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not (isinstance(func, ast.Attribute) and func.attr == "set_cookie"):
+                continue
+            segment = ast.get_source_segment(source, node) or ""
+            if "PLAY_CSRF_COOKIE" in segment or "sw_play_csrf" in segment:
+                offenders.append(f"{path.relative_to(backend)}:{node.lineno}")
+
+    assert not offenders, (
+        "The backend sets the sw_play_csrf cookie again: " + ", ".join(offenders)
+    )
+
+
 def test_the_trigger_list_reads_the_cookie_name_from_its_owner():
     """No second literal. ``PLAY_CSRF_COOKIE`` is the module constant the
-    ``set_cookie`` call actually uses and the registry guard resolves from
+    verification path actually uses and the registry guard resolves from
     source; if the trigger list carried its own copy of ``"sw_play_csrf"``
     the two could drift, and the drifted one would be the list the
     middleware trusts while the cookie went out under the other name.

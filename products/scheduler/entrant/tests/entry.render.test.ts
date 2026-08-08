@@ -88,12 +88,18 @@ const PAGE = {
     },
   ],
   entrants: [{ name: 'Ada Lovelace', eventId: MS }],
-  viewer: { signedIn: true, email: 'ada@example.com', formCsrf: 'csrf-token-abc' },
+  // **The only viewer projection a server-rendered page can ever receive.**
+  // This used to read `{signedIn: true, formCsrf: 'csrf-token-abc'}`, which
+  // the real backend cannot return to node: `apiFetch.server.ts` sends a
+  // frozen `accept`-only allowlist, so `_optional_entrant` reads no cookie
+  // and both fields are the anonymous values for every reader, signed in or
+  // not. That fixture is what let the form ship gated on a flag that is
+  // always false, carrying a token that could never match. The shape is now
+  // held to the real route by `tests/test_entrant_ssr_contract.py` in the
+  // backend suite, which fails on any fixture in this directory that claims
+  // otherwise.
+  viewer: { signedIn: false, email: null, formCsrf: '' },
 };
-
-function signedOut() {
-  return { ...PAGE, viewer: { signedIn: false, email: null, formCsrf: '' } };
-}
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 afterAll(() => vite.close());
@@ -147,13 +153,22 @@ describe('the entry form, unhydrated', () => {
   });
 
   it('carries the double-submit token as a hidden field', async () => {
-    // `_csrf` is `app/form_csrf.FORM_FIELD`; the value is the projection's
-    // `viewer.formCsrf`, never re-derived here.
+    // `_csrf` is `app/form_csrf.FORM_FIELD`. The value is the LOADER's
+    // (R8-D) — a sha256 hex digest of the nonce minted for this very
+    // response — and explicitly NOT the projection's `viewer.formCsrf`,
+    // which is `''` above and always will be. Asserted as 64 hex characters
+    // rather than as a fixed string, because the nonce is fresh per render;
+    // the test below is the one that proves it is the RIGHT digest.
     const html = await render();
 
     expect(html).toMatch(
-      /<input[^>]*type="hidden"[^>]*name="_csrf"[^>]*value="csrf-token-abc"/,
+      /<input[^>]*type="hidden"[^>]*name="_csrf"[^>]*value="[0-9a-f]{64}"/,
     );
+    // The empty value the OLD code rendered — `viewer.formCsrf` — is
+    // excluded by the `{64}` above; asserting `not.toContain('value=""')`
+    // over the whole document instead would fail on the perfectly correct
+    // empty `birthYear` fallback input.
+    expect(html).not.toMatch(/name="_csrf" value=""/);
   });
 
   it('carries the loader-minted key in the field the backend reads', async () => {
@@ -221,13 +236,47 @@ describe('the entry form, unhydrated', () => {
     expect(tag).toContain('type="checkbox"');
   });
 
-  it('shows a sign-in path instead of a form when signed out', async () => {
-    // No session is a login path, never a 404.
-    const html = await render(signedOut());
+  it('renders the form whatever the viewer projection says (R8-E)', async () => {
+    // The defect, as a test. The form was gated on `page.viewer.signedIn`,
+    // which is `false` on every SSR page — so it was hidden from everyone,
+    // and the copy shown instead linked to `/e/account/login`, a POST-only
+    // route that answers 405.
+    //
+    // Fed BOTH projections: the real anonymous one, and the impossible
+    // signed-in one the old fixtures used. The form renders either way,
+    // because who may submit is decided by `Depends(get_current_entrant)` on
+    // the write, which the browser reaches directly with its cookies.
+    for (const body of [
+      PAGE,
+      // impossible-projection: the shape the OLD fixtures claimed and the
+      // real backend can never return to node. Fed on purpose, so this test
+      // proves the gate is gone rather than merely absent from one payload.
+      // The marker is the opt-out `tests/test_entrant_ssr_contract.py`
+      // requires — see that file for why it is loud rather than silent.
+      { ...PAGE, viewer: { /* impossible-projection */ signedIn: true, email: 'a@b.c', formCsrf: '' } },
+    ]) {
+      const html = await render(body);
+      expect(html).toContain('action="/e/api/submit/spring-open"');
+    }
+  });
 
-    expect(html).not.toContain('action="/e/api/submit/spring-open"');
-    expect(html).toContain('href="/e/account/login?next=%2Fe%2Fspring-open"');
-    expect(html).toContain('href="/e/account/signup?next=%2Fe%2Fspring-open"');
+  it('links to no POST-only account route', async () => {
+    // `/e/account/login` and `/e/account/signup` are POST-only until Tasks
+    // 19-21 build the pages; an <a href> to either is a 405 in the
+    // entrant's face. Removed rather than left pending — a dead link is
+    // worse than no link, and this fails the day one is pasted back in.
+    const html = await render();
+
+    expect(html).not.toContain('/e/account/login');
+    expect(html).not.toContain('/e/account/signup');
+  });
+
+  it('states that submitting needs an account, since it cannot know', async () => {
+    // The page CANNOT tell a signed-in reader from a stranger (see the
+    // viewer fixture above), so the requirement is stated to everyone in
+    // the same grammar as the caps and the bundle schedule, rather than
+    // guessed at for anyone.
+    expect(await render()).toContain('Submitting needs an entrant account');
   });
 
   it('prints per-event fees as the cents the server returned, formatted', async () => {

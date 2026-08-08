@@ -1049,3 +1049,79 @@ def test_an_anonymous_browser_quote_is_still_refused(client, page):
     )
 
     assert r.status_code in (401, 403), r.text
+
+
+# ---- R8-E: what an anonymous submitter actually experiences --------------
+#
+# The entry form is now rendered to everyone, because a server-rendered page
+# cannot know who is reading it (see `tests/test_entrant_ssr_contract.py`).
+# That moves the sign-in decision to the write, where it can be made — and
+# makes the SHAPE of that refusal a user-facing question for the first time.
+
+
+def test_an_anonymous_browser_submit_is_navigated_back_to_the_form(client, page):
+    """A refusal a human can read, instead of a JSON blob in the window.
+
+    A native `<form method=post>` is a navigation: the browser replaces the
+    page with whatever comes back. `Depends(get_current_entrant)` answers
+    401 with `{"detail": {"code": ...}}`, which is a correct answer to the
+    wrong question — nobody typing an entry on a phone can act on it.
+
+    So a caller that says `text/html` is sent back to the entry page with a
+    refusal CODE, which `app/lib/echo.ts` maps to fixed local copy. A code,
+    never prose: this target is a shareable GET on the tournament's own
+    host, so free text in the query string is content a stranger could put
+    in front of an entrant by sending a link (`_echo_redirect` argues this
+    at length).
+    """
+    r = client.post(
+        f"/e/api/submit/{page['slug']}",
+        data={"playerName": "Alice Chen", "gender": "F", "acknowledged": "on"},
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303, r.text
+    assert r.headers["location"].startswith(f"/e/{page['slug']}?")
+    assert _echo(r)["refusalCode"] == ["NOT_SIGNED_IN"]
+    # The refusal carries a code and nothing else — no email, no message,
+    # nothing an author of a URL wrote.
+    assert set(_echo(r)) == {"refusalCode"}
+
+
+def test_an_anonymous_JSON_submit_is_still_a_plain_401(client, page):
+    """**Negative control, and the one that matters.**
+
+    The wrapper changes the SHAPE of the refusal for a navigation and
+    nothing else. A programmatic caller — no `text/html` in `Accept` — must
+    still get the 401 the identity dependency raises, with the same code.
+    Widening the redirect to every caller would turn a refusal into a 3xx
+    that a naive client follows to a 200 HTML page and reads as success.
+    """
+    r = client.post(
+        f"/e/api/submit/{page['slug']}",
+        data={"playerName": "Alice Chen", "gender": "F", "acknowledged": "on"},
+        headers={"accept": "application/json", "content-type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 401, r.text
+    assert r.json()["detail"]["code"] == "AUTH_NOT_SIGNED_IN"
+
+
+def test_the_redirect_never_fires_for_a_caller_who_IS_signed_in(client, page, entrant):
+    """Non-vacuity from the other side: the wrapper is a pure pass-through
+    on the success path. A signed-in browser post reaches the route and is
+    answered by the route's own guards — here the CSRF refusal, because this
+    post deliberately carries no `_csrf` — and never by the sign-in
+    redirect. A wrapper that redirected everyone would leave every test
+    above green while silently making the whole route unreachable."""
+    r = client.post(
+        f"/e/api/submit/{page['slug']}",
+        data={"playerName": "Alice Chen", "gender": "F", "acknowledged": "on"},
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"

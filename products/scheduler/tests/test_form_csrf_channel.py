@@ -154,18 +154,23 @@ def test_a_json_body_cannot_carry_the_second_channel(client, entrant):
 
 # ---- the pre-session channel (the gap R8-B closes) ---------------------
 
+# A nonce exactly as the SSR tier mints it (``entrant/app/lib/formCsrf.
+# server.ts``): 32 random bytes, base64url. A literal here rather than a
+# call, because after ruling R8-D the backend does not mint this cookie at
+# all — node does, on the SSR document response — and ``issue_play_csrf``
+# was deleted as the dead code it had always been. What the backend still
+# owns, and what these tests exercise, is the VERIFICATION half.
+_NONCE = "vJ8s0rQ2mF7pL4xW1kZ6bN3dT9gY5hC0aE8uI2oP7sM"
+
+
 
 def test_a_login_post_carrying_the_nonce_and_no_token_is_refused(client):
     """The pre-session gap, now closed. Before this, a login post carried
     no session, so ``form_csrf_token`` had nothing to derive from and the
     middleware never even looked at the request."""
-    from app.form_csrf import PLAY_CSRF_COOKIE, issue_play_csrf
-    from fastapi import Response
+    from app.form_csrf import PLAY_CSRF_COOKIE
 
-    response = Response()
-    issue_play_csrf(response)
-    nonce = response.headers["set-cookie"].split("=", 1)[1].split(";", 1)[0]
-    client.cookies.set(PLAY_CSRF_COOKIE, nonce)
+    client.cookies.set(PLAY_CSRF_COOKIE, _NONCE)
 
     r = client.post(
         "/e/account/login",
@@ -191,13 +196,10 @@ def test_a_login_post_with_the_nonce_token_reaches_the_route(client):
     A 401 is a *stronger* witness than the 422 was — it proves the request
     reached the credential check, not merely the body parser.
     """
-    from app.form_csrf import PLAY_CSRF_COOKIE, issue_play_csrf
-    from fastapi import Response
+    from app.form_csrf import PLAY_CSRF_COOKIE, form_csrf_token
 
-    response = Response()
-    token = issue_play_csrf(response)
-    nonce = response.headers["set-cookie"].split("=", 1)[1].split(";", 1)[0]
-    client.cookies.set(PLAY_CSRF_COOKIE, nonce)
+    client.cookies.set(PLAY_CSRF_COOKIE, _NONCE)
+    token = form_csrf_token(_NONCE)
 
     r = client.post(
         "/e/account/login",

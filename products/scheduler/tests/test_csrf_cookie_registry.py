@@ -41,8 +41,11 @@ _BACKEND = Path(__file__).resolve().parents[1] / "backend"
 
 # **Every directory where a cookie can be set, not every directory where one
 # happened to be set when this guard was written.** The scan covered ``api/``
-# alone until SP-PROGRAM-1 Phase 6 put ``issue_play_csrf`` — a real
-# ``set_cookie`` — in ``app/form_csrf.py``, where the glob never looked. That
+# alone until SP-PROGRAM-1 Phase 6 put a real ``set_cookie`` in
+# ``app/form_csrf.py``, where the glob never looked. (Ruling R8-D has since
+# moved that mint to the SSR tier and deleted the function, so ``app/`` is
+# clean again — the widened scan stays, because the lesson was about the
+# unasked question, not about the one file that raised it.) That
 # is the same failure mode as the one-hard-wired-cookie-name defect this whole
 # file exists about: not a wrong answer, an unasked question. A cookie set from
 # a directory outside this list is invisible to the gate, so adding a layer
@@ -56,7 +59,9 @@ _SCANNED_DIRS = (_BACKEND / "api", _BACKEND / "app")
 # assertion below.
 #
 # ``sw_play_csrf`` (SP-PROGRAM-1 Phase 6, R8-B) is the pre-session
-# double-submit nonce minted by ``app/form_csrf.py::issue_play_csrf``. It
+# double-submit nonce minted by the SSR tier (R8-D,
+# ``entrant/app/lib/formCsrf.server.ts``) and verified against
+# ``app/form_csrf.py::PLAY_CSRF_COOKIE``. It
 # is a random value handed to an *anonymous* visitor so that a login or
 # signup form has something unreadable to derive a token from; it names no
 # principal and grants no access. Registering it would be actively wrong,
@@ -278,12 +283,23 @@ def test_the_scan_reaches_every_directory_that_sets_a_cookie(client):
 
     Named by file rather than counted, because a count passes for the wrong
     reason the moment a call moves between the two directories.
+
+    **``app/form_csrf.py`` is no longer among them, and that is a downgrade
+    worth naming.** Ruling R8-D moved the one ``set_cookie`` in ``app/`` to
+    the SSR tier and deleted the dead function that held it, so there is
+    currently no cookie set outside ``api/`` for this control to point at.
+    The reach over ``app/`` is therefore pinned at the configuration rather
+    than at a live call site: drop ``app`` from ``_SCANNED_DIRS`` and this
+    fails, but a cookie appearing in some *third* directory is once again
+    only caught by whoever remembers to add it. That is the same unasked
+    question this file was written about, so it is written down rather than
+    quietly accepted.
     """
     seen = {name for name, _line, _expr, _constants in _cookie_key_expressions()}
 
     assert "api/auth.py" in seen
     assert "api/entrants.py" in seen
-    assert "app/form_csrf.py" in seen
+    assert _BACKEND / "app" in _SCANNED_DIRS
 
 
 def test_the_registry_names_both_principals(client):

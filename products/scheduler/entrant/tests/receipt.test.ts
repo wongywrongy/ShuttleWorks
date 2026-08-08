@@ -62,7 +62,10 @@ const PAGE = {
   },
   events: [],
   entrants: [],
-  viewer: { signedIn: true, email: 'ada@example.com', formCsrf: 'csrf-token-abc' },
+  // The anonymous viewer — the only projection a server-rendered page can be
+  // handed, because node's fetch carries no cookie for `_optional_entrant` to
+  // read. Held to the real route by `tests/test_entrant_ssr_contract.py`.
+  viewer: { signedIn: false, email: null, formCsrf: '' },
 };
 
 /**

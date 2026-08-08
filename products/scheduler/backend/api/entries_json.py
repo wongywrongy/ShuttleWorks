@@ -23,7 +23,8 @@ with the first until the day it does not.
 declares its own posture: the page projection and the config read are
 public (and named in ``tests/test_auth_surface.py`` with the reason);
 quote and submit declare ``get_current_entrant``, which has no bootstrap
-fallback in either mode.
+fallback in either mode (submit through ``entrant_or_back_to_form``, which
+changes the refusal's shape for a browser navigation and nothing else).
 
 **Not workspace-path-scoped, deliberately.** The key is the
 ``entry_pages`` slug. A raw tournament UUID is never a public address —
@@ -96,13 +97,31 @@ def _utcnow() -> datetime:
 
 
 class ViewerDTO(BaseModel):
-    """Who is reading, and what they need to post with.
+    """Who is reading, as seen from THIS request's cookies — which is not
+    the same thing as who is reading the page.
 
     ``formCsrf`` is empty for a signed-out reader because ``_form_csrf``
-    derives it from the session cookie and there is none. That is not a
-    gap: a signed-out reader has nothing to submit, and the pre-session
-    login/signup channel is the separate ``sw_play_csrf`` double-submit
-    (spec §3), which the SSR tier mints and Task 12 checks.
+    derives it from the session cookie and there is none.
+
+    **And on a server-rendered page it is ALWAYS empty, for every reader.**
+    The RR7 tier fetches this projection from node, and node sends a frozen
+    ``accept``-only allowlist (``app/lib/apiFetch.server.ts``) because it
+    renders and never relays credentials. So ``_optional_entrant`` reads a
+    cookie that was never sent, and ``signedIn`` is ``False`` and
+    ``formCsrf`` is ``""`` for a signed-in entrant exactly as much as for a
+    stranger. These two fields are meaningful only to a caller that sends
+    its own cookies — a hydrated browser fetch — and a server renderer must
+    not gate anything on them. It is pinned as a contract by
+    ``tests/test_entrant_ssr_contract.py``.
+
+    An earlier version of this docstring said the pre-session
+    ``sw_play_csrf`` double-submit was something "the SSR tier mints".
+    Nothing implemented that; ``issue_play_csrf`` had zero production call
+    sites and has been deleted. Ruling R8-D made the claim true instead:
+    the node loader mints the nonce on the SSR document response and
+    renders its digest (``app/lib/formCsrf.server.ts``), which
+    ``require_form_csrf`` below and ``app.form_csrf.form_csrf_proves``
+    already accepted as a second candidate secret.
     """
 
     signedIn: bool = False
@@ -474,6 +493,61 @@ _ECHO_MAX_FIELDS = 60
 _ECHO_MAX_LEN = 2000
 
 
+def entrant_or_back_to_form(
+    request: Request,
+    repo: LocalRepository = Depends(get_repository),
+) -> AuthEntrant:
+    """``get_current_entrant``, but a browser navigation gets an answer it can read.
+
+    Used by ``POST /submit/{slug}`` only — ``quote`` keeps the bare
+    dependency; the reason is at that route's parameter.
+
+    **What changed and what did not.** The identity decision is
+    ``get_current_entrant``'s, unaltered — same table, same no-bootstrap
+    rule, same 401 for every programmatic caller. This wrapper only changes
+    the *shape* of the refusal for a caller that cannot read JSON.
+
+    **Why it is needed (ruling R8-E).** The entry form is now rendered
+    unconditionally: node's projection fetch is anonymous by construction,
+    so the SSR page cannot know whether its reader is signed in and a gate
+    on ``viewer.signedIn`` hid the form from everyone. Who may submit is
+    therefore decided here, at the write, which the browser reaches
+    directly with its cookies. But a native ``<form method=post>`` is a
+    *navigation*: a 401 with a JSON body paints ``{"detail":{"code":...}}``
+    across the window, which is not an outcome a human can act on.
+
+    ``text/html`` in ``Accept`` means exactly that navigation — browsers
+    send it on a form post and never on ``fetch(..., {headers: {}})`` — so
+    those callers are sent back to the entry page carrying a refusal
+    **code**, which ``app/lib/echo.ts``'s ``refusalText`` maps to fixed
+    local copy. The same code-not-prose rule ``_echo_redirect`` argues for
+    at length: this target is a shareable GET on the tournament's own host,
+    so nothing an author of a URL writes may become a sentence on it.
+
+    The typing is not carried back. A 303 re-issues as GET, so the posted
+    body is dropped rather than round-tripped; the browser's own history
+    restore is what returns the fields, and re-echoing a whole form body
+    through a URL for a caller who has no account yet buys little for the
+    header budget it spends. Stated because it is a cost, not an oversight.
+    """
+    try:
+        return get_current_entrant(request, repo)
+    except HTTPException:
+        slug = request.path_params.get("slug")
+        if slug and "text/html" in request.headers.get("accept", ""):
+            raise HTTPException(
+                status_code=303,
+                detail="Not signed in",
+                headers={
+                    "Location": (
+                        f"/e/{quote(str(slug), safe='')}"
+                        "?refusalCode=NOT_SIGNED_IN#enter"
+                    )
+                },
+            ) from None
+        raise
+
+
 def _echo_redirect(slug: str, form, total, refusal) -> RedirectResponse:
     """The unhydrated answer: 303 back to the form, typing and total intact.
 
@@ -518,6 +592,16 @@ def _echo_redirect(slug: str, form, total, refusal) -> RedirectResponse:
 async def quote_entry(
     request: Request,
     slug: str = Path(..., max_length=100),
+    # **Not ``entrant_or_back_to_form``, deliberately.** That wrapper turns an
+    # anonymous browser navigation into a 303 back to the entry page, which is
+    # right for submit and is NOT this route's call to make: R8-C gated quote
+    # precisely so it could not answer a caller-chosen basket, and
+    # ``test_an_anonymous_browser_quote_is_still_refused`` pins that as a
+    # 401/403. The redirect discloses no price and would arguably satisfy the
+    # ruling, but relaxing a security control's assertion is a decision for
+    # whoever owns R8-C, not a side effect of a UX fix. The cost is real and
+    # named in the Task 18b report: an anonymous entrant who presses "Update
+    # events and total" still sees a raw JSON 401.
     entrant: AuthEntrant = Depends(get_current_entrant),
     repo: LocalRepository = Depends(get_repository),
 ):
@@ -589,7 +673,7 @@ async def submit_entry_json(
     idempotency_key: Optional[str] = Header(
         None, alias="Idempotency-Key", max_length=64
     ),
-    entrant: AuthEntrant = Depends(get_current_entrant),
+    entrant: AuthEntrant = Depends(entrant_or_back_to_form),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Record one submission. **The order of the guards is the contract**,

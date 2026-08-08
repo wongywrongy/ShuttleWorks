@@ -57,6 +57,10 @@ import type { EntryEventDTO, EntryPageDTO } from '../lib/entryPage.types';
 export interface EntryFormProps {
   page: EntryPageDTO;
   idempotencyKey: string;
+  /** The loader-minted double-submit token (R8-D). NOT `page.viewer.formCsrf`
+   * — that is `""` on every SSR page, because node's projection fetch carries
+   * no cookie for `_optional_entrant` to read. */
+  formCsrf: string;
   echo: FormEcho;
 }
 
@@ -228,7 +232,7 @@ function PlayerBlock({
   );
 }
 
-export function EntryForm({ page, idempotencyKey, echo }: EntryFormProps) {
+export function EntryForm({ page, idempotencyKey, formCsrf, echo }: EntryFormProps) {
   const openEvents = page.events.filter((event) => event.isOpen);
   const askBirthYear = openEvents.some((event) => event.ageBracketed);
   const cap = page.policy.maxEventsPerPerson;
@@ -256,10 +260,14 @@ export function EntryForm({ page, idempotencyKey, echo }: EntryFormProps) {
       className="grid gap-4"
     >
       {/* Channel two: the double-submit token, so an unhydrated form still
-          proves a same-origin browser sent this. The value is the
-          projection's — never re-derived here. `_csrf` is the backend's
-          `app/form_csrf.FORM_FIELD`. */}
-      <input type="hidden" name="_csrf" value={page.viewer.formCsrf} />
+          proves a same-origin browser sent this. Minted in the loader
+          alongside the `sw_play_csrf` nonce set on this very response (R8-D)
+          — NOT `page.viewer.formCsrf`, which is `""` on every SSR page
+          because node's projection fetch carries no cookie. `_csrf` is the
+          backend's `app/form_csrf.FORM_FIELD`, and this digest is
+          `app/lib/formCsrf.server.ts`'s, pinned byte-for-byte against the
+          Python one by a cross-tier test. */}
+      <input type="hidden" name="_csrf" value={formCsrf} />
       {/* Minted once per rendered form, in the loader: at submit time a
           double-click would mint two keys and record two entries. The field
           name is `idempotencyKey` — the hyphenated spelling is the HEADER
@@ -364,6 +372,18 @@ export function EntryForm({ page, idempotencyKey, echo }: EntryFormProps) {
           player&rsquo;s name will appear on this page&rsquo;s public entrant list.
         </span>
       </label>
+
+      {/* Stated before submission, in the same grammar as the caps and the
+          bundle schedule above (R14 §4). The page CANNOT know whether this
+          reader is signed in — node's projection fetch is always anonymous
+          (R8-D) — so the requirement is stated to everyone rather than
+          guessed at for anyone. An entrant who is not signed in is navigated
+          back to this page with the `NOT_SIGNED_IN` notice rather than shown
+          a raw 401 (`entrant_or_back_to_form`, `api/entries_json.py`). */}
+      <p className="text-sm text-muted-foreground">
+        Submitting needs an entrant account. If you are not signed in, this
+        page will say so and nothing is recorded.
+      </p>
 
       <Button type="submit" className="justify-self-start">
         Submit entry
