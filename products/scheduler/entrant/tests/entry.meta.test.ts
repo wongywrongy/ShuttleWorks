@@ -62,12 +62,19 @@ const PAGE = {
     },
   ],
   entrants: [{ name: 'Ada Lovelace', eventId: MS }],
-  // The marker values below are deliberately distinctive strings that must
-  // never appear ANYWHERE in the rendered document's <head>. A real
-  // `formCsrf` off this projection is always `''` (see entry.render.test.ts)
-  // — populated here with an unmistakable value specifically so a leak is
-  // provable rather than merely absent-by-coincidence with an empty string.
-  viewer: { signedIn: true, email: 'LEAK-MARKER-EMAIL@example.com', formCsrf: 'LEAK-MARKER-CSRF-TOKEN' },
+  // The email below is a deliberately distinctive marker string that must
+  // never appear ANYWHERE in the rendered document's <head>. `signedIn` is
+  // fed `true` for the same reason `entry.render.test.ts:216` does: it is
+  // the impossible-projection shape the OLD fixtures claimed, fed on purpose
+  // to prove nothing about it leaks — not a projection the backend can
+  // return (node's fetch is credential-free, so `signedIn` is always `false`
+  // in reality). `formCsrf` is left `''` — a marker value there would prove
+  // nothing (see the comment on the live nonce/digest check below, which is
+  // the real CSRF-leak proof) and `tests/test_entrant_ssr_contract.py`
+  // forbids a non-empty one with no exception. The `impossible-projection`
+  // marker is that guard's documented opt-out for `signedIn: true` — see
+  // that file for why it is loud rather than silent.
+  viewer: { /* impossible-projection */ signedIn: true, email: 'LEAK-MARKER-EMAIL@example.com', formCsrf: '' },
 };
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
@@ -154,12 +161,11 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
       const html = await res.text();
       const h = head(html);
       expect(h).not.toContain('LEAK-MARKER-EMAIL@example.com');
-      expect(h).not.toContain('LEAK-MARKER-CSRF-TOKEN');
 
-      // **The markers above are the harmless twin.** `viewer.formCsrf` is
-      // structurally `''` on every server render (node's projection fetch
-      // carries no credential), so a fixture marker for it proves nothing
-      // about the token that can actually do harm. The LIVE token is the one
+      // **There is no `formCsrf` marker to check here.** `viewer.formCsrf`
+      // is structurally `''` on every server render (node's projection fetch
+      // carries no credential), so a fixture marker for it would prove
+      // nothing about the token that can actually do harm. The LIVE token is the one
       // `mintFormCsrf()` mints in the loader and renders into `name="_csrf"`
       // — a random 64-hex digest that no hand-listed fixture string can
       // stand in for. So both halves are pulled off THIS response and
