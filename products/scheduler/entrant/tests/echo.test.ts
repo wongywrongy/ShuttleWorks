@@ -131,7 +131,7 @@ describe('parseEcho', () => {
     expect(
       parseEcho(new URLSearchParams('refusalCode=DISCIPLINE_CAP&refusalSubjects=Ada')).refusal,
     ).toBe(
-      'That is more events in one discipline than this tournament allows for one player. Remove some, then update the total again.',
+      'That is more events in one discipline than this tournament allows for one player. The per-discipline limits are stated on this page — remove some, then update the total again.',
     );
   });
 

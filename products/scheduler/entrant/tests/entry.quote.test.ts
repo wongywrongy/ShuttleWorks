@@ -211,8 +211,11 @@ describe('the quote round trip, with no JavaScript', () => {
 
   it('never posts the echoed total onward', async () => {
     // The total in the query is DISPLAY. `compute_fee_total` runs again on the
-    // write path (`api/entries_json.py:610`), so a hand-edited URL misleads
-    // only its editor. Add `<input type="hidden" name="totalCents">` and this
+    // write path (`api/entries_json.py:610`), so a hand-edited URL reaches no
+    // record — it does NOT follow that it misleads only its editor: this URL
+    // is a shareable GET on the tournament's own host, so a hand-edited one is
+    // read by whoever was sent it. That is why the tests below pin the refusal
+    // to fixed copy. Add `<input type="hidden" name="totalCents">` and this
     // goes red.
     const html = await render('?totalCents=1');
 

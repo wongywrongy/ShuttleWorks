@@ -238,6 +238,15 @@ export function EntryForm({ page, idempotencyKey, echo }: EntryFormProps) {
   const feeTiers = Object.entries(page.page.feeSchedule).sort(
     ([a], [b]) => Number(a) - Number(b),
   );
+  // Display only, same contract as the tiers above: the director's own
+  // per-discipline caps, stated before submission because `DISCIPLINE_CAP`
+  // refusal copy cannot name which cap broke (`lib/echo.ts`). A non-integer
+  // value is skipped exactly as `_discipline_breach` skips it
+  // (`services/entry_policy.py`), so this cannot promise a limit the server
+  // would not enforce.
+  const disciplineCaps = Object.entries(page.policy.disciplineCaps ?? {}).filter(
+    (entry): entry is [string, number] => Number.isInteger(entry[1]),
+  );
 
   return (
     <form
@@ -262,6 +271,19 @@ export function EntryForm({ page, idempotencyKey, echo }: EntryFormProps) {
       {cap === null ? null : (
         <p className="text-sm text-muted-foreground">
           Up to {cap} {cap === 1 ? 'event' : 'events'} per person.
+        </p>
+      )}
+
+      {disciplineCaps.length === 0 ? null : (
+        <p className="text-sm text-muted-foreground">
+          Per discipline:{' '}
+          {disciplineCaps
+            .map(
+              ([discipline, limit]) =>
+                `${limit} ${discipline} ${limit === 1 ? 'event' : 'events'}`,
+            )
+            .join('; ')}{' '}
+          per person.
         </p>
       )}
 

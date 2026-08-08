@@ -252,4 +252,35 @@ describe('the entry form, unhydrated', () => {
     expect(html).toContain('2 events');
     expect(html).toContain('25.00');
   });
+
+  it('states the per-discipline caps from the projection', async () => {
+    // The Task 17 regression. `DISCIPLINE_CAP` refusal copy cannot name the
+    // breached discipline (the echo carries a code and numeric subjects, and
+    // re-deriving which cap broke would be a second implementation of
+    // `_discipline_breach`), so the rule has to be READABLE BEFORE submission
+    // — R14 §4, the same reason the bundle schedule is stated above. Before
+    // this, `policy.disciplineCaps` was rendered nowhere in the entrant app
+    // and an entrant was refused by a rule they were never shown.
+    const html = await render({
+      ...PAGE,
+      policy: {
+        ...PAGE.policy,
+        disciplineCaps: { "Men's Singles": 1, 'Mixed Doubles': 2, Junk: 'lots' },
+      },
+    });
+
+    // A non-integer cap is skipped exactly as `_discipline_breach` skips it,
+    // so the form cannot state a limit the server would not enforce. Asserted
+    // on the rendered sentence, not on the whole document: React streams the
+    // entire loader payload — junk cap included — into the hydration script,
+    // so `html` contains "Junk" either way.
+    const sentence = /Per discipline:[\s\S]*?per person\./.exec(html)?.[0] ?? '';
+    expect(sentence).toContain('1 Men&#x27;s Singles event');
+    expect(sentence).toContain('2 Mixed Doubles events');
+    expect(sentence).not.toContain('Junk');
+  });
+
+  it('renders no discipline line when the director set no caps', async () => {
+    expect(await render()).not.toContain('Per discipline');
+  });
 });

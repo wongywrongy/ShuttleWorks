@@ -22,7 +22,11 @@
  *
  * **`totalCents` is DISPLAY.** It is never posted onward, and the write path
  * runs `compute_fee_total` again (`api/entries_json.py:610`), so an edited URL
- * reaches no record. It is still rendered, so it is still bounded above.
+ * reaches no record. It is still rendered, so `readCents` still bounds it —
+ * *below* and to an integer (a non-negative whole number of cents), which is
+ * what that function actually does. Nothing here caps how LARGE the echoed
+ * total may be: a link can still display an absurd figure, and the defence
+ * against that is the recompute on the write path, not this parse.
  *
  * `narrowEvents` mirrors the incumbent's gender filter
  * (`api/entries_public.py:924`). It is presentational — a default view, not a
@@ -67,16 +71,29 @@ const REFUSAL_UNKNOWN =
  * something truthy on any plain object's prototype. Two codes do not need a
  * data structure.
  *
- * The copy states no *number*. R14 wants the rule stated, and it is — by the
- * form itself, from the projection ("Up to N events per person"), which is the
- * director's own configuration rather than anything that rode in on a URL.
+ * The copy states no *number*, and for `DISCIPLINE_CAP` it does not name the
+ * discipline either. That is a limit of this channel, stated rather than
+ * hidden: the echo carries a code and numeric subjects only, so the one thing
+ * that would name the breached cap — the discipline string — is exactly the
+ * free text this boundary exists to refuse. Putting it back in the URL under
+ * an allowlist would work, but the client would still be guessing, and
+ * recomputing the breach here from `policy.disciplineCaps` and the ticked
+ * events would be a second implementation of `_discipline_breach`
+ * (`services/entry_policy.py`) — the thing this app declines to do for the
+ * fee, for the same reason.
+ *
+ * So R14's "state the rule" is answered where it belongs: by the form, from
+ * the projection — "Up to N events per person" from `maxEventsPerPerson` AND
+ * the per-discipline line from `policy.disciplineCaps` (`entry.form.tsx`).
+ * Both are the director's own configuration rather than anything that rode in
+ * on a URL, and the copy below points the entrant at them.
  */
 function refusalCopy(code: string): string {
   if (code === 'MAX_EVENTS_PER_PERSON') {
     return 'That is more events than this tournament allows for one player. Remove some, then update the total again.';
   }
   if (code === 'DISCIPLINE_CAP') {
-    return 'That is more events in one discipline than this tournament allows for one player. Remove some, then update the total again.';
+    return 'That is more events in one discipline than this tournament allows for one player. The per-discipline limits are stated on this page — remove some, then update the total again.';
   }
   return REFUSAL_UNKNOWN;
 }
