@@ -17,6 +17,10 @@ export default [
   // Static, so it ranks above the `:slug` route below and a workspace can
   // never be called "signup".
   route('signup', 'routes/signup.tsx'),
+  // The login PAGE, node-owned for exactly the reason above: `/e/account/login`
+  // is FastAPI's POST and a node GET there is a 405 in production and fine in
+  // dev, which is the worst pair. Static, so it ranks above `:slug`.
+  route('login', 'routes/login.tsx'),
   // The 303 target of POST /e/api/submit/{slug}: a GET, so a reload of the
   // success page re-reads instead of re-posting the entry.
   route(':slug/receipt/:submissionId', 'routes/receipt.tsx'),

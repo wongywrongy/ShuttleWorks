@@ -170,6 +170,12 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
             comes from `FORM_FIELD` rather than a literal, so the cross-tier
             pin against `app/form_csrf.FORM_FIELD` is load-bearing. */}
         <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+        {/* Where the 303 goes. Without it the backend falls back to
+            `/e/account/login` (`api/entrants.py:466`), which is POST-only —
+            so a successful signup ended on a 405. A constant, and a node-owned
+            GET: it carries no per-visitor information, so it cannot become the
+            distinction the uniform 202/303 exists to avoid. */}
+        <input type="hidden" name="next" value="/e/login" />
 
         <TextField
           id="signup-email"
@@ -238,6 +244,15 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
           Create account
         </Button>
       </form>
+
+      <p className="text-sm">
+        {/* The other half of Task 20's wiring: the two account pages point at
+            each other, and both targets are node-owned GETs. `/e/account/login`
+            is FastAPI's POST — an `<a href>` to it is a 405, which is what
+            R8-E removed from the entry page. `tests/login.test.ts` reads every
+            href in this document and fails on any under a backend prefix. */}
+        Already have an account? <a className="underline" href="/e/login">Sign in</a>.
+      </p>
     </main>
   );
 }

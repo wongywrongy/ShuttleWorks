@@ -165,6 +165,31 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
       <section id="enter">
         <h2 className="text-lg font-semibold">Enter</h2>
         {/*
+          **The link R8-E could not yet make (F-E1-2-E1).** The old copy here
+          pointed at `/e/account/login`, which is FastAPI's POST — a 405 — so
+          it was removed and nothing replaced it, which left both account
+          pages reachable only by typing their URLs. Tasks 19-20 built them at
+          node-owned GET paths, so this is the wiring.
+
+          Rendered unconditionally, exactly like the form above it and for the
+          same reason: `viewer.signedIn` is `false` on every server-rendered
+          page (node's fetch is always anonymous), so a gate here would hide
+          the link from everyone. A signed-in entrant seeing "sign in" is a
+          redundancy; a signed-out one seeing nothing is a dead end.
+
+          `next` sends the entrant back to THIS page after signing in —
+          validated at both ends (`safeNext` in `routes/login.tsx`,
+          `next_target` in `api/entrants.py`), and the slug is encoded because
+          it is the one part of this URL that comes from data.
+        */}
+        <p className="text-sm">
+          <a className="underline" href={`/e/login?next=/e/${encodeURIComponent(page.page.slug)}`}>
+            Sign in
+          </a>{' '}
+          or <a className="underline" href="/e/signup">create an entrant account</a> to
+          enter.
+        </p>
+        {/*
           **The form is rendered unconditionally (ruling R8-E).** It used to be
           gated on `page.viewer.signedIn`, which is a value this page cannot
           have: node's fetch of `GET /e/api/page/{slug}` is always anonymous
