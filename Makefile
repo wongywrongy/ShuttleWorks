@@ -1,5 +1,6 @@
 .PHONY: help \
         scheduler scheduler-dev scheduler-rebuild \
+        entrant-dev local-dev \
         stop logs ps clean \
         test test-e2e check \
         sim sim-ephemeral sim-all sim-test \
@@ -14,6 +15,9 @@ help:
 	@echo "                          (frontend :80, backend :8000, docs :8081)"
 	@echo "  make scheduler-dev      Backend in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
+	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host backend on :8600"
+	@echo "  make local-dev          Both surfaces at once: operator :5173 + entrant :5174"
+	@echo "                          (local only — see docs/getting-started/running-locally)"
 	@echo "  make stop               Stop the dev-facing stacks (default, dev, cloud)"
 	@echo "  make logs               Tail container logs"
 	@echo "  make ps                 Show running containers"
@@ -51,6 +55,23 @@ scheduler-dev:
 
 scheduler-rebuild:
 	$(MAKE) -C products/scheduler rebuild
+
+# === Entrant product (public SSR site) ===
+#
+# Local only — no nginx, no compose, no tunnel. See
+# docs/getting-started/running-locally.md for the full recipe and the
+# Docker-stack trap (the SPA's /api proxy defaults to :8000, exactly where
+# the Docker backend listens, so a host backend on :8600 goes silently
+# unused unless the stack is stopped first).
+
+entrant-dev:  ## Run the PUBLIC entrant site (SSR) at :5174 against a host backend on :8600
+	VITE_API_PROXY_TARGET=http://localhost:8600 PORT=5174 npm run dev:entrant
+
+local-dev:  ## Run BOTH surfaces: operator product :5173 + public entrant site :5174
+	@echo "Backend must already be running on :8600 — see docs/getting-started."
+	@echo "  operator product     http://localhost:5173"
+	@echo "  public entrant site  http://localhost:5174"
+	npm run dev:scheduler & npm run dev:entrant
 
 # `stop` covers the stacks a developer actually starts on this machine.
 # The selfhost and worker stacks run on servers, are started with an

@@ -45,6 +45,41 @@ After it is up:
 In dev, Vite proxies `/api/*` to the FastAPI container, so the front and back share an origin
 just as they do in production.
 
+## Running both surfaces locally: operator product + public entrant site
+
+There are now two frontends against one backend: the **operator product** (the Vite SPA above,
+`products/scheduler/frontend`) that a tournament director uses, and the **public entrant site**
+(`products/scheduler/entrant`, React Router 7, SSR) that entrants and spectators use. This recipe
+is deliberately **local only** — no nginx, no compose, no tunnel yet.
+
+| Surface | Port | Command |
+| --- | --- | --- |
+| Backend (host uvicorn) | `:8600` | `uvicorn app.main:app --port 8600` from `products/scheduler/backend` |
+| Operator product (SPA) | `:5173` | `npm run dev:scheduler` |
+| Public entrant site (SSR) | `:5174` | `npm run dev:entrant` |
+
+```bash
+# From the repo root
+make entrant-dev        # just the entrant site, on :5174, against a host backend on :8600
+make local-dev          # both frontends at once: operator :5173 + entrant :5174
+```
+
+Both targets assume a host backend is already running on `:8600` — they only launch frontends.
+
+**The trap this exists to warn about.** `products/scheduler/frontend/vite.config.ts` defaults its
+`/api` proxy to `:8000`, which is exactly where the **Docker** backend listens. If the Docker
+stack is still up when you start a host backend, the browser keeps talking to the *container* — a
+possibly weeks-stale baked image, plus its bind-mounted `data/local.db` — while your host
+`uvicorn` on `:8600` serves nothing. Backend edits then silently "don't work," with nothing to
+point at why. Before running a host backend:
+
+1. `docker ps` — check whether the Docker stack is up.
+2. `make stop` — stop it if so.
+3. Run the host backend on `:8600`, not `:8000`. Port `8000` sits in a Windows-reserved port
+   range, so a host `uvicorn` bound to it dies immediately with `PermissionError`.
+
+See `products/scheduler/entrant/README.md` for the entrant app's own copy of this recipe.
+
 ## Configuration
 
 Defaults work out of the box. The stack runs in **local mode**: SQLite is the source of
