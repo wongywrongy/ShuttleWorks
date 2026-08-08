@@ -13,9 +13,13 @@
  * contact data) applies to the document HEAD with more force than to the
  * body: an OG tag is read by crawlers and chat-client unfurlers, and is
  * visible to anyone who views source, without ever loading the page. The
- * `viewer` block (`email`, `formCsrf`) must never reach a `<meta>` tag —
- * `formCsrf` in particular is a CSRF token, and putting a mint in a `<meta>`
- * disclosed to every crawler would defeat the reason it exists.
+ * `viewer` block (`email`, `formCsrf`) must never reach a `<meta>` tag. And
+ * neither may the loader's OWN `formCsrf` — the live double-submit digest
+ * `mintFormCsrf()` mints on this very response. That is the one worth
+ * guarding: `viewer.formCsrf` is structurally `''` on every server render,
+ * so it could not do harm even if it leaked, while the minted digest is a
+ * working token. Putting a mint in a `<meta>` disclosed to every crawler
+ * and link-unfurler would defeat the reason it exists.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
@@ -76,10 +80,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function renderStatus(
+async function renderResponse(
   body: unknown,
   status: number,
-): Promise<string> {
+): Promise<Response> {
   vi.stubGlobal(
     'fetch',
     vi.fn(
@@ -93,14 +97,13 @@ async function renderStatus(
   const build = (await vite.ssrLoadModule(
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
-  const res = await createRequestHandler(build, 'development')(
+  return createRequestHandler(build, 'development')(
     new Request('http://entrant.test/e/spring-open'),
   );
-  return res.text();
 }
 
-function render(body: unknown = PAGE): Promise<string> {
-  return renderStatus(body, 200);
+async function render(body: unknown = PAGE): Promise<string> {
+  return (await renderResponse(body, 200)).text();
 }
 
 /** Pull just the `<head>…</head>` slice — meta tags belong there, and
@@ -108,6 +111,14 @@ function render(body: unknown = PAGE): Promise<string> {
  * FORM (an entrant's own name, say) cannot masquerade as a head leak. */
 function head(html: string): string {
   return html.match(/<head[^>]*>[\s\S]*?<\/head>/)?.[0] ?? '';
+}
+
+/** The `meta` export's own body, extracted from source text. Shared by the
+ * structural guard and its non-vacuity case so BOTH exercise this regex —
+ * it is the part that can silently stop matching (a rewrite to
+ * `export function meta` would make the guard pass by finding nothing). */
+function metaSource(source: string): string | null {
+  return source.match(/export const meta[\s\S]*?\n};/)?.[0] ?? null;
 }
 
 describe('per-route meta/OG tags on /e/{slug}', () => {
@@ -138,11 +149,28 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
   // I6: nothing from `viewer` may ever reach the document head.
   // ---------------------------------------------------------------------
   describe('viewer data never reaches a meta tag (I6)', () => {
-    it('the rendered head never contains the email or the CSRF marker', async () => {
-      const html = await render();
+    it('the rendered head never contains the email or EITHER live CSRF half', async () => {
+      const res = await renderResponse(PAGE, 200);
+      const html = await res.text();
       const h = head(html);
       expect(h).not.toContain('LEAK-MARKER-EMAIL@example.com');
       expect(h).not.toContain('LEAK-MARKER-CSRF-TOKEN');
+
+      // **The markers above are the harmless twin.** `viewer.formCsrf` is
+      // structurally `''` on every server render (node's projection fetch
+      // carries no credential), so a fixture marker for it proves nothing
+      // about the token that can actually do harm. The LIVE token is the one
+      // `mintFormCsrf()` mints in the loader and renders into `name="_csrf"`
+      // — a random 64-hex digest that no hand-listed fixture string can
+      // stand in for. So both halves are pulled off THIS response and
+      // checked against THIS head, by the same extraction
+      // `entry.loader.test.ts` uses on the wire.
+      const nonce = /sw_play_csrf=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')?.[1];
+      const digest = /name="_csrf" value="([0-9a-f]{64})"/.exec(html)?.[1];
+      expect(nonce).toBeTruthy();
+      expect(digest).toBeTruthy();
+      expect(h).not.toContain(nonce as string);
+      expect(h).not.toContain(digest as string);
       // Scoped to <head> deliberately, not the whole document: the loader's
       // FULL payload — viewer included — legitimately streams into the
       // hydration `<script>` in <body> (see entry.render.test.ts's
@@ -153,24 +181,36 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
     });
 
     // The structural half. A behavioural assertion alone can pass by luck —
-    // e.g. if `viewer.email` happened to collide with another rendered
-    // string — so this reads the `meta` export's own source and requires it
-    // never names `viewer` at all. Mutation: add `data.page.viewer.email` to
-    // the meta function and this goes red; see the task report for the
-    // real red/green transcript.
-    it('the meta() export never references `viewer` in its own source', () => {
-      const source = readAppSource('routes/entry.tsx');
-      const metaFn = source.match(/export const meta[\s\S]*?\n};/);
+    // e.g. if a token happened to collide with another rendered string — so
+    // this reads the `meta` export's own source. Stated as a POSITIVE
+    // allowlist (`data.page` and nothing else off `data`) rather than a
+    // denylist of today's sensitive field names: `data.formCsrf` is the live
+    // double-submit digest and sits directly on the loader payload, so the
+    // old `\bviewer\b`-only ban would have let
+    // `content: data.formCsrf` through untouched. Mutation transcript in the
+    // task report.
+    it('the meta() export reads only `data.page`, and names no secret', () => {
+      const metaFn = metaSource(readAppSource('routes/entry.tsx'));
       expect(metaFn).not.toBeNull();
-      expect(metaFn![0]).not.toMatch(/\bviewer\b/);
+      const reads = metaFn!.match(/\bdata\.\w+/g) ?? [];
+      expect(reads.length).toBeGreaterThan(0);
+      expect([...new Set(reads)]).toEqual(['data.page']);
+      expect(metaFn!).not.toMatch(/\bviewer\b|\bformCsrf\b|\bidempotencyKey\b/);
     });
 
-    it('is not vacuous: a meta() body that DOES read viewer.email is caught', () => {
-      // Fixture of the exact defect this guard exists to prevent.
+    it('is not vacuous: the guard’s own pipeline reddens on a tainted body', () => {
+      // Fixture of the exact defect this guard exists to prevent, run through
+      // the SAME extraction the guard above uses — so this pins the
+      // extraction regex too, not just the forbidden-word regex. A rewrite of
+      // `meta` to `export function meta` would make `metaSource` return null
+      // here and fail, instead of silently making the real guard vacuous.
       const tainted = `export const meta: Route.MetaFunction = ({ data }) => {
-  return [{ property: 'og:email', content: data.page.viewer.email }];
+  return [{ property: 'og:csrf', content: data.formCsrf }];
 };`;
-      expect(tainted).toMatch(/\bviewer\b/);
+      const extracted = metaSource(tainted);
+      expect(extracted).not.toBeNull();
+      expect([...new Set(extracted!.match(/\bdata\.\w+/g) ?? [])]).not.toEqual(['data.page']);
+      expect(extracted!).toMatch(/\bviewer\b|\bformCsrf\b|\bidempotencyKey\b/);
     });
   });
 
@@ -180,7 +220,7 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
   // ---------------------------------------------------------------------
   describe('a closed/unknown page renders no tournament data in its meta (uniform 404)', () => {
     it('titles the 404 document generically, never with a guessed tournament name', async () => {
-      const html = await renderStatus(null, 404);
+      const html = await (await renderResponse(null, 404)).text();
       const h = head(html);
       expect(h).not.toContain('Spring Open');
       // Some title must still exist — an empty <title> is itself a defect —
