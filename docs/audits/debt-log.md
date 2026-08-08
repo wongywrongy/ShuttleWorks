@@ -852,3 +852,18 @@ a green 1,100-test suite. The real check is the viewer flow in
   spec §7 and its form posts natively), or a smaller runtime — not an import cleanup. **The
   budget was deliberately not moved and the gate not softened**; it needs an owner decision.
   Size M. *(SP-PROGRAM-1 Phase 6 Task 27 review-fix pass.)*
+
+- **2026-08-07 · OWNER RULING R8-F — the entrant page-weight budget is raised to 123 KB
+  (135.3 KB with 10% CI slack), gate stays BLOCKING.** The 100 KB target above was written
+  into the implementation plan before ruling R8 chose React Router 7 SSR for the entrant
+  app, and was never achievable once that landed: re-measured on a clean build, the
+  framework floor alone — `entry.client-*.js` + the shared vendor chunk, i.e. react-dom's
+  client runtime plus the React Router runtime, present on hydrating *any* route on this
+  stack — is **98.8 KB**, before a line of this app runs. This app's own share (SSR HTML +
+  app JS) is **~27.8 KB** of the measured 126.6 KB total. The new budget (123 KB base, 135.3
+  KB enforced) is that framework floor plus an app allowance sized to current usage with
+  ~8.7 KB of real growth headroom — not a softened gate: `scripts/measure-page-weight.mjs`
+  still exits non-zero (verified by temporarily lowering `BUDGET_KB` to 100 and observing
+  the FAIL/exit 1, then restoring it) and the `entrant` CI job still fails on an overage. If
+  this number needs to move again, check whether `entry.client-*.js` + the shared chunk grew
+  (framework drift, expected occasionally on a React Router bump) before assuming app bloat.

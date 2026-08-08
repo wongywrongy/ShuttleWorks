@@ -21,28 +21,31 @@
  *
  * Run after `npm run build`: `node scripts/measure-page-weight.mjs`.
  *
- * **This gate is RED at 126.6 KB against a 110 KB ceiling, and the obvious fix
- * has been tried and does not work — do not retry it.** The hypothesis was a
- * `@scheduler/design-system/components` BARREL import dragging `GanttTimeline`
- * onto a page with no timeline: the critical set contains a chunk literally
- * named `GanttTimeline-*.js` at 14.8 KB gzipped, which reads like a smoking
- * gun. It is not one. That is a Rollup CHUNK NAME — the shared design-system
- * chunk, named after one module in its group — and the Gantt component's own
- * code is already tree-shaken out: `GANTT_GEOMETRY`, `placementBox` and
- * `laneOrientation` appear in NO file under `build/client/assets/`. Rewriting
- * all six route modules to deep-import each component (which needs a
- * `"./components/*"` subpath export on the package) was measured at 126.9 KB —
- * 0.3 KB WORSE, because the extra chunk boundaries cost more than the nothing
- * they removed. Reverted.
+ * A `@scheduler/design-system/components` barrel rewrite was tried and
+ * disproved: `GanttTimeline-*.js` in the critical set is a Rollup CHUNK
+ * NAME (the shared design-system chunk, named after one module in its
+ * group), not the component — `GANTT_GEOMETRY`/`placementBox`/
+ * `laneOrientation` appear in NO file under `build/client/assets/`, it is
+ * already tree-shaken out. Deep-importing all six route modules measured
+ * 126.9 KB, 0.3 KB WORSE (extra chunk boundaries cost more than the
+ * nothing they removed). Reverted.
  *
- * Where the weight actually is: `entry.client-*.js` (57.5 KB) plus
- * `chunk-*.js` (41.3 KB) = 98.8 KB of the 122.5 KB critical JS is react-dom's
- * client runtime and the React Router runtime, before a single line of this
- * app. Total client JS across the whole build is 126.2 KB, so there is almost
- * no app code to cut: the entry page IS essentially the framework. Closing a
- * 16.6 KB gap therefore means a framework-level decision — dropping hydration
- * on this route, or a smaller runtime — not trimming imports. Logged in
- * `docs/audits/debt-log.md`; the budget number is deliberately NOT moved.
+ * `entry.client-*.js` (57.5 KB) + the shared vendor `chunk-*.js` (41.3 KB)
+ * = 98.8 KB of the 122.5 KB critical JS is react-dom's client runtime and
+ * the React Router runtime, before a single line of this app runs. That is
+ * the FRAMEWORK FLOOR for hydrating any route on this stack — fixed cost,
+ * not trimmable by import changes here.
+ *
+ * OWNER RULING R8-F (2026-08-07): the original 100 KB target in the
+ * implementation plan predated ruling R8 choosing React Router 7 SSR, and
+ * was never achievable once that landed — 98.8 KB of framework alone
+ * already blows most of it. BUDGET_KB below is derived, not aspirational:
+ * FRAMEWORK_FLOOR (98.8 KB, measured above) + this app's actual footprint
+ * (~27.8 KB: 23.7 KB app JS + 4.0 KB HTML) + real growth headroom. The
+ * gate STAYS BLOCKING — raising the number does not soften it. A future
+ * overage past the ceiling below means the APP side grew (or the
+ * framework floor itself moved — recheck `entry.client-*.js` +
+ * `chunk-*.js` to tell which). See `docs/audits/debt-log.md`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -154,8 +157,16 @@ const htmlGzipBytes = zlib.gzipSync(Buffer.from(html, 'utf-8')).length;
 
 const totalBytes = htmlGzipBytes + criticalJsBytes;
 const totalKb = totalBytes / 1024;
-const BUDGET_KB = 100; // the brief's number
-const SLACK_KB = BUDGET_KB * 1.1; // +10% slack in CI, per the brief
+
+// R8-F: 123 KB base = ~98.8 KB measured framework floor (react-dom's client
+// runtime + the React Router runtime — entry.client-*.js + the shared vendor
+// chunk) + ~24.2 KB app allowance. +10% CI slack -> 135.3 KB enforced
+// ceiling, i.e. ~36.5 KB of total app-attributable room (HTML + app JS)
+// against this app's current ~27.8 KB, leaving ~8.7 KB of real growth
+// headroom before this gate goes red again. See the file header for the
+// R8-F ruling and docs/audits/debt-log.md for the record of why this moved.
+const BUDGET_KB = 123;
+const SLACK_KB = BUDGET_KB * 1.1; // +10% CI slack
 
 let cssNote = '';
 const cssFile = fs.readdirSync(path.join(clientDir, 'assets')).find((f) => /^app-.*\.css$/.test(f));

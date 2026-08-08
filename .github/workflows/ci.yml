@@ -83,11 +83,11 @@ jobs:
       # Spec §7's no-JS posture, held to a number: the entry page's real
       # server-rendered HTML plus the critical JS a browser downloads to
       # hydrate it, gzipped, walked out of the production build this job just
-      # produced above (not asserted against a guess). Budget is 100 KB
-      # gzipped with 10% CI slack — see the script for how "critical" is
-      # derived from the real build manifest, and the SP-E1 Phase 6 report
-      # for the measured figure at the time this gate was added and why it
-      # was over budget then.
+      # produced above (not asserted against a guess). Budget is 123 KB
+      # gzipped with 10% CI slack (135.3 KB enforced ceiling) — raised under
+      # ruling R8-F once React Router 7 SSR (ruling R8) made the original
+      # 100 KB target unachievable; see the script for the framework-floor
+      # vs. app-allowance split and docs/audits/debt-log.md for the record.
       - name: Page-weight budget (entry page, HTML + critical JS gzipped)
         run: node products/scheduler/entrant/scripts/measure-page-weight.mjs
 
