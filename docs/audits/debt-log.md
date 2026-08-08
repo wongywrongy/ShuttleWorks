@@ -795,3 +795,25 @@ a green 1,100-test suite. The real check is the viewer flow in
   third copy was found only because someone thought to ask whether one existed. The
   durable fix is one shared helper the three call sites delegate to; left out of a
   review-fix pass on purpose as a cross-file refactor outside that pass's scope. Size S.
+
+- **2026-08-07 · SP-PROGRAM-1 Phase 6 — the receipt is unverified.** `app/routes/receipt.tsx`
+  renders for ANY well-formed submission UUID because node cannot make the session-gated
+  read (spec §3: it holds no entrant credential and must not grow one). The 404 shape is
+  uniform across entrant B, entrant A and an anonymous stranger, so there is no
+  enumeration oracle and the page discloses nothing of A's — but a receipt page is not
+  evidence of anything: a stranger handed `/e/{slug}/receipt/{any-uuid}?totalCents=99999`
+  gets it rendered as the organiser's branded receipt, total and all. Existence and
+  ownership confirmation belong to the browser-side E2 "my entries" fetch (spec §1), which
+  holds the cookie this route deliberately does not. Size S — name Phase 7 as the consumer
+  that closes this. *(SP-PROGRAM-1 Phase 6 Task 18 review.)*
+
+- **2026-08-07 · SP-PROGRAM-1 Phase 6 — `find_for_account` has zero production callers.**
+  `backend/services/submissions.py:175` was added as the mitigation against a real defect
+  (a submission read scoped by `(tournament_id, key)` alone returned another entrant's
+  receipt on an id collision), but nothing in the current codebase routes a submission
+  read through it — `session.get(Submission, id)` still compiles and nothing structural
+  stops a future call site from using it instead, the way `require_tournament_access` is
+  enforced by the OpenAPI-derived tenancy test for workspace routes. It is exercised only
+  by its own unit test. Deliberate no-caller state for now; Phase 7's "my entries" fetch
+  is the named consumer that should route submission reads through it. Size S.
+  *(SP-PROGRAM-1 Phase 6 Task 18 review.)*

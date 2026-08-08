@@ -66,12 +66,14 @@ import type { Route } from './+types/receipt';
  */
 export interface ReceiptPage {
   tournamentName: string | null;
-  slug: string;
   paymentInstructions: string | null;
 }
 
 export interface ReceiptLoaderData {
   page: ReceiptPage;
+  /** The route param, not a copy of it read back off the projection — the
+   * fetch only succeeded because they already agree (`loader`, above). */
+  slug: string;
   submissionId: string;
   /** The server-stated total, or `null` when the redirect did not carry one.
    * Never `0` by default — a zero on a receipt is a claim about money nobody
@@ -112,24 +114,26 @@ export async function loader({
   // structural guards in `tests/entry.loader.test.ts` enumerate this file and
   // hold that line.
   const query = new URL(request.url).searchParams;
-  const total = Number(query.get('totalCents'));
+  // Validate the RAW string, not the coerced number: `Number('')` is `0`,
+  // `Number('0x10')` is `16`, `Number('1e3')` is `1000` — every one of those
+  // is a well-formed argument to `Number()` and none of them is a total the
+  // server put in the redirect. Only a plain non-negative digit string is.
+  const raw = query.get('totalCents');
+  const total = raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
 
   return {
     page: {
       tournamentName: projection.tournament.name,
-      slug: projection.page.slug,
       paymentInstructions: projection.page.paymentInstructions,
     },
+    slug,
     submissionId,
-    totalCents:
-      query.get('totalCents') !== null && Number.isInteger(total) && total >= 0
-        ? total
-        : null,
+    totalCents: total !== null && Number.isInteger(total) && total >= 0 ? total : null,
   };
 }
 
 export default function Receipt({ loaderData }: Route.ComponentProps) {
-  const { page, submissionId, totalCents } = loaderData;
+  const { page, slug, submissionId, totalCents } = loaderData;
 
   return (
     <main className="mx-auto grid max-w-2xl gap-4 p-4">
@@ -164,7 +168,7 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
       ) : null}
 
       <p className="text-sm">
-        <a className="underline" href={`/e/${page.slug}`}>
+        <a className="underline" href={`/e/${slug}`}>
           Back to the entry page
         </a>
       </p>

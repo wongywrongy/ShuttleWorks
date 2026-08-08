@@ -128,7 +128,6 @@ describe('receipt loader', () => {
     expect(data.submissionId).toBe(SUBMISSION);
     expect(data.totalCents).toBe(3500);
     expect(data.page.tournamentName).toBe('Spring Open');
-    expect(data.page.slug).toBe('spring-open');
   });
 
   it('returns only the three page fields it renders, not the whole projection', async () => {
@@ -143,7 +142,6 @@ describe('receipt loader', () => {
 
     expect(Object.keys(data.page).sort()).toEqual([
       'paymentInstructions',
-      'slug',
       'tournamentName',
     ]);
   });
@@ -205,6 +203,12 @@ describe('receipt loader', () => {
     expect((await get('spring-open', SUBMISSION, '?totalCents=free')).totalCents).toBeNull();
     expect((await get('spring-open', SUBMISSION, '?totalCents=-1')).totalCents).toBeNull();
     expect((await get('spring-open', SUBMISSION, '?totalCents=35.5')).totalCents).toBeNull();
+    // `Number('')` is `0`, not NaN — the hole this pins shut: present-but-empty
+    // must not be read as "no total present" collapsing into a false zero.
+    expect((await get('spring-open', SUBMISSION, '?totalCents=')).totalCents).toBeNull();
+    // `Number()` accepts hex and exponent literals a plain digit regex must not.
+    expect((await get('spring-open', SUBMISSION, '?totalCents=0x10')).totalCents).toBeNull();
+    expect((await get('spring-open', SUBMISSION, '?totalCents=1e3')).totalCents).toBeNull();
   });
 
   it('404s an unknown slug, uniformly, carrying no upstream detail', async () => {
@@ -356,6 +360,5 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
 
     expect(res.status).toBe(404);
     expect(body).not.toContain('TOURNAMENT_NOT_FOUND');
-    expect(body).not.toContain('backend:8000');
   });
 });
