@@ -65,6 +65,15 @@ make local-dev          # both frontends at once: operator :5173 + entrant :5174
 ```
 
 Both targets assume a host backend is already running on `:8600` — they only launch frontends.
+`make local-dev` backgrounds the first server with `&`, so **run it from Git Bash**; under
+`cmd.exe` `&` sequences instead of backgrounding and the operator SPA blocks forever.
+
+**Two backend variables, one per surface — swapping them fails silently.** The entrant SSR server
+reads `API_BASE_URL` (`entrant/app/lib/apiFetch.server.ts`, which *throws* when it is unset, so
+every API-backed route 500s). `VITE_API_PROXY_TARGET` is read only by the operator SPA's dev proxy
+(`frontend/vite.config.ts`) and does nothing for the entrant app. The Make targets set each on the
+surface that reads it. Ports are passed as `--port`; a `PORT` env var is ignored by both dev
+servers.
 
 **The trap this exists to warn about.** `products/scheduler/frontend/vite.config.ts` defaults its
 `/api` proxy to `:8000`, which is exactly where the **Docker** backend listens. If the Docker

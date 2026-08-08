@@ -13,8 +13,8 @@
     "@types/react-dom": "^19.2.3"
   },
   "scripts": {
-    "dev:scheduler": "npm run -w products/scheduler/frontend dev",
-    "dev:entrant": "npm run -w products/scheduler/entrant dev",
+    "dev:scheduler": "npm run -w products/scheduler/frontend dev --",
+    "dev:entrant": "npm run -w products/scheduler/entrant dev --",
     "build:scheduler": "npm run -w products/scheduler/frontend build",
     "build:entrant": "npm run -w products/scheduler/entrant build",
     "build:all": "npm run build:scheduler && npm run build:entrant",

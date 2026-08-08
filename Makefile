@@ -63,15 +63,27 @@ scheduler-rebuild:
 # Docker-stack trap (the SPA's /api proxy defaults to :8000, exactly where
 # the Docker backend listens, so a host backend on :8600 goes silently
 # unused unless the stack is stopped first).
+#
+# Two different variables, one per surface — do not swap them:
+#   VITE_API_PROXY_TARGET  operator SPA only (frontend/vite.config.ts dev proxy)
+#   API_BASE_URL           entrant SSR server only (entrant/app/lib/apiFetch.server.ts,
+#                          which THROWS when it is unset)
+# Ports are passed as `--port`, the only thing either dev server reads; a
+# PORT env var is ignored and the loser of a race silently increments.
+#
+# `local-dev` backgrounds with `&`, so it needs a POSIX shell: run it from
+# Git Bash (or any shell where GNU Make finds sh.exe on PATH). Under cmd.exe
+# `&` sequences instead of backgrounding and the first server blocks forever.
 
 entrant-dev:  ## Run the PUBLIC entrant site (SSR) at :5174 against a host backend on :8600
-	VITE_API_PROXY_TARGET=http://localhost:8600 PORT=5174 npm run dev:entrant
+	API_BASE_URL=http://localhost:8600 npm run dev:entrant -- --port 5174
 
 local-dev:  ## Run BOTH surfaces: operator product :5173 + public entrant site :5174
 	@echo "Backend must already be running on :8600 — see docs/getting-started."
 	@echo "  operator product     http://localhost:5173"
 	@echo "  public entrant site  http://localhost:5174"
-	npm run dev:scheduler & npm run dev:entrant
+	VITE_API_PROXY_TARGET=http://localhost:8600 npm run dev:scheduler -- --port 5173 & \
+	API_BASE_URL=http://localhost:8600 npm run dev:entrant -- --port 5174
 
 # `stop` covers the stacks a developer actually starts on this machine.
 # The selfhost and worker stacks run on servers, are started with an
