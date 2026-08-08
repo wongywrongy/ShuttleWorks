@@ -818,8 +818,16 @@ a green 1,100-test suite. The real check is the viewer flow in
   is the named consumer that should route submission reads through it. Size S.
   *(SP-PROGRAM-1 Phase 6 Task 18 review.)*
 
-- **2026-08-07 · SP-PROGRAM-1 Phase 6 Task 27 — `/e/robots.txt` is inert until ingress maps
-  the origin root at it. Owner: Task 22 (ingress).** `app/routes/robots.tsx` serves the file
+- **CLOSED 2026-08-07 by Task 22 (ingress).** `frontend/nginx.conf` now carries
+  `location = /robots.txt` proxying to `http://entrant:3000/e/robots.txt` — an exact match,
+  so it outranks the SPA fallback, with the upstream path rewritten so there is one body
+  rather than a copy on disk. Verified end to end (real nginx in front of the entrant
+  production image returned the `Disallow: /` body at the origin root), and held by
+  `entrant/tests/ingress.test.ts`, whose deletion mutation was confirmed red. `/e/sitemap.
+  xml` was deliberately NOT hoisted: it has a second discovery channel (this file's
+  `Sitemap:` line) and a root alias would be a second URL for one document.
+  ~~**2026-08-07 · SP-PROGRAM-1 Phase 6 Task 27 — `/e/robots.txt` is inert until ingress maps
+  the origin root at it. Owner: Task 22 (ingress).**~~ `app/routes/robots.tsx` serves the file
   at `/e/robots.txt` only, because `react-router.config.ts` mounts the whole entrant app
   under the `/e/` basename (R8-A) and a route table cannot claim the origin root. Per RFC
   9309 a crawler fetches `/robots.txt` at the **origin root and nowhere else** — a copy

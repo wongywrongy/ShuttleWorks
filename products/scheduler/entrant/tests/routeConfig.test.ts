@@ -24,13 +24,19 @@ import type { RouteConfigEntry } from '@react-router/dev/routes';
 
 import routes from '../app/routes';
 import { nodePaths } from './helpers/nodePaths';
+import { backendPrefixes } from './helpers/nginxConf';
 
 /**
- * The prefixes nginx gives FastAPI. Written out, not derived: they ARE the
- * ruling, and there is no machine-readable copy of it to read from until the
- * ingress pass (Task 22) writes one into `nginx.conf`.
+ * The prefixes nginx gives FastAPI — now READ OUT OF `frontend/nginx.conf`
+ * (Task 22 wrote the ruling into it) instead of copied here by hand. The
+ * copy was the right call while the config did not implement the split, and
+ * the wrong one the moment it did: two hand-maintained lists of the same
+ * fact drift, and the drift is invisible in dev either way.
+ *
+ * Derived by asking which `/e/…` locations proxy to the backend, so adding a
+ * third such prefix to the ingress extends this guard on the same day.
  */
-const BACKEND_PREFIXES = ['/e/api/', '/e/account/'];
+const BACKEND_PREFIXES = backendPrefixes();
 
 describe('node routes and the FastAPI prefixes do not overlap (R8-A)', () => {
   const paths = nodePaths(routes as RouteConfigEntry[]);
@@ -42,6 +48,10 @@ describe('node routes and the FastAPI prefixes do not overlap (R8-A)', () => {
     expect(paths.length).toBeGreaterThan(0);
     expect(paths).toContain('/e/signup');
     expect(paths.every((p) => p.startsWith('/e/'))).toBe(true);
+    // ...and the OTHER derivation. `it.each([])` generates no tests at all,
+    // so an nginx.conf this helper could no longer read would delete the
+    // overlap guard rather than fail it.
+    expect(BACKEND_PREFIXES).toEqual(['/e/account/', '/e/api/']);
   });
 
   it.each(BACKEND_PREFIXES)('claims no path under %s', (prefix) => {

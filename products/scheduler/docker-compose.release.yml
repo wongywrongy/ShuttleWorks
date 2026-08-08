@@ -43,12 +43,50 @@ services:
           cpus: '2'
           memory: 1G
 
+  # The public entrant site. In this stack because this stack has a
+  # `frontend`: nginx is what implements the `/e/` prefix split (ruling
+  # R8-A), and without it nothing can route to node.
+  #
+  # Pre-built like its siblings — `.github/workflows/publish-release.yml`
+  # publishes `scheduler-entrant` from the same matrix that publishes the
+  # other two. An image reference nobody builds is a stack that cannot be
+  # pulled, which is the failure this file has hit before.
+  entrant:
+    image: ghcr.io/${OWNER:-misogyu}/scheduler-entrant:${TAG:-latest}
+    # No `ports:` — reachable only through nginx, which strips the operator
+    # cookie on the way in.
+    environment:
+      # `apiBaseUrl()` throws when unset; the container serves nothing
+      # without it. Internal compose-network address, never public.
+      - API_BASE_URL=http://backend:8000
+      # Matches the backend, which sets no override here and so defaults to
+      # false: this stack serves plain HTTP on port 80. Both cookie issuers
+      # read this one variable name — see
+      # `entrant/tests/deployStacks.test.ts`.
+      - SESSION_COOKIE_SECURE=false
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
   frontend:
     image: ghcr.io/${OWNER:-misogyu}/scheduler-frontend:${TAG:-latest}
     ports:
       - "80:8080"
     depends_on:
       backend:
+        condition: service_healthy
+      # Ordering only — nginx starts with an unresolvable upstream, so a
+      # missing entrant is a 502 on `/e/*`, not a dead proxy.
+      entrant:
         condition: service_healthy
     restart: unless-stopped
     read_only: true

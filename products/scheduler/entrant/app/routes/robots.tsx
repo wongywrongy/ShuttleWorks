@@ -5,18 +5,22 @@
  * mounts this whole app under the `/e/` basename (ruling R8-A), so every
  * route this app declares is reachable only under that prefix.
  *
- * **THIS FILE IS INERT UNTIL INGRESS MAPS THE ORIGIN ROOT AT IT.** Per RFC
- * 9309 a crawler fetches `/robots.txt` at the ORIGIN ROOT and nowhere else;
- * a file served under a subpath is never consulted, ever. Nothing today
- * maps `/robots.txt` here — `frontend/nginx.conf` has no
- * `location = /robots.txt` — so this body reaches no crawler and the
- * `Sitemap:` line below is undiscoverable. Making it live is an ingress
- * decision owned by **Task 22** (`location = /robots.txt` proxying to
- * `/e/robots.txt`), not a route-table entry, and `nginx.conf` is
- * deliberately untouched here. Logged in `docs/audits/debt-log.md` under
- * the same owner. `sitemap.tsx` is in the same position for
- * `/sitemap.xml`, except a sitemap has a second discovery channel (this
- * file, and manual submission), where robots.txt has none.
+ * **THE ORIGIN ROOT IS MAPPED AT THIS ROUTE** (Task 22, 2026-08-07). Per
+ * RFC 9309 a crawler fetches `/robots.txt` at the ORIGIN ROOT and nowhere
+ * else; a file served under a subpath is never consulted, ever. So until
+ * the ingress pass this body was inert and the `Sitemap:` line below was
+ * undiscoverable. `frontend/nginx.conf` now carries
+ * `location = /robots.txt` proxying to `http://entrant:3000/e/robots.txt`
+ * — an exact match, which outranks every prefix including the operator
+ * SPA's fallback, and a rewritten upstream path so there is ONE body
+ * rather than a second copy on disk that drifts from this one. Verified
+ * end to end against a real nginx in front of this app's production
+ * image; the mapping is held by `tests/ingress.test.ts`.
+ *
+ * `sitemap.tsx` is deliberately NOT hoisted the same way: a sitemap has a
+ * second discovery channel (this file's `Sitemap:` line, and manual
+ * submission), where robots.txt has none, so a root alias for it would be
+ * a second URL for one document and nothing else.
  *
  * **What the body says, and why the order matters.** Once hoisted to the
  * root this file speaks for the WHOLE origin, not just `/e/` — robots.txt

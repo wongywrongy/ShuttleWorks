@@ -188,6 +188,46 @@ services:
         limits:
           memory: 6G
 
+  # The PUBLIC entrant site (Phase 6, ruling R8-A). React Router 7 SSR on
+  # node, reached only through `frontend`'s nginx, which splits `/e/`:
+  # `/e/api/` + `/e/account/` to the API, everything else here.
+  #
+  # In this stack because this stack has a `frontend`. It is also the stack
+  # where the split MATTERS most: the operator SPA sits behind Cloudflare
+  # Access on the same hostname, and an entrant behind Access is an entrant
+  # who cannot enter.
+  entrant:
+    build:
+      context: ../..
+      dockerfile: products/scheduler/entrant/Dockerfile
+    restart: always
+    # No `ports:` — nothing published, same reasoning as `api` and
+    # `frontend`. nginx is the only client.
+    environment:
+      # `apiBaseUrl()` throws when unset. `api` is this stack's name for the
+      # backend (it also carries a `backend` network alias, for nginx.conf's
+      # benefit); either resolves, and naming the real service is clearer.
+      - API_BASE_URL=http://api:8000
+      # MUST MATCH `api`'s value above. Two processes on one origin issue
+      # cookies from this one variable name — the backend's session and
+      # node's `sw_play_csrf` nonce — and if they disagree the nonce goes
+      # out without `Secure` over an HTTPS-only deployment. Correct here for
+      # the same reason it is on `api`: the flag describes the BROWSER leg,
+      # which is HTTPS at Cloudflare's edge, even though this container
+      # speaks plain HTTP to nginx. Held by
+      # `entrant/tests/deployStacks.test.ts`.
+      - SESSION_COOKIE_SECURE=true
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
   # The SPA. nginx serves the built bundle and proxies /api/* to the
   # backend over the compose network, which is why the tunnel points
   # here rather than at `api`: this is the only service that serves both
@@ -213,6 +253,10 @@ services:
     # to avoid.
     depends_on:
       api:
+        condition: service_healthy
+      # Ordering only — nginx starts with an unresolvable upstream, so a
+      # missing entrant is a 502 on `/e/*`, not a dead proxy.
+      entrant:
         condition: service_healthy
     read_only: true
     tmpfs:
