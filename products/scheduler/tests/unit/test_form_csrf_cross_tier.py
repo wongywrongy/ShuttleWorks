@@ -54,23 +54,31 @@ import pytest
 
 from tests.unit.test_form_csrf import _GOLDEN
 
-_TS_PATH = (
-    Path(__file__).resolve().parents[2] / "entrant" / "app" / "lib" / "formCsrf.server.ts"
-)
+_TS_LIB = Path(__file__).resolve().parents[2] / "entrant" / "app" / "lib"
+_TS_PATH = _TS_LIB / "formCsrf.server.ts"
+
+# ``FORM_FIELD`` alone is declared next door, in a module with no ``.server``
+# suffix. It has to be: the rendered form reads it for ``<input name=...>``
+# and the component ships to the browser, which React Router's build forbids
+# from importing a ``.server`` module at all. Pinning it where it is actually
+# declared is what keeps this cross-tier check load-bearing — the alternative
+# was the form repeating the literal while this test held a constant nothing
+# read.
+_TS_FIELD_PATH = _TS_LIB / "formField.ts"
 
 
-def _ts_source() -> str:
-    assert _TS_PATH.exists(), (
-        f"The node-side derivation is missing at {_TS_PATH}. If it moved, this "
+def _ts_source(path: Path = _TS_PATH) -> str:
+    assert path.exists(), (
+        f"The node-side derivation is missing at {path}. If it moved, this "
         "test must move with it — an absent file must not silently pass."
     )
     # Newlines normalized before any anchored match: this repo checks out
     # CRLF on Windows and LF in CI, and a ``$`` anchor that silently stops
     # matching on one platform is a guard that only works on the other.
-    return _TS_PATH.read_text(encoding="utf-8").replace("\r\n", "\n")
+    return path.read_text(encoding="utf-8").replace("\r\n", "\n")
 
 
-def _ts_constant(name: str) -> str:
+def _ts_constant(name: str, path: Path = _TS_PATH) -> str:
     """The string literal assigned to ``name`` in the TypeScript source.
 
     Deliberately strict: exactly one ``const NAME = '...'``. Two matches
@@ -80,10 +88,10 @@ def _ts_constant(name: str) -> str:
     that it cannot be quietly bypassed.
     """
     matches = re.findall(
-        rf"^(?:export )?const {name} = '([^']*)';$", _ts_source(), re.MULTILINE
+        rf"^(?:export )?const {name} = '([^']*)';$", _ts_source(path), re.MULTILINE
     )
     assert len(matches) == 1, (
-        f"expected exactly one `const {name} = '...'` in {_TS_PATH.name}, "
+        f"expected exactly one `const {name} = '...'` in {path.name}, "
         f"found {len(matches)}: {matches}"
     )
     return matches[0]
@@ -169,7 +177,7 @@ def test_the_two_tiers_share_one_cookie_name():
 def test_the_two_tiers_share_one_hidden_field_name():
     from app.form_csrf import FORM_FIELD
 
-    assert _ts_constant("FORM_FIELD") == FORM_FIELD
+    assert _ts_constant("FORM_FIELD", _TS_FIELD_PATH) == FORM_FIELD
 
 
 def test_the_nonce_still_carries_the_pythons_entropy_and_lifetime():

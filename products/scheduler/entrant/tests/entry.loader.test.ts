@@ -371,8 +371,25 @@ describe('GET /e/{slug}', () => {
     const res = await fetchEntrant('/e/spring-open');
     const html = await res.text();
 
-    const nonce = /sw_play_csrf=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')?.[1];
+    const setCookie = res.headers.get('set-cookie') ?? '';
+    const nonce = /sw_play_csrf=([^;]+)/.exec(setCookie)?.[1];
     const rendered = /name="_csrf" value="([0-9a-f]{64})"/.exec(html)?.[1];
+
+    // The attributes, asserted **on the wire**. `formCsrf.server.test.ts`
+    // checks them on `mintFormCsrf()`'s return value, which proves what the
+    // function intends and nothing about what React Router actually emits: a
+    // `responseInit` that never reaches the document, or a header rewritten
+    // in transit, is invisible to that test. `HttpOnly` is the load-bearing
+    // one — without it the whole double-submit argument (a cross-site page
+    // can make the browser send this cookie but can never read it) is gone.
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('SameSite=Lax');
+    expect(setCookie).toContain('Path=/');
+
+    // This document carries BOTH halves of the double-submit — the nonce in
+    // `Set-Cookie` and its digest in the body — so a shared cache that stored
+    // it would hand one visitor's pair to the next. See `mintFormCsrf`.
+    expect(res.headers.get('cache-control')).toBe('no-store');
 
     expect(nonce).toBeTruthy();
     expect(rendered).toBeTruthy();

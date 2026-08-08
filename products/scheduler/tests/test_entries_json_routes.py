@@ -1109,6 +1109,43 @@ def test_an_anonymous_JSON_submit_is_still_a_plain_401(client, page):
     assert r.json()["detail"]["code"] == "AUTH_NOT_SIGNED_IN"
 
 
+def test_a_non_401_from_the_identity_dependency_is_not_dressed_as_signed_out(
+    client, page, monkeypatch
+):
+    """**The bound on what the wrapper is allowed to claim.**
+
+    `entrant_or_back_to_form` builds a redirect that says exactly one thing:
+    `NOT_SIGNED_IN`. Today `get_current_entrant` raises only 401, so a bare
+    `except HTTPException` was correct — and would stop being correct in
+    silence the day that dependency grows a 403 for an unverified or a
+    locked account. The browser would then be navigated back to the form and
+    told "this browser is not signed in": false, and unactionable, because
+    signing in is not what fixes it, and the entrant would loop.
+
+    Simulated rather than waited for: the dependency is patched to raise the
+    403 it does not raise yet, and the refusal must arrive as itself.
+    """
+    from fastapi import HTTPException
+
+    import api.entries_json as mod
+
+    def locked(_request, _repo):
+        raise HTTPException(status_code=403, detail={"code": "AUTH_ACCOUNT_LOCKED"})
+
+    monkeypatch.setattr(mod, "get_current_entrant", locked)
+
+    r = client.post(
+        f"/e/api/submit/{page['slug']}",
+        data={"playerName": "Alice Chen", "gender": "F", "acknowledged": "on"},
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"]["code"] == "AUTH_ACCOUNT_LOCKED"
+    assert "location" not in r.headers
+
+
 def test_the_redirect_never_fires_for_a_caller_who_IS_signed_in(client, page, entrant):
     """Non-vacuity from the other side: the wrapper is a pure pass-through
     on the success path. A signed-in browser post reaches the route and is

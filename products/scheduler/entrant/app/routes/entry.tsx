@@ -106,6 +106,26 @@ export async function loader({
   return data(payload, csrf.responseInit);
 }
 
+/**
+ * Forward the loader's headers onto the document — all of them, by reference.
+ *
+ * React Router does NOT do this by default: `getDocumentHeaders` copies only
+ * `Set-Cookie` out of a loader's `ResponseInit` unless the route exports
+ * `headers`, so `mintFormCsrf`'s `Cache-Control: no-store` reached the loader
+ * result and stopped there, and the document went out cacheable while
+ * carrying both halves of a double-submit. (Verified against the running
+ * framework by `entry.loader.test.ts`, which asserts the header on the real
+ * document response rather than on the loader's return value — the reason
+ * this gap was findable at all.)
+ *
+ * Deliberately a pass-through and not `{'Cache-Control': 'no-store'}`: the
+ * value belongs to the mint, which is where the argument for it lives. This
+ * route only refuses to drop what the mint decided.
+ */
+export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
+  return loaderHeaders;
+}
+
 export default function Entry({ loaderData }: Route.ComponentProps) {
   const { page, idempotencyKey, formCsrf, echo } = loaderData;
   const openEvents = page.events.filter((event) => event.isOpen);

@@ -395,8 +395,11 @@ def require_form_csrf(request: Request, form) -> None:
     bootstrap fallback), so the session cookie alone used to be enough. The
     entrant auth routes (``api/entrants.py``) call this too, and signup/login
     are pre-session by construction — there is no session cookie yet, which
-    is exactly what ``PLAY_CSRF_COOKIE`` (``app.form_csrf.issue_play_csrf``)
-    exists to stand in for. Checking both, same as
+    is exactly what ``PLAY_CSRF_COOKIE`` exists to stand in for. **Nothing in
+    Python mints that cookie**; the SSR tier does, in
+    ``entrant/app/lib/formCsrf.server.ts`` (``mintFormCsrf``, ruling R8-D),
+    and the obituary for the Python minter that used to be named here is
+    at :119. Checking both, same as
     ``app.form_csrf.form_csrf_proves`` does, costs the session-gated callers
     nothing: they never carry a ``sw_play_csrf`` cookie, so that candidate is
     simply absent from ``expected`` for them.
@@ -529,12 +532,25 @@ def entrant_or_back_to_form(
     restore is what returns the fields, and re-echoing a whole form body
     through a URL for a caller who has no account yet buys little for the
     header budget it spends. Stated because it is a cost, not an oversight.
+
+    **Only a 401 is rewritten.** ``get_current_entrant`` raises nothing else
+    today, so the narrowing changes no behaviour now — it bounds what this
+    wrapper is allowed to claim later. The redirect it builds says exactly
+    one thing, ``NOT_SIGNED_IN``, and the day that dependency grows a 403
+    for an unverified or a locked account a bare ``except HTTPException``
+    would dress that refusal as "this browser is not signed in": false, and
+    unactionable, because signing in is not what fixes it. A refusal this
+    wrapper has no copy for must reach the caller as itself.
     """
     try:
         return get_current_entrant(request, repo)
-    except HTTPException:
+    except HTTPException as exc:
         slug = request.path_params.get("slug")
-        if slug and "text/html" in request.headers.get("accept", ""):
+        if (
+            exc.status_code == 401
+            and slug
+            and "text/html" in request.headers.get("accept", "")
+        ):
             raise HTTPException(
                 status_code=303,
                 detail="Not signed in",

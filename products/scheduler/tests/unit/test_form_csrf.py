@@ -216,6 +216,47 @@ def test_the_backend_no_longer_mints_the_nonce_itself():
     )
 
 
+# The two places the backend is allowed to say ``issue_play_csrf`` out loud.
+# Both are obituaries: prose explaining that the function is gone and why.
+_ISSUE_PLAY_CSRF_OBITUARIES = {"api/entries_json.py", "app/form_csrf.py"}
+
+
+def test_the_deleted_minter_is_named_only_in_its_own_obituaries():
+    """**The grep gate on a name that no longer resolves.**
+
+    ``issue_play_csrf`` was deleted by R8-D, and a docstring elsewhere went
+    on citing it as the owner of ``PLAY_CSRF_COOKIE`` — in the very module
+    whose thesis is that *a docstring asserting a mechanism nobody
+    implemented is what let the original defect ship*. Remembering to update
+    prose is not a control; this is.
+
+    Two occurrences, one per file, each a deliberate obituary. A third
+    mention anywhere in the backend is either a resurrection (there is no
+    such symbol to import) or a fresh false citation, and both are exactly
+    what this exists to catch. Pinned by file and by count rather than by
+    line, so ordinary edits above them do not turn it red for nothing.
+    """
+    from pathlib import Path
+
+    backend = Path(__file__).resolve().parents[2] / "backend"
+    hits = [
+        f"{path.relative_to(backend).as_posix()}:{n}"
+        for path in sorted(backend.rglob("*.py"))
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if "issue_play_csrf" in line
+    ]
+
+    files = {hit.rsplit(":", 1)[0] for hit in hits}
+    assert files == _ISSUE_PLAY_CSRF_OBITUARIES, (
+        "issue_play_csrf was deleted by R8-D. It may be named only in the two "
+        f"obituary comments that explain its removal, not in {sorted(files)}. "
+        "The surviving owner of the sw_play_csrf nonce is "
+        "entrant/app/lib/formCsrf.server.ts (mintFormCsrf); cite that.\n  "
+        + "\n  ".join(hits)
+    )
+    assert len(hits) == 2, f"one mention per obituary, found: {hits}"
+
+
 def test_the_trigger_list_reads_the_cookie_name_from_its_owner():
     """No second literal. ``PLAY_CSRF_COOKIE`` is the module constant the
     verification path actually uses and the registry guard resolves from

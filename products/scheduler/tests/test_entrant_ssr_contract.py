@@ -129,14 +129,25 @@ def test_no_node_fixture_claims_a_projection_the_backend_cannot_return():
 
     scanned = 0
     offenders: list[str] = []
-    for path in sorted(_ENTRANT_TESTS.rglob("*.ts")):
+    # ``*.ts*``, not ``*.ts``: the entrant tier renders components, so a
+    # fixture is at least as likely to live in a ``.tsx`` test file, and a
+    # guard that cannot see the file the defect ships in is not a guard. The
+    # sibling scan in ``tests/unit/test_form_csrf_cross_tier.py`` already
+    # globs this way.
+    for path in sorted(_ENTRANT_TESTS.rglob("*.ts*")):
         text = path.read_text(encoding="utf-8")
         for match in re.finditer(r"viewer:\s*\{[^}]*\}", text):
             literal = match.group(0)
             scanned += 1
             line = text[: match.start()].count("\n") + 1
             faults = []
-            if re.search(r"formCsrf:\s*'[^']+'", literal):
+            # All three TypeScript string quotings. Matching only ``'…'``
+            # made Prettier's quote setting the sole reason this rule
+            # worked: `formCsrf: "abc"` and a backtick template both passed
+            # clean, so a formatting-config change could have hollowed out
+            # the one control standing between the repo and the exact
+            # fixture lie that shipped this defect.
+            if re.search(r"""formCsrf:\s*(?:'[^']+'|"[^"]+"|`[^`]+`)""", literal):
                 faults.append("supplies a formCsrf the backend cannot")
             if "signedIn: true" in literal and "impossible-projection" not in literal:
                 faults.append("claims signedIn without the impossible-projection marker")
@@ -145,7 +156,10 @@ def test_no_node_fixture_claims_a_projection_the_backend_cannot_return():
 
     # Non-vacuity: a scan that matched nothing would pass silently the day
     # the fixtures are renamed or moved.
-    assert scanned >= 3, f"only {scanned} viewer literals found — is the scan reaching?"
+    # Raised to the count the widened glob actually finds (5, in four files).
+    # A floor set below the true count is a floor that never fires: it would
+    # have absorbed the loss of two whole fixture files in silence.
+    assert scanned >= 5, f"only {scanned} viewer literals found — is the scan reaching?"
     assert not offenders, (
         "An entrant-tier fixture stubs a viewer projection the backend cannot "
         "return to node (signedIn is always false and formCsrf always empty on "

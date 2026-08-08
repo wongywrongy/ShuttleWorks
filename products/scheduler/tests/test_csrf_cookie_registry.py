@@ -284,22 +284,28 @@ def test_the_scan_reaches_every_directory_that_sets_a_cookie(client):
     Named by file rather than counted, because a count passes for the wrong
     reason the moment a call moves between the two directories.
 
-    **``app/form_csrf.py`` is no longer among them, and that is a downgrade
-    worth naming.** Ruling R8-D moved the one ``set_cookie`` in ``app/`` to
-    the SSR tier and deleted the dead function that held it, so there is
-    currently no cookie set outside ``api/`` for this control to point at.
-    The reach over ``app/`` is therefore pinned at the configuration rather
-    than at a live call site: drop ``app`` from ``_SCANNED_DIRS`` and this
-    fails, but a cookie appearing in some *third* directory is once again
-    only caught by whoever remembers to add it. That is the same unasked
-    question this file was written about, so it is written down rather than
-    quietly accepted.
+    **``app/`` currently has no ``set_cookie`` at all, and this test is
+    honestly weaker for it.** Ruling R8-D moved the one ``set_cookie`` in
+    ``app/`` to the SSR tier and deleted the dead function that held it, so
+    there is no live call site outside ``api/`` left to point at. The
+    previous version of this test papered over that by asserting
+    ``_BACKEND / "app" in _SCANNED_DIRS`` — a module constant compared to
+    itself, three lines below its own definition, reddened by no mutation
+    except editing that constant in this same file. A green tautology reads
+    as coverage the scan does not have, which is the failure this whole file
+    exists to argue against, so it is gone rather than kept for the colour.
+
+    What remains is real: the two ``api/`` files below are live call sites,
+    and if the scan stops reaching them this fails. What is NOT covered, and
+    is written down instead of quietly accepted: a cookie set from ``app/``
+    or from some third directory is caught only by whoever remembers to add
+    that directory to ``_SCANNED_DIRS``. Restoring real reach means a real
+    ``set_cookie`` outside ``api/`` to name here.
     """
     seen = {name for name, _line, _expr, _constants in _cookie_key_expressions()}
 
     assert "api/auth.py" in seen
     assert "api/entrants.py" in seen
-    assert _BACKEND / "app" in _SCANNED_DIRS
 
 
 def test_the_registry_names_both_principals(client):

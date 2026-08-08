@@ -51,6 +51,7 @@ import {
 } from '@scheduler/design-system/components';
 
 import { narrowEvents, type FormEcho, type PlayerEcho } from '../lib/echo';
+import { FORM_FIELD } from '../lib/formField';
 import { formatCents } from '../lib/money';
 import type { EntryEventDTO, EntryPageDTO } from '../lib/entryPage.types';
 
@@ -266,8 +267,12 @@ export function EntryForm({ page, idempotencyKey, formCsrf, echo }: EntryFormPro
           because node's projection fetch carries no cookie. `_csrf` is the
           backend's `app/form_csrf.FORM_FIELD`, and this digest is
           `app/lib/formCsrf.server.ts`'s, pinned byte-for-byte against the
-          Python one by a cross-tier test. */}
-      <input type="hidden" name="_csrf" value={formCsrf} />
+          Python one by a cross-tier test. The NAME comes from that module's
+          `FORM_FIELD` rather than from a literal here, so the cross-tier pin
+          on it is load-bearing: change the constant and this input's name
+          changes with it, instead of the two drifting apart while the test
+          stays green. */}
+      <input type="hidden" name={FORM_FIELD} value={formCsrf} />
       {/* Minted once per rendered form, in the loader: at submit time a
           double-click would mint two keys and record two entries. The field
           name is `idempotencyKey` — the hyphenated spelling is the HEADER

@@ -51,8 +51,14 @@ import { createHash, randomBytes } from 'node:crypto';
  */
 const FORM_CSRF_PREFIX = 'sw-play-form-csrf:';
 
-/** The hidden input's name — `app/form_csrf.FORM_FIELD`. */
-export const FORM_FIELD = '_csrf';
+/**
+ * The hidden input's name — `app/form_csrf.FORM_FIELD`. Declared in
+ * `./formField` and re-exported here so this module still reads as the one
+ * place the form-CSRF vocabulary lives; the declaration had to move because
+ * the rendered component needs it and cannot import a `.server` module. See
+ * that file for the argument.
+ */
+export { FORM_FIELD } from './formField';
 
 /** The pre-session nonce cookie — `app/form_csrf.PLAY_CSRF_COOKIE`. */
 export const PLAY_CSRF_COOKIE = 'sw_play_csrf';
@@ -103,7 +109,10 @@ function cookieSecure(): boolean {
 export interface MintedFormCsrf {
   /** The digest to render into the form's `_csrf` field. */
   token: string;
-  /** `ResponseInit` carrying the `Set-Cookie` for the SSR document. */
+  /**
+   * `ResponseInit` carrying the `Set-Cookie` **and** the `Cache-Control` for
+   * the SSR document. Both, together, because they are one fact.
+   */
   responseInit: { headers: Record<string, string> };
 }
 
@@ -125,6 +134,18 @@ export interface MintedFormCsrf {
  * a server-side token store in everything but name, which is the property this
  * design exists to avoid. The failure is loud, recoverable in one action, and
  * says what to do.
+ *
+ * **`Cache-Control: no-store` rides with the cookie, and belongs to the mint
+ * rather than to the route.** A document carrying both halves of a
+ * double-submit — the `Set-Cookie` nonce and the matching digest in its body —
+ * is a per-visitor secret in HTML clothing. Any shared cache that stores it
+ * (nginx `proxy_cache`, a corporate proxy, a CDN rule on `/e/*`) replays one
+ * visitor's nonce *and its matching token* to the next, which collapses the
+ * whole scheme to a value an attacker obtains by fetching the public entry
+ * page. The page this replaced set it explicitly for exactly this reason
+ * (`api/entries_public.py:405`, "a cached copy is a wrong copy"); moving the
+ * render to node is what dropped it. Emitting it here means every future
+ * caller of the mint gets it without having to remember.
  */
 export function mintFormCsrf(): MintedFormCsrf {
   const nonce = randomBytes(PLAY_CSRF_BYTES).toString('base64url');
@@ -139,6 +160,11 @@ export function mintFormCsrf(): MintedFormCsrf {
 
   return {
     token: formCsrfToken(nonce),
-    responseInit: { headers: { 'Set-Cookie': attributes.join('; ') } },
+    responseInit: {
+      headers: {
+        'Set-Cookie': attributes.join('; '),
+        'Cache-Control': 'no-store',
+      },
+    },
   };
 }
