@@ -17,6 +17,11 @@
  *      its session cookie, node for the `sw_play_csrf` nonce — on ONE
  *      origin. Nothing checked they agreed. A node container missing it
  *      issues the nonce without `Secure` on an HTTPS-only deployment.
+ *   4. The release stack's image names must be names something BUILDS.
+ *      `docker-compose.release.yml` pulls `ghcr.io/<owner>/scheduler-entrant`
+ *      and `publish-release.yml` publishes `scheduler-${{ matrix.name }}`;
+ *      nothing connected the two, so a renamed matrix entry stayed green here
+ *      and 404'd at `docker compose pull`.
  *
  * The compose files are read as text and sliced by service, rather than
  * parsed with a YAML library this workspace does not depend on. The slicing
@@ -30,6 +35,16 @@ import { describe, expect, it } from 'vitest';
 
 const STACK_DIR = join(import.meta.dirname, '..', '..');
 const DOCKERFILE = join(import.meta.dirname, '..', 'Dockerfile');
+const WORKFLOW = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  '..',
+  '.github',
+  'workflows',
+  'publish-release.yml',
+);
 
 const stackFiles = readdirSync(STACK_DIR).filter((f) => /^docker-compose.*\.yml$/.test(f));
 
@@ -94,6 +109,48 @@ describe('the compose files are actually being read', () => {
       'frontend',
       'postgres',
     ]);
+  });
+});
+
+describe('the release stack pulls images something actually builds', () => {
+  // `docker-compose.release.yml` names `ghcr.io/<owner>/scheduler-entrant`;
+  // `.github/workflows/publish-release.yml` builds
+  // `scheduler-${{ matrix.name }}`. NOTHING tied the two together — rename the
+  // matrix entry and every test in this repo stays green while the release
+  // stack pulls a 404, which both files' own comments say is a failure this
+  // repo has already hit.
+  //
+  // Both sides are DERIVED. Hardcoding `scheduler-entrant` in each would only
+  // assert that this test agrees with itself.
+  const workflow = readFileSync(WORKFLOW, 'utf8');
+  const matrixBlock = workflow.split(/^\s*matrix:\s*$/m)[1]?.split(/^\s*steps:\s*$/m)[0] ?? '';
+  const imagesLine = /^\s*images:\s*ghcr\.io\/(.+)$/m.exec(workflow)?.[1].trim() ?? '';
+
+  /** `<owner>/<repo>:<tag>` → `<repo>`. Owner and tag are interpolations with
+   * their own `:` and `{}` inside them (`${OWNER:-misogyu}`, `${TAG:-latest}`),
+   * so the repo is "after the last slash, before the first colon there". */
+  const repoName = (ref: string): string =>
+    ref.slice(ref.lastIndexOf('/') + 1).split(':')[0];
+
+  const built = [...matrixBlock.matchAll(/^\s*- name:\s*(\S+)\s*$/gm)].map((m) =>
+    repoName(imagesLine).replace('${{ matrix.name }}', m[1]),
+  );
+  const referenced = [
+    ...stackSource('docker-compose.release.yml').matchAll(/^\s*image:\s*ghcr\.io\/(.+)$/gm),
+  ].map((m) => repoName(m[1].trim()));
+
+  it('reads both sides before comparing them', () => {
+    // Non-vacuity. An empty list on either side makes the subset check below
+    // trivially true — the shape of a control that cannot fail. So is a
+    // template that stopped containing the matrix interpolation, which would
+    // turn every built name into the same constant.
+    expect(repoName(imagesLine)).toContain('${{ matrix.name }}');
+    expect(built.length).toBeGreaterThan(1);
+    expect(referenced.length).toBeGreaterThan(1);
+  });
+
+  it('builds every image the release stack references', () => {
+    expect(built).toEqual(expect.arrayContaining(referenced));
   });
 });
 

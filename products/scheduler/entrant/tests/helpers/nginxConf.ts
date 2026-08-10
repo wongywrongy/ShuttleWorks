@@ -60,7 +60,12 @@ export interface Location {
 export function locations(source = nginxSource()): Location[] {
   const clean = uncommented(source);
   const found: Location[] = [];
-  const opener = /\blocation\s+(=\s+|\^~\s+|~\*?\s+)?(\S+)\s*\{/g;
+  // The whitespace after the modifier is OPTIONAL, because nginx does not
+  // require it: `location ~^/e/ {` is a regex location, and requiring `\s+`
+  // classified it as a PREFIX one. That is the exact case `assertModelHolds`
+  // exists for — a regex location outranks every prefix in the file, so the
+  // guard stayed silent about the one construct that makes `resolve()` wrong.
+  const opener = /\blocation\s+(=|\^~|~\*?)?\s*(\S+)\s*\{/g;
   let m: RegExpExecArray | null;
   while ((m = opener.exec(clean)) !== null) {
     const modifier = (m[1] ?? '').trim();

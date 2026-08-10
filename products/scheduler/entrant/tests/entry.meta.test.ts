@@ -156,34 +156,48 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
   // I6: nothing from `viewer` may ever reach the document head.
   // ---------------------------------------------------------------------
   describe('viewer data never reaches a meta tag (I6)', () => {
-    it('the rendered head never contains the email or EITHER live CSRF half', async () => {
+    it('the whole document never contains the email or the live nonce, and confines the digest', async () => {
       const res = await renderResponse(PAGE, 200);
       const html = await res.text();
-      const h = head(html);
-      expect(h).not.toContain('LEAK-MARKER-EMAIL@example.com');
+
+      // **WHOLE DOCUMENT, not `<head>`.** These three assertions were scoped
+      // to the head out of necessity, not judgement: the loader's full payload
+      // — `viewer` included — streamed into `<Scripts/>`'s hydration
+      // `<script>` in `<body>`, so a whole-document assertion would have
+      // failed on behaviour that was pre-existing and correct. `app/root.tsx`
+      // renders no `<Scripts/>`, that payload does not exist, and the
+      // narrowing has outlived its reason. A meta tag is the worst place for a
+      // leak, not the only one.
+      expect(html).not.toContain('LEAK-MARKER-EMAIL@example.com');
 
       // **There is no `formCsrf` marker to check here.** `viewer.formCsrf`
       // is structurally `''` on every server render (node's projection fetch
       // carries no credential), so a fixture marker for it would prove
-      // nothing about the token that can actually do harm. The LIVE token is the one
-      // `mintFormCsrf()` mints in the loader and renders into `name="_csrf"`
-      // — a random 64-hex digest that no hand-listed fixture string can
-      // stand in for. So both halves are pulled off THIS response and
-      // checked against THIS head, by the same extraction
-      // `entry.loader.test.ts` uses on the wire.
+      // nothing about the token that can actually do harm. The LIVE pair is
+      // what `mintFormCsrf()` minted on THIS response — a random nonce and its
+      // 64-hex digest, which no hand-listed fixture string can stand in for —
+      // pulled off THIS response by the same extraction `entry.loader.test.ts`
+      // uses on the wire.
       const nonce = /sw_play_csrf=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')?.[1];
       const digest = /name="_csrf" value="([0-9a-f]{64})"/.exec(html)?.[1];
       expect(nonce).toBeTruthy();
       expect(digest).toBeTruthy();
-      expect(h).not.toContain(nonce as string);
-      expect(h).not.toContain(digest as string);
-      // Scoped to <head> because a meta-tag leak is what this asserts about.
-      // It USED to be scoped out of necessity: the loader's full payload —
-      // viewer included — streamed into `<Scripts/>`'s hydration `<script>`
-      // in <body>, so a whole-document assertion would have failed on that
-      // pre-existing, correct behaviour. `app/root.tsx` renders no
-      // `<Scripts/>` any more, so the payload is not in the document at all
-      // and the whole document would now pass too.
+
+      // The NONCE is the secret half. It belongs in `Set-Cookie` and in no
+      // byte of the body — a document that echoes it has handed both halves of
+      // a double-submit pair to anyone who can read the page.
+      expect(html).not.toContain(nonce as string);
+
+      // The DIGEST is the half that is SUPPOSED to be in the document — that
+      // is what double-submit means — so the honest widening is confinement,
+      // not absence: every occurrence must be the value of a `_csrf` hidden
+      // input. There are two (the entry form and the footer's sign-out form),
+      // both minted from this one response. A third copy in a meta tag, an
+      // attribute, a link or a comment fails here.
+      const occurrences = html.split(digest as string).length - 1;
+      const inCsrfFields = html.split(`name="_csrf" value="${digest}"`).length - 1;
+      expect(inCsrfFields).toBeGreaterThan(0);
+      expect(occurrences).toBe(inCsrfFields);
     });
 
     // The structural half. A behavioural assertion alone can pass by luck —
