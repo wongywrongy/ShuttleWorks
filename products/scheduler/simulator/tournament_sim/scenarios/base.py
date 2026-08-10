@@ -32,19 +32,29 @@ MAX_WAVES = 60
 
 def setup_meet(ctx: RunContext, phase_cb, *, name: str, events: dict[str, int],
                court_count: int = 3, breaks: Optional[list[dict]] = None,
-               create_modules: Optional[list[dict]] = None) -> dict:
+               create_modules: Optional[list[dict]] = None,
+               create_workspace: bool = True,
+               roster: Optional[list] = None,
+               group_names: tuple[str, str] = ("School A", "School B")) -> dict:
     """create -> seed blob -> solve -> persist schedule -> finalize.
 
     Returns the final blob (with schedule) for the run phase.
+
+    ``create_workspace=False`` reuses whatever ``ctx.tid`` already names —
+    matching ``setup_bracket``'s existing switch, and what lets a caller
+    that created the workspace itself (to set a date, or a module seed this
+    signature has no opinion about) still get the solve and its invariants.
+    ``roster``/``group_names`` are forwarded verbatim to ``make_meet_state``.
     """
     client = ctx.client
     with Phase("meet-setup", phase_cb):
-        created = client.create_tournament(name, kind="meet", modules=create_modules)
-        ctx.tid = created["id"]
+        if create_workspace:
+            created = client.create_tournament(name, kind="meet", modules=create_modules)
+            ctx.tid = created["id"]
 
         blob, ratings = make_meet_state(
             ctx.seed, events=events, court_count=court_count, breaks=breaks,
-            tournament_name=name,
+            tournament_name=name, roster=roster, group_names=group_names,
         )
         ctx.winner_model = WinnerModel(ctx.seed, ratings)
         # remember group sides for the ledger (standings reconciliation)

@@ -112,6 +112,7 @@ class SimClient:
         path: str,
         *,
         json: Any = None,
+        data: Any = None,
         headers: Optional[dict[str, str]] = None,
         expect: Iterable[int] = OK,
     ) -> httpx.Response:
@@ -120,7 +121,9 @@ class SimClient:
         for attempt in range(self.TRANSPORT_RETRIES):
             start = time.perf_counter()
             try:
-                resp = self._http.request(method, path, json=json, headers=headers)
+                resp = self._http.request(
+                    method, path, json=json, data=data, headers=headers
+                )
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout) as exc:
                 last_exc = exc
                 time.sleep(0.25 * (attempt + 1))
@@ -292,6 +295,100 @@ class SimClient:
 
     def bracket_command(self, tid: str, body: dict, *, expect: Iterable[int] = OK) -> httpx.Response:
         return self.request("POST", f"/tournaments/{tid}/bracket/commands", json=body, expect=expect)
+
+    # ---- entries: the operator's desk + its configuration ------------------
+
+    def upsert_entry_page(self, tid: str, body: dict) -> dict:
+        return self._json("PUT", f"/tournaments/{tid}/entry-page", json=body)
+
+    def create_entry_event(self, tid: str, body: dict) -> dict:
+        return self._json(
+            "POST", f"/tournaments/{tid}/entry-events", json=body, expect={201}
+        )
+
+    def list_entries(self, tid: str, state: Optional[str] = None) -> list[dict]:
+        suffix = f"?state={state}" if state else ""
+        return self._json("GET", f"/tournaments/{tid}/entries{suffix}")
+
+    def confirm_entry(self, tid: str, entry_id: str) -> dict:
+        return self._json("POST", f"/tournaments/{tid}/entries/{entry_id}/confirm")
+
+    def commit_entries(self, tid: str) -> dict:
+        return self._json("POST", f"/tournaments/{tid}/entries/commit")
+
+    # ---- entries: the public write surface ---------------------------------
+    #
+    # These are the ONLY way an entry row can exist — there is no operator
+    # "create entry" route — so seeding a desk means being a real entrant:
+    # an account, a session cookie, and the form's own CSRF token.
+
+    def entrant_signup(self, body: dict, *, expect: Iterable[int] = (202,)):
+        """``POST /e/account/signup``, as JSON.
+
+        No cookies ride this request, so the custom-header CSRF middleware
+        never triggers (its condition is a *relevant cookie being present*).
+        Turnstile is verified for real against Cloudflare's documented
+        always-pass dummy secret — the shipped default — so the code path
+        is the production one with no stub in it.
+        """
+        return self.request("POST", "/e/account/signup", json=body, expect=expect)
+
+    def entrant_login(self, email: str, password: str) -> httpx.Response:
+        """``POST /e/account/login`` — sets ``sw_play_session`` on the jar."""
+        return self.request(
+            "POST", "/e/account/login", json={"email": email, "password": password}
+        )
+
+    def form_csrf(self) -> str:
+        """The hidden ``_csrf`` field's value for this client's session.
+
+        A double-submit token: ``sha256("sw-play-form-csrf:" + <cookie>)``,
+        which proves the sender can *read* the cookie rather than merely
+        cause the browser to send it. A first-party HTTP client legitimately
+        can, and computing it here is the same act the SSR tier performs in
+        ``entrant/app/lib/formCsrf.server.ts``. Nothing is weakened: a
+        cross-site page still cannot read the cookie.
+        """
+        import hashlib
+
+        secret = self._http.cookies.get("sw_play_session") or ""
+        if not secret:
+            return ""
+        return hashlib.sha256(
+            ("sw-play-form-csrf:" + secret).encode("utf-8")
+        ).hexdigest()
+
+    def submit_entry(
+        self, slug: str, fields: list[tuple[str, str]], *, expect: Iterable[int] = (303,)
+    ) -> httpx.Response:
+        """``POST /e/api/submit/{slug}`` as urlencoded form data.
+
+        ``fields`` is a list of pairs rather than a dict because the payload
+        repeats keys — ``playerName`` once per person, ``events`` once per
+        (person, event) — which is precisely what lets one flat form post
+        express 1-N players each with 1-N events.
+
+        The 303 is the contract: a POST/redirect/GET receipt means a reload
+        never re-posts the entry.
+
+        Folded into ``{key: [value, ...]}`` because that is httpx's spelling
+        of a repeated field; a bare list of pairs is not urlencodable and
+        fails inside the transport rather than at the call site.
+        """
+        body: dict[str, list[str]] = {}
+        for name, value in [*fields, ("_csrf", self.form_csrf())]:
+            body.setdefault(name, []).append(value)
+        return self.request("POST", f"/e/api/submit/{slug}", data=body, expect=expect)
+
+    def entry_page_projection(self, slug: str, *, expect: Iterable[int] = OK) -> httpx.Response:
+        """``GET /e/api/page/{slug}`` — the read model node renders from."""
+        return self.request("GET", f"/e/api/page/{slug}", expect=expect)
+
+    # ---- display -----------------------------------------------------------
+
+    def display_token(self, tid: str) -> dict:
+        """The workspace's public capability token (created on first read)."""
+        return self._json("GET", f"/tournaments/{tid}/display-token")
 
     def swiss_next_round(self, tid: str, event_id: str) -> httpx.Response:
         """409 is a legitimate answer here (all K rounds generated / round

@@ -52,6 +52,44 @@ Exit code 0 ⇔ zero invariant violations and zero 5xx.
 | `bracket`    | one event of `--format se\|rr\|swiss\|monrad\|compass\|de`, played to completion |
 | `mixed`      | meet + bracket + display modules in ONE workspace, both engines verified |
 | `chaos`      | replay idempotency, out-of-order 409, stale-version 409+recovery, retire, postpone/reassign, racing directors, bracket walkover |
+| `demo`       | **seeds a whole product, not one tournament** — 8 realistic workspaces, 4 module sets, ~108 named people, 5 draw formats, a solved meet, a floor mid-session, 2 live public entry pages + 1 deliberately closed |
+
+### The `demo` scenario
+
+Populates a **fresh** database for a walkthrough. It is a seeder that
+happens to be a scenario: every write still goes through `SimClient`, so
+5xx are findings and the meet solves still run `check_schedule` plus the
+solve-twice determinism check.
+
+```bash
+# a fresh database is a precondition, not a nicety — see below
+make -C products/scheduler sim SCENARIO=demo SEED=2026 SIM_URL=http://localhost:8600
+```
+
+The report's `note:` lines ARE the deliverable: one per workspace with its
+id, module set and URL, plus every display token and entry-page slug.
+
+**Not idempotent, deliberately.** Re-running creates eight *more*
+workspaces — `POST /tournaments` has no natural key and inventing one here
+would be the simulator asserting a product rule that does not exist. Two
+things additionally bite on a second run against the same database:
+entry-page slugs are globally unique (409, reported not swallowed), and
+`entrant_signup_max_per_ip` is 8 per hour against a throttle table that
+lives in that same database. Point it at an empty one.
+
+**Three things it discovered about the product, none worked around:**
+
+- `entries` is in `CLOUD_ONLY_MODULES` and cannot be enabled under
+  `AUTH_MODE=local` (ruling D2). The scenario asks, takes the 400, retries
+  without it and says so. The public entry page still works — nothing about
+  it is module-gated — but the operator's Entries desk tab is absent from
+  the nav by design.
+- A draw cannot be created empty to receive entries: `POST /bracket` wants
+  ≥2 participants (≥4 for `de`), while the commit seam needs the draw to
+  already exist. Hence two direct entries per entries-fed event.
+- `bracket_size` is fixed when the draw is created, so an entries-fed draw
+  must declare the field it expects rather than deriving it from its
+  founding participants.
 
 ## Determinism contract
 

@@ -55,6 +55,8 @@ def make_meet_state(
     default_rest_minutes: int = 30,
     solver_time_limit_seconds: float = 10.0,
     tournament_name: str = "Simulated Meet",
+    roster: Optional[list[tuple[str, Optional[str]]]] = None,
+    group_names: tuple[str, str] = ("School A", "School B"),
 ) -> tuple[dict, dict[str, float]]:
     """Build a ``TournamentStateDTO``-shaped blob (schedule=None) plus a
     sim-side ``{player_id: rating}`` map (ratings never enter the blob).
@@ -62,14 +64,23 @@ def make_meet_state(
     Layout: classic dual meet — two school groups; for every event rank
     (e.g. MS1, MS2, MD1) a dedicated set of players per group so the solve
     is always feasible. Singles pair 1v1, doubles 2v2.
+
+    ``roster`` supplies ``(name, notes)`` pairs consumed in order instead of
+    the RNG name generator, so a caller with a real named squad (the
+    ``demo`` scenario) gets its own people on the roster rather than
+    ``Alice Silva``. Running out of pairs falls back to the generator, which
+    keeps every existing caller byte-identical. ``group_names`` renames the
+    two sides for the same reason; the group *ids* are untouched because
+    matches and the ledger key off them.
     """
     events = events or {"MS": 2, "WS": 1, "MD": 1}
     rng = derive_rng(seed, "roster")
     rating_rng = derive_rng(seed, "ratings")
+    supplied = iter(roster or ())
 
     groups = [
-        {"id": "g1", "name": "School A"},
-        {"id": "g2", "name": "School B"},
+        {"id": "g1", "name": group_names[0]},
+        {"id": "g2", "name": group_names[1]},
     ]
     players: list[dict] = []
     matches: list[dict] = []
@@ -81,19 +92,22 @@ def make_meet_state(
         nonlocal pid
         pid += 1
         player_id = f"p{pid:03d}"
-        name = _name(rng)
-        while name in seen_names:  # keep rosters readable — no duplicate names
+        name, notes = next(supplied, (None, None))
+        if name is None:
             name = _name(rng)
+            while name in seen_names:  # keep rosters readable — no duplicates
+                name = _name(rng)
         seen_names.add(name)
-        players.append(
-            {
-                "id": player_id,
-                "name": name,
-                "groupId": group_id,
-                "ranks": [rank],
-                "availability": [],
-            }
-        )
+        payload = {
+            "id": player_id,
+            "name": name,
+            "groupId": group_id,
+            "ranks": [rank],
+            "availability": [],
+        }
+        if notes:
+            payload["notes"] = notes
+        players.append(payload)
         ratings[player_id] = 1200.0 + rating_rng.uniform(-250.0, 250.0)
         return player_id
 
