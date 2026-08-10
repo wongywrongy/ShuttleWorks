@@ -20,6 +20,7 @@
 import type ExcelJSNs from 'exceljs';
 import { indexById } from '../../../lib/indexById';
 import { getActiveAssignments } from '../../../lib/getActiveAssignments';
+import { defaultEventOrder } from '../roster/positionGrid/helpers';
 type ExcelJSType = typeof ExcelJSNs;
 
 import type {
@@ -300,7 +301,8 @@ function applyHeaderRow(sheet: ExcelJSNs.Worksheet, colCount: number): void {
 /* ====================================================================== *
  * Roster XLSX — Schedule-style aesthetic.                                *
  *                                                                        *
- *   Position | MD | WD | XD | WS | MS                                    *
+ *   Position | one column per configured event (MD | WD | XD | WS | MS,  *
+ *              then the meet's own events)                               *
  *                                                                        *
  *  - Bold centered header with thick bottom border                       *
  *  - Each school opens with a merged banner row (grey fill, like the     *
@@ -310,7 +312,6 @@ function applyHeaderRow(sheet: ExcelJSNs.Worksheet, colCount: number): void {
  *  - Heavy black rule between schools                                    *
  *  - Doubles rendered as "Name1 & Name2"                                 *
  * ====================================================================== */
-const EVENT_ORDER_ROSTER = ['MD', 'WD', 'XD', 'WS', 'MS'] as const;
 const ROSE_A = 'FFFCE7E7';
 const ROSE_B = 'FFF8DCDC';
 const BANNER_FILL = 'FFF3F4F6';
@@ -333,7 +334,9 @@ export async function exportRosterXlsx(
   wb.created = new Date();
 
   const counts = config?.rankCounts ?? {};
-  const events = EVENT_ORDER_ROSTER.filter((p) => (counts[p] ?? 0) > 0);
+  // Same derivation the roster grid uses — a meet whose events aren't the five
+  // canonical disciplines (U10/U11 …) must still export its columns.
+  const events = defaultEventOrder(counts);
   const maxRows = Math.max(0, ...events.map((p) => counts[p] ?? 0));
 
   const sheet = wb.addWorksheet('Roster', {

@@ -23,7 +23,28 @@ import { DISCIPLINE_NAMES } from '../../../../lib/disciplineNames';
 
 // Canonical order lives in lib/eventColors (shared with the bracket's
 // matches list); re-exported here for the meet's existing import sites.
+import { DISCIPLINE_ORDER } from '../../../../lib/eventColors';
 export { DISCIPLINE_ORDER as EVENT_ORDER } from '../../../../lib/eventColors';
+
+/**
+ * The configured events of a meet, in default column order: the canonical
+ * disciplines first (MD/WD/XD/WS/MS), then every OTHER configured event in
+ * `rankCounts` order.
+ *
+ * A meet's events are ITS OWN vocabulary — a junior league configures U10 /
+ * U11, not disciplines. Callers used to intersect `rankCounts` against the
+ * canonical five, which silently dropped every such event: the roster grid
+ * said "No events configured" on a workspace with two, and the roster export
+ * wrote a sheet with no event columns (2026-08-10 browser pass). Events with
+ * a zero count are omitted — that is how an event is turned off.
+ */
+export function defaultEventOrder(counts: Record<string, number>): string[] {
+  const configured = Object.keys(counts).filter((ev) => (counts[ev] ?? 0) > 0);
+  return [
+    ...DISCIPLINE_ORDER.filter((ev) => configured.includes(ev)),
+    ...configured.filter((ev) => !(DISCIPLINE_ORDER as readonly string[]).includes(ev)),
+  ];
+}
 
 export const EVENT_LABEL: Record<
   string,

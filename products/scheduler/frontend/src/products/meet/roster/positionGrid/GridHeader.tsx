@@ -16,7 +16,7 @@ import type { CSSProperties } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { EyeSlash, ArrowCounterClockwise } from '@phosphor-icons/react';
-import { EVENT_LABEL, EVENT_ORDER, isDoubles } from './helpers';
+import { EVENT_LABEL, isDoubles } from './helpers';
 import { usePositionGridColumns } from './usePositionGridColumns';
 
 export interface GridEvent {
@@ -72,11 +72,10 @@ function SortableHeaderCell({
 }
 
 export function GridHeader({ events }: { events: GridEvent[] }) {
-  const { allConfiguredEvents, toggleVisible, resetColumns, eventVisible } =
+  const { allConfiguredEvents, defaultOrder, toggleVisible, resetColumns, eventVisible } =
     usePositionGridColumns();
   const hidden = allConfiguredEvents.filter((p) => eventVisible?.[p] === false);
-  const canonical = EVENT_ORDER.filter((p) => allConfiguredEvents.includes(p));
-  const reordered = JSON.stringify(allConfiguredEvents) !== JSON.stringify(canonical);
+  const reordered = JSON.stringify(allConfiguredEvents) !== JSON.stringify(defaultOrder);
   const customized = hidden.length > 0 || reordered;
 
   return (

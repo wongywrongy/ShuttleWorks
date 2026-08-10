@@ -26,6 +26,28 @@ describe('usePositionGridColumns', () => {
     expect(result.current.events.map((e) => e.prefix)).toEqual(['MD', 'XD', 'WS', 'MS']);
   });
 
+  it('derives columns from NON-discipline events too (age groups, etc.)', () => {
+    // A league's events are its own vocabulary — F&K Junior League runs U10 and
+    // U11. Intersecting rankCounts against the canonical five disciplines
+    // dropped every column and showed "No events configured" on a configured
+    // meet (2026-08-10 browser pass).
+    useTournamentStore.setState({
+      config: { rankCounts: { U10: 5, U11: 5 } } as TournamentConfig,
+    });
+    const { result } = renderHook(() => usePositionGridColumns());
+    expect(result.current.events.map((e) => e.prefix)).toEqual(['U10', 'U11']);
+  });
+
+  it('orders canonical disciplines first, then the rest', () => {
+    useTournamentStore.setState({
+      config: { rankCounts: { U10: 5, MS: 1, WD: 2 } } as TournamentConfig,
+    });
+    const { result } = renderHook(() => usePositionGridColumns());
+    // EVENT_ORDER is MD,WD,XD,WS,MS — the two disciplines keep that order,
+    // then the non-canonical event follows in rankCounts order.
+    expect(result.current.events.map((e) => e.prefix)).toEqual(['WD', 'MS', 'U10']);
+  });
+
   it('honors config.eventOrder', () => {
     useTournamentStore.setState({
       config: cfg({ eventOrder: ['MS', 'WS', 'MD', 'WD', 'XD'] }),
@@ -70,6 +92,16 @@ describe('PositionGrid structure', () => {
     renderGrid();
     expect(screen.getByText(/No events configured/i)).toBeTruthy();
     expect(screen.queryByTestId('position-grid-table')).toBeNull();
+  });
+
+  it('renders the grid — not the empty state — for non-discipline events', () => {
+    useTournamentStore.setState({
+      config: { rankCounts: { U10: 5, U11: 5 } } as TournamentConfig,
+    });
+    renderGrid();
+    expect(screen.queryByText(/No events configured/i)).toBeNull();
+    // U10, U11 + the "#" stub = 3
+    expect(screen.getAllByRole('columnheader')).toHaveLength(3);
   });
 
   it('disables cells beyond an event count (dash, no add button)', () => {
