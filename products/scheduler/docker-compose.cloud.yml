@@ -26,7 +26,13 @@
 # invite/reset mail visible via `docker compose logs backend`.
 #
 # The frontend is intentionally absent — drive it with curl (see
-# docs) or point a Vite dev server's proxy at the API port.
+# docs) or point a Vite dev server's proxy at the API port. The entrant
+# tier is absent for the same reason and not a separate decision: nginx is
+# what splits `/e/` between node and the API (ruling R8-A), so a stack with
+# no frontend has nothing to put in front of it. That rule is enforced, not
+# just described — `entrant/tests/deployStacks.test.ts` asserts entrant
+# appears in exactly the stacks that have a frontend, so adding one here
+# without nginx fails, and so does adding nginx without one.
 
 name: btp-cloud
 

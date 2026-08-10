@@ -908,3 +908,24 @@ a green 1,100-test suite. The real check is the viewer flow in
   `app/routes.ts` throwing the same `notFound()` the `:slug` loader throws (or a redirect to
   the organiser's page, once one exists); the one-line nginx redirect belongs in that same
   change, not before it. Size XS. *(SP-PROGRAM-1 Phase 6, Task 22 review-fix pass B.)*
+
+- **2026-08-10 · SP-PROGRAM-1 Phase 6 — "Node 20+" is now wrong wherever it is stated as a
+  prerequisite, and the frontend still carries a dead per-product lockfile.** Closing the
+  Phase 6 deployment gaps bumped `products/scheduler/frontend/Dockerfile` and
+  `docs/Dockerfile` to `node:22-alpine`, because `frontend/vite.config.ts` imports
+  `rollup-plugin-visualizer@7.0.1`, whose `engines.node` is `>=22` with no `^20` branch —
+  the image was building the production bundle on an engine its own build plugin excludes.
+  The images are fixed and pinned to CI's major by
+  `entrant/tests/deployStacks.test.ts`. **The prose was not touched.** Five files still
+  advertise Node 20+ as the local prerequisite — `README.md:95`,
+  `products/scheduler/README.md:40`, `docs/getting-started/quickstart.md:10`,
+  `docs/getting-started/running-locally.md:10`, `products/scheduler/e2e/README.md:87` — and
+  all five are now inaccurate for the same reason the image was: the Vite **dev server**
+  loads that same config, so `npm run dev` and the docs build both want 22. Left alone
+  because it is prose in five files outside the deployment scope, not because it is
+  harmless: it sends a new contributor down a path that fails at install time. Size XS.
+  Separately and unrelated to node: `products/scheduler/frontend/package-lock.json` is still
+  **tracked** (379 KB) even though CLAUDE.md and both Dockerfiles say the root lockfile has
+  been canonical since Phase 2a. Nothing reads it — the frontend image copies only the root
+  lockfile — so it is dead weight that can drift out of step with the real one and mislead
+  anyone who opens it. Size XS. *(SP-PROGRAM-1 Phase 6, Tasks 23/24 reconciliation.)*

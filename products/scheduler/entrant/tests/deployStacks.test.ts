@@ -22,6 +22,10 @@
  *      and `publish-release.yml` publishes `scheduler-${{ matrix.name }}`;
  *      nothing connected the two, so a renamed matrix entry stayed green here
  *      and 404'd at `docker compose pull`.
+ *   5. The images must build on the node CI tests on. All three install the
+ *      one root lockfile but each pins its own base image, and nothing
+ *      compared the pins — the frontend image built the production bundle on
+ *      node 20 while its own vite plugin required >=22.
  *
  * The compose files are read as text and sliced by service, rather than
  * parsed with a YAML library this workspace does not depend on. The slicing
@@ -35,16 +39,8 @@ import { describe, expect, it } from 'vitest';
 
 const STACK_DIR = join(import.meta.dirname, '..', '..');
 const DOCKERFILE = join(import.meta.dirname, '..', 'Dockerfile');
-const WORKFLOW = join(
-  import.meta.dirname,
-  '..',
-  '..',
-  '..',
-  '..',
-  '.github',
-  'workflows',
-  'publish-release.yml',
-);
+const REPO_ROOT = join(import.meta.dirname, '..', '..', '..', '..');
+const WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'publish-release.yml');
 
 const stackFiles = readdirSync(STACK_DIR).filter((f) => /^docker-compose.*\.yml$/.test(f));
 
@@ -248,5 +244,53 @@ describe('the entrant container runs the built output, never a dev server', () =
     // this app.
     const mode = envValue(svc.entrant, 'NODE_ENV');
     expect(mode ?? 'production').toBe('production');
+  });
+});
+
+describe('the images build on the node CI tests on', () => {
+  /**
+   * Every image here runs `npm ci` against the ONE root lockfile, so they all
+   * inherit each other's engine requirements — but each pins its own base
+   * image, and nothing compared those pins to anything.
+   *
+   * They drifted. `products/scheduler/frontend/Dockerfile` sat on
+   * `node:20-alpine` while `frontend/vite.config.ts` imported
+   * `rollup-plugin-visualizer`, whose `engines.node` is `>=22` with no `^20`
+   * branch — the production bundle was being built on an engine its own build
+   * plugin excludes. CI could not catch it: CI runs node 22 and never builds
+   * these images, so the only two places the version is written never met.
+   *
+   * Both sides are DERIVED — CI's `node-version` and each `FROM node:` — so
+   * this fails on drift in EITHER direction. Hardcoding 22 on both sides would
+   * only assert that this test agrees with itself, and bumping CI alone would
+   * leave the images behind exactly as before.
+   */
+  const ciWorkflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+  const ciMajors = [...ciWorkflow.matchAll(/^\s*node-version:\s*"?(\d+)/gm)].map((m) => m[1]);
+
+  // Relative to REPO_ROOT. Every image that installs the root lockfile.
+  const dockerfiles = [
+    'products/scheduler/frontend/Dockerfile',
+    'products/scheduler/entrant/Dockerfile',
+    'docs/Dockerfile',
+  ];
+
+  it('reads a node major off both sides before comparing them', () => {
+    // Non-vacuity. Zero CI matches would make `every` below trivially true,
+    // and a Dockerfile the regex stopped matching would silently drop out.
+    expect(ciMajors.length).toBeGreaterThan(0);
+    expect(new Set(ciMajors).size, `ci.yml disagrees with itself: ${ciMajors}`).toBe(1);
+    for (const f of dockerfiles) {
+      expect(readFileSync(join(REPO_ROOT, f), 'utf8'), f).toMatch(/^FROM node:\d+/m);
+    }
+  });
+
+  it.each(dockerfiles)('%s builds on that major', (file) => {
+    const source = readFileSync(join(REPO_ROOT, file), 'utf8');
+    // Every stage, not the first: a builder on 22 and a runtime on 20 is the
+    // same split, just harder to see.
+    const majors = [...source.matchAll(/^FROM node:(\d+)/gm)].map((m) => m[1]);
+    expect(majors.length, `${file} pins no node base image`).toBeGreaterThan(0);
+    for (const major of majors) expect(major).toBe(ciMajors[0]);
   });
 });

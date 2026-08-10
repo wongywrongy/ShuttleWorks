@@ -1,8 +1,11 @@
 # Worker-only stack — a second machine joined as pure compute.
 #
-# No API, no Postgres, no migrations, no SMTP. This host solves jobs and
-# does nothing else; it reaches the primary host's Postgres over the
-# tailnet under a least-privilege role.
+# No API, no Postgres, no migrations, no SMTP, no frontend — and so no
+# entrant tier either. This host solves jobs and does nothing else; it
+# reaches the primary host's Postgres over the tailnet under a
+# least-privilege role. The public entry site lives on the primary host
+# (selfhost), behind the nginx that splits `/e/`; see
+# `entrant/tests/deployStacks.test.ts`, which ties entrant to frontend.
 #
 #   cd /opt/shuttleworks
 #   docker compose -f docker-compose.worker.yml up -d --build
