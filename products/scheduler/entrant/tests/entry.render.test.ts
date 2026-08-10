@@ -196,6 +196,47 @@ describe('the entry form, unhydrated', () => {
     expect(tag).toContain('type="checkbox"');
   });
 
+  it('states at the point of consent that the name will be published', async () => {
+    // Q4: notice belongs where consent is given, not in a policy page nobody
+    // opens. Ported from the retired FastAPI page's
+    // `test_the_acknowledgment_notice_names_the_public_entrant_list`, which
+    // read the 400 characters after `name="acknowledged"`; the same claim
+    // here, because the checkbox and its wording are one `<label>`.
+    const label =
+      (await render()).split('name="acknowledged"')[1]?.slice(0, 600) ?? '';
+
+    expect(label).toContain('public entrant list');
+  });
+
+  it('leaves club optional while gender is required', async () => {
+    // The asymmetry is the claim: a required club field would refuse an
+    // unaffiliated player at the form, which no director asked for. Ported
+    // from `test_the_gender_field_is_required_and_the_club_field_is_not` —
+    // the gender half is asserted on the `<select>` above; this is the half
+    // that has no other home.
+    const html = await render();
+
+    expect(html).toMatch(/<input[^>]*name="club"[^>]*>/);
+    expect(html.match(/<input[^>]*name="club"[^>]*>/)?.[0]).not.toContain(
+      'required',
+    );
+  });
+
+  it('carries no script and no challenge widget at all', async () => {
+    // Two claims the retired page held with `script-src 'none'` and a
+    // Turnstile-absence assertion (`test_the_page_now_allows_no_script_at_all`,
+    // `test_the_page_carries_no_challenge_widget`). This tier keeps both by
+    // construction — `app/root.tsx` renders no `<Scripts/>`, and the
+    // challenge guards signup, which is the act a stranger can perform — so
+    // this is the executed control that says so on the document itself. The
+    // CI page-weight budget is the other half; it measures, this one names.
+    const html = await render();
+
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('cf-turnstile');
+    expect(html).not.toContain('challenges.cloudflare.com');
+  });
+
   it('renders the form whatever the viewer projection says (R8-E)', async () => {
     // The defect, as a test. The form was gated on `page.viewer.signedIn`,
     // which is `false` on every SSR page — so it was hidden from everyone,

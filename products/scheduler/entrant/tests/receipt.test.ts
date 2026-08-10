@@ -278,6 +278,15 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
     expect(body).toContain('href="/e/spring-open"');
     // Nothing to re-fire: no form on the page at all.
     expect(body).not.toContain('<form');
+    // R10 retired the capability token, and this is the output-side half of
+    // that deletion guard — ported from the retired page's
+    // `test_the_success_page_carries_no_manage_code`. The mint-side half is
+    // `test_entries_page_api.py::
+    // test_the_entrant_json_module_mints_no_capability_material_at_all`.
+    // Managing an entry is login-gated "my entries", which E2 builds; nothing
+    // here prints a credential.
+    expect(body).not.toContain('Keep this code');
+    expect(body).not.toContain('data-manage-token');
   });
 
   it('reads a replay exactly as it reads the original — one outcome, one page', async () => {

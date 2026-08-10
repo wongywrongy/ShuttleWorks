@@ -29,7 +29,6 @@ lands in the database.
 from __future__ import annotations
 
 import json
-import re
 import uuid
 
 import pytest
@@ -259,9 +258,9 @@ def test_a_cookieless_write_is_still_never_checked(client):
 # for a token without replaying it and every urlencoded route downstream
 # gets an empty form — no exception, no log, just a submission with nobody
 # in it. The assertion is therefore on the *stored rows*, not on a status
-# code: a truncated body reaches ``_parse_players`` as zero players and
-# comes back as a rendered 400, which a status-only test would read as
-# "refused for a business reason" and shrug at.
+# code: a truncated body reaches ``services.entry_form.parse_players`` as
+# zero players and comes back as a 400, which a status-only test would read
+# as "refused for a business reason" and shrug at.
 
 
 @pytest.fixture
@@ -303,11 +302,14 @@ def page(client):
 
 
 def _rendered_csrf(client, page) -> str:
-    """Scrape the hidden field off the real page rather than recompute it —
-    a recomputed digest would pass even if the page stopped emitting one."""
-    body = client.get(f"/e/{page['slug']}").text
-    match = re.search(r'name="_csrf" value="([0-9a-f]*)"', body)
-    return match.group(1) if match else ""
+    """Read the token off the real projection rather than recompute it — a
+    recomputed digest would pass even if the surface stopped emitting one.
+
+    It used to scrape a hidden field out of the FastAPI-rendered page; the
+    Phase 6 cut-over deleted that page, and the field it emitted is now
+    minted by the RR7 loader from this same projection value.
+    """
+    return client.get(f"/e/api/page/{page['slug']}").json()["viewer"]["formCsrf"]
 
 
 # The payload is deliberately far larger than any probe a middleware test
@@ -349,9 +351,11 @@ def test_a_large_multi_player_submission_survives_the_middleware_body_read(
         "_csrf": token,
     }
 
-    r = client.post(f"/e/{page['slug']}/submit", data=data)
+    r = client.post(
+        f"/e/api/submit/{page['slug']}", data=data, follow_redirects=False
+    )
 
-    assert r.status_code == 201, r.text[:2000]
+    assert r.status_code == 303, r.text[:2000]
 
     session = SessionLocal()
     try:
@@ -375,28 +379,31 @@ def test_a_large_round_trip_that_writes_nothing_also_keeps_its_body(
     """The replay on the **non-writing** path, which is the one an entrant
     actually hits most.
 
-    "Update events and total" is the same large form posted with
-    ``action=filter``: the page runs no script, so the only way the event
-    list and the running total can react to what was typed is a server
-    round trip that re-renders the form with the typing still in it. That
-    echo is produced from the form the *route* read, so asserting all eight
-    names come back is a second, independent witness that the body survived
-    the middleware — on a path with no database row to check afterwards.
+    "Update events and total" is the same large form posted to the quote
+    route: the page runs no script, so the only way the event list and the
+    running total can react to what was typed is a server round trip.
+
+    **The witness changed shape with the route, and got no weaker.** On the
+    retired HTML surface this posted ``action=filter`` and asserted all
+    eight names came back in the re-rendered form. The quote route answers
+    JSON and echoes nothing — the RR7 tier does the echoing — so the
+    witness is the *price*: eight one-event players at 1500 each is 12000,
+    and a body truncated anywhere returns a smaller number. That is still
+    an independent check that the middleware's read did not eat the
+    request, on a path with no database row to inspect afterwards.
     """
     data = {
         "playerName": [f"Player Number {i}" for i in range(_PLAYERS)],
         "gender": ["F"] * _PLAYERS,
         "remarks": [_REMARK] * _PLAYERS,
         "events": [f"{i}:{page['ws']}" for i in range(_PLAYERS)],
-        "action": "filter",
         "_csrf": _rendered_csrf(client, page),
     }
 
-    r = client.post(f"/e/{page['slug']}/submit", data=data)
+    r = client.post(f"/e/api/quote/{page['slug']}", data=data)
 
     assert r.status_code == 200, r.text[:2000]
-    for i in range(_PLAYERS):
-        assert f"Player Number {i}" in r.text
+    assert r.json()["totalCents"] == 1500 * _PLAYERS
 
 
 def test_an_unreadable_body_is_a_refusal_and_not_a_500(client, entrant, monkeypatch):

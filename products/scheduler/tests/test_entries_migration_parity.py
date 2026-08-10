@@ -9,17 +9,26 @@ deleted — CODE_HEALTH's rule that a superseded test becomes its successor
 rather than a gap.
 
 A rule like that lives in review until someone writes it down as a check.
-This is the check. Each row of ``SUPERSEDED`` names an old test and the
-test that takes over its claim, and two assertions hold the pair honest:
+This is the check. Each row names an old test and the test that takes over
+its claim, in two dicts because the migration crosses a tier boundary:
+``SUPERSEDED`` for the 74 claims a backend successor took, ``RENDER_TIER``
+for the 18 that were claims about *markup* and therefore belong to
+``products/scheduler/entrant/`` or to nobody.
 
-1. every row names a test that really exists in the old file — so a typo
-   or a row invented for a test that was never there cannot pad the ledger;
-2. every successor named really exists in the file the row points at — so
+Three assertions held the pair honest while the migration was in flight:
+
+1. every row named a test that really existed in the old file — so a typo
+   or a row invented for a test that was never there could not pad the
+   ledger;
+2. ``SUPERSEDED`` and ``RENDER_TIER`` together named **every** test in the
+   old file, so a claim could not be dropped by leaving it out of both;
+3. every successor named really exists in the file the row points at — so
    a migration cannot be declared done by editing a dict.
 
-The second is deliberately red while the migration is in flight: it fails
-by name with exactly the tests still owed. Task 31 (the cut-over) deletes
-the old file and flips assertion 1 into "the old file is gone".
+The first two derive from a file the cut-over deletes, so they were green
+for the last time as that commit's pre-flight (92 = 74 + 18, no strays) and
+are replaced by ``test_the_superseded_file_is_gone``. The third is the
+ledger's whole remaining job and is unchanged.
 """
 from __future__ import annotations
 
@@ -32,6 +41,12 @@ _OLD = _PRODUCT_ROOT / "tests" / "test_entries_public_routes.py"
 
 _PAGE = "tests/test_entries_page_api.py"
 _SUBMIT = "tests/test_entries_submit_api.py"
+
+_RENDER = "entrant/tests/entry.render.test.ts"
+_QUOTE = "entrant/tests/entry.quote.test.ts"
+_ECHO = "entrant/tests/echo.test.ts"
+_INGRESS = "entrant/tests/ingress.test.ts"
+_RECEIPT = "entrant/tests/receipt.test.ts"
 
 # old test name -> (file that holds its successor, successor test name)
 SUPERSEDED: dict[str, tuple[str, str]] = {
@@ -209,14 +224,90 @@ SUPERSEDED: dict[str, tuple[str, str]] = {
 }
 
 
+# The 18 rows that are NOT about backend behaviour. Each one asserted
+# something about *markup* — a checkbox attribute, a stylesheet rule, a
+# sentence on a page — which is the one thing this cut-over genuinely moves
+# rather than merely relocates. A tuple is a checked successor in the RR7
+# suite; a string is a **deliberate drop, with its reason**, because a claim
+# that quietly has no home is the failure mode this whole file exists to
+# make visible.
+RENDER_TIER: dict[str, tuple[str, str] | str] = {
+    # ---- the form's transport shape and its gates ----------------------
+    "test_the_acknowledgment_checkbox_gates_submit_in_the_browser_too": (
+        _RENDER, "requires the acknowledgment in the markup itself"),
+    "test_the_form_offers_a_checkbox_per_open_event_carrying_the_player_index": (
+        _RENDER, "prefixes every event checkbox with its player index"),
+    "test_the_gender_field_is_required_and_the_club_field_is_not": (
+        _RENDER, "leaves club optional while gender is required"),
+    "test_the_acknowledgment_notice_names_the_public_entrant_list": (
+        _RENDER, "states at the point of consent that the name will be published"),
+    # ---- gender filtering and its override (R12 / Q14 §5) --------------
+    "test_the_event_list_narrows_to_the_players_gender": (
+        _QUOTE, "narrows the event list to the echoed gender"),
+    "test_the_override_control_puts_every_event_back": (
+        _QUOTE, "restores the whole list when Show every event is echoed on"),
+    "test_the_refresh_keeps_what_the_entrant_already_typed": (
+        _QUOTE, "puts the entrant typing back after the round trip"),
+    "test_an_event_already_chosen_is_never_hidden_by_the_filter": (
+        _ECHO, "never hides an event this player has already ticked"),
+    "test_no_gender_chosen_yet_offers_every_event": (
+        _ECHO, "shows everything when no gender has been chosen"),
+    # ---- the page's posture --------------------------------------------
+    # The headers moved a whole tier: the retired route set its own on the
+    # response, and nginx's shared snippet now covers every entrant path.
+    # `Cache-Control: no-store` — the half that matters for a document
+    # carrying a CSRF nonce — is pinned separately in entry.loader.test.ts.
+    "test_the_page_carries_its_own_security_headers": (
+        _INGRESS, "applies the shared security-headers snippet on every entrant path"),
+    "test_the_page_now_allows_no_script_at_all": (
+        _RENDER, "carries no script and no challenge widget at all"),
+    "test_the_page_carries_no_challenge_widget": (
+        _RENDER, "carries no script and no challenge widget at all"),
+    # ---- the success page ----------------------------------------------
+    "test_the_success_page_carries_no_manage_code": (
+        _RECEIPT, "server-renders the reference, the recorded total and the payment terms"),
+    "test_the_success_page_lists_every_entry_of_the_act_and_the_total": (
+        _RECEIPT, "server-renders the reference, the recorded total and the payment terms"),
+    # ---- deliberate drops, four of them, all the same kind --------------
+    #
+    # These asserted properties of a hand-rolled `<style>` block that the
+    # retired route inlined into its own document. There is no such block
+    # any more: the entrant tier renders through the design system's
+    # Tailwind build, so the successor assertion would have to be a check on
+    # class-name *spelling*, which login.test.ts already says plainly is not
+    # viewport coverage. A spelling check dressed as a layout guarantee is
+    # worse than an honest gap, so these are recorded as lost rather than
+    # replaced with something that cannot fail for the right reason. R11's
+    # two co-equal widths are held by the design system and by review.
+    "test_the_page_is_built_for_a_390px_screen":
+        "asserted `<style>` contents the entrant tier does not emit; R11 "
+        "width acceptance is not unit-testable without a browser",
+    "test_the_page_carries_both_a_phone_layout_and_a_desktop_layout":
+        "same: a media query and a grid-template in an inlined stylesheet "
+        "that no longer exists",
+    "test_nothing_in_the_stylesheet_fixes_a_pixel_width":
+        "same: grepped the inlined stylesheet for `width: <n>px`",
+    # The retired success page said where an entry lives without linking a
+    # page E2 had not built. The receipt page links `/e/{slug}` and
+    # login.test.ts derives that no href points into a FastAPI-owned prefix,
+    # so the dead-link half is covered; the "says where it lives" half is
+    # copy this page does not currently carry.
+    "test_the_success_page_points_at_my_entries_without_pretending_it_exists":
+        "copy claim about a sentence the RR7 receipt does not carry; the "
+        "dead-link half it guarded is held by login.test.ts's derived "
+        "no-FastAPI-href control",
+}
+
+
 def _test_names(path: Path) -> set[str]:
     """Every test this file declares, read from the source.
 
     Two dialects because the migration crosses tiers: pytest functions are
     read with ``ast`` (the same technique as
-    ``test_csrf_cookie_registry.py``), Playwright/vitest cases with a
-    regex over ``test('…')``, which is the only declaration form the e2e
-    suite uses.
+    ``test_csrf_cookie_registry.py``), vitest cases with a regex over
+    ``test('…')`` / ``it('…')`` — both forms, because the entrant suite
+    declares with ``it`` inside a ``describe`` and a regex that knew only
+    ``test(`` would find nothing there and report every row as missing.
     """
     source = path.read_text(encoding="utf-8")
     if path.suffix == ".py":
@@ -225,25 +316,38 @@ def _test_names(path: Path) -> set[str]:
             for node in ast.walk(ast.parse(source))
             if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
         }
-    return set(re.findall(r"""\btest\(\s*['"](.+?)['"]""", source))
+    return set(re.findall(r"""\b(?:test|it)\(\s*['"](.+?)['"]""", source))
 
 
-def test_every_row_names_a_real_superseded_test():
-    """No ledger padding: a row for a test the old file never had is a row
-    that proves nothing."""
-    old = _test_names(_OLD)
-    strays = sorted(name for name in SUPERSEDED if name not in old)
-    assert not strays, (
-        "These rows name tests that do not exist in "
-        f"{_OLD.name}:\n  " + "\n  ".join(strays)
+def test_the_superseded_file_is_gone():
+    """The cut-over, from the ledger's side.
+
+    Before deletion this module asserted that every row named a real test in
+    that file and that the two dicts together named all 92 of them; both
+    were green at the moment it was removed (Task 31's pre-flight, 74 + 18).
+    What is left to hold is that nothing brought it back — a resurrected
+    file would mean two implementations of the same surface, which is
+    precisely what the phase forbade.
+    """
+    assert not _OLD.exists(), (
+        f"{_OLD} is back. The HTML entry surface it tested was deleted in "
+        "SP-PROGRAM-1 Phase 6; its 92 claims live in the successors named "
+        "in SUPERSEDED and RENDER_TIER, or in the latter's written drops."
     )
 
 
 def test_every_successor_named_in_the_ledger_exists():
-    """The migration itself. Red until the successor is written, and it
-    fails by name — the list below is the work still owed."""
+    """The ledger's whole remaining job: the 88 migrated claims must still
+    be somewhere. Deleting a successor deletes a claim, and this is what
+    says so by name — across both tiers, because a vitest case is exactly
+    as deletable as a pytest one."""
+    rows = dict(SUPERSEDED)
+    rows.update(
+        {old: v for old, v in RENDER_TIER.items() if isinstance(v, tuple)}
+    )
+
     missing: list[str] = []
-    for old, (rel, successor) in sorted(SUPERSEDED.items()):
+    for old, (rel, successor) in sorted(rows.items()):
         target = _PRODUCT_ROOT / rel
         if not target.exists() or successor not in _test_names(target):
             missing.append(f"{old} -> {rel}::{successor}")

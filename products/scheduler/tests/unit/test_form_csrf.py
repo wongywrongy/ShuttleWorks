@@ -58,13 +58,30 @@ def test_two_different_sessions_do_not_share_a_token():
     assert form_csrf_token("tok-123") != form_csrf_token("tok-124")
 
 
-def test_the_route_helper_is_now_the_promoted_function():
-    """The incumbent name survives as an alias, so the submit route and the
-    ~90 tests in test_entries_public_routes.py are untouched by the move."""
-    from api.entries_public import _form_csrf
-    from app.form_csrf import form_csrf_token
+def test_no_route_module_re_exports_the_derivation_under_another_name():
+    """**The alias is gone, and this is what keeps it gone.**
 
-    assert _form_csrf is form_csrf_token
+    ``api/entries_public`` kept ``form_csrf_token`` bound to the incumbent
+    name ``_form_csrf`` so that the submit route and the ~90 tests in
+    ``test_entries_public_routes.py`` were untouched by the promotion. The
+    Phase 6 cut-over deleted both, so the alias had no callers left and
+    went with them; ``api/entries_json`` imports from ``app/form_csrf``
+    directly, which is the whole point of promoting it.
+
+    Asserted rather than left implicit because a re-export is how a second
+    apparent owner of a security primitive appears: a reader who imports
+    ``_form_csrf`` from a route module has no reason to know it is the
+    same function, and the next person to "fix" one copy fixes one copy.
+    ``test_there_is_exactly_one_derivation_in_the_backend`` below holds
+    the stronger property — one sha256 — and this holds the weaker one it
+    cannot see: one importable name.
+    """
+    import api.entries_json
+    import api.entries_public
+
+    assert not hasattr(api.entries_public, "_form_csrf")
+    # Negative control: the module that DOES use it names it from its owner.
+    assert api.entries_json._form_csrf.__module__ == "app.form_csrf"
 
 
 def test_there_is_exactly_one_derivation_in_the_backend():

@@ -53,7 +53,6 @@ from api.entries_public import (
     _entry_counts,
     _event_is_open,
     _events,
-    _form_csrf,
     _is_age_bracketed,
     _lookup_event,
     _moment,
@@ -65,6 +64,7 @@ from app.config import settings
 from app.dependencies import AuthEntrant, get_current_entrant
 from app.error_codes import ErrorCode, http_error
 from app.form_csrf import FORM_FIELD, PLAY_CSRF_COOKIE
+from app.form_csrf import form_csrf_token as _form_csrf
 from database.models import EntryPage, Org
 from repositories import LocalRepository, get_repository
 from services import auth as auth_service

@@ -1,23 +1,23 @@
 """The entrant form's flat-post parser (Phase 6, spec §3).
 
 **Why this module exists.** ``_parse_players`` and ``_year`` lived inside
-``api/entries_public.py``, which Phase 6 deletes (§9). Phase 6 gives the
-parser two more callers beyond the incumbent HTML submit route — the JSON
-quote (Task 10) and the JSON submit (Task 11) — so it is promoted out of
-the route into a module none of them need to import each other for.
+``api/entries_public.py``'s HTML submit route, which Phase 6's cut-over
+deleted (§9). They were promoted out first so the JSON quote (Task 10) and
+the JSON submit (Task 11) could call the same parser without importing each
+other or the route; when the route went, the parser was already somewhere
+that outlived it. ``api/entries_json.py`` is its caller now.
 
 **Deviation from the task-10 brief on file/scope.** The brief also asks
 this module to hold ``form_csrf`` / ``PLAY_CSRF_COOKIE`` /
 ``check_form_csrf``. An earlier task (the CSRF-channel work, see
 ``app/form_csrf.py``) already promoted that half into ``app/form_csrf.py``
 as ``form_csrf_token`` / ``PLAY_CSRF_COOKIE`` / ``form_csrf_proves``, with
-its own callers (the CSRF middleware, ``api/entries_public.py``) already
+its own callers (the CSRF middleware, ``api/entries_json.py``) already
 wired to it. The brief itself says the signatures are the contract and the
 file path is not: rather than re-derive a second CSRF module, this file
 holds only what does not already exist — the player parser and the year
-parser — and the quote route (``api/entries_json.py``) checks the token by
-calling ``app.form_csrf.form_csrf_token`` directly, the same way the
-incumbent submit route already does.
+parser — and the quote and submit routes (``api/entries_json.py``) check
+the token by calling ``app.form_csrf.form_csrf_token`` directly.
 
 **HTTP-free on purpose**, in line with the rest of ``services/``:
 ``parse_players`` takes anything with ``.getlist()`` and returns plain

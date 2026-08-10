@@ -138,25 +138,25 @@ def entrant(client, turnstile):
     return "parent@example.com"
 
 
-def _html_submit(client, page):
-    """Write one entry through the INCUMBENT route.
+def _seed_one_entry(client, page):
+    """Write one entry through the real write route.
 
     Used only to put a row on the entrant list so the projection has
-    something to project. Deliberately the old route: at this task the new
-    one does not exist yet, and using the shipped path keeps the fixture
-    honest about what the list is built from.
+    something to project. It went through ``POST /e/{slug}/submit`` until
+    the Phase 6 cut-over deleted that route; the shipped path is the JSON
+    one, and using it keeps the fixture honest about what the list is
+    built from.
     """
-    body = client.get(f"/e/{page['slug']}").text
-    token = re.search(r'name="_csrf" value="([0-9a-f]*)"', body).group(1)
     return client.post(
-        f"/e/{page['slug']}/submit",
+        f"/e/api/submit/{page['slug']}",
         data={
             "playerName": "Alice Chen",
             "gender": "F",
             "events": [f"0:{page['ws']}"],
             "acknowledged": "on",
-            "_csrf": token,
+            "_csrf": _form_token(client, page),
         },
+        follow_redirects=False,
     )
 
 
@@ -218,7 +218,7 @@ def test_the_projection_never_carries_an_entrants_contact_data(
     ``entry_page_projection`` (or widen ``_entrants``' SELECT past its two
     columns). Both assertions below go red. Put it back.
     """
-    assert _html_submit(client, page).status_code == 201
+    assert _seed_one_entry(client, page).status_code == 303
     # A STRANGER reads the page — the viewer block legitimately carries the
     # signed-in reader's own address, so it must not be in the frame.
     client.cookies.clear()
@@ -414,19 +414,18 @@ def test_the_quoted_total_is_the_total_recorded(client, page, entrant):
     quoted = _quote(client, page, [f"0:{page['ms']}", f"0:{page['ws']}"]).json()
     assert quoted["totalCents"] == 5500
 
-    body = client.get(f"/e/{page['slug']}").text
-    token = re.search(r'name="_csrf" value="([0-9a-f]*)"', body).group(1)
     r = client.post(
-        f"/e/{page['slug']}/submit",
+        f"/e/api/submit/{page['slug']}",
         data={
             "playerName": "Alice Chen",
             "gender": "F",
             "events": [f"0:{page['ms']}", f"0:{page['ws']}"],
             "acknowledged": "on",
-            "_csrf": token,
+            "_csrf": _form_token(client, page),
         },
+        follow_redirects=False,
     )
-    assert r.status_code == 201, r.text
+    assert r.status_code == 303, r.text
 
     from database.models import Submission
     from database.session import SessionLocal

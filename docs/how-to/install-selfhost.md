@@ -240,7 +240,7 @@ re-check them after any Access policy edit.
 ### 4b. The public entry surface (`/e/*`) — written, not yet activated
 
 The Entries module adds a genuinely public surface: `/e/{slug}` is an entry
-page a player opens from a poster, `/e/{slug}/submit` creates an entry, and
+page a player opens from a poster, `/e/api/submit/{slug}` creates an entry, and
 `/e/account/signup` | `/login` | `/logout` are the **entrant account** routes
 added by SP-E1-2 (ruling R10 — entrants have real accounts, held in their own
 tables with their own `sw_play_session` cookie, never `users`). The edge
@@ -273,10 +273,14 @@ changes, in this order:
    moved the challenge off the entry page and onto entrant **signup** (ruling
    R10 — a puzzle in front of a route that already requires an account charges
    every honest entrant to slow an attacker who has already signed up). The
-   entry page itself now sets `script-src 'none'`: it runs no JavaScript at
-   all, the acknowledgment gate is the HTML `required` attribute, and the
-   gender filtering and running fee total are server round trips rather than
-   script. So there is nothing left on `/e/{slug}` for the intersection of the
+   entry page ships **no client JavaScript at all**: the React Router 7 tier
+   that serves it renders no `<Scripts/>`, the acknowledgment gate is the HTML
+   `required` attribute, and the gender filtering and running fee total are
+   server round trips rather than script. (Until SP-PROGRAM-1 Phase 6 the page
+   was rendered by FastAPI and set its own `script-src 'none'` header; the
+   header is now the shared nginx snippet's, and the page has nothing to run
+   under it either way.) So there is nothing left on `/e/{slug}` for the
+   intersection of the
    page policy and the nginx policy to break. What still needs answering
    against a real browser is where the Turnstile widget renders for signup,
    and under which policy. It is left as-is on purpose: a security header

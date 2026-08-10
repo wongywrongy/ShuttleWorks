@@ -66,7 +66,13 @@ ENTRANT_REACHABLE = (
     # intended outcome, not an escalation. The sweep below would in fact
     # tolerate it either way (a random-uuid slug answers the uniform 404,
     # which counts as a refusal), which is exactly why it is written down.
-    | {("POST", "/e/{slug}/submit")}
+    #
+    # Phase 6's cut-over moved the address (``POST /e/{slug}/submit`` is
+    # gone) and added the quote route beside it: "Update events and total"
+    # is session-gated by ruling R8-C, so it is entrant-reachable **by
+    # design** rather than by oversight — an entrant pricing their own
+    # basket is the same credential doing the same job one step earlier.
+    | {("POST", "/e/api/submit/{slug}"), ("POST", "/e/api/quote/{slug}")}
 )
 
 
@@ -380,11 +386,12 @@ def test_a_relayed_operator_cookie_without_the_header_reaches_no_write(client):
 
     reachable: list[str] = []
     checked = 0
-    # BLIND SPOT, on purpose: ``POST /e/{slug}/submit`` passes this sweep
-    # *vacuously*. ``_concrete`` fills the slug with a random UUID, which
-    # answers the uniform 404 before CSRF matters — so this is no proof of
-    # that route's own CSRF gate (today, the ``_FORM_CSRF_ROUTES`` exemption
-    # in app/main.py). Its real proofs live in test_form_csrf_channel.py.
+    # BLIND SPOT, on purpose: ``POST /e/api/submit/{slug}`` passes this
+    # sweep *vacuously*. ``_concrete`` fills the slug with a random UUID,
+    # which answers the uniform 404 before CSRF matters — so this is no
+    # proof of that route's CSRF gate. Its real proofs live in
+    # test_form_csrf_channel.py (the middleware's two channels) and in
+    # test_entries_submit_api.py (the route's own ``require_form_csrf``).
     for method, path in _routes(app):
         if method not in ("POST", "PUT", "PATCH", "DELETE"):
             continue

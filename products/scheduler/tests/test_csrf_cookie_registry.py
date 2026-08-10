@@ -331,54 +331,104 @@ def test_the_pre_session_nonce_is_carved_out_and_not_registered(client):
     assert "sw_play_csrf" in settings.csrf_relevant_cookie_names
 
 
-# ---- 3. The one exemption, and the proof that it is the only one ------
+# ---- 3. Zero exemptions, and the two channels that replaced the one ----
 #
-# SP-E1-2 Phase C carved a single route out of the header check:
-# ``POST /e/{slug}/submit``. The reason is structural rather than
-# convenient — it is a native HTML form post on a page with
-# ``script-src 'none'``, and a form cannot attach a custom header, which is
-# the same property this whole defense rests on seen from the other side.
-# That route proves CSRF its own way (a double-submit token derived from
-# the session cookie), so the exemption is from *this check*, not from CSRF.
+# SP-E1-2 Phase C carved a single route out of the header check: ``POST
+# /e/{slug}/submit``, because it was a native HTML form post on a page with
+# ``script-src 'none'`` and a form cannot attach a custom header — the same
+# property this whole defense rests on, seen from the other side.
+# SP-PROGRAM-1 Phase 6 **deleted the exemption rather than narrowing or
+# renaming it** (ruling R8-B). The route it named ceases to exist, and the
+# proof it substituted — a double-submit token derived from a cookie the
+# attacker's page can make the browser send but never read — was promoted
+# out of the route into a second enumerated channel the middleware checks
+# itself (``app/form_csrf.form_csrf_proves``).
 #
-# An exemption is exactly the kind of thing that grows, so it is pinned in
-# three directions: the pattern is anchored, the route answers 403 without
-# its own token, and every other cookie-carrying write is still refused.
+# The difference is the whole point. A path-based exemption is a list that
+# grows, and every entry on it is a route the middleware does not look at.
+# Two enumerated channels are a rule: every cookie-carrying write proves
+# itself, by header or by token, and there is no third answer.
+#
+# So the assertion inverts from "the exemption matches one route shape" to
+# "there are no path-based exemptions at all", derived from the source —
+# because a regex that is deleted and later re-added under another name
+# would pass any behavioural test written against today's routes.
 
 
-def test_the_form_csrf_exemption_matches_exactly_one_route_shape(client):
-    from app.main import _FORM_CSRF_ROUTES
+def test_the_app_declares_zero_path_based_csrf_exemptions():
+    """**The inverted control.** Derived from ``app/main.py``'s source:
+    the CSRF middleware may not skip a write because of its path.
 
-    assert _FORM_CSRF_ROUTES.match("/e/spring-open/submit")
-    # Anchored at both ends: a prefix match here would exempt anything an
-    # attacker could hang off the same path.
-    assert not _FORM_CSRF_ROUTES.match("/e/spring-open/submit/extra")
-    assert not _FORM_CSRF_ROUTES.match("/e/spring-open/submitx")
-    assert not _FORM_CSRF_ROUTES.match("/x/e/spring-open/submit")
-    assert not _FORM_CSRF_ROUTES.match("/e/a/b/submit")
-    assert not _FORM_CSRF_ROUTES.match("/tournaments/x/entries/commit")
+    Break it to prove it is not vacuous: re-add
+    ``_SOMETHING = re.compile(r"^/e/[^/]+/submit$")`` at module scope in
+    ``app/main.py`` and this fails by line.
+    """
+    import ast
+    import inspect
+
+    from app import main as app_main
+
+    source = inspect.getsource(app_main)
+    tree = ast.parse(source)
+
+    # Any module-level name bound to a compiled pattern is a path list by
+    # construction — there is no other reason for one to live here.
+    patterns = [
+        f"line {node.lineno}: {node.targets[0].id}"
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute)
+        and node.value.func.attr == "compile"
+    ]
+    assert not patterns, (
+        "app/main.py declares path patterns next to the CSRF middleware. "
+        "Phase 6 deleted the last path-based exemption; a write proves "
+        "itself by header or by cookie-derived token, never by URL:\n  "
+        + "\n  ".join(patterns)
+    )
+    assert "_FORM_CSRF_ROUTES" not in source
 
 
-def test_the_exempt_route_still_refuses_a_write_with_no_proof_at_all(client):
-    """The exemption is not a hole: the route substitutes its own check.
+def test_a_cookie_carrying_write_with_no_proof_at_all_is_still_refused(client):
+    """The behavioural half, on the route that replaced the exempt one.
 
     A cookie-carrying POST with neither the header nor the form token is
-    refused — by the route rather than by the middleware, which is the
-    whole claim.
+    refused. It is now the *middleware* that refuses it rather than the
+    route, which is what deleting the exemption bought.
     """
     from app.config import settings
 
     client.cookies.clear()
     client.cookies.set(settings.entrant_session_cookie_name, "an-entrant-token")
 
-    r = client.post("/e/some-slug/submit", data={"playerName": "Alice"})
+    r = client.post("/e/api/submit/some-slug", data={"playerName": "Alice"})
 
     assert r.status_code in (401, 403, 404)
-    assert r.status_code != 201
+    assert r.status_code != 303
+
+
+def test_the_retired_html_routes_are_gone(client):
+    """The cut-over, asserted where route registration is actually visible.
+
+    Newer FastAPI keeps each ``include_router`` as a nested
+    ``_IncludedRouter`` rather than flattening onto ``app.routes``, so the
+    OpenAPI document is the assertion surface (CLAUDE.md, known hazards).
+    """
+    from app.main import app
+
+    paths = app.openapi()["paths"]
+    assert "/e/{slug}" not in paths
+    assert "/e/{slug}/submit" not in paths
+    # Negative control: the surface that replaced them is registered.
+    assert "get" in paths["/e/api/page/{slug}"]
+    assert "post" in paths["/e/api/submit/{slug}"]
 
 
 def test_every_other_cookie_carrying_write_is_still_covered(client):
-    """Negative control for the exemption: one route, not a category."""
+    """Negative control: a write with no proof at all is refused wherever it
+    lands, not only on the entrant surface."""
     from app.config import settings
 
     client.cookies.clear()

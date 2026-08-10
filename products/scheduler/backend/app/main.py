@@ -1,6 +1,5 @@
 """Main FastAPI application - stateless scheduler for school sparring."""
 import logging
-import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -14,7 +13,6 @@ from api import (
     health as health_api,  # SP-CLOUD-3 — liveness / readiness / queue metrics
     display as display_api,  # SP-CLOUD-2 — capability-token spectator display
     entries as entries_api,  # SP-E1-1 — the operator's Entries desk
-    entries_public as entries_public_api,  # SP-E1-1 — the public entry page + submit
     entries_json as entries_json_api,  # SP-PROGRAM-1 Phase 6 — the entrant tier's JSON surface
     entrants as entrants_api,  # SP-E1-2 — the entrant principal's auth surface
     schedule,
@@ -236,23 +234,6 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
-# Routes that prove CSRF their own way because they are native HTML form
-# posts and cannot attach a custom header. Anchored at both ends so it
-# matches one route shape and nothing that merely starts like it — a
-# prefix match here would exempt anything an attacker could hang off the
-# same path. See ``csrf_middleware`` for the full argument.
-#
-# **Retires with the HTML route it names, in the Phase 6 cutover** (ruling
-# R8-B), not before — deleting it while ``POST /e/{slug}/submit`` still
-# serves entrants breaks the shipping entry page. That commit must also
-# port, BY NAME: ``test_csrf_cookie_registry.py``'s
-# ``test_the_form_csrf_exemption_matches_exactly_one_route_shape`` (which
-# inverts to "there is no exemption", derived from this source), and
-# ``test_form_csrf_channel.py``'s two ``_rendered_csrf``-scraping body-replay
-# tests, which scrape a hidden field off a page that will no longer exist.
-_FORM_CSRF_ROUTES = re.compile(r"^/e/[^/]+/submit$")
-
-
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
     """Custom-header CSRF check for cookie-authenticated writes.
@@ -287,23 +268,26 @@ async def csrf_middleware(request: Request, call_next):
 
     Channel two is a **double-submit token derived from a cookie the
     attacker's page can make the browser send but can never read**
-    (``app/form_csrf.py``). It is what will let the path regex below go:
-    an exemption is a hole that grows and has to be re-argued every time a
-    path changes shape, while a channel is a property every write in the
-    application is measured against. The trigger reads
+    (``app/form_csrf.py``). The trigger reads
     ``settings.csrf_relevant_cookie_names``, which is wider than the
     session registry by exactly the pre-session nonce — the login post
     carries no session and was therefore never checked at all.
 
-    **The exempt route is still exempt, and the clause is evaluated last**
-    (SP-E1-2 Phase C). ``POST /e/{slug}/submit`` is a native form post that
-    proves CSRF its own way inside the route
-    (``api/entries_public.py``), and it cannot be deleted from here until
-    that FastAPI-rendered route retires at the Phase 6 cutover. Ordering
-    the clause after ``form_csrf_proves`` means submit runs through channel
-    two from now on rather than around it, so the two proofs are exercised
-    together instead of the exemption hiding the new channel.
-    ``tests/test_csrf_cookie_registry.py`` pins that it is the only one.
+    **There are no path-based exemptions** (SP-PROGRAM-1 Phase 6, ruling
+    R8-B). SP-E1-2 Phase C carved one out for ``POST /e/{slug}/submit`` — a
+    native form post on a page with ``script-src 'none'``, which cannot
+    attach a custom header — and made the route prove CSRF its own way
+    instead. Phase 6 deleted the route *and* the exemption in the same
+    commit, because they were the same fact: the proof that route
+    substituted is now the second enumerated channel above, which this
+    middleware checks itself. A cookie-carrying write is accepted with the
+    custom header **or** with a valid cookie-derived double-submit token,
+    so an unhydrated form still submits and no route is skipped for being
+    itself. An exemption is a hole that grows and has to be re-argued every
+    time a path changes shape; a channel is a property every write in the
+    application is measured against. ``tests/test_csrf_cookie_registry.py``
+    derives from this source that the exemption list is empty and stays
+    empty.
     """
     if (
         request.method in {"POST", "PUT", "PATCH", "DELETE"}
@@ -312,7 +296,6 @@ async def csrf_middleware(request: Request, call_next):
         )
         and request.headers.get("X-ShuttleWorks-CSRF") != "1"
         and not await form_csrf_proves(request)
-        and not _FORM_CSRF_ROUTES.match(request.url.path)
     ):
         return JSONResponse(
             status_code=403,
@@ -427,27 +410,19 @@ app.include_router(workspace_modules.router, dependencies=_AUTH_DEP)
 # posture — deliberately not folded into this router, so that widening
 # the public surface can never be a side effect of touching the desk.
 app.include_router(entries_api.router, dependencies=_AUTH_DEP)
-# Entries, public surface: registered WITHOUT the auth dep, following the
-# display public_router precedent below. **This comment described a world
-# that ruling R10 ended** — it used to say an entrant "has no account, by
-# definition, and never will (Q4)", which was true of the shipped E1 and
-# is now false: entrants are a real principal type with accounts, sessions
-# and a login (spec Q13, and the router below this one).
+# **``api/entries_public`` no longer registers a router** (SP-PROGRAM-1
+# Phase 6 cut-over). It served ``GET /e/{slug}`` and ``POST
+# /e/{slug}/submit`` as f-string HTML; the page is now the React Router 7
+# app at ``/e/{slug}``, reached through nginx and never through FastAPI,
+# and the write is ``POST /e/api/submit/{slug}`` below. What is left in
+# that module is the projection and lookup helpers the JSON router imports,
+# so it is a module with no routes rather than a router with no routes —
+# an empty ``include_router`` would be a registration that reads like a
+# public surface and is not one.
 #
-# What stays true is the *shape* of the risk. ``GET /e/{slug}`` is a
-# public read of workspace data — a poster URL, not a capability URL — and
-# the router is registered without the app-wide dependency so it can be.
-# Its guards live in the module itself (strict projection, uniform 404 for
-# an unknown or closed slug, per-IP throttle, the global body cap) and
-# every session-free route in it is named individually in
-# tests/test_auth_surface.py with the reason it must be reachable.
-# Deliberately a separate router from the desk above so that widening the
-# public surface can never be a side effect of touching the operator's
-# routes.
-app.include_router(entries_public_api.router)
 # Entries, entrant-tier JSON (Phase 6): what the React Router 7 app reads
-# and writes. Registered WITHOUT the app-wide dependency for the same
-# reason the HTML surface above is — its public routes are named
+# and writes. Registered WITHOUT the app-wide dependency, following the
+# display public_router precedent below — its public routes are named
 # individually in tests/test_auth_surface.py, and its writes declare
 # ``get_current_entrant`` themselves. ``/e/api/...`` cannot be shadowed by
 # ``/e/{slug}`` (different segment counts), regardless of registration
