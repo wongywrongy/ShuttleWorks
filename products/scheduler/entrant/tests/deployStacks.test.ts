@@ -152,12 +152,31 @@ describe('the entrant tier ships exactly where nginx can reach it', () => {
 describe('the entrant container runs the built output, never a dev server', () => {
   const dockerfile = readFileSync(DOCKERFILE, 'utf8');
 
-  it('starts through the production script', () => {
-    expect(dockerfile).toMatch(/^CMD \["npm", "start"\]$/m);
-    expect(dockerfile).toMatch(/^ENV NODE_ENV=production$/m);
-    // `npm start` is `react-router-serve` against the build; `dev` is the
-    // Vite server. @react-router/serve passes NODE_ENV through as the
-    // render mode, so both lines above are the switch.
+  /**
+   * THE LAST match, not any match. Docker honours the last `CMD` and the last
+   * `ENV` of a given name in a stage, so `toMatch(/^CMD \["npm", "start"\]$/m)`
+   * — which is what this asserted — stayed green with
+   * `CMD ["npm", "run", "dev"]` appended below it. The container would then
+   * run the Vite dev server and serialise absolute-path stack traces into a
+   * public page: verbatim the failure this file's docblock exists to prevent,
+   * with the guard reporting success.
+   */
+  function lastDirective(prefix: string, valuePattern: string): string | undefined {
+    return [...dockerfile.matchAll(new RegExp(`^${prefix}(${valuePattern})$`, 'gm'))].at(-1)?.[1];
+  }
+
+  it('starts by exec-ing the server directly, in production mode', () => {
+    // Not `npm start`: npm at PID 1 does not forward SIGTERM (every stop waits
+    // out the 10s kill timeout) and wants a writable $HOME/.npm, which
+    // `read_only: true` + `USER node` does not give it.
+    expect(lastDirective('CMD ', '.*')).toBe(
+      '["node", "./node_modules/@react-router/serve/bin.js", "./build/server/index.js"]',
+    );
+    // @react-router/serve passes NODE_ENV through as the render mode, so this
+    // line is the switch between the built output and dev-mode stack traces.
+    expect(lastDirective('ENV NODE_ENV=', '\\S+')).toBe('production');
+    // The package scripts still describe the same two worlds, so `npm start`
+    // stays a working local equivalent of the CMD above.
     const scripts = JSON.parse(
       readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
     ).scripts;
