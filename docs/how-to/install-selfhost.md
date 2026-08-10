@@ -237,31 +237,52 @@ Add both as Bypass rules in the Access application before the first event, and
 re-check them after any Access policy edit.
 :::
 
-### 4b. The public entry surface (`/e/*`) — written, not yet activated
+### 4b. The public entry surface (`/e/*`) — wired, not yet exposed
 
-The Entries module adds a genuinely public surface: `/e/{slug}` is an entry
-page a player opens from a poster, `/e/api/submit/{slug}` creates an entry, and
-`/e/account/signup` | `/login` | `/logout` are the **entrant account** routes
-added by SP-E1-2 (ruling R10 — entrants have real accounts, held in their own
-tables with their own `sw_play_session` cookie, never `users`). The edge
-configuration for all of it already exists in `frontend/nginx.conf` — a
-`sw_entries` `limit_req` zone (20 r/m, burst 5) and an explicit `location /e/`
-block, which also stops the SPA fallback swallowing entry links.
+The Entries module adds a genuinely public surface. Since SP-PROGRAM-1 Phase 6
+it is served by **two tiers behind one hostname** (ruling R8-A), and
+`frontend/nginx.conf` is the only thing that knows there are two:
 
-**The zone did not change when the account routes arrived, and that is
-correct**: a `limit_req` zone is path-scoped, and `/e/account/*` is inside
-`/e/`. It is left under `/e/` rather than moved under `/api/` on purpose —
-`/api/` is served on the Access-fronted operator hostname, and an entrant login
-behind Cloudflare Access is an entrant login nobody can reach.
+| Prefix | Served by | What lives there |
+| --- | --- | --- |
+| `/e/api/*` | FastAPI | the entrant JSON API — the page projection, the public config, the open-page list, the fee quote, and `POST /e/api/submit/{slug}`, which is the write |
+| `/e/account/*` | FastAPI | the **entrant account** routes (`signup`, `login`, `logout`, `me`) added by SP-E1-2 — ruling R10, entrants have real accounts in their own tables with their own `sw_play_session` cookie, never `users`. These are **POST endpoints, not pages** |
+| everything else under `/e/` | the `entrant` node service (React Router 7, SSR) | the **pages** a human opens: `/e/{slug}` off a poster, `/e/{slug}/receipt/{id}`, and `/e/signup` \| `/e/login`, whose forms POST to the FastAPI routes above |
+
+Longest-prefix wins, so `/e/api/` and `/e/account/` reach FastAPI while a slug
+falls through to node. `api` and `account` are reserved slugs on the node side
+so a director cannot mint an entry page that collides with the split.
+
+The edge configuration for all of it already exists in `frontend/nginx.conf`:
+a `sw_entries` `limit_req` zone (**120 r/m, burst 30**, the same number
+`sw_display` uses) applied at all four `/e/` locations, plus an explicit
+`location /e/` block that also stops the SPA fallback swallowing entry links.
+
+**The zone's size is set by the flow, not by the number of routes.** A
+signed-out entrant's happy path is seven metered requests (page → signup page →
+POST signup → back to the page → quote → POST submit → receipt), so the
+original 20 r/m burst=5 gave a capacity of six: one reload or one mistyped
+password was a `429`, and a second entrant behind the same venue NAT within
+~18 s was a `429`. Do not lower it without re-counting that flow.
+
+The zone stays under `/e/` rather than moving to `/api/` on purpose — `/api/`
+is served on the Access-fronted operator hostname, and an entrant login behind
+Cloudflare Access is an entrant login nobody can reach. The `Cookie` header is
+rewritten on the way to node so only `sw_play_session` and `sw_play_csrf` get
+through: the **operator** session is inadmissible on the entrant tier by
+construction, not by convention.
 
 The operator's entries desk needs nothing of its own: it is
 `/tournaments/{id}/entries`, session-guarded, and rides the general `/api/`
 block.
 
 ::: warning Activated at Phase 2 deployment, deliberately not before
-Nothing routes to `/e/` in a shipped deployment today, and nothing should
-until the public-exposure gate has been passed. Turning it on is three
-changes, in this order:
+`/e/` now **routes** in every stack that has a frontend — Phase 6 wired the
+split above and added the `entrant` service to the base, release and selfhost
+compose files. What has not happened is **exposure**: no hostname has been
+published for it, and none should be until the public-exposure gate has been
+passed. Turning it on is three changes, in this order — **and step 3 is
+currently a known blocker, not an open question**:
 
 1. **Real Turnstile keys** (`TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`).
    The shipped defaults are Cloudflare's dummy always-pass pair.
@@ -269,22 +290,35 @@ changes, in this order:
    served under its own public hostname with no Access policy attached — that
    is what keeps §4a's exclusion list from growing a `/entries/*` entry every
    time a public surface appears.
-3. **The CSP question, still open but now only for the signup route.** SP-E1-2
-   moved the challenge off the entry page and onto entrant **signup** (ruling
-   R10 — a puzzle in front of a route that already requires an account charges
-   every honest entrant to slow an attacker who has already signed up). The
-   entry page ships **no client JavaScript at all**: the React Router 7 tier
-   that serves it renders no `<Scripts/>`, the acknowledgment gate is the HTML
-   `required` attribute, and the gender filtering and running fee total are
-   server round trips rather than script. (Until SP-PROGRAM-1 Phase 6 the page
-   was rendered by FastAPI and set its own `script-src 'none'` header; the
-   header is now the shared nginx snippet's, and the page has nothing to run
-   under it either way.) So there is nothing left on `/e/{slug}` for the
-   intersection of the
-   page policy and the nginx policy to break. What still needs answering
-   against a real browser is where the Turnstile widget renders for signup,
-   and under which policy. It is left as-is on purpose: a security header
-   loosened on a guess is worse than one that visibly breaks a widget.
+3. **The CSP question is answered, and the answer is that signup is broken.**
+   SP-E1-2 moved the challenge off the entry page and onto entrant **signup**
+   (ruling R10 — a puzzle in front of a route that already requires an account
+   charges every honest entrant to slow an attacker who has already signed up).
+   The entry page ships **no client JavaScript at all**: the React Router 7
+   tier renders no `<Scripts/>`, the acknowledgment gate is the HTML `required`
+   attribute, and the gender filtering and running fee total are server round
+   trips rather than script. (Until SP-PROGRAM-1 Phase 6 the page was rendered
+   by FastAPI and set its own `script-src 'none'` header; the header is now the
+   shared nginx snippet's, and the page has nothing to run under it either
+   way.) So there is nothing left on `/e/{slug}` for the intersection of the
+   page policy and the nginx policy to break.
+
+   **The signup page is a different story.** It renders
+   `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js">` into
+   its own markup, and `security-headers.conf` sends `script-src 'self'`, which
+   does not allow that host. A real browser blocks it, the widget never renders,
+   the form posts no `cf-turnstile-response`, and the server refuses an empty
+   token: **every entrant signup answers `403 AUTH_CHALLENGE_FAILED`.** Since
+   entering a tournament requires a session and a session requires an account,
+   the entrant surface is unusable end to end in any stack that serves it.
+   Verified in Chromium and with curl against the containerised stack
+   (SP-PROGRAM-1 Phase 6, Task 30). **Do not deploy the entrant surface until
+   this is settled.** The fix is a policy call between allowing Turnstile's
+   domains in `script-src`/`frame-src` on the entrant locations, and dropping
+   Turnstile from a route already covered by the `esignup:` throttle and the
+   `sw_entries` zone. Tracked in `docs/audits/debt-log.md`, and pinned by a
+   `test.fail()` marker in `e2e/tests/10-entrant-r11-evidence.spec.ts` that goes
+   red the day it is fixed.
 :::
 
 Once the remediation in `SEC_PROGRESS.md` has landed and you want public

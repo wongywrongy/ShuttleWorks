@@ -17,7 +17,7 @@ program brief — that file is the plan; deviation is a STOP).
 | 3 | SP-UI-1 appearance pass | **pre-executed** (see contradiction C1) | — |
 | 4 | Dogfood (floating) | not started | — |
 | 5 | E1 walking skeleton | **E1 SHIPPED 2026-08-06** (merged `86182af`, under Amendment A1); **phase open** — delta slice E1-2 (SP-ENTRIES-R3) not started | public-exposure [USER SIGN-OFF] gate still owed, after Phase 2 |
-| 6 | play.* scaffold + email | not started | — |
+| 6 | play.* scaffold + email | **steps 1/2/4 CODE-COMPLETE 2026-08-10**; step 3 (email) deferred entirely | **NOT SHIPPABLE — one BLOCKING defect open**: the signup page's Turnstile script is blocked by our own CSP, so *every* entrant signup answers 403 and no entrant can enter a tournament in any deployed stack (see the Phase 6 entry, "The ship blocker"). Exit gate's "a real verification-class email lands in a real inbox" clause also stays **OPEN by ruling** |
 | 7 | E2 lifecycle | not started | — |
 | 8 | E3 doubles | not started | — |
 | 9 | E4 signals/phases | not started | — |
@@ -926,3 +926,266 @@ owed before E2 (debt-log).
 http://localhost:5174 (director@example.com) · entrant maria.silva@example.com · stack
 `sw-e1-2-demo` (`docker compose -p sw-e1-2-demo -f
 products/scheduler/docker-compose.cloud.yml down -v` to discard).
+
+---
+
+## Phase 6 — the entrant application: CODE-COMPLETE, **NOT SHIPPABLE** (2026-08-10)
+
+**Design:** `docs/superpowers/specs/2026-08-07-phase6-entrant-app-design.md` (approved by the
+owner 2026-08-07). **Plan:** `docs/superpowers/plans/2026-08-07-phase6-entrant-app.md`.
+**Task ledger:** `.superpowers/sdd/2026-08-07-phase6-entrant-app/progress.md` — the running
+record of every task, review, fix round and finding; read it before re-opening any decision here.
+**Executes:** Phase 6 steps 1, 2 and 4. **Step 3 (email) is deferred entirely.**
+**Branch:** `dev/prog1-p6-entrant-app`, 61 commits off `4dc3a93`.
+
+### THE SHIP BLOCKER — no entrant can enter a tournament in any deployed stack
+
+**Read this before reading anything else in this entry.** The phase's code is complete and
+reviewed. The product it produces **does not work**, for one reason, found on the last build
+task of the phase and deliberately left unfixed:
+
+`products/scheduler/entrant/app/routes/signup.tsx` renders
+`<script src="https://challenges.cloudflare.com/turnstile/v0/api.js">` **directly into its own
+markup**. The nginx CSP (`products/scheduler/frontend/security-headers.conf`) sends
+`script-src 'self'`, which does not allow that host, so Chromium blocks it:
+`script-src-elem blocked https://challenges.cloudflare.com/turnstile/v0/api.js`. The widget
+never renders, so the form posts no `cf-turnstile-response`, so `verify_turnstile("")` refuses
+without a round trip: **every entrant signup answers `403 AUTH_CHALLENGE_FAILED`.** Because
+ruling R10 puts entry submission behind an entrant session, and a session requires an account,
+**the entrant surface is unusable end to end.** Reproduced in Chromium *and* with curl against
+the real containerised stack (Task 30).
+
+Dropping `<Scripts/>` from `app/root.tsx` (Task 22 fix A1) never touched this: that removed
+React Router's hydration scripts, not a tag a route writes itself. "This tier ships zero client
+JS" is true of the entry page and **false of the signup page**.
+
+**It is unfixed and awaiting an owner decision**, because both available fixes are policy calls,
+not implementation details:
+
+1. **Widen `script-src`** (and `frame-src`) on the entrant locations to allow Turnstile's
+   domains — the vendor's documented requirement, and a real weakening of the policy that stops
+   XSS on a money page. Size S.
+2. **Re-site or drop Turnstile** on a route already covered by the `esignup:<ip>` throttle and
+   the `sw_entries` nginx zone. This is what R10's own reasoning points at — a puzzle in front
+   of an already-rate-limited route charges every honest entrant. Size M.
+
+Pinned as an executable, self-clearing marker: the `test.fail()` case "the signup page emits
+zero CSP violations" in `products/scheduler/e2e/tests/10-entrant-r11-evidence.spec.ts` runs (it
+is not a skip) and **turns the suite red the day the defect is fixed and the marker goes
+stale**. Logged in full at `docs/audits/debt-log.md`. Amendment A1 is why it is logged and not
+fixed: option 1 is a security-policy change on a public origin and option 2 changes the
+anti-abuse posture — neither is an evidence pass's call.
+
+**Phase 6 is done except that the product does not work.** Nothing downstream — Phase 2's
+deployment, the public-exposure sign-off, Phase 7's E2 lifecycle — should proceed on the
+assumption that an entrant can reach the flow.
+
+### What shipped
+
+- **The entrant surface is a real application.** React Router 7 in framework mode at
+  `products/scheduler/entrant/`, served same-origin with the API (R8-A): nginx routes
+  `/e/api/` and `/e/account/` to FastAPI and everything else under `/e/` to node, so there is
+  no CORS, no cookie widening and no preflight anywhere in the flow. R8 spends SP-PROGRAM-1
+  rule 4's single sanctioned new-dependency exception. **The node tier never relays a
+  credential** — `apiFetch.server.ts` freezes an accept-only outbound header allowlist, and
+  that property is held by structural guards enumerated over `app/routes/` from disk, not by
+  one hardcoded path.
+- **F-E1-2-E1 is closed in code.** First-class HTML signup and login pages exist (`/e/signup`,
+  `/e/login`, node-owned; the forms POST to the unchanged FastAPI routes at `/e/account/*`).
+  The E1-2 walkthrough recorded that the logged-out page *named* `/e/account/*` and shipped no
+  form, so no human could self-serve an account; that demo used API calls and cookie injection.
+  **See the ship blocker: signup does not currently succeed.**
+- **The throwaway HTML module is retired**, and the path-based CSRF exemption with it, in one
+  commit (`84b73a3`) — they were the same fact, since the exemption could not be deleted while
+  the route it named still existed. `api/entries_public.py` went 1313 to ~350 lines, and its
+  router, its registration and the `main.py` import were deleted outright (an empty
+  registration reads like a public surface and is none). A cookie-carrying write now proves
+  itself with the custom header **or** a cookie-derived double-submit token (R8-B) — two
+  enumerated channels rather than one channel and an escape hatch.
+  **Correction to the plan's framing:** `_FORM_CSRF_ROUTES` was **not** the form-field proof
+  channel. It was a *bypass of the header check*. The field channel is
+  `app/form_csrf.form_csrf_proves()`, an awaited, path-independent clause that already ran
+  first for every route. Deleting the pattern removed a bypass and took no proof channel with
+  it — proven by re-running the mutation after the commit.
+- **`UNIQUE (tournament_id, idempotency_key)` became reachable for the first time**, and that
+  made a latent defect live: a native form cannot send a header, so a real entrant's key was
+  always `NULL`; the loader now mints one and carries it as a field. `submissions.replay` was
+  scoped by `(tournament_id, key)` only, so a guessed key returned **another entrant's
+  receipt**. Migration `t4e9a3c6d1f2` narrows the index to
+  `(tournament_id, account_id, idempotency_key)`, and `find_for_account` takes `account_id` as
+  a **required positional** so a loader that forgets it gets a `TypeError`, not a leak. No test
+  asserted the buggy behaviour — it survived as a *coverage* failure, not a wrong-assertion
+  failure.
+- **The tier ships zero client JavaScript.** Deleting `<Scripts/>` took the entry page from
+  **126.6 KB to 2.5 KB** and the enforced page-weight budget from 123 KB to **4 KB**, still
+  blocking. The inline `window.__reactRouterContext` payload went with it, so the viewer object
+  (an entrant **email**) is no longer in the document at all.
+
+### Rulings taken during the phase
+
+| # | Ruling | Status |
+|---|---|---|
+| **R8** | React Router 7, framework mode (SSR) — spends the single sanctioned new-dependency exception | in force |
+| **R8-A** | Same origin as the API; nginx splits by prefix. No `play.*` subdomain in this phase | in force; **it is also the accepted risk below** |
+| **R8-B** | Two enumerated CSRF proof channels: the custom header **or** a cookie-derived double-submit token | in force |
+| **R8-C** | The R14 fee quote stays session-gated | in force |
+| **R8-D** | Node mints the `sw_play_csrf` nonce itself and renders its digest; no credential relay, no backend change | in force |
+| **R8-E** | Always render the entry form; `Depends(get_current_entrant)` on the submit route produces the sign-in outcome — it is not a render condition | in force |
+| **R8-F** | Raise the page-weight budget to the measured framework floor (123 KB), gate stays blocking | **SUPERSEDED 2026-08-10.** Task 22 fix A1 deleted `<Scripts/>`, so the floor the ruling was derived from no longer exists: 126.6 KB to 2.5 KB, budget to **4 KB**, still blocking. Recorded rather than deleted — it was the right call against the framework floor that existed when it was made |
+
+R8-D and R8-E were taken mid-phase after a seam investigation returned **BROKEN**: node's
+projection fetch is always anonymous, so `viewer.signedIn` was always `false` and
+`viewer.formCsrf` always `""` on every server-rendered page. Cutting over without them would
+have rendered the form to nobody and 403'd anything that did submit. It was invisible because
+two test fixtures stubbed `viewer: {signedIn: true, formCsrf: 'csrf-token-abc'}` — **a shape
+the real projection can never return to node.** The suite was green because the fixtures
+assumed away the constraint the tier lives under.
+
+### The 92 tests: migrated, not deleted
+
+`tests/test_entries_public_routes.py` (92 tests, not the plan's 90) was removed at the
+cut-over. Every claim has a named successor or a written reason, held by
+`tests/test_entries_migration_parity.py`, whose assertions **inverted** at the cut-over: the
+predecessor-side rows became `test_the_superseded_file_is_gone`, which is strictly stronger
+post-cut-over because it fails if anyone reintroduces the old tests.
+
+| Group | Successor home | Count |
+|---|---|---|
+| page projection, entrant list, IA cards, fee schedule, escaping, uniform 404, viewer block, registration | `tests/test_entries_page_api.py` | 25 |
+| session gate, CSRF channels, acknowledgment, policy, fees, throttle, idempotency, soft flags, cross-tenant, body cap | `tests/test_entries_submit_api.py` | 53 |
+| render-level markup claims | `products/scheduler/entrant/tests/*` (inside the **required** CI gate) | 14 |
+| **deliberate drops, with written reasons** | — | **4** |
+
+74 + 18 = 92, machine-checked. The ruling in every migrated case: **submission behaviour is
+unchanged; only the serving context moves** from f-string HTML to RR7 plus a JSON route.
+
+**The 4 drops are a real coverage loss, reported rather than absorbed.** Three
+(`test_the_page_is_built_for_a_390px_screen`,
+`test_the_page_carries_both_a_phone_layout_and_a_desktop_layout`,
+`test_nothing_in_the_stylesheet_fixes_a_pixel_width`) asserted the contents of a hand-rolled
+inline `<style>` block **that no longer exists** — the entrant tier renders through the design
+system's Tailwind build, so a successor would be a class-name *spelling* check, which the
+entrant suite already says in its own words is not viewport coverage. The fourth
+(`test_the_success_page_points_at_my_entries_without_pretending_it_exists`) belonged to a
+success page the receipt route replaced.
+
+### R11 evidence — and precisely what it is and is not
+
+Task 30 replaced the three lost viewport claims with a genuine control: at 390px and at 1440px,
+against the **real Tailwind build in a real browser in front of the real containerised stack**,
+`scrollWidth > clientWidth` must be false on the entry, signup and login pages. Layout needs a
+layout engine; jsdom computes none, so vitest cannot see this at any price. Screenshots at both
+widths land in the gitignored `.playwright-mcp/` under explicit paths (per the CLAUDE.md
+bare-filename hazard); the committed artefact is the spec.
+
+It also proves CSP **as a browser enforces it** — the policy comes from nginx, not the app, so
+no dev server and no unit test is ever sent one — with its own negative control, because "no
+violations observed" is the easiest green in this repo to fake: a browser that was never sent a
+policy reports the same empty array as a clean page. An injected inline script must be both
+*reported* and *prevented from running*.
+
+**State it plainly: `products/scheduler/e2e` is not in the PR gate** (it boots the Docker
+stack; the gates are deliberately lean). So R11 moved from "held by the design system and by
+review" to **"a control that exists and can be run"** — not to "enforced". That is the honest
+improvement available without standing up a new CI job, and it is the one thing a reader of
+this entry should not round up.
+
+Related, logged as debt: **`products/scheduler/e2e` is in no eslint project at all.** Only
+`lint:scheduler` and `lint:entrant` exist, and neither covers that directory. It matters
+because that directory is now being asked to host enforced controls.
+
+### Two phase-long verification gaps are now CLOSED
+
+Every task from 22 onward reported these as unverifiable for want of a running daemon. Docker
+came up during Task 30 and both were checked on the real stack:
+
+- **The entrant image builds** (exit 0) — so the Dockerfile CMD path
+  `./node_modules/@react-router/serve/bin.js`, previously verified only from package-lock
+  reasoning, resolves inside the image.
+- **`nginx -t` passes** inside the running frontend container — the first time it has been run
+  against an `nginx.conf` that three separate agents edited.
+
+### The exit gate: the email clause stays OPEN, by ruling
+
+Phase 6's exit gate includes "a real verification-class email lands in a real inbox". **It is
+not met, and it is recorded as deferred rather than quietly dropped** (design §1, §10.6).
+Step 3 needs an SMTP seam, a provider and DNS; Phase 2 (deploy on `wongworks.dev`) is not done,
+and Amendment A1 forbids the DNS work the step requires. The clause is carried, not closed.
+Phase 6 is code-complete against steps 1, 2 and 4 only, and this paragraph is the record that
+the difference is deliberate.
+
+### Accepted risk, logged
+
+Same origin (R8-A) fuses two blast radii that were previously separate: script anywhere on the
+origin can read the `_csrf` field out of the DOM, and can attach `X-ShuttleWorks-CSRF: 1`
+itself and drive `/api/*` with the httponly `sw_session`. Taken knowingly; in-phase mitigations
+are the per-response nonce CSP on the SSR tier, no user-supplied HTML in loader output, and the
+resolution of the CSP-duplication tension. **Named exit: Phase 11's origin split.** Logged to
+`docs/audits/debt-log.md`.
+
+### Two lessons the phase earned, for `CODE_HEALTH.md`
+
+1. **"Controls that cannot fail" was the dominant defect class — 13+ found across the phase.**
+   Not wrong assertions: assertions no mutation can redden. A regex matching only `let|var`
+   while citing `const x = new Map()`; a Set-Cookie relay assertion with no upstream Set-Cookie
+   to relay; `expect(credentials).toBe('same-origin')` where the default already is; a Makefile
+   control asserting a port literal that stayed green through two Criticals. Worst of all, one
+   was **already shipped**: `test_an_operator_session_does_not_authorize_a_submit` claimed an
+   operator cookie cannot submit, but the fixture never minted one, so `in (401, 403)` was
+   satisfied by the route's CSRF guard alone — proven by degrading the identity gate and
+   watching it stay green while both neighbours went red. **Every control owes an executed
+   mutation.** That question — "what edit makes this red?" — caught all 13, and asking it is
+   cheap.
+2. **Ten consecutive tasks were bitten by plan-vs-shipped DTO drift.** The plan's assumed
+   projection shape was wrong every time, and its test bodies would have `KeyError`'d, or
+   compiled clean and been `undefined` at runtime. The fix that worked was procedural: every
+   dispatch from Task 15 onward carried "reconcile the brief field-by-field against the shipped
+   type before writing a line". **A plan is a hypothesis about the code; verify it against the
+   code at dispatch, not at review.**
+
+### Deliberately not done
+
+Email (above); a `play.*` subdomain (R8-A — Phase 11); E2 lifecycle (withdrawals, partner
+confirmation, payment state, "my entries" — Phase 7); F-E1 (entry events map onto a Meet
+division, not a slot — still open, not patched ad hoc); the receipt page reads no submission at
+all, so any well-formed UUID renders one (uniform, so no enumeration oracle, but a receipt is
+therefore not evidence of anything — a Phase 7 follow-up in the debt log). **Nothing touched
+the Cloudflare dashboard, DNS, tunnel config or Access** (Amendment A1) — which is also why the
+ship blocker above is logged and not fixed.
+
+Two smaller things also logged rather than fixed, both found by Task 30's dual-width capture:
+the entry page renders a **"Sign out" button to anonymous visitors**, in the same document that
+tells them to "Sign in or create an entrant account to enter" (the footer is unconditional and
+the SSR viewer projection is anonymous for every reader); and `/e` with no trailing slash
+serves a **soft 404** — React Router matches `root.tsx` on the basename and returns `200` with
+an empty `<body>`, which is indexable by a crawler and a white screen to a human.
+
+### Gates at the close (2026-08-10)
+
+| Gate | Result |
+|---|---|
+| `make check` (eslint + vitest + depcruise + ruff + pytest) | **exit 0** |
+| Backend `pytest` | **1560 passed / 66 skipped** (Phase 0 baseline 1018/66; Phase 6 branch start 1454/66) |
+| Entrant `test:run` | **269/269** |
+| `npm run docs:build` (hard gate — broken internal links) | clean |
+| `docker compose config -q`, all six stacks | clean |
+| `nginx -t` | successful, **inside the running frontend container** (first run of the phase) |
+| Entrant image build | exit 0 (first build of the phase) |
+| `e2e/tests/10-entrant-r11-evidence.spec.ts` | 5 cases: 4 green, **1 `test.fail()` marking the ship blocker**. Not in the PR gate |
+
+The backend count is **down 91 from the pre-cut-over 1651**, and that is expected: the deleted
+file contributed 92 and `test_csrf_cookie_registry.py` gained 1. It is up **542** on the
+Phase 0 baseline. The 18 render claims left pytest for the entrant vitest suite and the e2e
+spec, so "strictly up in pytest alone" was never the right check — the sum across suites is.
+
+### Task order actually run
+
+`1-3 · 4-7 · 8-13 · 14-18 (+18b) · 19-21 · 21b · 25-27 · 22-24 · 28-29 · 31 · 30 · 32`.
+Deployment (22-24) moved to last-but-one by owner amendment (build locally first,
+internet-facing work last) — **not** last, because the cut-over deletes the FastAPI `/e/{slug}`
+routes while nginx still points `/e/` at the backend until Task 22. Task **31 ran before 30** by
+owner sequencing, so the R11 evidence pass captured final post-cut-over state. The plan's text
+for Tasks 30 and 32 assumes the original order and is stale wherever the two disagree: Task 30
+did not need to re-home 18 render claims (the cut-over had already homed 14 of them inside the
+required CI gate), and Task 32's proposed parity-ledger edits describe assertions the cut-over
+had already replaced.

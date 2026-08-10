@@ -970,3 +970,42 @@ a green 1,100-test suite. The real check is the viewer flow in
   control on the one page a stranger reaches off a poster. Gate it on the same signal the
   "Sign in or create an entrant account" line already branches on. Size XS.
   *(SP-PROGRAM-1 Phase 6, Task 30.)*
+
+- **2026-08-10 · SP-PROGRAM-1 Phase 6 ACCEPTED RISK — same origin fuses the entrant and
+  operator blast radii.** Ruling R8-A puts the entrant app, the operator SPA and `/api/` on one
+  public hostname, so a script that gets a foothold anywhere on that origin reaches all three.
+  Two consequences, both **accepted knowingly rather than overlooked**: it can read the `_csrf`
+  hidden field out of the DOM — double-submit is same-origin-readable by construction — and
+  submit as the entrant; and, worse, it can attach `X-ShuttleWorks-CSRF: 1` itself and drive
+  `/api/*` with the httponly `sw_session`, because that header proves "a same-origin browser
+  sent this" and nothing more. Two blast radii that were previously separate are now one.
+  **In-phase mitigations shipped:** the SSR tier ships zero client JavaScript at all (Task 22
+  fix A1 deleted `<Scripts/>`, so `script-src 'self'` is strict rather than decorative on
+  `/e/`), a per-response nonce is minted by node and carried on the SSR document (R8-D), no
+  user-supplied HTML appears in any loader output, and the CSP-duplication tension previously
+  recorded at `frontend/nginx.conf` is resolved (the snippet and any page-set header are both
+  sent; browsers enforce the intersection). **Named exit: Phase 11's origin split** — `play.*`
+  on its own hostname is what actually fixes this, and R8-A defers the subdomain to that
+  cut-over precisely so it lands with the rest of the marketing/DNS work. This entry is the
+  record that the debt was taken deliberately, with its exit identified. Size M, and the size
+  is Phase 11's, not a standalone task. *(Design
+  `docs/superpowers/specs/2026-08-07-phase6-entrant-app-design.md` §3; SP-PROGRAM-1 Phase 6,
+  Task 32.)*
+
+- **2026-08-10 · `products/scheduler/e2e` is in no eslint project, and nothing in CI runs it —
+  yet it is now where an enforced-sounding control lives.** Only `lint:scheduler` and
+  `lint:entrant` exist (root `package.json`), and neither covers that directory; `make check`
+  and `.github/workflows/ci.yml` lint the frontend and the entrant app and nothing else, so
+  `e2e/**` is unlinted TypeScript. Separately, e2e is deliberately **not** in the PR gate (it
+  boots the Docker stack — see CLAUDE.md, "the lean-gate philosophy"). Both were tolerable
+  while e2e held one smoke spec. They are less so now: the Phase 6 cut-over dropped three R11
+  viewport claims whose only successor is
+  `e2e/tests/10-entrant-r11-evidence.spec.ts`, so **R11's two co-equal widths went from "held
+  by the design system and by review" to "a control that exists and can be run" — not to
+  "enforced"**, and the file asserting it is not even type-linted. The same file carries the
+  self-clearing `test.fail()` marker for the Turnstile ship blocker above, so a stale marker
+  reddens a suite nobody runs. Two separable fixes: add an eslint project for `e2e/**` plus a
+  `lint:e2e` script (Size XS), and decide whether a scheduled — not per-PR — e2e job is worth
+  standing up (Size M, a gate-policy call, not a code change). Recording rather than fixing:
+  adding a CI job is exactly the kind of gate change CLAUDE.md says not to make casually.
+  *(SP-PROGRAM-1 Phase 6, Tasks 30/32.)*
