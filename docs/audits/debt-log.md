@@ -818,18 +818,18 @@ a green 1,100-test suite. The real check is the viewer flow in
   is the named consumer that should route submission reads through it. Size S.
   *(SP-PROGRAM-1 Phase 6 Task 18 review.)*
 
-- **CLOSED 2026-08-07 by Task 22 (ingress).** `frontend/nginx.conf` now carries
-  `location = /robots.txt` proxying to `http://entrant:3000/e/robots.txt` — an exact match,
-  so it outranks the SPA fallback, with the upstream path rewritten so there is one body
-  rather than a copy on disk. Verified end to end (real nginx in front of the entrant
-  production image returned the `Disallow: /` body at the origin root), and held by
-  `entrant/tests/ingress.test.ts`, whose deletion mutation was confirmed red. `/e/sitemap.
-  xml` was deliberately NOT hoisted: it has a second discovery channel (this file's
-  `Sitemap:` line) and a root alias would be a second URL for one document.
-  ~~**2026-08-07 · SP-PROGRAM-1 Phase 6 Task 27 — `/e/robots.txt` is inert until ingress maps
-  the origin root at it. Owner: Task 22 (ingress).**~~ `app/routes/robots.tsx` serves the file
-  at `/e/robots.txt` only, because `react-router.config.ts` mounts the whole entrant app
-  under the `/e/` basename (R8-A) and a route table cannot claim the origin root. Per RFC
+- ~~**2026-08-07 · SP-PROGRAM-1 Phase 6 Task 27 — `/e/robots.txt` is inert until ingress maps
+  the origin root at it. Owner: Task 22 (ingress).**~~ — ✅ **CLOSED 2026-08-07 by Task 22
+  (ingress).** `frontend/nginx.conf` now carries `location = /robots.txt` proxying to
+  `http://entrant:3000/e/robots.txt` — an exact match, so it outranks the SPA fallback, with
+  the upstream path rewritten so there is one body rather than a copy on disk. Verified end
+  to end (real nginx in front of the entrant production image returned the `Disallow: /`
+  body at the origin root), and held by `entrant/tests/ingress.test.ts`, whose deletion
+  mutation was confirmed red. `/e/sitemap.xml` was deliberately NOT hoisted: it has a second
+  discovery channel (this file's `Sitemap:` line) and a root alias would be a second URL for
+  one document. `app/routes/robots.tsx` serves the file at `/e/robots.txt` only, because
+  `react-router.config.ts` mounts the whole entrant app under the `/e/` basename (R8-A) and
+  a route table cannot claim the origin root. Per RFC
   9309 a crawler fetches `/robots.txt` at the **origin root and nowhere else** — a copy
   under a subpath is never consulted — and nothing today maps root to it:
   `products/scheduler/frontend/nginx.conf` has no `location = /robots.txt`. So the file
@@ -891,3 +891,20 @@ a green 1,100-test suite. The real check is the viewer flow in
   `window.__reactRouterContext` payload. Budget re-derived at 4 KB (4.4 KB with the 10% CI
   slack); still blocking, still verified by lowering `BUDGET_KB` and observing exit 1.
   *(SP-PROGRAM-1 Phase 6, Task 22 review-fix pass.)*
+
+- **2026-08-10 · SP-PROGRAM-1 Phase 6 — `/e/` is a soft-404, so `/e` cannot be redirected at
+  it yet.** The Task 22 ingress review asked for `location = /e { return 301 /e/; }` in
+  `frontend/nginx.conf`: bare `/e` matches no location, falls through to `location /` → the
+  operator SPA's `index.html` → a blank operator route, which is verbatim the symptom the
+  explicit `/e/` block exists to prevent, and `/e` is a plausible mistyping of a poster URL.
+  **The redirect was deliberately NOT shipped.** Measuring what `/e/` actually serves first
+  — the real route table through `createRequestHandler` — showed it is *worse* than the 404
+  the fix assumed: with no index route, React Router matches `root.tsx` on the basename
+  itself and returns **HTTP 200 with an empty `<body>`**. A soft-404: indexable by a
+  crawler, a white screen to a human. Every other miss on this tier is honest
+  (`/e/unknown-slug` → 404 "This entry page is not available"; `/e/no/such/deep/path` → the
+  framework's default 404 page), so this is the one gap. Redirecting `/e` there would trade
+  a blank operator page for a blank entrant page. The fix is an index route in
+  `app/routes.ts` throwing the same `notFound()` the `:slug` loader throws (or a redirect to
+  the organiser's page, once one exists); the one-line nginx redirect belongs in that same
+  change, not before it. Size XS. *(SP-PROGRAM-1 Phase 6, Task 22 review-fix pass B.)*

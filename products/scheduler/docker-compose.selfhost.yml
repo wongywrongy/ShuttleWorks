@@ -254,10 +254,15 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      # Ordering only — nginx starts with an unresolvable upstream, so a
-      # missing entrant is a 502 on `/e/*`, not a dead proxy.
+      # STARTED, not healthy. nginx resolves the literal
+      # `proxy_pass http://entrant:3000;` at CONFIG LOAD and exits
+      # `[emerg] host not found in upstream` with no address for the name, so
+      # the dependency is required — but a running container is all compose's
+      # DNS needs. `service_healthy` put the whole origin (operator SPA and
+      # `/api/` included) behind the health of the PUBLIC entrant tier, so a
+      # sick entrant took the console down with it.
       entrant:
-        condition: service_healthy
+        condition: service_started
     read_only: true
     tmpfs:
       # nginx writes its pid + client body temp files here.

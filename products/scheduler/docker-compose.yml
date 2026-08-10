@@ -113,12 +113,20 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-      # Ordering, not startup: nginx starts fine with an unresolvable
-      # upstream (verified), so a missing entrant is a 502 on `/e/*` rather
-      # than a dead proxy. Waiting for it means the first visitor after
-      # `up` gets the page instead of the 502.
+      # STARTED, not healthy — and the dependency is required, not cosmetic.
+      # `proxy_pass http://entrant:3000;` is a LITERAL upstream, so nginx
+      # resolves the name at CONFIG LOAD and exits `[emerg] host not found in
+      # upstream` when it has no address. What it needs is compose's embedded
+      # DNS answering, which a merely-running container already provides.
+      #
+      # It must NOT be `service_healthy`. nginx is the only thing serving the
+      # operator SPA and the `/api/` proxy, so waiting on the health of the
+      # PUBLIC entrant tier put the whole origin — console included — behind
+      # it: an entrant that never reports healthy took the console down with
+      # it. Before the `/e/` split the console had no dependency on this
+      # service at all, and it must not acquire one now.
       entrant:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     read_only: true
     tmpfs:
