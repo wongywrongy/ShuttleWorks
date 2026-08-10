@@ -290,7 +290,7 @@ currently a known blocker, not an open question**:
    served under its own public hostname with no Access policy attached — that
    is what keeps §4a's exclusion list from growing a `/entries/*` entry every
    time a public surface appears.
-3. **The CSP question is answered, and the answer is that signup is broken.**
+3. **The CSP question is answered: the policy admits Turnstile on one path.**
    SP-E1-2 moved the challenge off the entry page and onto entrant **signup**
    (ruling R10 — a puzzle in front of a route that already requires an account
    charges every honest entrant to slow an attacker who has already signed up).
@@ -303,22 +303,30 @@ currently a known blocker, not an open question**:
    way.) So there is nothing left on `/e/{slug}` for the intersection of the
    page policy and the nginx policy to break.
 
-   **The signup page is a different story.** It renders
-   `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js">` into
-   its own markup, and `security-headers.conf` sends `script-src 'self'`, which
-   does not allow that host. A real browser blocks it, the widget never renders,
-   the form posts no `cf-turnstile-response`, and the server refuses an empty
-   token: **every entrant signup answers `403 AUTH_CHALLENGE_FAILED`.** Since
-   entering a tournament requires a session and a session requires an account,
-   the entrant surface is unusable end to end in any stack that serves it.
-   Verified in Chromium and with curl against the containerised stack
-   (SP-PROGRAM-1 Phase 6, Task 30). **Do not deploy the entrant surface until
-   this is settled.** The fix is a policy call between allowing Turnstile's
-   domains in `script-src`/`frame-src` on the entrant locations, and dropping
-   Turnstile from a route already covered by the `esignup:` throttle and the
-   `sw_entries` zone. Tracked in `docs/audits/debt-log.md`, and pinned by a
-   `test.fail()` marker in `e2e/tests/10-entrant-r11-evidence.spec.ts` that goes
-   red the day it is fixed.
+   **The signup page is a different story, and it cost a policy change.** It
+   renders `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js">`
+   into its own markup. `security-headers.conf` used to send `script-src 'self'`
+   for it too, so a real browser blocked the script, the widget never rendered,
+   the form posted no `cf-turnstile-response`, and the server refused the empty
+   token: **every entrant signup answered `403 AUTH_CHALLENGE_FAILED`** — and
+   since entering a tournament requires a session and a session requires an
+   account, the entrant surface was unusable end to end in any stack that served
+   it. Found in Chromium and with curl against the containerised stack
+   (SP-PROGRAM-1 Phase 6, Task 30) and fixed in Task 33.
+
+   **The fix, and what it costs you.** `nginx.conf` now carries a
+   `$sw_turnstile_origin` map that appends `https://challenges.cloudflare.com`
+   to `script-src` and `frame-src` — the two directives Cloudflare
+   [documents as required](https://developers.cloudflare.com/turnstile/reference/content-security-policy/)
+   — **for `/e/signup` and no other path.** So the origin you host trusts one
+   third-party script host, on one public page, and the operator console served
+   from the same origin still gets `script-src 'self'` byte for byte. That
+   scoping is not decoration: the two tiers share an origin, so a global
+   widening would have handed the console a third-party script source it has no
+   use for. Nothing about your Cloudflare account, DNS, tunnel or Access config
+   changes — this is our own nginx header. `e2e/tests/10-entrant-r11-evidence.spec.ts`
+   holds both halves: the widget must render with zero CSP violations, and no
+   path other than `/e/signup` may name that host.
 :::
 
 Once the remediation in `SEC_PROGRESS.md` has landed and you want public

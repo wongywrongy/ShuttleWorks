@@ -17,7 +17,7 @@ program brief — that file is the plan; deviation is a STOP).
 | 3 | SP-UI-1 appearance pass | **pre-executed** (see contradiction C1) | — |
 | 4 | Dogfood (floating) | not started | — |
 | 5 | E1 walking skeleton | **E1 SHIPPED 2026-08-06** (merged `86182af`, under Amendment A1); **phase open** — delta slice E1-2 (SP-ENTRIES-R3) not started | public-exposure [USER SIGN-OFF] gate still owed, after Phase 2 |
-| 6 | play.* scaffold + email | **steps 1/2/4 CODE-COMPLETE 2026-08-10**; step 3 (email) deferred entirely | **NOT SHIPPABLE — one BLOCKING defect open**: the signup page's Turnstile script is blocked by our own CSP, so *every* entrant signup answers 403 and no entrant can enter a tournament in any deployed stack (see the Phase 6 entry, "The ship blocker"). Exit gate's "a real verification-class email lands in a real inbox" clause also stays **OPEN by ruling** |
+| 6 | play.* scaffold + email | **steps 1/2/4 COMPLETE 2026-08-10**; step 3 (email) deferred entirely | **SHIPPABLE.** The one BLOCKING defect (the signup page's Turnstile script blocked by our own CSP → *every* signup 403) is **RESOLVED**: the CSP now admits `challenges.cloudflare.com` in `script-src`/`frame-src` on `/e/signup` only, verified end to end in a browser (see the Phase 6 entry, "The ship blocker — resolved"). Exit gate's "a real verification-class email lands in a real inbox" clause stays **OPEN by ruling** |
 | 7 | E2 lifecycle | not started | — |
 | 8 | E3 doubles | not started | — |
 | 9 | E4 signals/phases | not started | — |
@@ -929,7 +929,7 @@ products/scheduler/docker-compose.cloud.yml down -v` to discard).
 
 ---
 
-## Phase 6 — the entrant application: CODE-COMPLETE, **NOT SHIPPABLE** (2026-08-10)
+## Phase 6 — the entrant application: COMPLETE (2026-08-10)
 
 **Design:** `docs/superpowers/specs/2026-08-07-phase6-entrant-app-design.md` (approved by the
 owner 2026-08-07). **Plan:** `docs/superpowers/plans/2026-08-07-phase6-entrant-app.md`.
@@ -938,11 +938,13 @@ record of every task, review, fix round and finding; read it before re-opening a
 **Executes:** Phase 6 steps 1, 2 and 4. **Step 3 (email) is deferred entirely.**
 **Branch:** `dev/prog1-p6-entrant-app`, 61 commits off `4dc3a93`.
 
-### THE SHIP BLOCKER — no entrant can enter a tournament in any deployed stack
+### THE SHIP BLOCKER — RESOLVED 2026-08-10 (Task 33)
 
-**Read this before reading anything else in this entry.** The phase's code is complete and
-reviewed. The product it produces **does not work**, for one reason, found on the last build
-task of the phase and deliberately left unfixed:
+**Kept in full, because how it was found is the reusable part.** For two days this phase was
+code-complete and shipped a product that did not work. The defect, the way it surfaced, and
+what the fix cost:
+
+#### The defect
 
 `products/scheduler/entrant/app/routes/signup.tsx` renders
 `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js">` **directly into its own
@@ -959,26 +961,63 @@ Dropping `<Scripts/>` from `app/root.tsx` (Task 22 fix A1) never touched this: t
 React Router's hydration scripts, not a tag a route writes itself. "This tier ships zero client
 JS" is true of the entry page and **false of the signup page**.
 
-**It is unfixed and awaiting an owner decision**, because both available fixes are policy calls,
-not implementation details:
+It was recorded rather than fixed on the spot, because both available fixes were policy calls
+and neither was an evidence pass's to make (Amendment A1): **(1)** allow Turnstile's origin in
+`script-src`/`frame-src` — the vendor's documented requirement, and a real weakening of the
+policy that stops XSS on a money page; or **(2)** re-site or drop Turnstile from a route already
+covered by the `esignup:<ip>` throttle and the `sw_entries` nginx zone, which is what R10's own
+reasoning points at.
 
-1. **Widen `script-src`** (and `frame-src`) on the entrant locations to allow Turnstile's
-   domains — the vendor's documented requirement, and a real weakening of the policy that stops
-   XSS on a money page. Size S.
-2. **Re-site or drop Turnstile** on a route already covered by the `esignup:<ip>` throttle and
-   the `sw_entries` nginx zone. This is what R10's own reasoning points at — a puzzle in front
-   of an already-rate-limited route charges every honest entrant. Size M.
+#### How it was caught, and the mechanism worth keeping
 
-Pinned as an executable, self-clearing marker: the `test.fail()` case "the signup page emits
-zero CSP violations" in `products/scheduler/e2e/tests/10-entrant-r11-evidence.spec.ts` runs (it
-is not a skip) and **turns the suite red the day the defect is fixed and the marker goes
-stale**. Logged in full at `docs/audits/debt-log.md`. Amendment A1 is why it is logged and not
-fixed: option 1 is a security-policy change on a public origin and option 2 changes the
-anti-abuse posture — neither is an evidence pass's call.
+Nothing in the unit gates could see this. The policy comes from **nginx**, so no dev server and
+no jsdom test is ever sent one: `react-router dev` sends no CSP at all, and the entrant suite's
+269 tests were green throughout. It took a real browser in front of the real containerised
+stack — which is exactly the class of regression the plan predicted a unit suite structurally
+cannot hold, and the reason Task 30 exists.
 
-**Phase 6 is done except that the product does not work.** Nothing downstream — Phase 2's
-deployment, the public-exposure sign-off, Phase 7's E2 lifecycle — should proceed on the
-assumption that an entrant can reach the flow.
+It was then pinned as an **executable, self-clearing marker**: the case "the signup page emits
+zero CSP violations" shipped as `test.fail()`, so it *ran*, and the day the defect was fixed it
+passed unexpectedly and turned the suite red — forcing the stale marker out rather than letting
+it rot as a skip nobody reads. That is the mechanism to reuse for any defect found without a
+mandate to fix it.
+
+#### The resolution (Task 33)
+
+**The owner chose option 1: allow Turnstile in the CSP.** It is
+[Cloudflare's documented requirement](https://developers.cloudflare.com/turnstile/reference/content-security-policy/)
+and it restores the behaviour `signup.tsx` was already written to have.
+
+**Scoped to one path, via a `map` rather than a wider snippet.** `frontend/nginx.conf` gains
+`map $uri $sw_turnstile_origin` yielding `" https://challenges.cloudflare.com"` for
+`~^/e/signup` and `""` everywhere else; `security-headers.conf` interpolates it into
+`script-src 'self'$sw_turnstile_origin` and a newly-**explicit** `frame-src
+'self'$sw_turnstile_origin` (`frame-src` was absent and inheriting `default-src 'self'` —
+spelling it out admits the widget's iframe without widening `default-src` and every other
+fetch directive that falls back to it). A per-location *variant snippet* was rejected on
+mechanics, not taste: nginx cannot override an `add_header`, so a variant means duplicating the
+whole header list, and two `Content-Security-Policy` headers are enforced as their
+**intersection** — which would block Turnstile just the same. The map also touches no proxy
+block, so it comes nowhere near the `proxy_set_header Cookie` line whose duplication is the
+real hazard in that file.
+
+**What it cost, stated plainly.** The origin now trusts one third-party script host, on one
+public page. That is not free — the accepted risk below (same origin fuses the entrant and
+operator blast radii) is precisely why the scoping matters: `/e/login`, `/e/{slug}`, `/api/`
+and the operator SPA at `/` are still sent the previous policy byte for byte, verified with
+curl against the running stack. Phase 11's origin split remains the real exit.
+
+**Verified end to end in Chromium against the containerised stack**: zero CSP violations on
+`/e/signup`, the widget renders, the `challenges.cloudflare.com` frame attaches, and a signup
+**succeeds** — `POST /e/account/signup → 303`, with a subsequent login on the new credentials
+issuing `sw_play_session` where a bogus address issues none. The stack runs Cloudflare's
+always-pass **test** keys (the shipped defaults), so that proves the CSP and the wiring rather
+than Cloudflare's own scoring path. The `test.fail()` marker is now a live control, joined by a
+sibling that fails if any path other than `/e/signup` names that host; both go red on removing
+the origin from `script-src` (executed). Amendment A1 held throughout — no Cloudflare
+dashboard, DNS, tunnel or Access change was involved, only our own nginx header.
+
+**Phase 6 is done, and the product works.** Nothing downstream is blocked on it.
 
 ### What shipped
 
@@ -994,7 +1033,8 @@ assumption that an entrant can reach the flow.
   `/e/login`, node-owned; the forms POST to the unchanged FastAPI routes at `/e/account/*`).
   The E1-2 walkthrough recorded that the logged-out page *named* `/e/account/*` and shipped no
   form, so no human could self-serve an account; that demo used API calls and cookie injection.
-  **See the ship blocker: signup does not currently succeed.**
+  Signup was 403ing on the CSP until Task 33; it now succeeds end to end in a real browser
+  (see "The ship blocker — resolved").
 - **The throwaway HTML module is retired**, and the path-based CSRF exemption with it, in one
   commit (`84b73a3`) — they were the same fact, since the exemption could not be deleted while
   the route it named still existed. `api/entries_public.py` went 1313 to ~350 lines, and its
@@ -1150,8 +1190,8 @@ confirmation, payment state, "my entries" — Phase 7); F-E1 (entry events map o
 division, not a slot — still open, not patched ad hoc); the receipt page reads no submission at
 all, so any well-formed UUID renders one (uniform, so no enumeration oracle, but a receipt is
 therefore not evidence of anything — a Phase 7 follow-up in the debt log). **Nothing touched
-the Cloudflare dashboard, DNS, tunnel config or Access** (Amendment A1) — which is also why the
-ship blocker above is logged and not fixed.
+the Cloudflare dashboard, DNS, tunnel config or Access** (Amendment A1) — including the ship
+blocker's fix, which is a header our own nginx sends and touches none of the four.
 
 Two smaller things also logged rather than fixed, both found by Task 30's dual-width capture:
 the entry page renders a **"Sign out" button to anonymous visitors**, in the same document that
@@ -1171,7 +1211,7 @@ an empty `<body>`, which is indexable by a crawler and a white screen to a human
 | `docker compose config -q`, all six stacks | clean |
 | `nginx -t` | successful, **inside the running frontend container** (first run of the phase) |
 | Entrant image build | exit 0 (first build of the phase) |
-| `e2e/tests/10-entrant-r11-evidence.spec.ts` | 5 cases: 4 green, **1 `test.fail()` marking the ship blocker**. Not in the PR gate |
+| `e2e/tests/10-entrant-r11-evidence.spec.ts` | **6/6 green** against the containerised stack. Shipped as 5 cases with 1 `test.fail()` marking the ship blocker; Task 33 flipped it to a live control and added the scoping sibling. Not in the PR gate |
 
 The backend count is **down 91 from the pre-cut-over 1651**, and that is expected: the deleted
 file contributed 92 and `test_csrf_cookie_registry.py` gained 1. It is up **542** on the

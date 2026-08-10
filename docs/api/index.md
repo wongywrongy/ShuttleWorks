@@ -194,12 +194,17 @@ cookie and never reach an operator route. Cookie-carrying writes here prove them
 that ships no JavaScript can still submit — there is no path-based CSRF exemption anywhere in
 the app, and `tests/test_csrf_cookie_registry.py` asserts that from source.
 
-::: danger Known blocker: entrant signup returns 403 in every deployed stack
-The signup page loads Turnstile's script from `challenges.cloudflare.com`, and the nginx CSP
-sends `script-src 'self'`, which blocks it — so the form posts no `cf-turnstile-response` and
-`POST /e/account/signup` refuses with `403 AUTH_CHALLENGE_FAILED`. No entrant can create an
-account, and therefore none can submit an entry. Awaiting an owner decision; see
-`docs/audits/debt-log.md` and the Phase 6 entry in `docs/programs/ENTRIES_PROGRESS.md`.
+::: tip Resolved: the CSP now admits Turnstile, on `/e/signup` only
+Entrant signup used to answer `403 AUTH_CHALLENGE_FAILED` in every deployed stack: the signup
+page loads Turnstile's script from `challenges.cloudflare.com`, the nginx CSP sent
+`script-src 'self'`, the browser blocked it, and the form posted no `cf-turnstile-response`.
+Fixed by the `$sw_turnstile_origin` map in `frontend/nginx.conf`, which adds that origin to
+`script-src` and `frame-src` — Cloudflare's
+[documented requirement](https://developers.cloudflare.com/turnstile/reference/content-security-policy/)
+— for `/e/signup` and no other path, so the operator console on the same origin still gets
+`script-src 'self'`. The cost is one trusted third-party script host on one public page.
+Held by `e2e/tests/10-entrant-r11-evidence.spec.ts`, which fails if the widget stops rendering
+**or** if the allowance widens past that page.
 :::
 
 ### Auth — self-hosted accounts & sessions

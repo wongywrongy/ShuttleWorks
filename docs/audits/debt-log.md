@@ -957,6 +957,41 @@ a green 1,100-test suite. The real check is the viewer flow in
   `test.fail()`, so it turns the suite red the day the defect is fixed and the marker is stale.
   Size S (config) / M (if Turnstile is re-sited). *(SP-PROGRAM-1 Phase 6, Task 30.)*
 
+- **2026-08-10 · CLOSED, the entry above — the owner took the first option, and it is scoped
+  to one path.** The ruling: allow Turnstile in the CSP. It is
+  [Cloudflare's documented requirement](https://developers.cloudflare.com/turnstile/reference/content-security-policy/)
+  (`script-src` + `frame-src` on `https://challenges.cloudflare.com`) and it restores the
+  behaviour `signup.tsx` was already written to have; re-siting Turnstile and making
+  verification optional were both offered and not chosen. **What shipped is a `map`, not a
+  wider snippet.** `frontend/nginx.conf` gains `map $uri $sw_turnstile_origin` yielding
+  `" https://challenges.cloudflare.com"` for `~^/e/signup` and `""` everywhere else, and
+  `security-headers.conf` interpolates it into `script-src 'self'$sw_turnstile_origin` and a
+  newly-explicit `frame-src 'self'$sw_turnstile_origin` (`frame-src` was previously absent and
+  inheriting `default-src 'self'` — spelling it out is what admits the widget's iframe without
+  widening `default-src` and every other fetch directive that falls back to it). Verified with
+  curl against the running stack: `/e/signup` carries both origins, `/e/login`, `/e/{slug}`,
+  `/api/` and the operator SPA at `/` carry the previous policy byte for byte. **Why a map and
+  not a second headers snippet:** nginx cannot override an `add_header`, so a per-location
+  variant means duplicating the whole header list (the drift the one-file design exists to
+  prevent), and two `Content-Security-Policy` headers are enforced as their INTERSECTION —
+  which would block Turnstile just the same. The map touches no proxy block, so it comes
+  nowhere near the `proxy_set_header Cookie "$sw_play_session_cookie$sw_play_csrf_cookie"`
+  line whose duplication is the actual hazard in this file. **The cost, stated plainly:** the
+  origin now trusts one third-party script host on one public page, which the accepted risk
+  two entries below (same origin fuses the two blast radii) makes non-zero — the scoping is
+  what keeps the operator console out of it, and Phase 11's origin split remains the real
+  exit. **Verified end to end in Chromium against the containerised stack** (`FRONTEND_HOST_PORT=8090`):
+  zero CSP violations on `/e/signup`, the widget renders, the challenge frame attaches, and a
+  signup **succeeds** — `POST /e/account/signup → 303`, and logging in with the new
+  credentials issues `sw_play_session` where a bogus address issues none. Note the stack runs
+  Cloudflare's always-pass **test** keys (`1x00000000000000000000AA` / `1x00000…AA`, the
+  shipped defaults), so this proves the CSP and the wiring, not Cloudflare's own scoring path.
+  The `test.fail()` marker is gone: `e2e/tests/10-entrant-r11-evidence.spec.ts` now asserts
+  the token input is non-empty, the `challenges.cloudflare.com` frame is attached and zero
+  violations are reported, plus a new sibling that fails if any path other than `/e/signup`
+  names that host. Both go red on removing the origin from `script-src` (executed).
+  *(SP-PROGRAM-1 Phase 6, Task 33.)*
+
 - **2026-08-10 · SP-PROGRAM-1 Phase 6 — the entry page shows "Sign out" to a visitor who is
   not signed in.** Seen in the Task 30 dual-width capture
   (`.playwright-mcp/entrant-entry-{390px,1440px}.png`): the same document says "Sign in or

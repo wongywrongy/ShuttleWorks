@@ -37,8 +37,10 @@
  *    violations, and it is why the entry page below is expected clean.
  *    It does not generalise: `routes/signup.tsx` writes its own
  *    `<script src="https://challenges.cloudflare.com/...">` directly into
- *    the markup, outside the `<Scripts/>` that `root.tsx` dropped. See the
- *    defect test below.
+ *    the markup, outside the `<Scripts/>` that `root.tsx` dropped, so that
+ *    one page needs — and gets, on that path only — a CSP that admits it.
+ *    This pass found `script-src 'self'` blocking it and 403ing every
+ *    entrant signup; the two tests below are what keep that fixed.
  *
  * Output: `.playwright-mcp/entrant-<page>-<width>.png` at the repo root —
  * gitignored, and the documented home for screenshots (CLAUDE.md, "Known
@@ -247,6 +249,37 @@ test.describe('entrant app — R11 evidence', () => {
   });
 
   /**
+   * The Turnstile allowance is SCOPED, and this is what holds it there.
+   *
+   * `$sw_turnstile_origin` (frontend/nginx.conf) adds
+   * challenges.cloudflare.com to `script-src`/`frame-src` on `/e/signup` and
+   * nowhere else, because both tiers share one origin and the operator
+   * console has no use for a third-party script host. Replacing the map's
+   * `~^/e/signup` with `~^/e/`, or moving the origin into the snippet's
+   * literal policy, turns this red — which is the only way that widening
+   * would otherwise be noticed.
+   *
+   * The operator SPA at `/` is checked too, and it is the one that matters
+   * most: it is the surface an XSS would be worth something on.
+   */
+  test('only the signup page trusts challenges.cloudflare.com', async ({ page }) => {
+    const slug = await seed(page);
+    const csp = async (path: string) =>
+      (await page.goto(path))!.headers()['content-security-policy'];
+
+    expect(await csp('/e/signup')).toContain(
+      "script-src 'self' https://challenges.cloudflare.com",
+    );
+    expect(await csp('/e/signup')).toContain(
+      "frame-src 'self' https://challenges.cloudflare.com",
+    );
+    for (const path of [`/e/${slug}`, '/e/login', '/']) {
+      expect(await csp(path), path).not.toContain('challenges.cloudflare.com');
+      expect(await csp(path), path).toContain("script-src 'self';");
+    }
+  });
+
+  /**
    * The NEGATIVE CONTROL for the two CSP tests below, and the reason they
    * are not vacuous.
    *
@@ -295,40 +328,54 @@ test.describe('entrant app — R11 evidence', () => {
   });
 
   /**
-   * KNOWN DEFECT, found by this pass. `test.fail()` rather than a skip or a
-   * deleted case: the test RUNS, and the day the defect is fixed it passes
-   * unexpectedly and turns this suite red, which is what forces the marker
-   * out. A defect recorded as a skip is a defect nobody ever hears about
-   * again.
+   * WAS the pinned ship blocker; now the control that keeps it fixed.
    *
-   * `routes/signup.tsx` renders
+   * This case shipped as a `test.fail()` — a defect that RUNS, so the day it
+   * was fixed the suite went red on an unexpected pass and forced the marker
+   * out. That is what happened. The defect: `routes/signup.tsx` renders
    * `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js">`
-   * straight into the markup. `root.tsx` dropping `<Scripts/>` did not touch
-   * it — that removed React Router's hydration scripts, not a tag a route
-   * writes itself — so this tier does NOT ship "zero client JS" on every
-   * page, only on the entry page. nginx sends `script-src 'self'`, which
-   * does not allow challenges.cloudflare.com, so the browser blocks the
-   * widget, the form posts no `cf-turnstile-response`, and
-   * `verify_turnstile('')` refuses with no round trip: every entrant signup
-   * answers 403 AUTH_CHALLENGE_FAILED. Since R10 puts entry submission
-   * behind an entrant session, an entrant cannot enter a tournament through
-   * a deployed stack at all.
+   * straight into the markup (`root.tsx` dropping `<Scripts/>` removed React
+   * Router's hydration scripts, not a tag a route writes itself), and nginx
+   * sent `script-src 'self'`, so the browser blocked the widget, the form
+   * posted no `cf-turnstile-response`, and `verify_turnstile('')` refused with
+   * no round trip: every entrant signup answered 403 AUTH_CHALLENGE_FAILED in
+   * every deployed stack, and since R10 puts entry submission behind an
+   * entrant session, no entrant could enter a tournament at all.
    *
-   * `nginx.conf` already names this as "the one open question ... a
-   * deployment decision to make against a real browser". This is that
-   * browser. The fix is an owner call between allowing the host in the
-   * entrant locations' script-src/frame-src and dropping Turnstile from a
-   * page that is already IP-throttled — not a change this evidence pass
-   * makes for them.
+   * Fixed by `$sw_turnstile_origin` in `frontend/nginx.conf` — Cloudflare's
+   * documented `script-src`/`frame-src` requirement, scoped to this one path.
+   *
+   * The widget assertions are not decoration. Zero violations is satisfiable
+   * by a page that stopped rendering the widget at all — the same 403 by a
+   * quieter route. So both directives are checked by their EFFECT: the token
+   * input is what only the script can populate, and the challenge frame is
+   * what only `frame-src` can admit. All three, or none of them means much.
    */
-  test('the signup page emits zero CSP violations', async ({ page }) => {
-    // In the BODY, not at describe scope: `test.fail()` at the top level of a
-    // describe marks every test in it, which would turn the whole file into
-    // a suite that passes by failing.
-    test.fail();
+  test('the signup page renders the Turnstile widget and emits zero CSP violations', async ({
+    page,
+  }) => {
     const consoleHits = watchCsp(page);
     await page.goto('/e/signup');
-    await page.waitForLoadState('networkidle');
+    // NOT `waitForLoadState('networkidle')` — the two tests above can use it
+    // and this one cannot. A live Turnstile widget keeps a connection open, so
+    // this page never goes idle and the wait burns the whole timeout.
+    //
+    // The token input is the whole point of the page: `api.js` creates it and
+    // writes the solved challenge into it, the form posts it as
+    // `cf-turnstile-response`, and `verify_turnstile` refuses an empty one
+    // with no round trip. Non-empty here IS "a signup can succeed".
+    //
+    // Asserted on the INPUT and the FRAME rather than on `.cf-turnstile
+    // iframe`, which never matches: Turnstile puts its iframe in a CLOSED
+    // shadow root, which Playwright's selector engine cannot pierce (its CSS
+    // pierces open roots only). Verified against the real widget.
+    await expect(page.locator('input[name="cf-turnstile-response"]')).not.toHaveValue(
+      '',
+    );
+    expect(
+      page.frames().map((f) => f.url()),
+      'no challenges.cloudflare.com frame attached — frame-src is blocking it',
+    ).toContainEqual(expect.stringContaining('https://challenges.cloudflare.com/'));
     expect(await drainCsp(page, consoleHits)).toEqual([]);
   });
 });
