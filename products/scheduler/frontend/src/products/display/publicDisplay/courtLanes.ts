@@ -11,12 +11,12 @@
  * buckets matches into court-scoped now/next/later. The two solve different
  * problems:
  *
- *   - `deriveCourtLanes` sets `now` POSITIONALLY: the earliest non-done
- *     match assigned to a court, regardless of whether it has actually
- *     started or been called. That's correct for Operations — it's
- *     bookkeeping for "what does this court's assignment queue look like
- *     right now" (role resolution, free-court finding), and an idle court
- *     with only scheduled matches still gets a `now` there.
+ *   - `deriveCourtLanes` ALWAYS gives an occupied court a `now`: a live
+ *     (called/playing) match wins, and failing that the earliest non-done
+ *     match on the court. That's correct for Operations — it's bookkeeping
+ *     for "what does this court's assignment queue look like right now"
+ *     (role resolution, free-court finding), so an idle court with only
+ *     scheduled matches still gets a `now` there.
  *   - The public board's `now` must be strictly LIVE-gated: a spectator TV
  *     must never label a not-yet-started match "Now". An idle court (no
  *     match started/called) has NO now lane at all — its earliest item is

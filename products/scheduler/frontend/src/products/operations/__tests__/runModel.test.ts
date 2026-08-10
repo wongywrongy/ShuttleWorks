@@ -64,6 +64,29 @@ describe('runModel', () => {
     expect([lane.now?.id, lane.next?.id, lane.later?.id]).toEqual(['n1', 'n2', 'n3']);
     expect(lane.depth).toBe(3); // 3 not-done on court 1
   });
+  it('a LIVE match owns the court, even behind an earlier planned slot', () => {
+    // The desk's reality: MD1 is scheduled for slot 0 and never started; QF1
+    // started late and is on the floor RIGHT NOW. Positionally MD1 sorts first,
+    // but the court's occupant is the match being played — otherwise the
+    // inspector calls the playing match "queued behind" and offers the desk no
+    // way to record the result in front of them.
+    const ms = toRunMatches([
+      blk({ id: 'md1', court: 4, slot: 0, status: 'scheduled' }),
+      blk({ id: 'qf1', court: 4, slot: 3, status: 'started' }),
+    ], {});
+    const lane = deriveCourtLanes(ms, 4, { running: true, currentSlot: 5 })[3];
+    expect(lane.now?.id).toBe('qf1');
+    expect(lane.next?.id).toBe('md1');
+  });
+  it('a called match outranks a scheduled one; playing outranks called', () => {
+    const ms = toRunMatches([
+      blk({ id: 's', court: 1, slot: 0, status: 'scheduled' }),
+      blk({ id: 'c', court: 1, slot: 1, status: 'called' }),
+      blk({ id: 'p', court: 1, slot: 2, status: 'started' }),
+    ], {});
+    const [lane] = deriveCourtLanes(ms, 1);
+    expect([lane.now?.id, lane.next?.id, lane.later?.id]).toEqual(['p', 'c', 's']);
+  });
   it('renders a free court (empty lane) for courts with no live matches', () => {
     const lanes = deriveCourtLanes(toRunMatches([blk({ id: 'x', court: 1, slot: 0 })], {}), 2);
     expect(lanes[1].now).toBeUndefined();

@@ -45,6 +45,22 @@ export function toRunMatches(
 export interface CourtLane { court: number; now?: RunMatch; next?: RunMatch; later?: RunMatch; depth: number; }
 
 /**
+ * Lane precedence: what is HAPPENING on a court outranks what was merely
+ * planned earlier there. Sorting by planned slot alone made an untouched
+ * earlier-slot match the court's occupant while the match actually in
+ * progress was demoted to "queued behind" — with no controls, so the desk
+ * could not record the result of the match in front of them (2026-08-10
+ * browser pass, Nashville QF1 on C4).
+ *
+ * Two live matches on one court is not a legal floor state (a court plays
+ * one match at a time), so this ranks rather than errors: playing beats
+ * called, and the earlier planned slot breaks any remaining tie. That keeps
+ * the derivation total and deterministic — the desk still gets full controls
+ * on the more-live of the two, and clearing it promotes the other.
+ */
+const LANE_RANK: Record<RunStatus, number> = { playing: 0, called: 1, scheduled: 2, done: 3 };
+
+/**
  * Build per-court Now/Next/Later lanes.
  *
  * `late` is applied to the Now match ONLY, and ONLY when the floor is running
@@ -66,7 +82,8 @@ export function deriveCourtLanes(
   return Array.from({ length: n }, (_, i) => i + 1).map((court) => {
     const lane = matches
       .filter((m) => m.court === court && m.status !== 'done')
-      .sort((a, b) => (a.plannedSlot ?? Infinity) - (b.plannedSlot ?? Infinity)
+      .sort((a, b) => LANE_RANK[a.status] - LANE_RANK[b.status]
+        || (a.plannedSlot ?? Infinity) - (b.plannedSlot ?? Infinity)
         || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
     const nowRaw = lane[0];
     const now = nowRaw
