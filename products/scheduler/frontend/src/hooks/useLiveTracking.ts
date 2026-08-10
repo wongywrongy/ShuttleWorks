@@ -13,7 +13,7 @@
  * reason attached. See VALID_TRANSITIONS below for the authoritative
  * table.
  */
-import { useEffect, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useCallback, useRef, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useMatchStateStore } from '../store/matchStateStore';
@@ -24,6 +24,7 @@ import { transitionPath } from '../platform/domain/matchTransitions';
 import { assertCanEdit } from './useCanEdit';
 import { useTournamentIdOrNull } from './useTournamentId';
 import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
+import { isTerminalPollError } from '../lib/pollPolicy';
 
 // The transition table lives in `platform/domain/matchTransitions` — a mirror
 // of the backend contract, unit-tested against it. It used to be defined here
@@ -60,6 +61,19 @@ export function useLiveTracking() {
   const setMatchStates = useMatchStateStore((state) => state.setMatchStates);
   const setMatchState = useMatchStateStore((state) => state.setMatchState);
   const setLastSynced = useMatchStateStore((state) => state.setLastSynced);
+  /**
+   * The source (tid or display token) whose reads answered a TERMINAL status —
+   * workspace deleted, access revoked, or an invalid capability token (shared
+   * definition: lib/pollPolicy). Those never come good, so the 5s poll below
+   * stops instead of re-firing the same 404 and console error every cycle
+   * forever (an invalid display link did exactly that). Stored as the source
+   * rather than a bare flag so pointing the hook at a different workspace /
+   * token resumes polling by itself. Transient failures (5xx, offline) are
+   * NOT terminal — a live desk must survive them.
+   */
+  const [terminalFor, setTerminalFor] = useState<string | null>(null);
+  const pollSource = tid || displayToken || '';
+  const pollTerminal = !!pollSource && terminalFor === pollSource;
 
   const loadMatchStates = useCallback(async () => {
     if (!tid && !tokenMode) return;
@@ -89,9 +103,10 @@ export function useLiveTracking() {
 
       setMatchStates(mergedStates);
     } catch (error) {
+      if (isTerminalPollError(error)) setTerminalFor(pollSource);
       console.error('Failed to load match states:', error);
     }
-  }, [setMatchStates, tid, tokenMode, displayToken]);
+  }, [setMatchStates, tid, tokenMode, displayToken, pollSource]);
 
   const syncMatchStates = useCallback(async () => {
     if (!tid && !tokenMode) return;
@@ -125,9 +140,10 @@ export function useLiveTracking() {
       setMatchStates(mergedStates);
       setLastSynced(new Date().toISOString());
     } catch (error) {
+      if (isTerminalPollError(error)) setTerminalFor(pollSource);
       console.error('Failed to sync match states:', error);
     }
-  }, [setMatchStates, setLastSynced, tid, tokenMode, displayToken]);
+  }, [setMatchStates, setLastSynced, tid, tokenMode, displayToken, pollSource]);
 
   // Lifecycle wiring — declared AFTER `loadMatchStates` / `syncMatchStates`
   // so the useEffect callbacks don't hit the temporal dead zone on the
@@ -139,6 +155,9 @@ export function useLiveTracking() {
   }, [loadMatchStates]);
 
   useEffect(() => {
+    // Nothing to wait for: this source can never answer. Don't even arm the
+    // interval or the visibility-regain sync.
+    if (pollTerminal) return;
     const interval = setInterval(() => {
       // Skip the roundtrip while the tab is hidden — nobody can see the
       // live-tracking board update anyway.
@@ -153,7 +172,7 @@ export function useLiveTracking() {
       clearInterval(interval);
       unsubscribe();
     };
-  }, [syncMatchStates]);
+  }, [syncMatchStates, pollTerminal]);
 
   // Self-ref so the toast `onAction` retry can invoke the latest
   // `updateMatchStatus` without tripping React's temporal-dead-zone

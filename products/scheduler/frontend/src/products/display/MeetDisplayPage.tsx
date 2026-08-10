@@ -96,7 +96,9 @@ export function MeetDisplayPage() {
   }, []);
 
   // Read-only polling + freshness derivation. See ./publicDisplay/useDisplaySync.ts.
-  const { freshness } = useDisplaySync(now);
+  // `linkDead` = the link itself can never work (invalid/revoked token, deleted
+  // workspace); polling has already stopped.
+  const { freshness, terminal: linkDead } = useDisplaySync(now);
 
   // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
@@ -168,7 +170,7 @@ export function MeetDisplayPage() {
   // never gets a manufactured "now". Everything else on a court is ordered
   // by its planned slot into `next`/`later`. This is deliberately a
   // board-local helper (publicDisplay/courtLanes.ts), NOT shared with
-  // Operations' positional `deriveCourtLanes` — see that file's doc
+  // Operations' always-occupied `deriveCourtLanes` — see that file's doc
   // comment and task-8-report.md for why forcing a shared extraction
   // would risk the shipped Run surface for a divergent `now` rule.
   const laneItems = useMemo((): LaneItem[] => {
@@ -304,7 +306,7 @@ export function MeetDisplayPage() {
   // screens can pick a light preset while the operator stays dark.
   const tvPreset = config?.tvPreset ?? DEFAULT_PRESET_ID;
 
-  if (!schedule || !config) {
+  if (!schedule || !config || linkDead) {
     return (
       <div
         ref={rootRef}
@@ -312,15 +314,27 @@ export function MeetDisplayPage() {
         className="min-h-[100dvh] bg-background text-foreground flex items-center justify-center"
       >
         <div className="absolute right-4 top-4 flex items-center gap-3">
-          <LiveStatusPill status={freshness} />
+          {/* A freshness pill on a dead link promises a recovery that can never
+              come; the board is not "Delayed", it is finished. */}
+          {linkDead ? null : <LiveStatusPill status={freshness} />}
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </div>
-        <div className="text-center">
-          <div className="text-6xl font-bold tracking-tight">Tournament Display</div>
-          <div className="mt-3 text-2xl text-muted-foreground">
-            {freshness === 'live' ? 'No schedule generated yet' : 'Waiting to connect…'}
+        {linkDead ? (
+          <div className="text-center" data-testid="display-link-invalid">
+            <div className="text-6xl font-bold tracking-tight">Display link not valid</div>
+            <div className="mt-3 text-2xl text-muted-foreground">
+              This link has been turned off or never existed. Ask the tournament
+              desk for a new one.
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-center">
+            <div className="text-6xl font-bold tracking-tight">Tournament Display</div>
+            <div className="mt-3 text-2xl text-muted-foreground">
+              {freshness === 'live' ? 'No schedule generated yet' : 'Waiting to connect…'}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
