@@ -929,3 +929,44 @@ a green 1,100-test suite. The real check is the viewer flow in
   been canonical since Phase 2a. Nothing reads it — the frontend image copies only the root
   lockfile — so it is dead weight that can drift out of step with the real one and mislead
   anyone who opens it. Size XS. *(SP-PROGRAM-1 Phase 6, Tasks 23/24 reconciliation.)*
+
+- **2026-08-10 · SP-PROGRAM-1 Phase 6 — BLOCKING: the entrant signup page's Turnstile script
+  is blocked by our own CSP, so no entrant can create an account or enter a tournament in a
+  deployed stack.** Found by the Task 30 R11 evidence pass, in a real browser in front of the
+  real containerised stack — which is the only place it is visible, and exactly the regression
+  the plan said a unit suite structurally cannot see. `app/routes/signup.tsx` renders
+  `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js">` **directly into its
+  own markup**. Dropping `<Scripts/>` from `app/root.tsx` did not touch it: that removed React
+  Router's hydration scripts, not a tag a route writes itself, so "this tier ships zero client
+  JS" is true of the entry page and **false of the signup page**. `security-headers.conf` sends
+  `script-src 'self'`, which does not allow `challenges.cloudflare.com`, so Chromium blocks it:
+  `script-src-elem blocked https://challenges.cloudflare.com/turnstile/v0/api.js`. The widget
+  never renders, the form posts no `cf-turnstile-response`, and `verify_turnstile("")` refuses
+  with no round trip — every signup answers **403 AUTH_CHALLENGE_FAILED**, reproduced end to
+  end with curl against the stack. Because R10 puts entry submission behind an entrant session,
+  and a session requires an account, **the entrant surface is unusable end to end in any stack
+  that serves this snippet.** `frontend/nginx.conf` already names this as "the one open
+  question ... a deployment decision to make against a real browser"; this is that browser, and
+  the answer is that it is broken today. The fix is an owner call, not an evidence pass's:
+  either allow the host in the entrant locations' `script-src`/`frame-src` (a real widening of
+  the policy that stops XSS), or drop Turnstile from a page already covered by the
+  `esignup:<ip>` throttle and the `sw_entries` nginx zone. Note the second option is what R10's
+  own reasoning points at — a puzzle in front of a route that is already rate-limited charges
+  every honest entrant. Pinned as an executable, self-clearing marker:
+  `e2e/tests/10-entrant-r11-evidence.spec.ts`'s "the signup page emits zero CSP violations" is
+  `test.fail()`, so it turns the suite red the day the defect is fixed and the marker is stale.
+  Size S (config) / M (if Turnstile is re-sited). *(SP-PROGRAM-1 Phase 6, Task 30.)*
+
+- **2026-08-10 · SP-PROGRAM-1 Phase 6 — the entry page shows "Sign out" to a visitor who is
+  not signed in.** Seen in the Task 30 dual-width capture
+  (`.playwright-mcp/entrant-entry-{390px,1440px}.png`): the same document says "Sign in or
+  create an entrant account to enter" at the top and renders a "Sign out" button in the
+  footer. `app/root.tsx`'s note explains the logout form lives in `routes/entry.tsx` because
+  that is "the only page a signed-in entrant is ever on" — but the footer is rendered
+  unconditionally, and the SSR tier's viewer projection is anonymous for *every* reader
+  (`apiFetch.server.ts` sends a frozen accept-only allowlist, so `_optional_entrant` reads no
+  cookie). So the button is shown to everyone and means nothing to most of them. Cosmetic, not
+  a security issue — the POST it makes is a no-op without a session — but it is a confusing
+  control on the one page a stranger reaches off a poster. Gate it on the same signal the
+  "Sign in or create an entrant account" line already branches on. Size XS.
+  *(SP-PROGRAM-1 Phase 6, Task 30.)*
