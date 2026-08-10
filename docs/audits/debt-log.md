@@ -875,3 +875,19 @@ a green 1,100-test suite. The real check is the viewer flow in
   the FAIL/exit 1, then restoring it) and the `entrant` CI job still fails on an overage. If
   this number needs to move again, check whether `entry.client-*.js` + the shared chunk grew
   (framework drift, expected occasionally on a React Router bump) before assuming app bloat.
+
+- **2026-08-10 · CLOSED, both entries above — hydration was dropped, and the budget is now
+  4 KB.** The Task 22 ingress review found that the framework floor R8-F budgeted for was
+  never actually paid: `frontend/security-headers.conf` sends `script-src 'self'` with no
+  `'unsafe-inline'` and no nonce, and `<Scripts/>` emits two INLINE scripts, so every
+  deployed stack blocked hydration outright — the app has never hydrated in production and
+  worked in `react-router dev` only because Vite sends no CSP. So the answer was the one
+  the first entry above named ("dropping hydration on this route"), taken for a correctness
+  reason rather than a size one: `app/root.tsx` no longer renders `<Scripts/>`, prod and dev
+  now agree, and nothing regresses because no route uses a hook, a handler or `<Form>`.
+  `measure-page-weight.mjs` now derives its script set from the RENDERED DOCUMENT instead of
+  the build manifest (the manifest still lists 122.5 KB no browser fetches) and measures
+  **2.5 KB, all HTML** — the gzipped HTML itself fell 4.0 → 2.5 KB with the inline
+  `window.__reactRouterContext` payload. Budget re-derived at 4 KB (4.4 KB with the 10% CI
+  slack); still blocking, still verified by lowering `BUDGET_KB` and observing exit 1.
+  *(SP-PROGRAM-1 Phase 6, Task 22 review-fix pass.)*

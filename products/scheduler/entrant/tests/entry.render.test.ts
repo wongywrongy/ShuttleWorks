@@ -274,9 +274,12 @@ describe('the entry form, unhydrated', () => {
 
     // A non-integer cap is skipped exactly as `_discipline_breach` skips it,
     // so the form cannot state a limit the server would not enforce. Asserted
-    // on the rendered sentence, not on the whole document: React streams the
-    // entire loader payload — junk cap included — into the hydration script,
-    // so `html` contains "Junk" either way.
+    // on the rendered sentence rather than the whole document, which is now
+    // belt-and-braces: React used to stream the entire loader payload — junk
+    // cap included — into `<Scripts/>`'s hydration script, so `html` contained
+    // "Junk" either way. `app/root.tsx` no longer renders `<Scripts/>`, so it
+    // does not; the narrow scope stays because the sentence is what this
+    // asserts about.
     const sentence = /Per discipline:[\s\S]*?per person\./.exec(html)?.[0] ?? '';
     expect(sentence).toContain('1 Men&#x27;s Singles event');
     expect(sentence).toContain('2 Mixed Doubles events');

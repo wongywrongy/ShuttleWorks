@@ -4,14 +4,24 @@
  * page spec §7's no-JS posture is about — on a production build.
  *
  * "Page weight" here is what a browser actually pays for: the server-
- * rendered HTML (what a no-JS visitor gets in full) PLUS the critical JS —
- * the client entry point, `root`, and the `:slug` route's own chunk, walked
- * out of the real build manifest rather than guessed at. Each file is
- * gzipped on its own and the compressed sizes are summed, because that is
- * how they cross the wire: as separate HTTP responses, not one concatenated
- * blob. CSS is deliberately not counted — the brief's "HTML plus critical
- * JS" is explicit, and `app-*.css` is reported separately, below the gate,
- * as a number a reader can still see.
+ * rendered HTML (what a no-JS visitor gets in full) PLUS every script the
+ * HTML actually references. Each file is gzipped on its own and the
+ * compressed sizes are summed, because that is how they cross the wire: as
+ * separate HTTP responses, not one concatenated blob. CSS is deliberately
+ * not counted — the brief's "HTML plus critical JS" is explicit, and
+ * `app-*.css` is reported separately, below the gate, as a number a reader
+ * can still see.
+ *
+ * **The script set is read OUT OF THE RENDERED HTML, not walked out of the
+ * build manifest.** It used to be the manifest — the client entry, `root`
+ * and the `:slug` route's chunk — and that number stopped being true the day
+ * `app/root.tsx` dropped `<Scripts/>`: the manifest still lists 122.5 KB of
+ * client bundle, the build still writes it to `build/client/assets/`, and no
+ * browser ever asks for a byte of it. A page-weight gate reading the
+ * manifest would keep charging the app for a download it does not make.
+ * Reading the document is both smaller and honest, and it re-arms by itself:
+ * restore `<Scripts/>` and the framework floor lands straight back in this
+ * number.
  *
  * Renders through the REAL production server build (`build/server/index.js`,
  * the same `createRequestHandler` the running app uses), against a stubbed
@@ -21,31 +31,12 @@
  *
  * Run after `npm run build`: `node scripts/measure-page-weight.mjs`.
  *
- * A `@scheduler/design-system/components` barrel rewrite was tried and
- * disproved: `GanttTimeline-*.js` in the critical set is a Rollup CHUNK
- * NAME (the shared design-system chunk, named after one module in its
- * group), not the component — `GANTT_GEOMETRY`/`placementBox`/
- * `laneOrientation` appear in NO file under `build/client/assets/`, it is
- * already tree-shaken out. Deep-importing all six route modules measured
- * 126.9 KB, 0.3 KB WORSE (extra chunk boundaries cost more than the
- * nothing they removed). Reverted.
- *
- * `entry.client-*.js` (57.5 KB) + the shared vendor `chunk-*.js` (41.3 KB)
- * = 98.8 KB of the 122.5 KB critical JS is react-dom's client runtime and
- * the React Router runtime, before a single line of this app runs. That is
- * the FRAMEWORK FLOOR for hydrating any route on this stack — fixed cost,
- * not trimmable by import changes here.
- *
- * OWNER RULING R8-F (2026-08-07): the original 100 KB target in the
- * implementation plan predated ruling R8 choosing React Router 7 SSR, and
- * was never achievable once that landed — 98.8 KB of framework alone
- * already blows most of it. BUDGET_KB below is derived, not aspirational:
- * FRAMEWORK_FLOOR (98.8 KB, measured above) + this app's actual footprint
- * (~27.8 KB: 23.7 KB app JS + 4.0 KB HTML) + real growth headroom. The
- * gate STAYS BLOCKING — raising the number does not soften it. A future
- * overage past the ceiling below means the APP side grew (or the
- * framework floor itself moved — recheck `entry.client-*.js` +
- * `chunk-*.js` to tell which). See `docs/audits/debt-log.md`.
+ * OWNER RULING R8-F (2026-08-07) set BUDGET_KB to 123 to cover a ~98.8 KB
+ * react-dom + React Router hydration floor. THAT FLOOR IS GONE: this tier
+ * ships no client JS (see the note in `app/root.tsx` — the CSP blocked the
+ * inline `<Scripts/>` output in every deployed stack anyway, so no visitor
+ * ever ran it). The budget below is re-derived from the measurement, not
+ * inherited. The gate STAYS BLOCKING.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,55 +54,9 @@ if (!fs.existsSync(serverEntry) || !fs.existsSync(clientDir)) {
   process.exit(1);
 }
 
-// ---- the critical JS set, walked out of the real manifest ---------------
-
-const manifestFile = fs
-  .readdirSync(path.join(clientDir, 'assets'))
-  .find((f) => /^manifest-.*\.js$/.test(f));
-if (!manifestFile) {
-  console.error('No client manifest (assets/manifest-*.js) in the production build.');
-  process.exit(1);
-}
-const manifestSrc = fs.readFileSync(path.join(clientDir, 'assets', manifestFile), 'utf-8');
-const match = manifestSrc.match(/window\.__reactRouterManifest\s*=\s*(\{.*\});?\s*$/);
-if (!match) {
-  console.error(`Could not parse __reactRouterManifest out of ${manifestFile}.`);
-  process.exit(1);
-}
-const manifest = JSON.parse(match[1]);
-
-/** module + imports for one manifest entry, as bare `/assets/...` paths. */
-function filesFor(entry) {
-  return [entry.module, ...(entry.imports ?? [])];
-}
-
-const entryRoute = manifest.routes['routes/entry'];
-if (!entryRoute) {
-  console.error('routes/entry is missing from the manifest — did routes.ts change?');
-  process.exit(1);
-}
-
-// The client entry point (always shipped), `root` (always active), and the
-// `:slug` route's own module — the union is exactly what a browser loads to
-// hydrate `/e/{slug}`. `Set` dedupes the shared vendor chunk pulled in by
-// more than one of the three.
-const criticalAssetPaths = [
-  ...new Set([
-    ...filesFor(manifest.entry),
-    ...filesFor(manifest.routes.root),
-    ...filesFor(entryRoute),
-  ]),
-];
-
 function gzipSizeOf(absPath) {
   return zlib.gzipSync(fs.readFileSync(absPath)).length;
 }
-
-const criticalJsBytes = criticalAssetPaths.reduce((sum, assetPath) => {
-  // Manifest paths are `/assets/foo.js`, relative to `build/client`.
-  const abs = path.join(clientDir, assetPath.replace(/^\//, ''));
-  return sum + gzipSizeOf(abs);
-}, 0);
 
 // ---- the real server-rendered HTML for one entry page --------------------
 
@@ -153,19 +98,37 @@ if (response.status !== 200) {
 const html = await response.text();
 const htmlGzipBytes = zlib.gzipSync(Buffer.from(html, 'utf-8')).length;
 
+// ---- the scripts the document actually asks for -------------------------
+//
+// Inline scripts are already inside `htmlGzipBytes`, so only `src=` costs
+// anything extra. URLs are `${publicPath}assets/…`; `build.publicPath` comes
+// from the build itself, so this keeps working if `base` moves again.
+const scriptSrcs = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
+const criticalJsBytes = scriptSrcs.reduce((sum, url) => {
+  const rel = url.startsWith(build.publicPath) ? url.slice(build.publicPath.length) : url;
+  const abs = path.join(clientDir, rel.replace(/^\//, ''));
+  if (!fs.existsSync(abs)) {
+    console.error(`The page references ${url}, which is not in build/client — 404 in prod.`);
+    process.exit(1);
+  }
+  return sum + gzipSizeOf(abs);
+}, 0);
+
 // ---- the gate --------------------------------------------------------
 
 const totalBytes = htmlGzipBytes + criticalJsBytes;
 const totalKb = totalBytes / 1024;
 
-// R8-F: 123 KB base = ~98.8 KB measured framework floor (react-dom's client
-// runtime + the React Router runtime — entry.client-*.js + the shared vendor
-// chunk) + ~24.2 KB app allowance. +10% CI slack -> 135.3 KB enforced
-// ceiling, i.e. ~36.5 KB of total app-attributable room (HTML + app JS)
-// against this app's current ~27.8 KB, leaving ~8.7 KB of real growth
-// headroom before this gate goes red again. See the file header for the
-// R8-F ruling and docs/audits/debt-log.md for the record of why this moved.
-const BUDGET_KB = 123;
+// 4 KB against a measured 2.5 KB — all of it HTML, because this tier ships no
+// client JS. With the +10% CI slack that is a 4.4 KB ceiling, i.e. ~1.9 KB
+// (~75%) of real growth room in the rendered document before it goes red.
+//
+// The old number was 123 KB. R8-F derived that from a ~98.8 KB react-dom +
+// React Router HYDRATION FLOOR, and that floor no longer exists — `root.tsx`
+// renders no `<Scripts/>`. (The gzipped HTML fell too, 4.0 -> 2.5 KB: the
+// inline `window.__reactRouterContext` loader payload went with it.) Leaving
+// 123 KB in place would have let this page grow ~50x unnoticed.
+const BUDGET_KB = 4;
 const SLACK_KB = BUDGET_KB * 1.1; // +10% CI slack
 
 let cssNote = '';
@@ -176,7 +139,7 @@ if (cssFile) {
 }
 
 console.log(`HTML (gzipped):        ${(htmlGzipBytes / 1024).toFixed(1)} KB`);
-console.log(`Critical JS (gzipped): ${(criticalJsBytes / 1024).toFixed(1)} KB  [${criticalAssetPaths.length} files]`);
+console.log(`Critical JS (gzipped): ${(criticalJsBytes / 1024).toFixed(1)} KB  [${scriptSrcs.length} scripts referenced by the page]`);
 console.log(`Total:                 ${totalKb.toFixed(1)} KB${cssNote}`);
 console.log(`Budget:                ${BUDGET_KB} KB (+10% CI slack = ${SLACK_KB.toFixed(1)} KB)`);
 

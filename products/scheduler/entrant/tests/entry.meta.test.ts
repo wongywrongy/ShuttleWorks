@@ -177,13 +177,13 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
       expect(digest).toBeTruthy();
       expect(h).not.toContain(nonce as string);
       expect(h).not.toContain(digest as string);
-      // Scoped to <head> deliberately, not the whole document: the loader's
-      // FULL payload — viewer included — legitimately streams into the
-      // hydration `<script>` in <body> (see entry.render.test.ts's
-      // "impossible-projection" fixture); that is a client-hydration
-      // concern this task does not touch, not a meta-tag leak. Asserting
-      // against the whole document would fail on that pre-existing, correct
-      // behaviour rather than on anything this task adds.
+      // Scoped to <head> because a meta-tag leak is what this asserts about.
+      // It USED to be scoped out of necessity: the loader's full payload —
+      // viewer included — streamed into `<Scripts/>`'s hydration `<script>`
+      // in <body>, so a whole-document assertion would have failed on that
+      // pre-existing, correct behaviour. `app/root.tsx` renders no
+      // `<Scripts/>` any more, so the payload is not in the document at all
+      // and the whole document would now pass too.
     });
 
     // The structural half. A behavioural assertion alone can pass by luck —

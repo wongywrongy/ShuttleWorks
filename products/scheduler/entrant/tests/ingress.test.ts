@@ -23,6 +23,8 @@ import { describe, expect, it } from 'vitest';
 import type { RouteConfigEntry } from '@react-router/dev/routes';
 
 import routes from '../app/routes';
+import rrConfig from '../react-router.config';
+import viteConfig from '../vite.config';
 import { nodePaths } from './helpers/nodePaths';
 import {
   assertModelHolds,
@@ -45,7 +47,7 @@ describe('the model still describes the file', () => {
     const all = locations();
     expect(all.length).toBeGreaterThan(5);
     expect(all.some((l) => l.kind === 'exact')).toBe(true);
-    expect(all.some((l) => l.kind === 'named')).toBe(true);
+    expect(all.some((l) => l.kind === 'prefix')).toBe(true);
     expect(() => assertModelHolds(all)).not.toThrow();
   });
 
@@ -128,17 +130,13 @@ describe('the operator session cannot reach the node process', () => {
     expect(forwardedCookie('SW_PLAY_SESSION=UPPER')).toBeNull();
   });
 
-  it('never forwards a cookie on the anonymous-by-definition routes', () => {
-    // The robots fetch and the asset fallback: both reach node, neither has
-    // any business carrying a credential. An explicitly empty value makes
-    // nginx omit the header entirely.
-    const anonymous = [
-      resolve('/robots.txt'),
-      locations().find((l) => l.kind === 'named')!,
-    ];
-    for (const location of anonymous) {
-      expect(proxySetHeader(location, 'Cookie')).toBe('');
-    }
+  it('never forwards a cookie on the anonymous-by-definition route', () => {
+    // A robots fetch is by definition anonymous and has no business carrying
+    // a credential. An explicitly empty value makes nginx omit the header
+    // entirely. (This used to cover the `@entrant_assets` fallback too; that
+    // location is gone — the entrant tier emits `/e/assets/*` now, which
+    // rides `location /e/` and its allowlist like every other node path.)
+    expect(proxySetHeader(resolve('/robots.txt'), 'Cookie')).toBe('');
   });
 });
 
@@ -154,20 +152,34 @@ describe('RFC 9309: robots.txt is served from the origin root', () => {
   });
 });
 
-describe('the two tiers share /assets/ on one origin', () => {
-  it('falls back to the entrant upstream when the operator bundle has no such file', () => {
-    // Vite's `base` is `/` for both builds, so the entrant app's SSR HTML
-    // references `/assets/*` at the ROOT. Without this fallback every
-    // entrant page arrives unstyled and unhydrated — a 404 per asset, and
-    // no 500 anywhere to notice.
+describe('the two tiers no longer collide on /assets/', () => {
+  // Both used to emit `/assets/<hash>` at the ORIGIN ROOT, where the operator
+  // SPA's asset directory answered first and 404'd every entrant asset — so
+  // entrant pages arrived unstyled in every deployed stack, with no 500
+  // anywhere to notice. nginx papered over it with `try_files $uri
+  // @entrant_assets`, which was also the one route into the node tier with no
+  // `limit_req` on it. Fixed at the source: `vite.config.ts` sets
+  // `base: '/e/'`, so the collision, the fallback and the unmetered path are
+  // all gone.
+
+  it('emits its assets under a prefix nginx already routes to the node tier', () => {
+    // DERIVED from the config that decides it, not from a literal: `base` is
+    // what `@react-router/dev` uses as `publicPath` (the prefix stamped onto
+    // every emitted URL) and what `@react-router/serve` mounts its static
+    // dirs at. Reverting it to `/` fails here rather than in a browser.
+    expect(viteConfig.base).toBe(rrConfig.basename);
+    expect(upstreamFor(`${viteConfig.base}assets/app-hash.css`)).toBe(ENTRANT);
+    // ...and it is metered and cookie-filtered like every other node path,
+    // because it is `location /e/` that answers it.
+    expect(resolve(`${viteConfig.base}assets/x.js`).path).toBe('/e/');
+  });
+
+  it('leaves the operator bundle on disk with no fallback into node', () => {
+    // The negative half. A `try_files` here — or any named location for it to
+    // reach — is the collision workaround coming back.
     const assets = resolve('/assets/x.js');
-    expect(assets.body).toMatch(/try_files\s+\$uri\s+@\w+;/);
-    const fallbackName = /try_files\s+\$uri\s+(@\w+);/.exec(assets.body)![1];
-    const fallback = locations().find((l) => l.path === fallbackName);
-    expect(fallback).toBeDefined();
-    expect(proxyPass(fallback!)).toBe(`http://${ENTRANT}`);
-    // No Cache-Control of its own: react-router-serve already sends
-    // `immutable, max-age=1y`, and add_header would send a second one.
-    expect(fallback!.body).not.toMatch(/add_header\s+Cache-Control/);
+    expect(proxyPass(assets)).toBeNull();
+    expect(assets.body).not.toMatch(/try_files/);
+    expect(locations().filter((l) => l.kind === 'named')).toEqual([]);
   });
 });

@@ -81,14 +81,16 @@ jobs:
         run: npm --prefix products/scheduler/entrant run build
 
       # Spec §7's no-JS posture, held to a number: the entry page's real
-      # server-rendered HTML plus the critical JS a browser downloads to
-      # hydrate it, gzipped, walked out of the production build this job just
-      # produced above (not asserted against a guess). Budget is 123 KB
-      # gzipped with 10% CI slack (135.3 KB enforced ceiling) — raised under
-      # ruling R8-F once React Router 7 SSR (ruling R8) made the original
-      # 100 KB target unachievable; see the script for the framework-floor
-      # vs. app-allowance split and docs/audits/debt-log.md for the record.
-      - name: Page-weight budget (entry page, HTML + critical JS gzipped)
+      # server-rendered HTML plus every script that HTML references, gzipped,
+      # rendered through the production build this job just produced above
+      # (not asserted against a guess). Budget is 4 KB gzipped with 10% CI
+      # slack (4.4 KB enforced ceiling) against a measured 2.5 KB, ALL OF IT
+      # HTML — this tier ships no client JS at all (`app/root.tsx` renders no
+      # `<Scripts/>`; the CSP blocked its inline output in every deployed
+      # stack anyway). That replaces ruling R8-F's 123 KB, which budgeted for
+      # a React Router hydration floor no browser ever downloaded. See
+      # docs/audits/debt-log.md for the record.
+      - name: Page-weight budget (entry page, HTML + referenced scripts gzipped)
         run: node products/scheduler/entrant/scripts/measure-page-weight.mjs
 
       # Report-only for the same reason the frontend job gives above: knip's
