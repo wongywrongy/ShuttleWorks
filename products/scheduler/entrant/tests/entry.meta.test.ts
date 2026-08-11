@@ -61,7 +61,7 @@ const PAGE = {
       entryCount: 7,
     },
   ],
-  entrants: [{ name: 'Ada Lovelace', eventId: MS }],
+  entrants: [{ name: 'Ada Lovelace' }],
   // The email below is a deliberately distinctive marker string that must
   // never appear ANYWHERE in the rendered document's <head>. `signedIn` is
   // fed `true` for the same reason `entry.render.test.ts:216` does: it is

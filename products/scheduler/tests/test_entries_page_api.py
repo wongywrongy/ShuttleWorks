@@ -271,11 +271,11 @@ def test_the_projection_carries_the_venue(client, page):
 # ---- the strict entrant list (Q4/I6) ------------------------------------
 
 
-def test_the_projection_lists_entrant_names_and_events_only(client, page):
+def test_the_projection_lists_entrant_names_only(client, page):
     _add_entry(page["tid"], page["ms"], player_name="Bo Ferrar")
     payload = _projection(client, page)
 
-    assert payload["entrants"] == [{"name": "Bo Ferrar", "eventId": page["ms"]}]
+    assert payload["entrants"] == [{"name": "Bo Ferrar"}]
     # The projection reaches the player and stops. The account behind the
     # entry is one hop further out and is never selected.
     assert "@example.com" not in json.dumps(payload)
@@ -299,14 +299,14 @@ def test_withdrawn_and_rejected_entries_are_not_listed(client, page):
 def test_the_list_never_reveals_entry_state(client, page):
     """Entry is not acceptance. The list shows who entered, and a public
     'pending' next to a name is a judgment nobody made — at the JSON
-    boundary that is a *schema* claim (the row has two keys) and, as in the
+    boundary that is a *schema* claim (the row has one key) and, as in the
     old file, an absence claim over the serialized list."""
     _add_entry(page["tid"], page["ms"], player_name="Ada Waiting", state="pending")
     _add_entry(page["tid"], page["ms"], player_name="Bo Accepted", state="confirmed")
 
     rows = _projection(client, page)["entrants"]
     assert {row["name"] for row in rows} == {"Ada Waiting", "Bo Accepted"}
-    assert all(set(row) == {"name", "eventId"} for row in rows)
+    assert all(set(row) == {"name"} for row in rows)
     serialized = json.dumps(rows).lower()
     for state in ("pending", "confirmed", "waitlisted"):
         assert state not in serialized

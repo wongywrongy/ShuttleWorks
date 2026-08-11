@@ -121,21 +121,33 @@ def _event_is_open(event: EntryEvent, now: datetime) -> bool:
     return True
 
 
-def _entrants(
-    repo: LocalRepository, tournament_id: uuid.UUID
-) -> List[Tuple[str, uuid.UUID]]:
-    """The public entrant list: ``(full_name, entry_event_id)``, nothing else.
+def _entrants(repo: LocalRepository, tournament_id: uuid.UUID) -> List[str]:
+    """The public entrant list: ``full_name``, one row per PERSON.
 
-    A **strict projection** (Q4/I6): the SELECT names two columns, so
-    contact data is structurally absent rather than fetched-and-then-hidden
-    — the same discipline the display routes hold. R13 moved the name onto
-    the player level, so this joins one table and still selects exactly two
-    columns; the account it belongs to is never reached. Rows with
+    A **strict projection** (Q4/I6): the SELECT names one column, so contact
+    data is structurally absent rather than fetched-and-then-hidden — the
+    same discipline the display routes hold. R13 moved the name onto the
+    player level, so this joins one table and still selects exactly that
+    column; the account it belongs to is never reached. Rows with
     ``list_opt_out`` never appear; the flag governs publication, never
     participation, and an opted-out entrant is fully entered.
+
+    **Grouped by the person, not by the entry.** "Who has entered" is a list
+    of people, and one person holds one entry per event — so an ungrouped
+    projection printed the same entrant once per event they entered (found
+    by a real-browser demo pass, 2026-08-10). ``entry_player_id`` is the
+    grouping key rather than the name, because two entrants who share a
+    name is routine at a club and collapsing them would under-report the
+    field. The event id the rows used to carry went with the fan-out: the
+    page renders one flat name list, and per-event numbers already come
+    from ``_entry_counts``.
     """
     rows = repo.session.execute(
-        select(EntryPlayer.full_name, Entry.entry_event_id)
+        select(EntryPlayer.full_name)
+        # Explicit, because the name is now the only selected column and
+        # SQLAlchemy would otherwise infer ``entry_players`` as the left
+        # side and fail to join it to itself.
+        .select_from(Entry)
         .join(
             EntryPlayer,
             (EntryPlayer.tournament_id == Entry.tournament_id)
@@ -146,11 +158,12 @@ def _entrants(
             Entry.list_opt_out.is_(False),
             Entry.state.in_(_LISTED_STATES),
         )
-        # Alphabetical, with the id as the tiebreaker the house rule asks
-        # for — two entrants share a name often enough at a club.
-        .order_by(EntryPlayer.full_name, Entry.id)
+        .group_by(Entry.entry_player_id, EntryPlayer.full_name)
+        # Alphabetical, with the person id as the tiebreaker the house rule
+        # asks for — two entrants share a name often enough at a club.
+        .order_by(EntryPlayer.full_name, Entry.entry_player_id)
     ).all()
-    return [(name, event_id) for name, event_id in rows]
+    return [name for (name,) in rows]
 
 
 # What makes an event "age-bracketed", and therefore what makes a birth

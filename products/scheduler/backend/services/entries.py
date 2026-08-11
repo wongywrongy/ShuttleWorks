@@ -208,32 +208,56 @@ def _expire(session: Session) -> None:
 
 
 def _player_id(entry: Entry) -> str:
-    """Deterministic roster id for an entry.
+    """Deterministic roster id for the PERSON this entry enters.
+
+    Keyed on ``entry_player_id``, not on the entry. A roster row is a human
+    — ``EntryPlayer``'s own docstring says so ("three events for one child
+    must not carry three copies of one sentence, **because the commit seam
+    writes it onto a roster player**") — and one person routinely holds
+    several entries, one per event. Keying on the entry made the seam emit
+    one roster row per (person x event): the Lewisville demo workspace read
+    "42 players" for 23 people, and the same fan-out reached the public
+    entrant list.
 
     Deterministic rather than random so that a partially-applied commit is
-    recognizable on the next run, and so the same entry can never appear
-    twice under two ids. 42 characters, inside ``Identifier``'s 100.
+    recognizable on the next run. 42 characters, inside ``Identifier``'s
+    100. ``entry_player_id`` is nullable only while the R13 narrowing is in
+    flight, so the entry id remains the fallback key.
     """
-    return f"entry-{entry.id}"
+    return f"entry-{entry.entry_player_id or entry.id}"
 
 
 def _adoptable(roster: list, entry: Entry) -> Optional[str]:
-    """The id of a roster player already carrying this entry's provenance.
+    """The id of a roster player this entry should be attached to.
 
-    The seam commits in two steps — the roster write, then the
-    back-references — because the repository methods commit on their own.
-    A crash between them leaves a player with ``sourceEntryId`` set and an
-    entry with ``committed_player_id`` unset. Re-running must adopt that
-    player rather than add a second one, which is what this lookup makes
-    possible and why ``sourceEntryId`` lives on the roster player rather
-    than only in the entries table.
+    Two ways to match, because the seam's identity is the PERSON while its
+    crash-recovery marker is per-entry:
+
+    - the person's deterministic id (``_player_id``) is already on the
+      roster. That is the ordinary case for a person's second and later
+      events, and it also covers the crash window below;
+    - a row carries this entry's own ``sourceEntryId``. Rows written by a
+      build that keyed on the entry have such an id, so re-running against
+      an older roster adopts instead of duplicating.
+
+    The crash window: the seam commits in two steps — the roster write,
+    then the back-references — because the repository methods commit on
+    their own. A crash between them leaves a player with ``sourceEntryId``
+    set and an entry with ``committed_player_id`` unset. Re-running must
+    adopt that player rather than add a second one, which is why
+    ``sourceEntryId`` lives on the roster player and not only in the
+    entries table.
     """
-    wanted = str(entry.id)
+    wanted_id = _player_id(entry)
+    wanted_source = str(entry.id)
     for player in roster:
-        if isinstance(player, dict) and player.get("sourceEntryId") == wanted:
-            player_id = player.get("id")
-            if isinstance(player_id, str):
-                return player_id
+        if not isinstance(player, dict):
+            continue
+        player_id = player.get("id")
+        if not isinstance(player_id, str):
+            continue
+        if player_id == wanted_id or player.get("sourceEntryId") == wanted_source:
+            return player_id
     return None
 
 
@@ -350,6 +374,18 @@ def _plan_meet(
 
         adopted = _adoptable(players, entry)
         if adopted is not None:
+            # The person is already on the roster from an earlier event.
+            # ``ranks[]`` is where a meet player carries the events they
+            # are in, so this entry extends that list rather than minting a
+            # second player under the same name. Never removes a rank: the
+            # operator's own edits to this row are not this seam's to undo.
+            row = next(
+                (p for p in players if isinstance(p, dict) and p.get("id") == adopted),
+                None,
+            )
+            if row is not None and event.code not in (row.get("ranks") or []):
+                row["ranks"] = [*(row.get("ranks") or []), event.code]
+                mutated = True
             planned.append((entry, adopted))
             continue
 

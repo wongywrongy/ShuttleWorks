@@ -11,9 +11,9 @@
  * implementation of a rule — exactly what Seam B forbids for the fee, applied
  * to the rest of the page for the same reason.
  *
- * `entrants` is the strict two-column list (`_entrants`): a name and an event
- * id, nothing else. Contact data is structurally absent rather than
- * fetched-and-then-hidden, and adding a third field here would be the first
+ * `entrants` is the strict one-column list (`_entrants`): a name, nothing
+ * else, one row per PERSON. Contact data is structurally absent rather than
+ * fetched-and-then-hidden, and adding a second field here would be the first
  * half of undoing that.
  */
 
@@ -36,7 +36,6 @@ export interface EntryEventDTO {
 
 export interface EntrantListRowDTO {
   name: string;
-  eventId: string;
 }
 
 export interface EntryPageContentDTO {

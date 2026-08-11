@@ -39,7 +39,7 @@ const SUBMISSION = '44444444-4444-4444-8444-444444444444';
 
 /**
  * The REAL `GET /e/api/page/{slug}` projection (`api/entries_json.py:97-188`):
- * nested, `entryCount` not `entered`, `{name, eventId}` rows, slug under
+ * nested, `entryCount` not `entered`, one-field `{name}` rows, slug under
  * `page.slug`. Same fixture shape as `entry.loader.test.ts`.
  */
 const PAGE = {

@@ -148,15 +148,15 @@ class EventDTO(BaseModel):
 
 
 class EntrantRowDTO(BaseModel):
-    """The strict two-column projection (Q4/I6), and nothing else.
+    """The strict projection (Q4/I6), and nothing else.
 
-    Two fields, because ``_entrants`` SELECTs two columns. Contact data is
-    structurally absent rather than fetched-and-then-hidden, and adding a
-    third field here would be the first half of undoing that.
+    One field, because ``_entrants`` SELECTs one column and answers one row
+    per PERSON. Contact data is structurally absent rather than
+    fetched-and-then-hidden, and adding a second field here would be the
+    first half of undoing that.
     """
 
     name: str
-    eventId: str
 
 
 class PageDTO(BaseModel):
@@ -305,10 +305,7 @@ def entry_page_projection(
             )
             for ev in events
         ],
-        entrants=[
-            EntrantRowDTO(name=name, eventId=str(event_id))
-            for name, event_id in _entrants(repo, tournament.id)
-        ],
+        entrants=[EntrantRowDTO(name=name) for name in _entrants(repo, tournament.id)],
         viewer=ViewerDTO(
             signedIn=entrant is not None,
             email=entrant.email if entrant is not None else None,

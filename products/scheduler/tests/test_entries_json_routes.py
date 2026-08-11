@@ -211,12 +211,12 @@ def test_a_signed_in_viewer_gets_their_email_and_a_form_token(
 def test_the_projection_never_carries_an_entrants_contact_data(
     client, page, entrant
 ):
-    """Invariant I6 — the strict two-column projection, at the JSON seam.
+    """Invariant I6 — the strict one-column projection, at the JSON seam.
 
     NEGATIVE CONTROL. To prove this is not vacuous: add ``"email":
     entrant_account.email`` to ``EntrantRowDTO`` and populate it in
-    ``entry_page_projection`` (or widen ``_entrants``' SELECT past its two
-    columns). Both assertions below go red. Put it back.
+    ``entry_page_projection`` (or widen ``_entrants``' SELECT past its one
+    column). Both assertions below go red. Put it back.
     """
     assert _seed_one_entry(client, page).status_code == 303
     # A STRANGER reads the page — the viewer block legitimately carries the
@@ -227,13 +227,70 @@ def test_the_projection_never_carries_an_entrants_contact_data(
     assert r.status_code == 200, r.text
     body = r.json()
     assert [row["name"] for row in body["entrants"]] == ["Alice Chen"]
-    assert all(set(row) == {"name", "eventId"} for row in body["entrants"])
+    assert all(set(row) == {"name"} for row in body["entrants"])
     assert "parent@example.com" not in r.text
     assert body["viewer"] == {"signedIn": False, "email": None, "formCsrf": ""}
     # The count over the list and the names under it are one query apart and
     # must not disagree.
     by_id = {ev["id"]: ev for ev in body["events"]}
     assert by_id[page["ws"]]["entryCount"] == 1
+
+
+def test_one_person_entering_two_events_is_listed_once(client, page, entrant):
+    """Regression (real-browser demo pass, 2026-08-10): "Who has entered"
+    named the same person once per EVENT they entered.
+
+    The list is of PEOPLE, and the page renders it flat — so a projection
+    shaped per-entry printed one entrant three times over. Deduplicating on
+    the name alone would be the wrong fix: two entrants sharing a name is
+    routine at a club (the reason ``_entrants`` orders by name *and* id), so
+    the grouping key is the person, ``entries.entry_player_id``.
+    """
+    r = client.post(
+        f"/e/api/submit/{page['slug']}",
+        data={
+            "playerName": "Alice Chen",
+            "gender": "F",
+            # "<player index>:<event id>" — same player, two events.
+            "events": [f"0:{page['ms']}", f"0:{page['ws']}"],
+            "acknowledged": "on",
+            "_csrf": _form_token(client, page),
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303, r.text
+    client.cookies.clear()
+
+    body = client.get(f"/e/api/page/{page['slug']}").json()
+    assert [row["name"] for row in body["entrants"]] == ["Alice Chen"]
+    # Negative control: the per-event counts are a different query and must
+    # still see BOTH entries.
+    counts = {ev["id"]: ev["entryCount"] for ev in body["events"]}
+    assert counts[page["ms"]] == 1 and counts[page["ws"]] == 1
+
+
+def test_two_entrants_who_share_a_name_are_both_listed(client, page, entrant):
+    """Negative control for the grouping above: the list must not collapse
+    two different people who happen to be called the same thing."""
+    for _ in range(2):
+        assert (
+            client.post(
+                f"/e/api/submit/{page['slug']}",
+                data={
+                    "playerName": "Alice Chen",
+                    "gender": "F",
+                    "events": [f"0:{page['ws']}"],
+                    "acknowledged": "on",
+                    "_csrf": _form_token(client, page),
+                },
+                follow_redirects=False,
+            ).status_code
+            == 303
+        )
+    client.cookies.clear()
+
+    body = client.get(f"/e/api/page/{page['slug']}").json()
+    assert [row["name"] for row in body["entrants"]] == ["Alice Chen", "Alice Chen"]
 
 
 # ---- GET /e/api/config ---------------------------------------------------

@@ -29,7 +29,7 @@ import {
  * The REAL `GET /e/api/page/{slug}` projection (`api/entries_json.py:175-188`),
  * not the brief's flat one — nested `{tournament, org, venue, page, policy,
  * events, entrants, viewer}`, `entryCount` rather than `entered`, and
- * `{name, eventId}` entrant rows. See the report for the deviation.
+ * one-field `{name}` entrant rows. See the report for the deviation.
  */
 const PAGE = {
   tournament: { name: 'Spring Open', date: '2026-09-12' },
@@ -64,7 +64,7 @@ const PAGE = {
       entryCount: 7,
     },
   ],
-  entrants: [{ name: 'Ada Lovelace', eventId: '11111111-1111-4111-8111-111111111111' }],
+  entrants: [{ name: 'Ada Lovelace' }],
   // **The anonymous viewer, which is the only one node can ever be handed.**
   // This read `{signedIn: true, formCsrf: 'csrf-token-abc'}` until Task 18b:
   // a shape the real backend cannot return to a caller that sends no cookie,
