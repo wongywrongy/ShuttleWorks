@@ -99,6 +99,33 @@ describe('ruling R8-A: the /e/ prefix is split across two tiers', () => {
   });
 });
 
+describe('the forwarded Host keeps its port', () => {
+  // `$host` is the Host header with the PORT STRIPPED. The node tier
+  // reconstructs its own URL from what arrives (`@react-router/express`
+  // builds `${req.protocol}://${req.hostname}${port}${req.originalUrl}`), and
+  // React Router 7 runs `throwIfPotentialCSRFAttack` on every action request,
+  // comparing that URL's origin to the browser's `Origin`. On any non-default
+  // port they disagree — `http://localhost` vs `http://localhost:8090` — so
+  // EVERY entrant action POST answered 400 through this proxy. Proven by
+  // isolating the single variable against the running stack: the same POST
+  // with `origin: http://localhost` answered 200.
+  //
+  // It broke a shipped feature independently: `/e/sitemap.xml` published
+  // `<loc>http://localhost/e/…</loc>` — an unreachable URL.
+  //
+  // 443 and 80 hide it, which is why the cloudflared self-host stack was fine
+  // and dev was not.
+  it('forwards $http_host, not $host, from every location that proxies', () => {
+    const proxying = locations().filter((l) => proxyPass(l) !== null);
+    expect(proxying.length).toBeGreaterThan(5);
+    for (const location of proxying) {
+      expect(
+        { path: location.path, host: proxySetHeader(location, 'Host') },
+      ).toEqual({ path: location.path, host: '$http_host' });
+    }
+  });
+});
+
 describe('the operator session cannot reach the node process', () => {
   const OPERATOR = 'sw_session=OPERATOR-SESSION-VALUE';
 

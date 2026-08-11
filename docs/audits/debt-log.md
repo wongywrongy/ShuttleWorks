@@ -1109,3 +1109,32 @@ a green 1,100-test suite. The real check is the viewer flow in
   The prohibition is now derived, not spelled: `login.test.ts` fails any `<button type="button">`
   in the login, signup or entry documents, since on a scriptless page that shape can only be
   inert. Size XS to revisit. *(Entrant-tier browser defect pass, E2.)*
+
+- **2026-08-10 · The entrant tier derives its own public origin from the client's `Host`
+  header, so `/e/sitemap.xml` and `/e/robots.txt` are Host-header injectable.**
+  `routes/sitemap.tsx` and `routes/robots.tsx` both build their absolute URLs from
+  `new URL(request.url).origin`, and `request.url` is reconstructed by
+  `@react-router/express` out of whatever `Host` arrives. `frontend/nginx.conf` is the only
+  `server` block on `listen 8080`, hence the implicit **default server**, so `server_name
+  localhost` constrains nothing and every `Host` value reaches it. Verified against the
+  running stack, before and independently of the `$host`→`$http_host` change that shares
+  this file: `curl -H 'Host: evil.example' /e/sitemap.xml` emits
+  `<loc>http://evil.example/e/dave-freeman-jr-2026</loc>`, and `/robots.txt` emits the
+  matching `Sitemap:` line. **Bounded, not harmless**: nginx validates the header ahead of
+  us and answers 400 for anything outside the host grammar, so the injected value can only
+  be an authority — no CRLF, no path, no query — and nginx caches nothing, while a CDN in
+  front of it keys on hostname, so the poisoned document is served back to whoever forged
+  the header and to nobody else. The R8-F cache hardening addressed a *different* half of
+  this (the sitemap caches the slug list, not rendered XML, so a rotating `Host` is no
+  longer a cache key); it did not make the value trustworthy. The durable fix is the one the
+  backend already has and the node tier does not: **be told** the public origin
+  (`PUBLIC_APP_ORIGIN`, already `https://${PUBLIC_HOSTNAME}` on `api` in
+  `docker-compose.selfhost.yml`) instead of deriving it. Not done here because it is
+  strictly worse half-applied: an env-var fallback to the request origin is a defence absent
+  in every stack that forgets the variable — including the default dev one, where it would
+  be the only place it could be tested — and a *wrong* value is a silently wrong sitemap in
+  production, a worse failure than the one it closes. A `server_name` allowlist cannot
+  substitute: `nginx.conf` is `COPY`'d into the image while the self-host hostname arrives
+  as `${PUBLIC_HOSTNAME}` at compose time, so the list would have to be templated
+  (`/etc/nginx/templates/*.template` + envsubst) across all six stacks. Size S (entrant +
+  two compose files) or M (with the nginx templating). *(Task 33, Item 1.)*
