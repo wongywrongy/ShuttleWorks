@@ -826,9 +826,24 @@ async def submit_entry_json(
     )
 
     # The key: header first (a hydrated fetch), hidden field second (an
-    # unhydrated native form, which cannot send a header at all). Bounded
-    # to the column's 64 characters on both paths.
-    key = idempotency_key or str(form.get("idempotencyKey") or "")[:64] or None
+    # unhydrated native form, which cannot send a header at all).
+    #
+    # **Refused over the column's 64 characters, on both channels.** The body
+    # was truncated here (``[:64]``) while the header is bounded by
+    # ``max_length=64`` above, so the two disagreed about the same value —
+    # and the truncating one turned a prefix collision into a silent replay:
+    # two distinct keys sharing 64 characters, from one account in one
+    # workspace, resolve to one row, so the second post is answered with the
+    # FIRST submission, its entry is never recorded, and the entrant is 303ed
+    # to a receipt that looks correct. A key is a promise about identity; the
+    # honest answer to one this store cannot hold is to say so.
+    key = idempotency_key or str(form.get("idempotencyKey") or "") or None
+    if key is not None and len(key) > 64:
+        # 422 because that is what the header channel already answers for the
+        # same value — matching the status is the agreement; the body stays
+        # this route's own ``ErrorCode`` vocabulary, as every other refusal
+        # here does.
+        raise refuse(422, "That submission's key is too long (64 characters).")
 
     # 7-9 — replay, flags and the write, all inside the submission service.
     result = submission_service.create_submission(

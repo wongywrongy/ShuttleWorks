@@ -819,6 +819,47 @@ def test_a_different_key_creates_a_second_act(client, page, entrant):
     assert len(_submissions(page["tid"])) == 2
 
 
+def test_two_keys_that_share_a_prefix_are_refused_and_not_silently_replayed(
+    client, page, entrant
+):
+    """**A prefix collision was a lost entry** (code review, F3).
+
+    The body key was ``[:64]``-truncated to fit the column while the header
+    key is *bounded* by ``max_length=64`` — so the two channels disagreed
+    about the same over-long value, one refusing it and one quietly making it
+    something else. Two distinct keys sharing their first 64 characters, from
+    one account in one workspace, then resolved to one row: ``replay``
+    answered the second post with the FIRST submission, the second entry was
+    never recorded, and the entrant got a 303 to a receipt that looked
+    entirely correct. Silent, where the header channel was already loud.
+
+    Not reachable from the shipped form — the loader mints a 36-character
+    ``crypto.randomUUID()`` — which is exactly why it had to be made loud
+    rather than left to the next caller to discover.
+
+    To prove it is not vacuous: put the ``[:64]`` back and this fails with
+    two 303s and one submission, which is the defect.
+    """
+    shared = "k" * 64
+    first = _submit(client, page, idempotencyKey=f"{shared}-one")
+    second = _submit(client, page, idempotencyKey=f"{shared}-two")
+
+    assert first.status_code == 422, first.text
+    assert second.status_code == 422
+    assert _submissions(page["tid"]) == []
+
+    # The same answer on the channel that was already refusing, so the two
+    # cannot drift apart again: same status, for the same value, either way.
+    assert _submit(
+        client, page, headers={"Idempotency-Key": "k" * 65}
+    ).status_code == 422
+
+    # Non-vacuity: the bound is 64, not "keys are refused". A key that FITS
+    # the column is still a normal submission on both channels.
+    assert _submit(client, page, idempotencyKey=shared).status_code == 303
+    assert _submissions(page["tid"])[0].idempotency_key == shared
+
+
 def test_a_key_is_scoped_to_the_tournament_the_slug_resolves_to(client, page, entrant):
     """Ruling D4, one level up. A key used in another workspace must not
     resolve here — a global lookup on a route anyone with a poster URL can
