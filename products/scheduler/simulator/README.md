@@ -52,7 +52,7 @@ Exit code 0 ⇔ zero invariant violations and zero 5xx.
 | `bracket`    | one event of `--format se\|rr\|swiss\|monrad\|compass\|de`, played to completion |
 | `mixed`      | meet + bracket + display modules in ONE workspace, both engines verified |
 | `chaos`      | replay idempotency, out-of-order 409, stale-version 409+recovery, retire, postpone/reassign, racing directors, bracket walkover |
-| `demo`       | **seeds a whole product, not one tournament** — 8 realistic workspaces, 4 module sets, ~108 named people, 5 draw formats, a solved meet, a floor mid-session, 2 live public entry pages + 1 deliberately closed |
+| `demo`       | **seeds a whole product, not one tournament** — 8 realistic workspaces of 73–110 matches each (788 total), 4 module sets, a 516-person designed pool over 22 clubs, all 6 draw formats, 2 solved league meets, a floor mid-session, 2 live public entry pages + 1 deliberately closed |
 
 ### The `demo` scenario
 
@@ -68,6 +68,25 @@ make -C products/scheduler sim SCENARIO=demo SEED=2026 SIM_URL=http://localhost:
 
 The report's `note:` lines ARE the deliverable: one per workspace with its
 id, module set and URL, plus every display token and entry-page slug.
+
+**Scale, and what pays for it.** 788 matches across eight workspaces, 390
+distinct people drawn from a 516-row designed pool, ~2000 requests, ~3½
+minutes wall on a laptop. Most of that is CP-SAT: the 73-match league meet
+solves in ~27 s and returns `feasible` rather than `optimal` — it spends
+its whole deterministic-time budget without proving optimality, while still
+assigning every match with no court overlap and no player double-booked.
+The 24-match one takes ~11 s. Both run **twice**, because the determinism
+invariant re-solves and compares. `solverTimeLimitSeconds` in a workspace's
+`meet` block is the knob (it maps to `max_deterministic_time`, so the stop
+criterion is host-speed-independent and the re-solve still matches).
+
+**Dates agree with floor state.** `_event_is_open` measures a deadline
+against the wall clock, so an entry page can only be seeded live — and a
+live entry window on a tournament that finished in February is a
+contradiction on screen. Workspaces that are played out are dated in the
+recent past, the mid-session one is dated today, and the three with entry
+pages are dated ahead with their deadlines in front of them. Every date is
+inside 2026, so the owner's tournament names stay literally true.
 
 **Not idempotent, deliberately.** Re-running creates eight *more*
 workspaces — `POST /tournaments` has no natural key and inventing one here
@@ -96,7 +115,23 @@ a neighbour's workspace. See "Auth" below.
   already exist. Hence two direct entries per entries-fed event.
 - `bracket_size` is fixed when the draw is created, so an entries-fed draw
   must declare the field it expects rather than deriving it from its
-  founding participants.
+  founding participants. Each event therefore declares `entry_slots` =
+  `bracket_size` minus its direct seeding, so the draw arrives exactly full
+  and opens with no byes.
+- Entries are **singles-only** (`entry_type` doubles is E3), so a doubles
+  draw gets no entry event. Doubles still exist — as team participants with
+  `members`, which the bracket adapter expands back to two engine players.
+  That expansion is why the participant id is `slug_of(name)` on both sides
+  of the singles/doubles line: a person entered in Men's Singles *and*
+  Men's Doubles is one engine player and cannot be put on two courts at once.
+- The per-IP budgets decided the *shape* of the seeding rather than being
+  raised for it. Eight entrant accounts is exactly
+  `entrant_signup_max_per_ip`; 130 entry players reach the desk in **10**
+  club-ordered squad submissions against `entries_max_per_ip`'s 20 per 10
+  minutes, because one form legitimately carries a squad
+  (`services/entry_form.parse_players`). Only `REGISTRATION_MAX_PER_IP`
+  still binds — six organisations against a shipped budget of five — and
+  that is raised on the deployment, never bypassed here.
 
 ## Auth
 
