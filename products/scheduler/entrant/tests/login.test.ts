@@ -266,6 +266,14 @@ describe('signing up says so on the page the browser lands on', () => {
 
 // ---- `next`: the page renders it, so the page validates it -----------------
 
+/**
+ * `DEFAULT_NEXT` in `app/routes/login.tsx`, restated rather than imported: a
+ * test that imported the constant would assert it equals itself. Written here
+ * so a change to it has to be made twice, on purpose — it is where a sign-in
+ * with no destination lands, which is a user-facing decision.
+ */
+const DEFAULT_NEXT = '/e/login/signed-in';
+
 describe('next is a same-origin entrant path or it is discarded', () => {
   it('carries a safe next through to the hidden field', async () => {
     const html = await render('/e/login?next=/e/spring-open');
@@ -288,7 +296,76 @@ describe('next is a same-origin entrant path or it is discarded', () => {
     const html = await render(`/e/login?next=${encodeURIComponent(crafted)}`);
 
     expect(html).not.toContain('evil.example');
-    expect(inputNamed(html, 'next')).toContain('value="/e/login"');
+    // The fallback is `/e/login/signed-in`, not the bare `/e/login` it was
+    // until 2026-08-10: landing back on an unchanged sign-in form is what a
+    // post that silently did nothing looks like. The property under test is
+    // unchanged — a crafted `next` is DISCARDED for the default — and the
+    // default is asserted rather than restated, so it cannot drift.
+    expect(inputNamed(html, 'next')).toContain(`value="${DEFAULT_NEXT}"`);
+  });
+
+  it('says a sign-in worked when it had nowhere else to send the entrant', async () => {
+    // Defect 3. `DEFAULT_NEXT` is where sign-up → sign-in lands for anyone who
+    // arrived without a tournament in hand, and it used to be this same page
+    // with nothing changed on it. It is not an identity claim — no page here
+    // can read the session cookie — so the copy states an outcome and grants
+    // nothing, and the form still renders for whoever typed the URL.
+    const html = await render(DEFAULT_NEXT);
+
+    expect(html).toContain('You are signed in on this device');
+    expect(html).toContain('action="/e/account/login"');
+    // Non-vacuity in the other direction: the plain page must not say it.
+    expect(await render('/e/login')).not.toContain('You are signed in on this device');
+  });
+});
+
+// ---- the refusal, as a page rather than as JSON ----------------------------
+
+describe('a refused sign-in', () => {
+  it('renders as a page carrying one sentence for every cause', async () => {
+    // Defect 2. `POST /e/account/login` answers a form post with a 303 here
+    // instead of a 401 whose JSON body a browser paints as the whole document.
+    const html = await render('/e/login/failed');
+
+    expect(html).toContain('We could not sign you in');
+    // The form is still on the page: a refusal the entrant cannot retry from
+    // is a dead end.
+    expect(html).toContain('action="/e/account/login"');
+  });
+
+  it('names no cause, and carries none to name', async () => {
+    // The non-enumeration control. The signal reaching this page is a path
+    // with two values — there is no code, no address and no branch — so the
+    // document cannot distinguish "no such account" from "wrong password".
+    const html = await render('/e/login/failed');
+
+    // Phrases, not words: "No account yet? Create one." is the signup link
+    // that has always been on this page, and a bare `no account` would match
+    // it and make this test pass for the wrong reason on the day it broke.
+    for (const oracle of [
+      'no account with',
+      'no such account',
+      'not registered',
+      'does not exist',
+      'wrong password',
+      'incorrect password',
+      'password is wrong',
+      'AUTH_INVALID_CREDENTIALS',
+    ]) {
+      expect(html.toLowerCase()).not.toContain(oracle.toLowerCase());
+    }
+  });
+
+  it('keeps the destination the entrant arrived with, so a retry still lands', async () => {
+    // The backend re-validates and re-attaches `next` on the refusal, and this
+    // page validates it again on the way into the markup.
+    const html = await render('/e/login/failed?next=/e/spring-open');
+
+    expect(inputNamed(html, 'next')).toContain('value="/e/spring-open"');
+  });
+
+  it('says nothing of the kind on the plain sign-in page', async () => {
+    expect(await render('/e/login')).not.toContain('We could not sign you in');
   });
 });
 

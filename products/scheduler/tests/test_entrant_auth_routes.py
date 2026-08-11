@@ -1036,6 +1036,123 @@ def test_a_form_login_honours_a_same_tier_next(client, turnstile):
     assert client.cookies.get("sw_play_session")
 
 
+# The Accept a browser sets itself on a form navigation. Never
+# `X-ShuttleWorks-CSRF`: a native form cannot send a header at all, which is
+# what channel two (`_csrf` in the body) exists for.
+_BROWSER = {
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+}
+
+
+def _form_login(client, email, password, next_value=None, headers=_BROWSER):
+    """A scriptless browser's sign-in: urlencoded body, `_csrf` in it, and the
+    Accept a navigation carries."""
+    from app.form_csrf import form_csrf_token
+
+    client.cookies.set(PLAY_CSRF, "v")
+    body = {"email": email, "password": password, "_csrf": form_csrf_token("v")}
+    if next_value is not None:
+        body["next"] = next_value
+    return client.post(
+        "/e/account/login", data=body, headers=headers, follow_redirects=False
+    )
+
+
+def test_a_refused_form_login_is_a_page_and_not_a_json_blob(client, account):
+    """**Defect 2 (2026-08-10 browser demo pass).**
+
+    A native form post is a NAVIGATION: whatever the server answers IS the
+    document. So the 401's body — ``{"detail":{"code":
+    "AUTH_INVALID_CREDENTIALS","message":"Invalid email or password"}}`` —
+    was painted across the whole window, on the one screen where a human has
+    just typed a credential and needs to know what to do next.
+
+    Same wrapper argument as ``entrant_or_back_to_form``
+    (``api/entries_json.py``): the identity decision is unchanged, only the
+    shape of the refusal for a caller that cannot read JSON.
+    """
+    r = _form_login(client, account, "the wrong passphrase entirely")
+
+    assert r.status_code == 303, r.text
+    assert r.headers["location"] == "/e/login/failed"
+    # Nothing was handed out, and nothing of the refusal's JSON survived.
+    assert "sw_play_session" not in r.cookies
+    assert "AUTH_INVALID_CREDENTIALS" not in r.text
+
+
+def test_the_refusal_page_is_the_same_one_for_every_cause(client, account):
+    """Non-enumeration, which is the property this must not buy its
+    readability with.
+
+    Unknown address, wrong password, and an address that exists but was
+    never given a password all reach the same branch, so they all reach the
+    same ``Location`` — byte for byte, and carrying no code for the far side
+    to branch on. ``authenticate`` still pays the Argon2 cost on the miss,
+    so the timing is not an oracle either; that is asserted by
+    ``test_an_unknown_address_is_refused_identically`` on the JSON path and
+    is the same call.
+    """
+    wrong = _form_login(client, account, "the wrong passphrase entirely")
+    unknown = _form_login(client, "nobody-at-all@example.com", GOOD_PW)
+
+    assert wrong.status_code == unknown.status_code == 303
+    assert wrong.headers["location"] == unknown.headers["location"]
+
+
+def test_a_refused_form_login_keeps_the_destination_it_arrived_with(
+    client, account
+):
+    """A refusal that dropped ``next`` would strand the entrant: they retry,
+    succeed, and land on the sign-in page instead of the entry page they came
+    from. Validated by the same allowlist the success branch uses..."""
+    r = _form_login(client, account, "wrong", next_value="/e/spring-open")
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/e/login/failed?next=%2Fe%2Fspring-open"
+
+
+def test_a_crafted_next_does_not_survive_a_refusal_either(client, account):
+    """...and dropped when it is not one. An open redirect reached through
+    the FAILURE branch is the same phishing primitive as one reached through
+    the success branch — the victim types real credentials on the real
+    origin and is handed onward — so ``next_target`` guards both."""
+    r = _form_login(client, account, "wrong", next_value="https://evil.example/steal")
+
+    assert r.status_code == 303
+    assert r.headers["location"] == "/e/login/failed"
+    assert "evil.example" not in r.headers["location"]
+
+
+def test_a_refused_JSON_login_is_still_a_plain_401(client, account):
+    """The negative control. Only the navigation shape changed: a
+    programmatic caller still gets the status and the error body it has
+    always parsed, which is what ``test_the_json_contract_is_untouched``
+    exists to protect more broadly."""
+    r = _login(client, password="the wrong passphrase entirely")
+
+    assert r.status_code == 401
+    assert r.json()["detail"]["code"] == "AUTH_INVALID_CREDENTIALS"
+
+
+def test_a_scripted_form_post_that_is_not_navigating_still_gets_the_401(
+    client, account
+):
+    """Non-vacuity for the Accept test, in the direction that matters.
+
+    The branch is on ``Accept``, not on the content type: a urlencoded post
+    from a script is not rendering anything, so it keeps the answer it can
+    parse. If the branch were widened to every form post, this goes red —
+    and so does ``test_a_login_post_with_the_nonce_token_reaches_the_route``
+    in ``tests/test_form_csrf_channel.py``, which posts exactly this shape.
+    """
+    r = _form_login(
+        client, account, "the wrong passphrase entirely", headers={"accept": "*/*"}
+    )
+
+    assert r.status_code == 401
+    assert r.json()["detail"]["code"] == "AUTH_INVALID_CREDENTIALS"
+
+
 def test_a_form_logout_proves_itself_with_the_session_derived_token(
     client, turnstile
 ):

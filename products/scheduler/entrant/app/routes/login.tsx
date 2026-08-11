@@ -21,17 +21,23 @@
  * 401-vs-303, and a page that renders "no account with that address" from it is
  * then one edit away.
  *
- * **Non-enumeration.** `api/entrants.py:login` answers one 401 for every cause
- * — unknown address, no password set, wrong password — and pays the Argon2 cost
- * on the miss as well, so neither body nor timing is an oracle
+ * **Non-enumeration.** `api/entrants.py:login` answers one refusal for every
+ * cause — unknown address, no password set, wrong password — and pays the
+ * Argon2 cost on the miss as well, so neither body nor timing is an oracle
  * (`entrant_service.authenticate` returns an account or `None` and offers no
- * way to ask why). This tier must not add the distinction back. It therefore
- * renders **no error state at all**: a failed form post never reaches node,
- * because the browser posts across the tier boundary and the backend answers
- * it. There is nothing here to branch on, which is a stronger property than
- * branching identically. `tests/login.test.ts` compares the rendered documents
- * for a fresh and an already-registered address byte for byte, and pins that
- * the only query parameter reaching the markup is `next`.
+ * way to ask why). This tier must not add the distinction back.
+ *
+ * It renders exactly one refusal state, and the signal that reaches it is a
+ * PATH (`/e/login/failed`), not a code: a form post that fails is a browser
+ * navigation, so before this the entrant read
+ * `{"detail":{"code":"AUTH_INVALID_CREDENTIALS",…}}` as the whole document
+ * (found by a real-browser demo pass, 2026-08-10). What node is handed is
+ * "that did not work" and nothing else — no address, no cause, nothing to
+ * branch on — which is why the fix is a second bound path rather than the
+ * `?error=` flash it would otherwise have been. The loader still reads
+ * exactly one query parameter. `tests/login.test.ts` compares the rendered
+ * documents for a fresh and an already-registered address byte for byte, and
+ * pins that the only query parameter reaching the markup is `next`.
  *
  * **CSRF on a page with no session.** There is none — obtaining one is what
  * this page is for — which is what the `sw_play_csrf` nonce exists for.
@@ -55,15 +61,22 @@ import type { Route } from './+types/login';
  * did not say.
  *
  * It cannot be left empty: the backend's own fallback is `/e/account/login`
- * (`api/entrants.py:532`), which is POST-only and therefore a 405 — fine as a
+ * (`api/entrants.py`), which is POST-only and therefore a 405 — fine as a
  * default for a JSON caller that never follows it, useless for a browser. So
  * this page always posts a `next`, and the default is a node-owned GET.
- * Returning to this page after signing in is not ideal — the page cannot see
- * the session cookie and so cannot say "you are signed in" — but a page is
- * strictly better than a 405, and every link that matters carries a real
- * `next` (the entry page sends `?next=/e/{slug}`).
+ *
+ * **It used to be the bare `/e/login`**, i.e. this page again with nothing
+ * changed on it: sign up, sign in, and land back on a sign-in form, which is
+ * exactly what a post that had silently done nothing looks like. That is the
+ * whole flow for an entrant who reached signup without a tournament in hand
+ * (every link that carries a real `next` was always fine — the entry page
+ * sends `?next=/e/{slug}/signed-in`). It now lands on the variant below,
+ * which says what happened and what to do next. Still not a claim this page
+ * can verify — no page on this tier can read the session cookie (R8-D) — so
+ * the copy states the outcome and grants nothing, the same posture the entry
+ * page's `/signed-in` variant takes.
  */
-const DEFAULT_NEXT = '/e/login';
+const DEFAULT_NEXT = '/e/login/signed-in';
 
 /**
  * The one prefix the entrant tier owns — **byte-identical to `_SAFE_NEXT` in
@@ -112,6 +125,26 @@ export interface LoginLoaderData {
    * still render byte-identical documents.
    */
   justSignedUp: boolean;
+  /**
+   * Did a sign-in just fail? Read from this request's PATH, `/e/login/failed`.
+   *
+   * **One flag for every cause, which is the point.** `api/entrants.py`'s
+   * login answers unknown-address, no-password-set and wrong-password
+   * identically and pays the Argon2 cost on the miss; the redirect that lands
+   * here is that same single answer wearing a shape a browser can render. A
+   * `?error=` query field would have carried a code this page then branched
+   * on — one edit from "no account with that address" — so there is no code:
+   * the path is the whole signal, and it has two values.
+   */
+  signInFailed: boolean;
+  /**
+   * Did a sign-in just succeed with nowhere in particular to go?
+   *
+   * `DEFAULT_NEXT`'s destination. Not an identity claim and not a capability:
+   * the URL is typeable, this page cannot read the session cookie, and
+   * nothing here is gated on it — the write is gated at the write.
+   */
+  justSignedIn: boolean;
 }
 
 /**
@@ -126,6 +159,11 @@ export interface LoginLoaderData {
  * signup document and renders it.
  */
 const SIGNED_UP_SUFFIX = '/created';
+
+/** The other two, same argument. The route table binds this module to four
+ * paths and nothing else can end in either of these. */
+const FAILED_SUFFIX = '/failed';
+const SIGNED_IN_SUFFIX = '/signed-in';
 
 /**
  * Reads the URL for exactly one field, and one that names no person.
@@ -148,6 +186,8 @@ export async function loader({ request }: { request: Request }) {
     formCsrf: csrf.token,
     next: safeNext(url.searchParams.get('next')),
     justSignedUp: url.pathname.endsWith(SIGNED_UP_SUFFIX),
+    signInFailed: url.pathname.endsWith(FAILED_SUFFIX),
+    justSignedIn: url.pathname.endsWith(SIGNED_IN_SUFFIX),
   };
   return data(payload, csrf.responseInit);
 }
@@ -170,7 +210,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
 }
 
 export default function LoginPage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, next, justSignedUp } = loaderData;
+  const { formCsrf, next, justSignedUp, signInFailed, justSignedIn } = loaderData;
 
   return (
     <main className="mx-auto grid w-full max-w-md gap-6 p-4">
@@ -195,6 +235,40 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
         <Notice tone="success">
           Your entrant account is ready. Sign in below with the address and
           password you just gave.
+        </Notice>
+      ) : null}
+
+      {/* The refusal, in words (2026-08-10 browser pass). Before this, a
+          wrong password painted `{"detail":{"code":"AUTH_INVALID_CREDENTIALS"
+          ,…}}` across the whole window: a native form post is a navigation,
+          so whatever the backend answers IS the document.
+
+          **One sentence for every cause**, matching the single 401 it stands
+          in for. It does not say whether the address is known, whether the
+          account has a password, or which of the two fields was wrong —
+          there is nothing here to say it WITH, because the signal that
+          reaches this page is a path with two values and carries no code.
+          "Check the address and password" is advice, not a diagnosis. */}
+      {signInFailed ? (
+        <Notice tone="warning">
+          We could not sign you in. Check the email address and password, then
+          try again. Nothing about your account has changed.
+        </Notice>
+      ) : null}
+
+      {/* A sign-in that worked but had nowhere to go (`DEFAULT_NEXT`).
+
+          The form still renders below, and deliberately: this page cannot
+          read the session cookie, so hiding it would strand anyone who
+          reached this URL by typing it, and "sign in as someone else" is a
+          real thing to want on a shared device. The copy therefore does not
+          leave the reader looking at an unexplained form — it says what the
+          form is now for. */}
+      {justSignedIn ? (
+        <Notice tone="success">
+          You are signed in on this device. Open the entry link your organiser
+          gave you to enter a tournament — the form below signs in a different
+          account.
         </Notice>
       ) : null}
 

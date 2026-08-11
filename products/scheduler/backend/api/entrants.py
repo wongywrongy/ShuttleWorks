@@ -43,6 +43,7 @@ from __future__ import annotations
 import logging
 import re
 from typing import Optional, Type
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.exceptions import RequestValidationError
@@ -158,6 +159,21 @@ def is_form_post(request: Request) -> bool:
         (request.headers.get("content-type") or "").split(";")[0].strip().lower()
         in _FORM_CONTENT_TYPES
     )
+
+
+# Where a form sign-in that did not work sends the browser back to. A
+# node-owned GET (``entrant/app/routes.ts`` binds it to the same module as
+# ``/e/login``), which is what makes the refusal a PAGE rather than the
+# ``{"detail":{"code":"AUTH_INVALID_CREDENTIALS"}}`` a native form post
+# otherwise paints across the window — found by a real-browser demo pass,
+# 2026-08-10.
+#
+# **One target for every cause**, exactly as the 401 it replaces is one
+# status and one body for every cause. Unknown address, no password set and
+# wrong password all land here, so this route is no more of an enumeration
+# oracle by redirecting than it was by refusing, and the copy on the far
+# side states no address and no branch.
+_LOGIN_FAILED_PAGE = "/e/login/failed"
 
 
 def next_target(raw: Optional[str], fallback: str) -> str:
@@ -474,7 +490,12 @@ def signup(
     response_model=None,
     responses={
         200: {"model": EntrantDTO},
-        303: {"description": "Form post: redirect carrying the session cookie"},
+        303: {
+            "description": (
+                "Form post: redirect to `next` carrying the session cookie, "
+                "or to the sign-in page's refusal variant on a bad credential"
+            )
+        },
     },
 )
 def login(
@@ -498,6 +519,13 @@ def login(
     neither the body nor the timing tells a caller which it was. The
     uniformity is ``services/entrants.authenticate``'s, not this route's —
     it returns an account or ``None`` and offers no way to ask why.
+
+    **Two shapes for that one answer, by ``Accept``.** A JSON caller keeps
+    the 401 verbatim; a browser navigation — which renders whatever it is
+    handed as the whole document — gets a 303 to ``_LOGIN_FAILED_PAGE``.
+    Same branch, same cause-blindness, same absence of anything an attacker
+    can read: what changes is only whether the refusal arrives as a page or
+    as ``{"detail":{"code":...}}`` in the entrant's face.
     """
     try:
         email = auth_service.normalize_email(body.email)
@@ -518,6 +546,32 @@ def login(
         auth_service.throttle_record_failure(repo.session, account_key)
         auth_service.throttle_record_failure(repo.session, ip_key)
         repo.session.commit()
+        if "text/html" in request.headers.get("accept", ""):
+            # ``text/html`` in Accept means a NAVIGATION — browsers send it on
+            # a form post and never on ``fetch(..., {headers: {}})`` — and a
+            # navigation renders whatever it is handed as the whole document.
+            # The same test ``entrant_or_back_to_form`` and ``quote_entry``
+            # make (``api/entries_json.py``), for the same reason and with the
+            # same answer: 303 to a page, carrying a code and never prose,
+            # because the target is addressable and shareable.
+            #
+            # Accept rather than ``is_form_post`` (which the SUCCESS branch
+            # below uses): a browser sends both, so the shipped path is
+            # unaffected either way, but a scripted urlencoded client is not
+            # navigating anywhere and keeps the 401 it parses.
+            #
+            # The retry keeps its destination: without this, failing once
+            # loses the ``next`` the entrant arrived with, and signing in on
+            # the second attempt strands them away from the entry page they
+            # came from. Validated by the same allowlist the success branch
+            # uses, and dropped entirely if it fails — a crafted value must
+            # not survive a refusal any more than it survives a success.
+            retry = next_target(next_raw, "")
+            return RedirectResponse(
+                url=_LOGIN_FAILED_PAGE
+                + (f"?{urlencode({'next': retry})}" if retry else ""),
+                status_code=status.HTTP_303_SEE_OTHER,
+            )
         raise http_error(
             status.HTTP_401_UNAUTHORIZED,
             ErrorCode.AUTH_INVALID_CREDENTIALS,

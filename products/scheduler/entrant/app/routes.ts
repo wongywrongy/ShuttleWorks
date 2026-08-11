@@ -44,6 +44,21 @@ export default [
   // would put `/e/login/created?` in it and the derivation would stop
   // matching. Same file, so `id` has to be given.
   route('login/created', 'routes/login.tsx', { id: 'login-created' }),
+  // The same module twice more, for the two other outcomes `POST
+  // /e/account/login` can produce — same argument as `login/created` above.
+  //
+  // `login/failed` is where a refused form post lands. The alternative was a
+  // `?error=` flash, and it was rejected: `login.tsx`'s loader reads exactly
+  // one query parameter (`next`) and `tests/login.test.ts` pins that, because
+  // the way this tier would reintroduce the enumeration distinction the
+  // backend refuses to make is a query field it renders. A path carries no
+  // attacker-chosen value at all.
+  //
+  // `login/signed-in` is where a sign-in with no destination lands. The old
+  // fallback was the bare `/e/login`, i.e. the sign-in page again, saying
+  // nothing — indistinguishable from a post that had quietly done nothing.
+  route('login/failed', 'routes/login.tsx', { id: 'login-failed' }),
+  route('login/signed-in', 'routes/login.tsx', { id: 'login-signed-in' }),
   // There is deliberately NO logout page. Signing out is a POST to
   // `/e/account/logout` (FastAPI's, R8-A) and the form that makes it lives in
   // the footer of `routes/entry.tsx` — the only page a signed-in entrant is
