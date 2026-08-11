@@ -25,10 +25,12 @@ import type { RouteConfigEntry } from '@react-router/dev/routes';
 import routes from '../app/routes';
 import rrConfig from '../react-router.config';
 import viteConfig from '../vite.config';
+import { contains } from './helpers/cidr';
 import { nodePaths } from './helpers/nodePaths';
 import {
   assertModelHolds,
   backendPrefixes,
+  directive,
   forwardedCookie,
   locations,
   proxyPass,
@@ -95,6 +97,62 @@ describe('ruling R8-A: the /e/ prefix is split across two tiers', () => {
   it('applies the shared security-headers snippet on every entrant path', () => {
     for (const path of ['/e/health', '/e/api/x', '/e/account/login', '/robots.txt']) {
       expect(resolve(path).body).toContain('snippets/security-headers.conf');
+    }
+  });
+});
+
+describe('the rate-limit bucket cannot be chosen by the client', () => {
+  // The zones used to key on `map $http_cf_connecting_ip $sw_limit_key`,
+  // justified by a premise stated in the file: "nginx publishes no host port
+  // in any shipped stack, so the only route in is cloudflared, which
+  // overwrites the header". The premise was FALSE — `docker-compose.yml`
+  // publishes `${FRONTEND_HOST_PORT:-80}:8080` and
+  // `docker-compose.release.yml` publishes `80:8080` — so on those stacks a
+  // client sends `CF-Connecting-IP: <random>` per request, every zone becomes
+  // a fresh bucket, and `sw_auth`/`sw_entries`/`sw_display` limit nothing at
+  // all.
+  //
+  // The replacement is nginx's own realip module, which believes the header
+  // ONLY from a peer in `set_real_ip_from` — so there is no premise left to
+  // keep true. These assertions are the ones that go red if the map comes
+  // back.
+
+  it('keys every zone on the connection address, never on a header', () => {
+    const zones = directive('limit_req_zone');
+    // Non-vacuity: an empty list would make the loop below trivially true.
+    expect(zones.length).toBeGreaterThan(2);
+    for (const zone of zones) {
+      expect(zone, 'a $http_* key is client-chosen: one header per request = one bucket per request').toMatch(
+        /^\$binary_remote_addr\s/,
+      );
+    }
+  });
+
+  it('rewrites that address from CF-Connecting-IP only for a trusted peer', () => {
+    expect(directive('real_ip_header')).toEqual(['CF-Connecting-IP']);
+    const trusted = directive('set_real_ip_from');
+    expect(trusted.length).toBeGreaterThan(0);
+    for (const range of trusted) {
+      // The negative control that matters: a range covering the internet
+      // (`0.0.0.0/0`, or a "temporary" widening) restores the spoof outright,
+      // and every other assertion here would stay green.
+      expect(contains(range, '203.0.113.7'), `${range} trusts the public internet`).toBe(false);
+    }
+  });
+
+  it('overwrites the header on the way upstream, on every path that proxies', () => {
+    // nginx forwards client request headers verbatim unless told otherwise,
+    // so without this the backend — which trusts THIS proxy — would receive
+    // whatever CF-Connecting-IP the client typed. `$remote_addr` is the
+    // address realip has already vouched for: the real client behind the
+    // tunnel, the socket peer everywhere else.
+    const proxying = locations().filter((l) => proxyPass(l) !== null);
+    expect(proxying.length).toBeGreaterThan(5);
+    for (const location of proxying) {
+      expect({
+        path: location.path,
+        header: proxySetHeader(location, 'CF-Connecting-IP'),
+      }).toEqual({ path: location.path, header: '$remote_addr' });
     }
   });
 });

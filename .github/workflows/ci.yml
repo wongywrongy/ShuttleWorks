@@ -165,7 +165,13 @@ jobs:
           POSTGRES_BIND_ADDR: 127.0.0.1
           PUBLIC_HOSTNAME: example.test
           CLOUDFLARE_TUNNEL_TOKEN: dummy-tunnel-token
-          TRUSTED_PROXY_IPS: 172.20.0.9
+          # TRUSTED_PROXY_IPS is deliberately NOT here. It is not a `${VAR:?}`
+          # variable — it has a compose default that is the correct value —
+          # and setting it overrode that default with an address from a subnet
+          # no stack uses, which is the exact shape of the bug this job would
+          # like to be able to see (`.env.selfhost.example` shipped the same
+          # dead value). `config -q` only parses, so nothing here checks the
+          # semantics; `entrant/tests/deployStacks.test.ts` does.
           SMTP_HOST: smtp.example.test
           SW_WORKER_PASSWORD: dummy-password
           PRIMARY_TAILNET_HOST: 100.64.0.1

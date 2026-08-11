@@ -50,6 +50,20 @@ function blockAt(source: string, open: number): string {
   throw new Error(`unbalanced braces at offset ${open} in nginx.conf`);
 }
 
+/**
+ * Every value of a top-level directive, comments stripped —
+ * `directive('set_real_ip_from')` → `['10.201.0.0/24']`.
+ *
+ * The `http`-context directives are as load-bearing as the locations: the
+ * rate-limit key and the realip trust boundary are both declared up there,
+ * and neither is reachable through `locations()`.
+ */
+export function directive(name: string, source = nginxSource()): string[] {
+  return [...uncommented(source).matchAll(new RegExp(`^\\s*${name}\\s+([^;]+);`, 'gm'))].map(
+    (m) => m[1].trim(),
+  );
+}
+
 export interface Location {
   /** `exact` = `location = /x`, `prefix` = `location /x`, `named` = `@x`. */
   kind: 'exact' | 'prefix' | 'named' | 'regex';

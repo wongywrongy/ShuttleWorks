@@ -33,9 +33,12 @@
  * fails if the splitter stops finding them, which is the failure that would
  * otherwise make every check below vacuously green.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+
+import { contains, hostAt } from './helpers/cidr';
+import { directive } from './helpers/nginxConf';
 
 const STACK_DIR = join(import.meta.dirname, '..', '..');
 const DOCKERFILE = join(import.meta.dirname, '..', 'Dockerfile');
@@ -199,6 +202,184 @@ describe('the entrant tier ships exactly where nginx can reach it', () => {
     const selfhost = stacks['docker-compose.selfhost.yml'];
     expect(envValue(selfhost.entrant, 'SESSION_COOKIE_SECURE')).toBe('true');
     expect(envValue(selfhost.api, 'SESSION_COOKIE_SECURE')).toBe('true');
+  });
+});
+
+describe('the chain from "who is the client" to "which bucket" holds in every stack', () => {
+  /**
+   * Two hops decide the throttle key, and both have to be right:
+   *
+   *   browser → cloudflared → frontend:8080 (nginx) → /api/*, /e/api/,
+   *                                                   /e/account/ → the API
+   *
+   * nginx's half lives in `frontend/nginx.conf` — believe `CF-Connecting-IP`
+   * only from a peer in `set_real_ip_from` — and `ingress.test.ts` holds it.
+   * The API's half is `TRUSTED_PROXY_IPS`, and it is COMPOSE that decides
+   * whether it can ever match: the API's immediate peer is the nginx
+   * container, whose address comes from this file's network.
+   *
+   * Both ends shipped broken at once, in the same fail-open direction:
+   *
+   *   - `.env.selfhost.example` set `TRUSTED_PROXY_IPS=172.20.0.3` on a stack
+   *     pinned to `10.201.0.0/24`. The runbook's day-one step is
+   *     `cp .env.selfhost.example .env`, and compose interpolates `.env`
+   *     BEFORE applying a `:-` default — so a dead value in the template beat
+   *     a compose file that was already right. One bucket for the whole
+   *     internet: the fifth failed sign-in from anyone locks out every user.
+   *   - `docker-compose.release.yml` set nothing at all, so every request
+   *     through nginx presented nginx's address and `entrant_signup_key(ip)`,
+   *     `entrant_ip_key(ip)` and `entries_key(ip)` shared one budget for the
+   *     whole internet.
+   *
+   * Neither is visible from either process, and both fail SILENTLY — which is
+   * why the assertions below compare the configured value against the network
+   * the stack actually declares, rather than checking that it is set.
+   *
+   * `docker-compose.yml` is deliberately absent from `PROXIED`. It is the
+   * local dev stack: `AUTH_MODE` is unset there, so every anonymous request
+   * already acts as the bootstrap operator and there is no per-client budget
+   * worth anchoring — and pinning its subnet would break the
+   * `COMPOSE_PROJECT_NAME` idiom that lets a second copy run beside the first,
+   * since two stacks cannot hold the same block. nginx's half still meters it
+   * per real client.
+   */
+  const PROXIED = ['docker-compose.release.yml', 'docker-compose.selfhost.yml'];
+
+  const subnetOf = (file: string): string | undefined =>
+    /^\s*-\s*subnet:\s*(\S+)/m.exec(stackSource(file))?.[1];
+
+  const apiOf = (file: string): string => stacks[file].api ?? stacks[file].backend;
+
+  /** The address the frontend container will actually hold on that network. */
+  const nginxAddressOf = (file: string): string =>
+    /^\s*ipv4_address:\s*(\S+)/m.exec(stacks[file].frontend)?.[1] ?? subnetOf(file)!;
+
+  /**
+   * What an operator ACTUALLY gets, template included — the failure above is
+   * invisible to anything that reads only the compose file.
+   *
+   * `||` rather than `??` on the override is compose's own `:-` semantics: a
+   * name present but EMPTY in `.env` falls through to the default.
+   */
+  function effectiveTrust(file: string): string | undefined {
+    const declared = envValue(apiOf(file), 'TRUSTED_PROXY_IPS');
+    if (declared === undefined) return undefined;
+    const interpolated = /^\$\{TRUSTED_PROXY_IPS(?::-(.*))?\}$/.exec(declared);
+    if (!interpolated) return declared; // a literal — no `.env` can change it
+    const template = join(
+      STACK_DIR,
+      file.replace(/^docker-compose(.*)\.yml$/, '.env$1.example'),
+    );
+    const override = existsSync(template)
+      ? /^\s*TRUSTED_PROXY_IPS=(.*)$/m.exec(readFileSync(template, 'utf8'))?.[1].trim()
+      : undefined;
+    return override || interpolated[1];
+  }
+
+  it('is asking the right stacks, with a helper that can say no', () => {
+    // Non-vacuity, and the tripwire for a NEW deployment stack: every stack
+    // with an nginx in front of an API is either checked below or is the dev
+    // stack the docblock exempts.
+    const fronted = Object.entries(stacks)
+      .filter(([, svc]) => 'frontend' in svc && ('api' in svc || 'backend' in svc))
+      .map(([f]) => f)
+      .sort();
+    expect(fronted).toEqual([...PROXIED, 'docker-compose.yml'].sort());
+    expect(contains('10.201.0.0/24', '10.201.0.9')).toBe(true);
+    expect(contains('10.201.0.0/24', '172.20.0.3')).toBe(false);
+  });
+
+  it.each(PROXIED)('%s pins a network, so a trust list has something to name', (file) => {
+    // Unpinned, the stack lands wherever Docker's pool puts it — which varies
+    // per host and moves when networks are recreated, so the trust list is
+    // either wrong on day one or wrong later. Both fail open.
+    expect(subnetOf(file)).toBeDefined();
+  });
+
+  it.each(PROXIED)('%s tells the API to trust exactly the nginx it will see', (file) => {
+    const trust = effectiveTrust(file);
+    expect(
+      trust,
+      `${file}: the API is never told to trust its proxy, so every request presents nginx's address and every per-IP budget becomes one global bucket`,
+    ).toBeDefined();
+
+    const subnet = subnetOf(file)!;
+    const nginx = nginxAddressOf(file);
+    expect(
+      contains(trust!, nginx),
+      `${file}: TRUSTED_PROXY_IPS=${trust} can never match nginx at ${nginx} — the trust check fails OPEN, silently`,
+    ).toBe(true);
+    expect(
+      contains(subnet, trust!),
+      `${file}: TRUSTED_PROXY_IPS=${trust} reaches outside the compose network ${subnet} — a header trusted from further away is a throttle BYPASS, which is worse than the collapse it fixes`,
+    ).toBe(true);
+  });
+
+  it.each(PROXIED)('%s does not trust the gateway when the API publishes a port', (file) => {
+    const api = apiOf(file);
+    if (!/^\s*ports:/m.test(api)) return; // unreachable except through nginx
+    // A published port is reachable from the host, and host traffic arrives
+    // SNAT'd from the network's gateway — so a subnet-wide trust list on such
+    // a stack makes CF-Connecting-IP spoofable by anything that can reach that
+    // port. Pin the frontend's own address instead.
+    const gateway = hostAt(subnetOf(file)!, 1);
+    expect(
+      contains(effectiveTrust(file)!, gateway),
+      `${file}: the API publishes a host port and trusts ${gateway}, the address host traffic arrives from`,
+    ).toBe(false);
+  });
+
+  it('offers no example address that could never match anything', () => {
+    // The FOURTH instance of the same mistake, and the one the other three
+    // were copied from: `backend/.env.example` — the file CLAUDE.md and the
+    // runbook both call the full per-variable reference — carried
+    // `# Cloud form: TRUSTED_PROXY_IPS=172.20.0.3`, so the value an operator
+    // pastes was dead before they pasted it.
+    //
+    // COMMENTED values count. A template's commented-out line is what people
+    // uncomment, which is exactly how a dead address travels.
+    const dirs = [STACK_DIR, join(STACK_DIR, 'backend')];
+    const templates = dirs.flatMap((dir) =>
+      readdirSync(dir)
+        .filter((f) => /^\.env.*\.example$/.test(f))
+        .map((f) => join(dir, f)),
+    );
+    expect(templates.length).toBeGreaterThan(2); // non-vacuity
+
+    const pinned = stackFiles.map(subnetOf).filter((s): s is string => s !== undefined);
+    expect(pinned.length).toBeGreaterThan(0);
+
+    for (const template of templates) {
+      const offered = [
+        ...readFileSync(template, 'utf8').matchAll(/TRUSTED_PROXY_IPS=(\S+)/g),
+      ].map((m) => m[1]);
+      for (const value of offered) {
+        expect(
+          pinned.some((subnet) => contains(subnet, value)),
+          `${template} offers TRUSTED_PROXY_IPS=${value}, which is outside every network any shipped stack pins (${pinned.join(', ')}) — it cannot match, and a trust check that cannot match fails OPEN`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('lets nginx believe the header only on the stack with a tunnel in front', () => {
+    // nginx's own trust boundary, checked against the networks it can meet.
+    // `set_real_ip_from` names the self-host subnet because that is the one
+    // stack with a cloudflared. If it ever covered another stack's network,
+    // that stack's GATEWAY — the peer for every host-published request —
+    // could set CF-Connecting-IP and pick its own bucket.
+    const trusted = directive('set_real_ip_from');
+    const selfhost = subnetOf('docker-compose.selfhost.yml')!;
+    expect(trusted.some((range) => contains(range, selfhost))).toBe(true);
+    for (const file of stackFiles) {
+      const subnet = subnetOf(file);
+      if (subnet === undefined || subnet === selfhost) continue;
+      for (const range of trusted) {
+        expect(contains(range, subnet), `${file}'s network ${subnet} is inside ${range}`).toBe(
+          false,
+        );
+      }
+    }
   });
 });
 

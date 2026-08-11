@@ -382,13 +382,33 @@ nothing to set here.** Prefer the subnet over a container address: Docker
 reassigns container IPs on `--force-recreate`, and a pinned literal that stops
 matching fails open, silently.
 
-Only if you changed the subnet, keep the two in step:
+`.env.selfhost.example` therefore does **not** set this variable, and that
+absence is deliberate: compose interpolates `.env` *before* applying a `:-`
+default, so anything the template says beats the compose file. Until
+2026-08-11 the template shipped `TRUSTED_PROXY_IPS=172.20.0.3` — an address
+from a subnet this stack no longer uses — and because §3's first step is
+`cp .env.selfhost.example .env`, every install inherited a trust check that
+could not match. Symptom: the failure this whole section describes, from day
+one, with nothing in any log.
+
+Only if you changed the subnet, keep all three in step:
 
 ```bash
 echo 'TRUSTED_PROXY_IPS=10.201.0.0/24' >> .env   # must match `networks:` in the compose file
 ```
 
 Both a bare address and a CIDR block are accepted.
+
+::: warning The third place is inside the frontend image
+`products/scheduler/frontend/nginx.conf` carries `set_real_ip_from
+10.201.0.0/24`, which is how nginx decides whether to believe
+`CF-Connecting-IP` for **its own** rate-limit zones (`sw_auth`, `sw_entries`,
+`sw_display`) and what it then forwards to the API. It is baked into the
+image, so changing the compose subnet without changing it there and rebuilding
+leaves nginx keying every zone on the cloudflared connector — one bucket for
+the whole internet again, one layer up. Same setting, three places:
+`networks:`, `TRUSTED_PROXY_IPS`, `set_real_ip_from`.
+:::
 
 The API then reads `CF-Connecting-IP`, **but only when the request's immediate
 peer is in that list**. A header trusted from anywhere would be worse than none:

@@ -229,11 +229,23 @@ here.** Prefer the subnet over a container address: Docker reassigns container
 IPs on `--force-recreate`, and a pinned literal that stops matching fails open,
 silently. Both bare addresses and CIDR blocks are accepted.
 
-If you changed the subnet, keep both in step:
+`.env.selfhost.example` deliberately does not set it. Compose reads `.env`
+*before* applying that default, so a value in the template beats the compose
+file — which is how the template's `172.20.0.3`, an address from a subnet this
+stack stopped using, disarmed the setting on every install until 2026-08-11.
+
+If you changed the subnet, keep all **three** in step — the third lives in the
+frontend image:
 
 ```bash
 echo 'TRUSTED_PROXY_IPS=10.201.0.0/24' >> .env   # must match `networks:` in the compose file
 ```
+
+`products/scheduler/frontend/nginx.conf` carries `set_real_ip_from
+10.201.0.0/24`, which is how nginx decides whether to believe `CF-Connecting-IP`
+for its own rate-limit zones and what it forwards to the API. It is baked into
+the image, so a changed subnet needs an edit there and a rebuild, or nginx keys
+every zone on the connector — the same collapse, one layer up.
 
 ::: danger Do not "fix" a mismatch with uvicorn `--proxy-headers`
 It is the reflex when deploying behind a proxy, and it silently breaks this.

@@ -36,15 +36,23 @@ strictly additive.
 
 **Ingress is a Cloudflare Tunnel, not an origin TLS terminator.** TLS
 terminates at Cloudflare's edge; `cloudflared` dials outward, so the
-host publishes no inbound port and there is no Caddy/nginx in front of
-the API. Two consequences the code cares about:
+host publishes no inbound port. Two consequences the code cares about:
 
-- Every request arrives from the connector, so the credential throttle
-  would collapse into one global bucket without `TRUSTED_PROXY_IPS`,
-  which lets `app/client_ip.py` believe `CF-Connecting-IP` **only** from
-  that peer. **Do not add uvicorn `--proxy-headers`** — it rewrites
-  `request.client.host` from `X-Forwarded-For`, so the trust check stops
-  matching and the collapse returns silently.
+- Every request arrives through a proxy, so the credential throttle and
+  every per-IP entry budget would collapse into one global bucket
+  without `TRUSTED_PROXY_IPS`, which lets `app/client_ip.py` believe
+  `CF-Connecting-IP` **only** from that peer. **The peer is the
+  `frontend` nginx container, not cloudflared** — the self-host stack
+  has served the SPA and proxied `/api/*` since 2026-08-04, so the
+  request path is `browser → cloudflared → nginx → backend:8000` and
+  cloudflared never talks to the API at all. Naming the connector is the
+  classic wrong value here, and it fails *open*, silently. nginx
+  overwrites `CF-Connecting-IP` with an address it has itself vouched
+  for (`frontend/nginx.conf`, `set_real_ip_from`), so what this trust
+  buys is a proxy's word, never a client's. **Do not add uvicorn
+  `--proxy-headers`** — it rewrites `request.client.host` from
+  `X-Forwarded-For`, so the trust check stops matching and the collapse
+  returns silently.
 - Cookie security is configuration (`SESSION_COOKIE_SECURE=true`), never
   detection. Nothing in this backend reads the request scheme, so the
   container seeing plain HTTP is irrelevant.

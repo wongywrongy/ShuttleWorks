@@ -25,6 +25,32 @@ services:
       # vanishes on the next ``docker compose up``. Four slashes is not
       # a typo — ``sqlite:///`` + the absolute path ``/app/data/...``.
       - DATABASE_URL=sqlite:////app/data/local.db
+      # ───────────────────────────────────────────────────────────────
+      # The address this API sees as its IMMEDIATE PEER, which is the
+      # `frontend` nginx container:
+      #
+      #   client → frontend:8080 (nginx) → /api/, /e/api/, /e/account/
+      #                                  → backend:8000
+      #
+      # Without it `trusted_proxy_ips` is empty, CF-Connecting-IP is
+      # ignored, and every request through nginx presents nginx's own
+      # address — so `entrant_signup_key(ip)`, `entrant_ip_key(ip)` and
+      # `entries_key(ip)` are ONE budget shared by the whole internet:
+      # one bot exhausts the entrant signup allowance for every real
+      # entrant. It fails that way silently, which is why the network
+      # below is pinned and `entrant/tests/deployStacks.test.ts` checks
+      # this value against it.
+      #
+      # ONE ADDRESS, not the subnet, and unlike the usual advice that is
+      # deliberate here: this service publishes 8000:8000, so it is
+      # reachable from the host directly, and host traffic arrives SNAT'd
+      # from the network GATEWAY (10.202.0.1). A subnet-wide trust list
+      # would therefore trust anything that can reach that port, turning
+      # a collapsed throttle into a throttle BYPASS. The address is safe
+      # to name because compose pins it (`ipv4_address` on `frontend`) —
+      # it is not the drifting container IP `app/client_ip.py` warns
+      # about, which is one Docker assigns.
+      - TRUSTED_PROXY_IPS=10.202.0.10
     volumes:
       - ./data:/app/data
     restart: unless-stopped
@@ -81,6 +107,15 @@ services:
     image: ghcr.io/${OWNER:-misogyu}/scheduler-frontend:${TAG:-latest}
     ports:
       - "80:8080"
+    networks:
+      # A FIXED address, because the backend has to name it: this is the
+      # peer every proxied request presents, and `TRUSTED_PROXY_IPS` above
+      # is what decides whether the API believes the client address this
+      # container vouches for. Docker otherwise assigns from the pool and
+      # reassigns on --force-recreate, and a trust list that stops matching
+      # fails open in silence.
+      default:
+        ipv4_address: 10.202.0.10
     depends_on:
       backend:
         condition: service_healthy
@@ -104,3 +139,23 @@ services:
         limits:
           cpus: '0.5'
           memory: 128M
+
+networks:
+  # Pinned so `TRUSTED_PROXY_IPS` on the backend can name a STABLE address.
+  # Unpinned, this stack lands wherever Docker's default pool puts it
+  # (172.16.0.0/12), which varies per host and shifts when networks are
+  # recreated — leaving the trust list wrong on day one or wrong later, and
+  # both fail open into one global throttle bucket.
+  #
+  # 10.202.0.0/24 sits outside Docker's default pool, so it will not collide
+  # with an auto-assigned network, and outside the 10.201.0.0/24 the self-host
+  # stack uses — which matters: `frontend/nginx.conf` trusts CF-Connecting-IP
+  # from 10.201.0.0/24, so an overlap would let this stack's gateway (the peer
+  # for everything arriving on the published port) spoof its own rate-limit
+  # bucket. Change this and the two addresses above together; they are one
+  # setting in three places, and `entrant/tests/deployStacks.test.ts` fails if
+  # they stop agreeing.
+  default:
+    ipam:
+      config:
+        - subnet: 10.202.0.0/24
