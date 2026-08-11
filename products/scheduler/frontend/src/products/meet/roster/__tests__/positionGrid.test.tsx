@@ -31,17 +31,13 @@ describe('usePositionGridColumns', () => {
     // U11. Intersecting rankCounts against the canonical five disciplines
     // dropped every column and showed "No events configured" on a configured
     // meet (2026-08-10 browser pass).
-    useTournamentStore.setState({
-      config: { rankCounts: { U10: 5, U11: 5 } } as TournamentConfig,
-    });
+    useTournamentStore.setState({ config: cfg({ rankCounts: { U10: 5, U11: 5 } }) });
     const { result } = renderHook(() => usePositionGridColumns());
     expect(result.current.events.map((e) => e.prefix)).toEqual(['U10', 'U11']);
   });
 
   it('orders canonical disciplines first, then the rest', () => {
-    useTournamentStore.setState({
-      config: { rankCounts: { U10: 5, MS: 1, WD: 2 } } as TournamentConfig,
-    });
+    useTournamentStore.setState({ config: cfg({ rankCounts: { U10: 5, MS: 1, WD: 2 } }) });
     const { result } = renderHook(() => usePositionGridColumns());
     // EVENT_ORDER is MD,WD,XD,WS,MS — the two disciplines keep that order,
     // then the non-canonical event follows in rankCounts order.
@@ -88,16 +84,14 @@ describe('PositionGrid structure', () => {
   });
 
   it('shows the empty state (no table) when no events are configured', () => {
-    useTournamentStore.setState({ config: { rankCounts: {} } as TournamentConfig });
+    useTournamentStore.setState({ config: cfg({ rankCounts: {} }) });
     renderGrid();
     expect(screen.getByText(/No events configured/i)).toBeTruthy();
     expect(screen.queryByTestId('position-grid-table')).toBeNull();
   });
 
   it('renders the grid — not the empty state — for non-discipline events', () => {
-    useTournamentStore.setState({
-      config: { rankCounts: { U10: 5, U11: 5 } } as TournamentConfig,
-    });
+    useTournamentStore.setState({ config: cfg({ rankCounts: { U10: 5, U11: 5 } }) });
     renderGrid();
     expect(screen.queryByText(/No events configured/i)).toBeNull();
     // U10, U11 + the "#" stub = 3
