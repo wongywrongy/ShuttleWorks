@@ -586,3 +586,75 @@ the page a signed-in entrant is on (moves from the old entry page to the enter p
 keeping the same-mint argument, `entry.tsx:404-461`); SP-P6-1 pages deleted only at proven
 parity (brief rule 8), which means: every old URL either serves its superior replacement or
 was an outcome variant whose producers all moved (G0 + `next` values).
+
+---
+
+## OWNER RULINGS — 2026-08-11
+
+Recorded against the four STOPs raised in this document. These are binding and amend the brief
+(`2026-08-11-sp-p6-2-public-ia-brief.md`) where they conflict with it.
+
+### STOP-1 — signed-in states: **DEFERRED TO E2**
+
+The signed-in discovery hub, the "My tournaments" strip and page, and the profile page are **out of
+scope for SP-P6-2**. Discovery ships as a single signed-out state.
+
+Rationale: the my-entries API is E2/Phase 7 work and does not exist; the pages do not exist; and the
+node tier structurally cannot know who is reading (`apiFetch.server.ts` freezes an `accept`-only
+outbound allowlist, `sourceGuards.ts` refuses any route module that reads a cookie or inbound
+header). Rendering these from FastAPI was rejected because it reintroduces the two-rendering-
+technology split SP-P6-1 exists to end; a CSP-nonce JS island was rejected because it breaks the
+zero-JS posture and the blocking page-weight gate the whole tier is built on.
+
+Brief §1 ("Signed-in: the entrant hub") and §4's "my tournaments" clause are struck for this phase.
+
+### STOP-3 / G0 — the `/{slug}/enter` split: **APPROVED**
+
+The two redirect Locations may be retargeted onto `/e/{slug}/enter`:
+`_echo_redirect` (`api/entries_json.py`) and `entrant_or_back_to_form` (`api/entrants.py`).
+
+This is a write-path change and therefore an explicit exception to the brief's read-only rule. It is
+approved because there is no decline path that preserves the binding IA, and because both the 307
+body-preserving quote redirect and its controls were built and proven in the preceding phase. The
+existing security properties on those paths are unchanged and must stay: `refusalCode` plus numeric
+`refusalSubjects` only (never free text, to close the GET-addressable echo-injection vector), and
+the `next_target` allowlist.
+
+### STOP-4 / G4 — Live / Finished / In-play: **CUT**
+
+The status chip ships **two** states, both computed from data that exists:
+`Entries open — closes in Nd` and `Entries closed`. The `Live`, `Finished` and `In play` chip states
+and the In-play discovery facet are removed from the IA for this phase.
+
+Rationale: `tournaments.status` is operator lifecycle, not a publishable signal, and
+`tournament_date` is a nullable `String(32)` with no timezone. G4 (a public lifecycle signal) is
+**declined** — deciding what "Live" means publicly is a product decision, not a field. Deriving the
+state from `tournament_date` was rejected outright: it would be absent or wrong for any tournament
+that has not filled it in, and wrong *confidently*, which is the defect class this program spent
+2026-08-10 removing.
+
+These states return when Display's projections migrate under the public site and a real signal
+exists. The card still answers "can I enter this right now", which the brief names as its job.
+
+### STOP-2 — R15: **UNRESOLVED, NON-BLOCKING**
+
+"R15" appears nowhere in the tree; the ledger transcribes R10–R14 only. The brief cites it twice as a
+boundary. Phase B proceeds without it; if R15 is a real ruling it must be transcribed into
+`SP-PROGRAM-1.md` before Phase C, and any conflict it creates is a stop-and-report at that point.
+
+### Gate proposals — status
+
+| | Proposal | Ruling |
+|---|---|---|
+| G0 | Retarget the two redirects onto `/e/{slug}/enter` | **APPROVED** (see STOP-3) |
+| G1 | Extend `GET /e/api/pages` items with `name, tournamentDate, venueName, eventCount, entriesOpen, entriesCloseAt` | **Open** — discovery cannot filter or render cards without it; the endpoint returns `{slug}` only today (verified in code and live) |
+| G2 | Add `cap` to `EventDTO` (the model already has it) | **Open** |
+| G3 | ISO moment fields (wire format today is the display string `"%Y-%m-%d %H:%M UTC"`) | **Open** |
+| G4 | Public lifecycle signal for Live/Finished | **DECLINED** (see STOP-4) |
+| G5a | Restore `eventCode` on entrant rows (the Entrants tab groups by event; the 2026-08-10 row-dedup dropped it) | **Open** |
+| G5b | Club column on entrant rows | **Recommended decline** — outruns the recorded consent copy in `entry.form.tsx` |
+| G6 | Re-derive the 4 KB page-weight budget at Phase C from the redesigned page, gate stays blocking (R8-F precedent) | **Open** |
+
+G1, G2, G3 and G5a are read-only additions the brief already permits at the gate. They are not yet
+ruled on individually; Phase B may mock against them, but Phase C must not wire a field the owner has
+not approved.
