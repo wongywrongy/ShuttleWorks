@@ -24,8 +24,16 @@ test('the Makefile targets invoke the scripts that actually exist', () => {
   expect(makefile).toContain('entrant-dev:');
   expect(makefile).toContain('local-dev:');
 
-  // Every `npm run X` the Makefile invokes must be a real root script.
-  const invoked = [...makefile.matchAll(/npm run ([a-z:.-]+)/g)].map((m) => m[1]);
+  // Every `npm run X` the Makefile INVOKES must be a real root script — and a
+  // `#` line invokes nothing. Comments are stripped first (the same idiom
+  // `helpers/nginxConf.ts` uses on nginx.conf, and for the same reason: that
+  // file is mostly prose and the prose names paths). Without this the
+  // `make check` type-gate comment, which explains why the gate runs `tsc -b`
+  // rather than `npm run build`, reddened a green tree by quoting CI's own
+  // command — `build` is a workspace script, not a root one. Nothing can hide
+  // behind the strip: a recipe line always begins with a TAB, never a `#`.
+  const recipes = makefile.replace(/^\s*#.*$/gm, '');
+  const invoked = [...recipes.matchAll(/npm run ([a-z:.-]+)/g)].map((m) => m[1]);
   const missing = invoked.filter((name) => !(name in scripts));
   expect(missing).toEqual([]);
 });
