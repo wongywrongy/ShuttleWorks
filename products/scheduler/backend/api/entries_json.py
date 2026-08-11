@@ -14,7 +14,7 @@ never forwards a ``Cookie``, and never manufactures the CSRF header
 ``_entrants``, ``_entry_counts``, ``check_policy`` and
 ``compute_fee_total`` stay exactly where they are and are imported, not
 re-derived. That is not tidiness: the total shown to the entrant IS the
-total recorded (Seam B), the entrant list IS the strict two-column
+total recorded (Seam B), the entrant list IS the strict one-row-per-person
 projection (invariant I6), and a second implementation of either agrees
 with the first until the day it does not.
 
@@ -161,13 +161,22 @@ class EventDTO(BaseModel):
 class EntrantRowDTO(BaseModel):
     """The strict projection (Q4/I6), and nothing else.
 
-    One field, because ``_entrants`` SELECTs one column and answers one row
-    per PERSON. Contact data is structurally absent rather than
-    fetched-and-then-hidden, and adding a second field here would be the
-    first half of undoing that.
+    ``_entrants`` answers one row per PERSON, so this is one row per person:
+    the codes are a LIST on that row precisely because the alternative — a
+    row per person-per-event — is the 2026-08-10 duplication defect, which
+    printed 42 rows for 23 people on the live page.
+
+    Two fields, and the second is the event dimension the Entrants tab
+    groups by (SP-P6-2 G5a). Contact data stays structurally absent rather
+    than fetched-and-then-hidden: the club sits one column away on
+    ``entry_players`` and is deliberately NOT here, because the
+    acknowledgment an entrant ticks promises publication of their name
+    (``entrant/app/routes/entry.form.tsx``) — a third field is only allowed
+    to appear here after the copy that consents to it does.
     """
 
     name: str
+    eventCodes: List[str] = []
 
 
 class PageDTO(BaseModel):
@@ -336,7 +345,10 @@ def entry_page_projection(
             )
             for ev in events
         ],
-        entrants=[EntrantRowDTO(name=name) for name in _entrants(repo, tournament.id)],
+        entrants=[
+            EntrantRowDTO(name=name, eventCodes=codes)
+            for name, codes in _entrants(repo, tournament.id)
+        ],
         viewer=ViewerDTO(
             signedIn=entrant is not None,
             email=entrant.email if entrant is not None else None,

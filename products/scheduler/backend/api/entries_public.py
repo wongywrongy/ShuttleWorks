@@ -18,7 +18,7 @@ by construction.
 
 **The entrant list is a strict projection** (I6/Q4), and that survives the
 move because it lives here rather than in a renderer: ``_entrants`` selects
-names and event ids only, never contact data, and rows with
+names and event codes only, never contact data, and rows with
 ``list_opt_out`` are absent. ``_resolve`` answers the same uniform 404 for
 an unknown slug and for a closed page, so a slug is the only public key
 and a raw tournament UUID never is.
@@ -35,7 +35,7 @@ import logging
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import Request
 from sqlalchemy import func, select
@@ -121,49 +121,75 @@ def _event_is_open(event: EntryEvent, now: datetime) -> bool:
     return True
 
 
-def _entrants(repo: LocalRepository, tournament_id: uuid.UUID) -> List[str]:
-    """The public entrant list: ``full_name``, one row per PERSON.
+def _entrants(
+    repo: LocalRepository, tournament_id: uuid.UUID
+) -> List[Tuple[str, List[str]]]:
+    """The public entrant list: ``(full_name, event codes)``, one row per PERSON.
 
-    A **strict projection** (Q4/I6): the SELECT names one column, so contact
-    data is structurally absent rather than fetched-and-then-hidden — the
+    A **strict projection** (Q4/I6): the SELECT names the published name,
+    the published codes and the id it groups on — nothing else — so contact
+    data is structurally absent rather than fetched-and-then-hidden, the
     same discipline the display routes hold. R13 moved the name onto the
-    player level, so this joins one table and still selects exactly that
-    column; the account it belongs to is never reached. Rows with
-    ``list_opt_out`` never appear; the flag governs publication, never
-    participation, and an opted-out entrant is fully entered.
+    player level, so this reaches the player table and never the account
+    behind it. Rows with ``list_opt_out`` never appear; the flag governs
+    publication, never participation, and an opted-out entrant is fully
+    entered.
 
-    **Grouped by the person, not by the entry.** "Who has entered" is a list
-    of people, and one person holds one entry per event — so an ungrouped
-    projection printed the same entrant once per event they entered (found
-    by a real-browser demo pass, 2026-08-10). ``entry_player_id`` is the
-    grouping key rather than the name, because two entrants who share a
-    name is routine at a club and collapsing them would under-report the
-    field. The event id the rows used to carry went with the fan-out: the
-    page renders one flat name list, and per-event numbers already come
-    from ``_entry_counts``.
+    **Grouped by the person, not by the entry — and that is what the codes
+    must not undo.** "Who has entered" is a list of people, and one person
+    holds one entry per event, so an ungrouped projection printed the same
+    entrant once per event they entered: 42 rows for 23 people on the live
+    page (a real-browser demo pass, 2026-08-10). ``entry_player_id`` is the
+    grouping key rather than the name, because two entrants who share a name
+    is routine at a club and collapsing them would under-report the field.
+
+    The event dimension the fan-out took with it comes back **on** the
+    person's row rather than as a row per person-per-event (SP-P6-2 G5a):
+    the Entrants tab groups by event, which needs to know which events a
+    person entered, and a row per person-per-event is not that — it is the
+    defect. So the fold below is the property, stated as code: the SQL
+    answers one row per (person, code) pair and the loop turns each person's
+    pairs into exactly one entry in the result, whatever number of events
+    they hold. The id is a grouping key only and is never published;
+    per-event *numbers* still come from ``_entry_counts``, which counts
+    entries rather than people and is deliberately a different query.
     """
     rows = repo.session.execute(
-        select(EntryPlayer.full_name)
-        # Explicit, because the name is now the only selected column and
-        # SQLAlchemy would otherwise infer ``entry_players`` as the left
-        # side and fail to join it to itself.
+        select(EntryPlayer.full_name, Entry.entry_player_id, EntryEvent.code)
+        # Explicit, because no column is selected off ``entries`` itself
+        # besides its grouping key, and SQLAlchemy would otherwise infer
+        # ``entry_players`` as the left side and fail to join it to itself.
         .select_from(Entry)
         .join(
             EntryPlayer,
             (EntryPlayer.tournament_id == Entry.tournament_id)
             & (EntryPlayer.id == Entry.entry_player_id),
         )
+        .join(
+            EntryEvent,
+            (EntryEvent.tournament_id == Entry.tournament_id)
+            & (EntryEvent.id == Entry.entry_event_id),
+        )
         .where(
             Entry.tournament_id == tournament_id,
             Entry.list_opt_out.is_(False),
             Entry.state.in_(_LISTED_STATES),
         )
-        .group_by(Entry.entry_player_id, EntryPlayer.full_name)
+        # Per (person, code): the same person entered in the same event
+        # twice is a judgement an operator makes, not a 409 the database
+        # returns (``Entry``'s non-unique ``ix_entries_event_player``), so
+        # the grouping is what keeps one code from being listed twice.
+        .group_by(Entry.entry_player_id, EntryPlayer.full_name, EntryEvent.code)
         # Alphabetical, with the person id as the tiebreaker the house rule
-        # asks for — two entrants share a name often enough at a club.
-        .order_by(EntryPlayer.full_name, Entry.entry_player_id)
+        # asks for — two entrants share a name often enough at a club — and
+        # the code last so a person's codes read in a stable order.
+        .order_by(EntryPlayer.full_name, Entry.entry_player_id, EntryEvent.code)
     ).all()
-    return [name for (name,) in rows]
+    grouped: Dict[uuid.UUID, Tuple[str, List[str]]] = {}
+    for name, player_id, code in rows:
+        grouped.setdefault(player_id, (name, []))[1].append(code)
+    # ``dict`` keeps first-insertion order, which is the ORDER BY's.
+    return list(grouped.values())
 
 
 # What makes an event "age-bracketed", and therefore what makes a birth

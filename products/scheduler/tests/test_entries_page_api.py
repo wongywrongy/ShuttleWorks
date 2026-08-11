@@ -271,11 +271,20 @@ def test_the_projection_carries_the_venue(client, page):
 # ---- the strict entrant list (Q4/I6) ------------------------------------
 
 
-def test_the_projection_lists_entrant_names_only(client, page):
+def test_the_projection_lists_entrant_names_and_their_event_codes_only(client, page):
+    """The whole row, asserted as a literal — so a third field cannot arrive
+    unnoticed.
+
+    ``eventCodes`` is SP-P6-2's ruled addition (G5a): the Entrants tab groups
+    by event, and the codes ride ON the person's row rather than fanning it
+    back out into one row per person-per-event. Nothing else joins them —
+    the club sits beside the name on ``entry_players`` and is absent because
+    the consent copy covers the name.
+    """
     _add_entry(page["tid"], page["ms"], player_name="Bo Ferrar")
     payload = _projection(client, page)
 
-    assert payload["entrants"] == [{"name": "Bo Ferrar"}]
+    assert payload["entrants"] == [{"name": "Bo Ferrar", "eventCodes": ["MS"]}]
     # The projection reaches the player and stops. The account behind the
     # entry is one hop further out and is never selected.
     assert "@example.com" not in json.dumps(payload)
@@ -299,14 +308,15 @@ def test_withdrawn_and_rejected_entries_are_not_listed(client, page):
 def test_the_list_never_reveals_entry_state(client, page):
     """Entry is not acceptance. The list shows who entered, and a public
     'pending' next to a name is a judgment nobody made — at the JSON
-    boundary that is a *schema* claim (the row has one key) and, as in the
-    old file, an absence claim over the serialized list."""
+    boundary that is a *schema* claim (the row has exactly its two published
+    keys) and, as in the old file, an absence claim over the serialized
+    list."""
     _add_entry(page["tid"], page["ms"], player_name="Ada Waiting", state="pending")
     _add_entry(page["tid"], page["ms"], player_name="Bo Accepted", state="confirmed")
 
     rows = _projection(client, page)["entrants"]
     assert {row["name"] for row in rows} == {"Ada Waiting", "Bo Accepted"}
-    assert all(set(row) == {"name"} for row in rows)
+    assert all(set(row) == {"name", "eventCodes"} for row in rows)
     serialized = json.dumps(rows).lower()
     for state in ("pending", "confirmed", "waitlisted"):
         assert state not in serialized

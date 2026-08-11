@@ -267,8 +267,15 @@ def test_the_projection_never_carries_an_entrants_contact_data(
 
     NEGATIVE CONTROL. To prove this is not vacuous: add ``"email":
     entrant_account.email`` to ``EntrantRowDTO`` and populate it in
-    ``entry_page_projection`` (or widen ``_entrants``' SELECT past its one
-    column). Both assertions below go red. Put it back.
+    ``entry_page_projection`` (or publish the ``entry_player_id``
+    ``_entrants`` groups on, or the club sitting beside the name on
+    ``entry_players``). Both assertions below go red. Put it back.
+
+    The key set is asserted EXACTLY rather than by absence of known-bad
+    names, which is why it moved when SP-P6-2's ruled addition landed
+    (``eventCodes``, G5a) instead of quietly tolerating it: a third field
+    still fails here, and a field the consent copy does not cover is a
+    ruling, not a refactor.
     """
     assert _seed_one_entry(client, page).status_code == 303
     # A STRANGER reads the page — the viewer block legitimately carries the
@@ -279,7 +286,7 @@ def test_the_projection_never_carries_an_entrants_contact_data(
     assert r.status_code == 200, r.text
     body = r.json()
     assert [row["name"] for row in body["entrants"]] == ["Alice Chen"]
-    assert all(set(row) == {"name"} for row in body["entrants"])
+    assert all(set(row) == {"name", "eventCodes"} for row in body["entrants"])
     assert "parent@example.com" not in r.text
     assert body["viewer"] == {"signedIn": False, "email": None, "formCsrf": ""}
     # The count over the list and the names under it are one query apart and
@@ -343,6 +350,60 @@ def test_two_entrants_who_share_a_name_are_both_listed(client, page, entrant):
 
     body = client.get(f"/e/api/page/{page['slug']}").json()
     assert [row["name"] for row in body["entrants"]] == ["Alice Chen", "Alice Chen"]
+
+
+def test_an_entrants_row_carries_their_event_codes_without_re_duplicating(
+    client, page, entrant
+):
+    """SP-P6-2 G5a: the Entrants tab groups by event, so a row must say which
+    events its person entered — **without undoing the 2026-08-10 dedup.**
+
+    The dropped dimension came back as codes ON the person's row rather than
+    as a row per person-per-event, because a row per person-per-event IS the
+    defect: it printed 42 rows for 23 people on the live page. So this test
+    asserts all three properties at once, and the second and third are the
+    ones that go red if the fan-out returns:
+
+    - one row per PERSON, carrying every code they entered (Alice, twice
+      entered, once listed);
+    - two people who share a name are still two rows (the grouping key is
+      ``entry_player_id``, never the name);
+    - each row's codes are that person's own.
+
+    Both Bobs render identically, so the pair's internal order — a random
+    UUID tiebreaker — cannot make this flake.
+    """
+    def submit(name, events):
+        assert (
+            client.post(
+                f"/e/api/submit/{page['slug']}",
+                data={
+                    "playerName": name,
+                    "gender": "F",
+                    "events": events,
+                    "acknowledged": "on",
+                    "_csrf": _form_token(client, page),
+                },
+                follow_redirects=False,
+            ).status_code
+            == 303
+        )
+
+    submit("Alice Chen", [f"0:{page['ms']}", f"0:{page['ws']}"])
+    submit("Bob Lee", [f"0:{page['ws']}"])
+    submit("Bob Lee", [f"0:{page['ws']}"])
+    client.cookies.clear()
+
+    body = client.get(f"/e/api/page/{page['slug']}").json()
+    assert [(row["name"], row["eventCodes"]) for row in body["entrants"]] == [
+        ("Alice Chen", ["MS", "WS"]),
+        ("Bob Lee", ["WS"]),
+        ("Bob Lee", ["WS"]),
+    ]
+    # Negative control on the count query, which is independent of the list:
+    # three people entered WS and one entered MS, whatever the rows say.
+    counts = {ev["code"]: ev["entryCount"] for ev in body["events"]}
+    assert counts == {"MS": 1, "WS": 3}
 
 
 # ---- GET /e/api/config ---------------------------------------------------
