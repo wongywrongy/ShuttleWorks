@@ -1229,3 +1229,64 @@ for Tasks 30 and 32 assumes the original order and is stale wherever the two dis
 did not need to re-home 18 render claims (the cut-over had already homed 14 of them inside the
 required CI gate), and Task 32's proposed parity-ledger edits describe assertions the cut-over
 had already replaced.
+
+## SP-P6-2 Phase C — the public IA, built and wired: COMPLETE (2026-08-11)
+
+Branch `dev/prog1-p6-2-public-ia`. The Phase B sign-off (recorded in
+`docs/superpowers/specs/2026-08-11-sp-p6-2-public-ia-design.md`, with the owner rulings and
+final gate verdicts) preceded every wiring commit, per the brief's done-condition.
+
+### What shipped
+
+- **The three pages, wired to real endpoints.** `/e/` discovery (the G1 decline path: the
+  loader fans out one `GET /e/api/page/{slug}` per listed slug — correct, N+1; a slug that
+  404s mid-flight is dropped, not an error), `/e/{slug}` tournament page (hero band,
+  phase-gated `?tab` links with `aria-current`, exactly one server-rendered panel), and
+  `/e/{slug}/enter` (+`/enter/signed-in`) — the entry flow off the hub scroll, carrying the
+  SP-P6-1 mint/echo/307-landing mechanics verbatim, ONE player block by default with
+  "Add another player" as a real form round trip (Z12).
+- **G0 (owner-approved backend change):** `_echo_redirect` now answers
+  `/e/{slug}/enter[/signed-in]?…#total` and `entrant_or_back_to_form` answers
+  `/e/{slug}/enter?refusalCode=NOT_SIGNED_IN#enter`. Server-authored fixed paths; the
+  no-body-loop property, code-not-prose refusals and the `next_target` allowlist unchanged.
+- **The component inventory** under `entrant/app/components/` (DateBadge, StatusChip,
+  TournamentCard, FilterStrip, HeroHeader, TabBar, SectionCard, TimelineCard, FeeTable,
+  EventRow, EntrantsList, StickyTotalBar, EmptyState, PlayShell), each state-tested by SSR
+  string renders; the structural guards (`sourceGuards`) enumerate the new directory in the
+  same change that created it.
+- **The four sign-off refinements:** actionable-first "closing soonest" discovery order;
+  the card chip in a fixed right-aligned position (a float, so long names keep the card's
+  width); the nearest deadline restated inside the sticky total bar; the 390px filter sheet
+  replaced by an always-visible compact strip (the checkbox-disclosure is gone).
+- **Owner design correction (mid-phase):** desktop-first composition — hero CTA stays
+  right-aligned on the title row, the enter page is a genuine two-column desktop layout
+  (max-w-5xl main + 18rem sticky side rail, two-column event checkboxes), and every
+  repeated gap now sits on the design system's 4/8/12/16/24/32 spacing scale.
+
+### What was deleted (parity proven first)
+
+`entry.tsx`, `entry.form.tsx`, and the five Phase B `mock.*` modules. Every old URL serves
+its superior replacement (`/e/{slug}` → tournament page; the form → `/e/{slug}/enter`), and
+the `/{slug}/signed-in` variant's two producers both moved to `/enter/signed-in` with G0.
+
+### Parity evidence (live, through nginx on :8090, seeded demo)
+
+sitemap.xml and robots.txt byte-compatible; closed page vs unknown slug **byte-identical
+404s** (cmp-verified); OG/meta derived from the loader on `/e/{slug}`; reserved slugs still
+derived from the route table (no new top-level static segment); `_csrf` double-submit and
+loader-minted idempotency key on the live form; anonymous submit → 303
+`/enter?refusalCode=NOT_SIGNED_IN#enter`; signed-in quote → **307**
+`/enter/signed-in?totalCents=4500#total` with the re-posted body rendering the quoted
+total; submit → 303 receipt; replay → identical Location; the operator Entries desk
+received the submission (id f10ec0b8…, fee 4500, R12 gender flag intact). `/e/` answers a
+real page (the front door), never a blank 200.
+
+### Gates
+
+entrant vitest **530/530** (Phase C baseline 399); typecheck + eslint clean;
+root depcruise **0 errors**; backend pytest **1596 passing / 66 skipped** (one
+migration-parity ledger repoint for the renamed test files); page-weight gate (blocking,
+4 KB/page): `/e/` **2.0 KB**, `/e/{slug}` **2.1 KB**, `/e/{slug}/enter` **3.2 KB** gzipped,
+**0 script tags each** — G6's re-derivation not needed. Dual-width screenshots in
+`docs/screenshots/sp-p6-2/` (390 + 1280, every page). **A2 restated: nothing touched
+exposure, DNS, tunnels or keys — the stack is local.**
