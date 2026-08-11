@@ -54,7 +54,7 @@ import { createRequestHandler, type ServerBuild } from 'react-router';
 
 import { FORM_FIELD } from '../app/lib/formField';
 import { formCsrfToken } from '../app/lib/formCsrf.server';
-import { readAppSource, routeFiles } from './helpers/sourceGuards';
+import { componentFiles, readAppSource, routeFiles } from './helpers/sourceGuards';
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 afterAll(() => vite.close());
@@ -194,15 +194,18 @@ describe('the sign-out form, unhydrated', () => {
 // ---- the derived half: one route file is not the tier ----------------------
 
 describe('nothing in the tier reaches /e/account/ except by POST', () => {
-  it.each(routeFiles())('%s reaches no /e/account/ URL by link or GET form', (relative) => {
-    // **Derived from disk, not listed.** Every `/e/account/*` route is
-    // POST-only (R8-A gives nginx the whole prefix), so an `<a href>` to one
-    // is a 405 — and for logout specifically it is worse than a 405: were the
-    // ingress ever to answer the GET, following a link, or submitting a GET
-    // form, would sign the entrant out. A route file added tomorrow is
-    // covered with no line added here.
-    expect(accountRefLines(readAppSource(relative))).toEqual([]);
-  });
+  it.each([...routeFiles(), ...componentFiles()])(
+    '%s reaches no /e/account/ URL by link or GET form',
+    (relative) => {
+      // **Derived from disk, not listed.** Every `/e/account/*` route is
+      // POST-only (R8-A gives nginx the whole prefix), so an `<a href>` to one
+      // is a 405 — and for logout specifically it is worse than a 405: were the
+      // ingress ever to answer the GET, following a link, or submitting a GET
+      // form, would sign the entrant out. A route or component file added
+      // tomorrow is covered with no line added here.
+      expect(accountRefLines(readAppSource(relative))).toEqual([]);
+    },
+  );
 
   it('the guard is not vacuous: links, both JSX spellings, and GET forms', () => {
     // Real fixture text of the exact defects, in the forms this codebase

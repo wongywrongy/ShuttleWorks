@@ -11,6 +11,12 @@ import { defineConfig } from 'vitest/config';
 // vitest itself is resolved from the ROOT node_modules (CLAUDE.md hazard: it
 // must stay hoisted there); it is intentionally absent from this package.json.
 export default defineConfig({
+  // The automatic JSX runtime, matching tsconfig's `jsx: "react-jsx"`. The
+  // request-level tests never need this (their modules load through the real
+  // Vite pipeline, which sets it), but `tests/components.test.ts` imports
+  // design-system components directly, and those don't import React —
+  // esbuild's classic-transform default would leave `React is not defined`.
+  esbuild: { jsx: 'automatic' },
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],

@@ -18,6 +18,7 @@ import { createRequestHandler, type ServerBuild } from 'react-router';
 import { loader } from '../app/routes/entry';
 import { formCsrfToken } from '../app/lib/formCsrf.server';
 import {
+  componentFiles,
   credentialRelayLines,
   libFiles,
   moduleScopedMutableBindings,
@@ -223,10 +224,12 @@ describe('entry loader', () => {
     expect([...sent[0].headers.keys()]).toEqual(['accept']);
   });
 
-  // Enumerated from disk (`routeFiles()`), not hardcoded to `entry.tsx`: every
-  // route module under app/routes/ is covered the moment it lands, with no
-  // human step. A failure here names the offending file.
-  describe.each(routeFiles())('route-tier relay guards: %s', (relative) => {
+  // Enumerated from disk (`routeFiles()` + `componentFiles()`), not
+  // hardcoded: every route module under app/routes/ AND every component under
+  // app/components/ (the SP-P6-2 inventory renders inside those routes) is
+  // covered the moment it lands, with no human step. A failure here names the
+  // offending file.
+  describe.each([...routeFiles(), ...componentFiles()])('route-tier relay guards: %s', (relative) => {
     it('declares no credential relay at all — structural, not behavioural', () => {
       // The half that actually bites. `apiGet`'s signature happens to leave no
       // room for a forwarded header today, so the behavioural test above would

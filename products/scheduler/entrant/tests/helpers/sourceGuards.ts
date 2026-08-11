@@ -41,6 +41,17 @@ export function libFiles(): string[] {
   return sourceNames('lib');
 }
 
+/**
+ * Every module under `app/components/` — the SP-P6-2 component inventory,
+ * enrolled in the same change that created the directory (design §1.3): the
+ * components render inside the same routes the relay and module-state guards
+ * police, so a directory the enumeration cannot see is a blind spot for the
+ * tier's primary controls.
+ */
+export function componentFiles(): string[] {
+  return sourceNames('components');
+}
+
 function sourceNames(dir: string): string[] {
   return readdirSync(new URL(`../../app/${dir}/`, import.meta.url))
     .filter((name) => name.endsWith('.ts') || name.endsWith('.tsx'))
