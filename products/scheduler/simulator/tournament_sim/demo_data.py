@@ -489,6 +489,56 @@ WORKSPACES: tuple[dict, ...] = (
 )
 
 
+# ---- operator accounts, one per organisation -----------------------------
+#
+# The eight workspaces above belong to SIX organisations, and an organisation
+# in this product is not a label on a tournament — it is a real ``orgs`` row
+# that owns workspaces (``tournaments.org_id``), created for a user the moment
+# they register (``services/auth.ensure_personal_org``). So the way to seed
+# six organisations is to register six operators and have each of them create
+# their own events: a director then signs in and the Hub shows exactly the
+# workspaces their org owns, because that is the only set the API will return.
+#
+# ``displayName`` is the organisation's own name, because the org row is named
+# after it (``f"{display_name}'s workspace"``). There is no route that renames
+# an org — the UI ignores org names entirely today — so this is as close as the
+# HTTP surface gets, and inventing a route to make a demo prettier is exactly
+# what the simulator's boundary exists to prevent.
+#
+# Under ``AUTH_MODE=local`` none of this is used: the deployment resolves every
+# credential-less request to the bootstrap operator and the scenario asks the
+# API which world it is in rather than being configured for one.
+
+OPERATOR_PASSWORD = "DemoOperator2026!"
+
+OPERATORS: dict[str, dict] = {
+    "F & K Tournaments": {
+        "email": "director@fk-tournaments.example.test",
+        "displayName": "F & K Tournaments",
+    },
+    "The Bellevue Badminton Club": {
+        "email": "director@bellevue-badminton.example.test",
+        "displayName": "The Bellevue Badminton Club",
+    },
+    "California Badminton": {
+        "email": "director@california-badminton.example.test",
+        "displayName": "California Badminton",
+    },
+    "Michigan Badminton Club": {
+        "email": "director@michigan-badminton.example.test",
+        "displayName": "Michigan Badminton Club",
+    },
+    "USA Badminton": {
+        "email": "director@usa-badminton.example.test",
+        "displayName": "USA Badminton",
+    },
+    "Nashville Badminton Association": {
+        "email": "director@nashville-badminton.example.test",
+        "displayName": "Nashville Badminton Association",
+    },
+}
+
+
 # ---- entrant accounts ----------------------------------------------------
 #
 # Six accounts, not sixty: ``entrant_signup_max_per_ip`` is 8 per hour from

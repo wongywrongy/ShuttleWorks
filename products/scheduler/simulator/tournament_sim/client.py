@@ -35,6 +35,10 @@ def _template(path: str) -> str:
 OK = frozenset({200})
 OK_OR_CREATED = frozenset({200, 201})
 
+#: Proof channel one of the CSRF middleware: a cross-site page cannot attach
+#: a custom header without a preflight the API does not approve.
+_CSRF_HEADER = "X-ShuttleWorks-CSRF"
+
 
 class ApiError(Exception):
     """An HTTP response outside the caller's expected-status set."""
@@ -75,9 +79,9 @@ class SimClient:
     ``base_url`` points straight at the backend (``http://localhost:8600``)
     or at the nginx prefix (``http://localhost/api``) — paths are joined
     verbatim either way. Local dev needs no auth (``AUTH_MODE=local``
-    resolves credential-less requests to the bootstrap operator);
-    ``auth_token`` exists so pointing this at an ``AUTH_MODE=cloud``
-    deployment needs no refactor.
+    resolves credential-less requests to the bootstrap operator); against an
+    ``AUTH_MODE=cloud`` deployment call :meth:`sign_in` first, which puts a
+    real cookie session on this client's jar.
     """
 
     #: transport-level retries (connect refused during server warmup etc.)
@@ -88,7 +92,6 @@ class SimClient:
         base_url: str,
         *,
         stats: Optional[ApiStats] = None,
-        auth_token: Optional[str] = None,
         # Generous because the interactive solves (repair, warm restart,
         # bracket) still run in-request; the meet batch solve is a job
         # and returns immediately.
@@ -96,13 +99,34 @@ class SimClient:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.stats = stats if stats is not None else ApiStats()
-        headers = {}
-        if auth_token:
-            headers["Authorization"] = f"Bearer {auth_token}"
-        self._http = httpx.Client(base_url=self.base_url, headers=headers, timeout=timeout)
+        # httpx.Client keeps a cookie jar, which is the whole of the session
+        # transport: /auth/login sets ``sw_session`` on it and every later
+        # request carries it. (The dead ``auth_token`` Bearer kwarg went with
+        # this change — nothing called it and the backend stopped reading an
+        # Authorization header when SP-CLOUD-2 retired bearer identities.)
+        self._http = httpx.Client(base_url=self.base_url, timeout=timeout)
 
     def close(self) -> None:
         self._http.close()
+
+    def clone(self) -> "SimClient":
+        """A second client *process* on the same session and the same stats.
+
+        That is what the Display module's polling surface and a second
+        director's laptop actually are: another connection, the same tenant.
+        Copying the jar rather than building an empty one keeps that true
+        under ``AUTH_MODE=cloud``, where a fresh jar is a fresh *nobody* and
+        every read 401s.
+
+        Deliberately not used for the entrant and per-organisation clients in
+        the ``demo`` scenario — those are different identities, and for them
+        an empty jar is the point.
+        """
+        twin = SimClient(self.base_url, stats=self.stats, timeout=self._http.timeout)
+        twin._http.cookies.update(self._http.cookies)
+        if _CSRF_HEADER in self._http.headers:
+            twin._prove_csrf()
+        return twin
 
     # ---- core request machinery -----------------------------------------
 
@@ -142,6 +166,100 @@ class SimClient:
             return None
         return resp.json()
 
+    # ---- operator identity (cookie sessions) -------------------------------
+    #
+    # The operator principal, not the entrant one (``/e/account/*`` below is
+    # a separate identity system with its own table, cookie and resolver).
+    # Under ``AUTH_MODE=local`` none of this is needed — a credential-less
+    # request resolves to the bootstrap operator. Under ``AUTH_MODE=cloud``
+    # every route below 401s until one of these has run.
+
+    def _prove_csrf(self) -> None:
+        """Send ``X-ShuttleWorks-CSRF: 1`` on everything from now on.
+
+        Set at sign-in rather than in ``__init__`` because that header is what
+        the middleware demands of a **cookie-carrying** write, and this client
+        has no cookie until now. Scoping it here also keeps it off the entrant
+        clients: their form posts must go on proving CSRF the way an unhydrated
+        browser form does — with the cookie-derived double-submit token in
+        :meth:`form_csrf` — and a blanket header would have silently retired
+        that second channel from the run.
+        """
+        self._http.headers[_CSRF_HEADER] = "1"
+
+    def login(self, email: str, password: str) -> dict:
+        """``POST /auth/login`` — puts ``sw_session`` on this client's jar."""
+        user = self._json(
+            "POST", "/auth/login", json={"email": email, "password": password}
+        )
+        self._prove_csrf()
+        return user
+
+    def register(
+        self, email: str, password: str, display_name: Optional[str] = None
+    ) -> dict:
+        """``POST /auth/register`` — creates the account, its personal org and
+        the owner membership, and returns *already signed in* (the route sets
+        the session cookie itself, so no second call is needed).
+
+        Use this when the account is expected NOT to exist; use
+        :meth:`sign_in` when it is expected to. That choice is not cosmetic —
+        see the throttle note there.
+        """
+        body: dict[str, Any] = {"email": email, "password": password}
+        if display_name:
+            body["displayName"] = display_name
+        user = self._json("POST", "/auth/register", json=body, expect={201})
+        self._prove_csrf()
+        return user
+
+    def sign_in(
+        self, email: str, password: str, display_name: Optional[str] = None
+    ) -> dict:
+        """Log in, registering the account if this deployment has never seen it.
+
+        **Call the one that succeeds on your common path.** There are two
+        per-IP budgets and both are charged by *failures*, not successes:
+
+        - a failed login charges the shared **credential** bucket
+          (``auth_throttle_max_failures``, 5 per 15 min, 60s doubling lock),
+          and a ``400 AUTH_EMAIL_TAKEN`` from register charges the same one;
+        - a successful register charges the separate **registration** bucket
+          (``registration_max_per_ip``, 5 per hour).
+
+        So probing in the wrong direction is not free, and there is no order
+        that is right for both situations. This method probes login-first,
+        which is correct for an identity reused across many runs against a
+        long-lived database — the account exists, login succeeds, and success
+        *clears* the bucket. It is the wrong call for seeding N brand-new
+        accounts into a fresh database: every probe would be a failed login
+        and the fifth would lock the address out. Use :meth:`register` there.
+
+        401 is in the expected set so "no account yet" is a branch rather than
+        an unexpected-4xx finding.
+        """
+        resp = self.request(
+            "POST",
+            "/auth/login",
+            json={"email": email, "password": password},
+            expect={200, 401},
+        )
+        if resp.status_code == 200:
+            self._prove_csrf()
+            return resp.json()
+        return self.register(email, password, display_name)
+
+    def whoami(self) -> Optional[dict]:
+        """``GET /auth/me`` — the identity this jar resolves to, or ``None``.
+
+        ``None`` means the deployment refused to name one, which only happens
+        under ``AUTH_MODE=cloud`` with no session: local mode always answers
+        with the bootstrap operator. So this doubles as the way to *ask* a
+        deployment which mode it is in rather than being told by config.
+        """
+        resp = self.request("GET", "/auth/me", expect={200, 401})
+        return resp.json() if resp.status_code == 200 else None
+
     # ---- health / workspace ----------------------------------------------
 
     def health(self) -> dict:
@@ -157,6 +275,14 @@ class SimClient:
         if modules is not None:
             body["modules"] = modules
         return self._json("POST", "/tournaments", json=body, expect=OK_OR_CREATED)
+
+    def list_tournaments(self) -> list[dict]:
+        """``GET /tournaments`` — what the Hub lists for *this* identity.
+
+        Tenant-scoped server-side, so it is also the shortest proof that one
+        director does not see another org's events.
+        """
+        return self._json("GET", "/tournaments")
 
     def delete_tournament(self, tid: str) -> None:
         self.request("DELETE", f"/tournaments/{tid}", expect={204})

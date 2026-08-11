@@ -20,6 +20,15 @@ from .report import PhaseTiming, RunReport
 from .results import WinnerModel
 
 
+#: Identity the runner signs in as when the deployment requires accounts.
+#: One is enough: every scenario except ``demo`` models a single director,
+#: and putting it here rather than in each scenario means all of them run
+#: unchanged against either auth posture. ``demo`` layers its own
+#: per-organisation operators on top.
+SIM_OPERATOR_EMAIL = "sim@simulator.example.test"
+SIM_OPERATOR_PASSWORD = "SimOperator2026!"
+
+
 class Pacer:
     def between_steps(self) -> None: ...
     def match_duration(self, duration_slots: int) -> None: ...
@@ -73,6 +82,11 @@ class ScenarioRunner:
         start = time.perf_counter()
         try:
             client.health()
+            # An ``AUTH_MODE=cloud`` deployment has no bootstrap identity, so
+            # every route below would 401. Ask whether this one names us —
+            # local mode always does — and sign in when it does not.
+            if client.whoami() is None:
+                client.sign_in(SIM_OPERATOR_EMAIL, SIM_OPERATOR_PASSWORD, "Simulator")
             self.scenario.run(ctx, phase_cb=lambda name, secs: report.phases.append(PhaseTiming(name, secs)))
         except Exception as exc:  # a crash is itself a finding — but keep the
             # innermost frame so a sim bug is distinguishable from a backend one

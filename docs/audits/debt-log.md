@@ -1198,3 +1198,35 @@ a green 1,100-test suite. The real check is the viewer flow in
   tiebreaker the ordering can actually rest on (a sequence/insert counter — S, and a
   migration). Found while running the gates for Task 33; logged rather than fixed because
   either option changes what a test asserts. Size XS–S. *(Task 33, gates.)*
+
+- **2026-08-11 · A workspace the caller cannot see leaves the SPA stuck on "Loading
+  workspace…" forever instead of rendering not-found.** The backend seam is correct and
+  uniform: signed in as one org's operator, `GET /tournaments/{id}`,
+  `/state`, `/modules` and `/match-states` for another org's workspace all answer
+  `404 TOURNAMENT_NOT_FOUND`, byte-identical to a workspace id that does not exist —
+  exactly what `require_tournament_access` promises. The console, however, has no terminal
+  state for it. `useTournamentState`'s hydrate logs `[useTournamentState] hydrate failed:
+  Error: Tournament not found` and `TournamentPage` goes on rendering its loading
+  placeholder, so a director who follows a stale link, or a demo that pastes a neighbour's
+  URL, sees an indefinite spinner rather than "this workspace does not exist". Verified in
+  a browser against the cloud-mode stack (screenshot:
+  `docs/screenshots/demo/tenancy-404-spa-stuck-loading.png`). Not a security defect — nothing
+  leaks, and the 404 is the *right* answer — but it is the one place the strongest tenancy
+  guarantee in the product looks like a hang. The fix wants a not-found branch on the
+  workspace route rather than a `catch` that only logs; sizing depends on whether the other
+  hydrating hooks (`useBracket`, `useMatchStateSync`) should share one "workspace is gone"
+  state. Size S. *(Found while unlocking cloud mode for the demo.)*
+
+- **2026-08-11 · Self-hosted first-run provisioning is throttled at four operator accounts
+  per hour per IP.** `registration_max_per_ip` is 5 and `throttle_record_attempt` locks when
+  `failures - max_attempts >= 0`, so the *fifth* registration succeeds and sets a 300s lock
+  with doubling backoff — an administrator standing up a self-hosted instance for six clubs
+  from one office address gets four accounts, then a five-minute wall, then ten. The
+  throttle is doing its job (SEC-03 counts successful registrations deliberately, because
+  they are the expensive path), and the budget is configurable, so nothing here is wrong —
+  but there is no provisioning path that is not public self-service registration: no admin
+  create-user route, no CLI, and `POST /invites/{token}/accept` needs an already-registered
+  user. The demo works around it with `REGISTRATION_MAX_PER_IP=20` on the deployment. Worth
+  a decision rather than a fix: either an owner-authenticated "create operator" route (which
+  is what "orgs own workspaces" implies anyway), or documenting the knob in the self-host
+  runbook. Size S. *(Found while unlocking cloud mode for the demo.)*

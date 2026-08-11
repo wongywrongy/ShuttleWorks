@@ -77,19 +77,73 @@ entry-page slugs are globally unique (409, reported not swallowed), and
 `entrant_signup_max_per_ip` is 8 per hour against a throttle table that
 lives in that same database. Point it at an empty one.
 
+Under `AUTH_MODE=cloud` the same scenario additionally seeds **six real
+organisations**: one registered operator account per org, each creating its
+own workspaces, followed by a `tenancy` phase that checks each director sees
+only their own events on `GET /tournaments` and gets a **404 — never 403** on
+a neighbour's workspace. See "Auth" below.
+
 **Three things it discovered about the product, none worked around:**
 
 - `entries` is in `CLOUD_ONLY_MODULES` and cannot be enabled under
   `AUTH_MODE=local` (ruling D2). The scenario asks, takes the 400, retries
   without it and says so. The public entry page still works — nothing about
   it is module-gated — but the operator's Entries desk tab is absent from
-  the nav by design.
+  the nav by design. Under `AUTH_MODE=cloud` the module is accepted and the
+  desk appears; the refusal branch simply never fires.
 - A draw cannot be created empty to receive entries: `POST /bracket` wants
   ≥2 participants (≥4 for `de`), while the commit seam needs the draw to
   already exist. Hence two direct entries per entries-fed event.
 - `bracket_size` is fixed when the draw is created, so an entries-fed draw
   must declare the field it expects rather than deriving it from its
   founding participants.
+
+## Auth
+
+The simulator is a real client and gets no exemption from the auth contract.
+
+- **`AUTH_MODE=local` (default)** — nothing to do. A credential-less request
+  resolves to the bootstrap operator.
+- **`AUTH_MODE=cloud`** — every route 401s without a session, so
+  `ScenarioRunner` asks `GET /auth/me` and, when the deployment declines to
+  name anyone, signs in via `SimClient.sign_in` (login first, register if the
+  account is new). `httpx.Client`'s cookie jar *is* the session transport, and
+  `sign_in` also switches on `X-ShuttleWorks-CSRF: 1`, which the middleware
+  requires of every cookie-carrying write.
+
+Two rules worth knowing before writing a scenario:
+
+- **A second client is not a second identity.** Use `client.clone()` for "a
+  second director's laptop" or the Display polling surface — it copies the
+  cookie jar. A bare `SimClient(...)` has an empty jar, which under cloud mode
+  is *nobody*, and the tenant-scoped routes will 401. Construct a bare one
+  only when a separate principal is the point (the entrant accounts and the
+  per-organisation operators in `demo`).
+- **The entrant clients deliberately do NOT send the CSRF header.** Their form
+  posts prove CSRF the way an unhydrated browser form must — with the
+  cookie-derived double-submit token in `SimClient.form_csrf`. Setting the
+  header on them would silently retire that second channel from the run.
+
+**Throttles apply, are not worked around, and decide which call you make.**
+Two per-IP budgets, both charged by *failures*: a failed login — and a
+`400 AUTH_EMAIL_TAKEN` from register — charge the shared **credential** bucket
+(5 per 15 min, 60s doubling lock), while a successful register charges the
+separate **registration** bucket (`REGISTRATION_MAX_PER_IP`, 5 per hour). So
+probing in the wrong direction is not free and there is no order that suits
+both situations:
+
+- `sign_in` (login, then register) — for an identity reused across many runs
+  against a long-lived database. The runner's own operator uses this.
+- `register` — for seeding N brand-new accounts into a fresh database. `demo`
+  uses this; login-probing six new orgs would lock the address out at the
+  fifth, before the fourth organisation existed.
+
+Seeding six organisations from one host needs `REGISTRATION_MAX_PER_IP` raised
+on the *deployment* (the default 5 locks on the fifth), never bypassed here.
+
+`EphemeralServer` runs uvicorn with `cwd=backend/`, so it reads `backend/.env`
+— on a machine configured for cloud mode, `--ephemeral` is cloud mode too.
+That is handled by the same runner check, so nothing needs to know.
 
 ## Determinism contract
 

@@ -1,9 +1,17 @@
 """demo — seed a whole *product* rather than one tournament.
 
-Eight workspaces with four different module sets, a ~100-person player
-pool drawn across them by age and level, draws in five of the six formats,
-a solved meet, a floor caught mid-session, two live public entry pages and
-one deliberately closed one.
+Eight workspaces across **six organisations**, four different module sets, a
+~100-person player pool drawn across them by age and level, draws in five of
+the six formats, a solved meet, a floor caught mid-session, two live public
+entry pages and one deliberately closed one.
+
+**Two principals, and under ``AUTH_MODE=cloud`` a third dimension.** The
+scenario asks ``/auth/me`` which world it is in. Local: one bootstrap
+operator owns everything, exactly as before. Cloud: it registers one real
+operator per organisation, creates each org's workspaces as that org's
+director, and then *proves* the isolation seam — each director sees only
+their own events on the Hub route and gets a uniform 404, never a 403, on a
+neighbour's workspace.
 
 **What makes this a scenario rather than a seeding script.** Every write
 goes through the same ``SimClient`` the other scenarios use, so every
@@ -30,12 +38,15 @@ from ..context import RunContext
 from ..demo_data import (
     ENTRANT_PASSWORD,
     ENTRANTS,
+    OPERATOR_PASSWORD,
+    OPERATORS,
     WORKSPACES,
     chunk,
     eligible,
     slug_of,
 )
 from ..factories import make_bracket_create_body
+from ..invariants import Violation
 from ..rng import derive_rng
 from ..runner import Phase
 from ..client import ApiError, SimClient
@@ -265,6 +276,55 @@ def _entry_page_body(config: dict) -> dict:
     }
 
 
+def _open_operator_sessions(ctx: RunContext, base_url: str) -> dict[str, SimClient]:
+    """One signed-in operator per organisation, each on its own cookie jar.
+
+    Separate clients for the same reason the entrants get them: a jar is an
+    identity. Sharing one would make "which director can see this" a question
+    about call order rather than about membership, which is the exact thing
+    this scenario exists to show.
+
+    Registration creates the ``users`` row, its ``orgs`` row and the owner
+    ``org_members`` row in one call, and returns already signed in — so this
+    is the whole of org provisioning. Every workspace the client then creates
+    is stamped with that org.
+
+    ``register``, not ``sign_in``: this scenario seeds a **fresh** database, so
+    every account here is new and register is the call that *succeeds*. Probing
+    with a login first would spend six failed logins against the per-IP
+    credential bucket, which locks after five — the seeder would take out its
+    own address before the fourth organisation existed. On a re-run against a
+    non-fresh database this raises instead, which is the honest answer: the
+    scenario is deliberately not idempotent.
+    """
+    clients: dict[str, SimClient] = {}
+    for spec in WORKSPACES:
+        org = spec["org"]
+        if org in clients:
+            continue
+        account = OPERATORS[org]
+        client = SimClient(base_url, stats=ctx.client.stats)
+        try:
+            who = client.register(
+                account["email"], OPERATOR_PASSWORD, account["displayName"]
+            )
+        except ApiError as exc:
+            if "AUTH_EMAIL_TAKEN" in exc.body:
+                raise ApiError(
+                    "POST", "/auth/register", exc.status,
+                    f"{account['email']} already exists — the demo scenario "
+                    "seeds a FRESH database (see the module docstring); point "
+                    "it at an empty one",
+                ) from exc
+            raise
+        clients[org] = client
+        ctx.notes.append(
+            f"operator {account['email']} (password {OPERATOR_PASSWORD!r}) "
+            f"= org {org!r}, user {who['id']}"
+        )
+    return clients
+
+
 def _open_entrant_sessions(ctx: RunContext, base_url: str) -> list[tuple[dict, SimClient]]:
     """One signed-in entrant per account, each on its own cookie jar.
 
@@ -329,14 +389,41 @@ def _submit(
 class Demo:
     name = "demo"
     description = (
-        "eight realistic workspaces, ~100 players, five draw formats, a solved "
-        "meet, a floor mid-session, and two live public entry pages"
+        "eight realistic workspaces across six organisations, ~100 players, five "
+        "draw formats, a solved meet, a floor mid-session, two live public entry "
+        "pages (+ a tenancy-isolation check under AUTH_MODE=cloud)"
     )
 
     def run(self, ctx: RunContext, phase_cb) -> None:
         client = ctx.client
         base_url = client.base_url
         sessions: list[tuple[dict, SimClient]] = []
+        operators: dict[str, SimClient] = {}
+        #: org -> the workspaces that org's operator created, for the
+        #: tenancy checks at the end.
+        owned: dict[str, list[str]] = {}
+
+        # ASK the deployment which world it is in rather than being told.
+        # ``/auth/me`` answers with the bootstrap operator under
+        # ``AUTH_MODE=local`` and 401s under ``AUTH_MODE=cloud``, so one
+        # request decides whether orgs are real here.
+        me = client.whoami()
+        cloud = me is None or me.get("authMode") == "cloud"
+
+        if cloud:
+            with Phase("operator-accounts", phase_cb):
+                operators = _open_operator_sessions(ctx, base_url)
+                ctx.notes.append(
+                    f"{len(operators)} organisations, one real operator account "
+                    f"each — every workspace below is owned by its org, and a "
+                    f"director signing in sees only their own"
+                )
+        else:
+            ctx.notes.append(
+                "AUTH_MODE=local: no accounts — every workspace belongs to the "
+                f"bootstrap operator ({(me or {}).get('email')}). Tenancy is "
+                "real but has one tenant; run under AUTH_MODE=cloud to see orgs."
+            )
 
         with Phase("entrant-accounts", phase_cb):
             sessions = _open_entrant_sessions(ctx, base_url)
@@ -348,10 +435,71 @@ class Demo:
 
         try:
             for spec in WORKSPACES:
+                if operators:
+                    # From here every write in this workspace is that org's
+                    # director acting: one assignment, because ``ctx.client``
+                    # is the single handle every actor and helper reaches for.
+                    ctx.client = operators[spec["org"]]
                 self._workspace(ctx, phase_cb, spec, sessions)
+                owned.setdefault(spec["org"], []).append(ctx.tid)
+            if operators:
+                with Phase("tenancy", phase_cb):
+                    self._prove_tenancy(ctx, operators, owned)
         finally:
             for _account, entrant in sessions:
                 entrant.close()
+            for operator in operators.values():
+                operator.close()
+
+    # -- tenancy ------------------------------------------------------------
+
+    def _prove_tenancy(self, ctx: RunContext, operators, owned) -> None:
+        """The isolation seam, exercised as a real cross-tenant client.
+
+        Two halves, and the negative one is worthless without the positive
+        one: a deployment where *every* workspace 404s would pass a
+        "non-members get 404" check while proving nothing. So each operator
+        must both **see exactly their own** workspaces on the Hub's list route
+        and get a **404 — never 403** on someone else's, because 403 would
+        confirm the workspace exists, and existence is information.
+        """
+        orgs = sorted(owned)
+        for org, neighbour in zip(orgs, orgs[1:] + orgs[:1]):
+            client = operators[org]
+            mine = {row["id"] for row in client.list_tournaments()}
+            if mine != set(owned[org]):
+                ctx.violations.append(Violation(
+                    "tenancy", "hub-list-scope",
+                    f"{org} sees {sorted(mine)}, owns {sorted(owned[org])}",
+                ))
+            # Their own workspace resolves — the positive control.
+            own_tid = owned[org][0]
+            own = client.request(
+                "GET", f"/tournaments/{own_tid}/state", expect={200, 204, 404}
+            )
+            if own.status_code == 404:
+                ctx.violations.append(Violation(
+                    "tenancy", "owner-can-read",
+                    f"{org} got 404 on its OWN workspace {own_tid}",
+                ))
+            # The neighbour's does not — the negative control. 403 is listed
+            # as expected only so this check reports it rather than the stats
+            # pass calling it an unexpected 4xx; it is still a violation.
+            other_tid = owned[neighbour][0]
+            probe = client.request(
+                "GET", f"/tournaments/{other_tid}/state", expect={200, 403, 404}
+            )
+            if probe.status_code != 404:
+                ctx.violations.append(Violation(
+                    "tenancy", "cross-tenant-404",
+                    f"{org} got {probe.status_code} on {neighbour}'s "
+                    f"workspace {other_tid} — must be 404",
+                ))
+            ctx.notes.append(
+                f"tenancy: {org} sees {len(mine)} workspace(s), reads its own "
+                f"{own_tid} ({own.status_code}), gets {probe.status_code} on "
+                f"{neighbour}'s {other_tid}"
+            )
 
     # -- one workspace ------------------------------------------------------
 

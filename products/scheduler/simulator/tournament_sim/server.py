@@ -2,9 +2,14 @@
 
 Launches ``uvicorn app.main:app`` as a SUBPROCESS (never an import — the
 HTTP-only boundary holds even here) with a fresh SQLite file in a temp
-dir, which gives the local bootstrap identity for free. The backend's
-lifespan runs Alembic
-``upgrade head`` on startup, so the schema self-provisions.
+dir. The backend's lifespan runs Alembic ``upgrade head`` on startup, so
+the schema self-provisions.
+
+The subprocess runs with ``cwd=backend/``, so it reads ``backend/.env``
+like any other local backend — a machine configured for ``AUTH_MODE=cloud``
+gets an ephemeral server that requires real accounts too. ``ScenarioRunner``
+handles both by asking ``/auth/me`` rather than assuming the bootstrap
+identity is there.
 
 Mirrors the health-poll pattern of ``e2e/global-setup.ts``.
 """
