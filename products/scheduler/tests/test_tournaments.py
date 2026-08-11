@@ -640,11 +640,16 @@ def test_shared_row_keeps_original_owner_name(client):
     from database.models import Tournament, TournamentMember
     from database.session import SessionLocal
     from app.dependencies import LOCAL_DEV_USER_UUID
+    from services.auth import ensure_bootstrap_user
 
     other_owner_uuid = uuid.uuid4()
     shared_id = uuid.uuid4()
     session = SessionLocal()
     try:
+        # The membership below is hand-seeded rather than earned through
+        # the API, so nothing has materialized the bootstrap operator yet
+        # — and ``tournament_members.user_id`` is an FK to ``users``.
+        ensure_bootstrap_user(session)
         session.add(Tournament(
             id=shared_id,
             data={},

@@ -22,6 +22,7 @@ from database.models import (
     MatchState,
     TournamentBackup,
     TournamentMember,
+    User,
 )
 from repositories.local import LocalRepository
 
@@ -56,6 +57,19 @@ def repo(session):
 
 def _seed_tournament(repo: LocalRepository, **kwargs) -> uuid.UUID:
     return repo.tournaments.create(**kwargs).id
+
+
+def _seed_user(repo: LocalRepository) -> uuid.UUID:
+    """A real ``users`` row to hang a membership on.
+
+    ``tournament_members.user_id`` is an FK to ``users``, so a bare
+    ``uuid.uuid4()`` is not a user — it only looked like one while SQLite
+    was accepting dangling references.
+    """
+    user = User(id=uuid.uuid4(), email=f"{uuid.uuid4().hex}@example.com")
+    repo.session.add(user)
+    repo.session.commit()
+    return user.id
 
 
 # ---- Tournament CRUD ---------------------------------------------------
@@ -380,7 +394,7 @@ def test_delete_cascades_match_states_and_backups(repo):
 
 def test_member_repo_add_get_role(repo):
     tid = _seed_tournament(repo, name="A")
-    uid = uuid.uuid4()
+    uid = _seed_user(repo)
     repo.members.add_member(tid, uid, role="operator")
     assert repo.members.get_role(tid, uid) == "operator"
 
@@ -394,7 +408,7 @@ def test_member_repo_add_member_is_upsert(repo):
     """A second add_member with a different role overwrites — used by
     Step 7 when accepting an invite link upgrades a viewer to operator."""
     tid = _seed_tournament(repo, name="A")
-    uid = uuid.uuid4()
+    uid = _seed_user(repo)
     repo.members.add_member(tid, uid, role="viewer")
     repo.members.add_member(tid, uid, role="operator")
     assert repo.members.get_role(tid, uid) == "operator"
@@ -402,7 +416,7 @@ def test_member_repo_add_member_is_upsert(repo):
 
 def test_member_repo_set_role(repo):
     tid = _seed_tournament(repo, name="A")
-    uid = uuid.uuid4()
+    uid = _seed_user(repo)
     repo.members.add_member(tid, uid, role="viewer")
     repo.members.set_role(tid, uid, "owner")
     assert repo.members.get_role(tid, uid) == "owner"
@@ -415,7 +429,7 @@ def test_member_repo_set_role_returns_none_when_missing(repo):
 
 def test_member_repo_remove_member(repo):
     tid = _seed_tournament(repo, name="A")
-    uid = uuid.uuid4()
+    uid = _seed_user(repo)
     repo.members.add_member(tid, uid, role="viewer")
     assert repo.members.remove_member(tid, uid) is True
     assert repo.members.remove_member(tid, uid) is False
@@ -424,7 +438,7 @@ def test_member_repo_remove_member(repo):
 
 def test_member_repo_list_for_tournament(repo):
     tid = _seed_tournament(repo, name="A")
-    u1, u2 = uuid.uuid4(), uuid.uuid4()
+    u1, u2 = _seed_user(repo), _seed_user(repo)
     repo.members.add_member(tid, u1, role="owner")
     repo.members.add_member(tid, u2, role="viewer")
     members = repo.members.list_for_tournament(tid)
@@ -435,7 +449,7 @@ def test_member_repo_list_tournament_ids_for_user(repo):
     t_a = _seed_tournament(repo, name="A")
     t_b = _seed_tournament(repo, name="B")
     _seed_tournament(repo, name="C")  # user not a member of this one
-    uid = uuid.uuid4()
+    uid = _seed_user(repo)
     repo.members.add_member(t_a, uid, role="owner")
     repo.members.add_member(t_b, uid, role="viewer")
     ids = set(repo.members.list_tournament_ids_for_user(uid))
@@ -444,8 +458,8 @@ def test_member_repo_list_tournament_ids_for_user(repo):
 
 def test_member_repo_cascade_on_tournament_delete(repo):
     tid = _seed_tournament(repo, name="A")
-    repo.members.add_member(tid, uuid.uuid4(), role="owner")
-    repo.members.add_member(tid, uuid.uuid4(), role="viewer")
+    repo.members.add_member(tid, _seed_user(repo), role="owner")
+    repo.members.add_member(tid, _seed_user(repo), role="viewer")
     assert len(repo.members.list_for_tournament(tid)) == 2
 
     repo.tournaments.delete(tid)
@@ -496,8 +510,8 @@ def test_count_by_tournament_helpers(repo, session):
         owner_id=uuid.uuid4(), owner_email="b@x.io",
     )
     # Members: 2 on t1, 0 on t2.
-    session.add(TournamentMember(tournament_id=t1.id, user_id=uuid.uuid4(), role="owner"))
-    session.add(TournamentMember(tournament_id=t1.id, user_id=uuid.uuid4(), role="viewer"))
+    session.add(TournamentMember(tournament_id=t1.id, user_id=_seed_user(repo), role="owner"))
+    session.add(TournamentMember(tournament_id=t1.id, user_id=_seed_user(repo), role="viewer"))
     # Invites on t1: 1 active, 1 revoked, 1 expired → active count 1.
     session.add(InviteLink(tournament_id=t1.id, role="operator", created_by=uuid.uuid4()))
     session.add(InviteLink(

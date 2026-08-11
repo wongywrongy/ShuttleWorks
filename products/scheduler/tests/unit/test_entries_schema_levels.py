@@ -473,6 +473,47 @@ def test_entry_data_cascades_from_the_workspace(session):
     ], "an account must not be workspace-scoped — it outlives the tournament"
 
 
+def test_deleting_the_workspace_actually_removes_the_entry_rows(session):
+    """The declaration above is inert unless the connection enforces it.
+
+    SQLite defaults ``PRAGMA foreign_keys`` to OFF per connection, so every
+    ``ondelete="CASCADE"`` here was a no-op on the director's laptop while
+    working normally on cloud Postgres. The orphan that outlived its
+    workspace kept ``entry_pages.slug`` — a globally unique index — taken
+    forever, so the address could never be reused.
+    """
+    from database.models import Tournament
+
+    tid = _tournament(session)
+    account = _account(session)
+    event = EntryEvent(tournament_id=tid, code="MS", discipline="singles")
+    player = EntryPlayer(
+        tournament_id=tid, account_id=account.id, full_name="Ada L", gender="F"
+    )
+    session.add_all([event, player, EntryPage(tournament_id=tid, slug="spring-open")])
+    session.commit()
+    session.add(
+        Entry(
+            tournament_id=tid, entry_event_id=event.id, entry_player_id=player.id
+        )
+    )
+    session.commit()
+
+    # The real path: repositories.local.TournamentRepository.delete. Nothing
+    # in the entries family is an ORM relationship on Tournament, so this
+    # leans entirely on the database's own cascade.
+    session.delete(session.get(Tournament, tid))
+    session.commit()
+
+    for model in (EntryPage, Entry, EntryEvent, EntryPlayer):
+        assert session.scalars(sa.select(model)).all() == [], model.__tablename__
+
+    # …and the slug is free again.
+    second = _tournament(session, name="Autumn Open")
+    session.add(EntryPage(tournament_id=second, slug="spring-open"))
+    session.commit()
+
+
 def test_a_submission_belongs_to_an_account(session):
     """The join R10 supplied: 'what else came in on this form?' follows
     entry -> submission -> account rather than grouping on a repeated
