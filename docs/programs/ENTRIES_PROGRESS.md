@@ -1290,3 +1290,72 @@ migration-parity ledger repoint for the renamed test files); page-weight gate (b
 **0 script tags each** — G6's re-derivation not needed. Dual-width screenshots in
 `docs/screenshots/sp-p6-2/` (390 + 1280, every page). **A2 restated: nothing touched
 exposure, DNS, tunnels or keys — the stack is local.**
+
+## SP-P6-2 Phase D — the demo walk: COMPLETE (2026-08-11)
+
+Branch `dev/prog1-p6-2-public-ia`. The rebuilt public site walked end to end in a real browser
+against the seeded demo stack (`:8090` nginx / `:8600` API, `AUTH_MODE=cloud`), console and
+network panels open on every page. The stack is left running.
+
+### Seed: the states discovery filters on
+
+The demo scenario produces two open entry pages and one closed one, which is not enough to
+demonstrate a status facet or a date preset. A new **`entry-states` simulator scenario**
+(`simulator/tournament_sim/scenarios/entry_states.py`) adds three more through the operator's own
+API — `bay-late-summer-2026` (open, closes in 2d, played in 5), `cardinal-fall-2026` (published,
+entries closed, still upcoming) and `golden-gate-spring-2026` (published, entries closed, already
+played). It is **additive** — it creates its own workspaces and touches nothing already there —
+unlike `demo`, which is a from-scratch seeder. Deadlines and dates are computed from the moment of
+the run, never fixed, because `_event_is_open` measures `closes_at` against the wall clock.
+
+**There is no "unlisted" state, and none was faked.** The brief asked for a tournament that renders
+by direct slug but stays off discovery. `EntryPage.is_open` decides both questions at once — off is
+the uniform 404 (`_resolve`), on is public *and* on `GET /e/api/pages`, which discovery and the
+sitemap read. The model cannot express a third position. Five listed tournaments + the 404,
+rather than four listed + an invented flag.
+
+### The walk
+
+Discovery → filter by status (`open` 3/5, `upcoming` 1/5, `past` 1/5) → filter by date preset
+(`7d` 1/5) → empty state → card → tournament page, all three tabs → Enter → sign in
+(`coach.reyes@example.test`, `next` returned to the enter page) → two players, three events →
+`Add another player` round trip preserving every typed field → **`Update total` → 115.00, 3 events**
+(70.00 + 45.00 against the published per-player bundle schedule) → submit → 303 receipt
+`ca849a8e-…-6520aea1f700`, **Amount recorded 115.00** → the two players appear on the public
+entrant list (71 → 73 entrants, 85 → 88 entries). Then the closed page: **404, byte-identical to an
+unknown slug** (same MD5). Screenshots of every page at 390px and 1280px in
+`docs/screenshots/sp-p6-2/` (`walk-*`).
+
+### Defects found (public surface, 2026-08-11) — all OPEN
+
+| | | |
+|---|---|---|
+| **E1** | Sign-in, sign-up, the receipt and the 404 never got the page system | No `PlayShell` — no header, no footer, no way back to the listing. The 404 is default browser typography at the top-left of an empty page. Brief §4 asked for these "re-skinned into the same system, auth pages as small centered cards"; they were centred, not carded, and not shelled. |
+| **E2** | The discovery card title wraps around the chip at 390px | `TournamentCard`'s own docstring says *"On phones it stays the bottom row"*; the code has an unconditional `float-right` with no breakpoint. **Not fixed here**: `components.test.ts` pins that float unconditionally, so the fix needs a test change — stop-and-flag per CLAUDE.md. |
+| **E3** | The sign-up handoff loses the tournament | On `/e/{slug}/enter` the sign-in link carries `next`; the "create one" link is a bare `/e/signup`, whose redirect target is a hard-coded constant (deliberately, so it can never carry an attacker-chosen value). The newest possible entrant gets the worst journey. |
+| **E4** | The header offers "Sign in" to a signed-in entrant | Structural: the node tier is forbidden from reading the session cookie (R8-D), which is why STOP-1 deferred signed-in states. Same cause puts an unconditional, primary-weight **Sign out** button at the foot of the entry page for signed-out visitors. |
+| **E5** | Smaller: fees carry no currency symbol (no currency field exists — the renderer refuses to invent one); the 390px sticky bar costs a third of the screen and overlaps the field above it; the closed tournament page says "Entries closed" twice on one line; a GET filter form echoes empty params into the URL. |  |
+
+Nothing else: no JavaScript errors, no failed requests, no hydration warnings, no horizontal
+scrolling at either width on any page, no control that did nothing when pressed.
+
+### R11's viewport control, repointed
+
+`e2e/tests/10-entrant-r11-evidence.spec.ts` was aimed at SP-P6-1's three pages and the markup they
+measured is deleted. It now covers the whole signed-out inventory — seven pages × two widths — plus
+three IA claims a screenshot cannot distinguish from its failure mode (the seeded tournament really
+appears as a discovery card; the gated-off tab is absent *and* unaddressable by `?tab=`; the hero
+CTA navigates rather than scrolling). It signs in when the deployment has accounts (once per file —
+nginx limits `/api/auth/` to 10r/m burst=5) and deletes its own workspaces in `afterAll`, because an
+open entry page is now a card on the front door. **9 passed** against the demo stack.
+e2e remains outside the PR gate by design.
+
+### Gates
+
+entrant vitest **530/530**; backend pytest **1596 passed / 66 skipped**; `make check` green
+(eslint, `tsc -b` ×2, frontend vitest, depcruise, ruff, pytest); `npm run docs:build` green;
+page-weight gate (blocking, 4 KB/page) **`/e/` 2.0 KB · `/e/{slug}` 2.1 KB · `/e/{slug}/enter`
+3.2 KB gzipped, 0 script tags each**. The owner walkthrough at
+`docs/screenshots/demo/walkthrough.html` §10 was rewritten around the new IA (that path is
+gitignored, so it is a local artefact and carries no commit). **A2 restated: nothing touched
+exposure, DNS, tunnels or keys — the stack is local.**
