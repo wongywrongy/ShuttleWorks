@@ -658,3 +658,42 @@ boundary. Phase B proceeds without it; if R15 is a real ruling it must be transc
 G1, G2, G3 and G5a are read-only additions the brief already permits at the gate. They are not yet
 ruled on individually; Phase B may mock against them, but Phase C must not wire a field the owner has
 not approved.
+
+---
+
+## PHASE B SIGN-OFF — 2026-08-11
+
+**Mockups APPROVED for Phase C**, with four refinements (owner ruling). Recorded here to satisfy the
+brief's done-condition: *"Mockup sign-off recorded in the ledger before any wiring commit."*
+
+Phase B shipped on `dev/prog1-p6-2-public-ia` as `68a738d` (phase-gating pure functions, 66 tests) and
+`c584beb` (the three mockups). Measured through the production handler: discovery **2.4 KB**,
+tournament **2.8 KB**, enter **3.3 KB** gzipped HTML, **0 script tags each**, all inside the 4 KB
+blocking budget. The zero-JS mechanisms are the real ones, not stand-ins — the filter GET form
+genuinely filters, `?tab=` renders one server-side panel with `aria-current`, and add-another-player
+is a live form round trip that preserves both players' typing.
+
+### The four refinements (all required in Phase C)
+
+1. **"Closing soonest" secondary sort.** Upcoming-first currently ranks a closed-but-sooner
+   tournament above one closing in 4 days. Correct per the spec, wrong for the page's stated job —
+   the card that can be acted on must lead.
+2. **Status chip in a fixed, right-aligned column** on desktop cards, rather than a bottom row.
+3. **The nearest deadline restated inside the sticky total bar** — the one fact a hesitating entrant
+   needs at the moment of submission.
+4. **The 390px filter sheet becomes an always-visible compact strip.** The native checkbox-disclosure
+   works, but "Filters, checkbox" is the weakest screen-reader announcement on an otherwise clean
+   page, and the strip is one less trick.
+
+### Gate proposals — final rulings
+
+| | Proposal | Ruling |
+|---|---|---|
+| G0 | Retarget the two redirects onto `/e/{slug}/enter` | **APPROVED** (2026-08-11, STOP-3) |
+| G1 | Discovery fields on `GET /e/api/pages` | **DECLINED** — the loader fans out one `GET /e/api/page/{slug}` per listed tournament. Correct, N+1. Revisit if a real deployment's listing grows past the point where that is cheap. |
+| G2 | `cap` on `EventDTO` | **DECLINED** — Events rows read "7 entered" rather than "7 of 32 entered". |
+| G3 | ISO moment fields | **APPROVED** — additive alongside the existing display strings, which `phase.test.ts` pins against the Python source. |
+| G4 | Public lifecycle signal for Live/Finished | **DECLINED** (2026-08-11, STOP-4) |
+| G5a | `eventCode` on entrant rows | **APPROVED** — restores the binding "Entrants grouped by event". **Must not reintroduce the row duplication** the 2026-08-10 dedup removed: one row per person, carrying their event codes. |
+| G5b | Club column on entrant rows | **DECLINED** — outruns the recorded consent copy. |
+| G6 | Re-derive the page-weight budget at Phase C | **Open** — the enter page at 3.3 KB is nearest the ceiling once real CSRF and idempotency fields land. The gate stays blocking either way. |
