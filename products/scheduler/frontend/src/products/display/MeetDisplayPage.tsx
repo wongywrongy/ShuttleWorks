@@ -28,7 +28,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
-import { useAdvisories } from '../../hooks/useAdvisories';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
@@ -82,12 +81,13 @@ export function MeetDisplayPage() {
   // embed respectively. Empty for bracket-kind/Meet-disabled workspaces.
   const standings = useTournamentStore((state) => state.standings);
 
-  // Display projects, never operates (see CLAUDE.md's module model) —
-  // the public board must not surface an operator-facing advisory, so
-  // no banner is rendered below. This call is left in place unchanged
-  // (out of scope for this removal); it is effectively inert here —
-  // see docs/audits/debt-log.md for why it's dead weight either way.
-  useAdvisories();
+  // No `useAdvisories()` here, deliberately. Display projects, never
+  // operates (CLAUDE.md's module model), so the public board renders no
+  // operator-facing advisory — and the hook was dead weight on both routes
+  // that mount this page: on standalone `/display?id=` it reads its
+  // tournament id from a route PATH param only, so the id is null and its
+  // effect returns before firing; in the embedded TV-preview tab `AppShell`
+  // already mounts it globally, so the call was a duplicate 15s poll.
 
   // 1 Hz tick drives both the wall clock and the elapsed timer on active matches.
   useEffect(() => {
