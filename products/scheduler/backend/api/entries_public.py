@@ -200,6 +200,19 @@ def _moment(value: datetime) -> str:
     return _aware(value).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
+def _moment_iso(value: datetime) -> str:
+    """The same instant as ``_moment``, for arithmetic instead of reading.
+
+    Ships **beside** the display string, never instead of it (SP-P6-2 G3):
+    the format above is a cross-tier contract pinned from both sides
+    (``entrant/tests/phase.test.ts`` greps this module for it), and a
+    countdown or a timeline position needs a parse that cannot be got wrong
+    rather than a sentence. Same ``_aware`` normalisation, so SQLite's naive
+    read and Postgres' aware one still answer with the same offset.
+    """
+    return _aware(value).astimezone(timezone.utc).isoformat()
+
+
 def _entry_counts(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
     """``entry_event_id`` to published entry count (R14 §6's entry counts).
 

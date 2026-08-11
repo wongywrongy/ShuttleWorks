@@ -56,6 +56,7 @@ from api.entries_public import (
     _is_age_bracketed,
     _lookup_event,
     _moment,
+    _moment_iso,
     _optional_entrant,
     _resolve,
 )
@@ -140,6 +141,16 @@ class EventDTO(BaseModel):
     opensAt: Optional[str] = None
     closesAt: Optional[str] = None
     withdrawsUntil: Optional[str] = None
+    # The same three instants in ISO-8601 (``_moment_iso``), for the readers
+    # that do arithmetic on them rather than print them: the "closes in Nd"
+    # countdown, the entry timeline's ordering, and the date facets. Additive
+    # by ruling (SP-P6-2 G3) — the display strings above are a shipped
+    # contract with a format pinned from the node side, so the deadline an
+    # entrant READS and the deadline the page COUNTS DOWN TO are one
+    # projection of one column, never two formats racing each other.
+    opensAtIso: Optional[str] = None
+    closesAtIso: Optional[str] = None
+    withdrawsUntilIso: Optional[str] = None
     isOpen: bool
     # R12's birth-year trigger, computed server-side so the form and the
     # write agree about which events need a year.
@@ -180,6 +191,15 @@ class PolicyDTO(BaseModel):
 
 class TournamentDTO(BaseModel):
     name: Optional[str] = None
+    # ``tournaments.tournament_date`` verbatim — a nullable ``String(32)``
+    # holding an ISO *date* by CONVENTION only: no time, no zone, no end
+    # date. Deliberately given no ``dateIso`` companion when the events got
+    # theirs (G3): there is no instant here to project. Where the convention
+    # holds this string already is ISO; where it does not, a server-side
+    # parse would either echo the same characters or manufacture a moment
+    # nobody recorded — confidently wrong, which is the defect class this
+    # program spent 2026-08-10 removing. The tier parses it as a date
+    # (``parseIsoDate``) and renders nothing when it will not parse.
     date: Optional[str] = None
 
 
@@ -296,6 +316,17 @@ def entry_page_projection(
                 closesAt=_moment(ev.closes_at) if ev.closes_at is not None else None,
                 withdrawsUntil=(
                     _moment(ev.withdraws_until)
+                    if ev.withdraws_until is not None
+                    else None
+                ),
+                opensAtIso=(
+                    _moment_iso(ev.opens_at) if ev.opens_at is not None else None
+                ),
+                closesAtIso=(
+                    _moment_iso(ev.closes_at) if ev.closes_at is not None else None
+                ),
+                withdrawsUntilIso=(
+                    _moment_iso(ev.withdraws_until)
                     if ev.withdraws_until is not None
                     else None
                 ),

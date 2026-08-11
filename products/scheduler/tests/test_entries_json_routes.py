@@ -189,6 +189,58 @@ def test_the_page_projection_carries_the_public_blocks(client, page):
     assert body["viewer"] == {"signedIn": False, "email": None, "formCsrf": ""}
 
 
+def test_every_event_moment_ships_iso_beside_its_display_string(client, page):
+    """SP-P6-2 G3: the countdown, the entry timeline and the date facets do
+    arithmetic on these instants, and ``_moment`` emits a display string.
+
+    **Additive, and the test says so in both directions.** The display string
+    is a shipped contract — ``entrant/tests/phase.test.ts`` pins its exact
+    format against the Python source — so the ISO field stands beside it
+    rather than replacing it: the same instant, twice, in two registers.
+    Absent moments stay absent on both fields; a null deadline must not
+    become an epoch.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from database.models import EntryEvent
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        ev = session.execute(
+            select(EntryEvent).where(EntryEvent.id == uuid.UUID(page["ms"]))
+        ).scalar_one()
+        ev.opens_at = datetime(2026, 7, 1, 9, 0, tzinfo=timezone.utc)
+        ev.closes_at = datetime(2026, 8, 14, 23, 59, tzinfo=timezone.utc)
+        ev.withdraws_until = datetime(2026, 8, 20, 12, 30, tzinfo=timezone.utc)
+        session.commit()
+    finally:
+        session.close()
+
+    by_code = {ev["code"]: ev for ev in client.get(f"/e/api/page/{page['slug']}").json()["events"]}
+    ms = by_code["MS"]
+    assert (ms["opensAt"], ms["opensAtIso"]) == (
+        "2026-07-01 09:00 UTC",
+        "2026-07-01T09:00:00+00:00",
+    )
+    assert (ms["closesAt"], ms["closesAtIso"]) == (
+        "2026-08-14 23:59 UTC",
+        "2026-08-14T23:59:00+00:00",
+    )
+    assert (ms["withdrawsUntil"], ms["withdrawsUntilIso"]) == (
+        "2026-08-20 12:30 UTC",
+        "2026-08-20T12:30:00+00:00",
+    )
+    # WS carries no moments at all: null stays null on both registers.
+    assert [by_code["WS"][k] for k in ("opensAt", "opensAtIso", "closesAt")] == [
+        None,
+        None,
+        None,
+    ]
+
+
 def test_an_unknown_slug_answers_the_uniform_404(client, page):
     """The same answer as a CLOSED page, so nobody can enumerate workspaces
     that exist but are not taking entries."""
