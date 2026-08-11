@@ -33,9 +33,12 @@
       "discipline": "Men's Singles",
       "feeCents": 1500,
       "genderConstraint": "M",
-      "opensAt": null,
-      "closesAt": null,
-      "withdrawsUntil": null,
+      "opensAt": "2026-06-01 09:00 UTC",
+      "closesAt": "2026-08-14 23:59 UTC",
+      "withdrawsUntil": "2026-09-05 18:00 UTC",
+      "opensAtIso": "2026-06-01T09:00:00+00:00",
+      "closesAtIso": "2026-08-14T23:59:00+00:00",
+      "withdrawsUntilIso": "2026-09-05T18:00:00+00:00",
       "isOpen": true,
       "ageBracketed": false,
       "entryCount": 7
@@ -46,9 +49,12 @@
       "discipline": "Women's Doubles",
       "feeCents": 2000,
       "genderConstraint": "F",
-      "opensAt": null,
-      "closesAt": null,
-      "withdrawsUntil": null,
+      "opensAt": "2026-06-01 09:00 UTC",
+      "closesAt": "2026-08-14 23:59 UTC",
+      "withdrawsUntil": "2026-09-05 18:00 UTC",
+      "opensAtIso": "2026-06-01T09:00:00+00:00",
+      "closesAtIso": "2026-08-14T23:59:00+00:00",
+      "withdrawsUntilIso": "2026-09-05T18:00:00+00:00",
       "isOpen": true,
       "ageBracketed": false,
       "entryCount": 4
@@ -59,9 +65,12 @@
       "discipline": "Mixed Doubles",
       "feeCents": 3000,
       "genderConstraint": null,
-      "opensAt": null,
-      "closesAt": null,
-      "withdrawsUntil": null,
+      "opensAt": "2026-06-01 09:00 UTC",
+      "closesAt": "2026-08-01 23:59 UTC",
+      "withdrawsUntil": "2026-09-05 18:00 UTC",
+      "opensAtIso": "2026-06-01T09:00:00+00:00",
+      "closesAtIso": "2026-08-01T23:59:00+00:00",
+      "withdrawsUntilIso": "2026-09-05T18:00:00+00:00",
       "isOpen": false,
       "ageBracketed": false,
       "entryCount": 1
@@ -69,7 +78,16 @@
   ],
   "entrants": [
     {
-      "name": "Ada Lovelace"
+      "name": "Ada Lovelace",
+      "eventCodes": ["MS", "WD"]
+    },
+    {
+      "name": "Grace Hopper",
+      "eventCodes": ["WD"]
+    },
+    {
+      "name": "Katherine Johnson",
+      "eventCodes": ["MS", "XD"]
     }
   ]
 }

@@ -124,13 +124,15 @@ describe('the sign-out form, unhydrated', () => {
   });
 
   it('offers no way to sign out with a GET', async () => {
-    // The property this control exists to get right.
+    // The property this control exists to get right. The document DOES carry
+    // GET forms now (discovery's header search), so the assertion is scoped
+    // to where it bites: no GET-shaped form may target the account prefix,
+    // and no link may reach it at all.
     const html = await fetchEntry();
 
-    expect(html).not.toMatch(/<form[^>]*method="get"/i);
-    // Exactly one form reaches the account prefix, so "it is a POST" is not
-    // true merely because a second one went unnoticed.
-    expect(html.match(/action="\/e\/account\//g)).toHaveLength(1);
+    const accountForms = (html.match(/<form[^>]*action="\/e\/account\/[^"]*"[^>]*>/g) ?? []);
+    expect(accountForms).toHaveLength(1);
+    expect(accountForms[0]).toMatch(/method="post"/i);
     expect(hrefs(html).filter((h) => h.startsWith('/e/account/'))).toEqual([]);
   });
 
@@ -255,7 +257,7 @@ async function fetchEntryResponse(): Promise<Response> {
     ),
   );
   try {
-    return await fetchPath('/e/spring-open');
+    return await fetchPath('/e/spring-open/enter');
   } finally {
     vi.unstubAllGlobals();
   }

@@ -33,7 +33,7 @@ export function EntrantsList({
             <h3 className="flex flex-wrap items-baseline gap-x-2 text-base font-semibold text-foreground">
               {event.discipline}
               <span className="text-sm font-normal text-muted-foreground">
-                {event.code} · {rows.length} entered
+                {`${event.code} · ${rows.length} entered`}
               </span>
             </h3>
             <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-sm text-foreground sm:grid-cols-2 lg:grid-cols-3">

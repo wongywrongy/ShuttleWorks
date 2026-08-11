@@ -32,7 +32,7 @@ export function FeeTable({
             ? tiers.map(([count, cents]) => (
                 <tr key={count} className="border-b border-rule-soft last:border-b-0">
                   <td className="py-1.5 text-foreground">
-                    {count} {count === '1' ? 'event' : 'events'}
+                    {`${count} ${count === '1' ? 'event' : 'events'}`}
                   </td>
                   <td className="py-1.5 text-right tabular-nums text-foreground">
                     {formatCents(cents)}

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Measures the real gzipped weight of `/e/{slug}` — the entry page, the one
- * page spec §7's no-JS posture is about — on a production build.
+ * Measures the real gzipped weight of the public pages — discovery (`/e/`),
+ * the tournament page (`/e/{slug}`) and the enter page (`/e/{slug}/enter`)
+ * — on a production build. Spec §7's no-JS posture, as a number.
  *
  * "Page weight" here is what a browser actually pays for: the server-
  * rendered HTML (what a no-JS visitor gets in full) PLUS every script the
@@ -76,6 +77,13 @@ const PAGE = JSON.parse(
 
 globalThis.fetch = async (input) => {
   const url = typeof input === 'string' ? input : input.url;
+  if (url === `${process.env.API_BASE_URL}/e/api/pages`) {
+    // Discovery's list — one slug, so the fan-out below hits the same page.
+    return new Response(JSON.stringify([{ slug: 'spring-open' }]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
   if (url === `${process.env.API_BASE_URL}/e/api/page/spring-open`) {
     return new Response(JSON.stringify(PAGE), {
       status: 200,
@@ -89,45 +97,56 @@ const { createRequestHandler } = await import('react-router');
 const build = await import(pathToFileURL(serverEntry).href);
 const handler = createRequestHandler(build, 'production');
 
-const response = await handler(new Request('http://weight-check.test/e/spring-open'));
-if (response.status !== 200) {
-  console.error(`Rendering /e/spring-open returned ${response.status}, not 200.`);
-  console.error(await response.text());
-  process.exit(1);
-}
-const html = await response.text();
-const htmlGzipBytes = zlib.gzipSync(Buffer.from(html, 'utf-8')).length;
+/**
+ * SP-P6-2: three measured documents, one gate each — discovery (`/e/`), the
+ * tournament page (`/e/{slug}`) and the enter page (`/e/{slug}/enter`). The
+ * enter page carries the real CSRF + idempotency fields; the tournament page
+ * is the sitemap-listed poster URL; discovery is the front door.
+ */
+const MEASURED = ['/e/', '/e/spring-open', '/e/spring-open/enter'];
 
-// ---- the scripts the document actually asks for -------------------------
-//
-// Inline scripts are already inside `htmlGzipBytes`, so only `src=` costs
-// anything extra. URLs are `${publicPath}assets/…`; `build.publicPath` comes
-// from the build itself, so this keeps working if `base` moves again.
-const scriptSrcs = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
-const criticalJsBytes = scriptSrcs.reduce((sum, url) => {
-  const rel = url.startsWith(build.publicPath) ? url.slice(build.publicPath.length) : url;
-  const abs = path.join(clientDir, rel.replace(/^\//, ''));
-  if (!fs.existsSync(abs)) {
-    console.error(`The page references ${url}, which is not in build/client — 404 in prod.`);
+async function measure(pathname) {
+  const response = await handler(new Request(`http://weight-check.test${pathname}`));
+  if (response.status !== 200) {
+    console.error(`Rendering ${pathname} returned ${response.status}, not 200.`);
+    console.error(await response.text());
     process.exit(1);
   }
-  return sum + gzipSizeOf(abs);
-}, 0);
+  const html = await response.text();
+  const htmlGzipBytes = zlib.gzipSync(Buffer.from(html, 'utf-8')).length;
 
-// ---- the gate --------------------------------------------------------
+  // The scripts the document actually asks for. Inline scripts are already
+  // inside `htmlGzipBytes`, so only `src=` costs anything extra; URLs are
+  // `${publicPath}assets/…` per the build itself.
+  const scriptSrcs = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
+  const criticalJsBytes = scriptSrcs.reduce((sum, url) => {
+    const rel = url.startsWith(build.publicPath) ? url.slice(build.publicPath.length) : url;
+    const abs = path.join(clientDir, rel.replace(/^\//, ''));
+    if (!fs.existsSync(abs)) {
+      console.error(`The page references ${url}, which is not in build/client — 404 in prod.`);
+      process.exit(1);
+    }
+    return sum + gzipSizeOf(abs);
+  }, 0);
 
-const totalBytes = htmlGzipBytes + criticalJsBytes;
-const totalKb = totalBytes / 1024;
+  return { pathname, htmlGzipBytes, criticalJsBytes, scriptCount: scriptSrcs.length };
+}
 
-// 4 KB against a measured 2.5 KB — all of it HTML, because this tier ships no
-// client JS. With the +10% CI slack that is a 4.4 KB ceiling, i.e. ~1.9 KB
-// (~75%) of real growth room in the rendered document before it goes red.
+const measured = [];
+for (const pathname of MEASURED) {
+  measured.push(await measure(pathname));
+}
+
+// 4 KB per document, all of it HTML, because this tier ships no client JS.
+// With the +10% CI slack that is a 4.4 KB ceiling per page.
 //
 // The old number was 123 KB. R8-F derived that from a ~98.8 KB react-dom +
 // React Router HYDRATION FLOOR, and that floor no longer exists — `root.tsx`
-// renders no `<Scripts/>`. (The gzipped HTML fell too, 4.0 -> 2.5 KB: the
-// inline `window.__reactRouterContext` loader payload went with it.) Leaving
-// 123 KB in place would have let this page grow ~50x unnoticed.
+// renders no `<Scripts/>`. The 4 KB figure was then derived from the
+// SP-P6-1 document (2.5 KB measured); the SP-P6-2 redesign's three pages
+// measure inside it (G6 stays open — if the enter page outgrows it once
+// real content lands, the budget is re-derived from measurement, gate
+// blocking, per the R8-F precedent).
 const BUDGET_KB = 4;
 const SLACK_KB = BUDGET_KB * 1.1; // +10% CI slack
 
@@ -138,15 +157,23 @@ if (cssFile) {
   cssNote = ` (not counted; app.css alone is ${cssKb.toFixed(1)} KB gzipped)`;
 }
 
-console.log(`HTML (gzipped):        ${(htmlGzipBytes / 1024).toFixed(1)} KB`);
-console.log(`Critical JS (gzipped): ${(criticalJsBytes / 1024).toFixed(1)} KB  [${scriptSrcs.length} scripts referenced by the page]`);
-console.log(`Total:                 ${totalKb.toFixed(1)} KB${cssNote}`);
-console.log(`Budget:                ${BUDGET_KB} KB (+10% CI slack = ${SLACK_KB.toFixed(1)} KB)`);
+let failed = false;
+for (const { pathname, htmlGzipBytes, criticalJsBytes, scriptCount } of measured) {
+  const totalKb = (htmlGzipBytes + criticalJsBytes) / 1024;
+  const verdict = totalKb <= SLACK_KB ? 'PASS' : 'FAIL';
+  if (verdict === 'FAIL') failed = true;
+  console.log(
+    `${pathname.padEnd(24)} HTML ${(htmlGzipBytes / 1024).toFixed(1)} KB gz` +
+      ` + JS ${(criticalJsBytes / 1024).toFixed(1)} KB [${scriptCount} scripts]` +
+      ` = ${totalKb.toFixed(1)} KB  ${verdict}`,
+  );
+}
+console.log(`Budget:                ${BUDGET_KB} KB per page (+10% CI slack = ${SLACK_KB.toFixed(1)} KB)${cssNote}`);
 
-if (totalKb <= SLACK_KB) {
+if (!failed) {
   console.log('PASS');
   process.exit(0);
 } else {
-  console.error(`FAIL — exceeds the ${SLACK_KB.toFixed(1)} KB gate by ${(totalKb - SLACK_KB).toFixed(1)} KB`);
+  console.error(`FAIL — at least one page exceeds the ${SLACK_KB.toFixed(1)} KB gate`);
   process.exit(1);
 }

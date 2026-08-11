@@ -2,22 +2,19 @@ import { type RouteConfig, index, route } from '@react-router/dev/routes';
 
 /**
  * Explicit route config, not file-system conventions. The entrant surface is
- * small and its URL shapes are load-bearing (spec §5: /{slug},
- * /{slug}/receipt/{submissionId}, /account/{signup,login,logout}) — they read
- * better declared in one place than encoded in filenames.
+ * small and its URL shapes are load-bearing (SP-P6-2 §3: /e/ discovery,
+ * /e/{slug} tournament page, /e/{slug}/enter entry flow,
+ * /e/{slug}/receipt/{submissionId}, /account/{signup,login,logout} owned by
+ * FastAPI) — they read better declared in one place than encoded in
+ * filenames.
  */
 export default [
-  // `/e/` — the basename itself. Without this, the basename matched no route,
-  // React Router fell back to `root.tsx` and answered **200 with an empty
-  // `<body>`**: a soft-404, indexable by a crawler and a white screen to a
-  // human, while every other miss on this tier is honest. It reuses the entry
-  // module rather than growing one of its own, because that module's loader
-  // already throws the uniform `notFound()` when there is no `slug`
-  // (`entry.loader.test.ts`, "404s a missing slug param without calling the
-  // API at all") and its ErrorBoundary already renders the 404 copy. It
-  // declares no `path`, so it is invisible to `nodePaths`/`shadowingSegments`
-  // and reserves no slug.
-  index('routes/entry.tsx', { id: 'entry-index' }),
+  // `/e/` — discovery, the platform front door (SP-P6-2 §1). Before this,
+  // the basename either answered 200 with an empty `<body>` (pre-P6-1, a
+  // soft-404) or reused the entry module's honest 404; now the app root IS a
+  // page. It is the index route, so it claims no static segment and reserves
+  // no slug.
+  index('routes/discovery.tsx'),
   route('health', 'routes/health.tsx'),
   // `/e/sitemap.xml` — a resource route (`routes/sitemap.tsx` exports no
   // default component, so its loader `Response` is returned verbatim).
@@ -72,34 +69,27 @@ export default [
   route('login/signed-in', 'routes/login.tsx', { id: 'login-signed-in' }),
   // There is deliberately NO logout page. Signing out is a POST to
   // `/e/account/logout` (FastAPI's, R8-A) and the form that makes it lives in
-  // the footer of `routes/entry.tsx` — the only page a signed-in entrant is
-  // ever on, and one that already mints the `sw_play_csrf` nonce the form
-  // needs. A standalone page would have to mint its own at `Path=/`, and by
+  // the footer of `routes/enter.tsx` — the page a signed-in entrant is on,
+  // and one that already mints the `sw_play_csrf` nonce the form needs. A
+  // standalone page would have to mint its own at `Path=/`, and by
   // last-issuance-wins that invalidated an in-flight entry form in another
   // tab. Fewer routes to enumerate, one fewer nonce channel, same POST.
-  // SP-P6-2 Phase B — the three static mockups behind the [USER SIGN-OFF]
-  // gate. DELETED AT PHASE C, together with routes/mock.data.ts and
-  // routes/mock.ui.tsx. Dotted segments on purpose: `_SLUG_RE` rejects a dot,
-  // so these can never collide with a workspace slug and need no backend
-  // reservation — the same argument as `sitemap.xml` above, and the reason
-  // `reservedSlugs.test.ts` skips dotted segments.
-  route('mock.discovery', 'routes/mock.discovery.tsx'),
-  route('mock.tournament', 'routes/mock.tournament.tsx'),
-  route('mock.enter', 'routes/mock.enter.tsx'),
+  //
   // The 303 target of POST /e/api/submit/{slug}: a GET, so a reload of the
   // success page re-reads instead of re-posting the entry.
   route(':slug/receipt/:submissionId', 'routes/receipt.tsx'),
-  // The entry page again, at the URL a completed sign-in lands on (E3) — the
-  // same argument as `login/created` above, applied to `POST /e/account/login`
-  // (303 to `next` on success, 401 and no redirect on failure). The entry page
-  // is where the sign-in link sends the entrant back to, so the confirmation
-  // belongs on it and not on a page in the way of the form.
-  //
-  // It is NOT a capability: the URL is typeable and shareable, so the banner
-  // states an outcome and grants nothing. Who may submit is decided at the
-  // write, by `Depends(get_current_entrant)`.
-  route(':slug/signed-in', 'routes/entry.tsx', { id: 'entry-signed-in' }),
-  // Last, and dynamic: React Router ranks the static segment above it, so
+  // The entry flow, on its own page off the hub scroll (SP-P6-2 §3, G0
+  // approved). `enter` is a sub-segment of `:slug`, so it shadows no
+  // workspace slug and needs no backend reservation.
+  route(':slug/enter', 'routes/enter.tsx'),
+  // The enter page again, at the URL a completed sign-in lands on (E3) — the
+  // 303 from `POST /e/account/login` is the only thing that matters that
+  // lands here, so the document can say the sign-in worked. NOT a capability:
+  // the URL is typeable and shareable, the banner states an outcome and
+  // grants nothing; who may submit is decided at the write. The quote 307's
+  // `?signedIn=1` presence flag re-targets here too (`_echo_redirect`).
+  route(':slug/enter/signed-in', 'routes/enter.tsx', { id: 'enter-signed-in' }),
+  // Last, and dynamic: React Router ranks the static segments above it, so
   // /e/health stays the health route rather than a workspace called "health".
-  route(':slug', 'routes/entry.tsx'),
+  route(':slug', 'routes/tournament.tsx'),
 ] satisfies RouteConfig;

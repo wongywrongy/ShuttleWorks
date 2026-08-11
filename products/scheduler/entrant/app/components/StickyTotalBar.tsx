@@ -44,7 +44,7 @@ export function StickyTotalBar({
           <p className="text-sm text-muted-foreground">
             Quoted total ·{' '}
             <span className="tabular-nums">
-              {state.eventCount} {state.eventCount === 1 ? 'event' : 'events'}
+              {`${state.eventCount} ${state.eventCount === 1 ? 'event' : 'events'}`}
             </span>
           </p>
           <p className="text-2xl font-semibold tabular-nums text-foreground">

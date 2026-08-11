@@ -1,25 +1,18 @@
 /**
- * Per-route meta/OG tags for `/e/{slug}` (Task 25).
+ * Per-route meta/OG tags for `/e/{slug}` — carried over from the SP-P6-1
+ * entry page when the tournament page took the URL (SP-P6-2).
  *
- * Rendered through the same real @react-router/dev pipeline as
- * `entry.render.test.ts` — request in, bytes out, no component mocking — so
- * everything asserted here is true of the document a crawler or a link
- * unfurler actually receives. No second backend call: the fixture below is
- * the SAME projection the loader already fetches (`GET /e/api/page/{slug}`),
- * proven by `apiFetch.server.test.ts`'s one-fetch-per-render contract, which
- * this file does not re-prove.
+ * Rendered through the same real @react-router/dev pipeline as the render
+ * suites — request in, bytes out — so everything asserted here is true of
+ * the document a crawler or a link unfurler actually receives.
  *
  * I6 (the public entry page shows names and events only — never emails or
  * contact data) applies to the document HEAD with more force than to the
- * body: an OG tag is read by crawlers and chat-client unfurlers, and is
- * visible to anyone who views source, without ever loading the page. The
- * `viewer` block (`email`, `formCsrf`) must never reach a `<meta>` tag. And
- * neither may the loader's OWN `formCsrf` — the live double-submit digest
- * `mintFormCsrf()` mints on this very response. That is the one worth
- * guarding: `viewer.formCsrf` is structurally `''` on every server render,
- * so it could not do harm even if it leaked, while the minted digest is a
- * working token. Putting a mint in a `<meta>` disclosed to every crawler
- * and link-unfurler would defeat the reason it exists.
+ * body: an OG tag is read by crawlers and chat-client unfurlers without ever
+ * loading the page. The `viewer` block must never reach a `<meta>` tag —
+ * and neither may a minted CSRF digest. The tournament page mints nothing
+ * (it has no form), which is asserted; the enter page's mint is confined to
+ * its `_csrf` fields.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
@@ -29,10 +22,8 @@ import { readAppSource } from './helpers/sourceGuards';
 
 const MS = '11111111-1111-4111-8111-111111111111';
 
-/** Same shape as `entry.render.test.ts`'s `PAGE` — the real nested
- * `GET /e/api/page/{slug}` projection. Kept local rather than imported: the
- * sibling file exports nothing, by design (each render-tier suite owns its
- * fixture, per prior art in this directory). */
+/** The real nested `GET /e/api/page/{slug}` projection, kept local (each
+ * render-tier suite owns its fixture, per prior art in this directory). */
 const PAGE = {
   tournament: { name: 'Spring Open', date: '2026-09-12' },
   org: { name: 'Kingsway BC' },
@@ -56,24 +47,20 @@ const PAGE = {
       opensAt: null,
       closesAt: null,
       withdrawsUntil: null,
+      opensAtIso: null,
+      closesAtIso: null,
+      withdrawsUntilIso: null,
       isOpen: true,
       ageBracketed: false,
       entryCount: 7,
     },
   ],
-  entrants: [{ name: 'Ada Lovelace' }],
+  entrants: [{ name: 'Ada Lovelace', eventCodes: ['MS'] }],
   // The email below is a deliberately distinctive marker string that must
-  // never appear ANYWHERE in the rendered document's <head>. `signedIn` is
-  // fed `true` for the same reason `entry.render.test.ts:216` does: it is
-  // the impossible-projection shape the OLD fixtures claimed, fed on purpose
-  // to prove nothing about it leaks — not a projection the backend can
-  // return (node's fetch is credential-free, so `signedIn` is always `false`
-  // in reality). `formCsrf` is left `''` — a marker value there would prove
-  // nothing (see the comment on the live nonce/digest check below, which is
-  // the real CSRF-leak proof) and `tests/test_entrant_ssr_contract.py`
-  // forbids a non-empty one with no exception. The `impossible-projection`
-  // marker is that guard's documented opt-out for `signedIn: true` — see
-  // that file for why it is loud rather than silent.
+  // never appear ANYWHERE in the rendered document. `signedIn` is fed `true`
+  // as the impossible-projection shape, on purpose, to prove nothing about it
+  // leaks — the marker comment is `test_entrant_ssr_contract.py`'s documented
+  // opt-out.
   viewer: { /* impossible-projection */ signedIn: true, email: 'LEAK-MARKER-EMAIL@example.com', formCsrf: '' },
 };
 
@@ -90,6 +77,7 @@ afterEach(() => {
 async function renderResponse(
   body: unknown,
   status: number,
+  path = '/e/spring-open',
 ): Promise<Response> {
   vi.stubGlobal(
     'fetch',
@@ -105,7 +93,7 @@ async function renderResponse(
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
   return createRequestHandler(build, 'development')(
-    new Request('http://entrant.test/e/spring-open'),
+    new Request(`http://entrant.test${path}`),
   );
 }
 
@@ -113,17 +101,13 @@ async function render(body: unknown = PAGE): Promise<string> {
   return (await renderResponse(body, 200)).text();
 }
 
-/** Pull just the `<head>…</head>` slice — meta tags belong there, and
- * scoping the assertions to it means a marker string appearing in the
- * FORM (an entrant's own name, say) cannot masquerade as a head leak. */
+/** Pull just the `<head>…</head>` slice — meta tags belong there. */
 function head(html: string): string {
   return html.match(/<head[^>]*>[\s\S]*?<\/head>/)?.[0] ?? '';
 }
 
 /** The `meta` export's own body, extracted from source text. Shared by the
- * structural guard and its non-vacuity case so BOTH exercise this regex —
- * it is the part that can silently stop matching (a rewrite to
- * `export function meta` would make the guard pass by finding nothing). */
+ * structural guard and its non-vacuity case so BOTH exercise this regex. */
 function metaSource(source: string): string | null {
   return source.match(/export const meta[\s\S]*?\n};/)?.[0] ?? null;
 }
@@ -144,7 +128,6 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
   it('sets a description drawn from director-authored fields (date, venue, intro)', async () => {
     const html = await render();
     const h = head(html);
-    // Not asserting one exact join grammar — the fields that must appear.
     expect(h).toMatch(/<meta name="description" content="[^"]*"/);
     const descTag = h.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? '';
     expect(descTag).toContain('Kingsway Centre');
@@ -153,77 +136,69 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
   });
 
   // ---------------------------------------------------------------------
-  // I6: nothing from `viewer` may ever reach the document head.
+  // I6: nothing from `viewer`, and no secret, may ever reach the document.
   // ---------------------------------------------------------------------
-  describe('viewer data never reaches a meta tag (I6)', () => {
-    it('the whole document never contains the email or the live nonce, and confines the digest', async () => {
+  describe('viewer data and secrets never reach the documents (I6)', () => {
+    it('the tournament page carries no viewer email and no secret at all', async () => {
+      // The poster page has NO form, so it must carry NEITHER half of a
+      // double-submit: no minted cookie, no `_csrf` field, and certainly no
+      // viewer email — whole document, not just the head.
       const res = await renderResponse(PAGE, 200);
       const html = await res.text();
 
-      // **WHOLE DOCUMENT, not `<head>`.** These three assertions were scoped
-      // to the head out of necessity, not judgement: the loader's full payload
-      // — `viewer` included — streamed into `<Scripts/>`'s hydration
-      // `<script>` in `<body>`, so a whole-document assertion would have
-      // failed on behaviour that was pre-existing and correct. `app/root.tsx`
-      // renders no `<Scripts/>`, that payload does not exist, and the
-      // narrowing has outlived its reason. A meta tag is the worst place for a
-      // leak, not the only one.
+      expect(html).not.toContain('LEAK-MARKER-EMAIL@example.com');
+      expect(html).not.toContain('name="_csrf"');
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+
+    it('the enter page confines the minted digest to its _csrf fields', async () => {
+      // The LIVE pair is what `mintFormCsrf()` minted on THIS response — a
+      // random nonce and its 64-hex digest, which no hand-listed fixture
+      // string can stand in for.
+      const res = await renderResponse(PAGE, 200, '/e/spring-open/enter');
+      const html = await res.text();
+
       expect(html).not.toContain('LEAK-MARKER-EMAIL@example.com');
 
-      // **There is no `formCsrf` marker to check here.** `viewer.formCsrf`
-      // is structurally `''` on every server render (node's projection fetch
-      // carries no credential), so a fixture marker for it would prove
-      // nothing about the token that can actually do harm. The LIVE pair is
-      // what `mintFormCsrf()` minted on THIS response — a random nonce and its
-      // 64-hex digest, which no hand-listed fixture string can stand in for —
-      // pulled off THIS response by the same extraction `entry.loader.test.ts`
-      // uses on the wire.
       const nonce = /sw_play_csrf=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')?.[1];
       const digest = /name="_csrf" value="([0-9a-f]{64})"/.exec(html)?.[1];
       expect(nonce).toBeTruthy();
       expect(digest).toBeTruthy();
 
-      // The NONCE is the secret half. It belongs in `Set-Cookie` and in no
-      // byte of the body — a document that echoes it has handed both halves of
-      // a double-submit pair to anyone who can read the page.
+      // The NONCE is the secret half: `Set-Cookie` only, no byte of the body.
       expect(html).not.toContain(nonce as string);
 
-      // The DIGEST is the half that is SUPPOSED to be in the document — that
-      // is what double-submit means — so the honest widening is confinement,
-      // not absence: every occurrence must be the value of a `_csrf` hidden
-      // input. There are two (the entry form and the footer's sign-out form),
-      // both minted from this one response. A third copy in a meta tag, an
-      // attribute, a link or a comment fails here.
+      // The DIGEST is the half that is SUPPOSED to be in the document — as
+      // the value of a `_csrf` hidden input (the entry form and the footer's
+      // sign-out form, minted from this one response) and nowhere else. A
+      // third copy in a meta tag, an attribute, a link or a comment fails.
       const occurrences = html.split(digest as string).length - 1;
       const inCsrfFields = html.split(`name="_csrf" value="${digest}"`).length - 1;
       expect(inCsrfFields).toBeGreaterThan(0);
       expect(occurrences).toBe(inCsrfFields);
     });
 
-    // The structural half. A behavioural assertion alone can pass by luck —
-    // e.g. if a token happened to collide with another rendered string — so
-    // this reads the `meta` export's own source. Stated as a POSITIVE
-    // allowlist (`data.page` and nothing else off `data`) rather than a
-    // denylist of today's sensitive field names: `data.formCsrf` is the live
-    // double-submit digest and sits directly on the loader payload, so the
-    // old `\bviewer\b`-only ban would have let
-    // `content: data.formCsrf` through untouched. Mutation transcript in the
-    // task report.
-    it('the meta() export reads only `data.page`, and names no secret', () => {
-      const metaFn = metaSource(readAppSource('routes/entry.tsx'));
-      expect(metaFn).not.toBeNull();
-      const reads = metaFn!.match(/\bdata\.\w+/g) ?? [];
-      expect(reads.length).toBeGreaterThan(0);
-      expect([...new Set(reads)]).toEqual(['data.page']);
-      expect(metaFn!).not.toMatch(/\bviewer\b|\bformCsrf\b|\bidempotencyKey\b/);
-    });
+    // The structural half, stated as a POSITIVE allowlist (`data.page` and
+    // nothing else off `data`) rather than a denylist of today's sensitive
+    // field names — `data.formCsrf` sits directly on the enter loader's
+    // payload, so a `\bviewer\b`-only ban would let `content: data.formCsrf`
+    // through untouched. Both meta-bearing routes are held to it.
+    it.each(['routes/tournament.tsx', 'routes/enter.tsx'])(
+      'the meta() export of %s reads only `data.page`, and names no secret',
+      (file) => {
+        const metaFn = metaSource(readAppSource(file));
+        expect(metaFn).not.toBeNull();
+        const reads = metaFn!.match(/\bdata\.\w+/g) ?? [];
+        expect(reads.length).toBeGreaterThan(0);
+        expect([...new Set(reads)]).toEqual(['data.page']);
+        expect(metaFn!).not.toMatch(/\bviewer\b|\bformCsrf\b|\bidempotencyKey\b/);
+      },
+    );
 
     it('is not vacuous: the guard’s own pipeline reddens on a tainted body', () => {
       // Fixture of the exact defect this guard exists to prevent, run through
       // the SAME extraction the guard above uses — so this pins the
-      // extraction regex too, not just the forbidden-word regex. A rewrite of
-      // `meta` to `export function meta` would make `metaSource` return null
-      // here and fail, instead of silently making the real guard vacuous.
+      // extraction regex too.
       const tainted = `export const meta: Route.MetaFunction = ({ data }) => {
   return [{ property: 'og:csrf', content: data.formCsrf }];
 };`;
@@ -262,13 +237,7 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
       });
       const h = head(html);
 
-      // The literal payload must never appear unescaped: that would mean it
-      // broke out of the attribute (or closed the tag) rather than being
-      // rendered as attribute text.
       expect(h).not.toContain('"><script>alert(1)</script>');
-      // React's serializer escapes to HTML entities; assert the escaped form
-      // landed rather than merely asserting absence (which a silently
-      // dropped field would also satisfy).
       expect(h).toContain('&quot;');
       expect(h).toContain('&amp;');
       expect(h).toMatch(/<meta property="og:title" content="[^"]*&quot;[^"]*"/);

@@ -35,7 +35,10 @@ export function EventRow({
           {event.ageBracketed ? ' · Age-restricted' : ''}
         </p>
       </div>
-      <p className="text-sm tabular-nums text-muted-foreground">{event.entryCount} entered</p>
+      {/* One template string, not adjacent JSX expressions: React 19's SSR
+          stream separates those with comment nodes, breaking text-level
+          assertions and, worse, screen-reader continuity of the phrase. */}
+      <p className="text-sm tabular-nums text-muted-foreground">{`${event.entryCount} entered`}</p>
       <p
         className={`text-sm font-medium ${
           event.isOpen ? 'text-status-live' : 'text-status-done'

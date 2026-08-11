@@ -167,7 +167,7 @@ describe('the account pages are reachable by link', () => {
     // (E3) — `/e/{slug}/signed-in`, the same document plus the outcome. A
     // failed sign-in 401s and never follows `next`, so arriving there is the
     // one thing this tier can say truthfully about an act it cannot observe.
-    expect(hrefs(html)).toContain('/e/login?next=/e/spring-open/signed-in');
+    expect(hrefs(html)).toContain('/e/login?next=/e/spring-open/enter/signed-in');
     expect(hrefs(html)).toContain('/e/signup');
   });
 
@@ -464,7 +464,7 @@ async function withApi<T>(body: unknown, run: () => Promise<T>): Promise<T> {
 
 async function fetchEntry(): Promise<string> {
   return withApi(ENTRY_PAGE, async () => {
-    const html = await (await fetchPath('/e/spring-open')).text();
+    const html = await (await fetchPath('/e/spring-open/enter')).text();
     // The fixture really rendered — otherwise every assertion made against
     // this document is made against an error page.
     expect(html).toContain('Spring Open');

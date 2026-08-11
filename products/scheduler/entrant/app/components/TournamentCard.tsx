@@ -33,7 +33,7 @@ export function TournamentCard({ card, now }: { card: DiscoveryCard; now: Date }
               <p className="mt-0.5 text-sm text-muted-foreground">{card.venueName}</p>
             ) : null}
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {card.eventCount} {card.eventCount === 1 ? 'event' : 'events'}
+              {`${card.eventCount} ${card.eventCount === 1 ? 'event' : 'events'}`}
             </p>
           </div>
         </div>

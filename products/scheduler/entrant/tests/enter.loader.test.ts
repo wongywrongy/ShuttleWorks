@@ -1,5 +1,6 @@
 /**
- * The `/e/{slug}` loader, and the one line in it that unlocks a database index.
+ * The `/e/{slug}/enter` loader, and the one line in it that unlocks a
+ * database index.
  *
  * `UNIQUE (tournament_id, account_id, idempotency_key)` has never fired for a
  * real entrant: a native form cannot send a header, so the column was always
@@ -9,13 +10,14 @@
  *
  * The rest of this file is the tier-level half of the fetch layer's promise:
  * `apiFetch.server.ts` refuses to send a credential, and these assert that the
- * loader above it never hands one down or copies one back.
+ * loader above it never hands one down or copies one back — enumerated over
+ * every route, component and lib module on disk.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
-import { loader } from '../app/routes/entry';
+import { loader } from '../app/routes/enter';
 import { formCsrfToken } from '../app/lib/formCsrf.server';
 import {
   componentFiles,
@@ -100,7 +102,7 @@ function notFoundBody() {
  * loader now sets the `sw_play_csrf` nonce on the SSR document response. */
 function getRaw(slug: string | undefined, headers: HeadersInit = {}) {
   return loader({
-    request: new Request(`http://entrant.test/e/${slug ?? ''}`, { headers }),
+    request: new Request(`http://entrant.test/e/${slug ?? ''}/enter`, { headers }),
     params: slug === undefined ? {} : { slug },
   });
 }
@@ -385,7 +387,7 @@ async function fetchEntrant(path: string, mode = 'development'): Promise<Respons
   return createRequestHandler(build, mode)(new Request(`http://entrant.test${path}`));
 }
 
-describe('GET /e/{slug}', () => {
+describe('GET /e/{slug}/enter', () => {
   it('server-renders the page and the key, with no JavaScript in play', async () => {
     // The upstream response carries a Set-Cookie so the assertion below has
     // something it could actually fail on — a loader that copied every
@@ -404,7 +406,7 @@ describe('GET /e/{slug}', () => {
       }),
     );
 
-    const res = await fetchEntrant('/e/spring-open');
+    const res = await fetchEntrant('/e/spring-open/enter');
     const body = await res.text();
 
     expect(res.status).toBe(200);
@@ -443,7 +445,7 @@ describe('GET /e/{slug}', () => {
     // and the hidden field the browser will post back.
     vi.stubGlobal('fetch', stubJson(PAGE));
 
-    const res = await fetchEntrant('/e/spring-open');
+    const res = await fetchEntrant('/e/spring-open/enter');
     const html = await res.text();
 
     const setCookie = res.headers.get('set-cookie') ?? '';
@@ -481,7 +483,7 @@ describe('GET /e/{slug}', () => {
     // hid the form from everyone. The gate is gone; the write decides.
     vi.stubGlobal('fetch', stubJson(PAGE));
 
-    const html = await (await fetchEntrant('/e/spring-open')).text();
+    const html = await (await fetchEntrant('/e/spring-open/enter')).text();
 
     expect(html).toContain('action="/e/api/submit/spring-open"');
     expect(html).not.toContain('/e/account/login');
@@ -490,7 +492,7 @@ describe('GET /e/{slug}', () => {
   it('renders a not-found page for a 404, leaking neither cause nor topology', async () => {
     vi.stubGlobal('fetch', stubJson(notFoundBody(), 404));
 
-    const res = await fetchEntrant('/e/does-not-exist');
+    const res = await fetchEntrant('/e/does-not-exist/enter');
     const body = await res.text();
 
     expect(res.status).toBe(404);
@@ -514,7 +516,7 @@ describe('GET /e/{slug}', () => {
       stubJson({ detail: 'IntegrityError at /app/api/entries_json.py:214' }, 500),
     );
 
-    const res = await fetchEntrant('/e/spring-open', 'production');
+    const res = await fetchEntrant('/e/spring-open/enter', 'production');
     const body = await res.text();
 
     expect(res.status).toBe(500);
