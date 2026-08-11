@@ -73,7 +73,13 @@ describe('backend _RESERVED_SLUGS covers what node shadows', () => {
     expect(reserved).toEqual(expect.arrayContaining(['api', 'account']));
   });
 
-  it.each(segments)('reserves %s', (segment) => {
+  // De-duplicated at the point of generation, not in `shadowingSegments`:
+  // one segment can head several routes (`login` heads both `/e/login` and
+  // `/e/login/created`), and one fact deserves one test rather than two cases
+  // with the same name and the same assertion. The derivation itself stays a
+  // plain list, so the non-vacuity check above still sees exactly what the
+  // route table declares.
+  it.each([...new Set(segments)])('reserves %s', (segment) => {
     expect(reserved).toContain(segment);
   });
 });
