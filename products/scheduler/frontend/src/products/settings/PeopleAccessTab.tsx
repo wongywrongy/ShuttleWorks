@@ -76,20 +76,30 @@ export function PeopleAccessTab({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Same class of defect as the Entries desk (2026-08-10 browser pass): a
+  // rejected read became `[]` and rendered as "No members yet" — a state that
+  // cannot exist, since a workspace always has at least an owner. It also
+  // poisoned `currentUserRole` below, which is derived from this list and
+  // gates every action in the row menus.
+  const [loadFailed, setLoadFailed] = useState(false);
+
   const load = useCallback(async () => {
     try {
       setMembers(await apiClient.listMembers(tid));
+      setLoadFailed(false);
     } catch {
-      setMembers([]);
+      setLoadFailed(true);
     }
   }, [tid]);
 
   useEffect(() => {
     let cancelled = false;
+    setMembers(null);
+    setLoadFailed(false);
     apiClient
       .listMembers(tid)
       .then((m) => !cancelled && setMembers(m))
-      .catch(() => !cancelled && setMembers([]));
+      .catch(() => !cancelled && setLoadFailed(true));
     return () => {
       cancelled = true;
     };
@@ -237,7 +247,21 @@ export function PeopleAccessTab({
         )}
 
         <ul className="divide-y divide-border rounded border border-border">
-          {members === null ? (
+          {loadFailed ? (
+            <li
+              role="alert"
+              data-testid="members-load-error"
+              className="flex items-center justify-between gap-3 p-3 text-sm text-muted-foreground"
+            >
+              <span>
+                The members list didn&rsquo;t load. This workspace has members —
+                they just aren&rsquo;t known right now.
+              </span>
+              <Button size="xs" variant="ghost" onClick={() => void load()}>
+                Retry
+              </Button>
+            </li>
+          ) : members === null ? (
             <li className="p-3 text-sm text-muted-foreground">Loading…</li>
           ) : members.length === 0 ? (
             <li className="p-3 text-sm text-muted-foreground">

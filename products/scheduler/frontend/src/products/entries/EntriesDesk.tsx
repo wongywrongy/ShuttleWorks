@@ -28,7 +28,7 @@
  *   on the band, once, rather than on every row.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Button } from '@scheduler/design-system';
+import { Button, Notice } from '@scheduler/design-system';
 import { StatusPill } from '../../components/StatusPill';
 import {
   ActionsBar,
@@ -67,19 +67,36 @@ const COLUMNS: BandedTableColumn[] = [
 export function EntriesDesk({ tid }: { tid: string }) {
   const canEdit = useCanEdit();
   const [entries, setEntries] = useState<EntryDTO[] | null>(null);
+  // A THIRD state, distinct from "loading" (`entries === null`) and from
+  // "loaded, and there are none" (`entries.length === 0`). The read used to
+  // collapse a rejection into the empty array, and the desk then told the
+  // organiser "0 submitted · No entries yet" while the GET had 500'd on 54
+  // real submissions (2026-08-10 full-scale browser pass). How many entries
+  // exist is UNKNOWN when the read fails; it is never zero.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [result, setResult] = useState<EntryCommitResultDTO | null>(null);
 
   const load = useCallback(async () => {
-    const rows = await apiClient.listEntries(tid);
-    setEntries(rows);
+    try {
+      setEntries(await apiClient.listEntries(tid));
+      setLoadFailed(false);
+    } catch {
+      // Keep whatever rows we already have — a failed refresh doesn't delete
+      // them — but stop presenting the list as complete.
+      setLoadFailed(true);
+    }
   }, [tid]);
 
   useEffect(() => {
     let cancelled = false;
+    // A different workspace's rows are not this one's; drop them rather than
+    // showing them under the new tid while the first read is in flight.
+    setEntries(null);
+    setLoadFailed(false);
     apiClient
       .listEntries(tid)
       .then((rows) => !cancelled && setEntries(rows))
-      .catch(() => !cancelled && setEntries([]));
+      .catch(() => !cancelled && setLoadFailed(true));
     return () => {
       cancelled = true;
     };
@@ -117,7 +134,9 @@ export function EntriesDesk({ tid }: { tid: string }) {
       <ActionsBar
         title="Entries"
         status={
-          entries ? (
+          loadFailed ? (
+            <span className="text-xs text-status-warning-fg">Count unknown</span>
+          ) : entries ? (
             <span className="text-xs text-muted-foreground">
               {entries.length} submitted
             </span>
@@ -136,13 +155,34 @@ export function EntriesDesk({ tid }: { tid: string }) {
           <CommitSummary result={result} nameById={nameById} />
         ) : null}
 
+        {loadFailed ? (
+          <div className="p-5" data-testid="entries-load-error">
+            <Notice
+              tone="warning"
+              title="Entries didn't load"
+              action={
+                <Button size="xs" variant="ghost" onClick={() => void load()}>
+                  Retry
+                </Button>
+              }
+            >
+              This is a failed read, not an empty desk — how many entries this
+              workspace has is unknown until it loads.
+            </Notice>
+          </div>
+        ) : null}
+
         {entries === null ? (
-          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+          loadFailed ? null : (
+            <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+          )
         ) : entries.length === 0 ? (
-          <EmptyState
-            title="No entries yet"
-            body="Entries submitted through this workspace's public entry page land here for review."
-          />
+          loadFailed ? null : (
+            <EmptyState
+              title="No entries yet"
+              body="Entries submitted through this workspace's public entry page land here for review."
+            />
+          )
         ) : (
           <BandedTable
             columns={COLUMNS}

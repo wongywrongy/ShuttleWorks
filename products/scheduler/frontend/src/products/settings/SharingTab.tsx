@@ -53,6 +53,10 @@ export function SharingTab({ tid }: { tid: string }) {
   const displayLink = displayToken ? `${origin}/display?token=${displayToken}` : null;
 
   const [invites, setInvites] = useState<InviteSummaryDTO[] | null>(null);
+  // Same class as the Entries desk (2026-08-10 browser pass): a rejected read
+  // became `[]` and rendered "No invite links yet." An owner reading that
+  // mints a second invite for someone who already has one.
+  const [invitesFailed, setInvitesFailed] = useState(false);
   const [role, setRole] = useState<InviteRole>('operator');
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -80,17 +84,22 @@ export function SharingTab({ tid }: { tid: string }) {
   const refresh = useCallback(() => {
     apiClient
       .listInvites(tid)
-      .then(setInvites)
-      .catch(() => setInvites([]));
+      .then((r) => {
+        setInvites(r);
+        setInvitesFailed(false);
+      })
+      .catch(() => setInvitesFailed(true));
   }, [tid]);
 
   // Initial / tid-change load, guarded so a late response can't overwrite newer state.
   useEffect(() => {
     let cancelled = false;
+    setInvites(null);
+    setInvitesFailed(false);
     apiClient
       .listInvites(tid)
       .then((r) => !cancelled && setInvites(r))
-      .catch(() => !cancelled && setInvites([]));
+      .catch(() => !cancelled && setInvitesFailed(true));
     return () => {
       cancelled = true;
     };
@@ -221,7 +230,21 @@ export function SharingTab({ tid }: { tid: string }) {
         </div>
 
         <ul className="divide-y divide-border rounded border border-border">
-          {invites === null ? (
+          {invitesFailed ? (
+            <li
+              role="alert"
+              data-testid="invites-load-error"
+              className="flex items-center justify-between gap-3 p-3 text-sm text-muted-foreground"
+            >
+              <span>
+                The invite list didn&rsquo;t load — whether any exist is unknown.
+                Creating one here may duplicate an invite someone already holds.
+              </span>
+              <Button size="xs" variant="ghost" onClick={refresh}>
+                Retry
+              </Button>
+            </li>
+          ) : invites === null ? (
             <li className="p-3 text-sm text-muted-foreground">Loading…</li>
           ) : invites.length === 0 ? (
             <li className="p-3 text-sm text-muted-foreground">No invite links yet.</li>

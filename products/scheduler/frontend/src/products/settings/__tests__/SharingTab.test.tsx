@@ -121,3 +121,33 @@ describe('SharingTab', () => {
     ).toBeNull();
   });
 });
+
+/**
+ * Sibling of the Entries-desk defect (2026-08-10 browser pass): a rejected
+ * `listInvites` became `[]` and rendered as "No invite links yet." An owner
+ * reading that would mint a duplicate invite for someone who already has one.
+ */
+describe('SharingTab — a failed read is not an empty invite list', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
+      token: 'tok-abc',
+      url: '/display?token=tok-abc',
+    } as never);
+  });
+
+  it('says the invites did not load, and never claims there are none', async () => {
+    vi.mocked(apiClient.listInvites).mockRejectedValue(
+      Object.assign(new Error('Server error 500'), { status: 500 }),
+    );
+    render(<SharingTab tid="t1" />);
+    expect(await screen.findByTestId('invites-load-error')).toBeInTheDocument();
+    expect(screen.queryByText(/no invite links yet/i)).toBeNull();
+  });
+
+  it('NEGATIVE CONTROL: a real (empty) list still reads as empty', async () => {
+    vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
+    render(<SharingTab tid="t1" />);
+    expect(await screen.findByText(/no invite links yet/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('invites-load-error')).toBeNull();
+  });
+});

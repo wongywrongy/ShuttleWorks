@@ -486,3 +486,35 @@ describe('PeopleAccessTab — error handling', () => {
     expect(screen.getByTestId('member-u-op')).toHaveTextContent('operator');
   });
 });
+
+/**
+ * Sibling of the Entries-desk defect (2026-08-10 browser pass): a rejected
+ * fetch was turned into an empty collection and rendered as fact. Here the
+ * lie is louder — a workspace ALWAYS has at least an owner, so "No members
+ * yet" is a state that cannot exist. It also poisons `currentUserRole`,
+ * which is derived from this list and gates every action in the menu.
+ */
+describe('PeopleAccessTab — a failed read is not an empty workspace', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.listMembers).mockReset();
+    CURRENT_USER = { id: 'u-owner' };
+  });
+
+  it('says the members did not load, and never claims there are none', async () => {
+    vi.mocked(apiClient.listMembers).mockRejectedValue(
+      Object.assign(new Error('Server error 500'), { status: 500 }),
+    );
+    render(<PeopleAccessTab tid="t1" summary={summary} />);
+
+    expect(await screen.findByTestId('members-load-error')).toBeInTheDocument();
+    expect(screen.queryByText(/no members yet/i)).toBeNull();
+  });
+
+  it('NEGATIVE CONTROL: a real (empty) list still reads as empty', async () => {
+    mockMembers();
+    render(<PeopleAccessTab tid="t1" summary={summary} />);
+
+    expect(await screen.findByText(/no members yet/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('members-load-error')).toBeNull();
+  });
+});
