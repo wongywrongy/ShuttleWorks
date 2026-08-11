@@ -479,6 +479,26 @@ def _resolve_selections(repo: LocalRepository, tournament_id, parsed: List[dict]
     return resolved
 
 
+def _grouped(resolved: List[tuple]) -> List[tuple]:
+    """``[(player_key, [event, ...]), ...]`` — the shape ``check_policy`` and
+    ``compute_fee_total`` both take, keyed by the block the entrant typed in.
+
+    **The key is ``parse_players``' block index, not this list's position.**
+    They are the same number until a block is dropped (one with no name, no
+    gender or no events — the normal case for an unused second block), and
+    after that they differ by one for every player behind the gap. The key is
+    what a refusal reports as its ``subjects``, and what the entry page turns
+    back into ``Player {n + 1}`` against the blocks it RENDERED
+    (``entrant/app/lib/echo.ts``) — so numbering by position told the entrant
+    that the block which ticked nothing had ticked too much.
+
+    One function for both routes because the quote and the write must group
+    identically: Seam B's invariant is that the total shown IS the total
+    recorded, and it is these keys that the fee basis is labelled with.
+    """
+    return [(str(spec["index"]), events) for spec, events in resolved]
+
+
 # The suffix of the entry page's second path (``entrant/app/routes.ts``).
 # ``/e/{slug}/signed-in`` is the URL a completed sign-in lands on, and it is
 # the ONLY thing that makes a sign-in legible on a tier that cannot read the
@@ -677,7 +697,7 @@ async def quote_entry(
     require_form_csrf(request, form)
 
     resolved = _resolve_selections(repo, tournament.id, parse_players(form))
-    grouped = [(str(i), events) for i, (_, events) in enumerate(resolved)]
+    grouped = _grouped(resolved)
     refusal = check_policy(page, grouped)
     total, basis = (
         compute_fee_total(
@@ -791,7 +811,7 @@ async def submit_entry_json(
     except HTTPException:
         raise refuse(400, "That event is not taking entries.")
 
-    grouped = [(str(i), events) for i, (_, events) in enumerate(resolved)]
+    grouped = _grouped(resolved)
 
     # 6 — entry policy, refused WITH THE RULE STATED (R14 §4).
     refusal = check_policy(page, grouped)

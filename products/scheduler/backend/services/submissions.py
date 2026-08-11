@@ -347,7 +347,8 @@ def _write(
         created_players.append(player)
 
         events = _distinct(spec.events)
-        shares = _split(per_player_fee.get(str(index)), len(events))
+        priced = per_player_fee[index] if index < len(per_player_fee) else None
+        shares = _split(priced, len(events))
         for share, event in zip(shares, events):
             reasons = list(gender_flags(spec.gender, event))
             if looks_duplicate(session, tournament_id, event.id, spec.full_name):
@@ -391,15 +392,27 @@ def _distinct(events: Sequence[Any]) -> list[Any]:
     return out
 
 
-def _per_player_fee(fee_basis: Optional[dict]) -> dict[str, Optional[int]]:
-    """``{player_key: cents}`` out of the fee basis, if it carries one."""
+def _per_player_fee(fee_basis: Optional[dict]) -> list[Optional[int]]:
+    """Each person's price out of the fee basis, **in the order it was
+    computed** — which is the order of the ``players`` this function's caller
+    was handed, because both lists are built from one parse in one pass.
+
+    Positional rather than keyed on ``row["key"]``, which is what it read
+    before. The key is a LABEL the caller chooses (``compute_fee_total`` says
+    so: "a player row's id, or a form index while the row does not exist
+    yet"), and pairing on it silently assumed one particular choice — that it
+    is this list's own index, as a string. The entry route's keys are the
+    entrant's form BLOCK indices, so the moment an empty block was dropped
+    every share behind the gap missed its row and came back ``None``: entries
+    written with no fee against a submission that has a total.
+    """
     if not isinstance(fee_basis, dict):
-        return {}
-    return {
-        str(row.get("key")): row.get("cents")
+        return []
+    return [
+        row.get("cents")
         for row in fee_basis.get("players") or []
         if isinstance(row, dict)
-    }
+    ]
 
 
 def _split(cents: Optional[int], event_count: int) -> list[Optional[int]]:

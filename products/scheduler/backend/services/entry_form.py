@@ -37,6 +37,15 @@ def parse_players(form: Any) -> List[dict]:
     payload. A block with no name, no gender or no events is **dropped
     rather than refused**: the second player block is optional and an empty
     one is the normal case, not an error.
+
+    Each dict carries the ``index`` of the block it was read from, and that
+    is the whole reason it is here rather than being re-derived by the
+    caller: once a block is dropped, position in this list is no longer the
+    block the entrant is looking at. A refusal numbered by position names
+    the wrong player — the page renders ``Player {index + 1}`` against the
+    blocks it drew (``entrant/app/lib/echo.ts``), so an empty first block
+    would put the blame for the second block's breach on the one that
+    selected nothing.
     """
     names = form.getlist("playerName")
     genders = form.getlist("gender")
@@ -59,6 +68,7 @@ def parse_players(form: Any) -> List[dict]:
             continue
         out.append(
             {
+                "index": index,
                 "name": str(name).strip()[:200],
                 "gender": gender[:20],
                 "club": str(clubs[index] if index < len(clubs) else "").strip()[:200]

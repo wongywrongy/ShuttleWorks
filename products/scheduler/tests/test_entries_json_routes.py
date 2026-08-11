@@ -1070,6 +1070,113 @@ def test_a_browser_quote_echoes_a_policy_refusal_as_a_code_not_prose(
     assert "at most" not in r.headers["location"]
 
 
+def test_a_refusal_names_the_block_that_breached_it_not_the_one_that_survived(
+    client, page, entrant
+):
+    """**The wrong player, blamed** (code review, F2).
+
+    ``parse_players`` DROPS a block with no name, no gender or no events —
+    the second block is optional and an empty one is the normal case. The
+    refusal subjects were then numbered by ``enumerate`` over what
+    *survived* that drop, while ``app/lib/echo.ts`` renders them as ``Player
+    ${n + 1}`` against the blocks the page RENDERED. So a first block that
+    was typed into but ticked nothing shifted every later player up one, and
+    the page told the entrant that Player 1 — the one that selected nothing
+    — had picked too many events.
+
+    Here block 0 has a name and a gender and no events (dropped), and block
+    1 breaches the cap. The subject must be ``1``: the block the entrant can
+    see the problem in.
+
+    To prove it is not vacuous: number ``grouped`` with ``enumerate``
+    (``api/entries_json.py``) instead of the parsed block index and this goes
+    red with ``["0"]`` — while the single-player refusal test above, where
+    the two numberings agree, stays green.
+    """
+    from database.models import EntryPage
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        row = session.get(EntryPage, uuid.UUID(page["tid"]))
+        row.max_events_per_person = 1
+        session.commit()
+    finally:
+        session.close()
+
+    body = {
+        # Block 0: typed into, nothing ticked. Dropped by ``parse_players``.
+        # Block 1: the breach.
+        "playerName": ["Alice Chen", "Ben Ito"],
+        "gender": ["F", "M"],
+        "events": [f"1:{page['ms']}", f"1:{page['ws']}"],
+        "_csrf": _form_token(client, page),
+    }
+
+    r = client.post(
+        f"/e/api/quote/{page['slug']}",
+        data=body,
+        headers=_BROWSER,
+        follow_redirects=False,
+    )
+    assert r.status_code == 307
+    echo = _echo(r)
+    assert echo["refusalCode"] == ["MAX_EVENTS_PER_PERSON"]
+    assert echo["refusalSubjects"] == ["1"]
+
+    # The JSON surface carries the same keys, so a hydrated client cannot be
+    # told a different player is at fault than the unhydrated one is.
+    body["_csrf"] = _form_token(client, page)
+    refusal = client.post(
+        f"/e/api/quote/{page['slug']}", data=body, headers=CSRF
+    ).json()["refusal"]
+    assert refusal["subjects"] == ["1"]
+    # Still numeric, never a name: the echo is a shareable GET on the
+    # tournament's own host and nothing an author of a URL writes may become
+    # prose on it.
+    assert all(s.isdigit() for s in refusal["subjects"])
+
+
+def test_a_dropped_block_does_not_misprice_the_players_that_survive_it(
+    client, page, entrant
+):
+    """The other half of the same numbering, on the write path.
+
+    The player keys are also what ``compute_fee_total`` labels its per-player
+    basis rows with, and ``services/submissions._write`` splits each person's
+    price across their entries from that basis. Numbering the keys by the
+    posted block rather than by position in the surviving list must not cost
+    the entrant their per-entry fee: one dropped block, and every share after
+    it would come back ``None`` if anything paired the two lists by key.
+    """
+    r = client.post(
+        f"/e/api/submit/{page['slug']}",
+        data={
+            "playerName": ["Alice Chen", "Ben Ito"],
+            "gender": ["F", "M"],
+            "events": [f"1:{page['ms']}", f"1:{page['ws']}"],
+            "acknowledged": "on",
+            "_csrf": _form_token(client, page),
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303, r.text
+
+    from database.models import Entry, Submission
+    from database.session import SessionLocal
+    from sqlalchemy import select
+
+    session = SessionLocal()
+    try:
+        submission = session.scalars(select(Submission)).one()
+        entries = session.scalars(select(Entry)).all()
+        # Two events for one person, off the cumulative schedule's "2" tier.
+        assert submission.fee_total_cents == 5500
+        assert sorted(e.fee_cents for e in entries) == [2750, 2750]
+    finally:
+        session.close()
+
+
 def test_a_headerless_browser_quote_is_refused_without_the_body_token(
     client, page, entrant
 ):
