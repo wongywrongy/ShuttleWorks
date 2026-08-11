@@ -29,8 +29,12 @@ export function HeroHeader({
   return (
     <section className="border-b border-rule-soft bg-surface-raised">
       <div className="mx-auto w-full max-w-6xl px-4 pt-8 md:pt-10">
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5 pb-6">
-          <div className="min-w-0">
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-6 pb-6">
+          {/* `flex-1` keeps the CTA on the SAME row, right-aligned, even
+              under a long tournament name — without it the title block takes
+              the full width and the CTA wraps to a left-aligned second row,
+              which reads as a stretched phone layout at 1280px. */}
+          <div className="min-w-0 flex-1 basis-96">
             {orgName ? <p className="text-sm text-muted-foreground">{orgName}</p> : null}
             <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-foreground md:text-[1.75rem]">
               {title}

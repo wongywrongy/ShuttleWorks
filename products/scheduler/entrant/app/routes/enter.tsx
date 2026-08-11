@@ -198,7 +198,7 @@ function PlayerBlock({
   const ticked = new Set(said.events);
 
   return (
-    <section className="grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm">
+    <section className="grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
       <h3 className="text-base font-semibold text-foreground">
         {`Player ${index + 1}`}
         {index === 0 ? null : (
@@ -265,7 +265,7 @@ function PlayerBlock({
         )}
       </div>
 
-      <fieldset className="grid gap-1.5">
+      <fieldset className="grid gap-1.5 sm:grid-cols-2 sm:gap-x-6">
         <legend className="mb-1.5 text-sm font-medium text-foreground">Events</legend>
         {offered.map((event) => {
           const value = `${index}:${event.id}`;
@@ -343,7 +343,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
   return (
     <PlayShell>
       <section className="border-b border-rule-soft bg-surface-raised">
-        <div className="mx-auto w-full max-w-4xl px-4 py-6 md:py-8">
+        <div className="mx-auto w-full max-w-5xl px-4 py-6 md:py-8">
           <p className="text-sm">
             <a
               href={`/e/${encodeURIComponent(slug)}`}
@@ -386,7 +386,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
         </div>
       </section>
 
-      <main className="mx-auto w-full max-w-4xl px-4 py-6 md:py-8">
+      <main className="mx-auto w-full max-w-5xl px-4 py-6 md:py-8">
         {/* Z15 — the shipped R8-E posture: this page cannot know who is
             reading it, so it states what the write will require instead of
             guessing, with the sign-in handoff and a `next` return to THIS
@@ -432,9 +432,9 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             method="post"
             action={`/e/api/submit/${slug}`}
             encType="application/x-www-form-urlencoded"
-            className="mt-6 lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start lg:gap-8"
+            className="mt-6 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-8"
           >
-            <div className="grid gap-5">
+            <div className="grid gap-6">
               {/* Channel two: the double-submit token — the loader's mint,
                   never `viewer.formCsrf`. The NAME comes from `FORM_FIELD`,
                   so the cross-tier pin on it stays load-bearing. */}
@@ -484,7 +484,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                 </span>
               </label>
 
-              <section className="grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm">
+              <section className="grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
                 <h2 className="text-base font-semibold text-foreground">Before you submit</h2>
                 <label className="flex items-start gap-2 text-sm text-foreground">
                   <input type="checkbox" name="acknowledged" value="on" required />

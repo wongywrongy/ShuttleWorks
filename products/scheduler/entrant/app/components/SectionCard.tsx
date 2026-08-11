@@ -6,8 +6,10 @@
 import type { ReactNode } from 'react';
 
 export function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+  // p-6 / mt-3 / gap-2: 24-12-8, all steps on the design system's spacing
+  // scale — the public pages are "setup" surfaces, which breathe.
   return (
-    <section className="rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm">
+    <section className="rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
       <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
         {title}
       </h3>

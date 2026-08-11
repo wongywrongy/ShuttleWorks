@@ -28,7 +28,7 @@ export function EntrantsList({
           <section
             key={event.code}
             id={`event-${event.code}`}
-            className="rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm"
+            className="rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm"
           >
             <h3 className="flex flex-wrap items-baseline gap-x-2 text-base font-semibold text-foreground">
               {event.discipline}

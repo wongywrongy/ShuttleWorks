@@ -102,7 +102,7 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
           whether you can enter it right now.
         </p>
 
-        <div className="mt-6 md:grid md:grid-cols-[15rem_minmax(0,1fr)] md:items-start md:gap-10">
+        <div className="mt-6 md:grid md:grid-cols-[15rem_minmax(0,1fr)] md:items-start md:gap-8">
           {/* Refinement 4: the always-visible strip — a compact panel at
               phone widths, the rail from md: up. No toggle, nothing hidden. */}
           <FilterStrip filters={filters} />
@@ -133,7 +133,7 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
                 </p>
               )
             ) : (
-              <ul className="mt-4 grid gap-3 lg:grid-cols-2">
+              <ul className="mt-4 grid gap-4 lg:grid-cols-2">
                 {cards.map((card) => (
                   <TournamentCard key={card.slug} card={card} now={now} />
                 ))}

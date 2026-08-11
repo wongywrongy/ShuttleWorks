@@ -146,10 +146,14 @@ describe('TournamentCard', () => {
     expect(html).toContain('after:absolute after:inset-0');
   });
 
-  it('right-aligns the chip in its own column from sm: up (refinement 2)', () => {
+  it('pins the chip to a fixed right-aligned position, not a bottom row (refinement 2)', () => {
     const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
-    expect(html).toMatch(/sm:flex-row/);
-    expect(html).toMatch(/<div class="sm:shrink-0 sm:text-right">/);
+    // A float: one vertical line of chips down the list, while long names
+    // keep the full card width and wrap under the chip.
+    expect(html).toMatch(/<span class="float-right[^"]*">/);
+    // …and the chip precedes the name in the markup (floats must), so it is
+    // structurally not a bottom row.
+    expect(html.indexOf('float-right')).toBeLessThan(html.indexOf('Spring Open'));
   });
 
   it('collapses absent fields without breaking the anatomy order', () => {

@@ -143,13 +143,13 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
         <p className="max-w-prose text-base text-foreground">{page.page.introText}</p>
       ) : null}
 
-      <div className="grid items-start gap-4 md:grid-cols-2">
+      <div className="grid items-start gap-6 md:grid-cols-2">
         {moments.length > 0 ? (
           <TimelineCard moments={moments} now={now} eventsHref={tabHref(slug, 'events')} />
         ) : null}
 
         {feeTable !== null || page.page.paymentInstructions ? (
-          <div className="grid gap-4">
+          <div className="grid gap-6">
             {feeTable !== null ? <SectionCard title="Fees">{feeTable}</SectionCard> : null}
             {page.page.paymentInstructions ? (
               <SectionCard title="Payment">
