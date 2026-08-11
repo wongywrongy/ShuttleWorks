@@ -285,6 +285,23 @@ describe('RFC 9309: robots.txt is served from the origin root', () => {
   });
 });
 
+describe('bare /e reaches the entrant tier, not the operator SPA', () => {
+  it('redirects the trailing-slash-less form instead of letting it fall through', () => {
+    // `/e` matched no location, so it fell through to `location /` — the
+    // operator SPA's index.html and a blank operator route, which is verbatim
+    // the symptom the explicit `/e/` block exists to prevent. And `/e` is a
+    // plausible mistyping of a poster URL. The redirect only became safe to
+    // ship once `/e/` itself stopped being a soft-404 (`app/routes.ts` now
+    // declares an index route); before that it traded one blank page for
+    // another.
+    const bare = resolve('/e');
+    expect(bare.kind).toBe('exact');
+    expect(bare.body).toMatch(/return\s+301\s+\/e\/\s*;/);
+    // A near miss must NOT be captured by the exact match.
+    expect(resolve('/elsewhere').path).toBe('/');
+  });
+});
+
 describe('the two tiers no longer collide on /assets/', () => {
   // Both used to emit `/assets/<hash>` at the ORIGIN ROOT, where the operator
   // SPA's asset directory answered first and 404'd every entrant asset — so

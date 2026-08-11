@@ -37,7 +37,7 @@ It's designed for the operator running the day from a laptop in the corner of th
 
 ## Quick start
 
-Requires Docker (with Compose v2) and — for dev mode only — Node 20+.
+Requires Docker (with Compose v2) and — for dev mode only — Node 22+.
 
 ### Production (Docker)
 

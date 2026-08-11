@@ -58,6 +58,28 @@ describe('useBracketDisplaySync', () => {
     expect(apiClient.getBracket).not.toHaveBeenCalled();
   });
 
+  it('stops polling on a terminal error instead of storming forever', async () => {
+    // A revoked token / deleted workspace answers 403. Retrying can never
+    // succeed, so the loop must stop — the same `lib/pollPolicy` contract
+    // every other polling hook in the app already honours.
+    vi.useFakeTimers();
+    try {
+      vi.mocked(apiClient.getDisplayBracket).mockRejectedValue(
+        Object.assign(new Error('Forbidden'), { status: 403 }),
+      );
+      const wrapToken = ({ children }: { children: React.ReactNode }) => (
+        <MemoryRouter initialEntries={['/display?token=revoked']}>{children}</MemoryRouter>
+      );
+      renderHook(() => useBracketDisplaySync(new Date(0)), { wrapper: wrapToken });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(apiClient.getDisplayBracket).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(35_000);
+      expect(apiClient.getDisplayBracket).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('token mode reads the public projection via getDisplayBracket', async () => {
     vi.mocked(apiClient.getDisplayBracket).mockResolvedValue(emptyBracket as never);
     const wrapToken = ({ children }: { children: React.ReactNode }) => (

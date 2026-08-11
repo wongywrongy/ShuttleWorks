@@ -92,7 +92,7 @@ re-auth ~once per reboot is expected; if the on-click flow errors, run
 ## Quick start
 
 Requires Docker (with Compose v2) for the production-shape stack.
-For dev-server mode, also Node 20+.
+For dev-server mode, also Node 22+.
 
 ```bash
 make scheduler          # → http://localhost (frontend), backend on :8000

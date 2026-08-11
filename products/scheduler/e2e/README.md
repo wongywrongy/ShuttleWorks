@@ -84,7 +84,7 @@ node interaction-sweep/analyze.mjs        # triage table
 ## Prerequisites
 
 - Docker Desktop running
-- Node 20+
+- Node 22+
 
 ## Run
 
