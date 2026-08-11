@@ -542,14 +542,14 @@ def _grouped(resolved: List[tuple]) -> List[tuple]:
     return [(str(spec["index"]), events) for spec, events in resolved]
 
 
-# The suffix of the entry page's second path (``entrant/app/routes.ts``).
-# ``/e/{slug}/signed-in`` is the URL a completed sign-in lands on, and it is
-# the ONLY thing that makes a sign-in legible on a tier that cannot read the
-# session cookie. A recalculation that redirected to the bare page would
-# silently retract that statement, so the variant the request came from is
-# carried across the round trip. Two possible values, both written here —
-# the flag on the way in is a presence test, never a path, so nothing an
-# entrant posts can choose the target.
+# The suffix of the enter page's second path (``entrant/app/routes.ts``).
+# ``/e/{slug}/enter/signed-in`` is the URL a completed sign-in lands on, and
+# it is the ONLY thing that makes a sign-in legible on a tier that cannot
+# read the session cookie. A recalculation that redirected to the bare page
+# would silently retract that statement, so the variant the request came
+# from is carried across the round trip. Two possible values, both written
+# here — the flag on the way in is a presence test, never a path, so nothing
+# an entrant posts can choose the target.
 _SIGNED_IN_SUFFIX = "/signed-in"
 
 
@@ -612,8 +612,13 @@ def entrant_or_back_to_form(
                 status_code=303,
                 detail="Not signed in",
                 headers={
+                    # The enter page (SP-P6-2 G0, owner-approved): the form
+                    # lives at /e/{slug}/enter now, so the refusal must land
+                    # on the route that renders it. Server-authored fixed
+                    # path + a refusal CODE — never free text, and never a
+                    # loop over the posted body.
                     "Location": (
-                        f"/e/{quote(str(slug), safe='')}"
+                        f"/e/{quote(str(slug), safe='')}/enter"
                         "?refusalCode=NOT_SIGNED_IN#enter"
                     )
                 },
@@ -687,8 +692,12 @@ def _echo_redirect(request: Request, slug: str, total, refusal) -> RedirectRespo
     # is transport — the submit post has no use for it.
     variant = _SIGNED_IN_SUFFIX if request.query_params.get("signedIn") else ""
     query = f"?{urlencode(echoed)}" if echoed else ""
+    # `/enter` (SP-P6-2 G0, owner-approved): the form moved off the tournament
+    # page onto its own route, and the 307 must land where the form renders or
+    # the re-posted body renders nothing. `#total` puts the landing scroll at
+    # the sticky total bar — the thing the press was about.
     return RedirectResponse(
-        url=f"/e/{quote(slug, safe='')}{variant}{query}#enter", status_code=307
+        url=f"/e/{quote(slug, safe='')}/enter{variant}{query}#total", status_code=307
     )
 
 

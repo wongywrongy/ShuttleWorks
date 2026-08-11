@@ -1062,8 +1062,10 @@ def test_a_browser_quote_redirects_back_to_the_entry_page_with_the_total(
     # browser re-posts the same fields to the page it came from.
     assert r.status_code == 307, r.text
     location = r.headers["location"]
-    assert location.startswith(f"/e/{page['slug']}?")
-    assert location.endswith("#enter")
+    # `/enter` since SP-P6-2 G0: the form lives on its own route, and the 307
+    # must land where the form renders. `#total` scrolls to the total bar.
+    assert location.startswith(f"/e/{page['slug']}/enter?")
+    assert location.endswith("#total")
 
     # The number is compute_fee_total's, identical to the JSON path's — and
     # it is the ONLY thing here that came from the entrant's press.
@@ -1379,8 +1381,10 @@ def test_a_recalculation_comes_back_to_the_page_it_was_pressed_on(
         f"/e/api/quote/{page['slug']}?signedIn=https://evil.example", **kwargs
     )
 
-    assert plain.headers["location"].startswith(f"/e/{page['slug']}?")
-    assert signed_in.headers["location"].startswith(f"/e/{page['slug']}/signed-in?")
+    assert plain.headers["location"].startswith(f"/e/{page['slug']}/enter?")
+    assert signed_in.headers["location"].startswith(
+        f"/e/{page['slug']}/enter/signed-in?"
+    )
     assert crafted.headers["location"] == signed_in.headers["location"]
     assert "evil.example" not in crafted.headers["location"]
 
@@ -1429,7 +1433,7 @@ def test_an_anonymous_browser_submit_is_navigated_back_to_the_form(client, page)
     )
 
     assert r.status_code == 303, r.text
-    assert r.headers["location"].startswith(f"/e/{page['slug']}?")
+    assert r.headers["location"].startswith(f"/e/{page['slug']}/enter?")
     assert _echo(r)["refusalCode"] == ["NOT_SIGNED_IN"]
     # The refusal carries a code and nothing else — no email, no message,
     # nothing an author of a URL wrote.
