@@ -66,6 +66,15 @@ export default [
   // needs. A standalone page would have to mint its own at `Path=/`, and by
   // last-issuance-wins that invalidated an in-flight entry form in another
   // tab. Fewer routes to enumerate, one fewer nonce channel, same POST.
+  // SP-P6-2 Phase B — the three static mockups behind the [USER SIGN-OFF]
+  // gate. DELETED AT PHASE C, together with routes/mock.data.ts and
+  // routes/mock.ui.tsx. Dotted segments on purpose: `_SLUG_RE` rejects a dot,
+  // so these can never collide with a workspace slug and need no backend
+  // reservation — the same argument as `sitemap.xml` above, and the reason
+  // `reservedSlugs.test.ts` skips dotted segments.
+  route('mock.discovery', 'routes/mock.discovery.tsx'),
+  route('mock.tournament', 'routes/mock.tournament.tsx'),
+  route('mock.enter', 'routes/mock.enter.tsx'),
   // The 303 target of POST /e/api/submit/{slug}: a GET, so a reload of the
   // success page re-reads instead of re-posting the entry.
   route(':slug/receipt/:submissionId', 'routes/receipt.tsx'),
