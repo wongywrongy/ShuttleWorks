@@ -118,7 +118,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "sqlite":
         log.info(
-            "orphan purge: %s enforces foreign keys, so no orphan can exist — "
+            "orphan purge: %s enforces foreign keys, so no orphan can exist - "
             "skipped",
             bind.dialect.name,
         )
