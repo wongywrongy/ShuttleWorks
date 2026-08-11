@@ -1,9 +1,10 @@
 """demo — seed a whole *product* rather than one tournament.
 
 Eight workspaces across **six organisations**, four different module sets, a
-~100-person player pool drawn across them by age and level, draws in five of
-the six formats, a solved meet, a floor caught mid-session, two live public
-entry pages and one deliberately closed one.
+516-person player pool drawn across them by age, gender and club, draws in
+all six formats, two solved league meets, a floor caught mid-session, two
+live public entry pages and one deliberately closed one. Every workspace
+carries 73-110 matches, sized for its own field rather than padded.
 
 **Two principals, and under ``AUTH_MODE=cloud`` a third dimension.** The
 scenario asks ``/auth/me`` which world it is in. Local: one bootstrap
@@ -40,9 +41,11 @@ from ..demo_data import (
     ENTRANTS,
     OPERATOR_PASSWORD,
     OPERATORS,
+    PLAYERS,
     WORKSPACES,
     chunk,
     eligible,
+    make_meet_blob,
     slug_of,
 )
 from ..factories import make_bracket_create_body
@@ -60,6 +63,13 @@ TURNSTILE_DUMMY = "XXXX.DUMMY.TOKEN.XXXX"
 #: How many bracket seeds an event carries. Four is the BWF habit for a
 #: 16-draw and reads correctly on a smaller one too.
 SEEDED = 4
+
+#: Players per public submission. A club secretary enters a squad on one
+#: form (``services/entry_form.parse_players`` is built for exactly that
+#: 1-N shape), which is both the realistic act and what keeps ~130 entry
+#: players inside ``entries_max_per_ip`` — 20 submissions per 10 minutes
+#: from one address. Nothing here goes around that budget.
+SQUAD = 12
 
 #: Mirrors ``database.models.CLOUD_ONLY_MODULES``. Duplicated rather than
 #: imported because the simulator's hard boundary forbids importing backend
@@ -100,30 +110,77 @@ def _create_workspace(client: SimClient, spec: dict, seed: dict) -> Optional[dic
 # ---- roster construction --------------------------------------------------
 
 
-def _draw_pool(seed: int, key: str, event: dict) -> list[tuple[str, str, int, str]]:
-    """``event['size']`` eligible people, chosen deterministically.
+def _people(
+    seed: int,
+    key: str,
+    event: dict,
+    *,
+    gender: Optional[str] = None,
+    size: Optional[int] = None,
+    label: str = "",
+) -> list[tuple[str, str, int, str]]:
+    """Eligible people for one event, chosen deterministically.
 
-    Shuffled per (workspace, event) so two tournaments running the same age
-    band get overlapping-but-different fields — which is what a real
-    circuit looks like, and what makes "the same player in two events"
-    visible in the demo at all.
+    Shuffled per (workspace, event, stream label) so two tournaments running
+    the same age band get overlapping-but-different fields — which is what a
+    real circuit looks like, and what makes "the same player in two events"
+    visible in the demo at all. ``size=None`` means "everyone eligible", for
+    the entry planner that needs the tail of the queue as well as its head.
     """
-    pool = eligible(min_year=event.get("min_year"), max_year=event.get("max_year"))
-    rng = derive_rng(seed, "demo-pool", key, event["id"])
+    pool = eligible(
+        gender=gender if gender is not None else event.get("gender"),
+        min_year=event.get("min_year"),
+        max_year=event.get("max_year"),
+    )
+    rng = derive_rng(seed, "demo-pool", key, event["id"], label)
     rng.shuffle(pool)
-    return pool[: event.get("size", 0)]
+    return pool if size is None else pool[:size]
 
 
-def _event_in(seed: int, key: str, event: dict) -> tuple[dict, dict[str, float]]:
-    """One ``EventIn`` plus the sim-side ratings for its entrants."""
-    people = _draw_pool(seed, key, event)
+def _participants(
+    seed: int, key: str, event: dict
+) -> tuple[list[dict], list[tuple[str, str, int, str]]]:
+    """``(participants, the humans behind them)`` for one draw.
+
+    A ``pair`` event's participants are doubles TEAMS: ``size`` counts
+    pairs, and each carries ``members`` so the bracket adapter expands the
+    team back to two engine players. That expansion is why the participant
+    id must be ``slug_of(name)`` on both sides of the singles/doubles line —
+    a person entered in Men's Singles and Men's Doubles is then ONE engine
+    player and cannot be put on two courts in the same slot.
+    """
+    pair = event.get("pair")
+    if not pair:
+        people = _people(seed, key, event, size=event["size"])
+        return [{"id": slug_of(n), "name": n} for n, *_ in people], people
+
+    size = event["size"]
+    if pair == "XD":
+        left = _people(seed, key, event, gender="M", size=size, label="M")
+        right = _people(seed, key, event, gender="F", size=size, label="F")
+    else:
+        gender = "M" if pair == "MD" else "F"
+        both = _people(seed, key, event, gender=gender, size=size * 2, label=gender)
+        left, right = both[:size], both[size:]
+    participants = [
+        {
+            "id": f"{slug_of(a[0])}--{slug_of(b[0])}",
+            "name": f"{a[0]} / {b[0]}",
+            "members": [slug_of(a[0]), slug_of(b[0])],
+        }
+        for a, b in zip(left, right)
+    ]
+    return participants, left + right
+
+
+def _event_in(
+    seed: int, key: str, event: dict
+) -> tuple[dict, dict[str, float], list[tuple[str, str, int, str]]]:
+    """One ``EventIn``, the sim-side ratings for its entrants, and the
+    people those entrants are."""
+    participants, people = _participants(seed, key, event)
     rating_rng = derive_rng(seed, "demo-ratings", key, event["id"])
-    participants: list[dict] = []
-    ratings: dict[str, float] = {}
-    for name, _gender, _year, _club in people:
-        pid = slug_of(name)
-        participants.append({"id": pid, "name": name})
-        ratings[pid] = 1200.0 + rating_rng.uniform(-250.0, 250.0)
+    ratings = {p["id"]: 1200.0 + rating_rng.uniform(-250.0, 250.0) for p in participants}
     # Top seeds are the highest-rated entrants, so "the top seed usually
     # goes deep" holds under the Elo-lite model and the draw looks sane.
     for rank, entrant in enumerate(
@@ -143,22 +200,7 @@ def _event_in(seed: int, key: str, event: dict) -> tuple[dict, dict[str, float]]
     }
     if event.get("bracket_size"):
         event_in["bracket_size"] = event["bracket_size"]
-    return event_in, ratings
-
-
-def _meet_roster(seed: int, key: str, spec: dict, wanted: int) -> list:
-    """``(name, notes)`` pairs for a meet blob.
-
-    The club rides in ``notes`` because ``PlayerDTO`` has nowhere else to
-    put it — Meet's roster models a player's *ranks and availability*, not
-    their affiliation. Stated rather than worked around: inventing a column
-    to make a demo prettier is how a demo stops proving anything.
-    """
-    pool = eligible(**(spec["meet"].get("pool") or {}))
-    rng = derive_rng(seed, "demo-meet", key)
-    rng.shuffle(pool)
-    picked = (pool * ((wanted // max(len(pool), 1)) + 1))[:wanted]
-    return [(name, club) for name, _g, _y, club in picked]
+    return event_in, ratings, people
 
 
 # ---- floor driving --------------------------------------------------------
@@ -204,7 +246,7 @@ def _play_spread(ctx: RunContext, blob: dict) -> str:
     return ", ".join(f"{n} {s}" for s, n in counts.items() if n)
 
 
-def _play_first_wave(ctx: RunContext, leave_live: int = 1) -> str:
+def _play_first_wave(ctx: RunContext, leave_live: int = 2) -> str:
     """Play the currently-scheduled bracket wave, leaving some matches live.
 
     ``leave_live`` units are *started and not resulted* — a clock running
@@ -249,9 +291,11 @@ def _deadline(days: Optional[int]) -> Optional[str]:
     """``days`` from now as ISO-8601, or ``None`` for no deadline.
 
     Relative to the run, because ``_event_is_open`` measures ``closes_at``
-    against the wall clock: a fixed February date is a page that refuses
-    every entry with "that event is not taking entries" the moment February
-    is over. The tournament's own date stays exactly what the owner gave.
+    against the wall clock: a fixed date is a page that refuses every entry
+    with "that event is not taking entries" the moment that date passes.
+    The tournaments whose entry pages are open were dated *forward* in
+    ``demo_data`` so that this deadline lands in front of the first day of
+    play instead of behind it.
     """
     if days is None:
         return None
@@ -260,12 +304,26 @@ def _deadline(days: Optional[int]) -> Optional[str]:
     ).isoformat()
 
 
-def _entry_page_body(config: dict) -> dict:
+def _spoken(iso: Optional[str]) -> str:
+    """An ISO deadline as a director would write it in the regulations."""
+    if iso is None:
+        return "when the draw is made"
+    when = datetime.fromisoformat(iso)
+    return f"{when.day} {when:%B %Y}"
+
+
+def _entry_page_body(config: dict, closes: Optional[str]) -> dict:
+    """The page as the operator saves it.
+
+    The regulations carry a ``{closes}`` placeholder rather than a literal
+    date, because the deadline is computed from the moment the seeder runs
+    and prose that contradicts the field next to it is worse than no prose.
+    """
     return {
         "slug": config["slug"],
         "isOpen": config["isOpen"],
         "introText": config["introText"],
-        "regulationsText": config["regulationsText"],
+        "regulationsText": config["regulationsText"].replace("{closes}", _spoken(closes)),
         "waiverRequired": config["waiverRequired"],
         "feeSchedule": config["feeSchedule"],
         "paymentInstructions": config["paymentInstructions"],
@@ -378,9 +436,58 @@ def _submit(
             ("birthYear", str(year)),
             ("remarks", remark if remark and index == 0 else ""),
         ]
-        for event_id in event_ids_for(name, gender, year, club):
+        for event_id in event_ids_for(name):
             fields.append(("events", f"{index}:{event_id}"))
     client.submit_entry(slug, fields)
+
+
+def _entry_plan(seed: int, spec: dict, config: dict) -> dict[tuple, list[str]]:
+    """Person -> the bracket events they enter, sized to each draw's slots.
+
+    Two rules, and the first is a product rule rather than a taste:
+
+    - a draw's ``bracket_size`` is fixed when the draw is created, so an
+      entries-fed event asks for exactly ``entry_slots`` = size minus its
+      direct seeding. Overshooting refuses to generate ("bracket_size=16
+      cannot hold 19 participants") and undershooting seeds a draw of byes;
+    - juniors **play up**. ``playUp`` of each band's newcomers also enter
+      the next older band of their own gender, which is the realistic act
+      and the one that puts ``maxEventsPerPerson`` under load. It is capped
+      by the page's own policy rather than discovering it: manufacturing
+      refusals would seed nothing.
+
+    Anyone already seeded directly into a draw is excluded, because the
+    commit seam would give them a SECOND roster row and push the draw past
+    its founding size.
+    """
+    taken = {
+        person[0]
+        for event in spec["events"]
+        for person in _participants(seed, spec["key"], event)[1]
+    }
+    plan: dict[tuple, list[str]] = {}
+    previous: dict[str, list] = {}
+    for event in spec["events"]:
+        slots = event.get("entry_slots")
+        if not slots or event.get("pair"):
+            continue
+        gender = event.get("gender") or "open"
+        up = [
+            person
+            for person in previous.get(gender, [])
+            if person[2] >= (event.get("min_year") or 0)
+        ][: config.get("playUp", 0)]
+        pool = [
+            person
+            for person in _people(seed, spec["key"] + "-entries", event)
+            if person[0] not in taken
+        ]
+        fresh = pool[: max(slots - len(up), 0)]
+        taken.update(person[0] for person in fresh)
+        for person in fresh + up:
+            plan.setdefault(person, []).append(event["id"])
+        previous[gender] = fresh
+    return plan
 
 
 # ---- the scenario ---------------------------------------------------------
@@ -389,10 +496,17 @@ def _submit(
 class Demo:
     name = "demo"
     description = (
-        "eight realistic workspaces across six organisations, ~100 players, five "
-        "draw formats, a solved meet, a floor mid-session, two live public entry "
-        "pages (+ a tenancy-isolation check under AUTH_MODE=cloud)"
+        "eight realistic workspaces across six organisations, 516 designed "
+        "people, all six draw formats, 73-110 matches each, two solved league "
+        "meets, a floor mid-session, two live public entry pages (+ a "
+        "tenancy-isolation check under AUTH_MODE=cloud)"
     )
+
+    def __init__(self) -> None:
+        #: every human who ends up on a roster, in a draw or on an entry —
+        #: counted for the report, never used to decide anything.
+        self.people: set[str] = set()
+        self.matches: dict[str, int] = {}
 
     def run(self, ctx: RunContext, phase_cb) -> None:
         client = ctx.client
@@ -446,6 +560,13 @@ class Demo:
                 with Phase("tenancy", phase_cb):
                     self._prove_tenancy(ctx, operators, owned)
         finally:
+            ctx.notes.append(
+                f"TOTALS: {sum(self.matches.values())} matches across "
+                f"{len(self.matches)} workspaces "
+                f"({', '.join(f'{k} {v}' for k, v in self.matches.items())}); "
+                f"{len(self.people)} distinct people used of {len(PLAYERS)} "
+                f"in the designed pool"
+            )
             for _account, entrant in sessions:
                 entrant.close()
             for operator in operators.values():
@@ -543,9 +664,10 @@ class Demo:
 
         entries = spec.get("entries")
         bracket_events: list[dict] = []
+        meet_matches = 0
 
-        if spec["kind"] == "meet":
-            self._meet(ctx, phase_cb, spec)
+        if spec.get("meet"):
+            meet_matches = self._meet(ctx, phase_cb, spec)
         if spec.get("events"):
             # Only the workspace that commits its entries defers generating:
             # the seam refuses a draw that is already generated, so its draws
@@ -561,44 +683,58 @@ class Demo:
 
         self._play(ctx, phase_cb, spec, bracket_events)
 
+        units = (
+            len(client.get_bracket(ctx.tid).get("play_units") or [])
+            if bracket_events
+            else 0
+        )
+        self.matches[key] = meet_matches + units
+        ctx.notes.append(
+            f"[{key}] MATCHES: {meet_matches + units}"
+            + (f" (meet {meet_matches} + draws {units})" if meet_matches and units else "")
+        )
+
         if spec["modules"].get("display") == "enabled":
             token = client.display_token(ctx.tid)["token"]
             ctx.notes.append(f"[{key}] display board: /display?token={token}")
 
     # -- engines ------------------------------------------------------------
 
-    def _meet(self, ctx: RunContext, phase_cb, spec: dict) -> None:
-        meet = spec["meet"]
-        # Two players per side per rank for doubles codes, one for singles —
-        # the same arithmetic make_meet_state does, so the roster it is handed
-        # is exactly long enough.
-        wanted = sum(
-            count * 2 * (2 if code in ("MD", "WD", "XD") else 1)
-            for code, count in meet["ranks"].items()
-        )
+    def _meet(self, ctx: RunContext, phase_cb, spec: dict) -> int:
+        """The league half of a workspace: build, solve, finalize.
+
+        The blob is built here rather than by ``make_meet_state`` because a
+        league player plays three or four times across singles, doubles and
+        mixed — see ``demo_data.make_meet_blob``. Everything downstream of
+        the blob is ``setup_meet``'s, invariants included.
+        """
+        blob, ratings = make_meet_blob(ctx.seed, spec)
+        self.people.update(player["name"] for player in blob["players"])
         blob = setup_meet(
             ctx, phase_cb,
             name=spec["name"],
-            events=meet["ranks"],
-            court_count=meet["courts"],
+            events=blob["config"]["rankCounts"],
+            court_count=spec["meet"]["courts"],
             create_workspace=False,
-            roster=_meet_roster(ctx.seed, spec["key"], spec, wanted),
-            group_names=meet["groups"],
+            state=(blob, ratings),
         )
         spec["_blob"] = blob
         ctx.notes.append(
             f"[{spec['key']}] meet: {len(blob['players'])} roster players, "
-            f"{len(blob['matches'])} matches, {meet['courts']} courts, solved"
+            f"{len(blob['matches'])} matches, {spec['meet']['courts']} courts, "
+            f"{len(blob['config']['rankCounts'])} disciplines, solved"
         )
+        return len(blob["matches"])
 
     def _bracket(self, ctx: RunContext, phase_cb, spec: dict, *, generate: bool) -> list[dict]:
         client = ctx.client
         with Phase(f"{spec['key']}-bracket", phase_cb):
             events, ratings = [], {}
             for event in spec["events"]:
-                event_in, event_ratings = _event_in(ctx.seed, spec["key"], event)
+                event_in, event_ratings, people = _event_in(ctx.seed, spec["key"], event)
                 events.append(event_in)
                 ratings.update(event_ratings)
+                self.people.update(person[0] for person in people)
             ctx.winner_model.ratings.update(ratings)
             client.create_bracket(
                 ctx.tid,
@@ -623,9 +759,10 @@ class Demo:
     def _entries(self, ctx, phase_cb, spec, config, bracket_events, sessions) -> None:
         client = ctx.client
         key = spec["key"]
+        closes = _deadline(config["closesInDays"])
         with Phase(f"{key}-entry-page", phase_cb):
             try:
-                client.upsert_entry_page(ctx.tid, _entry_page_body(config))
+                client.upsert_entry_page(ctx.tid, _entry_page_body(config, closes))
             except ApiError as exc:
                 # Slugs are globally unique. A second run against the same
                 # database lands here; say so rather than seeding a page the
@@ -634,6 +771,10 @@ class Demo:
                 return
             event_rows = []
             for event in spec["events"]:
+                # Entries are singles-only (E1; ``entry_type`` doubles is E3),
+                # so a pair draw gets no entry event rather than a broken one.
+                if event.get("pair"):
+                    continue
                 event_rows.append(
                     client.create_entry_event(
                         ctx.tid,
@@ -642,9 +783,9 @@ class Demo:
                             "discipline": event["label"],
                             "entryType": "singles",
                             "bracketEventId": event["id"],
-                            "cap": 32,
-                            "genderConstraint": None,
-                            "closesAt": _deadline(config["closesInDays"]),
+                            "cap": event.get("bracket_size") or event["size"],
+                            "genderConstraint": event.get("gender"),
+                            "closesAt": closes,
                             "withdrawsUntil": _deadline(config["withdrawsInDays"]),
                         },
                     )
@@ -652,17 +793,15 @@ class Demo:
             state = "OPEN" if config["isOpen"] else "CLOSED (uniform 404)"
             ctx.notes.append(
                 f"[{key}] entry page /e/{config['slug']} — {state}, "
-                f"{len(event_rows)} entry events"
+                f"{len(event_rows)} entry events, closes {_spoken(closes)}"
             )
 
         if not config["isOpen"]:
             return  # a closed page takes no entries; that is the point of it.
 
-        by_code = {row["code"]: row for row in event_rows}
+        by_bracket = {row["bracketEventId"]: row["id"] for row in event_rows}
         with Phase(f"{key}-entrant-submissions", phase_cb):
-            submitted = self._submissions(
-                ctx, spec, config, by_code, sessions, bracket_events
-            )
+            submitted = self._submissions(ctx, spec, config, by_bracket, sessions)
         if config["workflow"] == "commit":
             with Phase(f"{key}-desk", phase_cb):
                 self._confirm_and_commit(ctx, spec, key, bracket_events)
@@ -672,78 +811,40 @@ class Demo:
                 "(review queue, deliberately uncommitted)"
             )
 
-    def _submissions(self, ctx, spec, config, by_code, sessions, bracket_events) -> int:
+    def _submissions(self, ctx, spec, config, by_bracket, sessions) -> int:
         """Squads submitted by the entrant accounts, through the public form.
 
-        Batched into submissions of up to five players because that is both
-        the real shape (a club secretary enters a squad on one form) and the
-        only way this many entrants fit inside ``entries_max_per_ip`` — 20
+        Ordered by club and cut into squads of ``SQUAD``, because that is
+        both the real shape (a club secretary enters a squad on one form)
+        and what keeps the whole seeding inside ``entries_max_per_ip`` — 20
         submissions per 10 minutes from one address. The budget is sized for
         exactly this; nothing here goes around it.
         """
-        events_by_year = [
-            (event, by_code[event["code"]]["id"])
-            for event in spec["events"]
-            if event["code"] in by_code
-        ]
-
-        def events_for(_name, _gender, year, _club):
-            """This player's own age band, plus the one above it.
-
-            Junior players "play up" — a U13 routinely also enters U15 — so
-            eligibility is *born on or after* the band's floor, not an exact
-            band. Capped at two because both these pages set
-            ``maxEventsPerPerson`` and a basket over the cap is refused with
-            the rule stated. The seeder respects the policy rather than
-            discovering it: manufacturing refusals would seed nothing.
-            """
-            bands = [
-                (event, row_id)
-                for event, row_id in events_by_year
-                if year >= event.get("min_year", 0)
-            ]
-            bands.sort(key=lambda pair: -pair[0].get("min_year", 0))
-            return [row_id for _event, row_id in bands[:2]]
-
-        # Six per age band, not ten: every entrant takes their own band AND
-        # the one above, so ten each would land ~22 in the middle bands and
-        # overflow a 16-draw the moment it generates. Six keeps every event
-        # inside its declared ``bracket_size`` with a realistic number of
-        # byes instead of a draw that is mostly empty slots.
-        people: list[tuple[str, str, int, str]] = []
-        for event in spec["events"]:
-            people += _draw_pool(ctx.seed, spec["key"] + "-entries", {**event, "size": 6})
-        # One person, one entry act — a name entered twice by two different
-        # accounts is a duplicate the desk should flag, not something the
-        # seeder should manufacture by accident. The direct entries already
-        # sitting in the draw are excluded for the same reason.
-        seen = {
-            participant["name"]
-            for event_in in bracket_events
-            for participant in event_in["participants"]
+        plan = _entry_plan(ctx.seed, spec, config)
+        self.people.update(person[0] for person in plan)
+        events_for = {
+            person[0]: [by_bracket[eid] for eid in ids if eid in by_bracket]
+            for person, ids in plan.items()
         }
-        unique = []
-        for person in people:
-            if person[0] not in seen:
-                seen.add(person[0])
-                unique.append(person)
+        people = sorted(plan, key=lambda person: (person[3], person[0]))
 
-        count = 0
-        batches = chunk(unique, 8)
+        rows = 0
+        batches = chunk(people, SQUAD)
         for index, batch in enumerate(batches):
-            account, entrant = sessions[index % len(sessions)]
+            _account, entrant = sessions[index % len(sessions)]
             remark = (
                 "Cannot play before 10:00 on the Saturday — school commitment."
                 if index % 3 == 0
                 else None
             )
-            _submit(entrant, config["slug"], batch, events_for, remark=remark)
-            count += len(batch)
+            _submit(entrant, config["slug"], batch, events_for.__getitem__, remark=remark)
+            rows += sum(len(events_for[person[0]]) for person in batch)
         ctx.notes.append(
-            f"[{spec['key']}] {count} entry players in {len(batches)} submissions "
-            f"from {min(len(batches), len(sessions))} entrant accounts"
+            f"[{spec['key']}] {len(people)} entry players / {rows} entries in "
+            f"{len(batches)} submissions from "
+            f"{min(len(batches), len(sessions))} entrant accounts"
         )
-        return count
+        return rows
 
     def _confirm_and_commit(self, ctx, spec, key, bracket_events) -> None:
         """The desk's half of the pipe: confirm, commit, then draw.
@@ -776,7 +877,7 @@ class Demo:
         if mode == "none":
             ctx.notes.append(f"[{key}] floor: untouched — draws fresh, nothing played")
             return
-        if spec["kind"] == "meet" and spec.get("_blob"):
+        if spec.get("_blob"):
             if mode == "spread":
                 with Phase(f"{key}-run", phase_cb):
                     ctx.notes.append(f"[{key}] floor: {_play_spread(ctx, spec['_blob'])}")

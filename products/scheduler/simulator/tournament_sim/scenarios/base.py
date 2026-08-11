@@ -35,7 +35,8 @@ def setup_meet(ctx: RunContext, phase_cb, *, name: str, events: dict[str, int],
                create_modules: Optional[list[dict]] = None,
                create_workspace: bool = True,
                roster: Optional[list] = None,
-               group_names: tuple[str, str] = ("School A", "School B")) -> dict:
+               group_names: tuple[str, str] = ("School A", "School B"),
+               state: Optional[tuple[dict, dict]] = None) -> dict:
     """create -> seed blob -> solve -> persist schedule -> finalize.
 
     Returns the final blob (with schedule) for the run phase.
@@ -45,6 +46,14 @@ def setup_meet(ctx: RunContext, phase_cb, *, name: str, events: dict[str, int],
     that created the workspace itself (to set a date, or a module seed this
     signature has no opinion about) still get the solve and its invariants.
     ``roster``/``group_names`` are forwarded verbatim to ``make_meet_state``.
+
+    ``state`` is a pre-built ``(blob, ratings)`` pair, for a caller whose
+    roster model ``make_meet_state`` does not have — the ``demo`` scenario's
+    league meets put one player in three or four ranks, which the
+    one-dedicated-pair-per-rank factory cannot express. Everything after the
+    blob (solve, determinism re-solve, round-trip, finalize, and their
+    invariants) is the same code either way, which is the point of taking it
+    here rather than inlining a second copy in the scenario.
     """
     client = ctx.client
     with Phase("meet-setup", phase_cb):
@@ -52,7 +61,7 @@ def setup_meet(ctx: RunContext, phase_cb, *, name: str, events: dict[str, int],
             created = client.create_tournament(name, kind="meet", modules=create_modules)
             ctx.tid = created["id"]
 
-        blob, ratings = make_meet_state(
+        blob, ratings = state if state is not None else make_meet_state(
             ctx.seed, events=events, court_count=court_count, breaks=breaks,
             tournament_name=name, roster=roster, group_names=group_names,
         )
