@@ -178,10 +178,13 @@ function evaluate(map: CookieMap, cookieHeader: string): string {
 }
 
 /**
- * The Cookie header nginx forwards to the entrant upstream for a given
- * inbound Cookie header — composed from the `proxy_set_header Cookie`
- * directive IN THE CONFIG, so replacing the allowlist with `$http_cookie`
- * makes this return the operator's session and the tests go red.
+ * The Cookie header nginx forwards upstream for the location that answers
+ * `path`, given an inbound Cookie header — composed from the
+ * `proxy_set_header Cookie` directive IN THE CONFIG, so replacing an
+ * allowlist with `$http_cookie` (or dropping the directive, which is
+ * pass-through) makes this return the operator's session and the tests go
+ * red. `path` defaults to node's half of `/e/`; the FastAPI half and the
+ * operator `/api/` plane are asked about by passing their own.
  *
  * `null` means no Cookie header is sent at all: nginx omits a header whose
  * value evaluates to the empty string.

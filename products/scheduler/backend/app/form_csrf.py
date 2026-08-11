@@ -113,6 +113,64 @@ def form_csrf_token(secret: Optional[str]) -> str:
 _URLENCODED = "application/x-www-form-urlencoded"
 
 
+def _operator_session_authenticates(request: Request) -> bool:
+    """Would ``sw_session`` on this request actually sign it in as an operator?
+
+    **This used to be ``settings.session_cookie_name in request.cookies``,
+    and that was a defect, not a shortcut** (found in the 2026-08-10 browser
+    pass). The bound channel two needs is on the PRINCIPAL — "this write is
+    the operator's, so it must prove itself the operator's way". A cookie
+    *name* is not a principal. Any string at all under that name switched the
+    channel off, and channel two is the only one a scriptless form can use:
+    one stale ``sw_session`` from a local DB reset, one logged-out cookie the
+    browser still holds, and every entrant login, signup, logout and entry
+    submission on the same origin answered ``403 AUTH_CSRF_REQUIRED`` as raw
+    JSON. R8-A's accepted same-origin risk, materialised — a director who had
+    signed into the console could not use the public entrant site at all.
+
+    So ask the question the guard meant to ask, of the code that answers it
+    everywhere else: ``auth_service.resolve_session`` is what
+    ``app/dependencies.get_current_user`` consults to turn this exact cookie
+    into an identity. Live row, unrevoked, unexpired, user still present →
+    the write really is the operator's and channel two must refuse it. Not
+    that → the cookie authenticates nobody, names no principal, and has no
+    blast radius to bound.
+
+    **Not path-scoped, deliberately.** Scoping channel two to ``/e/`` would
+    fix the symptom by re-adding the path-based exemption ruling R8-B
+    deleted; ``tests/test_csrf_cookie_registry.py::
+    test_the_app_declares_zero_path_based_csrf_exemptions`` is the control
+    that says so.
+
+    **Fails closed.** A database error here means "cannot rule the operator
+    out", which is the answer that refuses the weaker channel rather than the
+    one that grants it. The module's stated "never raises" contract holds:
+    the middleware answers 403, not 500.
+
+    The imports are deferred for the reason ``config.csrf_relevant_cookie_
+    names`` defers its import of this module — ``database.session`` builds
+    the engine at import time, and this module is imported (transitively, via
+    ``app.config``) by unit tests that bind no database at all. The lookup
+    itself only runs on a urlencoded write that carries BOTH principals'
+    cookies, which is the collision case and nothing else.
+    """
+    token = request.cookies.get(settings.session_cookie_name)
+    if not token:
+        return False
+
+    from database.session import SessionLocal
+    from services import auth as auth_service
+
+    try:
+        with SessionLocal() as session:
+            # Read-only by intent: ``resolve_session`` touches ``last_seen_at``
+            # and this session is closed without a commit, so the rolling stamp
+            # is left to the request's own repository session.
+            return auth_service.resolve_session(session, token) is not None
+    except Exception:
+        return True
+
+
 async def form_csrf_proves(request: Request) -> bool:
     """Does this write present a token derived from one of its own cookies?
 
@@ -121,13 +179,16 @@ async def form_csrf_proves(request: Request) -> bool:
     so the caller's ``and not`` composition stays readable and a
     malformed body is a refusal rather than a 500.
 
-    **An operator cookie disables this channel outright.** Channel two
+    **A live operator session disables this channel outright.** Channel two
     exists for a surface that physically cannot attach a header; the
     operator SPA can, and does. Under R8-A both principals' cookies can
     ride the same origin, so without this line a token minted for the
     entrant tier would satisfy the check on an operator write. The bound
     is on the principal, not on the path — a path bound is the exemption
-    this channel was built to delete.
+    this channel was built to delete — and "the principal" means a session
+    that resolves, not a cookie that exists; see
+    ``_operator_session_authenticates`` for what checking the name alone
+    cost the entrant tier.
 
     **``await request.body()`` before ``request.form()`` is load-bearing,
     not a warm-up.** A request stream is consumed once. ``Request.form()``
@@ -153,8 +214,6 @@ async def form_csrf_proves(request: Request) -> bool:
     in the hidden field would otherwise be a 500 any cross-site page could
     trigger against a browser holding an entrant cookie.
     """
-    if settings.session_cookie_name in request.cookies:
-        return False
     if not request.headers.get("content-type", "").startswith(_URLENCODED):
         return False
 
@@ -169,6 +228,12 @@ async def form_csrf_proves(request: Request) -> bool:
         if secret
     ]
     if not expected:
+        return False
+
+    # Last of the cheap checks, because it is the only one that reads the
+    # database: by here the write is urlencoded AND carries an entrant
+    # secret, which is the same-origin collision case and nothing else.
+    if _operator_session_authenticates(request):
         return False
 
     try:

@@ -213,17 +213,45 @@ def test_a_login_post_with_the_nonce_token_reaches_the_route(client):
 # ---- operator containment ----------------------------------------------
 
 
-def test_an_operator_cookie_is_never_rescued_by_channel_two(client, entrant):
+def _sign_in_an_operator(client) -> None:
+    """A REAL operator session, minted through the real routes, left in the
+    same jar as the entrant's — the R8-A same-origin collision, built rather
+    than imagined."""
+    from app.config import settings
+
+    assert (
+        client.post(
+            "/auth/register",
+            json={"email": "director@example.com", "password": GOOD_PW},
+            headers=CSRF,
+        ).status_code
+        == 201
+    )
+    r = client.post(
+        "/auth/login",
+        json={"email": "director@example.com", "password": GOOD_PW},
+        headers=CSRF,
+    )
+    assert r.status_code == 200, r.text
+    assert client.cookies.get(settings.session_cookie_name), "no operator cookie set"
+
+
+def test_a_live_operator_session_is_never_rescued_by_channel_two(client, entrant):
     """**The blast-radius bound.** Channel two exists for a surface that
-    cannot send a header. The operator SPA can and does, so a request
-    carrying the operator cookie must prove itself the operator's way —
+    cannot send a header. The operator SPA can and does, so a request the
+    operator cookie *signs in* must prove itself the operator's way —
     always, and regardless of what else is in the jar. Same origin (R8-A)
     means both cookies can ride one request; this is the line that stops a
     proof minted for the entrant tier from authorizing an operator write.
-    """
-    from app.config import settings
 
-    client.cookies.set(settings.session_cookie_name, "an-operator-token")
+    **The bound is on the session, not on the cookie name** (the 2026-08-10
+    browser pass). It used to be enough to *set* ``sw_session`` to any
+    string; see the test below for what that cost. What is asserted here is
+    the property that actually matters and it is asserted more strongly than
+    before: this session is one ``resolve_session`` accepts, so the write is
+    genuinely operator-authenticated, and channel two still refuses it.
+    """
+    _sign_in_an_operator(client)
 
     r = client.post(
         "/e/account/logout", data={"_csrf": _token_for(entrant)}, headers=FORM
@@ -231,6 +259,33 @@ def test_an_operator_cookie_is_never_rescued_by_channel_two(client, entrant):
 
     assert r.status_code == 403
     assert r.json()["detail"]["code"] == "AUTH_CSRF_REQUIRED"
+
+
+def test_a_dead_operator_cookie_does_not_lock_the_entrant_out(client, entrant):
+    """**The regression.** Presence-checking the operator cookie made *any*
+    string named ``sw_session`` — a stale cookie from a DB reset, a logged-out
+    one the browser still holds, a value a cross-site page planted — disable
+    the only CSRF channel a scriptless form has. Every entrant login, signup,
+    logout and submission then answered 403 as raw JSON, for any director who
+    had ever signed into the console in that browser.
+
+    The cookie below authenticates nobody: no ``auth_sessions`` row hashes to
+    it. So it names no operator, bounds no blast radius, and must not be
+    allowed to speak for one.
+    """
+    from app.config import settings
+
+    client.cookies.set(settings.session_cookie_name, "not-a-session-anybody-holds")
+
+    r = client.post(
+        "/e/account/logout",
+        data={"_csrf": _token_for(entrant)},
+        headers=FORM,
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 303, r.text
+    assert client.get("/e/account/me").status_code == 401
 
 
 def test_the_header_still_works_for_everyone(client, entrant):

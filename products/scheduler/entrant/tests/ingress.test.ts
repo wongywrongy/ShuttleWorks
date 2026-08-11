@@ -140,6 +140,54 @@ describe('the operator session cannot reach the node process', () => {
   });
 });
 
+describe('the operator session cannot reach the entrant API either', () => {
+  // The 2026-08-10 browser pass. `sw_session` was stopped at the node tier
+  // and waved through to FastAPI's half of the same split prefix, where the
+  // backend's CSRF middleware read its mere PRESENCE and switched off the
+  // only proof channel a scriptless form has — so a director who had signed
+  // into the console could not log in, sign up or enter on the public site.
+  // The backend fix is the one that has to be right (local dev has no
+  // nginx); this is the tier that makes the collision impossible to have.
+  const OPERATOR = 'sw_session=OPERATOR-SESSION-VALUE';
+  const prefixes = backendPrefixes();
+
+  it.each(prefixes)('forwards only the entrant cookies to %s', (prefix) => {
+    const forwarded = forwardedCookie(
+      `${OPERATOR}; sw_play_session=PLAY1; sw_play_csrf=NONCE1`,
+      `${prefix}anything`,
+    );
+    expect(forwarded).toContain('sw_play_session=PLAY1');
+    expect(forwarded).toContain('sw_play_csrf=NONCE1');
+    expect(forwarded).not.toContain('OPERATOR-SESSION-VALUE');
+    expect(forwarded).not.toContain('sw_session=');
+  });
+
+  it.each(prefixes)('sends no Cookie at all to %s for an operator-only jar', (prefix) => {
+    expect(forwardedCookie(OPERATOR, `${prefix}anything`)).toBeNull();
+  });
+
+  it.each(prefixes)('launders no near-miss cookie name into %s', (prefix) => {
+    // The boundary the `~*`-to-`~` tightening was about, asked of the new
+    // locations: an allowlist that harvested `evil_sw_play_session` or
+    // rewrote `SW_PLAY_SESSION` would hand the backend a cookie the browser
+    // never sent under that name. `evil_sw_session` / `sw_session_x` are the
+    // other direction — neither is on the list, so neither is forwarded, and
+    // neither can be mistaken for the operator cookie downstream.
+    const path = `${prefix}anything`;
+    expect(forwardedCookie('evil_sw_session=X; sw_session_x=Y', path)).toBeNull();
+    expect(forwardedCookie('evil_sw_play_session=SPOOFED', path)).toBeNull();
+    expect(forwardedCookie('SW_PLAY_SESSION=UPPER', path)).toBeNull();
+    expect(forwardedCookie('sw_play_session_x=NOPE', path)).toBeNull();
+  });
+
+  it('leaves the operator API untouched — the allowlist is the entrant surface only', () => {
+    // Negative control on reach: `/api/` is the console's own plane and MUST
+    // keep carrying `sw_session`, or this "fix" signs every director out.
+    expect(proxySetHeader(resolve('/api/tournaments'), 'Cookie')).toBeNull();
+    expect(forwardedCookie(OPERATOR, '/api/tournaments')).toBe(OPERATOR);
+  });
+});
+
 describe('RFC 9309: robots.txt is served from the origin root', () => {
   it('maps the root path onto the app copy, exactly and only', () => {
     const root = resolve('/robots.txt');
