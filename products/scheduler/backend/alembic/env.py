@@ -27,7 +27,20 @@ from database.session import normalize_database_url  # noqa: E402
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # ``disable_existing_loggers=False`` is load-bearing, not tidiness.
+    # ``fileConfig`` defaults it to True, which disables every logger that
+    # already exists and is not named in the ini. The app runs migrations
+    # from its own lifespan (``app.main._run_migrations``), by which point
+    # uvicorn has already created ``uvicorn``, ``uvicorn.error`` and
+    # ``uvicorn.access`` — so the default silently switched the server's
+    # entire log off a few hundred milliseconds into startup. The effect
+    # was total and invisible: no access log line, and no traceback for
+    # any unhandled exception (uvicorn logs those on ``uvicorn.error``),
+    # so 500s were served with a bare ``Internal Server Error`` body and
+    # nothing at all in ``docker logs``. It hid a live availability defect
+    # for as long as it existed. Guarded by
+    # ``tests/unit/test_logging_survives_migrations.py``.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Override sqlalchemy.url from settings — keeps the canonical source of
 # truth in one place. The ini file's placeholder is left blank.

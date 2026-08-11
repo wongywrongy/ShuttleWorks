@@ -36,6 +36,18 @@ from app.dependencies import get_current_user
 from app.exceptions import ConflictError, PreconditionFailedError
 from app.form_csrf import form_csrf_proves
 
+# Give the root logger a handler. Uvicorn's own logging config only
+# configures the ``uvicorn*`` loggers and leaves root untouched, so every
+# ``scheduler.*`` record fell through to logging's ``lastResort`` handler,
+# which drops anything below WARNING. Every ``log.info`` in this file —
+# startup, migrations, the workers — was therefore written to nowhere.
+# ``basicConfig`` is a no-op if root already has handlers, so a host that
+# configures logging itself (the test suite, ``python -m worker``) wins.
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(levelname)-8s %(name)s %(message)s",
+)
+
 log = logging.getLogger("scheduler.app")
 
 # Backend root — used by Alembic to locate alembic.ini at startup so the
@@ -53,7 +65,22 @@ def _run_migrations() -> None:
     from alembic import command
     from alembic.config import Config
 
-    cfg = Config(str(_BACKEND_DIR / "alembic.ini"))
+    # Built WITHOUT the .ini file, deliberately — the same construction
+    # ``tests/unit/test_entries_migration.py`` uses and for the same
+    # reason. ``env.py`` calls ``fileConfig`` only when it was handed an
+    # ini, and ``fileConfig`` reconfigures the ROOT logger from
+    # ``[logger_root] level = WARNING``. Running the app's migrations
+    # through the ini therefore reached up and turned the whole
+    # application's log level down to WARNING a moment after startup, so
+    # every ``scheduler.*`` INFO record for the rest of the process went
+    # nowhere. The ini's job is to configure the ``alembic`` CLI; it has
+    # no business setting the logging policy of a running API.
+    #
+    # Nothing else in the ini is needed here: ``script_location`` is set
+    # below, ``sqlalchemy.url`` is overridden by ``env.py`` from
+    # ``settings.database_url``, and ``prepend_sys_path`` only matters to
+    # the CLI — this process has already imported the backend packages.
+    cfg = Config()
     cfg.set_main_option("script_location", str(_BACKEND_DIR / "alembic"))
     command.upgrade(cfg, "head")
 
