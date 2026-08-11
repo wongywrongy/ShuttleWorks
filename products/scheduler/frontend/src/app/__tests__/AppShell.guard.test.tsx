@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveActivePane } from '../AppShell';
+import { resolveActivePane, resolveModuleCatalog } from '../AppShell';
 import type { ModuleId, WorkspaceModule } from '../../platform/product-shell/types';
 
 const wm = (id: ModuleId, status: string): WorkspaceModule =>
@@ -89,5 +89,37 @@ describe('resolveActivePane — unknown/absent module fails closed', () => {
   it('an empty catalog that has actually loaded also fails closed', () => {
     const r = resolveActivePane('meet', [], true);
     expect(r.kind).toBe('panel');
+  });
+});
+
+/**
+ * A failed `/modules` fetch must not be answered with a guess.
+ *
+ * 2026-08-10 browser pass: with the endpoint 500ing, Husky Open (bracket +
+ * display, both enabled) rendered a Meet section that is not enabled, hid
+ * Bracket and Display, and drew the Meet group as an empty grey void — while
+ * the main pane showed bracket content. The kind-derived catalog is the right
+ * answer for the LOAD WINDOW (where it prevents a flash) and the wrong answer
+ * for a FAILURE, where it is a plausible-looking lie.
+ */
+describe('resolveModuleCatalog — loading may guess, failure may not', () => {
+  it('uses the real catalog whenever it has arrived', () => {
+    const real = [wm('bracket', 'enabled'), wm('display', 'enabled')];
+    expect(resolveModuleCatalog(real, false, 'bracket')).toBe(real);
+  });
+
+  it('falls back to the kind-derived catalog WHILE the fetch is in flight', () => {
+    expect(resolveModuleCatalog(null, false, 'bracket').map((m) => m.id)).toEqual([
+      'meet',
+      'bracket',
+      'display',
+    ]);
+  });
+
+  it('yields NOTHING once the fetch has failed — unknown is not meet-shaped', () => {
+    expect(resolveModuleCatalog(null, true, null)).toEqual([]);
+    // The exact reported shape: kind is null on the kind-agnostic Overview,
+    // and the fallback defaulted that to a meet-enabled workspace.
+    expect(resolveModuleCatalog(null, true, 'meet')).toEqual([]);
   });
 });

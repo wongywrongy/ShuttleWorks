@@ -27,10 +27,22 @@ interface WorkspaceSidebarProps {
   tid: string;
   kind: WsKind;
   modules: WorkspaceModule[];
+  /** The module catalog failed to load. `modules` is then empty for want of
+   *  an answer, not because the workspace has none — and rendering an empty
+   *  rail would state the second. */
+  modulesUnknown?: boolean;
+  onRetryModules?: () => void;
   activeTab: AppTab;
 }
 
-export function WorkspaceSidebar({ tid, kind, modules, activeTab }: WorkspaceSidebarProps) {
+export function WorkspaceSidebar({
+  tid,
+  kind,
+  modules,
+  modulesUnknown,
+  onRetryModules,
+  activeTab,
+}: WorkspaceSidebarProps) {
   const navigate = useNavigate();
   // Stable key so the memo doesn't recompute on every render (Set identity).
   const enabledKey = modules
@@ -103,7 +115,31 @@ export function WorkspaceSidebar({ tid, kind, modules, activeTab }: WorkspaceSid
       {/* Tier 3 — Overview (always, top) */}
       <NavItem item={nav.overview} />
 
-      {/* Tier 1 + 2 — sections (independent open state) */}
+      {/* Tier 1 + 2 — sections (independent open state), or a plain statement
+          that we don't know what they are. Overview and the Workspace admin
+          items below are shell-owned, so they stay reachable either way — the
+          Modules admin page is in fact the place to go from here. */}
+      {modulesUnknown ? (
+        <div
+          data-testid="ws-modules-unknown"
+          className="mt-2 rounded-sm border border-status-warning-fg/40 bg-status-warning-bg px-2 py-2 text-status-warning-fg"
+        >
+          <p className="text-xs font-medium">Modules didn&rsquo;t load</p>
+          <p className="mt-0.5 text-2xs">
+            This workspace&rsquo;s modules are unknown right now, so none are
+            listed. They have not been turned off.
+          </p>
+          {onRetryModules ? (
+            <button
+              type="button"
+              onClick={onRetryModules}
+              className="mt-1.5 rounded-sm border border-current px-1.5 py-0.5 text-2xs font-medium hover:bg-current/10"
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-2 space-y-0.5">
         {nav.sections.map((s) => {
           const open = openSections.has(s.id);

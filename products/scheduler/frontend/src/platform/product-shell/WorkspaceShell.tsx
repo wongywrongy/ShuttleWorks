@@ -9,6 +9,11 @@ import type { WsKind } from './workspaceNav';
 interface WorkspaceShellProps {
   identity: WorkspaceIdentity;
   modules: WorkspaceModule[];
+  /** The module catalog could not be read, so `modules` is not a fact about
+   *  this workspace — it is empty for want of an answer. The sidebar says so
+   *  rather than rendering a rail that reads as "no modules here". */
+  modulesUnknown?: boolean;
+  onRetryModules?: () => void;
   tid: string;
   kind: WsKind;
   activeTab: AppTab;
@@ -26,6 +31,8 @@ interface WorkspaceShellProps {
 export function WorkspaceShell({
   identity,
   modules,
+  modulesUnknown,
+  onRetryModules,
   tid,
   kind,
   activeTab,
@@ -60,7 +67,14 @@ export function WorkspaceShell({
         </div>
       </div>
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <WorkspaceSidebar tid={tid} kind={kind} modules={modules} activeTab={activeTab} />
+        <WorkspaceSidebar
+          tid={tid}
+          kind={kind}
+          modules={modules}
+          modulesUnknown={modulesUnknown}
+          onRetryModules={onRetryModules}
+          activeTab={activeTab}
+        />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       </div>
     </div>

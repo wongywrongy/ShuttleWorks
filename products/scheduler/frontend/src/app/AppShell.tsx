@@ -24,7 +24,11 @@ import {
   isModuleEnterable,
   MODULE_LABELS,
 } from '../platform/domain/moduleModel';
-import type { ModuleId, WorkspaceModule } from '../platform/product-shell/types';
+import type {
+  ModuleId,
+  WorkspaceIdentity,
+  WorkspaceModule,
+} from '../platform/product-shell/types';
 import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
 import { ModuleUnavailablePanel } from './workspace/ModuleUnavailablePanel';
 import { WorkspaceShellSurface } from '../products/workspace/WorkspaceShellSurface';
@@ -83,6 +87,30 @@ export function resolveActivePane(
   };
 }
 
+/**
+ * Which module catalog the shell renders from.
+ *
+ * Three inputs, three answers — the middle one is the whole point:
+ *   - the real catalog has arrived → use it;
+ *   - it is still in flight        → the kind-derived guess, which keeps the
+ *     rail from flashing empty on every workspace entry;
+ *   - the fetch FAILED             → nothing. The guess is a plausible-looking
+ *     lie: with `/modules` 500ing, a bracket+display workspace rendered a Meet
+ *     section that is not enabled, hid Bracket and Display, and drew the Meet
+ *     group as an empty grey void, while the main pane showed bracket content
+ *     (2026-08-10 full-scale browser pass). An unknown module state has to
+ *     read as unknown, which `WorkspaceSidebar` says in words — an empty list
+ *     on its own would claim the workspace has no modules.
+ */
+export function resolveModuleCatalog(
+  realModules: WorkspaceModule[] | null,
+  modulesError: boolean,
+  kind: WorkspaceIdentity['kind'],
+): WorkspaceModule[] {
+  if (realModules) return realModules;
+  return modulesError ? [] : modulesForWorkspace(kind);
+}
+
 export function AppShell() {
   // Theme + density hooks live at App.tsx level so they fire on every
   // route. ``useTournamentState`` runs for ALL tournament kinds (meet +
@@ -98,10 +126,14 @@ export function AppShell() {
   const tid = useTournamentId();
   const identity = useWorkspaceIdentity();
   const activeModule = moduleForTab(activeTab, activeTournamentKind);
-  // Real persisted module state (sub-project #2); fall back to the kind-derived
-  // catalog while loading or on error.
-  const { modules: realModules } = useWorkspaceModules(tid);
-  const modules = realModules ?? modulesForWorkspace(activeTournamentKind);
+  // Real persisted module state (sub-project #2). The kind-derived catalog is
+  // the fallback WHILE LOADING only — see `resolveModuleCatalog`.
+  const {
+    modules: realModules,
+    error: modulesError,
+    refetch: refetchModules,
+  } = useWorkspaceModules(tid);
+  const modules = resolveModuleCatalog(realModules, modulesError, activeTournamentKind);
   // Meet-only polling runs when the Meet module is enabled (data exists), not
   // by kind — so a hybrid keeps polling and a bracket-only workspace doesn't.
   // Gate on the REAL catalog, never the kind-derived fallback: on the
@@ -214,6 +246,8 @@ export function AppShell() {
       <WorkspaceShell
         identity={identity}
         modules={modules}
+        modulesUnknown={modulesError}
+        onRetryModules={refetchModules}
         tid={tid ?? ''}
         kind={activeTournamentKind}
         activeTab={activeTab}
