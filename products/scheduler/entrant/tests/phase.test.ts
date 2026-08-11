@@ -23,6 +23,7 @@ import {
   parseMoment,
   statusFacet,
   timelineModel,
+  toDiscoveryCard,
   totalBarState,
   visibleBlocks,
   visibleTabs,
@@ -278,23 +279,120 @@ describe('cardMatches', () => {
   });
 });
 
-describe('orderCards (upcoming-first)', () => {
-  it('sorts future ascending, then undated, then past descending', () => {
-    const future1 = card({ slug: 'a', tournamentDate: '2026-08-29' });
-    const future2 = card({ slug: 'b', tournamentDate: '2026-09-19' });
-    const undated = card({ slug: 'c', tournamentDate: null });
-    const past1 = card({ slug: 'd', tournamentDate: '2026-05-02' });
-    const past2 = card({ slug: 'e', tournamentDate: '2026-07-30' });
+describe('orderCards (actionable first, then upcoming-first — refinement 1)', () => {
+  it('leads with the card that can be acted on', () => {
+    // The Phase B sign-off example verbatim: a closed tournament happening
+    // sooner must not outrank one an entrant can still enter for 4 more days.
+    const closedSooner = card({
+      slug: 'closed-sooner',
+      entriesOpen: false,
+      entriesCloseAt: null,
+      tournamentDate: '2026-08-29',
+    });
+    const openFourDays = card({ slug: 'open-4d', tournamentDate: '2026-09-19' });
+
+    expect(orderCards([closedSooner, openFourDays], NOW).map((c) => c.slug)).toEqual([
+      'open-4d',
+      'closed-sooner',
+    ]);
+  });
+
+  it('orders open cards by their nearest deadline, closing soonest first', () => {
+    const later = card({
+      slug: 'later',
+      entriesCloseAt: '2026-10-30 23:59 UTC',
+      tournamentDate: '2026-08-20',
+    });
+    const sooner = card({
+      slug: 'sooner',
+      entriesCloseAt: '2026-08-14 23:59 UTC',
+      tournamentDate: '2026-11-14',
+    });
+    // Open but no parseable deadline: still actionable, but with nothing to
+    // count down to it follows every card whose urgency is knowable.
+    const noDeadline = card({
+      slug: 'no-deadline',
+      entriesCloseAt: null,
+      tournamentDate: '2026-08-15',
+    });
+
+    expect(orderCards([later, noDeadline, sooner], NOW).map((c) => c.slug)).toEqual([
+      'sooner',
+      'later',
+      'no-deadline',
+    ]);
+  });
+
+  it('sorts closed cards future ascending, then undated, then past descending', () => {
+    const closed = { entriesOpen: false, entriesCloseAt: null };
+    const future1 = card({ ...closed, slug: 'a', tournamentDate: '2026-08-29' });
+    const future2 = card({ ...closed, slug: 'b', tournamentDate: '2026-09-19' });
+    const undated = card({ ...closed, slug: 'c', tournamentDate: null });
+    const past1 = card({ ...closed, slug: 'd', tournamentDate: '2026-05-02' });
+    const past2 = card({ ...closed, slug: 'e', tournamentDate: '2026-07-30' });
 
     expect(
       orderCards([past1, undated, future2, past2, future1], NOW).map((c) => c.slug),
     ).toEqual(['a', 'b', 'c', 'e', 'd']);
   });
 
-  it('breaks date ties by name so the order is stable', () => {
+  it('breaks deadline ties by name so the order is stable', () => {
     const one = card({ slug: 'z', name: 'Beta Open' });
     const two = card({ slug: 'y', name: 'Alpha Open' });
     expect(orderCards([one, two], NOW).map((c) => c.slug)).toEqual(['y', 'z']);
+  });
+});
+
+describe('toDiscoveryCard (the G1 decline path — derived, N+1, tier-side)', () => {
+  const projection = {
+    tournament: { name: 'Spring Open', date: '2026-09-19' },
+    venue: { name: 'Kingsway Centre' },
+    page: { slug: 'spring-open' },
+    events: [
+      { isOpen: true, closesAt: '2026-08-20 23:59 UTC' },
+      { isOpen: true, closesAt: '2026-08-14 23:59 UTC' },
+      { isOpen: false, closesAt: '2026-08-01 23:59 UTC' },
+    ],
+  };
+
+  it('reduces the projection to the card', () => {
+    expect(toDiscoveryCard(projection)).toEqual({
+      slug: 'spring-open',
+      name: 'Spring Open',
+      tournamentDate: '2026-09-19',
+      venueName: 'Kingsway Centre',
+      eventCount: 3,
+      entriesOpen: true,
+      entriesCloseAt: '2026-08-14 23:59 UTC',
+    });
+  });
+
+  it('takes the NEAREST open deadline, ignoring closed events', () => {
+    // The closed event's 2026-08-01 is sooner than every open deadline and
+    // must not become the countdown — its window is already spent.
+    expect(toDiscoveryCard(projection).entriesCloseAt).toBe('2026-08-14 23:59 UTC');
+  });
+
+  it('is open-without-deadline when no open event has a parseable one', () => {
+    const card = toDiscoveryCard({
+      ...projection,
+      events: [{ isOpen: true, closesAt: null }],
+    });
+    expect(card.entriesOpen).toBe(true);
+    expect(card.entriesCloseAt).toBeNull();
+  });
+
+  it('is closed when the server says no event is open — never re-derived', () => {
+    const card = toDiscoveryCard({
+      ...projection,
+      events: [{ isOpen: false, closesAt: '2099-01-01 00:00 UTC' }],
+    });
+    expect(card.entriesOpen).toBe(false);
+    expect(card.entriesCloseAt).toBeNull();
+  });
+
+  it('collapses a missing venue to null', () => {
+    expect(toDiscoveryCard({ ...projection, venue: null }).venueName).toBeNull();
   });
 });
 

@@ -11,10 +11,12 @@
  * implementation of a rule — exactly what Seam B forbids for the fee, applied
  * to the rest of the page for the same reason.
  *
- * `entrants` is the strict one-column list (`_entrants`): a name, nothing
- * else, one row per PERSON. Contact data is structurally absent rather than
- * fetched-and-then-hidden, and adding a second field here would be the first
- * half of undoing that.
+ * `entrants` is the strict projection (`_entrants`): a name and the codes of
+ * the events it appears under, one row per PERSON (G5a — the codes are a list
+ * on the row precisely because a row per person-per-event is the 2026-08-10
+ * duplication defect, 42 rows for 23 people on the live page). Contact data
+ * is structurally absent rather than fetched-and-then-hidden, and adding a
+ * field here would be the first half of undoing that.
  */
 
 export interface EntryEventDTO {
@@ -23,10 +25,16 @@ export interface EntryEventDTO {
   discipline: string;
   feeCents: number | null;
   genderConstraint: string | null;
-  /** UTC ISO-8601, stated in UTC and saying so (`_moment`). */
+  /** Display strings, stated in UTC and saying so (`_moment`, pinned wire
+   * format `"%Y-%m-%d %H:%M UTC"` — `parseMoment` parses exactly this). */
   opensAt: string | null;
   closesAt: string | null;
   withdrawsUntil: string | null;
+  /** The same three instants in ISO-8601 (`_moment_iso`), additive by ruling
+   * (SP-P6-2 G3) — shipped beside the display strings, never replacing them. */
+  opensAtIso: string | null;
+  closesAtIso: string | null;
+  withdrawsUntilIso: string | null;
   isOpen: boolean;
   /** R12's birth-year trigger, computed server-side so the form and the write
    * agree about which events need a year. */
@@ -36,6 +44,9 @@ export interface EntryEventDTO {
 
 export interface EntrantListRowDTO {
   name: string;
+  /** The event dimension the Entrants tab groups by (G5a). Codes, not ids —
+   * the public page names events by code. */
+  eventCodes: string[];
 }
 
 export interface EntryPageContentDTO {

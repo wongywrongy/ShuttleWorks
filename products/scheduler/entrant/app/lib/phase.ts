@@ -29,7 +29,11 @@ export type ChipState =
 
 export type CtaState = { kind: 'enter'; href: string } | { kind: 'closed' };
 
-/** The G1 discovery-list item shape (proposed; mocked in Phase B). */
+/**
+ * One discovery card. G1 (these fields on `GET /e/api/pages`) was DECLINED at
+ * the Phase B gate, so the shape is derived tier-side by `toDiscoveryCard`
+ * from the full page projection the loader fans out for — correct, N+1.
+ */
 export interface DiscoveryCard {
   slug: string;
   name: string | null;
@@ -147,8 +151,8 @@ function countdown(deadlineMs: number, now: Date): number {
   return Math.max(0, Math.ceil((deadlineMs - now.getTime()) / DAY_MS));
 }
 
-/** The same chip, computed from a discovery card's G1 fields —
- * `entriesCloseAt` is already the server's min over open events. */
+/** The same chip, computed from a discovery card — `entriesCloseAt` is
+ * already the nearest deadline `toDiscoveryCard` reduced to. */
 export function cardChipState(
   card: Pick<DiscoveryCard, 'entriesOpen' | 'entriesCloseAt'>,
   now: Date,
@@ -254,26 +258,63 @@ export function cardMatches(card: DiscoveryCard, filters: Filters, now: Date): b
 }
 
 /**
- * Upcoming-first (design §3): parseable today-or-future dates ascending, then
- * undated/unparseable, then past descending. Name then slug as tiebreakers so
- * the order is total and stable across renders.
+ * Discovery order (design §3 + Phase B refinement 1). The card that can be
+ * acted on leads: entries-open cards first, **closing soonest first** — a
+ * closed-but-sooner tournament must never outrank one an entrant can still
+ * enter. Open cards with no parseable deadline follow, then closed cards,
+ * both upcoming-first (parseable today-or-future dates ascending, then
+ * undated/unparseable, then past descending). Name then slug as tiebreakers
+ * so the order is total and stable across renders.
  */
 export function orderCards(cards: readonly DiscoveryCard[], now: Date): DiscoveryCard[] {
   const start = utcDayStart(now);
-  const rank = (card: DiscoveryCard): [number, number] => {
+  const rank = (card: DiscoveryCard): [number, number, number] => {
+    const close = card.entriesOpen ? parseMoment(card.entriesCloseAt) : null;
+    if (close !== null) return [0, 0, close.getTime()];
     const date = parseIsoDate(card.tournamentDate);
-    if (date === null) return [1, 0];
-    const t = date.getTime();
-    return t >= start ? [0, t] : [2, -t];
+    const dateRank: [number, number] =
+      date === null ? [1, 0] : date.getTime() >= start ? [0, date.getTime()] : [2, -date.getTime()];
+    return [card.entriesOpen ? 1 : 2, ...dateRank];
   };
   return [...cards].sort((a, b) => {
-    const [groupA, keyA] = rank(a);
-    const [groupB, keyB] = rank(b);
-    if (groupA !== groupB) return groupA - groupB;
-    if (keyA !== keyB) return keyA - keyB;
+    const ra = rank(a);
+    const rb = rank(b);
+    const byRank = ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2];
+    if (byRank !== 0) return byRank;
     const nameOrder = (a.name ?? '').localeCompare(b.name ?? '');
     return nameOrder !== 0 ? nameOrder : a.slug.localeCompare(b.slug);
   });
+}
+
+/**
+ * A discovery card, derived tier-side from the full page projection — the G1
+ * decline path: `GET /e/api/pages` lists `{slug}` only, so the discovery
+ * loader fans out one `GET /e/api/page/{slug}` per listed tournament and
+ * reduces each answer to this. `entriesOpen` is the OR of the server's own
+ * `isOpen` (never re-derived from moments); `entriesCloseAt` is the nearest
+ * deadline over open events, kept as the raw wire string so the chip parses
+ * exactly one format.
+ */
+export function toDiscoveryCard(page: {
+  tournament: { name: string | null; date: string | null };
+  venue: { name: string | null } | null;
+  page: { slug: string };
+  events: readonly Pick<PhaseEvent, 'isOpen' | 'closesAt'>[];
+}): DiscoveryCard {
+  const deadlines = page.events
+    .filter((event) => event.isOpen)
+    .map((event) => ({ raw: event.closesAt, at: parseMoment(event.closesAt) }))
+    .filter((d): d is { raw: string; at: Date } => d.at !== null)
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
+  return {
+    slug: page.page.slug,
+    name: page.tournament.name,
+    tournamentDate: page.tournament.date,
+    venueName: page.venue?.name ?? null,
+    eventCount: page.events.length,
+    entriesOpen: entriesOpen(page.events),
+    entriesCloseAt: deadlines[0]?.raw ?? null,
+  };
 }
 
 // Frozen literals — the safe-to-share form the mutable-bindings guard exempts.
