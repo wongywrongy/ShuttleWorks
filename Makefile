@@ -25,7 +25,7 @@ help:
 	@echo "Tests:"
 	@echo "  make test               Run scheduler pytest suite"
 	@echo "  make test-e2e           Run scheduler Playwright e2e (boots stack)"
-	@echo "  make check              Run all local checks (lint, vitest, depcruise, ruff, pytest)"
+	@echo "  make check              Run all local checks (lint, types, vitest, depcruise, ruff, pytest)"
 	@echo ""
 	@echo "Tournament simulator (internal dev tool, not in CI):"
 	@echo "  make sim                Run a scenario vs a running backend (SCENARIO=, SEED=, SIM_URL=)"
@@ -137,6 +137,26 @@ engine-readme:
 
 check:
 	npm run lint:scheduler
+# The TYPE gate, and the reason it is spelled out here rather than left to
+# `npm run build`. Until 2026-08-10 `make check` ran lint, vitest, depcruise,
+# ruff and pytest and NO build — so it structurally could not catch a
+# TypeScript error, while CLAUDE.md advertised it as "all local checks at
+# once". A `tsc` break reached a branch through exactly that hole. CI does
+# catch it (the interaction-smoke job runs `npm run build`, and `build` is
+# `tsc -b && vite build`), so this closes a local/CI divergence, not a CI hole.
+#
+# `tsc -b` and not `npm run build`: the type check is the half that gates, the
+# bundle is not, and `make check` is run often enough that the difference is
+# felt (~7 s cold, near-nothing incrementally — `tsc -b` writes a
+# .tsbuildinfo). `npx` rather than a new package.json script, because the
+# command already exists inside `build` and a second declaration of it is a
+# second thing to keep in step.
+#
+# The entrant tier is a SEPARATE invocation because it needs a separate step:
+# its `typecheck` runs `react-router typegen` first, and without the generated
+# route types `tsc` there is meaningless. Root already exposes it for CI.
+	cd products/scheduler/frontend && npx tsc -b
+	npm run typecheck:entrant
 	npm --prefix products/scheduler/frontend run test:run
 	npm run depcruise
 	ruff check products/scheduler scheduler_core

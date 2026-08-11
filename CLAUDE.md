@@ -17,7 +17,7 @@ Monorepo: a CP-SAT scheduling product (meets + bracket draws) plus a shared desi
 - Backend tests: `cd products/scheduler && pytest`  (rootdir is products/scheduler; needs the repo .venv active)
 - Architecture boundaries: `npm run depcruise`
 - Python lint: `ruff check products/scheduler scheduler_core`
-- All local checks at once: `make check`
+- All local checks at once: `make check` — eslint, **`tsc -b` (frontend) + `typecheck:entrant`**, vitest, depcruise, ruff, pytest. The two type gates were added 2026-08-10: `make check` ran no build, so it structurally could not catch a TypeScript error that CI (`npm run build` = `tsc -b && vite build`) fails on.
 - Regenerate frontend DTOs after backend schema changes: `make -C products/scheduler generate-api` (product-local target; then reconcile src/api/dto.ts by hand)
 - Run the app: `make scheduler` (Docker; frontend :80, backend :8000) or `make scheduler-dev` (Vite :5173 + HMR); `make stop`. Where host :8000 is reserved (some Windows boxes), prefix `BACKEND_HOST_PORT=8600`.
 - Single frontend test: `npm --prefix products/scheduler/frontend run test:run -- src/path/x.test.ts` (filter with `-t "name"`). Type gate `tsc -b` runs inside `build`.
