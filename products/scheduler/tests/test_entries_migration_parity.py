@@ -42,8 +42,10 @@ _OLD = _PRODUCT_ROOT / "tests" / "test_entries_public_routes.py"
 _PAGE = "tests/test_entries_page_api.py"
 _SUBMIT = "tests/test_entries_submit_api.py"
 
-_RENDER = "entrant/tests/entry.render.test.ts"
-_QUOTE = "entrant/tests/entry.quote.test.ts"
+# Renamed with the SP-P6-2 route split: the form's document tests moved to
+# the enter page's suites, successor test names unchanged.
+_RENDER = "entrant/tests/enter.render.test.ts"
+_QUOTE = "entrant/tests/enter.quote.test.ts"
 _ECHO = "entrant/tests/echo.test.ts"
 _INGRESS = "entrant/tests/ingress.test.ts"
 _RECEIPT = "entrant/tests/receipt.test.ts"
