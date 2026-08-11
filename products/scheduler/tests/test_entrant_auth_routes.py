@@ -995,7 +995,10 @@ def test_a_form_login_never_redirects_off_the_entrant_tier(
         follow_redirects=False,
     )
     assert r.status_code == 303, r.text
-    assert r.headers["location"] == "/e/account/login"
+    # The fallback, which is ``login.tsx``'s own ``DEFAULT_NEXT``. It used to
+    # be ``/e/account/login`` — this route's own URL, POST-only, so the
+    # discarded-``next`` path 405ed in the entrant's face (F1).
+    assert r.headers["location"] == "/e/login/signed-in"
 
 
 def test_a_form_login_honours_a_same_tier_next(client, turnstile):
@@ -1404,6 +1407,48 @@ def test_a_form_logout_kills_the_session_and_lands_on_a_node_owned_get(
     client.cookies.clear()
     client.cookies.set(settings.entrant_session_cookie_name, token)
     assert client.get(ME).status_code == 401
+
+
+@pytest.mark.parametrize("path", [SIGNUP, LOGIN, LOGOUT])
+def test_a_form_post_with_no_next_never_lands_on_a_post_only_route(
+    client, account, path
+):
+    """**The dead end all three fallbacks used to be** (code review, F1).
+
+    ``next`` is validated by ``next_target`` and discarded for the fallback
+    when it fails ``_SAFE_NEXT`` or is absent — and every fallback here was
+    ``/e/account/login``, which is FastAPI's POST and has no GET at all
+    (``entrant/app/routes.ts`` says so, and gives the human-facing pages
+    node-owned paths for exactly this reason). The browser re-issues a 303 as
+    a GET, so a form post that lost its ``next`` was answered ``405 Method
+    Not Allowed`` **as the whole document**. Unreachable from the shipped
+    forms, which always post a valid ``next``; reachable by a hand-edited URL
+    or the next caller that forgets the field.
+
+    Asserted as the PROPERTY rather than three strings: the target is not
+    under the prefix ruling R8-A gives FastAPI, and this app — which owns
+    every route that could 405 — does not answer a GET of it with one. A
+    404 here is the correct answer and the point: the path is node's, and
+    nginx hands it there.
+
+    To prove it is not vacuous: point any of the three fallbacks back at
+    ``/e/account/login`` and that case goes red on both assertions.
+    """
+    from app.form_csrf import form_csrf_token
+
+    client.cookies.set(PLAY_CSRF, "v")
+    body = {"_csrf": form_csrf_token("v")}
+    if path != LOGOUT:
+        body |= {"email": account, "password": GOOD_PW}
+    if path == SIGNUP:
+        body["cf-turnstile-response"] = "a-solved-token"
+
+    r = client.post(path, data=body, headers=_BROWSER, follow_redirects=False)
+
+    assert r.status_code == 303, r.text
+    target = r.headers["location"]
+    assert not target.startswith("/e/account/"), target
+    assert client.get(target, headers=_BROWSER).status_code != 405, target
 
 
 def test_a_form_logout_without_the_form_token_is_refused(client, turnstile):

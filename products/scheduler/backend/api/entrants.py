@@ -161,9 +161,28 @@ def is_form_post(request: Request) -> bool:
     )
 
 
-# Where a form sign-in that did not work sends the browser back to. A
-# node-owned GET (``entrant/app/routes.ts`` binds it to the same module as
-# ``/e/login``), which is what makes the refusal a PAGE rather than the
+# Where a form post sends the browser when it lands. **Every one of these is
+# a node-owned GET** (``entrant/app/routes.ts``), and that is the whole
+# property: all of ``/e/account/`` is FastAPI's by prefix and POST-only
+# (ruling R8-A), so a redirect to one of these routes' own URLs is re-issued
+# by the browser as a GET and answered ``405 Method Not Allowed`` as the
+# whole document. Which is what all three fallbacks below used to be —
+# unreachable from the shipped forms, which always post a valid ``next``, and
+# a dead end for a hand-edited URL or any future caller that forgets the
+# field.
+#
+# One page per outcome, because the outcomes differ and the page says which
+# happened: the bare sign-in form after a sign-out, "the account is ready"
+# after a signup (on BOTH branches — the non-enumeration property), "you are
+# signed in" after a sign-in that had nowhere else to go. The last is
+# ``login.tsx``'s own ``DEFAULT_NEXT``, so the two tiers agree on where a
+# destinationless sign-in lands.
+_LOGIN_PAGE = "/e/login"
+_ACCOUNT_READY_PAGE = "/e/login/created"
+_SIGNED_IN_PAGE = "/e/login/signed-in"
+
+# Where a form sign-in that did not work sends the browser back to, which is
+# what makes the refusal a PAGE rather than the
 # ``{"detail":{"code":"AUTH_INVALID_CREDENTIALS"}}`` a native form post
 # otherwise paints across the window — found by a real-browser demo pass,
 # 2026-08-10.
@@ -479,7 +498,7 @@ def signup(
         # cookie on either branch, because a cookie set only on the created
         # branch would be as observable as a status code (module docstring).
         return RedirectResponse(
-            url=next_target(next_raw, "/e/account/login"),
+            url=next_target(next_raw, _ACCOUNT_READY_PAGE),
             status_code=status.HTTP_303_SEE_OTHER,
         )
     return SignupResponse()
@@ -583,7 +602,7 @@ def login(
     repo.session.commit()
     if is_form_post(request):
         redirect = RedirectResponse(
-            url=next_target(next_raw, "/e/account/login"),
+            url=next_target(next_raw, _SIGNED_IN_PAGE),
             status_code=status.HTTP_303_SEE_OTHER,
         )
         _set_entrant_cookie(redirect, token)
@@ -620,7 +639,7 @@ def logout(
     _clear_entrant_cookie(response)
     if is_form_post(request):
         redirect = RedirectResponse(
-            url=next_target(next_raw, "/e/account/login"),
+            url=next_target(next_raw, _LOGIN_PAGE),
             status_code=status.HTTP_303_SEE_OTHER,
         )
         _clear_entrant_cookie(redirect)
