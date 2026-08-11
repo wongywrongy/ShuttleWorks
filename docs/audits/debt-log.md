@@ -1215,7 +1215,12 @@ a green 1,100-test suite. The real check is the viewer flow in
   guarantee in the product looks like a hang. The fix wants a not-found branch on the
   workspace route rather than a `catch` that only logs; sizing depends on whether the other
   hydrating hooks (`useBracket`, `useMatchStateSync`) should share one "workspace is gone"
-  state. Size S. *(Found while unlocking cloud mode for the demo.)*
+  state. Size S. *(Found while unlocking cloud mode for the demo.)* ✅ **Fixed 2026-08-11**
+  (`9dbf79e`): a later full-scale browser pass found it presenting *worse* than described —
+  an "Untitled" workspace with a module sidebar and a Configuration form carrying a Save
+  button, not an endless spinner. `useTournamentKind` makes the first request the workspace
+  route sends, so it now reports `notFound` on a 404 and the route renders a not-found page
+  instead of falling through to client defaults.
 
 - **2026-08-11 · Self-hosted first-run provisioning is throttled at four operator accounts
   per hour per IP.** `registration_max_per_ip` is 5 and `throttle_record_attempt` locks when
@@ -1230,3 +1235,95 @@ a green 1,100-test suite. The real check is the viewer flow in
   a decision rather than a fix: either an owner-authenticated "create operator" route (which
   is what "orgs own workspaces" implies anyway), or documenting the knob in the self-host
   runbook. Size S. *(Found while unlocking cloud mode for the demo.)*
+
+- **2026-08-11 · A dropped bracket-occupancy fetch tells the meet solver the bracket occupies
+  no courts, and the schedule it returns can double-book them.**
+  `useSchedule.resolveClosedWindows`
+  (`products/scheduler/frontend/src/hooks/useSchedule.ts:83`) catches *every* failure of
+  `apiClient.getBracket` and returns `[]`. The comment defending it is reasonable read on its
+  own — "a broken bracket poll must never block a meet solve" — and it is correct about the
+  case it was written for: a meet-only workspace answers 404, and 404 really does mean no
+  bracket occupancy. It is wrong about every other failure. A timeout, a 500, a dropped
+  connection and an expired session all land in the same `catch` and produce the same `[]`,
+  and `[]` is not "unknown" — it is the positive claim *the bracket is using no courts at no
+  time*. `closedCourtWindows` is the only channel Meet has for bracket occupancy
+  (`lib/bracketOccupancy.ts`), so the engine takes that claim at face value and is free to
+  place meet matches on courts the bracket is already running on. All three meet solve entry
+  points route through it (`useSchedule.ts:233` generate, `:251` warm-restart, `:295` repair),
+  and the same swallow is hand-written a second time at `useLiveOperations.ts:243`, where the
+  stakes are highest: that is the live-day re-solve, running while both engines are actually
+  on court. Nothing in the product distinguishes the two schedules afterwards — a double-booked
+  court looks like a normal solve until two matches are called to it. Three honest options, and
+  picking between them is the reason this was left rather than fixed: **fail the solve** when
+  occupancy cannot be read on a workspace that has a bracket (safest, and turns a degraded
+  network into a blocked solve — exactly what the comment was trying to avoid); **solve and warn
+  the operator** that the schedule was computed without bracket occupancy (keeps the solve
+  unblocked, moves the judgement to the person who can see both boards); or **distinguish "no
+  occupancy" from "unknown occupancy"** at the seam — let `resolveClosedWindows` return `null`
+  for unknown and `[]` only for a genuine 404, and let each of the four call sites decide. The
+  third is the enabling change for either of the first two and is the smallest real fix; on its
+  own it changes nothing. Any of them changes what a solve does when the network is bad, which
+  makes this a design call rather than cleanup. Size S (the `null`/`[]` distinction + threading
+  it through four call sites) + a product decision on the response. *(Found in the closing
+  review of the demo session.)*
+
+- **2026-08-11 · OPEN INCIDENT — 118 × HTTP 500 under ordinary concurrency, never explained,
+  and it has not reproduced since.** This is not a defect entry; it is an unexplained
+  production-shaped incident, kept open deliberately. **If you are reading this because you
+  just saw it again, that is new evidence — go straight to `docker logs` and capture the
+  traceback, which the first occurrence did not leave.**
+
+  **What was observed** (2026-08-10, full-scale browser pass against the seeded cloud-mode
+  demo stack): nginx's access log recorded **118 responses with status 500**. In each
+  concurrent batch roughly **two requests succeeded and every other one failed instantly** —
+  about 15 ms, not a timeout. The SPA fans out to 4–6 requests per page load, so it fired on
+  ordinary navigation rather than under load; the container was idle at 0.18% CPU and 145 MB
+  of 1 GB, and the connection pool is 20. It was **path-independent and data-independent**,
+  reproduced identically against the backend's published port and through nginx (so neither a
+  proxy nor a browser artefact), and hit public surfaces too (`/display/{token}/summary`).
+  Every failing route was **synchronous, DB-backed, and resolved through `get_repository`**;
+  `/health` — the one dependency-free `async` route — never failed once. The response body was
+  a bare `Internal Server Error` as `text/plain`: an unhandled exception, not a deliberate
+  rejection. Ramping concurrency on a single endpoint showed a hard ceiling of two.
+
+  **What has been ruled out.** A dedicated diagnosis pass could **not reproduce it**: ~1,300
+  requests across parallel bursts against the current tree, all clean. It established that the
+  container serving the 500s was running an **older image** — and that rebuilding *that* tree
+  did not reproduce it either. A later sustained soak against the live container (below) did
+  not reproduce it. No change has been made that would explain the original behaviour, so
+  **nothing here is a fix** and the incident must not be recorded as closed.
+
+  **The soak, since "latent state in a long-lived process" is the leading reading and short
+  bursts against a fresh container are exactly the test that would miss it** (2026-08-11):
+  **25 minutes** of continuous browser-shaped load against the live demo container — a 15-minute
+  segment, a two-minute idle probe, then a 10-minute segment — driven by four concurrent
+  drivers (two authenticated sessions across one meet and three bracket workspaces, plus an
+  anonymous driver on the public display and entrant surfaces), hitting ~30 distinct DB-backed
+  routes rather than one route repeated, direct to `:8600` **and** through nginx `:8090`, up to
+  24 requests in flight at ~46 req/s. **68,619 requests, zero non-200 responses**, and zero
+  tracebacks in the container log. Mean latency flat across the whole run (segment 1 by
+  3-minute bucket: 61.9 / 58.9 / 62.6 / 54.2 / 56.8 ms; segment 2 by 2-minute bucket: 68.8 /
+  67.0 / 65.6 / 76.3 / 59.0 ms — noise, no trend), threads 37–49 under load returning to 30 at
+  idle, file descriptors 50–63, TCP connections 4–19. RSS rose ~20 MB over the first ten
+  minutes (161 → ~180 MB) and then **plateaued** (~184 MB at the end of a further ten), and did
+  not return to baseline when the load stopped — consistent with allocator/pool warm-up rather
+  than a leak, but it is the one number worth re-checking on a run measured in hours. The soak
+  was **read-only** (the demo data was in use), so a concurrent *write* mix over hours is the
+  one shape still unexercised outside the test suite. Harness: a shell loop plus `curl -Z`, no
+  new dependency; scripts were scratch, not committed.
+
+  **What now exists to catch it.** (1) The backend **logs again** — `alembic/env.py` called
+  `fileConfig` without `disable_existing_loggers=False`, so running migrations at startup
+  switched off every logger uvicorn had configured *for the life of the process*. That is why
+  hundreds of 500s left no access log and not one traceback, and why this took a browser to
+  find rather than a log tail (`efeb08c`). (2) `products/scheduler/tests/test_concurrent_requests.py`
+  (`7cae310`) fires genuinely parallel requests at the **whole** `app.main:app` over
+  file-backed SQLite — reads, writes, a read/write mix, and the uniform-404 seam — with a
+  negative control asserting the burst really overlaps and the DB has not gone in-memory
+  (`StaticPool` would silently remove the concurrency under test). Before it, the ~1,580-test
+  suite and the ~2,000-request simulator were both strictly sequential, so this entire failure
+  class was invisible to every gate.
+
+  Size: unknown by construction — it is an investigation, not a task. *(Recorded in the
+  closing review of the demo session; walkthrough §11 D1 carries the same account for the
+  non-engineering reader.)*
