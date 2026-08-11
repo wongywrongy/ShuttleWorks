@@ -1138,3 +1138,63 @@ a green 1,100-test suite. The real check is the viewer flow in
   as `${PUBLIC_HOSTNAME}` at compose time, so the list would have to be templated
   (`/etc/nginx/templates/*.template` + envsubst) across all six stacks. Size S (entrant +
   two compose files) or M (with the nginx templating). *(Task 33, Item 1.)*
+
+- **2026-08-10 · A THROTTLED entrant sign-in still paints raw JSON — the half the E3 fix
+  did not reach.** `api/entrants.py:login` now answers a browser navigation with a 303 to
+  `_LOGIN_FAILED_PAGE` when the credentials are wrong, so the entry above is closed for
+  *that* branch. The throttle branch is a different answer and still is not: both
+  `throttle_check` hits raise `_throttled(...)`, which is `api/auth.py`'s 429 shape verbatim
+  — `{"detail":{"code":"AUTH_THROTTLED","message":"Too many attempts — try again later",
+  "retryAfterSeconds":N}}` — and a native `<form method=post>` is a navigation, so that
+  object is the whole document the entrant reads. It is reachable on the ordinary path: the
+  same address typed wrong a few times, or one venue's phones behind one NAT sharing the
+  `eip:` bucket. **It cannot be folded into the existing refusal**, which is why this is not
+  a one-line follow-up: `/e/login/failed` says "check the address and password", and saying
+  that to someone whose password is right would be a lie that costs them the entry. The fix
+  needs its own path (`/e/login/wait`, or a `retryAfterSeconds` the entrant tier renders as
+  copy) carrying the wait — the *only* number here that is safe to show, since it is a
+  property of the request rate and not of the account. **Whatever renders it must not become
+  an enumeration oracle**: today the throttle is keyed on the address as well as the IP, so a
+  page that distinguished "this address is throttled" from "wrong password" would tell a
+  caller which addresses have accounts — exactly what `authenticate`'s single cause-blind
+  answer and its deliberate Argon2 cost on the miss exist to prevent. One copy for both keys,
+  no mention of which bucket tripped. Backend + one entrant route. Size S.
+  *(Task 33, Item 4.)*
+
+- **2026-08-10 · `useBracketDisplaySync` never consults `pollPolicy`, so a revoked bracket
+  display token would poll forever.** Every other polling hook in the app — `useBracket`,
+  `useMatchStateSync`, `useAdvisories`, `useSuggestions`, `useLiveTracking`, and the meet
+  board's own `publicDisplay/useDisplaySync` — imports `isTerminalPollError` from
+  `lib/pollPolicy` and stops on 401/403/404/410, which is the whole point of that module
+  existing ("one definition of *this poll can never succeed*"). `products/display/
+  bracketDisplay/useBracketDisplaySync.ts` is the one that does not: its `catch` only sets
+  `syncError` and the 10-second `setInterval` runs on. Compounding it, `apiClient.
+  getDisplayBracket` passes `validateStatus: (s) => s === 200 || s === 404` and returns
+  `null` on 404 — the deliberate "no draw configured yet" contract — so a 404 is not even an
+  error the hook could stop on; it is a successful poll of nothing, forever, on a TV nobody
+  is watching. **Currently unreachable via a bad token**, which is why it is logged rather
+  than fixed: `useDisplayKind` resolves the kind from `/display/{token}/summary` and
+  `.catch(() => setKind('meet'))`, so a revoked token renders the *meet* board and this hook
+  never mounts. The fix has two halves and they are not the same size — adding
+  `if (isTerminalPollError(err)) return;` to the catch is XS and correct on its own, but
+  making a revoked token actually reach it means giving 404 two meanings on
+  `getDisplayBracket`, and that endpoint's "null means no draw yet" is depended on by the
+  configured-and-empty case. Splitting them (a distinct code for a revoked capability, or a
+  `getDisplaySummary` failure that surfaces instead of defaulting) is a display-contract
+  change riskier than the defect warrants today. Size XS (the guard) + S (the 404 semantics).
+  *(Task 33, Item 4.)*
+
+- **2026-08-10 · `test_list_recent_is_bounded_and_stably_ordered` is flaky in a REQUIRED CI
+  gate.** Measured at ~1 in 8 runs of `tests/unit/test_solve_jobs.py` on Windows, with no
+  other change in the tree. `solve_jobs.list_recent` orders by `created_at DESC, id DESC` —
+  the repo-wide tiebreaker idiom, correctly applied — but `SolveJob.id` is a random UUID, so
+  the tiebreaker is *deterministic* without being *insertion-ordered*. The test creates three
+  jobs in a loop and asserts `listed[0].id == ids[-1]`; when two `created_at` values land in
+  the same clock tick (Windows `datetime.now` granularity is coarse enough that they
+  regularly do) the winner is whichever UUID sorts higher. So the query is right and the
+  assertion claims something the query never promised. Two candidate fixes, and the choice is
+  a design call rather than a cleanup: assert set membership + a bound instead of a position
+  (test-side, XS, but weakens the ordering claim to nothing), or give the table a monotonic
+  tiebreaker the ordering can actually rest on (a sequence/insert counter — S, and a
+  migration). Found while running the gates for Task 33; logged rather than fixed because
+  either option changes what a test asserts. Size XS–S. *(Task 33, gates.)*
