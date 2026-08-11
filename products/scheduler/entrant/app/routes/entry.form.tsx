@@ -5,7 +5,11 @@
  * entrant write is browser → nginx → FastAPI on one origin. If node relayed
  * the write, the `X-ShuttleWorks-CSRF` header would stop proving "a
  * same-origin browser sent this" and start proving only "a node process asked"
- * — so there is no `action` export anywhere in this tier, by design.
+ * — so no form in this tier targets a node action, and the credential routes
+ * (`login.tsx`, `signup.tsx`) export none at all. The one action that exists,
+ * on `entry.tsx`, is not on a write path: it is where the quote route's 307
+ * hands the entrant's own body back for re-rendering, so that body never has
+ * to travel as a query string. It reads no cookie and calls nothing upstream.
  *
  * The transport shape is the incumbent's, verbatim, because the parser is
  * unchanged: player fields repeat positionally and each event checkbox is
@@ -23,9 +27,10 @@
  * form is finished. That is a real navigation in every browser: this is a
  * plain `<form>`, not React Router's `<Form>`, so RR7 never intercepts the
  * submission and a hydrated browser posts the document exactly as a scriptless
- * one does. The quote route answers a browser `Accept` with a 303 back to this
- * page carrying the posted body plus the server's total, and this loader
- * renders it. **There is deliberately no fetch-and-navigate enhancement**: a
+ * one does. The quote route answers a browser `Accept` with a 307 back to this
+ * page — method and body preserved, so the typing returns in the POST and only
+ * the server's total is in the URL. **There is deliberately no
+ * fetch-and-navigate enhancement**: a
  * second client path for the same act is a second thing that can drift from
  * `compute_fee_total`, which is the drift R14 exists to prevent. The cost is a
  * document reload; the price of the alternative is a wrong number about money.
@@ -63,6 +68,16 @@ export interface EntryFormProps {
    * no cookie for `_optional_entrant` to read. */
   formCsrf: string;
   echo: FormEcho;
+  /**
+   * Is this the `/e/{slug}/signed-in` variant of the page?
+   *
+   * Not a claim about identity — no server-rendered page here can make one
+   * (R8-D) — just which of the two paths bound to `entry.tsx` matched. It
+   * rides on the quote URL below so the 307 comes back to the SAME one:
+   * without it a recalculation drops the reader onto the bare page, silently
+   * retracting the only statement this tier can make that a sign-in worked.
+   */
+  signedIn: boolean;
 }
 
 /**
@@ -233,7 +248,13 @@ function PlayerBlock({
   );
 }
 
-export function EntryForm({ page, idempotencyKey, formCsrf, echo }: EntryFormProps) {
+export function EntryForm({
+  page,
+  idempotencyKey,
+  formCsrf,
+  echo,
+  signedIn,
+}: EntryFormProps) {
   const openEvents = page.events.filter((event) => event.isOpen);
   const askBirthYear = openEvents.some((event) => event.ageBracketed);
   const cap = page.policy.maxEventsPerPerson;
@@ -341,7 +362,12 @@ export function EntryForm({ page, idempotencyKey, formCsrf, echo }: EntryFormPro
         variant="outline"
         name="action"
         value="filter"
-        formAction={`/e/api/quote/${page.page.slug}`}
+        // `?signedIn=1` is TRANSPORT, and it is on the quote URL rather than
+        // in a hidden field so the write post never carries it. The backend
+        // reads it as presence only and appends its own `/signed-in` suffix
+        // (`_echo_redirect`), so this cannot name a redirect target — it
+        // picks between two paths the server already knows.
+        formAction={`/e/api/quote/${page.page.slug}${signedIn ? '?signedIn=1' : ''}`}
         formNoValidate
         className="justify-self-start"
       >

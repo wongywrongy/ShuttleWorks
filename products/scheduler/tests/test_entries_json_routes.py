@@ -896,10 +896,17 @@ def test_two_submissions_without_a_key_are_two_acts(client, page, entrant):
 #
 # The no-JS half of R14 (spec §7). A native <form method=post> cannot read
 # JSON — pressing "Update events and total" is a navigation — so a browser
-# Accept gets a 303 back to the entry page carrying its own body plus the
-# server's total. This is what makes the unhydrated round trip a shipped
-# path rather than a degraded one, and it is the only shape that gets a
-# total onto that page without node relaying the entrant's credential.
+# Accept gets a 307 back to the entry page: method and body preserved, so the
+# entrant's own typing is re-posted there and only the server's total is in
+# the URL. This is what makes the unhydrated round trip a shipped path rather
+# than a degraded one, and it is the only shape that gets a total onto that
+# page without node relaying the entrant's credential.
+#
+# **It was a 303 until the 2026-08-10 browser pass**, which read the address
+# bar back and found the entrant's name, club, birth year and free-text
+# remarks in it. See `_echo_redirect`'s docstring, and
+# `test_a_browser_quote_never_puts_entrant_detail_in_a_url` below, which is
+# the control that fails if any of it ever returns.
 
 # **No X-ShuttleWorks-CSRF here, deliberately.** A native <form method=post>
 # cannot set a header — that is the whole reason channel two (the `_csrf` body
@@ -936,41 +943,51 @@ def test_a_browser_quote_redirects_back_to_the_entry_page_with_the_total(
         follow_redirects=False,
     )
 
-    # 303, not 302: the browser must re-issue as GET so a reload never
-    # re-posts. Same choice submit_entry_json makes.
-    assert r.status_code == 303, r.text
+    # 307, not 303: 303 re-issues as GET, and a form body can only survive
+    # that as a query string — which is how the typing ended up in browser
+    # history and nginx logs. 307 preserves the method and the body, so the
+    # browser re-posts the same fields to the page it came from.
+    assert r.status_code == 307, r.text
     location = r.headers["location"]
     assert location.startswith(f"/e/{page['slug']}?")
     assert location.endswith("#enter")
 
-    echo = _echo(r)
-    # The typing survives...
-    assert echo["playerName"] == ["Alice Chen"]
-    assert echo["gender"] == ["F"]
-    assert echo["club"] == ["Kingsway"]
-    assert sorted(echo["events"]) == sorted([f"0:{page['ms']}", f"0:{page['ws']}"])
-    # ...and the number is compute_fee_total's, identical to the JSON path's.
-    assert echo["totalCents"] == [
+    # The number is compute_fee_total's, identical to the JSON path's — and
+    # it is the ONLY thing here that came from the entrant's press.
+    assert _echo(r)["totalCents"] == [
         str(_quote(client, page, [f"0:{page['ms']}", f"0:{page['ws']}"]).json()["totalCents"])
     ]
 
 
-def test_the_browser_echo_drops_the_csrf_token_and_the_idempotency_key(
-    client, page, entrant
-):
-    """Transport, not typing.
+def test_a_browser_quote_never_puts_entrant_detail_in_a_url(client, page, entrant):
+    """**The privacy control (2026-08-10 browser demo pass).**
 
-    The key especially: it is minted once per rendered form, and echoing a
-    spent one into the address bar would pin it across every re-render, so
-    the entrant's real submission would replay against a key the round trip
-    had already fixed. The token is dropped because a URL is shareable,
-    pasteable and logged, and this one is derived from a session cookie.
+    Found by driving the real stack, not by reading the code: pressing
+    "Update events and total" left
+
+        /e/{slug}?playerName=Rin+Matsuda&gender=F&club=Kingsway+BC
+                 &birthYear=2012&remarks=cannot+play+before+6pm+Saturday
+
+    in the address bar. A URL is written to the browser's history, to every
+    nginx access log and to any intermediary's — none of which is scoped to
+    hold an entrant's name, club or free-text notes. Age-bracketed events
+    make ``birthYear`` mandatory, so that is personal data of MINORS in logs
+    that were never designed to carry it.
+
+    Asserted as an **allowlist over the whole query string**, not as a list
+    of today's field names: a redaction denylist has to be kept in step with
+    every field the form grows, and the day it is not is silent. Three keys,
+    all server-authored, and the values are checked too — a field renamed on
+    both sides would slip past a key-only check.
     """
     r = client.post(
         f"/e/api/quote/{page['slug']}",
         data={
-            "playerName": "Alice Chen",
+            "playerName": "Rin Matsuda",
             "gender": "F",
+            "club": "Kingsway BC",
+            "birthYear": "2012",
+            "remarks": "cannot play before 6pm Saturday",
             "events": [f"0:{page['ms']}"],
             "_csrf": _form_token(client, page),
             "idempotencyKey": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
@@ -980,12 +997,29 @@ def test_the_browser_echo_drops_the_csrf_token_and_the_idempotency_key(
         follow_redirects=False,
     )
 
-    assert r.status_code == 303
-    echo = _echo(r)
-    assert "_csrf" not in echo
-    assert "idempotencyKey" not in echo
-    assert "action" not in echo
-    assert "aaaaaaaa-bbbb" not in r.headers["location"]
+    assert r.status_code == 307, r.text
+    location = r.headers["location"]
+
+    # Nothing but the three the server itself wrote.
+    assert set(_echo(r)) <= {"totalCents", "refusalCode", "refusalSubjects"}
+    # And no posted VALUE reached the header by any spelling — including the
+    # transport fields, which are not typing but are still a spent
+    # idempotency key and a session-derived CSRF digest in a shareable URL.
+    for leaked in (
+        "playerName",
+        "club",
+        "birthYear",
+        "remarks",
+        "Rin",
+        "Matsuda",
+        "Kingsway",
+        "2012",
+        "6pm",
+        "aaaaaaaa-bbbb",
+        "idempotencyKey",
+        "_csrf",
+    ):
+        assert leaked not in location, f"{leaked!r} reached the redirect Location"
 
 
 def test_a_browser_quote_echoes_a_policy_refusal_as_a_code_not_prose(
@@ -1024,7 +1058,7 @@ def test_a_browser_quote_echoes_a_policy_refusal_as_a_code_not_prose(
         follow_redirects=False,
     )
 
-    assert r.status_code == 303
+    assert r.status_code == 307
     echo = _echo(r)
     assert echo["refusalCode"] == ["MAX_EVENTS_PER_PERSON"]
     assert echo["refusalSubjects"] == ["0"]
@@ -1069,11 +1103,12 @@ def test_a_fetch_still_gets_json(client, page, entrant):
 def test_a_browser_quote_cannot_inject_a_header_through_the_echo(
     client, page, entrant
 ):
-    """The body is entrant-controlled and it lands in a Location header.
+    """The body is entrant-controlled and it used to land in a Location header.
 
-    urlencode percent-encodes CR/LF, so the newline below can never end the
-    header — but nothing else in the request path guarantees that, so it is
-    asserted here rather than assumed.
+    It no longer reaches that header at all — the 307 leaves the body in the
+    body — so injection is now structurally impossible rather than merely
+    escaped. Kept, and strengthened to say exactly that: the crafted name is
+    absent from the header entirely, not present-and-encoded.
     """
     r = client.post(
         f"/e/api/quote/{page['slug']}",
@@ -1087,11 +1122,47 @@ def test_a_browser_quote_cannot_inject_a_header_through_the_echo(
         follow_redirects=False,
     )
 
-    assert r.status_code == 303
+    assert r.status_code == 307
     assert "\r" not in r.headers["location"]
     assert "\n" not in r.headers["location"]
     assert "x-injected" not in {k.lower() for k in r.headers}
-    assert _echo(r)["playerName"] == ["Alice\r\nX-Injected: yes"]
+    assert "Alice" not in r.headers["location"]
+    assert "Injected" not in r.headers["location"]
+
+
+def test_a_recalculation_comes_back_to_the_page_it_was_pressed_on(
+    client, page, entrant
+):
+    """`/e/{slug}/signed-in` is the whole of E3.
+
+    A tier that cannot read the session cookie can say a sign-in worked in
+    exactly one way: by the URL the 303 from `POST /e/account/login` lands
+    on. Redirecting a recalculation to the bare `/e/{slug}` silently
+    retracted that, so pressing "Update events and total" made the banner
+    vanish and left the reader unable to tell whether they were still signed
+    in — on the one page where that decides whether their entry records.
+
+    Presence, not value: the flag picks between two paths written in Python,
+    so it can never name a third.
+    """
+    body = {
+        "playerName": "Alice Chen",
+        "gender": "F",
+        "events": [f"0:{page['ms']}"],
+        "_csrf": _form_token(client, page),
+    }
+    kwargs = dict(data=body, headers=_BROWSER, follow_redirects=False)
+
+    plain = client.post(f"/e/api/quote/{page['slug']}", **kwargs)
+    signed_in = client.post(f"/e/api/quote/{page['slug']}?signedIn=1", **kwargs)
+    crafted = client.post(
+        f"/e/api/quote/{page['slug']}?signedIn=https://evil.example", **kwargs
+    )
+
+    assert plain.headers["location"].startswith(f"/e/{page['slug']}?")
+    assert signed_in.headers["location"].startswith(f"/e/{page['slug']}/signed-in?")
+    assert crafted.headers["location"] == signed_in.headers["location"]
+    assert "evil.example" not in crafted.headers["location"]
 
 
 def test_an_anonymous_browser_quote_is_still_refused(client, page):

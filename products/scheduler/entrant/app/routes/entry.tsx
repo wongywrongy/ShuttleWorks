@@ -138,6 +138,46 @@ export async function loader({
 }
 
 /**
+ * Where the "Update events and total" round trip lands — and the reason the
+ * entrant's name, club, birth year and remarks are no longer in a URL.
+ *
+ * `POST /e/api/quote/{slug}` used to answer 303 with the posted body reflected
+ * into its `Location`, which put all of that into the address bar, the
+ * browser's history and every nginx access log (age-bracketed events make
+ * `birthYear` mandatory, so that included the birth years of minors). It now
+ * answers **307**, so the browser re-posts the SAME body here and the query
+ * string carries only what the server computed. This action is what makes that
+ * landing legal: without it React Router answers a document POST with 405.
+ *
+ * **It holds no credential and asks upstream for nothing (R8-D intact).** The
+ * request is read for its body and its query string — never for a header,
+ * never for a cookie, and there is no `fetch` here — so the tier still renders
+ * and never relays. The structural guards in `tests/entry.loader.test.ts` run
+ * over this file and would go red on any of that. The browser does send its
+ * `sw_play_session` cookie with the re-post, exactly as it already does on
+ * every GET of this page; nothing here reads it, and nothing can, which is why
+ * the quote itself stays a direct browser→FastAPI call.
+ *
+ * Body first, query second, into one `URLSearchParams`, then straight through
+ * the SAME `parseEcho` the loader uses — one parser, not a second one that can
+ * drift. Nothing here is trusted: `parseEcho` maps `refusalCode` to fixed local
+ * copy and bounds `totalCents`, and it reads only the names it knows, so
+ * `_csrf` and `idempotencyKey` are ignored rather than filtered.
+ *
+ * `request.text()` assumes urlencoded, which is what `entry.form.tsx` declares
+ * (`encType`) and what a 307 preserves. The body is bounded by nginx
+ * (`client_max_body_size 4m`), not here — reading a `content-length` header
+ * would be exactly the header read this tier refuses to make.
+ */
+export async function action({ request }: { request: Request }) {
+  const posted = new URLSearchParams(await request.text());
+  for (const [name, value] of new URL(request.url).searchParams) {
+    posted.append(name, value);
+  }
+  return { echo: parseEcho(posted) };
+}
+
+/**
  * Forward the loader's headers onto the document — all of them, by reference.
  *
  * React Router does NOT do this by default: `getDocumentHeaders` copies only
@@ -219,8 +259,15 @@ export const meta: Route.MetaFunction = ({ data, location }) => {
   return tags;
 };
 
-export default function Entry({ loaderData }: Route.ComponentProps) {
-  const { page, idempotencyKey, formCsrf, echo, justSignedIn } = loaderData;
+export default function Entry({ loaderData, actionData }: Route.ComponentProps) {
+  const { page, idempotencyKey, formCsrf, justSignedIn } = loaderData;
+  // The re-posted body wins when there is one: on the 307 landing the loader
+  // sees only the query string (the total and any refusal code), and the
+  // entrant's own typing arrives in the POST the action read. A plain GET —
+  // a bookmark, a shared link, a reload the browser re-issued — has no
+  // `actionData`, and the loader's parse of the same query string is the
+  // whole echo. Same parser both times.
+  const echo = actionData?.echo ?? loaderData.echo;
   const openEvents = page.events.filter((event) => event.isOpen);
 
   return (
@@ -323,6 +370,7 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
             idempotencyKey={idempotencyKey}
             formCsrf={formCsrf}
             echo={echo}
+            signedIn={justSignedIn}
           />
         )}
       </section>

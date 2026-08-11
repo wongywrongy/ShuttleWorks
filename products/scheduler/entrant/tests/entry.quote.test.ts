@@ -94,7 +94,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(query = ''): Promise<string> {
+async function handle(request: Request): Promise<Response> {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -108,10 +108,29 @@ async function render(query = ''): Promise<string> {
   const build = (await vite.ssrLoadModule(
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
-  const res = await createRequestHandler(build, 'development')(
-    new Request(`http://entrant.test/e/spring-open${query}`),
+  return createRequestHandler(build, 'development')(request);
+}
+
+async function render(query = ''): Promise<string> {
+  return (await handle(new Request(`http://entrant.test/e/spring-open${query}`))).text();
+}
+
+/**
+ * The 307 landing: the browser re-posting the entrant's own body to this page.
+ *
+ * Exactly what `POST /e/api/quote/{slug}` now sends a browser to do — same
+ * method, same urlencoded body, and the server's `totalCents` in the query
+ * string instead of the entrant's name. Driven through the real handler, so
+ * this is the document a scriptless browser receives.
+ */
+async function repost(body: string, query = ''): Promise<Response> {
+  return handle(
+    new Request(`http://entrant.test/e/spring-open${query}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+    }),
   );
-  return res.text();
 }
 
 describe('the quote round trip, with no JavaScript', () => {
@@ -141,6 +160,27 @@ describe('the quote round trip, with no JavaScript', () => {
     expect(html).toContain('action="/e/api/submit/spring-open"');
   });
 
+  it('tells the quote route which of the two entry-page paths it is on', async () => {
+    // E3's `/e/{slug}/signed-in` is the ONLY way this tier can say a sign-in
+    // worked — it cannot read the session cookie (R8-D). A recalculation used
+    // to come back to the bare page, so pressing "Update events and total"
+    // silently retracted that. The flag is on the quote URL, not in a hidden
+    // field, so the write post never carries it; the backend reads it as
+    // presence and appends its own suffix.
+    const plain = await (
+      await handle(new Request('http://entrant.test/e/spring-open'))
+    ).text();
+    const signedIn = await (
+      await handle(new Request('http://entrant.test/e/spring-open/signed-in'))
+    ).text();
+
+    expect(plain).toMatch(/formaction="\/e\/api\/quote\/spring-open"/i);
+    expect(signedIn).toMatch(/formaction="\/e\/api\/quote\/spring-open\?signedIn=1"/i);
+    // The write target is the same on both: this is transport for the quote
+    // round trip only.
+    expect(signedIn).toContain('action="/e/api/submit/spring-open"');
+  });
+
   it('recalculates by POST, so this tier never puts entrant detail in a URL', async () => {
     // **E1, the privacy control.** A GET here would carry the player's name,
     // club, birth year and free-text remarks in the query string — into nginx
@@ -151,10 +191,12 @@ describe('the quote round trip, with no JavaScript', () => {
     // EVERY form in the document is checked rather than the one this file is
     // about — a second form added as a GET is the same defect.
     //
-    // What this cannot see, stated rather than implied: the 303 the quote
-    // route answers with echoes the posted body into its `Location`
-    // (`_echo_redirect`, `api/entries_json.py`), so the PII reaches the URL
-    // bar anyway. That half is the backend's and is reported, not fixed here.
+    // The other half of it used to undo this one: the quote route answered
+    // 303 and reflected the posted body into its `Location`, so the PII
+    // reached the address bar anyway. It answers 307 now — body preserved,
+    // nothing of it in the URL — and the tests below are this tier's half of
+    // that (`test_a_browser_quote_never_puts_entrant_detail_in_a_url` in
+    // `tests/test_entries_json_routes.py` is the backend's).
     const html = await render();
 
     const forms = [...html.matchAll(/<form\b[^>]*>/g)].map((m) => m[0]);
@@ -291,6 +333,60 @@ describe('the quote round trip, with no JavaScript', () => {
     const html = await render('?refusalCode=SOME_FUTURE_RULE');
 
     expect(html).toContain('cannot be entered as it stands');
+  });
+
+  it('renders the re-posted body, so the typing never needs a query string', async () => {
+    // **E1, the other half.** The quote route answers 307, so the browser
+    // re-posts the entrant's own fields HERE. Without an `action` export this
+    // is a 405 and the whole privacy fix is unshippable, which is what makes
+    // this the regression test rather than a nicety: delete the action and
+    // this goes red on the status line alone.
+    const res = await repost(
+      `playerName=Rin+Matsuda&gender=F&club=Kingsway+BC&birthYear=2012` +
+        `&remarks=cannot+play+before+6pm+Saturday&events=0%3A${WD}` +
+        `&_csrf=deadbeef&idempotencyKey=aaaaaaaa-bbbb&showAllEvents=on`,
+      '?totalCents=2000',
+    );
+    const html = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(html).toContain('value="Rin Matsuda"');
+    expect(html).toContain('value="Kingsway BC"');
+    // `birthYear` is not asserted here: no event in this fixture is
+    // age-bracketed, so the form renders it as an empty positional hidden
+    // field and there is nothing to echo. It is the field that made this a
+    // privacy defect rather than an untidiness, so it is pinned where it can
+    // be — on the redirect itself, in `test_entries_json_routes.py`.
+    expect(html).toContain('cannot play before 6pm Saturday');
+    expect(html).toContain('<option value="F" selected="">Female</option>');
+    const ticked = html.match(new RegExp(`<input[^>]*value="0:${WD}"[^>]*>`))?.[0] ?? '';
+    expect(ticked).toContain('checked=""');
+    // The server's number came the other way, in the query string, and is
+    // rendered from there — one document, two channels, one parser.
+    expect(html).toContain('20.00');
+    expect(html).toContain('Provisional');
+  });
+
+  it('re-mints the form token on the landing, so the next post still proves itself', async () => {
+    // The re-rendered form carries a NEW `_csrf` digest and the response
+    // carries the matching nonce. If the action short-circuited the loader —
+    // or `headers` stopped forwarding the mint — the entrant's next press
+    // would answer 403 "This form has expired" with nothing to explain it.
+    const res = await repost('playerName=Rin&gender=F');
+    const html = await res.text();
+
+    expect(res.headers.get('set-cookie')).toContain('sw_play_csrf=');
+    expect(res.headers.get('cache-control')).toContain('no-store');
+    expect(html).toMatch(/name="_csrf"[^>]*value="[0-9a-f]{64}"/);
+  });
+
+  it('never asks the API for a quote on the landing either', async () => {
+    // The action must not become a relay: node holds no entrant credential,
+    // so re-posting through it must still cost exactly the one public
+    // projection read the GET costs.
+    await repost(`playerName=Rin&gender=F&events=0%3A${WD}`);
+
+    expect(called).toEqual(['http://backend:8000/e/api/page/spring-open']);
   });
 
   it('renders a hand-edited total as nothing rather than as NaN', async () => {

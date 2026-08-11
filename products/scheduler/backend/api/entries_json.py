@@ -479,18 +479,15 @@ def _resolve_selections(repo: LocalRepository, tournament_id, parsed: List[dict]
     return resolved
 
 
-# Transport, not typing — none of it belongs in an address bar. The
-# idempotency key especially: it is minted per rendered form, and echoing a
-# spent one would pin it there across re-renders.
-_ECHO_DROP = frozenset({"_csrf", "idempotencyKey", "Idempotency-Key", "action"})
-
-# Bounds on what is reflected back. The body is entrant-controlled, and a
-# ``Location`` header is not the place to discover that: ``urlencode``
-# percent-encodes CR/LF so header injection is already impossible, but an
-# unbounded echo is still a self-inflicted 8k-header 502. Matches the form's
-# own ``maxlength`` on remarks and its two player blocks' worth of fields.
-_ECHO_MAX_FIELDS = 60
-_ECHO_MAX_LEN = 2000
+# The suffix of the entry page's second path (``entrant/app/routes.ts``).
+# ``/e/{slug}/signed-in`` is the URL a completed sign-in lands on, and it is
+# the ONLY thing that makes a sign-in legible on a tier that cannot read the
+# session cookie. A recalculation that redirected to the bare page would
+# silently retract that statement, so the variant the request came from is
+# carried across the round trip. Two possible values, both written here —
+# the flag on the way in is a presence test, never a path, so nothing an
+# entrant posts can choose the target.
+_SIGNED_IN_SUFFIX = "/signed-in"
 
 
 def entrant_or_back_to_form(
@@ -561,43 +558,74 @@ def entrant_or_back_to_form(
         raise
 
 
-def _echo_redirect(slug: str, form, total, refusal) -> RedirectResponse:
-    """The unhydrated answer: 303 back to the form, typing and total intact.
+def _echo_redirect(request: Request, slug: str, total, refusal) -> RedirectResponse:
+    """The unhydrated answer: **307** back to the form, so the typing rides
+    in the BODY and never in a URL.
 
     A native ``<form method=post>`` cannot read JSON, so a browser that
     pressed "Update events and total" with no script must be *navigated*
-    somewhere useful. 303 (not 302) so the browser re-issues as GET and a
-    reload never re-posts — the same choice ``submit_entry_json`` makes.
+    somewhere useful — and the entry page is node's, so the navigation is
+    the only channel the two tiers share.
 
-    ``totalCents`` rides in the query string as **display**. It is not
-    posted onward by the page that receives it, and the write path runs
-    ``compute_fee_total`` again (:610), so an edited URL reaches no record.
+    **Why 307 and not 303 (the 2026-08-10 browser pass).** This used to
+    answer 303 with the posted body reflected into the query string, and a
+    real demo pass read the address bar back:
+    ``/e/{slug}?playerName=Rin+Matsuda&club=Kingsway+BC&birthYear=2012&remarks=…``.
+    A 303 re-issues as GET, so a form body can only survive it as a URL —
+    and a URL is written into the browser's history, into every nginx
+    access log, and into any intermediary's, none of which is scoped to
+    hold an entrant's name, club or free-text notes. Age-bracketed events
+    make ``birthYear`` mandatory (``_is_age_bracketed``), so that is
+    personal data of MINORS in logs that were never designed to carry it.
+    307 preserves the method and the body, so the browser re-posts the same
+    fields to the page it came from and the query string carries only what
+    the SERVER computed. Redacting field names would have been the smaller
+    diff and the wrong fix: the typing has to survive the round trip (that
+    is what the round trip is for), so it has to travel somewhere, and the
+    only somewhere that is not a log line is the request body.
 
-    **The refusal is echoed as a CODE, never as its message.** This target
-    is a GET on the tournament's own host, so the query string is a
-    *shareable link* — whatever it carries is rendered on the official
-    entry page for whoever was sent it, which is not the same person who
-    wrote it. A free-text ``?refusal=`` would therefore let a stranger put
-    a plausible organiser warning on a page about money (no XSS is needed;
-    the page escaping it faithfully is the problem). ``code`` is fixed
-    server vocabulary from ``check_policy`` and ``subjects`` are its
-    player keys, so the client picks the sentence
+    The cost, stated because it is real: 307 is not POST/redirect/GET, so
+    reloading the landing page re-posts and the browser asks. That is
+    acceptable for THIS target and would not be for the receipt —
+    ``quote_entry`` writes nothing, and the ``action`` this lands on
+    (``entrant/app/routes/entry.tsx``) re-renders and writes nothing
+    either, so a re-post is a re-render.
+
+    ``totalCents`` still rides in the query string as **display**. It is
+    not posted onward by the page that receives it, and the write path runs
+    ``compute_fee_total`` again (:604), so an edited URL reaches no record.
+
+    **The refusal is still echoed as a CODE, never as its message.** The
+    landing URL remains addressable and therefore *shareable* — whatever it
+    carries is rendered on the official entry page for whoever was sent it,
+    which is not the same person who wrote it. A free-text ``?refusal=``
+    would let a stranger put a plausible organiser warning on a page about
+    money (no XSS is needed; the page escaping it faithfully is the
+    problem). ``code`` is fixed server vocabulary from ``check_policy`` and
+    ``subjects`` are its player keys, so the client picks the sentence
     (``app/lib/echo.ts``'s ``refusalText``) and nothing an author of a URL
-    writes can become prose.
+    writes can become prose. Moving the body out of the query string does
+    not relax that: it removes the only *other* channel free text had.
+
+    Three keys, all server-authored, and no loop over the body at all —
+    which is what makes the privacy property structural rather than a
+    denylist somebody has to keep in step with the form.
     """
-    echoed = [
-        (name, value[:_ECHO_MAX_LEN])
-        for name, value in list(form.multi_items())[:_ECHO_MAX_FIELDS]
-        if name not in _ECHO_DROP and isinstance(value, str)
-    ]
+    echoed = []
     if total is not None:
         echoed.append(("totalCents", str(total)))
     if refusal is not None:
         echoed.append(("refusalCode", refusal.code))
         if refusal.subjects:
             echoed.append(("refusalSubjects", ",".join(refusal.subjects)))
+    # Presence, not value: the flag chooses between two paths written above,
+    # so a crafted `?signedIn=/evil` picks the same `/signed-in` any honest
+    # form does. It rides on the quote URL rather than in the body because it
+    # is transport — the submit post has no use for it.
+    variant = _SIGNED_IN_SUFFIX if request.query_params.get("signedIn") else ""
+    query = f"?{urlencode(echoed)}" if echoed else ""
     return RedirectResponse(
-        url=f"/e/{quote(slug, safe='')}?{urlencode(echoed)}#enter", status_code=303
+        url=f"/e/{quote(slug, safe='')}{variant}{query}#enter", status_code=307
     )
 
 
@@ -636,12 +664,13 @@ async def quote_entry(
 
     **Two answers, by ``Accept``.** A hydrated caller asks for JSON and gets
     ``QuoteResponse``. A native form post cannot read JSON at all — it is a
-    navigation — so a browser ``Accept: text/html`` gets a 303 back to the
-    entry page carrying its own body plus the total (``_echo_redirect``).
-    That is what keeps R14's "Update events and total" working with
-    JavaScript disabled (spec §7) without node ever relaying a credential:
-    the browser talks to this route directly, on one origin, and the RR7
-    page just renders what comes back in the query string.
+    navigation — so a browser ``Accept: text/html`` gets a **307** back to
+    the entry page, which re-posts the entrant's own body there and leaves
+    only the server's total in the query string (``_echo_redirect``). That
+    is what keeps R14's "Update events and total" working with JavaScript
+    disabled (spec §7) without node ever relaying a credential: the browser
+    talks to this route directly, on one origin, and the RR7 page renders
+    the body it is handed back.
     """
     page, tournament = _resolve(repo, slug)
     form = await request.form()
@@ -660,7 +689,7 @@ async def quote_entry(
     # ``text/html`` in Accept means a navigation, not a fetch: browsers send
     # it on a native form post and never on `fetch(..., {headers: {}})`.
     if "text/html" in request.headers.get("accept", ""):
-        return _echo_redirect(page.slug, form, total, refusal)
+        return _echo_redirect(request, page.slug, total, refusal)
     return QuoteResponse(
         totalCents=total,
         feeBasis=basis,
