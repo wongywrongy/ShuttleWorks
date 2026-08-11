@@ -163,7 +163,11 @@ describe('the account pages are reachable by link', () => {
     // entry page's own document.
     const html = await fetchEntry();
 
-    expect(hrefs(html)).toContain('/e/login?next=/e/spring-open');
+    // `next` names the variant of the entry page that CONFIRMS the sign-in
+    // (E3) — `/e/{slug}/signed-in`, the same document plus the outcome. A
+    // failed sign-in 401s and never follows `next`, so arriving there is the
+    // one thing this tier can say truthfully about an act it cannot observe.
+    expect(hrefs(html)).toContain('/e/login?next=/e/spring-open/signed-in');
     expect(hrefs(html)).toContain('/e/signup');
   });
 
@@ -196,6 +200,68 @@ describe('the account pages are reachable by link', () => {
       expect(links.filter((h) => h.startsWith('/e/api/'))).toEqual([]);
     },
   );
+});
+
+// ---- no control may need a script this tier does not ship ------------------
+
+describe('every control on these pages works with no JavaScript', () => {
+  it.each([['login'], ['signup'], ['entry']] as const)(
+    'the %s page renders no control that can only do something with script',
+    async (page) => {
+      // **E2.** The design system's `TextField` adds a "Show password" toggle
+      // to every `type="password"` input, and it is a `<button type="button">`
+      // driven by `onClick`. This tier renders no client JS at all
+      // (`app/root.tsx` has no `<Scripts/>`, and the CSP is `script-src
+      // 'self'`), so pressing it did nothing at all — a dead control, which
+      // teaches the reader the page is broken. `revealable={false}` deletes
+      // it; a JS-backed reveal would need a script budget the tier does not
+      // have, and is logged in `docs/audits/debt-log.md` instead.
+      //
+      // **Derived, not spelled.** The finding is not the label: it is that a
+      // `type="button"` has no behaviour of its own — unlike submit and reset,
+      // which the browser itself implements — so on a scriptless page it can
+      // only ever be inert. Anything new with that shape is a finding here on
+      // the day it lands.
+      const html =
+        page === 'entry'
+          ? await fetchEntry()
+          : page === 'signup'
+            ? await fetchSignup()
+            : await render('/e/login');
+
+      expect(html).not.toMatch(/<button[^>]*type="button"/i);
+      expect(html).not.toContain('Show password');
+      expect(html).not.toContain('Hide password');
+      // Non-vacuity: these documents DO carry buttons, so the assertions
+      // above are not passing over a page that rendered no controls at all.
+      expect(html).toMatch(/<button[^>]*type="submit"/i);
+    },
+  );
+});
+
+// ---- a completed sign-up has to be visible on the page it lands on ---------
+
+describe('signing up says so on the page the browser lands on', () => {
+  it('confirms at the destination sign-up itself posts as `next`', async () => {
+    // **E3.** `POST /e/account/signup` answers 303 to `next` on BOTH
+    // branches — created and already-registered — so the confirmation is
+    // rendered from the URL and is byte-identical for both, and the
+    // non-enumeration property is untouched. Derived end to end: the value is
+    // read off the signup document and then RENDERED, so a `next` that points
+    // at a page which says nothing is a failure here rather than a silent
+    // regression.
+    const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(await fetchSignup())?.[1];
+
+    expect(next).toBeTruthy();
+    expect(await render(next as string)).toContain('entrant account is ready');
+  });
+
+  it('says nothing of the kind on the plain sign-in page', async () => {
+    // Non-vacuity, and the property that makes the line above mean anything:
+    // someone who navigated to `/e/login` did not just create an account, and
+    // must not be told they did.
+    expect(await render('/e/login')).not.toContain('entrant account is ready');
+  });
 });
 
 // ---- `next`: the page renders it, so the page validates it -----------------

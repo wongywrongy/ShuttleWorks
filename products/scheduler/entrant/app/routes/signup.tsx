@@ -174,8 +174,17 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
             `/e/account/login` (`api/entrants.py:466`), which is POST-only —
             so a successful signup ended on a 405. A constant, and a node-owned
             GET: it carries no per-visitor information, so it cannot become the
-            distinction the uniform 202/303 exists to avoid. */}
-        <input type="hidden" name="next" value="/e/login" />
+            distinction the uniform 202/303 exists to avoid.
+
+            **`/created`, not bare `/e/login` (E3).** Both are this same login
+            page; the suffix is the one signal node gets that a sign-up
+            completed, because the backend redirects here on success and
+            answers 401/422 without redirecting otherwise. Landing on the bare
+            page said nothing, so a completed sign-up and a silently failed
+            one rendered the same document. The extra segment is still a
+            constant and still carries nothing per-visitor, so the uniform
+            303 stays uniform. */}
+        <input type="hidden" name="next" value="/e/login/created" />
 
         <TextField
           id="signup-email"
@@ -203,6 +212,10 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
           maxLength={128}
           autoComplete="new-password"
           hint="At least 8 characters. Very common passwords are refused."
+          // Deleted for the reason spelled out in `login.tsx`: `TextField`'s
+          // default "Show password" toggle is a `<button type="button">` with
+          // an `onClick`, and this tier ships no client JS, so it was inert.
+          revealable={false}
         />
 
         <TextField

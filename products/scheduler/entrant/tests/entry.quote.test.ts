@@ -141,6 +141,38 @@ describe('the quote round trip, with no JavaScript', () => {
     expect(html).toContain('action="/e/api/submit/spring-open"');
   });
 
+  it('recalculates by POST, so this tier never puts entrant detail in a URL', async () => {
+    // **E1, the privacy control.** A GET here would carry the player's name,
+    // club, birth year and free-text remarks in the query string — into nginx
+    // access logs, browser history and any intermediary — and junior events
+    // collect a birth year, so that is personal data of minors in logs never
+    // scoped to hold it. The mechanism that prevents it is entirely native:
+    // the form's `method` and the button's `formaction`. Both are pinned, and
+    // EVERY form in the document is checked rather than the one this file is
+    // about — a second form added as a GET is the same defect.
+    //
+    // What this cannot see, stated rather than implied: the 303 the quote
+    // route answers with echoes the posted body into its `Location`
+    // (`_echo_redirect`, `api/entries_json.py`), so the PII reaches the URL
+    // bar anyway. That half is the backend's and is reported, not fixed here.
+    const html = await render();
+
+    const forms = [...html.matchAll(/<form\b[^>]*>/g)].map((m) => m[0]);
+    expect(forms.length).toBeGreaterThan(0);
+    for (const form of forms) {
+      expect(form).toMatch(/method="post"/i);
+    }
+    // No second, GET-shaped route to the same act: not a link, and not a
+    // submit control that overrides the method back to GET.
+    expect(html).not.toMatch(/<a[^>]*href="[^"]*\/e\/api\/quote\//i);
+    expect(html).not.toMatch(/formmethod="get"/i);
+    // And no field that carries entrant detail is rendered into a URL.
+    for (const field of ['playerName', 'club', 'birthYear', 'remarks']) {
+      expect(html).not.toContain(`?${field}=`);
+      expect(html).not.toContain(`&${field}=`);
+    }
+  });
+
   it('takes the SAME path hydrated: nothing intercepts the submission', async () => {
     // Why there is one path and not two. This is a plain `<form>`, not React
     // Router's `<Form>`, and the button carries no handler — so a hydrated

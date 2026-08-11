@@ -30,6 +30,20 @@ export default [
   // is FastAPI's POST and a node GET there is a 405 in production and fine in
   // dev, which is the worst pair. Static, so it ranks above `:slug`.
   route('login', 'routes/login.tsx'),
+  // The SAME module at a second path, and the only channel this tier has for
+  // saying "that worked" (E3). `POST /e/account/signup` answers 303 to the
+  // form's `next` — on BOTH branches, created and already-registered, which is
+  // the non-enumeration property — and it answers nothing else, so arriving
+  // here is an outcome rather than an identity. node cannot read the session
+  // cookie (R8-D) and so cannot state who is signed in; it can state what just
+  // happened, because only the redirect lands on this URL.
+  //
+  // A second `route()` rather than an optional segment (`login/created?`):
+  // `tests/helpers/nodePaths.ts` flattens `path` verbatim, and the signup
+  // `next` control checks its value against that list — an optional segment
+  // would put `/e/login/created?` in it and the derivation would stop
+  // matching. Same file, so `id` has to be given.
+  route('login/created', 'routes/login.tsx', { id: 'login-created' }),
   // There is deliberately NO logout page. Signing out is a POST to
   // `/e/account/logout` (FastAPI's, R8-A) and the form that makes it lives in
   // the footer of `routes/entry.tsx` — the only page a signed-in entrant is
@@ -40,6 +54,16 @@ export default [
   // The 303 target of POST /e/api/submit/{slug}: a GET, so a reload of the
   // success page re-reads instead of re-posting the entry.
   route(':slug/receipt/:submissionId', 'routes/receipt.tsx'),
+  // The entry page again, at the URL a completed sign-in lands on (E3) — the
+  // same argument as `login/created` above, applied to `POST /e/account/login`
+  // (303 to `next` on success, 401 and no redirect on failure). The entry page
+  // is where the sign-in link sends the entrant back to, so the confirmation
+  // belongs on it and not on a page in the way of the form.
+  //
+  // It is NOT a capability: the URL is typeable and shareable, so the banner
+  // states an outcome and grants nothing. Who may submit is decided at the
+  // write, by `Depends(get_current_entrant)`.
+  route(':slug/signed-in', 'routes/entry.tsx', { id: 'entry-signed-in' }),
   // Last, and dynamic: React Router ranks the static segment above it, so
   // /e/health stays the health route rather than a workspace called "health".
   route(':slug', 'routes/entry.tsx'),

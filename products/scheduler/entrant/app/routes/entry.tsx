@@ -28,7 +28,7 @@
  * principal, so the no-relay rule is untouched. See
  * `app/lib/formCsrf.server.ts`.
  */
-import { Button } from '@scheduler/design-system/components';
+import { Button, Notice } from '@scheduler/design-system/components';
 import { data, isRouteErrorResponse, useRouteError } from 'react-router';
 
 import { ApiError, apiGet } from '../lib/apiFetch.server';
@@ -54,7 +54,32 @@ export interface EntryLoaderData {
    * body plus the server's total, and the hydrated path navigates to the same
    * shape. Nothing in it is trusted — see `parseEcho`. */
   echo: FormEcho;
+  /**
+   * Did the browser arrive here from a completed sign-in (E3)?
+   *
+   * **Not a claim about identity, and not a capability.** This page cannot
+   * know who is reading it — node's projection fetch is anonymous by
+   * construction (R8-D), so `viewer.signedIn` is `false` for a signed-in
+   * entrant exactly as much as for a stranger, and reading the session cookie
+   * is refused structurally by `credentialRelayLines`. What node CAN observe
+   * is which of this module's two routes matched, and `/e/{slug}/signed-in` is
+   * reached by exactly one thing that matters: the 303 `POST
+   * /e/account/login` answers on success. A failure raises 401 and redirects
+   * nowhere.
+   *
+   * The URL is typeable and shareable, so a stranger can reach this state
+   * without a session. That costs nothing: the banner grants no access and
+   * the only thing gated on being signed in — the write — is gated at the
+   * write, by `Depends(get_current_entrant)` on `POST /e/api/submit/{slug}`,
+   * which answers an anonymous submitter with the `NOT_SIGNED_IN` notice.
+   */
+  justSignedIn: boolean;
 }
+
+/** The suffix of the second path bound to this module (`app/routes.ts`).
+ * A suffix, not the whole URL, because the slug is a route param — and the
+ * table binds this module to exactly two shapes, so nothing else ends here. */
+const SIGNED_IN_SUFFIX = '/signed-in';
 
 /**
  * The uniform 404 — an unknown slug and a closed page answer identically.
@@ -99,11 +124,15 @@ export async function loader({
   // nothing here can ship one without the other. `mintFormCsrf` takes no
   // arguments, so this route still reads no credential of any kind.
   const csrf = mintFormCsrf();
+  const url = new URL(request.url);
   const payload: EntryLoaderData = {
     page,
     idempotencyKey: crypto.randomUUID(),
     formCsrf: csrf.token,
-    echo: parseEcho(new URL(request.url).searchParams),
+    echo: parseEcho(url.searchParams),
+    // The path, i.e. which of this module's two routes matched — not a
+    // credential, not a header, and nothing that names a person.
+    justSignedIn: url.pathname.endsWith(SIGNED_IN_SUFFIX),
   };
   return data(payload, csrf.responseInit);
 }
@@ -150,7 +179,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
  * inherits the uniform 404 structurally: there is nothing tournament-shaped
  * to read, and the fallback title below names no workspace.
  */
-export const meta: Route.MetaFunction = ({ data }) => {
+export const meta: Route.MetaFunction = ({ data, location }) => {
   if (!data) {
     return [{ title: 'Entry page not found' }];
   }
@@ -162,6 +191,22 @@ export const meta: Route.MetaFunction = ({ data }) => {
     .join(' · ');
 
   const tags: ReturnType<Route.MetaFunction> = [{ title }];
+  // The post-sign-in variant is the same tournament content at a second URL,
+  // and it says "You are signed in" — which is false for a crawler. Nothing
+  // links to it (only the login page's hidden `next` field names it), so this
+  // is belt to that braces rather than the only control.
+  //
+  // Read off `location`, NOT off the loader payload's `justSignedIn`, which
+  // holds exactly the same boolean. The allowlist guard in
+  // `entry.meta.test.ts` enumerates every field of the loader payload this
+  // function may touch, and it is stated positively so a future secret cannot
+  // slip past a denylist of today's field names. Taking the path from the
+  // argument that already carries it leaves that allowlist at one entry
+  // instead of asking a reviewer to re-approve a widened one for a value the
+  // request itself provides.
+  if (location.pathname.endsWith(SIGNED_IN_SUFFIX)) {
+    tags.push({ name: 'robots', content: 'noindex' });
+  }
   if (description) {
     tags.push({ name: 'description', content: description });
     tags.push({ property: 'og:description', content: description });
@@ -175,7 +220,7 @@ export const meta: Route.MetaFunction = ({ data }) => {
 };
 
 export default function Entry({ loaderData }: Route.ComponentProps) {
-  const { page, idempotencyKey, formCsrf, echo } = loaderData;
+  const { page, idempotencyKey, formCsrf, echo, justSignedIn } = loaderData;
   const openEvents = page.events.filter((event) => event.isOpen);
 
   return (
@@ -228,15 +273,29 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
           `next` sends the entrant back to THIS page after signing in —
           validated at both ends (`safeNext` in `routes/login.tsx`,
           `next_target` in `api/entrants.py`), and the slug is encoded because
-          it is the one part of this URL that comes from data.
+          it is the one part of this URL that comes from data. It names the
+          `/signed-in` variant of this page (E3): the redirect is the only
+          thing that lands there, so the document the entrant arrives on can
+          say the sign-in worked. Before that, a sign-in that succeeded and one
+          that silently did nothing rendered the same page.
         */}
-        <p className="text-sm">
-          <a className="underline" href={`/e/login?next=/e/${encodeURIComponent(page.page.slug)}`}>
-            Sign in
-          </a>{' '}
-          or <a className="underline" href="/e/signup">create an entrant account</a> to
-          enter.
-        </p>
+        {justSignedIn ? (
+          <Notice tone="success">
+            You are signed in. Fill in the form below and press
+            &ldquo;Submit entry&rdquo;.
+          </Notice>
+        ) : (
+          <p className="text-sm">
+            <a
+              className="underline"
+              href={`/e/login?next=/e/${encodeURIComponent(page.page.slug)}/signed-in`}
+            >
+              Sign in
+            </a>{' '}
+            or <a className="underline" href="/e/signup">create an entrant account</a> to
+            enter.
+          </p>
+        )}
         {/*
           **The form is rendered unconditionally (ruling R8-E).** It used to be
           gated on `page.viewer.signedIn`, which is a value this page cannot
@@ -288,7 +347,7 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
         <h2 className="text-lg font-semibold">Who has entered</h2>
         <ul className="grid gap-1 text-sm">
           {page.entrants.map((row, i) => (
-            <li key={`${row.eventId}-${i}`}>{row.name}</li>
+            <li key={`${row.name}-${i}`}>{row.name}</li>
           ))}
           {page.entrants.length === 0 ? <li>Nobody yet.</li> : null}
         </ul>
@@ -321,6 +380,20 @@ export default function Entry({ loaderData }: Route.ComponentProps) {
         HTML default and is what `is_form_post` looks for.
       */}
       <footer className="grid gap-1 border-t pt-4 text-sm">
+        {/* **The contradiction, removed (E3).** This footer used to offer
+            "Sign out" flatly, in the same document that told the reader to
+            sign in — one page asserting both states of a reader it cannot
+            see. The control still renders on both variants, because hiding it
+            on the plain URL would strand a signed-in entrant: NO node page can
+            observe the session, so "hide it when signed out" is not a thing
+            this tier can implement. What it can do is stop claiming. On the
+            plain page the offer is conditional; on the page a sign-in just
+            landed on, it is not, because there the outcome is known. */}
+        {justSignedIn ? null : (
+          <p className="text-muted-foreground">
+            Signed in on this device? You can sign out here.
+          </p>
+        )}
         <form method="post" action="/e/account/logout" className="flex items-baseline gap-3">
           {/* The nonce set on THIS response is the secret; this is its digest —
               the same field the entry form above carries, from the same mint.

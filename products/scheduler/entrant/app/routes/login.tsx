@@ -43,7 +43,7 @@
  * **Everything here works unhydrated.** Unlike signup there is no Turnstile —
  * `verify_turnstile` guards signup only — so this page has no no-JS gap at all.
  */
-import { Button, TextField } from '@scheduler/design-system/components';
+import { Button, Notice, TextField } from '@scheduler/design-system/components';
 import { data } from 'react-router';
 
 import { FORM_FIELD } from '../lib/formField';
@@ -100,7 +100,32 @@ export interface LoginLoaderData {
   formCsrf: string;
   /** Validated here, and validated again by `next_target` at the far end. */
   next: string;
+  /**
+   * Did the browser arrive here from a completed sign-up (E3)?
+   *
+   * Read from this request's own PATH — `/e/login/created`, the second route
+   * bound to this module — and from nothing else. `POST /e/account/signup`
+   * answers 303 to the form's `next` and answers it identically whether the
+   * account was created or already existed, so this says "your sign-up
+   * finished" and never "your address was new": the enumeration property the
+   * backend pays an Argon2 hash to keep is untouched, and the two branches
+   * still render byte-identical documents.
+   */
+  justSignedUp: boolean;
 }
+
+/**
+ * The suffix of the second path bound to this module (`app/routes.ts`).
+ *
+ * A suffix rather than the whole URL, and no constant shared with
+ * `signup.tsx`: the route table binds this module to exactly two paths, so
+ * there is nothing else `/created` could be, and a route-to-route import to
+ * spare one literal is a worse trade than the literal. The pair that could
+ * actually drift — the `next` signup posts and the page that confirms it — is
+ * held end to end in `tests/login.test.ts`, which reads the value off the
+ * signup document and renders it.
+ */
+const SIGNED_UP_SUFFIX = '/created';
 
 /**
  * Reads the URL for exactly one field, and one that names no person.
@@ -115,9 +140,14 @@ export interface LoginLoaderData {
  */
 export async function loader({ request }: { request: Request }) {
   const csrf = mintFormCsrf();
+  // Read for its URL — its query for `next`, its path for which of this
+  // module's two routes was matched — and for nothing that carries identity.
+  // The structural guards in `tests/entry.loader.test.ts` hold that line.
+  const url = new URL(request.url);
   const payload: LoginLoaderData = {
     formCsrf: csrf.token,
-    next: safeNext(new URL(request.url).searchParams.get('next')),
+    next: safeNext(url.searchParams.get('next')),
+    justSignedUp: url.pathname.endsWith(SIGNED_UP_SUFFIX),
   };
   return data(payload, csrf.responseInit);
 }
@@ -140,7 +170,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
 }
 
 export default function LoginPage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, next } = loaderData;
+  const { formCsrf, next, justSignedUp } = loaderData;
 
   return (
     <main className="mx-auto grid w-full max-w-md gap-6 p-4">
@@ -151,6 +181,22 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
           into any tournament on this site.
         </p>
       </header>
+
+      {/* The sign-up outcome, in words (E3). Before this, a successful sign-up
+          redirected here and said nothing at all, so it was indistinguishable
+          from a form that had quietly failed.
+
+          The copy is true on BOTH of the backend's branches — a new account is
+          ready, and one that already existed is ready too — which is what
+          keeps it from becoming the enumeration oracle the uniform 303 exists
+          to avoid. It states no address and no branch, so the documents for a
+          fresh and a registered address stay byte-identical. */}
+      {justSignedUp ? (
+        <Notice tone="success">
+          Your entrant account is ready. Sign in below with the address and
+          password you just gave.
+        </Notice>
+      ) : null}
 
       {/*
         Posts ACROSS the tier boundary, not to this page's own URL: all of
@@ -191,6 +237,17 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
           // publishes the shape of stored secrets and locks out any account
           // whose password predates the rule. The server decides.
           autoComplete="current-password"
+          // **The reveal toggle is deleted, not fixed (E2).** `TextField`
+          // gives every password box a "Show password" control by default,
+          // and it is a `<button type="button">` driven by `onClick` — on a
+          // tier that ships no client JS at all it did nothing when pressed.
+          // A dead control is worse than no control: it teaches the reader
+          // that the page is broken on the one screen where they are typing a
+          // credential. Making it work needs a script budget this tier does
+          // not have (`root.tsx` renders no `<Scripts/>`; the CSP is
+          // `script-src 'self'`), so the affordance is logged in
+          // `docs/audits/debt-log.md` rather than built.
+          revealable={false}
         />
 
         <Button type="submit" className="justify-self-start">

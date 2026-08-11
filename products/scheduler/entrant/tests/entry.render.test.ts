@@ -21,7 +21,7 @@ import { createRequestHandler, type ServerBuild } from 'react-router';
 
 /**
  * The REAL `GET /e/api/page/{slug}` projection (`api/entries_json.py:97-188`):
- * NESTED, `entryCount` not `entered`, `{name, eventId}` entrant rows, a
+ * NESTED, `entryCount` not `entered`, one-field `{name}` entrant rows, a
  * `policy` object and the three deadline fields. See the task report.
  *
  * **Shared with `scripts/measure-page-weight.mjs`, on purpose.** That script
@@ -71,7 +71,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(body: unknown = PAGE): Promise<string> {
+async function render(body: unknown = PAGE, path = '/e/spring-open'): Promise<string> {
   vi.stubGlobal(
     'fetch',
     vi.fn(
@@ -86,7 +86,7 @@ async function render(body: unknown = PAGE): Promise<string> {
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
   const res = await createRequestHandler(build, 'development')(
-    new Request('http://entrant.test/e/spring-open'),
+    new Request(`http://entrant.test${path}`),
   );
   return res.text();
 }
@@ -329,5 +329,71 @@ describe('the entry form, unhydrated', () => {
 
   it('renders no discipline line when the director set no caps', async () => {
     expect(await render()).not.toContain('Per discipline');
+  });
+});
+
+// ---- the outcome of signing in, on the page it lands on --------------------
+
+describe('signing in says so on the page the browser lands on', () => {
+  /**
+   * **E3, and the limit of what this tier can claim.** node's projection
+   * fetch is anonymous by construction (`apiFetch.server.ts` sends a frozen
+   * `accept`-only allowlist, and `credentialRelayLines` refuses any route
+   * module that reads a cookie), so `viewer.signedIn` is `false` on every
+   * server-rendered page and the document cannot state WHO is reading it.
+   *
+   * What it can state is what just happened: `POST /e/account/login` answers
+   * 303 to `next` only on success — a failure raises 401 and never redirects
+   * — so landing on `/e/{slug}/signed-in` is an outcome, not an identity, and
+   * it is the only thing about the act that reaches node at all. It is not
+   * proof: the URL is typeable and shareable, so nothing is *granted* by it.
+   * Who may submit is still decided at the write, by
+   * `Depends(get_current_entrant)` on `POST /e/api/submit/{slug}`.
+   */
+  it('confirms the sign-in on the /signed-in variant and nowhere else', async () => {
+    const confirmed = await render(PAGE, '/e/spring-open/signed-in');
+    const plain = await render();
+
+    expect(confirmed).toContain('You are signed in');
+    expect(plain).not.toContain('You are signed in');
+    // Non-vacuity: both really are the entry page, not an error boundary.
+    expect(confirmed).toContain('action="/e/api/submit/spring-open"');
+    expect(plain).toContain('action="/e/api/submit/spring-open"');
+  });
+
+  it('drops the "sign in to enter" invitation once the reader has signed in', async () => {
+    // The contradiction the browser pass found, in its second half: the same
+    // document told the reader to sign in AND offered to sign them out.
+    const confirmed = await render(PAGE, '/e/spring-open/signed-in');
+
+    expect(confirmed).not.toContain('to enter.');
+    expect(await render()).toContain('to enter.');
+  });
+
+  it('keeps the sign-out control off the "you might not be signed in" claim', async () => {
+    // The footer is rendered on both variants — `logout` is idempotent and a
+    // page that hid it would strand a signed-in entrant, since NO node page
+    // can see the session. What changes is the copy: on the plain page the
+    // control is offered conditionally, so an anonymous reader is no longer
+    // told flatly that they can sign out.
+    const plain = await render();
+    const confirmed = await render(PAGE, '/e/spring-open/signed-in');
+
+    expect(plain).toContain('Signed in on this device?');
+    expect(confirmed).not.toContain('Signed in on this device?');
+    for (const html of [plain, confirmed]) {
+      expect(html).toContain('action="/e/account/logout"');
+    }
+  });
+
+  it('keeps the confirmation variant out of search results', async () => {
+    // A second URL for the same tournament content, reachable by anyone who
+    // types it and saying "You are signed in" to a crawler that is not. It is
+    // linked from nothing (only the login page's hidden `next` field names
+    // it), and this makes that explicit rather than hopeful.
+    const confirmed = await render(PAGE, '/e/spring-open/signed-in');
+
+    expect(confirmed).toMatch(/<meta[^>]*name="robots"[^>]*content="noindex"/);
+    expect(await render()).not.toContain('noindex');
   });
 });

@@ -1044,3 +1044,68 @@ a green 1,100-test suite. The real check is the viewer flow in
   standing up (Size M, a gate-policy call, not a code change). Recording rather than fixing:
   adding a CI job is exactly the kind of gate change CLAUDE.md says not to make casually.
   *(SP-PROGRAM-1 Phase 6, Tasks 30/32.)*
+
+- **2026-08-10 · `POST /e/api/quote/{slug}` echoes the whole posted body into its 303
+  `Location`, so entrant PII lands in a URL (E1 — the entrant half is already correct).**
+  Found by a real-browser demo pass over `/e/dfw-lewisville-2026`. The reported symptom was
+  "the recalculation is a GET"; it is not — the form is `method="post"` and the button carries
+  `formaction="/e/api/quote/{slug}"`, and the network log shows `POST … => 303` followed by the
+  GET. The GET is the redirect: `_echo_redirect` (`backend/api/entries_json.py`) builds
+  `f"/e/{slug}?{urlencode(echoed)}"` from `form.multi_items()` minus `_ECHO_DROP`, so
+  `playerName`, `club`, `birthYear` and the free-text `remarks` all cross into the address bar
+  — into nginx access logs, browser history and any intermediary. Junior events collect a birth
+  year, so this is personal data of minors in logs never scoped to hold it. **The entrant tier
+  cannot fix this alone**: a native form posts all of its fields, only the *events* are actually
+  priced (`quote_entry` groups on events and discards the rest), and the typing has to survive
+  the round trip or every recalculation eats a half-filled form. The shape of the fix is a
+  backend one: answer **307** to `/e/{slug}` instead of 303 — the method and body are preserved,
+  so the PII travels in a POST body — with only `totalCents`/`refusalCode`/`refusalSubjects`
+  (all non-PII, already bounded) in the query, and grow an `action` on `routes/entry.tsx` that
+  reads the re-posted body into the existing `FormEcho`. That action holds no credential and
+  makes no upstream call, so R8-D's no-relay rule is untouched. Two smaller consequences of the
+  same line: the redirect target is always the bare `/e/{slug}`, so a recalculation drops the
+  `/signed-in` variant and the signed-in reader is shown the "sign in to enter" invitation
+  again. The in-tier half is pinned green by `entry.quote.test.ts`'s "recalculates by POST"
+  control, which reddens if any form on that page becomes a GET. Size S (backend) + XS
+  (entrant). *(Entrant-tier browser defect pass, E1.)*
+
+- **2026-08-10 · A failed entrant sign-in paints raw JSON at `/e/account/login` (E3, the other
+  half).** Verified in a browser: wrong password → `HTTP 401` with
+  `{"detail":{"code":"AUTH_INVALID_CREDENTIALS","message":"Invalid email or password"}}` as the
+  whole document. A native `<form method=post>` is a *navigation*, so a JSON body is what the
+  human reads. The pattern for the fix already exists one file over —
+  `entrant_or_back_to_form` (`api/entries_json.py`) turns a 401 into a 303 carrying a refusal
+  *code* when `Accept` contains `text/html`, and `lib/echo.ts`'s `refusalText` maps codes to
+  fixed local copy — so `api/entrants.py:login` wants the same treatment, back to `/e/login`
+  with one code. **It must stay one code for every cause**: unknown address, no password set and
+  wrong password are deliberately indistinguishable (the route pays the Argon2 cost on the miss
+  for the same reason), and a per-cause refusal would rebuild the enumeration oracle the whole
+  page is designed around. Backend-only, so reported rather than made. The success side is now
+  legible from the entrant tier (`/e/{slug}/signed-in`, `/e/login/created`). Size S.
+  *(Entrant-tier browser defect pass, E3.)*
+
+- **2026-08-10 · `DEFAULT_NEXT` sends a sign-in with no destination back to a page that says
+  nothing (E3 residual).** `routes/login.tsx` defaults `next` to `/e/login`, so the sign-up →
+  sign-in path — the one a brand-new entrant takes, since signup posts `next=/e/login/created`
+  and that page carries no onward destination — ends on the sign-in form again, which reads as
+  "the form reset itself". Every link that matters carries a real `next` (the entry page sends
+  `?next=/e/{slug}/signed-in`, and that flow is verified), so this is the fallback only.
+  Fixing it properly means either a third path on the login module (`/e/login/signed-in`, which
+  would render "you are signed in" above a sign-in form — odd) or carrying the entrant's
+  original destination through sign-up, which `_SAFE_NEXT` (`^/e/[A-Za-z0-9/_.~-]*$`, no `?`)
+  makes path-only. Recorded rather than guessed at. Size XS–S, design call.
+  *(Entrant-tier browser defect pass, E3.)*
+
+- **2026-08-10 · The entrant tier has no password-visibility affordance, deliberately (E2).**
+  `TextField` gives every `type="password"` a "Show password" toggle by default, and it is a
+  `<button type="button">` driven by `onClick`. On `/e/login` and `/e/signup` that shipped a
+  control that did nothing at all when pressed — this tier renders no client JavaScript
+  (`root.tsx` has no `<Scripts/>`; the CSP is `script-src 'self'`). It is now opted out with
+  `revealable={false}` rather than made to work, because making it work needs a script budget
+  the tier does not have: the page-weight gate is a blocking 4 KB against a measured 2.5 KB of
+  HTML and zero JS. If the affordance is genuinely wanted, the options are a CSS-only
+  checkbox-and-`:checked` reveal (needs `type` to be swappable by CSS, which it is not) or the
+  Phase 11 origin split re-opening the JS question — i.e. it is a design decision, not a bug.
+  The prohibition is now derived, not spelled: `login.test.ts` fails any `<button type="button">`
+  in the login, signup or entry documents, since on a scriptless page that shape can only be
+  inert. Size XS to revisit. *(Entrant-tier browser defect pass, E2.)*
