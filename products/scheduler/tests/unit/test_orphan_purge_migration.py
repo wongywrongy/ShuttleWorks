@@ -66,6 +66,10 @@ EVENT = "2" * 32
 PLAYER = "3" * 32
 ENTRY_CASCADED = "4" * 32
 ENTRY_KEPT = "5" * 32
+ORG_GONE = "9" * 32
+USER = "8" * 32
+BACKUP = "7" * 32
+MATCH = "a-match"
 
 
 def _load_migration():
@@ -155,6 +159,58 @@ def _orphan_the_account(url: str) -> None:
     conn.close()
 
 
+def _give_the_workspace_an_org(url: str) -> None:
+    """Attach the seeded workspace to an org and hang real content off it.
+
+    Everything a director would lose: the workspace row itself, its matches
+    and match states, its ``tournament_backups`` (the in-product recovery
+    path) and its membership row.
+    """
+    conn = sqlite3.connect(_db_path(url))
+    conn.execute("PRAGMA foreign_keys=OFF")
+    conn.execute(
+        "INSERT INTO orgs (id, name, created_at) VALUES (?, 'Riverside BC', ?)",
+        (ORG_GONE, NOW),
+    )
+    conn.execute(
+        "INSERT INTO users (id, email, email_verified, created_at, updated_at)"
+        " VALUES (?, 'director@x.test', 0, ?, ?)",
+        (USER, NOW, NOW),
+    )
+    conn.execute("UPDATE tournaments SET org_id = ? WHERE id = ?", (ORG_GONE, TOURNAMENT))
+    conn.execute(
+        "INSERT INTO matches (tournament_id, id, status, version, created_at,"
+        " updated_at) VALUES (?, ?, 'scheduled', 1, ?, ?)",
+        (TOURNAMENT, MATCH, NOW, NOW),
+    )
+    conn.execute(
+        "INSERT INTO match_states (tournament_id, match_id, status, updated_at)"
+        " VALUES (?, ?, 'scheduled', ?)",
+        (TOURNAMENT, MATCH, NOW),
+    )
+    conn.execute(
+        "INSERT INTO tournament_backups (id, tournament_id, filename, snapshot,"
+        " size_bytes, created_at) VALUES (?, ?, 'tournament-orphan-purge.json',"
+        " '{}', 2, ?)",
+        (BACKUP, TOURNAMENT, NOW),
+    )
+    conn.execute(
+        "INSERT INTO tournament_members (tournament_id, user_id, role, joined_at)"
+        " VALUES (?, ?, 'owner', ?)",
+        (TOURNAMENT, USER, NOW),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _orphan_the_org(url: str) -> None:
+    conn = sqlite3.connect(_db_path(url))
+    conn.execute("PRAGMA foreign_keys=OFF")
+    conn.execute("DELETE FROM orgs WHERE id = ?", (ORG_GONE,))
+    conn.commit()
+    conn.close()
+
+
 def _violations(url: str) -> list[tuple]:
     conn = sqlite3.connect(_db_path(url))
     try:
@@ -211,6 +267,69 @@ def test_upgrade_removes_only_the_rows_foreign_key_check_reports(alembic_cfg):  
     assert _ids(url, "tournaments") == {TOURNAMENT}
     assert _ids(url, "entry_players") == {PLAYER}
     assert _ids(url, "entry_events") == {EVENT}
+
+
+# ---- It refuses to delete what a cascade would never have removed -----
+
+
+def test_a_workspace_whose_org_row_vanished_survives_the_purge(alembic_cfg, caplog):  # noqa: F811
+    """The data-loss case: ``tournaments.org_id`` is ON DELETE **RESTRICT**.
+
+    ``PRAGMA foreign_key_check`` reports a tournament whose org row vanished
+    while enforcement was inert exactly as it reports a truly orphaned
+    ``submissions`` row — but the two are nothing alike. A child of a CASCADE
+    parent was already logically deleted; a tournament is a top-level entity
+    the Hub lists and the director works in every day (the list query joins
+    ``tournament_members``, never ``orgs``). Deleting it, unattended, from the
+    app's startup path takes its matches, its match states, its membership and
+    the ``tournament_backups`` that were the only way back.
+
+    So the purge is bounded by the schema's own ON DELETE action: it removes
+    the rows a cascade would have removed, and nothing else. What it refuses
+    it must say out loud — the row is still a booby trap on any UPDATE, which
+    is the entire reason this migration exists.
+    """
+    import logging
+
+    from alembic import command
+
+    cfg, url = alembic_cfg
+    command.upgrade(cfg, PREVIOUS_REVISION)
+    _seed(url)
+    _give_the_workspace_an_org(url)
+    _orphan_the_account(url)
+    _orphan_the_org(url)
+
+    before = _violations(url)
+    assert {row[0] for row in before} == {
+        "submissions",
+        "entrant_sessions",
+        "tournaments",
+    }, before
+
+    with caplog.at_level(logging.INFO, logger="alembic.runtime.migration"):
+        command.upgrade(cfg, "head")
+
+    # The workspace and every row hanging off it is still there.
+    assert _ids(url, "tournaments") == {TOURNAMENT}
+    assert _ids(url, "matches") == {MATCH}
+    assert _ids(url, "match_states", "match_id") == {MATCH}
+    assert _ids(url, "tournament_backups") == {BACKUP}
+    assert _ids(url, "tournament_members", "tournament_id") == {TOURNAMENT}
+
+    # The genuine orphans still go — the bound narrows the purge, it does not
+    # switch it off.
+    assert _ids(url, "submissions") == {SUBMISSION_KEPT}
+    assert _ids(url, "entrant_sessions") == {SESSION_KEPT}
+    assert _ids(url, "entries") == {ENTRY_KEPT}
+
+    # Skipping quietly is its own trap: the row still fails any UPDATE that
+    # touches it, so the operator is told which row and what to do about it.
+    assert _violations(url) == [("tournaments", 1, "orgs", 0)]
+    refusals = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(refusals) == 1, caplog.records
+    message = refusals[0].getMessage()
+    assert "tournaments" in message and "org_id" in message and "RESTRICT" in message
 
 
 # ---- No-op on a clean database ----------------------------------------

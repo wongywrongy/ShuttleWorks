@@ -21,6 +21,36 @@ direction that deletes nothing while looking thorough. It also means this
 migration deletes *only* what SQLite itself calls invalid: on a clean database
 the first check comes back empty and nothing is executed at all.
 
+**Bounded to the constraints declared ``ON DELETE CASCADE``, because
+``foreign_key_check`` is not the same question as "should this row be gone".**
+It reports every invalid row, and invalid does not imply orphaned.
+``tournaments.org_id`` is a *nullable* ``ondelete="RESTRICT"`` pointer
+(``database/models.py``): a workspace whose org row vanished while enforcement
+was inert is reported by the check, yet the Hub lists it and the director
+works in it every day — the list query joins ``tournament_members``, never
+``orgs``. Deleting it here would take its matches, its match states, its
+membership and its ``tournament_backups`` — the in-product recovery path —
+unattended, at startup, on a laptop, with no backup and no downgrade. So each
+violation is matched against its constraint's ``on_delete`` action from
+``PRAGMA foreign_key_list``, and only ``CASCADE`` is swept. That makes this
+file's claim literally true rather than true of the two cases we happened to
+observe: every row deleted is a row SQLite itself would have deleted, had
+enforcement been on when the parent went. Reading the action from the schema
+keeps a new table correct for free, which a hand-written allowlist would not.
+
+**A refused violation is reported at ERROR, and the migration still
+completes.** Skipping quietly would be its own trap — the row keeps failing
+any ``UPDATE`` that touches it, which is the entire reason this migration
+exists. Raising instead is worse than it looks: ``app.main._run_migrations``
+catches and continues, so the raise would not stop the app, it would leave
+``alembic_version`` below head *permanently* — this purge re-raising on every
+boot, every future migration blocked behind it, and the genuine orphans never
+swept because the transaction rolled back. That trades one unwritable row for
+a database that silently stops receiving schema changes. Nor can the migration
+repair such a row without inventing policy (fabricate the missing org, or null
+out a pointer that drives tenancy). So it names the row and leaves it: a
+degraded workspace the operator can see and fix beats a deleted one.
+
 **Why the loop.** ``alembic/env.py`` disables enforcement on the migration
 connection, and must keep doing so — batch mode rebuilds a table by DROPping
 the original, and with enforcement on SQLite issues an implicit ``DELETE
@@ -62,23 +92,54 @@ log = logging.getLogger("alembic.runtime.migration")
 _MAX_PASSES = 20
 
 
+def _fk_actions(bind, table: str) -> dict[int, tuple[str, str]]:  # noqa: ANN001
+    """``{fkid: (on_delete_action, columns)}`` for one table, from the schema.
+
+    ``fkid`` is the fourth column of ``PRAGMA foreign_key_check`` and indexes
+    into ``PRAGMA foreign_key_list``. A composite key reports one row per
+    column, all sharing an ``id``, so the columns are joined for the log.
+    """
+    actions: dict[int, tuple[str, list[str]]] = {}
+    rows = bind.exec_driver_sql(
+        'SELECT id, "from", "on_delete" FROM pragma_foreign_key_list(?)', (table,)
+    ).fetchall()
+    for fkid, column, on_delete in rows:
+        _, columns = actions.setdefault(fkid, ((on_delete or "NO ACTION").upper(), []))
+        columns.append(column)
+    return {fkid: (action, ", ".join(cols)) for fkid, (action, cols) in actions.items()}
+
+
 def purge_orphans(bind) -> dict[str, int]:  # noqa: ANN001
-    """Delete every row ``PRAGMA foreign_key_check`` reports, and only those.
+    """Delete the rows a declared ``ON DELETE CASCADE`` would have removed.
 
     Returns ``{table: rows_removed}`` — empty when the database was clean.
+    Violations of any other action are left in place and logged at ERROR; see
+    the module docstring for why they are neither deleted nor raised on.
     """
     removed: dict[str, int] = {}
+    refused: list[tuple] = []
 
     for _ in range(_MAX_PASSES):
         violations = bind.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
         if not violations:
+            refused = []
             break
 
         # One row can violate several constraints at once (the demo database's
         # submissions rows each miss both their account and their workspace),
         # so collapse to a set of rowids per table before deleting.
+        actions = {
+            table: _fk_actions(bind, table) for table in {v[0] for v in violations}
+        }
         by_table: dict[str, set[int]] = {}
-        for table, rowid, parent, _fkid in violations:
+        refused = []
+        for table, rowid, parent, fkid in violations:
+            # Unknown fkid cannot happen against a consistent schema; default
+            # to refusing anyway, because the fallback here deletes user data.
+            action, columns = actions[table].get(fkid, ("UNKNOWN", "?"))
+            if action != "CASCADE":
+                refused.append((table, rowid, columns, parent, action))
+                continue
             if rowid is None:
                 # WITHOUT ROWID tables report no rowid, and this migration has
                 # no other way to name the single offending row. Refuse rather
@@ -89,6 +150,11 @@ def purge_orphans(bind) -> dict[str, int]:  # noqa: ANN001
                     "rows to delete"
                 )
             by_table.setdefault(table, set()).add(rowid)
+
+        if not by_table:
+            # Everything still reported is refused, so no further pass can
+            # make progress. Stop here rather than spin to _MAX_PASSES.
+            break
 
         for table, rowids in by_table.items():
             ordered = sorted(rowids)
@@ -109,6 +175,20 @@ def purge_orphans(bind) -> dict[str, int]:  # noqa: ANN001
         raise RuntimeError(
             f"PRAGMA foreign_key_check still reports violations after "
             f"{_MAX_PASSES} passes; not deleting further"
+        )
+
+    if refused:
+        log.error(
+            "orphan purge: REFUSED to delete %d invalid row(s) whose missing "
+            "parent is not declared ON DELETE CASCADE - the row is reachable "
+            "data this migration must not destroy, but any UPDATE touching it "
+            "will fail with IntegrityError until it is fixed. Restore the "
+            "missing parent row, or clear the pointer. Rows: %s",
+            len(refused),
+            "; ".join(
+                f"{table} rowid {rowid} ({columns} -> {parent}, ON DELETE {action})"
+                for table, rowid, columns, parent, action in refused
+            ),
         )
 
     return removed
@@ -141,8 +221,10 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Irreversible, and honestly so.
 
-    The rows are gone and were unreachable by any query before they went —
-    every one of them referenced a parent that no longer exists. A downgrade
-    that fabricated replacements would invent data; one that raised would
-    block an otherwise valid rollback over rows nobody can reach.
+    The rows are gone and were unreachable by any query before they went:
+    every one was the child of a parent declared ON DELETE CASCADE, so it was
+    already logically deleted and SQLite would have removed it itself had
+    enforcement been on at the time. A downgrade that fabricated replacements
+    would invent data; one that raised would block an otherwise valid rollback
+    over rows nobody can reach.
     """
