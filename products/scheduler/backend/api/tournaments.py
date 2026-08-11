@@ -13,7 +13,7 @@ import uuid
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.dependencies import (
     AuthUser,
@@ -24,7 +24,13 @@ from app.config import cloud_modules_enabled
 from app.error_codes import ErrorCode, http_error
 from app.exceptions import ConflictError
 from app.limits import Code, Identifier, StrictModel
-from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO, state_dto_from_document
+from app.schemas import (
+    MeetStandingRowDTO,
+    TournamentConfig,
+    TournamentStateDTO,
+    WorkspaceModuleDTO,
+    state_dto_from_document,
+)
 from database.models import (
     CLOUD_ONLY_MODULES,
     Tournament,
@@ -781,8 +787,29 @@ def put_tournament_state(
         if isinstance(incoming_schedule, dict)
         else None
     )
-    prior_cfg = prior.get("config") if isinstance(prior.get("config"), dict) else None
     incoming_cfg = incoming.get("config") if isinstance(incoming.get("config"), dict) else None
+    # Both sides of the lock comparison must be read through the SAME
+    # projection. ``incoming`` is a DTO dump, so every field the client did
+    # not set still arrives carrying its ``TournamentConfig`` default. The
+    # STORED blob can be sparse — ``POST /tournaments`` seeds 8 keys — so
+    # comparing the dump against the raw blob reported all 13
+    # defaulted-but-absent scheduling keys as user edits, and 409'd an
+    # unmodified round trip on every workspace that had never completed a
+    # full state PUT. Found by a real-browser pass: 6 of 8 demo workspaces
+    # raised the destructive "Discard committed schedule?" modal on Bracket
+    # page load, because the GET the client hydrates from already applies
+    # this very projection.
+    #
+    # Fail-closed on an unparseable stored config: fall back to the raw
+    # blob (the old comparison), which over-reports changes rather than
+    # under-reporting them. Never let the lock's own normalization 500 a
+    # write that would otherwise be refused cleanly.
+    prior_cfg = prior.get("config") if isinstance(prior.get("config"), dict) else None
+    if prior_cfg is not None:
+        try:
+            prior_cfg = TournamentConfig.model_validate(prior_cfg).model_dump()
+        except ValidationError:
+            log.warning("stored config for %s does not validate; comparing raw", tournament_id)
 
     bracket_session = prior.get("bracket_session")
     bracket_assignments = (
