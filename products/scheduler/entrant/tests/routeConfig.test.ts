@@ -58,6 +58,16 @@ describe('node routes and the FastAPI prefixes do not overlap (R8-A)', () => {
     expect(paths.filter((p) => p.startsWith(prefix))).toEqual([]);
   });
 
+  it('answers the basename itself with a 404, not a blank 200', () => {
+    // `/e/` matched no route, so React Router matched `root.tsx` on the
+    // basename and returned 200 with an empty <body> — a soft-404: indexable
+    // by a crawler, a white screen to a human, and the reason `/e` could not
+    // be redirected here. An index route reusing the entry module gives the
+    // basename the same honest 404 an unknown slug already gets.
+    const index = (routes as RouteConfigEntry[]).find((r) => r.index === true);
+    expect(index?.file).toBe('routes/entry.tsx');
+  });
+
   it('is not vacuous: a route inside a backend prefix is a finding', () => {
     // The guard applied to a fixture of the exact defect — the route table as
     // Task 19 shipped it. Without this, a `nodePaths` that returned the

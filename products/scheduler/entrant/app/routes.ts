@@ -1,4 +1,4 @@
-import { type RouteConfig, route } from '@react-router/dev/routes';
+import { type RouteConfig, index, route } from '@react-router/dev/routes';
 
 /**
  * Explicit route config, not file-system conventions. The entrant surface is
@@ -7,6 +7,17 @@ import { type RouteConfig, route } from '@react-router/dev/routes';
  * better declared in one place than encoded in filenames.
  */
 export default [
+  // `/e/` — the basename itself. Without this, the basename matched no route,
+  // React Router fell back to `root.tsx` and answered **200 with an empty
+  // `<body>`**: a soft-404, indexable by a crawler and a white screen to a
+  // human, while every other miss on this tier is honest. It reuses the entry
+  // module rather than growing one of its own, because that module's loader
+  // already throws the uniform `notFound()` when there is no `slug`
+  // (`entry.loader.test.ts`, "404s a missing slug param without calling the
+  // API at all") and its ErrorBoundary already renders the 404 copy. It
+  // declares no `path`, so it is invisible to `nodePaths`/`shadowingSegments`
+  // and reserves no slug.
+  index('routes/entry.tsx', { id: 'entry-index' }),
   route('health', 'routes/health.tsx'),
   // `/e/sitemap.xml` — a resource route (`routes/sitemap.tsx` exports no
   // default component, so its loader `Response` is returned verbatim).
