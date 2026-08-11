@@ -7,9 +7,15 @@ import { buildWorkspaceNav } from '../../platform/product-shell/workspaceNav';
 import type { ModuleId } from '../../platform/product-shell/types';
 
 // Stub the heavy AppShell + the kind fetch so we test only TournamentPage's
-// URL→store syncing (no network, no product mount).
-vi.mock('../../app/AppShell', () => ({ AppShell: () => null }));
-vi.mock('../../hooks/useTournamentKind', () => ({ useTournamentKind: () => {} }));
+// URL→store syncing (no network, no product mount). AppShell renders a marker
+// so the not-found cases can assert the workspace chrome did NOT mount.
+vi.mock('../../app/AppShell', () => ({
+  AppShell: () => <div data-testid="app-shell" />,
+}));
+const kind = vi.hoisted(() => ({ notFound: false }));
+vi.mock('../../hooks/useTournamentKind', () => ({
+  useTournamentKind: () => kind.notFound,
+}));
 
 function renderAt(seg: string) {
   return render(
@@ -22,6 +28,7 @@ function renderAt(seg: string) {
 }
 
 beforeEach(() => {
+  kind.notFound = false;
   useUiStore.setState({ activeTab: 'setup', activeTournamentKind: 'meet' });
 });
 
@@ -53,6 +60,30 @@ describe('an unrecognised segment is an honest not-found', () => {
     // under it (before the fix this left activeTab on its default and the Meet
     // Configuration page rendered under a nonsense URL).
     expect(useUiStore.getState().activeTab).toBe('setup');
+  });
+
+  /**
+   * D4 (2026-08-10 browser pass). A workspace belonging to another
+   * organisation answers a uniform 404 (`TOURNAMENT_NOT_FOUND`) — "exists but
+   * isn't yours" is byte-identical to "doesn't exist", which is the tenancy
+   * guarantee working. The SPA swallowed that 404 and fell through to client
+   * defaults: an "Untitled" workspace with a module sidebar and a
+   * Configuration form carrying a Save button. Nothing leaked (every field
+   * was a default) but offering to save a workspace you cannot reach makes
+   * the strongest guarantee in the product look like a bug.
+   */
+  it('renders not-found for a workspace the account cannot see', async () => {
+    kind.notFound = true;
+    renderAt('setup');
+    await waitFor(() => expect(screen.getByTestId('workspace-not-found')).toBeTruthy());
+    // The chrome — and with it the Save button — must not mount at all.
+    expect(screen.queryByTestId('app-shell')).toBeNull();
+  });
+
+  it('NEGATIVE CONTROL: a workspace we CAN see still renders the shell', () => {
+    renderAt('setup');
+    expect(screen.getByTestId('app-shell')).toBeTruthy();
+    expect(screen.queryByTestId('workspace-not-found')).toBeNull();
   });
 
   it('accepts EVERY segment the workspace nav can route to', () => {
