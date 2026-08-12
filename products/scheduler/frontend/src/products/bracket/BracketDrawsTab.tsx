@@ -28,6 +28,7 @@ import {
   BandedTable,
   DetailDock,
   EmptyState,
+  NAME_COL_MIN,
   colClass,
   dockMinContentWidth,
   type BandedListColumn,
@@ -84,7 +85,15 @@ interface DrawRow {
 // expanse at full width. `flex-wrap` is the backstop for three-digit tallies:
 // the row grows a line rather than clipping a number.
 const DRAW_COLUMNS: BandedListColumn[] = [
-  { label: 'Code', className: 'w-16 shrink-0' },
+  // Code carries an operator-defined draw id, capped at MAX_EVENT_CODE_LENGTH
+  // (40) rather than at anything a fixed column could hold. At w-16 (64px) the
+  // seeded "md-classic" wrapped to "md-" / "classic" in every row: the same
+  // defect as the bracket match label, one list over. It is a NAME-like column
+  // by nature, so it is marked as one, and the derivation gives it both a real
+  // floor and the two-line reservation that goes with wrappable operator text.
+  // That costs Draws the 7px it was winning by declaring no name column, which
+  // it was only winning because the code was wrapping anyway.
+  { label: 'Code', className: `${NAME_COL_MIN} shrink-0` },
   { label: 'Format', className: 'min-w-0 flex-1', priority: 3 },
   { label: 'Size', className: 'w-12 shrink-0 text-right', priority: 2 },
   { label: 'Entered', className: 'w-16 shrink-0 text-right' },

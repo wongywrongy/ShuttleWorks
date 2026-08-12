@@ -230,6 +230,9 @@ describe('flexible name columns have a real minimum, not `min-w-0`', () => {
       ['products/bracket/BracketRosterTab.tsx', "label: 'Player'"],
       ['products/bracket/standingsColumns.ts', "label: 'Player'"],
       ['products/entries/EntriesDesk.tsx', "label: 'Entrant'"],
+      // A draw code is operator text capped at 40 chars, not a fixed token:
+      // at w-16 it wrapped "md-classic" in every row. Name-like by nature.
+      ['products/bracket/BracketDrawsTab.tsx', "label: 'Code'"],
     ];
     for (const [file, marker] of NAME_COLUMNS) {
       const line = read(file)
@@ -241,13 +244,22 @@ describe('flexible name columns have a real minimum, not `min-w-0`', () => {
     }
   });
 
-  it('the one banded surface with no name column declares none', () => {
-    // Bracket Draws — Code / Format / Size / Entered / Progress / Status, all
-    // fixed-width or short non-name text. It is the surface the derived
-    // reservation gives its density back to, so a name column appearing here
-    // is a deliberate change that should have to say so.
-    expect(read('products/bracket/BracketDrawsTab.tsx')).not.toContain(
-      'NAME_COL_MIN',
+  it('the one-line branch still works, even with no surface using it today', () => {
+    // Bracket Draws WAS this surface. Its `Code` column looked like a short
+    // fixed token and turned out to be operator text capped at 40 characters:
+    // at w-16 it wrapped "md-classic" into "md-" / "classic" in every row, so
+    // the 7px it appeared to save was bought by the very wrapping the
+    // reservation exists to prevent. It is a name column now, and every banded
+    // surface in the app declares one.
+    //
+    // So the 1-line branch has no production consumer. It is kept because the
+    // reservation is DERIVED — a future column set without a name must get one
+    // line without anyone remembering to ask — and it is tested directly here
+    // rather than through a surface, because pretending a consumer exists is
+    // how the Draws entry above went stale.
+    expect(bandedRowLines([{ label: 'Pos', className: 'w-7 shrink-0' }])).toBe(1);
+    expect(bandedRowClasses([{ label: 'Pos', className: 'w-7 shrink-0' }])).toContain(
+      BANDED_ROW_MIN_H[1],
     );
   });
 });
