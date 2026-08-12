@@ -83,3 +83,35 @@ describe('RunQueue', () => {
     expect(screen.getByTestId('run-queue-row-bracket:pu1')).toHaveAttribute('data-source', 'bracket');
   });
 });
+
+// A queue row said nothing about whether it could actually be sent. The send
+// affordance rendered only for eligible+scheduled rows; every other row —
+// blocked on an earlier result, or already called to a court — looked
+// identical to a playable one, with nothing saying why (audit T2 item 7).
+describe('RunQueue — readiness is legible on the row', () => {
+  const READINESS: RunMatch[] = [
+    mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1' }),
+    mkMatch({
+      key: 'bracket:pu9', id: 'pu9', source: 'bracket', label: 'SF1',
+      eligible: false, sideA: 'TBD', sideB: 'TBD',
+    }),
+    mkMatch({ key: 'meet:m7', id: 'm7', source: 'meet', label: 'MS7', status: 'called' }),
+  ];
+
+  it('separates playable-now, waiting-on-an-earlier-result, and already-called', () => {
+    render(<RunQueue queue={READINESS} onSelect={vi.fn()} onSend={vi.fn()} />);
+
+    // Playable now: the send affordance.
+    expect(screen.getByTestId('queue-send-meet:m1')).toBeInTheDocument();
+
+    // Blocked: no send, and it SAYS why rather than just going quiet.
+    expect(screen.queryByTestId('queue-send-bracket:pu9')).toBeNull();
+    const blocked = screen.getByTestId('queue-blocked-bracket:pu9');
+    expect(blocked.textContent).toMatch(/waiting/i);
+    expect(blocked).toHaveAttribute('title', expect.stringMatching(/earlier result/i));
+
+    // Already called: no send either, but a different reason.
+    expect(screen.queryByTestId('queue-send-meet:m7')).toBeNull();
+    expect(screen.getByTestId('queue-state-meet:m7').textContent).toMatch(/called/i);
+  });
+});

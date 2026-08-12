@@ -9,6 +9,7 @@
  */
 import type { CSSProperties } from 'react';
 import type { RunMatch } from '../runtime/runModel';
+import { RUN_STATUS_LABEL } from '../runtime/runMachine';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 
@@ -19,6 +20,14 @@ const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
   bracket: 'bg-module-bracket/15 text-module-bracket',
 };
 const SOURCE_LABEL: Record<'meet' | 'bracket', string> = { meet: 'Meet', bracket: 'Bracket' };
+
+// Why an ineligible row can't be sent, in the terms of its own engine —
+// `RunMatch.eligible` means "both sides known" for meet and "every feeder
+// resolved" for bracket (see toRunMatches).
+const WAITING_REASON: Record<'meet' | 'bracket', string> = {
+  meet: 'Waiting — both sides are not decided yet',
+  bracket: 'Waiting on an earlier result to decide a side',
+};
 
 // ── props ─────────────────────────────────────────────────────────────────
 export interface RunQueueProps {
@@ -117,8 +126,26 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               </span>
             )}
 
-            {/* Quick-send — eligible scheduled rows only */}
-            {onSend && match.eligible && match.status === 'scheduled' && (
+            {/* Readiness — every row says which of the three it is. The send
+                affordance used to be the only marker, so a row blocked on an
+                earlier result and a row already called to a court both read as
+                a plain, unexplained absence. */}
+            {!match.eligible ? (
+              <span
+                data-testid={`queue-blocked-${match.key}`}
+                title={WAITING_REASON[match.source]}
+                className={`flex-shrink-0 ${EYEBROW_CLASS} text-ink-faint`}
+              >
+                Waiting
+              </span>
+            ) : match.status !== 'scheduled' ? (
+              <span
+                data-testid={`queue-state-${match.key}`}
+                className={`flex-shrink-0 ${EYEBROW_CLASS} text-muted-foreground`}
+              >
+                {RUN_STATUS_LABEL[match.status]}
+              </span>
+            ) : onSend ? (
               <button
                 type="button"
                 data-testid={`queue-send-${match.key}`}
@@ -130,7 +157,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               >
                 ↵ send
               </button>
-            )}
+            ) : null}
           </li>
         );
       })}
