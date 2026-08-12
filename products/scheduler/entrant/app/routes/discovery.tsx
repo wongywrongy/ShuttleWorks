@@ -87,7 +87,7 @@ export async function loader({ request }: { request: Request }) {
     throw redirect(canonical === '' ? '/' : `/?${canonical}`);
   }
 
-  const filters = parseFilters(new URL(request.url).searchParams);
+  const filters = parseFilters(url.searchParams);
   const listed = await apiGet<{ slug: string }[]>('/e/api/pages');
   const pages = await Promise.all(
     listed.map(async ({ slug }) => {
