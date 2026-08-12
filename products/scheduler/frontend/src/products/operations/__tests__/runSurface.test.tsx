@@ -17,6 +17,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 // single microtask) guarantees the whole `Promise.resolve().then().finally()`
 // chain drains before act resolves.
 const flushAssignSettle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+// Recording is terminal (runMachine's `done` has no edge out, Meet has no
+// reopen), so the button arms on the first press and commits on the second.
+const pressRecord = () => {
+  fireEvent.click(screen.getByTestId('run-act-record'));
+  fireEvent.click(screen.getByTestId('run-act-record'));
+};
 import { RunSurface, computeAutoPull } from '../run/RunSurface';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { OpsBlock } from '../opsBlock';
@@ -334,7 +340,7 @@ describe('RunSurface — select Now playing meet match + Record result', () => {
     // Inspector in "now" + "playing" role shows "Record result"
     expect(screen.getByTestId('run-act-record')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    pressRecord();
     // record auto-pulls m2 → fireAssign → drain its settle microtask in act
     await flushAssignSettle();
 
@@ -355,7 +361,7 @@ describe('RunSurface — auto-pull after record empties a court', () => {
     );
 
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    pressRecord();
 
     // Two calls: (1) finish_match for m1, (2) assign_court for m2 (auto-pull)
     expect(mockMeetSubmit).toHaveBeenCalledTimes(2);
@@ -380,7 +386,7 @@ describe('RunSurface — auto-pull after record empties a court', () => {
 
     // Record → auto-pull: 2 calls
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    pressRecord();
     // Drain the auto-pull settle microtask in act BEFORE the rerender below,
     // so it can't fire un-acted mid-rerender.
     await flushAssignSettle();
@@ -454,7 +460,7 @@ describe('RunSurface — auto-pull skips ineligible queue head', () => {
     );
 
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    pressRecord();
 
     // Only the record fires — no auto-pull because head is ineligible
     expect(mockMeetSubmit).toHaveBeenCalledTimes(1);

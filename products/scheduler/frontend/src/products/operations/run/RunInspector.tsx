@@ -20,6 +20,7 @@ import {
   type RunActionKind,
 } from '../runtime/runMachine';
 import type { RunMatch } from '../runtime/runModel';
+import { useConfirmClick } from '../../../hooks/useConfirmClick';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 
 // ── button styles (mirrors OpsDetailRail) ────────────────────────────────
@@ -29,6 +30,10 @@ const actionBtn =
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
   `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
+// Armed state of a terminal action — same vocabulary as bracket's WinnerButton.
+const armedBtn =
+  `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-destructive px-2 py-1 ` +
+  `text-2xs font-medium text-destructive-foreground hover:brightness-110`;
 
 // ── typography constants ──────────────────────────────────────────────────
 const EYEBROW = 'text-2xs uppercase tracking-[0.08em] text-muted-foreground';
@@ -134,6 +139,45 @@ export function RunInspector({
         )
       )}
     </aside>
+  );
+}
+
+/**
+ * Record result — the one TERMINAL action on this rail.
+ *
+ * `runMachine`'s `done` has no outgoing edge and Meet ships no reopen, so this
+ * press cannot be taken back; Postpone next to it can. Two guards carry that
+ * difference, both already in the codebase:
+ *
+ *   - the canon two-click arm (`useConfirmClick`), same as bracket's
+ *     `WinnerButton`. `window.confirm` is banned here and blocks the event
+ *     loop; a modal would cost a second surface on a desk used at speed. The
+ *     arm decays on its own, so a stray press on a busy floor is harmless and
+ *     the repeated task pays nothing extra when it goes right.
+ *   - weight: accent when idle (this IS the desk's main verb), destructive
+ *     when armed. Postpone keeps the neutral border, so at a glance the
+ *     irreversible action is never the same shape as the reversible one.
+ */
+function RecordButton({ onRecord }: { onRecord: () => void }) {
+  const confirm = useConfirmClick(onRecord);
+  return (
+    <button
+      type="button"
+      data-testid="run-act-record"
+      className={confirm.armed ? armedBtn : primaryBtn}
+      onClick={confirm.press}
+      onBlur={confirm.reset}
+      title={
+        confirm.armed
+          ? 'Press again to record the result — a finished match cannot be reopened'
+          : 'Record the result — this cannot be undone'
+      }
+      aria-label={
+        confirm.armed ? 'Confirm the result — cannot be undone' : 'Record result'
+      }
+    >
+      {confirm.armed ? 'Press again' : 'Record result'}
+    </button>
   );
 }
 
@@ -249,17 +293,12 @@ function NowActions({
             names. Two identical accent buttons reading "A wins"/"B wins" four
             pixels apart used to live here instead. */}
         {match.source === 'meet' && can(match.status, 'record') && (
-          <button
-            type="button"
-            data-testid="run-act-record"
-            className={actionBtn}
-            onClick={() => onAction('record')}
-          >
-            Record result
-          </button>
+          <RecordButton onRecord={() => onAction('record')} />
         )}
 
-        {/* Postpone — called or playing */}
+        {/* Postpone — called or playing. Reversible (it just returns the match
+            to the queue), so it stays one press and keeps the neutral border:
+            the accent weight belongs to the action that cannot be taken back. */}
         {can(match.status, 'postpone') && (
           <button
             type="button"

@@ -74,22 +74,47 @@ describe('RunInspector — role: now', () => {
     expect(onAction).toHaveBeenCalledWith('start');
   });
 
-  it('playing meet → Record result + Postpone; clicking record fires onAction("record")', () => {
+  // Recording is TERMINAL — `runMachine`'s `done` state has no edge out and
+  // Meet has no reopen action — while Postpone beside it is legal from both
+  // `called` and `playing` and undoes itself. They used to be the same neutral
+  // button, one click each. The terminal one now arms first (`useConfirmClick`,
+  // the canon guard; `window.confirm` is banned) and carries the accent weight
+  // the reversible one does not.
+  it('playing meet → Record ARMS on the first press and commits on the second', () => {
     const onAction = vi.fn();
     const m = mkMatch({
       key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1', status: 'playing',
     });
     render(<RunInspector match={m} role="now" onAction={onAction} />);
 
-    expect(screen.getByTestId('run-act-record')).toBeInTheDocument();
+    const record = screen.getByTestId('run-act-record');
     expect(screen.getByTestId('run-act-postpone')).toBeInTheDocument();
     expect(screen.queryByTestId('run-act-call')).toBeNull();
     expect(screen.queryByTestId('run-act-start')).toBeNull();
-    expect(screen.queryByTestId('run-act-win-a')).toBeNull();
-    expect(screen.queryByTestId('run-act-win-b')).toBeNull();
 
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    // First press: no write. The label names the consequence instead.
+    fireEvent.click(record);
+    expect(onAction).not.toHaveBeenCalled();
+    expect(record.textContent).toMatch(/again/i);
+
+    fireEvent.click(record);
     expect(onAction).toHaveBeenCalledWith('record');
+  });
+
+  it('playing meet → Postpone is reversible, so it stays one press and stays quiet', () => {
+    const onAction = vi.fn();
+    const m = mkMatch({
+      key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1', status: 'playing',
+    });
+    render(<RunInspector match={m} role="now" onAction={onAction} />);
+
+    fireEvent.click(screen.getByTestId('run-act-postpone'));
+    expect(onAction).toHaveBeenCalledWith('postpone');
+
+    // ...and the two are no longer visually interchangeable: the terminal
+    // action carries the accent, the reversible one the neutral border.
+    expect(screen.getByTestId('run-act-record').className).toMatch(/bg-accent/);
+    expect(screen.getByTestId('run-act-postpone').className).not.toMatch(/bg-accent/);
   });
 
   // The rail used to render two identical accent buttons, "A wins" and "B
