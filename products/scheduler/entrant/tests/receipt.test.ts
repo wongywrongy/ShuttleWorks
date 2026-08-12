@@ -23,6 +23,7 @@
  * and they pin that the bytes served to entrant B, to entrant A and to an
  * anonymous stranger are the same bytes.
  */
+import { readFileSync } from 'node:fs';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
@@ -379,5 +380,33 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
 
     expect(res.status).toBe(404);
     expect(body).not.toContain('TOURNAMENT_NOT_FOUND');
+  });
+
+  // 2026-08-11 design audit, finding #7: "Entry received" is a rare,
+  // high-stakes moment (MOTION.md §2's "one delight beat" tier) and read as
+  // flat as any neutral content. `.motion-enter` ships free in the imported
+  // design-system CSS (zero page-weight cost, already counted separately
+  // from the HTML/JS gate), but is NOT in `globals.css`'s
+  // `prefers-reduced-motion` kill list — that's a design-system fix another
+  // agent owns, so this tier cannot rely on it and guards locally instead.
+  it('gives the receipt heading one motion beat, guarded locally for reduced motion', async () => {
+    vi.stubGlobal('fetch', stubUpstream());
+
+    const html = (await fetchEntrant(RECEIPT).then((r) => r.text()));
+    const h1 = html.match(/<h1[^>]*>Entry received<\/h1>/)?.[0] ?? '';
+
+    expect(h1).toContain('motion-enter');
+
+    // `.motion-enter` is not yet in the design system's own kill list
+    // (packages/design-system/globals.css) — out of scope for this tier to
+    // fix — so app.css must guard it locally, or this class would animate
+    // unconditionally under `prefers-reduced-motion: reduce`.
+    const appCss = readFileSync(
+      new URL('../app/app.css', import.meta.url),
+      'utf8',
+    );
+    const reducedMotionBlock =
+      appCss.match(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(reducedMotionBlock).toMatch(/\.motion-enter\b/);
   });
 });

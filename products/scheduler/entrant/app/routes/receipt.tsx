@@ -147,8 +147,17 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
         <header className="grid gap-1">
           {/* One heading, whichever post landed here. A replay is not a
               different outcome and must not read as one — see the ruling in
-              the module header. */}
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+              the module header.
+
+              2026-08-11 design audit, finding #7: "Entry received" is a rare,
+              high-stakes moment (MOTION.md §2's one-delight-beat tier) and
+              read as flat as any neutral content. `.motion-enter` ships free
+              in the imported design-system CSS — zero page-weight cost, it's
+              already in the stylesheet every page loads. `prefers-reduced-
+              motion` guard for it is LOCAL (`app.css`), not the design
+              system's: `.motion-enter` isn't yet in globals.css's kill list,
+              and that fix belongs to another agent. */}
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground motion-enter">
             Entry received
           </h1>
           <p className="text-sm text-muted-foreground">
