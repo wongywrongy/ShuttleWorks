@@ -164,10 +164,7 @@ export function UpNextCard({
       <span className="tabular-nums text-2xs text-muted-foreground">
         C{assignment.courtId} · {scheduledTime}
       </span>
-      <span
-        className="truncate text-foreground inline-flex flex-wrap items-center gap-x-1 gap-y-0.5"
-        title={`${sideANames} vs ${sideBNames}`}
-      >
+      <span className="min-w-0 break-words text-foreground inline-flex flex-wrap items-center gap-x-1 gap-y-0.5">
         {(() => {
           if (isCalled && onConfirmPlayer) {
             const renderPill = (p: { id: string; name: string }, i: number) => {
@@ -265,7 +262,10 @@ export function UpNextCard({
         {matchState?.postponed && <StatusPill tone="amber">postponed</StatusPill>}
         {isLate && !matchState?.postponed && <StatusPill tone="yellow">late</StatusPill>}
         {trafficLight?.reason && light !== 'green' && (
-          <StatusPill tone={light} className="max-w-[180px] truncate" title={trafficLight.reason}>
+          /* The reason IS the warning ("Ana Silva plays 2 slots earlier") —
+             capped at 180px it read "Ana Silva plays 2 slo…", the half that
+             tells the director nothing. It wraps; the pill grows. */
+          <StatusPill tone={light} className="break-words text-left">
             {trafficLight.reason}
           </StatusPill>
         )}

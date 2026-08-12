@@ -128,7 +128,7 @@ export function LiveMatchList({ data, onChange }: Props) {
             ? `C${assignment.court_id} · ${formatBracketSlot(assignment.slot_id, slotCtx)}`
             : '—'}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm">
+        <span className="min-w-0 flex-1 break-words text-sm">
           <span className={result?.winner_side === 'A' ? 'font-semibold' : ''}>{labelA}</span>
           <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           <span className={result?.winner_side === 'B' ? 'font-semibold' : ''}>{labelB}</span>

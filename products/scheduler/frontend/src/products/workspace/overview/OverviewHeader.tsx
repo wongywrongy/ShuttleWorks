@@ -18,7 +18,7 @@ export function OverviewHeader({ summary }: { summary: TournamentSummaryDTO }) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="type-display truncate text-2xl text-foreground">
+        <h1 className="type-display break-words text-2xl text-foreground">
           {summary.name || 'Untitled'}
         </h1>
         <p className="mt-1 text-xs text-text-muted">

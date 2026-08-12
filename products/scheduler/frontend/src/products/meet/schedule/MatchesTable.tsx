@@ -234,13 +234,10 @@ export function MatchesTable({
                       </td>
                       <td className="px-2 py-1 text-muted-foreground">C{a.courtId}</td>
                       <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
-                      <td
-                        className="px-2 py-1 text-foreground/80 truncate max-w-xs"
-                        title={getPlayerNames(a.matchId)}
-                      >
-                        <span className="inline-flex items-center gap-1.5">
+                      <td className="px-2 py-1 text-foreground/80">
+                        <span className="inline-flex items-start gap-1.5">
                           {renderSchoolDot(a.matchId)}
-                          <span className="truncate">{getPlayerNames(a.matchId)}</span>
+                          <span className="break-words">{getPlayerNames(a.matchId)}</span>
                         </span>
                       </td>
                     </tr>
@@ -278,13 +275,10 @@ export function MatchesTable({
                         {formatSlotTime(a.slotId, config)}
                       </td>
                       <td className="px-2 py-1 font-medium text-foreground">{getMatchLabel(a.matchId)}</td>
-                      <td
-                        className="px-2 py-1 text-foreground/80 truncate max-w-xs"
-                        title={getPlayerNames(a.matchId)}
-                      >
-                        <span className="inline-flex items-center gap-1.5">
+                      <td className="px-2 py-1 text-foreground/80">
+                        <span className="inline-flex items-start gap-1.5">
                           {renderSchoolDot(a.matchId)}
-                          <span className="truncate">{getPlayerNames(a.matchId)}</span>
+                          <span className="break-words">{getPlayerNames(a.matchId)}</span>
                         </span>
                       </td>
                     </tr>

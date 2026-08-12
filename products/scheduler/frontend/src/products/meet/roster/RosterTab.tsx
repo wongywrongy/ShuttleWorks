@@ -452,7 +452,10 @@ function SchoolTabs({
                 : 'border-b-transparent text-muted-foreground hover:text-foreground',
             ].join(' ')}
           >
-            <span className="max-w-[14rem] truncate">{g.name}</span>
+            {/* No width cap: the pill bar is `overflow-x-auto`, so a long
+                school name widens its pill and the bar scrolls — the pill
+                is the only place that name is written. */}
+            <span>{g.name}</span>
             <span
               className={`tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground'}`}
             >

@@ -74,10 +74,7 @@ export function FinishedCard({
       <span className="tabular-nums text-2xs text-muted-foreground">
         C{assignment.courtId}
       </span>
-      <span
-        className="truncate text-muted-foreground"
-        title={`${sideANames} vs ${sideBNames}`}
-      >
+      <span className="min-w-0 break-words text-muted-foreground">
         {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
       </span>
       {score ? (

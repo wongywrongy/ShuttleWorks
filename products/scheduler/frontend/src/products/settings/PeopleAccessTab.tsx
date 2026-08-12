@@ -350,7 +350,7 @@ export function PeopleAccessTab({
                       {name ? name[0].toUpperCase() : initialFor(m.userId)}
                     </span>
                     <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-xs font-medium text-foreground">
+                      <span className="break-words text-xs font-medium text-foreground">
                         {label}
                         {currentUserId === m.userId && (
                           <span className="ml-1 text-2xs text-muted-foreground">(you)</span>

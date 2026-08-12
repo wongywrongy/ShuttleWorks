@@ -88,7 +88,7 @@ export function InProgressCard({
       <span className="tabular-nums text-2xs text-muted-foreground">
         <ElapsedTimer startTime={matchState?.actualStartTime} />
       </span>
-      <span className="truncate text-foreground" title={`${sideANames} vs ${sideBNames}`}>
+      <span className="min-w-0 break-words text-foreground">
         {sideANames} <span className="text-muted-foreground">vs</span> {sideBNames}
         {wasMoved && (
           <span className="ml-1 text-3xs text-accent">

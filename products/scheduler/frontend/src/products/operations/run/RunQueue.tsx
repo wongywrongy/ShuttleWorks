@@ -60,7 +60,6 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
     <ul className="sw-stagger divide-y divide-border/60 border-t border-border">
       {queue.map((match, i) => {
         const isSelected = selectedKey === match.key;
-        const sidesLabel = `${match.sideA} vs ${match.sideB}`;
 
         return (
           <li
@@ -88,15 +87,14 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             </span>
 
             {/* Match code — tabular */}
-            <span className="w-16 flex-shrink-0 truncate text-2xs font-semibold sw-num text-ink-3">
+            <span className="w-16 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">
               {match.label}
             </span>
 
-            {/* Sides — truncated with tooltip */}
-            <span
-              className="min-w-0 flex-1 truncate text-sm"
-              title={sidesLabel}
-            >
+            {/* Sides — wrap; the row grows. The court caller reads names off
+                this queue, and a tooltip is not a thing you can hover on the
+                tablet it runs on. */}
+            <span className="min-w-0 flex-1 break-words text-sm">
               {match.sideA}
               <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
                 v

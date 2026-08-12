@@ -123,11 +123,11 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
       >
         <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
         {/* Same match-code grammar as the Run queue rows. */}
-        <span className="w-20 flex-shrink-0 truncate text-2xs font-semibold sw-num text-ink-3">{b.label}</span>
+        <span className="w-20 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">{b.label}</span>
         <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
           {b.court != null ? `C${b.court} · S${b.slot}` : '—'}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm" title={`${b.sideA} vs ${b.sideB}`}>
+        <span className="min-w-0 flex-1 break-words text-sm">
           {b.sideA}
           <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           {b.sideB}

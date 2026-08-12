@@ -105,7 +105,7 @@ export function ScheduleView({ data, selectedId, onSelect }: Props) {
           title={tooltip}
           onClick={pu && onSelect ? () => onSelect(pu.id) : undefined}
         >
-          <div className="text-2xs sw-num truncate">{pu?.id}</div>
+          <div className="text-2xs sw-num break-words">{pu?.id}</div>
         </div>
       );
     },

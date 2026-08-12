@@ -92,7 +92,10 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
         return (
           <div
             key={courtId}
-            className={`grid h-14 items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
+            // `min-h`, not `h`: the players cell wraps rather than
+            // ellipsising, so a long doubles pairing makes the row taller
+            // instead of hiding a surname from the far side of the hall.
+            className={`grid min-h-[3.5rem] items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
               isClosed ? 'opacity-50' : ''
             }`}
           >
@@ -104,7 +107,7 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
             <span className="tabular-nums text-base font-semibold text-muted-foreground">
               {isClosed ? '—' : match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
             </span>
-            <span className="truncate">
+            <span className="min-w-0 break-words">
               {isClosed ? (
                 <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
               ) : match ? (
@@ -168,7 +171,11 @@ function CourtsCardMode({
   return (
     <div
       className={`w-full ${displayMode === 'grid' ? `grid gap-3 ${gridColsClass}` : 'flex flex-col gap-2'}`}
-      style={displayMode === 'grid' ? { gridAutoRows: `${cardHeightPx}px` } : undefined}
+      // `minmax(h, auto)`, not a fixed track: the card height is the DESIGNED
+      // height, not a cap. A doubles pairing too long for one line grows its
+      // row instead of being clipped by the card — nothing on a hall board is
+      // readable at half a name.
+      style={displayMode === 'grid' ? { gridAutoRows: `minmax(${cardHeightPx}px, auto)` } : undefined}
     >
       {courts.map((row, idx) => (
         <CourtCard
@@ -237,9 +244,9 @@ function CourtCard({
 
   return (
     <div
-      className={`overflow-hidden rounded-sm border border-border sw-float-in ${cardBgClass}`}
+      className={`rounded-sm border border-border sw-float-in ${cardBgClass}`}
       style={{
-        height: cardHeightPx,
+        minHeight: cardHeightPx,
         // Staggered entry — each tile arrives 60 ms after the previous
         // so the grid doesn't flash on every poll. (Cards are keyed by
         // courtId, so this fires on arrival, not on every poll.)
@@ -247,7 +254,7 @@ function CourtCard({
       }}
     >
       <div
-        className={`grid h-full items-center gap-3 ${cardPadX} grid-cols-[auto_auto_1fr_auto_auto]`}
+        className={`grid min-h-full items-center gap-3 py-2 ${cardPadX} grid-cols-[auto_auto_1fr_auto_auto]`}
       >
         {/* Court number — anchor of the card */}
         <div className="flex items-baseline gap-2">
@@ -266,8 +273,8 @@ function CourtCard({
           {match ? match.eventRank || `M${match.matchNumber || '?'}` : ''}
         </div>
 
-        {/* Players (grows). Always rendered on their own lines so long
-            doubles names never truncate. */}
+        {/* Players (grows). Each side on its own line, and each side wraps —
+            between the two, a full doubles pairing always reads. */}
         <div className={`min-w-0 ${playerSize} leading-tight text-foreground`}>
           {isClosed ? (
             <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
@@ -352,17 +359,13 @@ function PlayerStack({
 }) {
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="block truncate font-medium" title={sideA}>
-        {sideA}
-      </span>
+      <span className="block break-words font-medium">{sideA}</span>
       <span
         className={`${isFullscreen ? 'text-sm' : 'text-xs'} uppercase tracking-widest text-muted-foreground`}
       >
         vs
       </span>
-      <span className="block truncate font-medium" title={sideB}>
-        {sideB}
-      </span>
+      <span className="block break-words font-medium">{sideB}</span>
     </div>
   );
 }

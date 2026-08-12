@@ -70,7 +70,7 @@ function Side({ label, won }: { label: string; won: boolean }) {
         won ? 'font-bold text-accent' : 'font-medium text-foreground',
       ].join(' ')}
     >
-      <span className="truncate">{label}</span>
+      <span className="min-w-0 break-words">{label}</span>
       {won ? <span aria-label="winner" className="text-accent">✓</span> : null}
     </div>
   );

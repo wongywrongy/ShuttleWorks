@@ -323,7 +323,7 @@ function SideSection({
                     open ? 'rotate-90' : '',
                   ].join(' ')}
                 />
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                <span className="min-w-0 flex-1 break-words text-sm text-foreground">
                   {name}
                 </span>
               </button>

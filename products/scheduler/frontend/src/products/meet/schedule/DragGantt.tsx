@@ -686,7 +686,7 @@ function MatchBlock({
           className="pointer-events-none absolute -inset-[1px] rounded pin-marquee motion-safe:animate-marching-ants"
         />
       ) : null}
-      <span className="relative text-2xs font-semibold leading-tight block truncate">
+      <span className="relative text-2xs font-semibold leading-tight block break-words">
         {matchLabel(match)}
       </span>
       {isPinned && !pinActive ? (

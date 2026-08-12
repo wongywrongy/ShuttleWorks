@@ -269,7 +269,7 @@ export function BracketMatchesTab({
                           editable event field. */}
                       <span
                         role="cell"
-                        className={`${MATCH_CELL.event} truncate px-1.5 text-sm font-semibold text-accent sw-num`}
+                        className={`${MATCH_CELL.event} break-words px-1.5 text-sm font-semibold text-accent sw-num`}
                         title={pu.id}
                       >
                         {labelById.get(pu.id) ?? pu.id}

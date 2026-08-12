@@ -194,7 +194,10 @@ export function WorkspaceRow({
         {/* The dot is `aria-hidden` (it has a title, which AT ignores on a
             span), so the one state worth interrupting a scan for gets words. */}
         {health === 'attention' ? <span className="sr-only">Needs attention</span> : null}
-        <span className="truncate text-sm font-semibold text-foreground">
+        {/* Wraps, never ellipsises: the name is the row's only identifying
+            fact, and the `@container/table` priorities above yield Modules
+            then Date so it has the width to wrap at word boundaries. */}
+        <span className="min-w-0 break-words text-sm font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </span>
       </span>
@@ -226,7 +229,7 @@ export function WorkspaceRow({
             : 'text-muted-foreground group-hover:bg-accent/10 group-hover:text-accent',
         ].join(' ')}
       >
-        <span className="truncate">{action.label}</span>
+        <span className="min-w-0 break-words">{action.label}</span>
         <span
           aria-hidden
           className="shrink-0 opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100"

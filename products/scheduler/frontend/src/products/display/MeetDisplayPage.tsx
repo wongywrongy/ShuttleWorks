@@ -437,11 +437,11 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
       {/* ---------- Header ------------------------------------------------ */}
       <div className="sticky top-0 z-hud border-b border-border bg-background/90 px-6 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-baseline gap-4">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
             {/* Tournament name when set, else a generic "Live ops" label
                 so the header still anchors the page when the operator
                 hasn't named their tournament. */}
-            <div className="truncate text-3xl font-bold tracking-tight">
+            <div className="min-w-0 break-words text-3xl font-bold tracking-tight">
               {config.tournamentName?.trim() || 'Tournament status'}
             </div>
             {formatTournamentDate(config.tournamentDate) && (

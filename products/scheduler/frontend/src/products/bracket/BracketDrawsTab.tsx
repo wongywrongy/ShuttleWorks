@@ -68,8 +68,9 @@ interface DrawRow {
 /** Column set for the draws table. The trailing unlabeled column hosts the
  *  per-row action buttons (Generate / Configure / Next round / Open). */
 // Fixed cells are `shrink-0` so a docked detail pane can never crush them
-// into overlapping their neighbors — only Format (truncates) and Progress
-// (overflow-hidden) give way.
+// into overlapping their neighbors. Nothing here ellipsises: Format wraps
+// (the row grows) and yields entirely at priority 3; Progress is a bar, not
+// text.
 const DRAW_COLUMNS: BandedListColumn[] = [
   { label: 'Code', className: 'w-16 shrink-0' },
   { label: 'Format', className: 'w-44 min-w-0', priority: 3 },
@@ -289,8 +290,7 @@ export function BracketDrawsTab() {
                 <>
                   <span
                     role="cell"
-                    className="w-16 shrink-0 truncate text-sm font-semibold text-accent sw-num"
-                    title={row.ev.id}
+                    className="w-16 shrink-0 break-words text-sm font-semibold text-accent sw-num"
                   >
                     {row.ev.id}
                   </span>
@@ -299,7 +299,7 @@ export function BracketDrawsTab() {
                       change. */}
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[1])} truncate text-xs text-muted-foreground`}
+                    className={`${colClass(DRAW_COLUMNS[1])} break-words text-xs text-muted-foreground`}
                   >
                     {formatLabel(row.ev.format)}
                     {row.isSwiss && row.swissRounds !== undefined && row.generated ? (
@@ -745,7 +745,7 @@ function FormatCard({
     >
       <span className="flex items-center gap-2">
         <Glyph className={`h-5 w-5 shrink-0 ${selected ? 'text-accent' : 'text-muted-foreground'}`} />
-        <span className="truncate text-sm font-semibold">{descriptor.label}</span>
+        <span className="min-w-0 break-words text-sm font-semibold">{descriptor.label}</span>
         {!descriptor.implemented && (
           <span className="ml-auto shrink-0 text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Planned

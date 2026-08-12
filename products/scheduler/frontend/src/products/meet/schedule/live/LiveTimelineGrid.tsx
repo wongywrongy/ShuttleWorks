@@ -133,8 +133,8 @@ export function LiveTimelineGrid({
           style={{ height: box.height - 4 }}
           title={tooltip}
         >
-          <div className="px-1 h-full flex items-center overflow-hidden">
-            <span className="text-xs font-medium truncate text-foreground">
+          <div className="px-1 h-full flex items-center">
+            <span className="text-xs font-medium break-words text-foreground">
               {match ? getMatchLabel(match) : '?'}
             </span>
           </div>

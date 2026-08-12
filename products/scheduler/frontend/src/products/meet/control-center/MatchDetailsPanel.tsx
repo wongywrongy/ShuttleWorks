@@ -270,12 +270,12 @@ export function MatchDetailsPanel({
           C{displayCourtId}{courtChanged && ` (sched: C${assignment.courtId})`} · {scheduledTime}
         </div>
         {showSchools && (
-          <div className="mt-1 flex items-center gap-1 text-2xs text-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-2xs text-foreground">
             <SchoolDot accent={sideASchool!} size="sm" />
-            <span className="truncate">{sideASchool!.name}</span>
+            <span className="min-w-0 break-words">{sideASchool!.name}</span>
             <span className="text-muted-foreground">vs</span>
             <SchoolDot accent={sideBSchool!} size="sm" />
-            <span className="truncate">{sideBSchool!.name}</span>
+            <span className="min-w-0 break-words">{sideBSchool!.name}</span>
           </div>
         )}
       </div>
@@ -319,7 +319,7 @@ export function MatchDetailsPanel({
             </div>
             {winner && winnerNames ? (
               <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate">
+                <span className="min-w-0 break-words">
                   <span className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Winner
                   </span>{' '}
@@ -556,7 +556,7 @@ export function MatchDetailsPanel({
                         {match.eventRank}
                       </span>
                     )}
-                    <span className="truncate">{name}</span>
+                    <span className="min-w-0 break-words">{name}</span>
                   </span>
                   <span className="inline-flex items-center gap-1">
                     {showCheckIn && (
@@ -664,7 +664,7 @@ export function MatchDetailsPanel({
                             onSubstitute?.(match.id, playerId, p.id);
                             setSubPickingFor(null);
                           }}
-                          className="block w-full truncate px-1.5 py-0.5 text-left text-foreground hover:bg-muted/40"
+                          className="block w-full break-words px-1.5 py-0.5 text-left text-foreground hover:bg-muted/40"
                         >
                           {p.name}
                         </button>
@@ -794,12 +794,11 @@ export function MatchDetailsPanel({
                     }
                   }}
                   className="flex items-center gap-1.5 px-1.5 py-0.5 cursor-pointer hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  title={sharedPlayerNames.join(', ')}
                 >
                   <span className="text-2xs font-medium text-foreground tabular-nums w-12 flex-shrink-0">
                     {eventLabel}
                   </span>
-                  <span className="flex-1 truncate text-3xs text-muted-foreground">
+                  <span className="min-w-0 flex-1 break-words text-3xs text-muted-foreground">
                     {sharedPlayerNames.join(', ') || '—'}
                   </span>
                   <CaretRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />

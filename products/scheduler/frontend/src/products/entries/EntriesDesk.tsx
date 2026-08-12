@@ -204,7 +204,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
             renderRow={(e) => (
               <>
                 <span role="cell" className={`${colClass(COLUMNS[0])} min-w-0`}>
-                  <span className="block truncate text-xs text-foreground">
+                  <span className="block break-words text-xs text-foreground">
                     {e.playerName}
                   </span>
                 </span>
@@ -234,10 +234,15 @@ export function EntriesDesk({ tid }: { tid: string }) {
                     </span>
                   ))}
                 </span>
+                {/* Free text, so it is the cell most likely to need two
+                    lines — and the one an ellipsis destroys, since a remark's
+                    point is usually its end ("…allergic to latex"). The
+                    column is already priority 3: on a narrow desk it yields
+                    ENTIRELY rather than showing a cut-off version, and where
+                    it is shown it wraps and the row grows. */}
                 <span
                   role="cell"
-                  className={`${colClass(COLUMNS[4])} min-w-0 truncate text-2xs text-muted-foreground`}
-                  title={e.remarks ?? undefined}
+                  className={`${colClass(COLUMNS[4])} min-w-0 break-words text-2xs text-muted-foreground`}
                 >
                   {e.remarks ?? ''}
                 </span>

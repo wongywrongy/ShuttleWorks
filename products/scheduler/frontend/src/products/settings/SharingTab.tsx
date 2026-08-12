@@ -272,7 +272,7 @@ export function SharingTab({ tid }: { tid: string }) {
                         {STATUS_LABEL[status]}
                       </span>
                     </div>
-                    <div className="mt-0.5 truncate text-2xs text-muted-foreground">
+                    <div className="mt-0.5 break-words text-2xs text-muted-foreground">
                       {inv.email ? <>{inv.email} · </> : null}
                       {fmtExpiry(inv.expiresAt)}
                     </div>

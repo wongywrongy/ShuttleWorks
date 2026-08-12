@@ -59,7 +59,7 @@ function EntryRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <span
-            className={`truncate text-xs font-medium ${
+            className={`min-w-0 break-words text-xs font-medium ${
               isWarning ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >

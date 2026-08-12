@@ -35,7 +35,7 @@ export function DraggablePlayerChip({
         isDragging ? 'opacity-40' : 'cursor-grab',
       ].join(' ')}
     >
-      <span className="flex-1 truncate">{player.name || '(unnamed)'}</span>
+      <span className="min-w-0 flex-1 break-words">{player.name || '(unnamed)'}</span>
       <span
         className={[
           'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-sm px-1 text-3xs tabular-nums',

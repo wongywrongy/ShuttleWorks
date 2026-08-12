@@ -1108,7 +1108,10 @@ function Side({
           : "bg-bg-elev border border-border hover:bg-accent")
       }
     >
-      <span className="truncate">{label}</span>
+      {/* A draw slot IS the participant's name — ellipsising it cut exactly
+          the surname that tells two entrants apart. It wraps; the card grows
+          into the 28px row gap rather than hiding characters. */}
+      <span className="min-w-0 break-words text-left">{label}</span>
       {seeding && !bye ? (
         <span className="text-3xs text-muted-foreground">⇄</span>
       ) : winning && score ? (

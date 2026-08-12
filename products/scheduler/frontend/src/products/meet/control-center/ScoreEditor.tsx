@@ -132,7 +132,7 @@ function SimpleScoreEditor({
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5">
         <div className="min-w-0">
-          <div className="mb-0.5 truncate text-3xs text-muted-foreground" title={sideAName}>{sideAName}</div>
+          <div className="mb-0.5 break-words text-3xs text-muted-foreground">{sideAName}</div>
           <input
             ref={aRef}
             type="number"
@@ -147,7 +147,7 @@ function SimpleScoreEditor({
         </div>
         <span className="text-muted-foreground">–</span>
         <div className="min-w-0">
-          <div className="mb-0.5 truncate text-3xs text-muted-foreground text-right" title={sideBName}>{sideBName}</div>
+          <div className="mb-0.5 break-words text-3xs text-muted-foreground text-right">{sideBName}</div>
           <input
             type="number"
             min={0}
@@ -353,9 +353,9 @@ function BadmintonInlineEditor({
 
       <div className="mb-1 grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-1.5 text-3xs text-muted-foreground">
         <span></span>
-        <span className="truncate" title={sideAName}>{sideAName}</span>
+        <span className="break-words">{sideAName}</span>
         <span></span>
-        <span className="truncate text-right" title={sideBName}>{sideBName}</span>
+        <span className="break-words text-right">{sideBName}</span>
       </div>
 
       <div className="space-y-1">

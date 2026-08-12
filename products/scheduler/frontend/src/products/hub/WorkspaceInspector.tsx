@@ -113,7 +113,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
       <div className="flex flex-col gap-3 border-b border-border p-[18px]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-semibold text-foreground">
+            <h2 className="break-words text-[15px] font-semibold text-foreground">
               {tournament.name || 'Untitled'}
             </h2>
             <p className="mt-1.5 text-2xs uppercase tracking-[0.02em] sw-num text-muted-foreground">

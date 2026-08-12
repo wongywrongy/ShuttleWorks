@@ -86,7 +86,10 @@ export function SyncBackupsTab() {
               className="flex items-center justify-between gap-3 p-3"
             >
               <div className="min-w-0">
-                <div className="truncate font-mono text-xs text-foreground">{b.filename}</div>
+                {/* A backup filename is a timestamp you restore FROM — the
+                    end of it is the identifying part. `break-words` breaks
+                    inside the token only when it cannot otherwise fit. */}
+                <div className="break-words font-mono text-xs text-foreground">{b.filename}</div>
                 <div className="text-2xs tabular-nums text-muted-foreground">
                   {fmtDate(b.modifiedAt)} · {fmtBytes(b.sizeBytes)}
                 </div>

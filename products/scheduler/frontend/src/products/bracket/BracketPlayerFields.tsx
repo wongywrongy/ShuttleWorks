@@ -217,7 +217,7 @@ function EventTypeEditor({
               <span className="w-9 shrink-0 text-2xs font-semibold text-accent sw-num">
                 {ev.id}
               </span>
-              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              <span className="min-w-0 flex-1 break-words text-xs text-muted-foreground">
                 {disciplineLabel(ev.discipline)}
               </span>
               {isDraft ? (

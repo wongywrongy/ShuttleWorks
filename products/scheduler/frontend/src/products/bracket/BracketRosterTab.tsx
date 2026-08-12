@@ -212,7 +212,7 @@ function BracketRosterTabCore({
             rowTestId={(p) => `roster-row-${p.id}`}
             renderRow={(p) => (
               <>
-                <span role="cell" className="min-w-0 flex-1 truncate text-sm text-foreground">
+                <span role="cell" className="min-w-0 flex-1 break-words text-sm text-foreground">
                   {p.name}
                 </span>
                 <span role="cell" className="flex min-w-0 flex-1 flex-wrap items-center gap-1">

@@ -4,7 +4,7 @@
  * Visual spec: Appendix A of docs/superpowers/plans/2026-05-04-suggestions-inbox.md
  *   - 6px semantic dot
  *   - eyebrow ("REPAIR" / "OPTIMIZE" / "DIRECTOR" / "ALT")
- *   - title (single line, truncate)
+ *   - title (wraps; the row grows rather than ellipsising it)
  *   - tabular metric (right column)
  *   - Apply button (primary), Dismiss × (ghost)
  *   - Click row body to expand inline preview (handled by parent)
@@ -60,9 +60,8 @@ export function SuggestionRow({
       <button
         type="button"
         onClick={onToggleExpanded}
-        title={s.title}
         aria-expanded={expanded}
-        className={`${INTERACTIVE_BASE} truncate text-left text-sm font-medium text-foreground`}
+        className={`${INTERACTIVE_BASE} min-w-0 break-words text-left text-sm font-medium text-foreground`}
       >
         {s.title}
       </button>

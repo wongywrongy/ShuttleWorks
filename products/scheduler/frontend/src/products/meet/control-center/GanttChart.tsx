@@ -410,13 +410,16 @@ function GanttChartImpl({
           {isImpacted && (
             <div className="pointer-events-none absolute inset-0 rounded border-2 border-dashed border-accent" />
           )}
+          {/* `nowrap` + `overflow-hidden` cut the label mid-glyph with no
+              ellipsis and no tooltip on the span itself. The label wraps
+              inside the block instead. */}
           <div
-            className={`h-full flex flex-col justify-center overflow-hidden leading-tight ${
+            className={`h-full flex flex-col justify-center leading-tight ${
               multiLane ? 'px-0 items-center' : 'px-2 items-start'
             }`}
           >
             <span
-              className={`text-2xs font-semibold whitespace-nowrap overflow-hidden tabular-nums ${styles.text}`}
+              className={`text-2xs font-semibold break-words tabular-nums ${styles.text}`}
             >
               {match ? getMatchLabel(match) : '?'}
             </span>

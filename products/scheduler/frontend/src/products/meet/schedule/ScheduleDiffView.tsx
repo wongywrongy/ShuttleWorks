@@ -422,8 +422,8 @@ function MoveRow({
           <span className="ml-1 text-foreground">{move.eventRank}</span>
         )}
       </span>
-      {/* Players (truncates if too long) */}
-      <span className="truncate">{playerLine}</span>
+      {/* Players — wraps into the `minmax(0,1fr)` column; the row grows. */}
+      <span className="min-w-0 break-words">{playerLine}</span>
       {/* From → To inline */}
       <span className="sw-num text-muted-foreground whitespace-nowrap">
         {formatSlot(move.fromSlotId)}
