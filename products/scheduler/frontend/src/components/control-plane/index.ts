@@ -31,6 +31,13 @@ export {
 } from './matchStatus';
 export { DetailPanel } from './DetailPanel';
 export { DetailDock } from './DetailDock';
+export { DockModeContext } from './dockMode';
+export {
+  EventPicker,
+  EVENT_PICKER_SEARCH_THRESHOLD,
+  type EventPickerOption,
+  type EventPickerProps,
+} from './EventPicker';
 export { AvailabilityControl } from './AvailabilityControl';
 export {
   EventsControl,

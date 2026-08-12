@@ -14,6 +14,9 @@
  * and still keep `minContentWidth` px of content, the dock stays 0-wide and
  * renders its children as the classic right-edge overlay instead
  * (`data-mode="overlay"`), anchored to the consumer's `relative` container.
+ * That fallback is a REAL mode change, not a cosmetic one: the pane now
+ * covers the table it was supposed to sit beside. `DockModeContext` publishes
+ * it so the pane can say so — see the note on the context below.
  *
  * Geometry lives here; pane chrome (header, close, scroll) is the child —
  * typically a `variant="docked"` DetailPanel. Width animation is chosen over
@@ -29,6 +32,7 @@ import {
   type RefObject,
 } from 'react';
 import { useContainerWidth } from '../../hooks/useContainerWidth';
+import { DockModeContext } from './dockMode';
 
 function prefersReducedMotion(): boolean {
   return (
@@ -92,57 +96,59 @@ export function DetailDock({
 
   const mode = docked ? 'docked' : 'overlay';
   return (
-    <div
-      ref={hostRef}
-      data-testid={testId}
-      data-mode={mode}
-      onTransitionEnd={(e) => {
-        // transitionend BUBBLES: a hover/focus transition ending on a
-        // control inside the retained pane must not clear the retention
-        // mid-close — only the host's own transition counts (the host
-        // transitions nothing but width, so the target check suffices;
-        // jsdom's synthetic event carries no propertyName to check).
-        if (!open && e.target === e.currentTarget) {
-          setRetained(null);
+    <DockModeContext.Provider value={mode}>
+      <div
+        ref={hostRef}
+        data-testid={testId}
+        data-mode={mode}
+        onTransitionEnd={(e) => {
+          // transitionend BUBBLES: a hover/focus transition ending on a
+          // control inside the retained pane must not clear the retention
+          // mid-close — only the host's own transition counts (the host
+          // transitions nothing but width, so the target check suffices;
+          // jsdom's synthetic event carries no propertyName to check).
+          if (!open && e.target === e.currentTarget) {
+            setRetained(null);
+          }
+        }}
+        // Overlay mode keeps the host STATIC (and unclipped) so the absolute
+        // layer below anchors to the consumer's `relative` container, not to
+        // this zero-width column.
+        className={
+          docked
+            ? 'relative h-full flex-shrink-0 overflow-hidden sw-dock-transition'
+            : 'h-full flex-shrink-0'
         }
-      }}
-      // Overlay mode keeps the host STATIC (and unclipped) so the absolute
-      // layer below anchors to the consumer's `relative` container, not to
-      // this zero-width column.
-      className={
-        docked
-          ? 'relative h-full flex-shrink-0 overflow-hidden sw-dock-transition'
-          : 'h-full flex-shrink-0'
-      }
-      style={{ width: docked && open ? width : 0 }}
-    >
-      {docked ? (
-        open || closing ? (
-          // Fixed-width layer pinned to the dock's right edge: while the
-          // host's width animates, content slides in/out instead of
-          // reflowing at every frame. Retained (closing) content is inert —
-          // a click during the ≤450ms close must not fire an action bound
-          // to the just-dismissed selection.
+        style={{ width: docked && open ? width : 0 }}
+      >
+        {docked ? (
+          open || closing ? (
+            // Fixed-width layer pinned to the dock's right edge: while the
+            // host's width animates, content slides in/out instead of
+            // reflowing at every frame. Retained (closing) content is inert —
+            // a click during the ≤450ms close must not fire an action bound
+            // to the just-dismissed selection.
+            <div
+              className={[
+                'absolute inset-y-0 right-0 flex flex-col border-l border-border bg-card',
+                open ? '' : 'pointer-events-none',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              style={{ width }}
+            >
+              {open ? children : retained}
+            </div>
+          ) : null
+        ) : open ? (
           <div
-            className={[
-              'absolute inset-y-0 right-0 flex flex-col border-l border-border bg-card',
-              open ? '' : 'pointer-events-none',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+            className="absolute inset-y-0 right-0 z-overlay flex max-w-[90%] flex-col border-l border-border bg-card shadow-2xl sw-drawer-in"
             style={{ width }}
           >
-            {open ? children : retained}
+            {children}
           </div>
-        ) : null
-      ) : open ? (
-        <div
-          className="absolute inset-y-0 right-0 z-overlay flex max-w-[90%] flex-col border-l border-border bg-card shadow-2xl sw-drawer-in"
-          style={{ width }}
-        >
-          {children}
-        </div>
-      ) : null}
-    </div>
+        ) : null}
+      </div>
+    </DockModeContext.Provider>
   );
 }
