@@ -105,8 +105,43 @@ const handler = createRequestHandler(build, 'production');
  */
 const MEASURED = ['/e/', '/e/spring-open', '/e/spring-open/enter'];
 
-async function measure(pathname) {
-  const response = await handler(new Request(`http://weight-check.test${pathname}`));
+/**
+ * 2026-08-11 design audit, finding #7 ("the page-weight gate cannot see the
+ * state that breaks its own budget"). Every measurement above is a bare GET,
+ * and a bare GET's `echo.players` is always `[]` — so `visibleBlocks()`
+ * (`app/lib/phase.ts`) was structurally incapable of returning anything but
+ * `1`, no matter how the enter page is actually used. The form's own worst
+ * case is the "Add another player" round trip clamped at 8 blocks (Z12's
+ * documented display bound), and each block re-renders the full open-events
+ * checkbox list with no dedup — the growth driver.
+ *
+ * Reached the SAME way a real entrant reaches it: a POST to the enter
+ * route's own action with `addPlayer=1` (no backend call, no credential —
+ * see `action()` in `routes/enter.tsx`), which is exactly what the "Add
+ * another player" button's `formAction` does. Player content is irrelevant
+ * to weight (the checkbox list dominates it), so one POST carrying 7 echoed
+ * players + `addPlayer=1` reaches the 8-block ceiling in a single request
+ * rather than 7 sequential round trips.
+ */
+function enterCeilingRequestInit() {
+  const body = new URLSearchParams();
+  body.set('addPlayer', '1');
+  for (let i = 0; i < 7; i++) {
+    body.append('playerName', `Player ${i + 1}`);
+    body.append('gender', '');
+    body.append('club', '');
+    body.append('birthYear', '');
+    body.append('remarks', '');
+  }
+  return {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  };
+}
+
+async function measure(pathname, init, label = pathname) {
+  const response = await handler(new Request(`http://weight-check.test${pathname}`, init));
   if (response.status !== 200) {
     console.error(`Rendering ${pathname} returned ${response.status}, not 200.`);
     console.error(await response.text());
@@ -129,13 +164,20 @@ async function measure(pathname) {
     return sum + gzipSizeOf(abs);
   }, 0);
 
-  return { pathname, htmlGzipBytes, criticalJsBytes, scriptCount: scriptSrcs.length };
+  return { pathname: label, htmlGzipBytes, criticalJsBytes, scriptCount: scriptSrcs.length };
 }
 
 const measured = [];
 for (const pathname of MEASURED) {
   measured.push(await measure(pathname));
 }
+measured.push(
+  await measure(
+    '/e/spring-open/enter',
+    enterCeilingRequestInit(),
+    '/e/spring-open/enter [8 blocks]',
+  ),
+);
 
 // 4 KB per document, all of it HTML, because this tier ships no client JS.
 // With the +10% CI slack that is a 4.4 KB ceiling per page.
