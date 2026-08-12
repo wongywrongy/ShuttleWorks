@@ -30,6 +30,7 @@ const authedLayout = readSrc('app/AuthedLayout.tsx');
 const appShell = readSrc('app/AppShell.tsx');
 const rosterTab = readSrc('products/meet/roster/RosterTab.tsx');
 const hubPage = readSrc('products/hub/HubPage.tsx');
+const workspaceRow = readSrc('products/hub/WorkspaceRow.tsx');
 
 /** Source with comments removed — these files DISCUSS `<main>` in prose, and
  *  a doc comment is not a landmark. */
@@ -104,5 +105,74 @@ describe('the Hub command bar fits a narrow viewport', () => {
     expect(kbd).toBeDefined();
     expect(kbd).toMatch(/\bhidden\b/);
     expect(kbd).toMatch(/\bsm:block\b/);
+  });
+});
+
+/**
+ * A Hub row is NAME (`min-w-0 flex-1`) beside four `shrink-0` siblings —
+ * Modules, Date, Next action, the overflow menu. At 390px measured
+ * `scrollWidth` 424 vs `clientWidth` 334: the siblings alone exceed the row,
+ * so `flex-1`'s hypothetical size (basis 0, min-width 0) stayed 0 and the
+ * row's only identifying text disappeared. The column header above it,
+ * sharing the same widths, collapsed the same way — 0px with `overflow:
+ * visible`, so its text spilled instead of clipping.
+ *
+ * The fix reuses BandedTable's own mechanism (`@container/table` sizing +
+ * `hidden …:block|flex` priority classes, `components/control-plane/
+ * BandedList.tsx`) rather than inventing a new one, applied directly to the
+ * row (and mirrored on the header) since neither is `columns`-config-driven.
+ * Modules yields first (priority 3), Date next (priority 2) — both are
+ * metadata the inspector panel already repeats; the name never yields.
+ */
+describe('the Hub row keeps its name at a narrow container width', () => {
+  it('the row is its own `@container/table` sizing context', () => {
+    expect(workspaceRow).toMatch(/@container\/table/);
+  });
+
+  it('the name cell is still the one flexible, unhidden column', () => {
+    expect(workspaceRow).toMatch(/className="flex min-w-0 flex-1 items-center gap-2\.5"/);
+  });
+
+  it('the Modules glyphs yield first — priority 3, hides soonest', () => {
+    expect(workspaceRow).toMatch(/COL_PRIORITY_CLASS_FLEX\[3\]/);
+  });
+
+  it('the Date cell yields next — priority 2, both branches (dated and undated)', () => {
+    // DateCell has two `return`s (the undated spacer, the dated label); both
+    // must carry the priority class, or the 64px column reserves its width
+    // whenever ANY row in the list happens to be undated.
+    const hits = workspaceRow.match(/COL_PRIORITY_CLASS\[2\]/g) ?? [];
+    expect(hits.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the Hub column header shares the row\'s container and the same two priorities', () => {
+    expect(hubPage).toMatch(/@container\/table/);
+    expect(hubPage).toMatch(/COL_PRIORITY_CLASS\[3\]/);
+    expect(hubPage).toMatch(/COL_PRIORITY_CLASS\[2\]/);
+  });
+});
+
+/**
+ * The Roster actions bar's trailing control ("+ Add school") sat past the
+ * viewport on a school roster long enough to push the bar's `scrollWidth`
+ * (424) past its `clientWidth` (334) — data-dependent, so a short roster
+ * (Nashville) was fine and a long one was not. `overflow-x: visible` on the
+ * bar plus the page root's `overflow-hidden` clipped the overflow with no
+ * scrollbar and no way to reach it.
+ */
+describe('the Roster actions bar reaches its trailing control on a narrow container', () => {
+  const actionsBarWrap = /<div className="(shrink-0 overflow-x-auto[^"]*)">\s*<MeetActionsBar/.exec(
+    rosterTab,
+  )?.[1];
+
+  it('the actions bar is wrapped in its own scrollable container', () => {
+    // The Entries desk / desk-row prior art (above): what does not fit gets
+    // a scrollbar rather than clipping silently.
+    expect(actionsBarWrap).toBeDefined();
+    expect(actionsBarWrap).toMatch(/\boverflow-x-auto\b/);
+  });
+
+  it('that wrapper does not also clip with overflow-hidden', () => {
+    expect(actionsBarWrap).not.toMatch(/\boverflow-hidden\b/);
   });
 });

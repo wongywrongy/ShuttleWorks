@@ -15,7 +15,7 @@ import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
-import { EmptyState, Skeleton, Eyebrow } from '../../components/control-plane';
+import { EmptyState, Skeleton, Eyebrow, COL_PRIORITY_CLASS } from '../../components/control-plane';
 import { temporalGroupOf } from './hubGrouping';
 import { HUB_FACETS, facetCounts, matchesFacet, type HubFacetId } from './hubFacets';
 import { sortBy, type HubSortId } from './hubSort';
@@ -326,13 +326,22 @@ export function HubPage() {
             <div>
               {/* Column header — the dense-table grammar from the handoff Hub
                   prototype (widths mirror WorkspaceRow's cells). */}
+              {/* `@container/table` matches WorkspaceRow's own — same row
+                  width, same priority-hide, so the header and its data rows
+                  collapse in lockstep instead of drifting apart at 390px. */}
               <div
                 aria-hidden
-                className={`flex items-center gap-3 border-b border-border px-4 py-2 ${EYEBROW_CLASS} text-ink-faint`}
+                className={`flex items-center gap-3 border-b border-border px-4 py-2 @container/table ${EYEBROW_CLASS} text-ink-faint`}
               >
                 <span className="min-w-0 flex-1">Workspace</span>
-                <span className="w-[108px] shrink-0">Modules</span>
-                {showDates ? <span className="w-16 shrink-0 text-right">Date</span> : null}
+                <span className={['w-[108px] shrink-0', COL_PRIORITY_CLASS[3]].join(' ')}>
+                  Modules
+                </span>
+                {showDates ? (
+                  <span className={['w-16 shrink-0 text-right', COL_PRIORITY_CLASS[2]].join(' ')}>
+                    Date
+                  </span>
+                ) : null}
                 <span className="w-40 shrink-0 px-2">Next action</span>
                 <span className="w-6 shrink-0" />
               </div>

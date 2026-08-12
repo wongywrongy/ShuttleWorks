@@ -13,6 +13,7 @@ export {
   COLUMN_HEADER_ROW_CLASSES,
   BANDED_ROW_CLASSES,
   COL_PRIORITY_CLASS,
+  COL_PRIORITY_CLASS_FLEX,
   colClass,
   type BandedListColumn,
 } from './BandedList';

@@ -73,7 +73,10 @@ export const COL_PRIORITY_CLASS: Record<1 | 2 | 3, string> = {
   3: 'hidden @4xl/table:block',
 };
 
-const COL_PRIORITY_CLASS_FLEX: Record<1 | 2 | 3, string> = {
+/** Flex-restore twin of `COL_PRIORITY_CLASS` — exported alongside it since
+ *  WorkspaceRow's hand-rolled cells (not `columns`-config-driven) need the
+ *  flex variant directly for a cell whose own inner layout is a flex row. */
+export const COL_PRIORITY_CLASS_FLEX: Record<1 | 2 | 3, string> = {
   1: '',
   2: 'hidden @2xl/table:flex',
   3: 'hidden @4xl/table:flex',

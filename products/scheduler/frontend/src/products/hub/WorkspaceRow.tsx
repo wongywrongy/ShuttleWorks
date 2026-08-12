@@ -10,7 +10,13 @@
  * menu that reveals on hover/focus — never inline on the row surface.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
-import { HealthDot, OverflowMenu, type OverflowItem } from '../../components/control-plane';
+import {
+  HealthDot,
+  OverflowMenu,
+  COL_PRIORITY_CLASS,
+  COL_PRIORITY_CLASS_FLEX,
+  type OverflowItem,
+} from '../../components/control-plane';
 import { workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
@@ -53,7 +59,16 @@ const GLYPH_TITLE: Record<ModuleGlyphId, string> = {
 function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
   const glyphs = moduleGlyphs(tournament.modules ?? [], tournament.kind);
   return (
-    <span data-testid="row-modules" className="flex w-[108px] shrink-0 items-center gap-1">
+    <span
+      data-testid="row-modules"
+      // T4 (390px, 2026-08-12): the row's own `@container/table` (below) lets
+      // this yield BEFORE the name does — same `hidden …:flex` mechanism as
+      // BandedTable's column priorities, just applied to a hand-rolled cell
+      // instead of a `columns` config. Priority 3 (yields soonest): this is
+      // decoration the inspector panel already repeats, never the row's only
+      // identifying fact.
+      className={['w-[108px] shrink-0 items-center gap-1', COL_PRIORITY_CLASS_FLEX[3]].join(' ')}
+    >
       {glyphs.map((g) => (
         <span
           key={g.id}
@@ -86,8 +101,10 @@ function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
  *  for the absence of a fact nobody asked for. The width is kept so the dated
  *  rows still align. */
 function DateCell({ iso }: { iso: string | null }) {
+  // Priority 2: yields after Modules but before the name, same `@container/
+  // table` on the row (T4, 390px, 2026-08-12).
   if (!iso) {
-    return <span aria-hidden className="w-16 shrink-0" />;
+    return <span aria-hidden className={['w-16 shrink-0', COL_PRIORITY_CLASS[2]].join(' ')} />;
   }
   const d = eventDate(iso);
   const valid = !Number.isNaN(d.getTime());
@@ -100,7 +117,12 @@ function DateCell({ iso }: { iso: string | null }) {
       })
     : iso.slice(0, 10);
   return (
-    <span className="w-16 shrink-0 text-right text-2xs sw-num text-muted-foreground">
+    <span
+      className={[
+        'w-16 shrink-0 text-right text-2xs sw-num text-muted-foreground',
+        COL_PRIORITY_CLASS[2],
+      ].join(' ')}
+    >
       {label}
     </span>
   );
@@ -152,7 +174,12 @@ export function WorkspaceRow({
     <div
       onClick={onSelect}
       className={[
-        'group flex min-h-[40px] cursor-pointer items-center gap-3 px-4 py-2 text-sm',
+        // `@container/table`: the row is its own sizing context for the
+        // Modules/Date priority-hide below — T4 found this row's NAME
+        // resolving to 0px at 390 (`min-w-0 flex-1` against fixed-width
+        // siblings with nothing yielding). Same mechanism as BandedTable's
+        // `@container/table` columns, scoped to one row instead of a table.
+        'group flex min-h-[40px] cursor-pointer items-center gap-3 px-4 py-2 text-sm @container/table',
         'transition-colors duration-fast ease-brand',
         receded ? 'opacity-80 hover:opacity-100' : '',
         selected

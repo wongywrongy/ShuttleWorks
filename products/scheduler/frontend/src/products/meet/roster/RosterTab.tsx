@@ -247,41 +247,50 @@ export function RosterTab() {
     >
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         {/* ───── ACTIONS BAR — page-level controls ───────────────────── */}
-        <MeetActionsBar
-          title="Roster"
-          status={
-            <span className="text-sm font-semibold text-foreground tabular-nums">
-              {players.length} player{players.length === 1 ? '' : 's'}
-            </span>
-          }
-        >
-          <BulkImportMenu
-            schoolId={activeSchoolId}
-            onImport={(names) => {
-              if (!activeSchoolId) return;
-              for (const name of names) {
-                addPlayer({
-                  id: uuid(),
-                  name,
-                  groupId: activeSchoolId,
-                  ranks: [],
-                  availability: [],
-                });
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => exportRosterXlsx(players, groups, config)}
-            disabled={!canExport}
-            data-testid="export-roster"
-            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
+        {/* T4 (390px, 2026-08-12): a long school roster (e.g. "+ Add school"
+            after several school pills' worth of status text) can push the
+            bar's content past its own width. The root `overflow-hidden`
+            above then clipped it with no scrollbar and no way to reach the
+            trailing control — same "what doesn't fit gets a scrollbar"
+            answer already used for the desk row and SchoolTabs below,
+            applied to the one surface in between that didn't have it yet. */}
+        <div className="shrink-0 overflow-x-auto overflow-y-hidden">
+          <MeetActionsBar
+            title="Roster"
+            status={
+              <span className="text-sm font-semibold text-foreground tabular-nums">
+                {players.length} player{players.length === 1 ? '' : 's'}
+              </span>
+            }
           >
-            <Download aria-hidden="true" className="h-3.5 w-3.5" />
-            Export XLSX
-          </button>
-          <AddSchoolMenu onAddSchool={(name) => addGroup({ id: uuid(), name })} />
-        </MeetActionsBar>
+            <BulkImportMenu
+              schoolId={activeSchoolId}
+              onImport={(names) => {
+                if (!activeSchoolId) return;
+                for (const name of names) {
+                  addPlayer({
+                    id: uuid(),
+                    name,
+                    groupId: activeSchoolId,
+                    ranks: [],
+                    availability: [],
+                  });
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => exportRosterXlsx(players, groups, config)}
+              disabled={!canExport}
+              data-testid="export-roster"
+              className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
+            >
+              <Download aria-hidden="true" className="h-3.5 w-3.5" />
+              Export XLSX
+            </button>
+            <AddSchoolMenu onAddSchool={(name) => addGroup({ id: uuid(), name })} />
+          </MeetActionsBar>
+        </div>
 
         {/* ───── CONTENT — school tabs above the three-pane body ─────── */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
