@@ -39,6 +39,7 @@
  * `defaultColumns` applies here same as the real board.
  */
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
+import { Eyebrow } from '../../../components/control-plane';
 import { CourtsView } from '../../display/publicDisplay/CourtsView';
 import { DEFAULT_PRESET_ID } from '../../display/publicDisplay/displayPresets';
 import { defaultColumns } from '../../display/publicDisplay/courtLayout';
@@ -157,41 +158,59 @@ export function DisplayPreview({ config }: { config: TournamentConfig | null }) 
   const gridColsClass = resolveGridColsClass(resolvedColumns);
 
   return (
-    <div
-      className="overflow-hidden rounded-md border border-border bg-card/40"
-      style={{ width: NATURAL_WIDTH * SCALE, height: NATURAL_HEIGHT * SCALE }}
-      aria-label="Board layout preview"
-      data-testid="display-preview-frame"
-    >
-      <div
-        data-tv-preset={tvPreset}
-        className="bg-background text-foreground"
-        style={{
-          width: NATURAL_WIDTH,
-          height: NATURAL_HEIGHT,
-          transform: `scale(${SCALE})`,
-          transformOrigin: 'top left',
-          padding: 24,
-          overflow: 'hidden',
-        }}
+    <figure className="m-0">
+      {/* Defect D7: the caption is not decoration. The names and scores below
+          ("A. Ntumba vs D. Reyes", 11-7) are a fixed fixture, not this
+          workspace, and an unlabelled board that invents four courts teaches
+          the operator something false about their own event. It leads the
+          figure rather than trailing it so it is read BEFORE the board, and
+          says which parts of what is shown are real. */}
+      <figcaption
+        data-testid="display-preview-caption"
+        className="mb-1.5 flex items-baseline gap-2"
       >
-        <CourtsView
-          courts={sampleCourts}
-          config={config}
-          now={now}
-          displayMode={tvDisplayMode}
-          gridColsClass={gridColsClass}
-          cardHeightPx={cardHeightPx}
-          cardPadX={cardPadX}
-          courtNumSize={courtNumSize}
-          eventCodeSize={eventCodeSize}
-          playerSize={playerSize}
-          tvAccent={tvAccent}
-          tvShowScores={tvShowScores}
-          isFullscreen={false}
-          playerNames={SAMPLE_PLAYER_NAMES}
-        />
+        <Eyebrow tone="accent">Sample data</Eyebrow>
+        <span className="text-2xs text-muted-foreground">
+          Players, scores and courts are invented. Layout, size, colour and
+          columns are your real settings.
+        </span>
+      </figcaption>
+      <div
+        className="overflow-hidden rounded-sm border border-border bg-card/40"
+        style={{ width: NATURAL_WIDTH * SCALE, height: NATURAL_HEIGHT * SCALE }}
+        aria-label="Board layout preview, sample data"
+        data-testid="display-preview-frame"
+      >
+        <div
+          data-tv-preset={tvPreset}
+          className="bg-background text-foreground"
+          style={{
+            width: NATURAL_WIDTH,
+            height: NATURAL_HEIGHT,
+            transform: `scale(${SCALE})`,
+            transformOrigin: 'top left',
+            padding: 24,
+            overflow: 'hidden',
+          }}
+        >
+          <CourtsView
+            courts={sampleCourts}
+            config={config}
+            now={now}
+            displayMode={tvDisplayMode}
+            gridColsClass={gridColsClass}
+            cardHeightPx={cardHeightPx}
+            cardPadX={cardPadX}
+            courtNumSize={courtNumSize}
+            eventCodeSize={eventCodeSize}
+            playerSize={playerSize}
+            tvAccent={tvAccent}
+            tvShowScores={tvShowScores}
+            isFullscreen={false}
+            playerNames={SAMPLE_PLAYER_NAMES}
+          />
+        </div>
       </div>
-    </div>
+    </figure>
   );
 }

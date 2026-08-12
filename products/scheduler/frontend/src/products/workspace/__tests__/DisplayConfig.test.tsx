@@ -101,3 +101,33 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
     expect(preview).not.toHaveTextContent('11–7');
   });
 });
+
+/**
+ * Defect D7: the Preview rendered "MS1 A. Ntumba vs D. Reyes", 11-7, on four
+ * courts, with nothing saying it was invented. It is a fixed fixture on
+ * purpose (a schedule-less workspace would otherwise preview the board's "no
+ * schedule" placeholder, and the point here is to preview LAYOUT) — but an
+ * unlabelled board that shows names and scores teaches the operator something
+ * false about their own event.
+ */
+describe('<DisplayConfig /> — the Preview says its data is a sample', () => {
+  it('captions the preview, before the board, naming what is invented', () => {
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    const caption = screen.getByTestId('display-preview-caption');
+    expect(caption).toHaveTextContent(/sample data/i);
+    expect(caption).toHaveTextContent(/players, scores and courts are invented/i);
+    // Read BEFORE the board it describes, not after it.
+    expect(
+      caption.compareDocumentPosition(screen.getByTestId('display-preview-frame')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('carries the sample warning in the accessible name too', () => {
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    expect(screen.getByTestId('display-preview-frame')).toHaveAttribute(
+      'aria-label',
+      'Board layout preview, sample data',
+    );
+  });
+});

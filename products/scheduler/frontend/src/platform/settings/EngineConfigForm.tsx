@@ -422,10 +422,8 @@ export function EngineConfigForm({
             />
           </Section>
 
-          {/* Solver internals last: a director changes these rarely, and
-              never during an event. */}
-          {/* The one collapsed group: solver internals a director
-              changes rarely, and never during an event. */}
+          {/* Solver internals last: the one collapsed group — a director
+              changes these rarely, and never during an event. */}
           <Section title="Advanced solver" defaultOpen={false}>
             <Row
               label="Reproducible run"

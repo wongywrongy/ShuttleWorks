@@ -94,7 +94,26 @@ export function SyncBackupsTab() {
                   {fmtDate(b.modifiedAt)} · {fmtBytes(b.sizeBytes)}
                 </div>
               </div>
-              <Button variant="ghost" onClick={() => setRestoreTarget(b.filename)}>
+              {/* An ACTION, not text. `variant="ghost"` at the default size put
+                  ten "Restore" labels down the list in the same ink, weight and
+                  box as the metadata line beside them, so the one control on
+                  the row that replaces the entire workspace read as another
+                  column of the table. Outline gives it an edge; the destructive
+                  tint says which way it points.
+                  The guard is the Modal below, deliberately, NOT the two-click
+                  arm: `useConfirmClick`'s own contract reserves the arm for the
+                  merely-irreversible and calls for a Modal that states what is
+                  lost when the action is catastrophic. Restoring discards every
+                  change since the snapshot.
+                  The name is per-backup: ten controls all called "Restore" are
+                  ten identical announcements to a screen reader. */}
+              <Button
+                variant="outline"
+                size="xs"
+                className="text-destructive"
+                aria-label={`Restore backup ${b.filename}`}
+                onClick={() => setRestoreTarget(b.filename)}
+              >
                 Restore
               </Button>
             </li>

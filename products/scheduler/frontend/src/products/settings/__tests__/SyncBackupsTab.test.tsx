@@ -35,11 +35,43 @@ describe('SyncBackupsTab', () => {
     expect(createBackup).toHaveBeenCalled();
   });
 
+  /* A restore replaces the whole workspace and discards everything since the
+   * snapshot, and the list renders ten of these. The row button must not be
+   * the thing that does it. */
+  it('a single click on a row Restore does NOT restore: it opens the confirm', () => {
+    render(<SyncBackupsTab />);
+    fireEvent.click(
+      within(screen.getByTestId('backup-b1.json')).getByRole('button', {
+        name: 'Restore backup b1.json',
+      }),
+    );
+    expect(restoreBackup).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /restore workspace/i })).toBeInTheDocument();
+  });
+
   it('restores a backup after confirm (delegates to the hook → store rehydrate)', async () => {
     render(<SyncBackupsTab />);
-    fireEvent.click(within(screen.getByTestId('backup-b1.json')).getByRole('button', { name: 'Restore' }));
+    fireEvent.click(
+      within(screen.getByTestId('backup-b1.json')).getByRole('button', {
+        name: 'Restore backup b1.json',
+      }),
+    );
     fireEvent.click(screen.getByRole('button', { name: /restore workspace/i }));
     await waitFor(() => expect(restoreBackup).toHaveBeenCalledWith('b1.json'));
+  });
+
+  /* Ten rows, ten controls all announced as "Restore", is a list a screen
+   * reader cannot navigate. The name carries the snapshot it restores. */
+  it('each row Restore is named for the backup it would restore', () => {
+    setHook({
+      entries: [
+        { filename: 'b1.json', sizeBytes: 2048, modifiedAt: '2026-06-01T00:00:00Z' },
+        { filename: 'b2.json', sizeBytes: 4096, modifiedAt: '2026-06-02T00:00:00Z' },
+      ],
+    });
+    render(<SyncBackupsTab />);
+    expect(screen.getByRole('button', { name: 'Restore backup b1.json' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore backup b2.json' })).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no backups', () => {

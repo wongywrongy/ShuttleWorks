@@ -15,7 +15,13 @@ import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
-import { EmptyState, Skeleton, Eyebrow, COL_PRIORITY_CLASS } from '../../components/control-plane';
+import {
+  EmptyState,
+  Skeleton,
+  Eyebrow,
+  DetailDock,
+  COL_PRIORITY_CLASS,
+} from '../../components/control-plane';
 import { temporalGroupOf } from './hubGrouping';
 import { HUB_FACETS, facetCounts, matchesFacet, type HubFacetId } from './hubFacets';
 import { sortBy, type HubSortId } from './hubSort';
@@ -23,6 +29,7 @@ import { SortControl } from './SortControl';
 import { needsAttention } from './hubSignals';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
+import { HUB_DOCK_MIN_CONTENT_WIDTH, HUB_DOCK_WIDTH } from './hubDockGeometry';
 import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** The ⌘K handler accepts Ctrl too — the hint should name the key the
@@ -295,8 +302,10 @@ export function HubPage() {
         </div>
       ) : null}
 
-      {/* Body: one flat, sorted, facet-filtered list (+ footer) + inspector */}
-      <div className="flex min-h-0 flex-1">
+      {/* Body: one flat, sorted, facet-filtered list (+ footer) + inspector.
+          `relative` + `overflow-hidden` is DetailDock's host contract: the
+          narrow fallback anchors its overlay layer to this box. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
           {error && (
@@ -389,12 +398,21 @@ export function HubPage() {
           ) : null}
         </div>
 
-        <WorkspaceInspector
-          tournament={selected}
-          onOpen={openTournament}
-          onSetDate={(id) => navigate(`/tournaments/${id}/settings?tab=general`)}
-          onSettings={(id) => navigate(`/tournaments/${id}/settings`)}
-        />
+        {/* Geometry, and why it is these numbers: `hubDockGeometry.ts`. */}
+        <DetailDock
+          open={selected != null}
+          width={HUB_DOCK_WIDTH}
+          minContentWidth={HUB_DOCK_MIN_CONTENT_WIDTH}
+        >
+          <WorkspaceInspector
+            key={selected?.id}
+            tournament={selected}
+            onOpen={openTournament}
+            onSetDate={(id) => navigate(`/tournaments/${id}/settings?tab=general`)}
+            onSettings={(id) => navigate(`/tournaments/${id}/settings`)}
+            onClose={() => setSelectedId(null)}
+          />
+        </DetailDock>
       </div>
 
       {deleteTarget && (

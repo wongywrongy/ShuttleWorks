@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@scheduler/design-system';
 import { Select } from '@scheduler/design-system/components';
 import { SectionCard } from '../../components/control-plane';
+import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { apiClient } from '../../api/client';
 import type { InviteRole, InviteSummaryDTO } from '../../api/dto';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
@@ -126,6 +127,15 @@ export function SharingTab({ tid }: { tid: string }) {
     }
   }
 
+  // Rotate sat 24px from Copy and Open fullscreen, in the same row, at the same
+  // size and variant: three controls that looked like one family, of which two
+  // are read-only and the third revokes the live venue link on the first click.
+  // Mid-event that is the hall's screen going blank. It now ARMS (the canon
+  // two-click guard, disarming on Escape and on blur) and sits below the rule,
+  // out of the safe controls' row. A Modal is reserved for the catastrophic;
+  // this is merely irreversible: the operator can always re-share the new link.
+  const confirmRotate = useConfirmClick(() => void rotate());
+
   async function create() {
     setBusy(true);
     try {
@@ -187,19 +197,34 @@ export function SharingTab({ tid }: { tid: string }) {
             >
               Open fullscreen
             </Button>
+          </div>
+
+          {/* Below the rule, apart from the two safe controls above it. */}
+          <div className="mt-3 flex items-center gap-3 border-t border-border pt-3">
             <Button
               size="xs"
-              variant="ghost"
+              variant={confirmRotate.armed ? 'destructive' : 'outline'}
               disabled={!displayLink || rotating}
-              onClick={() => void rotate()}
+              onClick={confirmRotate.press}
+              onBlur={confirmRotate.reset}
+              aria-label={
+                confirmRotate.armed
+                  ? 'Confirm rotating the public display link'
+                  : 'Rotate the public display link'
+              }
             >
-              {rotating ? 'Rotating…' : 'Rotate link'}
+              {rotating
+                ? 'Rotating…'
+                : confirmRotate.armed
+                  ? 'Confirm: revoke and replace'
+                  : 'Rotate link'}
             </Button>
+            <p className="text-2xs text-muted-foreground">
+              {confirmRotate.armed
+                ? 'Any venue display still on the old link goes blank until you re-share. Press Escape to cancel.'
+                : 'Revokes the current link immediately and issues a new one. Every venue display has to be re-shared.'}
+            </p>
           </div>
-          <p className="mt-2 text-2xs text-muted-foreground">
-            Rotating the link revokes the old one immediately. Re-share the new link with
-            any venue displays.
-          </p>
         </SectionCard>
       )}
 

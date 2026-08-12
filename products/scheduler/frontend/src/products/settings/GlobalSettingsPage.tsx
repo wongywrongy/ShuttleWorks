@@ -30,12 +30,16 @@ const NAV: { group: string; items: { id: string; label: string }[] }[] = [
     { id: 'security', label: 'Security' },
     { id: 'sessions', label: 'Sessions' },
   ] },
-  { group: 'Workspace defaults', items: [
-    { id: 'modules', label: 'Modules' },
-  ] },
+  // No "Workspace defaults › Modules" and no "Notifications".
+  //
+  // Modules was a read-only restatement of the per-workspace Modules tab with
+  // zero controls and a hardcoded three-module list that had already drifted
+  // (no Entries), so it answered a question the real catalog answers better and
+  // could only ever be more wrong. Notifications was an empty "Not available
+  // yet" card. Both cost a nav row and returned nothing; a nav entry that leads
+  // to a placeholder teaches the operator that this nav is not worth reading.
   { group: 'Preferences', items: [
     { id: 'appearance', label: 'Appearance' },
-    { id: 'notifications', label: 'Notifications' },
   ] },
 ];
 const SECTION_IDS = NAV.flatMap((g) => g.items.map((i) => i.id));
@@ -261,94 +265,11 @@ function SessionsPage() {
   );
 }
 
-const MODULE_DEFAULTS: {
-  id: string;
-  name: string;
-  desc: string;
-  defaultState: string;
-  integration?: { name: string; desc: string; envVar: string };
-}[] = [
-  {
-    id: 'meet',
-    name: 'Meet',
-    desc: 'Single-day meet cockpit: roster, CP-SAT court assignments, live scoring.',
-    defaultState: 'Available',
-  },
-  {
-    id: 'bracket',
-    name: 'Bracket',
-    desc: 'Single-elimination + round-robin draws: seeding, advancement, import/export.',
-    defaultState: 'Available',
-  },
-  {
-    id: 'display',
-    name: 'Display',
-    desc: 'Read-only public TV display of live matches, draws, and results.',
-    defaultState: 'Available',
-  },
-];
-
-function ModulesPage() {
-  return (
-    <div className="max-w-2xl space-y-6 p-6">
-      <PageHead
-        title="Modules"
-        subtitle="The product systems available inside a workspace, and the integrations they rely on."
-      />
-
-      <div className="space-y-3">
-        {MODULE_DEFAULTS.map((m) => (
-          <div key={m.id} className="rounded-md border border-border">
-            <div className="flex items-start justify-between gap-4 p-4">
-              <div>
-                <div className="text-sm font-medium text-foreground">{m.name}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground">{m.desc}</div>
-              </div>
-              <span className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
-                {m.defaultState}
-              </span>
-            </div>
-            {m.integration ? (
-              <div className="border-t border-border bg-muted/20 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-xs font-medium text-foreground">{m.integration.name}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">{m.integration.desc}</div>
-                  </div>
-                  <span className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
-                    Not configured
-                  </span>
-                </div>
-                <Note>
-                  Configured via backend environment:{' '}
-                  <span className="font-mono">{m.integration.envVar}</span>.
-                </Note>
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function AppearancePage() {
   return (
     <div className="max-w-2xl space-y-5 p-6">
       <PageHead title="Appearance" subtitle="Theme and density for this browser." />
       <AppearanceSettings />
-    </div>
-  );
-}
-
-function NotificationsPage() {
-  return (
-    <div className="max-w-xl space-y-4 p-6">
-      <PageHead title="Notifications" subtitle="How and when ShuttleWorks notifies you." />
-      <div className="rounded-md border border-dashed border-border p-6 text-center">
-        <div className="text-sm font-medium text-foreground">Not available yet</div>
-        <Note>Notification preferences will land in a future update.</Note>
-      </div>
     </div>
   );
 }
@@ -399,9 +320,7 @@ export function GlobalSettingsPage() {
           {section === 'profile' && <ProfilePage />}
           {section === 'security' && <SecurityPage />}
           {section === 'sessions' && <SessionsPage />}
-          {section === 'modules' && <ModulesPage />}
           {section === 'appearance' && <AppearancePage />}
-          {section === 'notifications' && <NotificationsPage />}
         </div>
       </div>
     </div>

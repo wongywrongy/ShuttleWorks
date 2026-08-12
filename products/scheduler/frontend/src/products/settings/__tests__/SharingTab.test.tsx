@@ -41,13 +41,73 @@ describe('SharingTab', () => {
     expect(input.value).not.toContain('?id=');
   });
 
-  it('Rotate link swaps in the new token from rotateDisplayToken', async () => {
+  /* Rotate revokes the LIVE venue display link on the spot: mid-event, the
+   * hall's screen goes blank. It used to be one click, in a row with Copy and
+   * Open fullscreen, at the same size and variant as both. It now arms first
+   * (the canon `useConfirmClick` two-click guard) and sits below the rule,
+   * outside that row. */
+  it('Rotate link does NOT rotate on the first click: it arms', async () => {
     render(<SharingTab tid="t1" />);
     const input = screen.getByLabelText('Public display link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('tok-abc'));
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate link' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
+    expect(input.value).toContain('tok-abc');
+    // Armed state names the consequence rather than repeating the label.
+    expect(
+      screen.getByRole('button', { name: 'Confirm rotating the public display link' }),
+    ).toBeInTheDocument();
+  });
+
+  it('Rotate link swaps in the new token on the confirming second click', async () => {
+    render(<SharingTab tid="t1" />);
+    const input = screen.getByLabelText('Public display link') as HTMLInputElement;
+    await waitFor(() => expect(input.value).toContain('tok-abc'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm rotating the public display link' }),
+    );
+
     await waitFor(() => expect(input.value).toContain('/display?token=tok-new'));
     expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1');
+  });
+
+  it('Escape disarms a Rotate armed by mistake', async () => {
+    render(<SharingTab tid="t1" />);
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('Public display link') as HTMLInputElement).value,
+      ).toContain('tok-abc'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(
+      screen.getByRole('button', { name: 'Rotate the public display link' }),
+    ).toBeInTheDocument();
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
+  });
+
+  it('keeps Rotate out of the row that holds the two safe controls', async () => {
+    render(<SharingTab tid="t1" />);
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('Public display link') as HTMLInputElement).value,
+      ).toContain('tok-abc'),
+    );
+
+    // Copy and Open fullscreen share a parent with the link input. Rotate must
+    // not: a destructive control 24px from two read-only ones, styled the same,
+    // is the misclick this separation exists to prevent.
+    const safeRow = screen.getByRole('button', { name: 'Copy' }).parentElement!;
+    expect(within(safeRow).getByRole('button', { name: 'Open fullscreen' })).toBeInTheDocument();
+    expect(
+      within(safeRow).queryByRole('button', { name: /rotate/i }),
+    ).toBeNull();
   });
 
   it('hides the public display section when the token fetch fails (not owner)', async () => {

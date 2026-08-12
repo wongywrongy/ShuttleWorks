@@ -13,10 +13,15 @@
  * Engine-specific timing (rest between matches / rounds, breaks) stays in
  * each engine's Configuration.
  */
+import { Link } from 'react-router-dom';
 import { useTournamentStore } from '../../store/tournamentStore';
 import type { TournamentConfig } from '../../api/dto';
 import { useLockGuard } from '../../hooks/useLockGuard';
+import { useTournamentIdOrNull } from '../../hooks/useTournamentId';
+import { useMatchStateSync } from '../../hooks/useMatchStateSync';
+import { useMeetResultsLock } from '../../hooks/useMeetResultsLock';
 import { LockRibbon } from '../../components/status/LockRibbon';
+import { LockedFieldset } from '../../platform/settings/ConfigSurface';
 import {
   Row,
   SectionHeader,
@@ -38,7 +43,25 @@ const FALLBACK_CONFIG: TournamentConfig = {
 export function VenueScheduleTab() {
   const config = useTournamentStore((s) => s.config);
   const setConfig = useTournamentStore((s) => s.setConfig);
-  const { confirmUnlock } = useLockGuard();
+  const { isLocked, confirmUnlock } = useLockGuard();
+
+  // Defect D5, found from the other end. Meet Configuration announces
+  // "Settings are read-only while matches are in play" and means it: it wraps
+  // its whole form in a disabled fieldset keyed off `useMeetResultsLock`. This
+  // surface holds court count, slot duration and the day window — by this
+  // file's own reckoning the MOST scheduling-structural fields in the product,
+  // and settings by any reading an operator would give the word — and it
+  // carried only the SCHEDULE lock. So with scores already recorded, a
+  // director who had just been told settings were read-only could move the day
+  // window one nav item away, autosaving, with nothing to stop them.
+  // The engine surfaces' own lock, on the fields that deserve it most.
+  const tid = useTournamentIdOrNull();
+  // The store is only hydrated by surfaces that mount a match-state loader,
+  // and this is not one of them; without this the hook silently answers false
+  // (see useMeetResultsLock's note). Same lightweight loader Meet
+  // Configuration mounts for exactly this reason.
+  useMatchStateSync(tid);
+  const resultsLocked = useMeetResultsLock();
 
   // These fields autosave per edit — no Save step to guard — so the FIRST
   // edit under a meet schedule lock routes through the confirm-unlock modal
@@ -66,64 +89,104 @@ export function VenueScheduleTab() {
 
       {/* These are the MOST scheduling-structural fields in the product —
           the same CONFIG_LOCKED contract that guards the engine forms
-          guards them. Same ribbon as Configuration so the operator learns
-          one lock vocabulary (reads the meet store flag). */}
-      <LockRibbon tier="schedule" variant="inline" />
+          guards them. Same ribbons as Configuration, in the same precedence:
+          once scores exist the surface is read-only, so "saving will clear the
+          schedule" is no longer a thing that can happen and stacking both
+          would state two different answers at once. */}
+      {resultsLocked ? (
+        <LockRibbon
+          tier="results"
+          locked
+          variant="inline"
+          action={
+            tid ? (
+              <Link
+                to={`/tournaments/${tid}/matches`}
+                className="ml-1 font-medium text-accent hover:underline"
+              >
+                View matches →
+              </Link>
+            ) : null
+          }
+        />
+      ) : (
+        <LockRibbon tier="schedule" variant="inline" />
+      )}
 
-      <section>
-        <SectionHeader>Venue</SectionHeader>
-        <Row
-          label="Courts"
-          control={
-            <NumberInput
-              value={config?.courtCount ?? 4}
-              onChange={(v) => set('courtCount', v)}
-              min={1}
-              max={32}
-              ariaLabel="Court count"
-            />
-          }
-        />
-        <Row
-          label="Slot duration"
-          control={
-            <NumberWithSuffix
-              value={config?.intervalMinutes ?? 30}
-              onChange={(v) => set('intervalMinutes', v)}
-              suffix="min"
-              min={5}
-              max={240}
-              ariaLabel="Slot duration in minutes"
-            />
-          }
-          last
-        />
-      </section>
+      {/* Defect D15: this surface has NO Save button, and the schedule ribbon
+          warns that "saving these settings will clear" the committed schedule.
+          It names an action that does not exist here, so an operator reading it
+          looks for a Save to avoid pressing and concludes the fields are safe
+          to touch. They are not: each one autosaves, and under the lock the
+          FIRST change opens the confirm-unlock modal whose OK clears the
+          schedule.
+          Saying when it actually fires is the fix. The ribbon copy itself is
+          shared with both engine Configuration surfaces, which DO have a Save,
+          so it stays right for them and gets its local caveat here. */}
+      <p className="text-xs text-muted-foreground" data-testid="venue-save-note">
+        {resultsLocked
+          ? 'These are read-only while matches are in play. Nothing on this page can be changed until the event is done.'
+          : isLocked
+            ? 'There is no Save on this page: each field applies as you change it. Because a schedule is committed, the next change asks you to confirm first, and confirming clears that schedule.'
+            : 'There is no Save on this page: each field applies as you change it.'}
+      </p>
 
-      <section>
-        <SectionHeader>Day window</SectionHeader>
-        <Row
-          label="Start time"
-          control={
-            <TimeInput
-              value={config?.dayStart ?? '09:00'}
-              onChange={(v) => set('dayStart', v)}
-              ariaLabel="Day start"
-            />
-          }
-        />
-        <Row
-          label="End time"
-          control={
-            <TimeInput
-              value={config?.dayEnd ?? '18:00'}
-              onChange={(v) => set('dayEnd', v)}
-              ariaLabel="Day end"
-            />
-          }
-          last
-        />
-      </section>
+      <LockedFieldset locked={resultsLocked}>
+        <section>
+          <SectionHeader>Venue</SectionHeader>
+          <Row
+            label="Courts"
+            control={
+              <NumberInput
+                value={config?.courtCount ?? 4}
+                onChange={(v) => set('courtCount', v)}
+                min={1}
+                max={32}
+                ariaLabel="Court count"
+              />
+            }
+          />
+          <Row
+            label="Slot duration"
+            control={
+              <NumberWithSuffix
+                value={config?.intervalMinutes ?? 30}
+                onChange={(v) => set('intervalMinutes', v)}
+                suffix="min"
+                min={5}
+                max={240}
+                ariaLabel="Slot duration in minutes"
+              />
+            }
+            last
+          />
+        </section>
+
+        <section>
+          <SectionHeader>Day window</SectionHeader>
+          <Row
+            label="Start time"
+            control={
+              <TimeInput
+                value={config?.dayStart ?? '09:00'}
+                onChange={(v) => set('dayStart', v)}
+                ariaLabel="Day start"
+              />
+            }
+          />
+          <Row
+            label="End time"
+            control={
+              <TimeInput
+                value={config?.dayEnd ?? '18:00'}
+                onChange={(v) => set('dayEnd', v)}
+                ariaLabel="Day end"
+              />
+            }
+            last
+          />
+        </section>
+      </LockedFieldset>
     </div>
   );
 }

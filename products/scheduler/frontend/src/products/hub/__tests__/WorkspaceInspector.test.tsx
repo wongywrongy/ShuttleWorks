@@ -45,7 +45,7 @@ const noop = () => {};
 
 describe('WorkspaceInspector', () => {
   it('shows the matches/scheduled/to-do metric triplet from signals.matches', () => {
-    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     const metrics = screen.getByTestId('inspector-metrics');
     expect(metrics).toHaveTextContent('48');
     expect(metrics).toHaveTextContent('36');
@@ -54,17 +54,17 @@ describe('WorkspaceInspector', () => {
   });
 
   it('metric tiles fall back to – when match signals are absent (older payload)', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.getByTestId('inspector-metrics')).toHaveTextContent('–');
   });
 
   it('shows a Ready status pill when readiness is complete and health is good', () => {
-    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.getByText('Ready')).toBeInTheDocument();
   });
 
   it('shows a "Needs setup" pill when readiness is incomplete', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.getByText(/needs setup/i)).toBeInTheDocument();
   });
 
@@ -79,13 +79,13 @@ describe('WorkspaceInspector', () => {
         attention: [{ code: 'NO_MODULES_ENABLED', label: 'No modules enabled' }],
       },
     };
-    render(<WorkspaceInspector tournament={readyButAttention} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={readyButAttention} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.queryByText('Ready')).toBeNull();
     expect(screen.getByText(/needs setup/i)).toBeInTheDocument();
   });
 
   it('renders a readiness progress bar reflecting setup completion', () => {
-    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
   });
 
@@ -97,12 +97,12 @@ describe('WorkspaceInspector', () => {
         nextUp: [{ code: 'MS1', timeLabel: '09:30', courtLabel: 'Court 1', status: 'scheduled' }],
       },
     };
-    render(<WorkspaceInspector tournament={withNext} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={withNext} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.getByTestId('inspector-next-up')).toHaveTextContent('MS1');
   });
 
   it('hides the Next up section when there are no upcoming matches', () => {
-    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.queryByTestId('inspector-next-up')).toBeNull();
   });
   // SP-UI-1: the rail used to render a separate `inspector-todos` list AND a
@@ -110,7 +110,7 @@ describe('WorkspaceInspector', () => {
   // checklist (shared with the Overview), so the attention copy appears as the
   // step's subline instead of in a list of its own.
   it('renders one merged checklist carrying the plain-language reason, plus module counts', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.queryByTestId('inspector-todos')).toBeNull();
     const checklist = screen.getByTestId('inspector-checklist');
     expect(checklist).toHaveTextContent(/roster/i);
@@ -120,12 +120,12 @@ describe('WorkspaceInspector', () => {
   });
 
   it('keeps the rail free of per-step action buttons (the CTA lives at its head)', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.queryByTestId('setup-action-roster')).toBeNull();
   });
 
   it('does not show raw signal codes or identity/collaboration metadata', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.queryByText(/\[ SIGNAL \]/)).toBeNull();
     expect(screen.queryByText(/NO_ROSTER/)).toBeNull();
     expect(screen.queryByText(/op@example\.com/)).toBeNull();
@@ -135,13 +135,13 @@ describe('WorkspaceInspector', () => {
 
   it('renders without signals (older payloads) — no to-dos / checklist sections', () => {
     const noSignals = { ...withSignals, signals: undefined };
-    render(<WorkspaceInspector tournament={noSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={noSignals} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.queryByTestId('inspector-todos')).toBeNull();
     expect(screen.queryByTestId('inspector-checklist')).toBeNull();
   });
 
   it('offers the primary next action (the setup step for an upcoming event)', () => {
-    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.getByRole('button', { name: 'Add players' })).toBeInTheDocument();
   });
 
@@ -153,7 +153,7 @@ describe('WorkspaceInspector', () => {
         tournament={{ ...withSignals, tournamentDate: null }}
         onOpen={onOpen}
         onSetDate={onSetDate}
-        onSettings={noop}
+        onSettings={noop} onClose={noop}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Set date' }));
@@ -163,7 +163,7 @@ describe('WorkspaceInspector', () => {
 
   it('the secondary action opens workspace settings', () => {
     const onSettings = vi.fn();
-    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={onSettings} />);
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={onSettings} onClose={noop} />);
     fireEvent.click(screen.getByRole('button', { name: 'Workspace settings' }));
     expect(onSettings).toHaveBeenCalledWith('t1');
   });

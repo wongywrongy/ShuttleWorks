@@ -215,3 +215,54 @@ describe('HubPage — the facet strip is reachable at any width', () => {
     expect(attention).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+/**
+ * The inspector as a panel (W10 / debt-log:119).
+ *
+ * It used to be a hand-rolled `<aside className="hidden w-[344px] … lg:flex">`
+ * with its own `RailLabel` — a fourth panel geometry and a fourth eyebrow
+ * spelling, in an app with one dock and one `DetailPanel.Section`. The `hidden
+ * lg:flex` was the sharpest edge of it: below 1024px a Hub row click did
+ * nothing at all, on the tablet the owner actually runs.
+ */
+describe('HubPage — the workspace inspector is a DetailPanel in a DetailDock', () => {
+  it('renders inside the shared dock rather than a hand-rolled rail', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Meet A'));
+
+    const dock = screen.getByTestId('detail-dock');
+    expect(within(dock).getByTestId('workspace-inspector')).toBeInTheDocument();
+  });
+
+  it('is not gated behind a breakpoint: a selection is visible at every width', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Meet A'));
+
+    // Walk the panel's ancestors: no bare `display:none` anywhere between it
+    // and the page. `hidden lg:flex` is the pattern that made the pane silently
+    // absent on a tablet; the dock's own narrow fallback handles small widths
+    // by presenting the pane as a dialog, not by deleting it. (`overflow-hidden`
+    // is a different utility and is the dock's host contract, hence the exact
+    // class-token match rather than a substring.)
+    let node: HTMLElement | null = screen.getByTestId('workspace-inspector');
+    while (node) {
+      expect(node.className.split(/\s+/)).not.toContain('hidden');
+      node = node.parentElement;
+    }
+  });
+
+  it('the panel close button clears the selection', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Meet A'));
+    expect(screen.getByTestId('workspace-inspector')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close detail' }));
+    // The dock RETAINS the pane's content while it slides shut (inert, then
+    // dropped), so the assertion is on it going away, not on it being gone the
+    // same tick.
+    await waitFor(() => expect(screen.queryByTestId('workspace-inspector')).toBeNull());
+  });
+});

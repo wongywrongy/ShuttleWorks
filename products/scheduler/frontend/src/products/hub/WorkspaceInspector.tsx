@@ -1,14 +1,28 @@
 /**
- * Workspace Inspector — the Hub's right-side rail (hidden below `lg`), shown
- * when a workspace is selected. Handoff Hub-prototype grammar (2026-07-02):
- * rail substrate, 10px uppercase section labels, a grid-lines METRIC TILE
- * triplet, an amber › to-do list, module rows with micro-tag statuses, and
- * the primary action anchored to the bottom with the signature glow.
+ * Workspace Inspector — the Hub's detail pane for the selected workspace.
  *
  * Plain-language and operator-first; deliberately omits raw signal codes,
  * owner/identity metadata, and collaboration stats.
+ *
+ * It is a `DetailPanel`, hosted by the Hub's `DetailDock` (debt-log:119). It
+ * used to hard-code `w-[344px]`, roll its own `RailLabel`, and hide itself
+ * below `lg` — three problems in one element:
+ *
+ *  - the width was a fourth panel geometry in an app that has one dock;
+ *  - `RailLabel` was a fourth spelling of the section eyebrow, the exact
+ *    duplication `DetailPanel.Section` exists to end;
+ *  - `hidden lg:flex` meant that on the tablet the owner actually runs, every
+ *    Hub row click did nothing at all. Not degraded: nothing. The dock's own
+ *    narrow fallback answers that properly, presenting the pane as the dialog
+ *    it has become rather than deleting it.
+ *
+ * It also fixes D11. As a fixed 344px sibling this pane stole width from the
+ * list, which pushed the row's `@container/table` under the Modules column's
+ * `@4xl` threshold: selecting a row silently dropped a column. The dock now
+ * carries a `minContentWidth` (HubPage) that keeps the list above that
+ * threshold, or falls back to overlay and leaves the list untouched. Either
+ * way, nothing disappears as a side effect of selecting a row.
  */
-import type { ReactNode } from 'react';
 import { Button } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { StatusPill } from '../../components/StatusPill';
@@ -17,10 +31,10 @@ import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/modul
 import { attentionReasons, moduleCountsOf, readinessOf } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, temporalGroupOf } from './hubGrouping';
+import { DetailPanel } from '../../components/control-plane/DetailPanel';
 import { NextUpList } from '../../components/control-plane/NextUpList';
 import { SetupChecklist } from '../../components/control-plane/SetupChecklist';
 import { buildChecklist } from '../../platform/domain/setupChecklist';
-import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** One metric tile in the "This event" triplet. */
 function MetricTile({
@@ -50,24 +64,23 @@ function fmtDate(iso: string | null): string {
     : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-/** 10px uppercase micro-label — the rail's section voice. */
-function RailLabel({ children }: { children: ReactNode }) {
-  return (
-    <div className={`mb-2 ${EYEBROW_CLASS} text-ink-faint`}>
-      {children}
-    </div>
-  );
-}
-
 interface InspectorProps {
   tournament: TournamentSummaryDTO | null;
   onOpen: (id: string) => void;
   onSetDate: (id: string) => void;
   onSettings: (id: string) => void;
+  /** Clear the selection. The pane's × and Escape both route here. */
+  onClose: () => void;
 }
 
-export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }: InspectorProps) {
-  // Empty-state decision (2026-07 cleanup): the rail COLLAPSES until a
+export function WorkspaceInspector({
+  tournament,
+  onOpen,
+  onSetDate,
+  onSettings,
+  onClose,
+}: InspectorProps) {
+  // Empty-state decision (2026-07 cleanup): the pane COLLAPSES until a
   // selection exists — the list gets the full width instead of a third of
   // the screen spelling out one gray sentence.
   if (!tournament) return null;
@@ -78,10 +91,10 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const todos = attentionReasons(tournament);
   const moduleCounts = moduleCountsOf(tournament);
   const readiness = readinessOf(tournament);
-  // ONE merged setup model, shared with the Overview (SP-UI-1): the rail used
+  // ONE merged setup model, shared with the Overview (SP-UI-1): the pane used
   // to render an amber to-do list AND a readiness checklist — the same fact
   // set twice, in two shapes. `compact` drops the per-step action buttons;
-  // the rail already has a primary CTA at its head.
+  // the pane already has a primary CTA at its head.
   const steps = buildChecklist(tournament);
   const metrics = tournament.signals?.matches;
   const toDo = metrics ? metrics.toDo : todos.length;
@@ -89,7 +102,7 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const todayKey = new Date().toISOString().slice(0, 10);
   const action = rowActionFor(tournament, temporalGroupOf(tournament, todayKey));
 
-  // Header status pill (only meaningful with signals): the shared lifecycle
+  // Status pill (only meaningful with signals): the shared lifecycle
   // precedence first (Archived > Live > Complete — platform/domain/lifecycle),
   // so an archived workspace never flaunts a pulsing "Live" and the pill
   // matches the shell header. Otherwise: "Ready" when the setup checklist is
@@ -107,69 +120,63 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
   return (
-    <aside className="hidden w-[344px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-rail lg:flex">
-      {/* Header block — identity + status pill, then the primary action + gear
-          (redesign moves the actions to the top). */}
-      <div className="flex flex-col gap-3 border-b border-border p-[18px]">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="break-words text-[15px] font-semibold text-foreground">
-              {tournament.name || 'Untitled'}
-            </h2>
-            <p className="mt-1.5 text-2xs uppercase tracking-[0.02em] sw-num text-muted-foreground">
-              {fmtDate(tournament.tournamentDate)} · {tournament.kind === 'bracket' ? 'Bracket' : 'Meet'}
-            </p>
-          </div>
-          {tournament.signals ? (
+    <DetailPanel
+      label="Workspace"
+      value={tournament.name || 'Untitled'}
+      sub={`${fmtDate(tournament.tournamentDate)} · ${tournament.kind === 'bracket' ? 'Bracket' : 'Meet'}`}
+      onClose={onClose}
+      testId="workspace-inspector"
+    >
+      {/* Actions lead — the pane exists to be acted on, not read. */}
+      <div className="flex gap-2 border-b border-border p-4">
+        <Button
+          className="flex-1"
+          onClick={() => (action.kind === 'set-date' ? onSetDate(tournament.id) : onOpen(tournament.id))}
+        >
+          {action.label === 'Open workspace' ? 'Open workspace →' : action.label}
+        </Button>
+        <Button
+          variant="outline"
+          aria-label="Workspace settings"
+          onClick={() => onSettings(tournament.id)}
+        >
+          ⚙
+        </Button>
+      </div>
+
+      <DetailPanel.Section
+        eyebrow="This event"
+        right={
+          tournament.signals ? (
             <StatusPill tone={pill.tone} dot className="shrink-0">
               {pill.text}
             </StatusPill>
-          ) : null}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            className="flex-1"
-            onClick={() => (action.kind === 'set-date' ? onSetDate(tournament.id) : onOpen(tournament.id))}
-          >
-            {action.label === 'Open workspace' ? 'Open workspace →' : action.label}
-          </Button>
-          <Button
-            variant="outline"
-            aria-label="Workspace settings"
-            onClick={() => onSettings(tournament.id)}
-          >
-            ⚙
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-[17px] overflow-y-auto p-[18px]">
-      <div>
-        <RailLabel>THIS EVENT</RailLabel>
+          ) : null
+        }
+      >
         {/* Metric tiles — grid-lines triplet: matches / scheduled / to do.
-            Falls back to — when a payload predates the match signals. */}
+            Falls back to – when a payload predates the match signals. */}
         <div
           data-testid="inspector-metrics"
-          className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border"
+          className="grid grid-cols-3 gap-px overflow-hidden rounded-sm border border-border bg-border"
         >
           <MetricTile value={metrics ? metrics.total : '–'} label="matches" />
           <MetricTile value={metrics ? metrics.scheduled : '–'} label="scheduled" />
           <MetricTile value={toDo} label="to do" tone={toDo > 0 ? 'warning' : undefined} />
         </div>
-      </div>
+      </DetailPanel.Section>
 
       {steps.length > 0 ? (
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <span className={`${EYEBROW_CLASS} text-ink-faint`}>
-              Readiness
-            </span>
-            {readiness ? (
+        <DetailPanel.Section
+          eyebrow="Readiness"
+          right={
+            readiness ? (
               <span className="text-2xs sw-num text-muted-foreground">
                 {readiness.ready} / {readiness.total}
               </span>
-            ) : null}
-          </div>
+            ) : null
+          }
+        >
           <div
             role="progressbar"
             aria-label="Readiness"
@@ -181,23 +188,22 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
             <div className="h-full rounded-full bg-status-success-fg" style={{ width: `${pct}%` }} />
           </div>
           <SetupChecklist steps={steps} variant="compact" testId="inspector-checklist" />
-        </div>
+        </DetailPanel.Section>
       ) : null}
 
-      <div>
-        <RailLabel>
-          <span className="flex items-baseline justify-between">
-            <span>MODULES</span>
-            {moduleCounts ? (
-              <span
-                data-testid="inspector-module-counts"
-                className="normal-case tracking-normal sw-num text-muted-foreground"
-              >
-                {moduleCounts.enabled} on · {moduleCounts.available} available
-              </span>
-            ) : null}
-          </span>
-        </RailLabel>
+      <DetailPanel.Section
+        eyebrow="Modules"
+        right={
+          moduleCounts ? (
+            <span
+              data-testid="inspector-module-counts"
+              className="text-2xs sw-num text-muted-foreground"
+            >
+              {moduleCounts.enabled} on · {moduleCounts.available} available
+            </span>
+          ) : null
+        }
+      >
         <ul className="space-y-1.5">
           {modules.map((m) => (
             <li key={m.id} className="flex items-center justify-between gap-2" title={m.note}>
@@ -217,16 +223,13 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
             </li>
           ))}
         </ul>
-      </div>
+      </DetailPanel.Section>
 
       {(tournament.signals?.nextUp?.length ?? 0) > 0 ? (
-        <div data-testid="inspector-next-up">
-          <RailLabel>NEXT UP</RailLabel>
+        <DetailPanel.Section eyebrow="Next up" testId="inspector-next-up">
           <NextUpList items={tournament.signals?.nextUp ?? []} />
-        </div>
+        </DetailPanel.Section>
       ) : null}
-
-      </div>
-    </aside>
+    </DetailPanel>
   );
 }
