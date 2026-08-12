@@ -18,6 +18,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 // chain drains before act resolves.
 const flushAssignSettle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 import { RunSurface, computeAutoPull } from '../run/RunSurface';
+import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { OpsBlock } from '../opsBlock';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
@@ -137,6 +138,7 @@ function makeAutoFillBlocks(): OpsBlock[] {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useMatchStateStore.getState().reset();
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -253,6 +255,41 @@ describe('RunSurface — summary band derived counts', () => {
 
   // The Plan→Run readiness pill now lives in OperationsProduct's single header
   // (RunSurface no longer renders its own header) — see courtStatus.test.tsx.
+});
+
+// `useCommandQueue.submit()` records every 409 into `matchStateStore.conflicts`
+// specifically so `ConflictBanner` can render it — but the banner was mounted
+// NOWHERE in production, so an operator who lost a race to another desk got no
+// feedback at all (audit ship blocker #3).
+describe('RunSurface — a rejected command is visible on the live desk', () => {
+  it('renders the conflict banner, named by match, and dismisses it', () => {
+    render(
+      <RunSurface
+        blocks={makeAutoFillBlocks()}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    expect(screen.queryByTestId('conflict-banner-conflict')).toBeNull();
+
+    // What useCommandQueue does on a 409 `conflict` outcome.
+    act(() => {
+      useMatchStateStore
+        .getState()
+        .recordConflict('m1', 'conflict', 'Cannot transition finished → playing');
+    });
+
+    const strip = screen.getByTestId('run-conflicts');
+    expect(strip).toHaveTextContent('Cannot transition finished → playing');
+    // Named, so a six-court desk knows WHICH match was rejected.
+    expect(strip).toHaveTextContent('MS1');
+
+    fireEvent.click(screen.getByTestId('conflict-dismiss'));
+    expect(screen.queryByTestId('run-conflicts')).toBeNull();
+  });
 });
 
 // The Plan branch wraps its rail in `DetailDock` (OperationsProduct.tsx), which

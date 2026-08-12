@@ -16,7 +16,9 @@ import { useBracketApi } from '../../../api/bracketClient';
 import { useCommandQueue } from '../../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../../hooks/useBracketResultQueue';
 import { useUiStore } from '../../../store/uiStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
 import { DetailDock } from '../../../components/control-plane';
+import { ConflictBanner } from '../../../components/ConflictBanner';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import type { OpsBlock } from '../opsBlock';
 import {
@@ -35,6 +37,7 @@ import { RunSummaryBand } from './RunSummaryBand';
 import { RunLiveBoard } from './RunLiveBoard';
 import { RunQueue } from './RunQueue';
 import { RunInspector } from './RunInspector';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 
 // ── prop contract ─────────────────────────────────────────────────────────
 
@@ -125,6 +128,16 @@ export function RunSurface({
       }),
   });
 
+  /**
+   * Server-rejected commands. `useCommandQueue.submit` already records every
+   * 409 here (stale_version → someone else moved first; conflict → the
+   * transition was refused) — nothing rendered them, so a lost race was
+   * silent on the busiest surface in the product. The strip lives at surface
+   * level rather than in the inspector because `record` deselects the match,
+   * so an inspector-scoped banner would unmount before its own conflict landed.
+   */
+  const conflicts = useMatchStateStore((s) => s.recentConflictsByMatchId);
+
   // ── transient state ───────────────────────────────────────────────────────
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   /** Bracket has no persisted "called" status — overlay it locally. */
@@ -206,6 +219,12 @@ export function RunSurface({
     [liveBlocks, currentSlot, planFinalized],
   );
   const summary = useMemo(() => deriveSummary(matches, lanes, liveChips), [matches, lanes, liveChips]);
+
+  const conflictIds = useMemo(() => Object.keys(conflicts), [conflicts]);
+  const labelForMatchId = useCallback(
+    (matchId: string) => matches.find((m) => m.id === matchId)?.label ?? matchId,
+    [matches],
+  );
 
   // ── seams object (stable per deps) ────────────────────────────────────────
   const seams: RunSeams = useMemo(
@@ -375,6 +394,22 @@ export function RunSurface({
     <div data-testid="run-surface" className="relative flex h-full min-h-0 flex-col bg-card">
       {/* Summary band */}
       <RunSummaryBand summary={summary} />
+
+      {/* Rejected-command strip. Each banner is the store-subscribing
+          ConflictBanner (its documented production shape), prefixed with the
+          match code so a six-court desk can tell WHICH write bounced. */}
+      {conflictIds.length > 0 && (
+        <div data-testid="run-conflicts" className="shrink-0 space-y-1 px-4 pt-2">
+          {conflictIds.map((matchId) => (
+            <div key={matchId} className="flex items-center gap-2">
+              <span className={`shrink-0 ${EYEBROW_CLASS} text-muted-foreground`}>
+                {labelForMatchId(matchId)}
+              </span>
+              <ConflictBanner matchId={matchId} className="mt-0 min-w-0 flex-1" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Content area — board+queue beside a PERSISTENT inspector. The inspector
           is always mounted (showing its "Select a match…" empty state) so the

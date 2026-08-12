@@ -65,7 +65,7 @@ vi.mock('../../../store/tournamentStore', () => ({
 
 vi.mock('../../../store/matchStateStore', () => ({
   useMatchStateStore: (selector: (s: unknown) => unknown) =>
-    selector({ matchStates: {} }),
+    selector({ matchStates: {}, recentConflictsByMatchId: {} }),
 }));
 
 vi.mock('../../../hooks/useCommandQueue', () => ({
