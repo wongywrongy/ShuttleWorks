@@ -99,6 +99,127 @@ describe('GanttChart intensity encoding', () => {
   });
 });
 
+// Clock-relative rendering vs. stale actual timestamps (design audit T6).
+//
+// `getRenderSlot` positions a called/finished match off its wall-clock
+// `actualStartTime`. Reopen ANY past tournament's Live tab — a finished event,
+// a restored backup, a demo seed — and those timestamps describe a different
+// day than the configured one. The derived slot lands far past the day's last
+// slot, the axis stretches to absorb it, and every chip is clamped onto the
+// final column: hundreds of pixels right of a ~680px viewport, so the chart
+// reads as empty/unconfigured with all its matches still in the DOM.
+describe('GanttChart with stale actual timestamps', () => {
+  // 21:14 on a long-past date. The config's day is 09:00-12:00, so this
+  // wall-clock time is ~24 slots into a 6-slot day — outside it either way.
+  const STALE_START = '2026-01-25T21:14:00';
+  const STALE_END = '2026-01-25T21:49:00';
+  const staleStates: Record<string, MatchStateDTO> = Object.fromEntries(
+    ['m1', 'm2', 'm3', 'm4'].map((id) => [
+      id,
+      {
+        matchId: id,
+        status: 'finished',
+        actualStartTime: STALE_START,
+        actualEndTime: STALE_END,
+      } as MatchStateDTO,
+    ]),
+  );
+
+  /** The scaffold's sized grid wrapper — `label + slotCount * slotWidth`. */
+  const gridWidthPx = (container: HTMLElement) =>
+    parseFloat(
+      (container.querySelector('.overflow-x-auto > div') as HTMLElement).style.width,
+    );
+
+  /** A block's absolutely-positioned wrapper (PositionedBlock). */
+  const boxOf = (label: string) => {
+    const el = screen.getByRole('button', { name: new RegExp(label) })
+      .parentElement as HTMLElement;
+    return { left: parseFloat(el.style.left), width: parseFloat(el.style.width) };
+  };
+
+  it('keeps the axis inside the configured day instead of stretching past it', () => {
+    const { container } = render(
+      <GanttChart
+        schedule={schedule}
+        matches={matches}
+        matchStates={staleStates}
+        config={config}
+        currentSlot={0}
+        selectedMatchId={null}
+        onMatchSelect={vi.fn()}
+      />,
+    );
+    // 09:00-12:00 at 30-min slots = 6 slots; 56px label column + 80px/slot.
+    expect(gridWidthPx(container)).toBeLessThanOrEqual(56 + 6 * 80);
+  });
+
+  it('draws every block at its planned slot, inside the visible track', () => {
+    const { container } = render(
+      <GanttChart
+        schedule={schedule}
+        matches={matches}
+        matchStates={staleStates}
+        config={config}
+        currentSlot={0}
+        selectedMatchId={null}
+        onMatchSelect={vi.fn()}
+      />,
+    );
+    const meshWidth = gridWidthPx(container) - 56;
+    // m1/m2 are planned at slot 0, m3/m4 at slot 1 → 0px and 80px.
+    expect(boxOf('M1').left).toBe(0);
+    expect(boxOf('M2').left).toBe(0);
+    expect(boxOf('M3').left).toBe(80);
+    expect(boxOf('M4').left).toBe(80);
+    for (const label of ['M1', 'M2', 'M3', 'M4']) {
+      const { left, width } = boxOf(label);
+      expect(left + width).toBeLessThanOrEqual(meshWidth);
+    }
+  });
+
+  it('says the times shown are planned, not actual', () => {
+    render(
+      <GanttChart
+        schedule={schedule}
+        matches={matches}
+        matchStates={staleStates}
+        config={config}
+        currentSlot={0}
+        selectedMatchId={null}
+        onMatchSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/planned times for 4 matches/i)).toBeInTheDocument();
+  });
+
+  it('still positions credible actual timestamps off the clock', () => {
+    // 10:30 local on the same day the config describes → slot 3, 1-slot span.
+    const onTime: Record<string, MatchStateDTO> = {
+      ...matchStates,
+      m2: {
+        matchId: 'm2',
+        status: 'finished',
+        actualStartTime: '2026-01-25T10:30:00',
+        actualEndTime: '2026-01-25T11:00:00',
+      } as MatchStateDTO,
+    };
+    render(
+      <GanttChart
+        schedule={schedule}
+        matches={matches}
+        matchStates={onTime}
+        config={config}
+        currentSlot={0}
+        selectedMatchId={null}
+        onMatchSelect={vi.fn()}
+      />,
+    );
+    expect(boxOf('M2').left).toBe(3 * 80);
+    expect(screen.queryByText(/planned times for/i)).not.toBeInTheDocument();
+  });
+});
+
 // A `<div onClick>` with no tabIndex, no role and no key handler is invisible
 // to a keyboard operator — WCAG 2.1.1. The sibling Plan Gantt (DragGantt) has
 // always rendered its blocks as real `<button>`s, and this file's own

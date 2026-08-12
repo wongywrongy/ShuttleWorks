@@ -143,18 +143,47 @@ export function parseMatchStartMs(value: string | null | undefined): number | nu
   return null;
 }
 
-export function msToSlot(ms: number, config: TournamentConfig): number {
+/** Slot index of an instant, UNCLAMPED — negative before the day start,
+ *  past `calculateTotalSlots` after the day end. The signed value is what
+ *  makes "this timestamp isn't from this day" detectable. */
+function slotOfMs(ms: number, config: TournamentConfig): number {
   const d = new Date(ms);
   const minutesOfDay = d.getHours() * 60 + d.getMinutes();
   const start = timeToMinutes(config.dayStart);
   let effective = minutesOfDay;
   if (isOvernightSchedule(config) && effective < start) effective += MIN_PER_DAY;
-  return Math.max(0, Math.floor((effective - start) / config.intervalMinutes));
+  return Math.floor((effective - start) / config.intervalMinutes);
+}
+
+export function msToSlot(ms: number, config: TournamentConfig): number {
+  return Math.max(0, slotOfMs(ms, config));
+}
+
+/**
+ * How far past the configured day an actual timestamp is still believable.
+ * A real day runs a couple of hours long; a timestamp from another day is
+ * not a late match, it is stale data. Matches the Live Gantt's own axis
+ * overrun allowance, so a credible actual always has an axis to land on.
+ */
+const ACTUAL_TIMING_GRACE_SLOTS = 8;
+
+function isCredibleSlot(slot: number, config: TournamentConfig): boolean {
+  return slot >= 0 && slot <= calculateTotalSlots(config) + ACTUAL_TIMING_GRACE_SLOTS;
 }
 
 /**
  * Where a match should render on the Gantt: paper slot until called/started,
- * actual play head once a timestamp exists. Falls back safely on missing data.
+ * actual play head once a CREDIBLE timestamp exists. Falls back safely on
+ * missing data.
+ *
+ * "Credible" is load-bearing. Positioning is clock-relative, so an actual
+ * timestamp whose wall-clock time isn't in the configured day — any past
+ * tournament reopened on its Live tab, a restored backup, a seeded demo —
+ * derives a slot tens or hundreds of columns off the axis. The chart then
+ * stretched to absorb it and clamped every chip onto its last column, i.e.
+ * a Gantt that looks unconfigured while all its matches sit off-screen right.
+ * The plan slot is the honest fallback; `hasStaleActualTiming` lets the
+ * surface say so rather than pass plan off as actual.
  */
 export function getRenderSlot(
   assignment: { slotId: number; durationSlots: number },
@@ -167,21 +196,50 @@ export function getRenderSlot(
     const startMs = parseMatchStartMs(matchState.actualStartTime);
     const endMs = parseMatchStartMs(matchState.actualEndTime);
     if (startMs !== null && endMs !== null && endMs >= startMs) {
-      const startSlot = msToSlot(startMs, config);
-      const minutes = (endMs - startMs) / 60_000;
-      const duration = Math.max(1, Math.round(minutes / config.intervalMinutes));
-      return { slotId: startSlot, durationSlots: duration };
+      const startSlot = slotOfMs(startMs, config);
+      if (isCredibleSlot(startSlot, config)) {
+        const minutes = (endMs - startMs) / 60_000;
+        const duration = Math.max(1, Math.round(minutes / config.intervalMinutes));
+        // A credible start with an end from a later day (Finish pressed the
+        // next morning) is a real start and a dirty span — keep the start,
+        // plan the duration, rather than throw both away.
+        return {
+          slotId: startSlot,
+          durationSlots: isCredibleSlot(startSlot + duration, config)
+            ? duration
+            : assignment.durationSlots,
+        };
+      }
     }
   }
 
   if (status === 'started' && matchState?.actualStartTime) {
     const startMs = parseMatchStartMs(matchState.actualStartTime);
     if (startMs !== null) {
-      return { slotId: msToSlot(startMs, config), durationSlots: assignment.durationSlots };
+      const startSlot = slotOfMs(startMs, config);
+      if (isCredibleSlot(startSlot, config)) {
+        return { slotId: startSlot, durationSlots: assignment.durationSlots };
+      }
     }
   }
 
   return { slotId: assignment.slotId, durationSlots: assignment.durationSlots };
+}
+
+/**
+ * True when a match carries an actual start timestamp that `getRenderSlot`
+ * REFUSED — it doesn't land in the configured day, so the surface is drawing
+ * the match at its planned time, not where it really played.
+ */
+export function hasStaleActualTiming(
+  matchState: MatchStateDTO | undefined | null,
+  config: TournamentConfig,
+): boolean {
+  const status = matchState?.status;
+  if (status !== 'started' && status !== 'finished') return false;
+  const startMs = parseMatchStartMs(matchState?.actualStartTime);
+  if (startMs === null) return false;
+  return !isCredibleSlot(slotOfMs(startMs, config), config);
 }
 
 // Token-driven; hues match the board vocabulary (called=amber, playing=green,

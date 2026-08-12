@@ -34,17 +34,22 @@ export function formatDuration(aIso: string | null | undefined, bIso: string | n
  * Elapsed-since-start, stable across the elapsed range:
  *   < 1 h    →  ``M:SS``
  *   < 24 h   →  ``H:MM:SS``
- *   ≥ 24 h   →  ``Xd Hh``  (stale data — operator should resolve)
+ *   ≥ 24 h   →  ``null``
  *
- * Returns ``null`` when the start timestamp is missing/unparseable so the
- * caller can omit the chip rather than render a placeholder.
+ * Returns ``null`` when the start timestamp is missing, unparseable, or a day
+ * or more old, so the caller can omit the chip rather than render a
+ * placeholder or a falsehood. No match runs for a day: a ≥24 h reading means
+ * the timestamp is stale (a finished tournament left with rows still marked
+ * playing, a restored backup), and this value is read by the public
+ * spectator board, where "1d 2h" beside a live badge asserts something that
+ * is not happening. Operator surfaces that need to SEE the stale row use the
+ * match's status and start time directly.
  */
 export function formatElapsed(startIso: string | undefined | null): string | null {
   const started = parseMatchStartMs(startIso);
   if (started === null) return null;
   const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
-  const days = Math.floor(secs / 86400);
-  if (days >= 1) return `${days}d ${Math.floor((secs % 86400) / 3600)}h`;
+  if (secs >= 86_400) return null;
   const hours = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;

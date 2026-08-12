@@ -25,7 +25,12 @@ import {
   type GanttCell,
   type GanttBlockBox,
 } from '@scheduler/design-system/components';
-import { calculateTotalSlots, formatSlotTime, getRenderSlot } from '../../../lib/time';
+import {
+  calculateTotalSlots,
+  formatSlotTime,
+  getRenderSlot,
+  hasStaleActualTiming,
+} from '../../../lib/time';
 import {
   getClosedSlotWindows,
   isCourtFullyClosed,
@@ -127,6 +132,18 @@ function GanttChartImpl({
     );
     return byCourt;
   }, [schedule.assignments, config, matchStates]);
+
+  // Honesty pass. getRenderSlot refuses an actual timestamp that isn't from
+  // the configured day and draws the match at its PLANNED slot instead —
+  // right, but indistinguishable from a match that ran exactly on time. Say
+  // which it is; this is the normal state of every past tournament's Live tab.
+  const staleTimingCount = useMemo(
+    () =>
+      schedule.assignments.filter((a) =>
+        hasStaleActualTiming(matchStates[a.matchId], config),
+      ).length,
+    [schedule.assignments, matchStates, config],
+  );
 
   // Axis extent covers BOTH the planned slots and the live render slots.
   // Render slots come from wall-clock actual start/end times (getRenderSlot),
@@ -431,6 +448,13 @@ function GanttChartImpl({
   return (
     <div className="relative overflow-hidden">
       <TimelineKey />
+      {staleTimingCount > 0 ? (
+        <p className="px-2 pb-1 text-2xs text-muted-foreground">
+          Showing planned times for {staleTimingCount}{' '}
+          {staleTimingCount === 1 ? 'match' : 'matches'} — their recorded start
+          times are not from this tournament&rsquo;s day.
+        </p>
+      ) : null}
       <GanttTimeline
         courts={courts}
         minSlot={minSlot}

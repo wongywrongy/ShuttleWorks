@@ -27,6 +27,7 @@ import {
   parseMatchStartMs,
   msToSlot,
   getRenderSlot,
+  hasStaleActualTiming,
   getStatusColor,
 } from '../time';
 import type { TournamentConfig, ScheduleAssignment, MatchStateDTO } from '../../api/dto';
@@ -687,6 +688,70 @@ describe('getRenderSlot', () => {
       slotId: 5,
       durationSlots: 2,
     });
+  });
+
+  // Stale actuals (design audit T6). A reopened past tournament, a restored
+  // backup or a demo seed carries timestamps whose wall-clock time is not in
+  // the configured day. Positioning off them threw the chip hundreds of slots
+  // off the axis; the plan slot is the honest fallback.
+  it('actual start outside the configured day → falls back to the plan slot', () => {
+    // 23:30 PDT: minutesOfDay 1410, day is 08:00-18:00 → slot 62 of a 40-slot day.
+    const a = makeAssignment({ slotId: 5, durationSlots: 3 });
+    const state = makeState({
+      status: 'finished',
+      actualStartTime: '2026-06-30T23:30:00',
+      actualEndTime: '2026-07-01T00:05:00',
+    });
+    expect(getRenderSlot(a, state, cfg)).toEqual({ slotId: 5, durationSlots: 3 });
+  });
+
+  it('actual start before the day start → falls back to the plan slot', () => {
+    // 03:00 PDT is before the 08:00 day start; msToSlot used to clamp it to 0.
+    const a = makeAssignment({ slotId: 7, durationSlots: 2 });
+    const state = makeState({ status: 'started', actualStartTime: '2026-06-30T03:00:00' });
+    expect(getRenderSlot(a, state, cfg)).toEqual({ slotId: 7, durationSlots: 2 });
+  });
+
+  it('credible start with a next-day end → keeps the start, plans the duration', () => {
+    // Finish pressed the next morning: 17 h of "play" is not a real span.
+    const a = makeAssignment({ slotId: 5, durationSlots: 2 });
+    const state = makeState({
+      status: 'finished',
+      actualStartTime: '2026-06-30T16:00:00Z', // 09:00 PDT → slot 4
+      actualEndTime: '2026-07-01T09:00:00Z',
+    });
+    expect(getRenderSlot(a, state, cfg)).toEqual({ slotId: 4, durationSlots: 2 });
+  });
+
+  it('a late-running day still positions off the clock (within the grace)', () => {
+    // 18:30 PDT → slot 42, past the 40-slot day but inside the 8-slot grace.
+    const a = makeAssignment({ slotId: 5, durationSlots: 2 });
+    const state = makeState({ status: 'started', actualStartTime: '2026-06-30T18:30:00' });
+    expect(getRenderSlot(a, state, cfg)).toEqual({ slotId: 42, durationSlots: 2 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasStaleActualTiming
+// ---------------------------------------------------------------------------
+
+describe('hasStaleActualTiming', () => {
+  const cfg = makeConfig();
+
+  it('is false without a state, a status or a timestamp', () => {
+    expect(hasStaleActualTiming(undefined, cfg)).toBe(false);
+    expect(hasStaleActualTiming(makeState({ status: 'scheduled' }), cfg)).toBe(false);
+    expect(hasStaleActualTiming(makeState({ status: 'started' }), cfg)).toBe(false);
+  });
+
+  it('is false for a timestamp inside the configured day', () => {
+    const state = makeState({ status: 'started', actualStartTime: '2026-06-30T16:00:00Z' });
+    expect(hasStaleActualTiming(state, cfg)).toBe(false);
+  });
+
+  it('is true for a timestamp outside it — whatever day it came from', () => {
+    const state = makeState({ status: 'finished', actualStartTime: '2026-01-25T21:14:00' });
+    expect(hasStaleActualTiming(state, cfg)).toBe(true);
   });
 });
 
