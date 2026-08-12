@@ -80,6 +80,21 @@ export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
     .sort((x, y) => x.court - y.court || (x.status === y.status ? 0 : x.status === 'on-court' ? -1 : 1));
 }
 
+/** Whether the board has nothing left to show as live: something has been
+ *  decided and no assigned match is still open. Used to pick the opening
+ *  view — a finished tournament opening on Live reads as "not started".
+ *
+ *  A pause between rounds (everything assigned so far is played, the next
+ *  round not yet scheduled) reads the same and opens on Results too, which is
+ *  the right call anyway: Live would have nothing but its empty state, and it
+ *  flips back the moment the next round is assigned. */
+export function isComplete(data: BracketTournamentDTO): boolean {
+  return (
+    data.results.some((r) => r.winner_side !== 'none') &&
+    data.assignments.every((a) => a.finished)
+  );
+}
+
 /** The champion of an event: the winner of its final-round play_unit, when
  *  that round is a single decided match. Returns the participant name, or
  *  null when the event isn't a single-elimination final / isn't decided. */

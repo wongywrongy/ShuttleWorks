@@ -17,6 +17,7 @@ import { FullscreenButton } from '../publicDisplay/FullscreenButton';
 import { LiveStatusPill } from '../publicDisplay/LiveStatusPill';
 import { STALE_CAPTION } from '../publicDisplay/freshness';
 import { useBracketDisplaySync } from './useBracketDisplaySync';
+import { isComplete } from './bracketDisplayData';
 import { BracketLiveView } from './BracketLiveView';
 import { BracketDrawView } from './BracketDrawView';
 import { BracketResultsView } from './BracketResultsView';
@@ -31,12 +32,21 @@ const VIEWS: { id: BracketView; label: string }[] = [
 export function BracketDisplayPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as BracketView | null;
-  const view: BracketView =
-    viewParam && VIEWS.some((v) => v.id === viewParam) ? viewParam : 'live';
   const [now, setNow] = useState<Date>(() => new Date());
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const { data, freshness, syncError } = useBracketDisplaySync(now);
+
+  // A finished tournament opening on Live shows "No matches on court", which
+  // reads as "hasn't started yet" — so with nothing left to play, open on the
+  // results instead. An explicit `?view=` always wins: the board a director
+  // pointed the TV at never moves under them.
+  const view: BracketView =
+    viewParam && VIEWS.some((v) => v.id === viewParam)
+      ? viewParam
+      : data && isComplete(data)
+        ? 'results'
+        : 'live';
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
 
   // 1 Hz clock drives the freshness derivation.
