@@ -118,6 +118,29 @@ describe('<MatchesSpreadsheet />', () => {
     ).not.toBeInTheDocument();
   });
 
+  // Design audit T7 / WCAG 1.3.1. This is the surface where the cell roles
+  // are hardest to keep honest: three of the seven cells are controls (the
+  // event Select or its free-text fallback, the two player editors, the
+  // delete button), and a `role="cell"` placed ON one of those would REPLACE
+  // its own role. They are wrapped in `display: contents` cells instead — so
+  // this pins the thing that silently rots: cell count === column count, and
+  // the controls still announce as controls.
+  it('exposes a match row as seven cells, controls intact', () => {
+    renderSheet();
+    const row = screen.getByTestId('match-row-m5');
+    expect(row).toHaveAttribute('role', 'row');
+    expect(screen.getByRole('table')).toContainElement(row);
+    expect(within(row).getAllByRole('cell')).toHaveLength(
+      screen.getAllByRole('columnheader').length,
+    );
+    expect(screen.getAllByRole('columnheader')).toHaveLength(7);
+    // The interactive cells did not swallow their controls' roles.
+    expect(within(row).getByRole('combobox', { name: 'Event' })).toBeInTheDocument();
+    expect(
+      within(row).getByRole('button', { name: /Remove match MS1|Remove match WD1/ }),
+    ).toBeInTheDocument();
+  });
+
   it('renders doubles sides as comma-separated names, school shown once per side', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m5');
