@@ -1,0 +1,60 @@
+/**
+ * Shell layout contract — holds the operator shell's landmark structure and
+ * its narrow-viewport reachability to the files that actually ship.
+ *
+ * The 2026-08-11 design audit (theme T4) found the workspace content column
+ * resolving to ~110px at 390px, with two surfaces vanishing entirely rather
+ * than crowding: no scrollbar, no swipe, nothing to hint they existed. The
+ * shell fix (an off-canvas rail) is behaviour and is tested as behaviour in
+ * `product-shell/__tests__/WorkspaceShell.responsive.test.tsx`.
+ *
+ * What is left over is layout — flex minimums, overflow axes, and one
+ * landmark element. jsdom applies no stylesheet and runs no layout engine, so
+ * a rendering test cannot see any of it: `getBoundingClientRect()` is all
+ * zeroes and `getComputedStyle` knows nothing of a Tailwind class. These are
+ * therefore file-level assertions, the same call `motionContract.test.ts`
+ * makes for the same reason. Each pins the specific mechanism that failed,
+ * not a whole className string.
+ */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SRC = path.resolve(HERE, '../../..');
+
+const readSrc = (p: string) => readFileSync(path.join(SRC, p), 'utf8');
+
+const authedLayout = readSrc('app/AuthedLayout.tsx');
+const appShell = readSrc('app/AppShell.tsx');
+const rosterTab = readSrc('products/meet/roster/RosterTab.tsx');
+
+/** Source with comments removed — these files DISCUSS `<main>` in prose, and
+ *  a doc comment is not a landmark. */
+const code = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+/** Opening `<main` tags, ignoring the closing `</main>`. */
+const mainTags = (src: string) => code(src).match(/<main[\s>]/g) ?? [];
+
+describe('one main landmark per authenticated page', () => {
+  it('AuthedLayout owns it', () => {
+    expect(mainTags(authedLayout)).toHaveLength(1);
+  });
+
+  it('AppShell nests no second one inside it', () => {
+    // `<main id="main">` inside AuthedLayout's `<main>` is invalid HTML and
+    // screen readers announce two main regions.
+    expect(mainTags(appShell)).toHaveLength(0);
+  });
+
+  it('the skip link still lands on the pane, which still carries the id', () => {
+    expect(appShell).toContain('href="#main"');
+    expect(appShell).toContain('<div id="main"');
+  });
+
+  it('the Roster desk does not open a third one for a pane', () => {
+    expect(mainTags(rosterTab)).toHaveLength(0);
+  });
+});

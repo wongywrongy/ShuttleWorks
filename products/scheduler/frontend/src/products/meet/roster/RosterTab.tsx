@@ -321,8 +321,10 @@ export function RosterTab() {
               />
             </aside>
 
-            {/* CENTER — position grid (always full width; scrolls) */}
-            <main
+            {/* CENTER — position grid (always full width; scrolls). A <div>,
+                not a <main>: AuthedLayout owns the page's one main landmark
+                and this pane is a third of a desk, not the page. */}
+            <div
               data-testid="roster-right-panel"
               className="flex min-w-0 flex-1 flex-col overflow-hidden"
             >
@@ -342,7 +344,7 @@ export function RosterTab() {
                   </div>
                 )}
               </div>
-            </main>
+            </div>
 
             {/* DETAIL DRAWER — docked beside the grid. A clicked position
                 (its 1–2 occupants) or a clicked list player. */}

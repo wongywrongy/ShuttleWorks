@@ -228,7 +228,9 @@ export function AppShell() {
       />
       {/* Skip-link: hidden until focused. Lets keyboard users jump past the
           WorkspaceShell chrome straight into the active pane. The target
-          id (#main) is on the <main> element inside WorkspaceShell below. */}
+          (#main) is the pane wrapper inside WorkspaceShell below — a plain
+          <div>, because AuthedLayout already carries the page's one <main>
+          landmark and a skip target needs an id, not a role. */}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-modal focus:rounded-sm focus:bg-primary focus:px-3 focus:py-1.5 focus:text-sm focus:text-primary-foreground focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -260,7 +262,7 @@ export function AppShell() {
       >
         <ReadOnlyBannerSlot />
         <UnsavedBannerSlot />
-        <main id="main" className="min-h-0 flex-1 overflow-hidden">
+        <div id="main" className="min-h-0 flex-1 overflow-hidden">
           {SHELL_SEGMENTS.has(activeTab) ? (
             <div className="h-full overflow-auto">
               <WorkspaceShellSurface segment={activeTab} modules={modules} />
@@ -287,7 +289,7 @@ export function AppShell() {
               }
             />
           )}
-        </main>
+        </div>
       </WorkspaceShell>
       <SolverHud />
       <ToastStack />
