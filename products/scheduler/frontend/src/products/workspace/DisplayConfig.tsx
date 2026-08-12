@@ -10,10 +10,11 @@
  * paragraph under every heading — which is why this module looked untouched by
  * the config unification.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
+import { apiClient } from '../../api/client';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { FieldRow, Row, Section } from '../../platform/settings/SettingsControls';
 import { DisplayLayoutEditor } from './displayConfig/DisplayLayoutEditor';
@@ -28,10 +29,40 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
   const [copied, setCopied] = useState(false);
   const config = useTournamentStore((s) => s.config);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const publicUrl = `${origin}/display?id=${tid}`;
   const isOn = (id: string) => modules.some((m) => m.id === id && m.status === 'enabled');
 
+  // The public link is a CAPABILITY link, minted server-side and revocable by
+  // rotation (SP-CLOUD-2) — the same `/tournaments/{id}/display-token` seam
+  // Settings → Sharing mints from, and the server owns the URL shape (`url`
+  // on the DTO) so the two surfaces can't drift.
+  //
+  // This tab used to advertise `${origin}/display?id=${tid}` under "Anyone with
+  // the link can watch, with no sign-in". That route is viewer-gated: a venue TV
+  // signed out of the workspace got a 401, and the board then blamed an expired
+  // session for a session that never existed. `null` = no link to hand over —
+  // say so rather than print one that fails.
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [mintFailed, setMintFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .getDisplayToken(tid)
+      .then((t) => {
+        if (cancelled) return;
+        setPublicUrl(`${origin}${t.url}`);
+        setMintFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setMintFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tid, origin]);
+
   const copy = async () => {
+    if (!publicUrl) return;
     try {
       await navigator.clipboard.writeText(publicUrl);
       setCopied(true);
@@ -78,34 +109,43 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
       <Section
         title="Public link"
         action={
-          <span className="inline-flex items-center gap-2">
-            {/* xs (28px) both — the anchor can't be a `Button`, so it mirrors
-                the variant="outline" chrome by hand. Two controls side by
-                side at different heights is the kind of near-miss the
-                grammar exists to stop. */}
-            <Button variant="outline" size="xs" onClick={copy}>
-              {copied ? 'Copied' : 'Copy'}
-            </Button>
-            <a
-              href={publicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40"
-            >
-              <ArrowSquareOut aria-hidden className="h-4 w-4" />
-              Open
-            </a>
-          </span>
+          publicUrl ? (
+            <span className="inline-flex items-center gap-2">
+              {/* xs (28px) both — the anchor can't be a `Button`, so it mirrors
+                  the variant="outline" chrome by hand. Two controls side by
+                  side at different heights is the kind of near-miss the
+                  grammar exists to stop. */}
+              <Button variant="outline" size="xs" onClick={copy}>
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+              <a
+                href={publicUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40"
+              >
+                <ArrowSquareOut aria-hidden className="h-4 w-4" />
+                Open
+              </a>
+            </span>
+          ) : null
         }
       >
-        <FieldRow
-          readOnly
-          label="Public display URL"
-          value={publicUrl}
-          hint="View-only. Anyone with the link can watch, with no sign-in."
-          inputClassName="font-mono"
-          last
-        />
+        {mintFailed ? (
+          <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
+            No public link yet. Only a workspace owner can create one — ask an owner to
+            share it from Settings → Sharing.
+          </p>
+        ) : (
+          <FieldRow
+            readOnly
+            label="Public display URL"
+            value={publicUrl ?? 'Creating link…'}
+            hint="View-only. Anyone with this link can watch, with no sign-in. Rotate it in Settings → Sharing to revoke it."
+            inputClassName="font-mono"
+            last
+          />
+        )}
       </Section>
 
       {/* tv* fields only drive MeetDisplayPage (the bracket board never
