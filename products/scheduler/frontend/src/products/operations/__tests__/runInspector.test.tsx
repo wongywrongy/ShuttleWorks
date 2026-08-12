@@ -162,7 +162,7 @@ describe('RunInspector — role: next-later', () => {
 
     expect(
       screen.getByText(
-        'Queued behind MS1 on C1 — advances when the court clears.',
+        'Queued behind MS1 on C1. Advances when the court clears.',
       ),
     ).toBeInTheDocument();
 
@@ -201,7 +201,7 @@ describe('RunInspector — role: queued', () => {
     render(<RunInspector match={m} role="queued" onAction={vi.fn()} />);
 
     expect(
-      screen.getByText('No court is free — waits for one to clear.'),
+      screen.getByText('No court is free yet. Waiting for one to clear.'),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('run-act-send')).toBeNull();
   });

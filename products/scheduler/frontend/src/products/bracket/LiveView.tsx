@@ -79,7 +79,7 @@ function buildTooltip(
   const round = `R${pu.round_index + 1}`;
   const match = `M${pu.match_index + 1}`;
 
-  return `${discipline} — ${round} ${match} — ${sideA} vs ${sideB} [${state}]`;
+  return `${discipline} · ${round} ${match} · ${sideA} vs ${sideB} [${state}]`;
 }
 
 // ---- Component ------------------------------------------------------------

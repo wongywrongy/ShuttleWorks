@@ -105,7 +105,7 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
               {courtId}
             </span>
             <span className="tabular-nums text-base font-semibold text-muted-foreground">
-              {isClosed ? '—' : match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
+              {isClosed ? '–' : match ? match.eventRank || `M${match.matchNumber || '?'}` : '–'}
             </span>
             <span className="min-w-0 break-words">
               {isClosed ? (

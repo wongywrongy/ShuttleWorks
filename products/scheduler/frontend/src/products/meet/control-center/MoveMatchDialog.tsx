@@ -79,7 +79,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
   if (!isOpen) return null;
 
   const formatSlotForDiff = (slotId: number | null | undefined): string => {
-    if (slotId === null || slotId === undefined) return '—';
+    if (slotId === null || slotId === undefined) return '–';
     if (!config) return `slot ${slotId}`;
     return formatSlotTime(slotId, config);
   };
@@ -165,7 +165,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
     return (
       <Modal onClose={handleCancel} titleId="move-match-title" widthClass="max-w-md">
         <div className="p-4 text-sm text-muted-foreground">
-          Cannot move this match — no scheduled assignment available.
+          Cannot move this match: no scheduled assignment available.
           <div className="mt-3 flex justify-end">
             <button
               type="button"
@@ -197,7 +197,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
   const previewLabel =
     target != null
       ? `${slotToTime(target.slotId, config)} · c${target.courtId}`
-      : '—';
+      : '–';
 
   return (
     <Modal onClose={handleCancel} titleId="move-match-title" widthClass="max-w-md">
@@ -208,7 +208,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
             <span className="sw-num">{matchLabel}</span>
-            {sideALabel && ` — ${sideALabel}`}
+            {sideALabel && ` · ${sideALabel}`}
             {sideBLabel && ` vs ${sideBLabel}`}
           </p>
           <p className="text-xs text-muted-foreground">

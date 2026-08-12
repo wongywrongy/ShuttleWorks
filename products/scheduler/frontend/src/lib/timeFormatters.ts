@@ -11,7 +11,7 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 /** Render an ISO-8601 timestamp as the operator's local HH:mm clock. */
 export function formatIsoClock(iso: string | null | undefined): string {
   const ms = parseMatchStartMs(iso);
-  if (ms === null) return '—';
+  if (ms === null) return '–';
   return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 

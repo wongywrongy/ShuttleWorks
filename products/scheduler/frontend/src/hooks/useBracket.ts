@@ -182,7 +182,7 @@ async function runFetch(e: PollEntry): Promise<void> {
       // with 403s. Pause the loop and surface a human answer; a manual
       // `refresh` re-checks if the operator believes otherwise.
       e.error =
-        'This workspace is no longer available — it may have been deleted or your access removed.';
+        'This workspace is no longer available: it may have been deleted or your access removed.';
       pause(e);
     } else {
       // Real network / server failure (the shared axios interceptor already

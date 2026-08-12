@@ -81,8 +81,8 @@ export function MatchDetailPanel({ data, onChange, hideIdentity }: Props) {
   }
 
   const nameById = Object.fromEntries(data.participants.map((p) => [p.id, p.name]));
-  const labelA = (pu.side_a ?? []).map((id) => nameById[id] ?? id).join(' / ') || '—';
-  const labelB = (pu.side_b ?? []).map((id) => nameById[id] ?? id).join(' / ') || '—';
+  const labelA = (pu.side_a ?? []).map((id) => nameById[id] ?? id).join(' / ') || '–';
+  const labelB = (pu.side_b ?? []).map((id) => nameById[id] ?? id).join(' / ') || '–';
 
   return (
     // Keyed by the selected match id so switching selection re-mounts the
@@ -112,7 +112,7 @@ export function MatchDetailPanel({ data, onChange, hideIdentity }: Props) {
       <div className="text-sm sw-num">
         {assignment
           ? `Court C${assignment.court_id} · slot ${assignment.slot_id}`
-          : '—'}
+          : '–'}
       </div>
 
       {/* Participants — skipped when the host already showed them (see
@@ -128,7 +128,7 @@ export function MatchDetailPanel({ data, onChange, hideIdentity }: Props) {
       {/* Result summary (when finished) */}
       {result && (
         <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
-          Done — {result.winner_side === 'A' ? labelA : labelB} wins
+          Done: {result.winner_side === 'A' ? labelA : labelB} wins
         </div>
       )}
 

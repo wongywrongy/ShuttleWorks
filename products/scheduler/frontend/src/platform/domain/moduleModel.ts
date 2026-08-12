@@ -82,7 +82,7 @@ function moduleNote(id: ModuleId, status: ModuleStatus): string | undefined {
   if (status === 'coming-soon') {
     return `${MODULE_LABELS[id]} is not enabled for this workspace yet.`;
   }
-  if (status === 'disabled') return `${MODULE_LABELS[id]} is turned off — re-enable to use it.`;
+  if (status === 'disabled') return `${MODULE_LABELS[id]} is turned off. Re-enable to use it.`;
   return undefined;
 }
 

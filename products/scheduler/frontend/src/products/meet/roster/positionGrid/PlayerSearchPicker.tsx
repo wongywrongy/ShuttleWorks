@@ -109,7 +109,7 @@ export function PlayerSearchPicker({
           <div className="px-2 py-3 text-center text-xs italic text-muted-foreground">
             {query
               ? 'No matching players.'
-              : 'No more players available — add some to the pool.'}
+              : 'No more players available. Add some to the pool.'}
           </div>
         ) : (
           candidates.map((p, i) => {

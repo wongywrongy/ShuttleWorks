@@ -1007,7 +1007,7 @@ def restore_tournament_backup(
         raise http_error(
             500,
             ErrorCode.BACKUP_RESTORE_FAILED,
-            "restore failed — see server logs",
+            "restore failed (see server logs)",
         )
     return get_tournament_state(
         tournament_id=tournament_id, repo=repo, response=response

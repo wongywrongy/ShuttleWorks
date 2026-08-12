@@ -839,7 +839,7 @@ async def submit_entry_json(
         raise http_error(
             429,
             ErrorCode.AUTH_THROTTLED,
-            "Too many entries from this connection — try again later",
+            "Too many entries from this connection. Try again later.",
             extra={"retryAfterSeconds": int(remaining) + 1},
         )
 

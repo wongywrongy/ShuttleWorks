@@ -19,7 +19,7 @@ function Marker({ now }: { now: Date }) {
         aria-hidden
         className="absolute -start-[1.42rem] top-1.5 h-2 w-2 rounded-full bg-accent"
       />
-      You are here — {formatUtcInstant(now)}
+      You are here · {formatUtcInstant(now)}
     </li>
   );
 }
@@ -63,7 +63,7 @@ export function TimelineCard({
               <p className="text-sm text-muted-foreground">
                 {moment.variance === 'per-event' ? (
                   <>
-                    Varies by event — see{' '}
+                    Varies by event: see{' '}
                     <a href={eventsHref} className="text-accent underline-offset-4 hover:underline">
                       Events
                     </a>

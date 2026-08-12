@@ -60,7 +60,7 @@ export function buildRailRows(
     key: 'display',
     label: 'Public display',
     value:
-      displayShared === null ? '—' : displayShared ? 'Live link' : 'Not shared',
+      displayShared === null ? '–' : displayShared ? 'Live link' : 'Not shared',
     tone: displayShared ? undefined : 'muted',
     segment: 'ws-sharing',
   });

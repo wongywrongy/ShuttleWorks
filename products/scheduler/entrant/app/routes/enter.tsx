@@ -166,7 +166,7 @@ export const meta: Route.MetaFunction = ({ data }) => {
   }
   const name = data.page.tournament.name;
   return [
-    { title: name ? `Enter — ${name}` : 'Enter' },
+    { title: name ? `Enter · ${name}` : 'Enter' },
     { name: 'robots', content: 'noindex' },
   ];
 };
@@ -184,7 +184,7 @@ const NO_ECHO: PlayerEcho = Object.freeze({
 });
 
 const GENDERS = Object.freeze([
-  ['', '—'],
+  ['', 'Select gender'],
   ['F', 'Female'],
   ['M', 'Male'],
 ] as const);
@@ -383,7 +383,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                 : `Bundle pricing per player: ${feeTiers
                     .map(
                       ([count, cents]) =>
-                        `${count} ${count === '1' ? 'event' : 'events'} — ${formatCents(cents)}`,
+                        `${count} ${count === '1' ? 'event' : 'events'} · ${formatCents(cents)}`,
                     )
                     .join('; ')}.`}
             </p>
@@ -447,8 +447,8 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                   create one
                 </a>
               </>
-            )}{' '}
-            — you&rsquo;ll come straight back here. Until you are signed in, nothing
+            )}
+            , and you&rsquo;ll come straight back here. Until you are signed in, nothing
             is recorded.
           </Notice>
         )}

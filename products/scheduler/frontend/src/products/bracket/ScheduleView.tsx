@@ -33,7 +33,7 @@ function buildTooltip(
   const round = `R${pu.round_index + 1}`;
   const match = `M${pu.match_index + 1}`;
 
-  return `${discipline} — ${round} ${match} — ${sideA} vs ${sideB}`;
+  return `${discipline} · ${round} ${match} · ${sideA} vs ${sideB}`;
 }
 
 // ---- Component ------------------------------------------------------------
@@ -115,7 +115,7 @@ export function ScheduleView({ data, selectedId, onSelect }: Props) {
   if (placements.length === 0) {
     return (
       <div className="p-6 text-sm text-muted-foreground">
-        No draws generated yet — see the <strong>Events</strong> tab.
+        No draws generated yet. See the <strong>Events</strong> tab.
       </div>
     );
   }

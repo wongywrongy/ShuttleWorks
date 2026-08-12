@@ -97,13 +97,13 @@ function refusalCopy(code: string): string {
     // instead. No link: `/e/account/login` is POST-only until Tasks 19-21
     // build the page, and a link that 405s is worse than a sentence that
     // does not lie.
-    return 'You need an entrant account to submit an entry, and this browser is not signed in to one. Nothing was recorded — sign in, then submit again.';
+    return 'You need an entrant account to submit an entry, and this browser is not signed in to one. Nothing was recorded. Sign in, then submit again.';
   }
   if (code === 'MAX_EVENTS_PER_PERSON') {
     return 'That is more events than this tournament allows for one player. Remove some, then update the total again.';
   }
   if (code === 'DISCIPLINE_CAP') {
-    return 'That is more events in one discipline than this tournament allows for one player. The per-discipline limits are stated on this page — remove some, then update the total again.';
+    return 'That is more events in one discipline than this tournament allows for one player. The per-discipline limits are stated on this page. Remove some, then update the total again.';
   }
   return REFUSAL_UNKNOWN;
 }
@@ -123,7 +123,7 @@ export function refusalText(code: string | null, subjects: string | null): strin
     .split(',')
     .filter((raw) => /^\d+$/.test(raw))
     .map((raw) => `Player ${Number(raw) + 1}`);
-  return players.length === 0 ? copy : `${players.join(', ')} — ${copy}`;
+  return players.length === 0 ? copy : `${players.join(', ')}: ${copy}`;
 }
 
 /**

@@ -42,7 +42,7 @@ function pluralize(n: number, singular: string, plural?: string): string {
 }
 
 function defaultFormatSlot(slotId: number | null | undefined): string {
-  if (slotId === null || slotId === undefined) return '—';
+  if (slotId === null || slotId === undefined) return '–';
   return `slot ${slotId}`;
 }
 
@@ -443,7 +443,7 @@ function MoveRow({
 }
 
 function SideInline({ members }: { members: PartyMember[] }) {
-  if (members.length === 0) return <span className="text-muted-foreground italic">—</span>;
+  if (members.length === 0) return <span className="text-muted-foreground italic">–</span>;
   const names = members.map((m) => m.name).join(' & ');
   const school = members[0];
   return (

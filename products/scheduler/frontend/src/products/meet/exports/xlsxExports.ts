@@ -527,7 +527,7 @@ export async function exportMatchesXlsx(
     sheet.mergeCells(rowIdx, 1, rowIdx, colCount);
     const bannerCell = bannerRow.getCell(1);
     const isDoubles = prefix.endsWith('D');
-    bannerCell.value = `${prefix} · ${isDoubles ? 'doubles' : 'singles'} — ${bucket.length} match${bucket.length === 1 ? '' : 'es'}`;
+    bannerCell.value = `${prefix} · ${isDoubles ? 'doubles' : 'singles'} · ${bucket.length} match${bucket.length === 1 ? '' : 'es'}`;
     bannerCell.font = { bold: true, size: 12, color: { argb: BANNER_FONT } };
     bannerCell.alignment = { vertical: 'middle', horizontal: 'center' };
     applyRangeStyle(sheet, rowIdx, rowIdx, 1, colCount, {

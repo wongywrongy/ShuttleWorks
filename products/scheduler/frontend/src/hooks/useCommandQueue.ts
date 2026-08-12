@@ -217,7 +217,7 @@ export function useCommandQueue() {
       const own = outcomes.find((o) => o.id === commandId);
       const result = own?.result ?? {
         kind: 'networkError' as const,
-        message: 'no outcome — possibly absorbed by a concurrent flush',
+        message: 'no outcome: possibly absorbed by a concurrent flush',
       };
 
       // Result handling per the prompt's matrix.

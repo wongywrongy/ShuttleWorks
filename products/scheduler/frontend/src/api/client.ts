@@ -387,7 +387,7 @@ export function handleApiResponseError(error: any): never {
     } catch {
       // non-browser test environments without CustomEvent — ignore
     }
-    message = 'Your session has expired — please sign in again';
+    message = 'Your session has expired. Please sign in again';
   }
 
   const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;

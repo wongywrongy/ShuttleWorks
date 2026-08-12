@@ -26,7 +26,7 @@ export const MODULE_CATALOG: Record<CatalogModuleId, ModuleMeta> = {
   display: {
     id: 'display',
     name: 'Display',
-    capability: 'Read-only public display — live matches, draw, or results.',
+    capability: 'Read-only public display: live matches, draw, or results.',
     dependency: 'Needs Meet or Bracket enabled.',
   },
   entries: {

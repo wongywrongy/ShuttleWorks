@@ -103,7 +103,7 @@ export const meta: Route.MetaFunction = ({ data }) => {
   }
 
   const { tournament, org, venue, page } = data.page;
-  const title = tournament.name ? `${tournament.name} — Enter now` : 'Enter now';
+  const title = tournament.name ? `${tournament.name} · Enter now` : 'Enter now';
   const description = [tournament.date, venue?.name, page.introText]
     .filter((part): part is string => Boolean(part))
     .join(' · ');

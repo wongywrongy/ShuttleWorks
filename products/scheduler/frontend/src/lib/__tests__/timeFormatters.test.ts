@@ -2,7 +2,7 @@
  * Safety-net characterization tests for timeFormatters.ts.
  *
  * Covers every exported function:
- *   - formatIsoClock  — null/undefined/empty sentinel, valid ISO, TZ=America/Los_Angeles pin
+ *   - formatIsoClock  - null/undefined/empty sentinel (en dash), valid ISO, TZ=America/Los_Angeles pin
  *   - formatDuration  — boundary math: 0m, sub-hour, exact-hour, multi-hour
  *   - formatElapsed   — null paths, sub-minute, sub-hour, ≥1h, ≥24h; uses fake timers
  *
@@ -15,29 +15,29 @@ import { formatIsoClock, formatDuration, formatElapsed } from '../timeFormatters
 // ── formatIsoClock ────────────────────────────────────────────────────────────
 
 describe('formatIsoClock', () => {
-  it('returns em-dash sentinel for null', () => {
-    expect(formatIsoClock(null)).toBe('—');
+  it('returns en-dash sentinel for null', () => {
+    expect(formatIsoClock(null)).toBe('–');
   });
 
-  it('returns em-dash sentinel for undefined', () => {
-    expect(formatIsoClock(undefined)).toBe('—');
+  it('returns en-dash sentinel for undefined', () => {
+    expect(formatIsoClock(undefined)).toBe('–');
   });
 
-  it('returns em-dash sentinel for empty string', () => {
-    expect(formatIsoClock('')).toBe('—');
+  it('returns en-dash sentinel for empty string', () => {
+    expect(formatIsoClock('')).toBe('–');
   });
 
-  it('returns em-dash sentinel for an unparseable string', () => {
-    expect(formatIsoClock('not-a-date')).toBe('—');
+  it('returns en-dash sentinel for an unparseable string', () => {
+    expect(formatIsoClock('not-a-date')).toBe('–');
   });
 
-  it('returns em-dash sentinel for a plausible-but-invalid ISO string', () => {
-    expect(formatIsoClock('2024-13-99T99:99:99Z')).toBe('—');
+  it('returns en-dash sentinel for a plausible-but-invalid ISO string', () => {
+    expect(formatIsoClock('2024-13-99T99:99:99Z')).toBe('–');
   });
 
   it('returns a non-sentinel string for a valid ISO timestamp', () => {
     const result = formatIsoClock('2024-06-15T18:00:00.000Z');
-    expect(result).not.toBe('—');
+    expect(result).not.toBe('–');
     expect(result).not.toContain('Invalid');
     // toLocaleTimeString output always contains a colon between h and mm
     expect(result).toMatch(/:/);
@@ -48,14 +48,14 @@ describe('formatIsoClock', () => {
     // Under UTC the hour portion would be 20 (or 8 PM).
     // With TZ=America/Los_Angeles the output must contain "12:00".
     const result = formatIsoClock('2024-01-15T20:00:00.000Z');
-    expect(result).not.toBe('—');
+    expect(result).not.toBe('–');
     expect(result).toMatch(/12[: ]00/); // "12:00" or "12 00" per locale narrow-space
   });
 
   it('correctly formats a PM hour in LA (UTC-7 during DST)', () => {
     // 2024-07-15T22:30:00Z = 3:30 PM PDT (UTC-7)
     const result = formatIsoClock('2024-07-15T22:30:00.000Z');
-    expect(result).not.toBe('—');
+    expect(result).not.toBe('–');
     expect(result).toMatch(/3[: ]30|15[: ]30/); // either 12h or 24h locale
   });
 });

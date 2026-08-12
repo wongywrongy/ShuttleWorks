@@ -169,16 +169,16 @@ export function AppStatusPopover() {
             </Row>
             {/* Operator-first labels — the diagnostics stay, the internals
                 jargon ("Schema", "Solver loaded", "Data dir") doesn't. */}
-            <Row label="Data format">{health ? `v${health.schemaVersion}` : '—'}</Row>
+            <Row label="Data format">{health ? `v${health.schemaVersion}` : '–'}</Row>
             <Row label="Scheduler">
               {health
                 ? (health.solverLoaded ? 'ready' : <span className="text-status-danger-fg">unavailable</span>)
-                : '—'}
+                : '–'}
             </Row>
             <Row label="Data folder">
               {health
                 ? (health.dataDirWritable ? 'writable' : <span className="text-status-danger-fg">read-only</span>)
-                : '—'}
+                : '–'}
             </Row>
             <Row label="Last save">
               {persistStatus === 'error' ? (
@@ -191,7 +191,7 @@ export function AppStatusPopover() {
               ) : persistStatus === 'saving' ? (
                 'saving…'
               ) : (
-                '—'
+                '–'
               )}
             </Row>
           </dl>

@@ -53,9 +53,9 @@ describe('WorkspaceInspector', () => {
     expect(metrics).toHaveTextContent(/scheduled/i);
   });
 
-  it('metric tiles fall back to — when match signals are absent (older payload)', () => {
+  it('metric tiles fall back to – when match signals are absent (older payload)', () => {
     render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} />);
-    expect(screen.getByTestId('inspector-metrics')).toHaveTextContent('—');
+    expect(screen.getByTestId('inspector-metrics')).toHaveTextContent('–');
   });
 
   it('shows a Ready status pill when readiness is complete and health is good', () => {

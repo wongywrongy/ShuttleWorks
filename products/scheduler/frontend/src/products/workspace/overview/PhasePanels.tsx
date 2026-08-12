@@ -111,9 +111,9 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
         <SectionLabel>Schedule</SectionLabel>
         <Figures
           items={[
-            { value: m ? m.total : '—', label: 'matches' },
-            { value: m ? m.scheduled : '—', label: 'scheduled' },
-            { value: first?.timeLabel ?? '—', label: 'first match' },
+            { value: m ? m.total : '–', label: 'matches' },
+            { value: m ? m.scheduled : '–', label: 'scheduled' },
+            { value: first?.timeLabel ?? '–', label: 'first match' },
           ]}
         />
       </div>
@@ -137,8 +137,8 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
         <SectionLabel>In progress</SectionLabel>
         <Figures
           items={[
-            { value: m ? m.total : '—', label: 'matches' },
-            { value: m ? m.scheduled : '—', label: 'scheduled' },
+            { value: m ? m.total : '–', label: 'matches' },
+            { value: m ? m.scheduled : '–', label: 'scheduled' },
           ]}
         />
       </div>
@@ -162,7 +162,7 @@ function CompletePanel({ summary, onNavigate }: PanelProps) {
     <section className="space-y-5">
       <div>
         <SectionLabel>Results</SectionLabel>
-        <Figures items={[{ value: m ? m.total : '—', label: 'matches played' }]} />
+        <Figures items={[{ value: m ? m.total : '–', label: 'matches played' }]} />
       </div>
       <div className="flex gap-2">
         <Button onClick={() => onNavigate(seg.matches)}>View results</Button>

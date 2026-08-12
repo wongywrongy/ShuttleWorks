@@ -154,7 +154,7 @@ describe('modulesFromDto', () => {
   it('notes a disabled module', () => {
     const m = modulesFromDto([{ moduleId: 'display', status: 'disabled', config: null }]);
     expect(m[0].status).toBe('disabled');
-    expect(m[0].note).toBe('Display is turned off — re-enable to use it.');
+    expect(m[0].note).toBe('Display is turned off. Re-enable to use it.');
   });
 });
 

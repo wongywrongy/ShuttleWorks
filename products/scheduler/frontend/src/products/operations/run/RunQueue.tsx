@@ -25,7 +25,7 @@ const SOURCE_LABEL: Record<'meet' | 'bracket', string> = { meet: 'Meet', bracket
 // `RunMatch.eligible` means "both sides known" for meet and "every feeder
 // resolved" for bracket (see toRunMatches).
 const WAITING_REASON: Record<'meet' | 'bracket', string> = {
-  meet: 'Waiting — both sides are not decided yet',
+  meet: 'Waiting on both sides to be decided',
   bracket: 'Waiting on an earlier result to decide a side',
 };
 
@@ -47,7 +47,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
   if (queue.length === 0) {
     return (
       <div className="flex items-center justify-center px-4 py-6 text-sm text-muted-foreground">
-        Queue empty — every match is on a court.
+        Queue empty. Every match is on a court.
       </div>
     );
   }

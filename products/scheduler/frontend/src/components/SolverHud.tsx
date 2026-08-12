@@ -154,10 +154,10 @@ export function SolverHud() {
             {hud.numMatches}
           </span>
           <span className="text-muted-foreground mx-1">·</span>
-          <span className="tabular-nums">{hud.numIntervals ?? '—'}</span>{' '}
+          <span className="tabular-nums">{hud.numIntervals ?? '–'}</span>{' '}
           <span className="text-muted-foreground">intervals</span>
           <span className="text-muted-foreground mx-1">·</span>
-          <span className="tabular-nums">{hud.numNoOverlap ?? '—'}</span>{' '}
+          <span className="tabular-nums">{hud.numNoOverlap ?? '–'}</span>{' '}
           <span className="text-muted-foreground">no-overlap</span>
         </span>
       ) : null}

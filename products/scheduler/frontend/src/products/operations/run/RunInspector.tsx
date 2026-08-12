@@ -116,7 +116,7 @@ export function RunInspector({
 
       {role === 'next-later' && nowRef && (
         <p className="text-sm text-muted-foreground">
-          Queued behind {nowRef.code} on C{nowRef.court} — advances when the court clears.
+          Queued behind {nowRef.code} on C{nowRef.court}. Advances when the court clears.
         </p>
       )}
 
@@ -134,7 +134,7 @@ export function RunInspector({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No court is free — waits for one to clear.
+            No court is free yet. Waiting for one to clear.
           </p>
         )
       )}
@@ -169,11 +169,11 @@ function RecordButton({ onRecord }: { onRecord: () => void }) {
       onBlur={confirm.reset}
       title={
         confirm.armed
-          ? 'Press again to record the result — a finished match cannot be reopened'
-          : 'Record the result — this cannot be undone'
+          ? 'Press again to record the result: a finished match cannot be reopened'
+          : 'Record the result: this cannot be undone'
       }
       aria-label={
-        confirm.armed ? 'Confirm the result — cannot be undone' : 'Record result'
+        confirm.armed ? 'Confirm the result: cannot be undone' : 'Record result'
       }
     >
       {confirm.armed ? 'Press again' : 'Record result'}

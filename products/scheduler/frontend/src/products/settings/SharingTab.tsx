@@ -151,7 +151,7 @@ export function SharingTab({ tid }: { tid: string }) {
         <h2 className="text-base font-semibold tracking-tight text-foreground">Links &amp; access</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           The public display link is view-only; collaborator invites let people sign in
-          and operate this workspace. They are separate — share each deliberately.
+          and operate this workspace. They are separate. Share each deliberately.
         </p>
       </div>
 
@@ -160,7 +160,7 @@ export function SharingTab({ tid }: { tid: string }) {
       {!displayTokenDenied && (
         <SectionCard eyebrow="PUBLIC DISPLAY LINK" testId="sharing-public">
           <p className="mb-2 text-xs text-muted-foreground">
-            Anyone with this link can view the read-only venue display — no sign-in required.
+            Anyone with this link can view the read-only venue display: no sign-in required.
           </p>
           <div className="flex items-center gap-2">
             <input
@@ -197,7 +197,7 @@ export function SharingTab({ tid }: { tid: string }) {
             </Button>
           </div>
           <p className="mt-2 text-2xs text-muted-foreground">
-            Rotating the link revokes the old one immediately — re-share the new link with
+            Rotating the link revokes the old one immediately. Re-share the new link with
             any venue displays.
           </p>
         </SectionCard>
@@ -237,7 +237,7 @@ export function SharingTab({ tid }: { tid: string }) {
               className="flex items-center justify-between gap-3 p-3 text-sm text-muted-foreground"
             >
               <span>
-                The invite list didn&rsquo;t load — whether any exist is unknown.
+                The invite list didn&rsquo;t load. Whether any exist is unknown.
                 Creating one here may duplicate an invite someone already holds.
               </span>
               <Button size="xs" variant="ghost" onClick={refresh}>

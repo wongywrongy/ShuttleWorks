@@ -99,7 +99,7 @@ export function DisruptionDialog({
   };
 
   const formatSlot = (slotId: number | null | undefined): string => {
-    if (slotId === null || slotId === undefined) return '—';
+    if (slotId === null || slotId === undefined) return '–';
     if (!config) return `slot ${slotId}`;
     return formatSlotTime(slotId, config);
   };

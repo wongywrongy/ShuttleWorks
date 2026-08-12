@@ -49,7 +49,7 @@ export function MatchDetailPanel({
     <DetailPanel
       variant="docked"
       label="Match"
-      value={code || '—'}
+      value={code || '–'}
       sub={EVENT_LABEL[prefix]?.full}
       mono
       onClose={onClose}

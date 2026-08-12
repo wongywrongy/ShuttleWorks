@@ -378,7 +378,7 @@ function BadmintonInlineEditor({
                 disabled={decided}
                 value={s.sideA || ''}
                 onChange={(e) => updateScore(i, 'sideA', e.target.value)}
-                placeholder="—"
+                placeholder="–"
                 aria-label={`Set ${i + 1} score for ${sideAName}`}
                 className={`${inputCls} ${wonBy === 'A' ? 'border-status-live bg-status-live-bg font-semibold text-status-live' : ''}`}
               />
@@ -391,7 +391,7 @@ function BadmintonInlineEditor({
                 disabled={decided}
                 value={s.sideB || ''}
                 onChange={(e) => updateScore(i, 'sideB', e.target.value)}
-                placeholder="—"
+                placeholder="–"
                 aria-label={`Set ${i + 1} score for ${sideBName}`}
                 className={`${inputCls} ${wonBy === 'B' ? 'border-status-live bg-status-live-bg font-semibold text-status-live' : ''}`}
               />

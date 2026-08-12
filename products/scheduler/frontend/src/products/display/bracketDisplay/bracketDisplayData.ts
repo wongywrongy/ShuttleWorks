@@ -30,7 +30,7 @@ export function sideLabel(
       .map((id) => participants.find((x) => x.id === id)?.name ?? id)
       .join(' / ');
   }
-  return '—';
+  return '–';
 }
 
 export interface LiveRow {

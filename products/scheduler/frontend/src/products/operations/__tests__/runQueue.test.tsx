@@ -45,7 +45,7 @@ describe('RunQueue', () => {
   it('renders the exact empty-state copy when queue is empty', () => {
     render(<RunQueue queue={[]} onSelect={vi.fn()} />);
     expect(
-      screen.getByText('Queue empty — every match is on a court.'),
+      screen.getByText('Queue empty. Every match is on a court.'),
     ).toBeInTheDocument();
     expect(screen.queryByTestId(/^run-queue-row-/)).toBeNull();
   });

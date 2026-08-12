@@ -31,7 +31,7 @@ function CellChipRow({
       <button
         type="button"
         onClick={() => onSelect(player.id)}
-        title={`${player.name || 'player'} — click to view, double-click to reassign`}
+        title={`${player.name || 'player'}: click to view, double-click to reassign`}
         className="min-w-0 flex-1 cursor-pointer break-normal text-left text-xs font-medium leading-tight text-foreground hover:text-accent"
       >
         {player.name || '(unnamed)'}

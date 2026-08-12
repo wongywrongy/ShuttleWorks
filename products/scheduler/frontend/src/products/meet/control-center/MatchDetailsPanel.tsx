@@ -366,7 +366,7 @@ export function MatchDetailsPanel({
               </div>
             ) : (
               <div className="mt-1 text-3xs text-muted-foreground">
-                No per-set scores recorded — tap Edit to fill them in.
+                No per-set scores recorded. Tap Edit to fill them in.
               </div>
             )}
           </div>
@@ -401,7 +401,7 @@ export function MatchDetailsPanel({
                   onClick={handleCall}
                   disabled={locked || light === 'red'}
                   className={primaryActionBtn}
-                  title={light === 'red' ? trafficLight?.reason ?? 'Blocked' : 'Call match — players head to court'}
+                  title={light === 'red' ? trafficLight?.reason ?? 'Blocked' : 'Call match: players head to court'}
                 >
                   Call
                 </button>
@@ -423,7 +423,7 @@ export function MatchDetailsPanel({
                   onClick={handleStart}
                   disabled={locked}
                   className={primaryActionBtn}
-                  title="Start match — court is now in play"
+                  title="Start match: court is now in play"
                 >
                   Start
                 </button>
@@ -432,7 +432,7 @@ export function MatchDetailsPanel({
                   onClick={() => setMode('score')}
                   disabled={locked}
                   className={actionBtn}
-                  title="Skip ahead — record final score"
+                  title="Skip ahead: record final score"
                 >
                   Score
                 </button>
@@ -454,7 +454,7 @@ export function MatchDetailsPanel({
                   onClick={handleUndoStart}
                   disabled={locked}
                   className={actionBtn}
-                  title="Undo start — returns the match to the queue"
+                  title="Undo start: returns the match to the queue"
                 >
                   Undo start
                 </button>
@@ -799,7 +799,7 @@ export function MatchDetailsPanel({
                     {eventLabel}
                   </span>
                   <span className="min-w-0 flex-1 break-words text-3xs text-muted-foreground">
-                    {sharedPlayerNames.join(', ') || '—'}
+                    {sharedPlayerNames.join(', ') || '–'}
                   </span>
                   <CaretRight aria-hidden="true" className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 </div>
@@ -848,7 +848,7 @@ export function MatchDetailsPanel({
                     onClick={() => onRequestDisruption('overrun', match.id)}
                     disabled={locked}
                     className="rounded border border-status-warning/40 bg-status-warning-bg px-2 py-0.5 text-2xs text-status-warning hover:bg-status-warning-bg/70 disabled:cursor-not-allowed disabled:opacity-50"
-                    title={disabledReason ?? 'Mark overrun — keeps this match playing, slides successors back to absorb the delay.'}
+                    title={disabledReason ?? 'Mark overrun: keeps this match playing, slides successors back to absorb the delay.'}
                   >
                     Mark overrun
                   </button>
@@ -858,7 +858,7 @@ export function MatchDetailsPanel({
                   onClick={() => onRequestDisruption('cancellation', match.id)}
                   disabled={locked}
                   className="rounded border border-destructive/40 bg-status-blocked-bg px-2 py-0.5 text-2xs text-status-blocked hover:bg-status-blocked-bg/70 disabled:cursor-not-allowed disabled:opacity-50"
-                  title={disabledReason ?? 'Cancel match — removes it entirely and frees the slot for later use.'}
+                  title={disabledReason ?? 'Cancel match: removes it entirely and frees the slot for later use.'}
                 >
                   Cancel match
                 </button>
@@ -870,7 +870,7 @@ export function MatchDetailsPanel({
                     className="rounded border border-border bg-card px-2 py-0.5 text-2xs text-muted-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
                     title={
                       disabledReason ??
-                      `Close court ${assignment.courtId} — closes it for the rest of the day; remaining matches on it are re-routed.`
+                      `Close court ${assignment.courtId}: closes it for the rest of the day; remaining matches on it are re-routed.`
                     }
                   >
                     Close court {assignment.courtId}

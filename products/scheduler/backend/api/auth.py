@@ -122,7 +122,7 @@ def _throttle_guard(repo: LocalRepository, *keys: str) -> None:
             raise http_error(
                 status.HTTP_429_TOO_MANY_REQUESTS,
                 ErrorCode.AUTH_THROTTLED,
-                "Too many attempts — try again later",
+                "Too many attempts. Try again later.",
                 extra={"retryAfterSeconds": int(remaining) + 1},
             )
 

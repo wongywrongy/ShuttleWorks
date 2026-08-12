@@ -133,7 +133,7 @@ export function groupBySubmission(entries: readonly EntryDTO[]): EntryGroup[] {
 const SKIP_REASON_LABEL: Record<string, string> = {
   UNMAPPABLE_EVENT: 'Event code has no match in this workspace',
   DRAW_NOT_EDITABLE: 'The draw for that event is already generated',
-  STATE_CONFLICT: 'Roster changed underneath the commit — try again',
+  STATE_CONFLICT: 'Roster changed underneath the commit. Try again',
   INVALID_PLAYER: 'Entry is missing a usable player name',
 };
 

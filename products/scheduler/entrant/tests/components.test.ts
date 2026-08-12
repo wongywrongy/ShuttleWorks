@@ -90,8 +90,8 @@ function classTokens(html: string, token: string): string[] {
 
 describe('StatusChip', () => {
   it.each([
-    [{ kind: 'entriesOpen', closesInDays: 4 } as ChipState, 'Entries open — closes in 4d'],
-    [{ kind: 'entriesOpen', closesInDays: 0 } as ChipState, 'Entries open — closes today'],
+    [{ kind: 'entriesOpen', closesInDays: 4 } as ChipState, 'Entries open · closes in 4d'],
+    [{ kind: 'entriesOpen', closesInDays: 0 } as ChipState, 'Entries open · closes today'],
     [{ kind: 'entriesOpen', closesInDays: null } as ChipState, 'Entries open'],
     [{ kind: 'entriesClosed' } as ChipState, 'Entries closed'],
   ])('%o renders its exact ruled copy', (state, copy) => {
@@ -150,7 +150,7 @@ describe('TournamentCard', () => {
     expect(html).toMatch(/<a href="\/e\/spring-open"[^>]*>Spring Open<\/a>/);
     expect(html).toContain('Kingsway Centre');
     expect(html).toContain('4 events');
-    expect(html).toContain('Entries open — closes in 4d');
+    expect(html).toContain('Entries open · closes in 4d');
   });
 
   it('is one link, stretched over the whole card', () => {
@@ -614,7 +614,7 @@ describe('StickyTotalBar', () => {
     const html = renderToStaticMarkup(
       h(StickyTotalBar, { ...base, state: { kind: 'unquoted' } }),
     );
-    expect(html).toContain('Entries open — closes in 4d');
+    expect(html).toContain('Entries open · closes in 4d');
     expect(html).toContain('14 Aug 2026, 23:59 UTC');
   });
 

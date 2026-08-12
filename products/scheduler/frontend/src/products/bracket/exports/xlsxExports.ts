@@ -91,7 +91,7 @@ export async function exportBracketRosterXlsx(
     row.getCell(2).value = (badgesById.get(p.id) ?? [])
       .map((b) => b.code)
       .join(', ');
-    row.getCell(3).value = p.restSlots ?? '—';
+    row.getCell(3).value = p.restSlots ?? '–';
     row.getCell(4).value = formatWindowSummary(p.availability ?? []);
     row.getCell(5).value = p.notes ?? '';
 

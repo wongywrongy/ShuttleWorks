@@ -125,7 +125,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         {/* Same match-code grammar as the Run queue rows. */}
         <span className="w-20 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">{b.label}</span>
         <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
-          {b.court != null ? `C${b.court} · S${b.slot}` : '—'}
+          {b.court != null ? `C${b.court} · S${b.slot}` : '–'}
         </span>
         <span className="min-w-0 flex-1 break-words text-sm">
           {b.sideA}

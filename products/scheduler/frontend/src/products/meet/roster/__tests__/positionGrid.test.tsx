@@ -102,7 +102,7 @@ describe('PositionGrid structure', () => {
     renderGrid();
     // XD count is 1, so XD2 (row 2) is disabled.
     const disabled = screen.getByTestId('pos-cell-S1-XD2');
-    expect(disabled.textContent).toContain('—');
+    expect(disabled.textContent).toContain('–');
     expect(screen.queryByTestId('pos-cell-btn-S1-XD2')).toBeNull();
   });
 

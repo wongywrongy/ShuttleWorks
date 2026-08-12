@@ -354,7 +354,7 @@ export function DragGantt({
           <button
             type="button"
             onClick={() => onRequestReopenCourt(courtId)}
-            title={`Court ${courtId} closed — open Reopen panel`}
+            title={`Court ${courtId} closed: open Reopen panel`}
             aria-label={`Court ${courtId} is closed. Click to open Reopen panel.`}
             className="flex h-full w-full items-center gap-1 px-2 text-xs font-semibold tabular-nums bg-muted/60 text-muted-foreground hover:bg-status-warning-bg hover:text-status-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
           >
@@ -449,7 +449,7 @@ export function DragGantt({
   return (
     <div data-testid="drag-gantt" className="relative">
       <Hint id="schedule.drag-instructions" className="m-2">
-        Drag a match to any cell — infeasible targets glow red. Drop pins the match and re-solves the rest.
+        Drag a match to any cell. Infeasible targets glow red. Drop pins the match and re-solves the rest.
       </Hint>
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         {/* The EVENTS hue legend is gone — the chip label prefix (MS1/WD2…)
@@ -483,7 +483,7 @@ export function DragGantt({
             validation.feasible ? (
               <span className="inline-flex items-center gap-1 text-status-done">
                 <Check aria-hidden="true" className="h-3.5 w-3.5" />
-                Feasible — drop to pin at Court {hoverCell.courtId},{' '}
+                Feasible: drop to pin at Court {hoverCell.courtId},{' '}
                 {formatSlotTime(hoverCell.slotId, config)}
               </span>
             ) : (
@@ -501,7 +501,7 @@ export function DragGantt({
               {objectiveScore != null ? (
                 <span
                   className="cursor-help tabular-nums"
-                  title="Total penalty score of the last solve — lower is better. Sums rest violations, late finishes, and movement away from any prior schedule."
+                  title="Total penalty score of the last solve. Lower is better. Sums rest violations, late finishes, and movement away from any prior schedule."
                 >
                   {' '}
                   · Score {Math.round(objectiveScore)}

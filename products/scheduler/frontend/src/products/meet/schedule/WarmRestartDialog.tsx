@@ -30,9 +30,9 @@ interface Props {
 }
 
 const WEIGHTS: Array<{ id: 'conservative' | 'balanced' | 'aggressive'; label: string; weight: number; hint: string }> = [
-  { id: 'conservative', label: 'Conservative', weight: 10, hint: 'Strongest stay-close — very few moves' },
-  { id: 'balanced',     label: 'Balanced',     weight: 5,  hint: 'Default — moves when objective improves' },
-  { id: 'aggressive',   label: 'Aggressive',   weight: 1,  hint: 'Lowest stay-close — re-optimises freely' },
+  { id: 'conservative', label: 'Conservative', weight: 10, hint: 'Strongest stay-close: very few moves' },
+  { id: 'balanced',     label: 'Balanced',     weight: 5,  hint: 'Default: moves when objective improves' },
+  { id: 'aggressive',   label: 'Aggressive',   weight: 1,  hint: 'Lowest stay-close: re-optimises freely' },
 ];
 
 export function WarmRestartDialog({ isOpen, onClose }: Props) {
@@ -65,7 +65,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
 
   // Slot formatter for the diff view's "From / To" columns.
   const formatSlot = (slotId: number | null | undefined): string => {
-    if (slotId === null || slotId === undefined) return '—';
+    if (slotId === null || slotId === undefined) return '–';
     if (!config) return `slot ${slotId}`;
     return formatSlotTime(slotId, config);
   };

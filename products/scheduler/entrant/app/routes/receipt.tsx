@@ -149,9 +149,9 @@ export async function loader({
  * either, so neither is read.
  */
 export const meta: Route.MetaFunction = ({ data }) => {
-  if (!data) return [{ title: 'Receipt not available — ShuttleWorks Tournaments' }];
+  if (!data) return [{ title: 'Receipt not available · ShuttleWorks Tournaments' }];
   const { tournamentName } = data.page;
-  return [{ title: tournamentName ? `Entry received — ${tournamentName}` : 'Entry received' }];
+  return [{ title: tournamentName ? `Entry received · ${tournamentName}` : 'Entry received' }];
 };
 
 export default function Receipt({ loaderData }: Route.ComponentProps) {

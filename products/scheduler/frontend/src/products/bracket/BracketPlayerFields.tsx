@@ -91,7 +91,7 @@ export function BracketAvailabilityEventsFields({
         <span className={FIELD_LABEL_CLASSES}>Events</span>
         {events.length === 0 ? (
           <span className="text-xs text-muted-foreground">
-            No draws yet — create one in Draws to enter this player.
+            No draws yet. Create one in Draws to enter this player.
           </span>
         ) : (
           <EventsControl
@@ -252,7 +252,7 @@ function EventTypeEditor({
                     data-testid={`event-locked-${ev.id}`}
                     title="Participants are locked once a draw is generated."
                   >
-                    locked — draw generated
+                    locked: draw generated
                   </span>
                 </span>
               )}

@@ -444,7 +444,7 @@ def signup(
     remaining = auth_service.throttle_check(repo.session, throttle_key)
     if remaining is not None:
         raise _throttled(
-            remaining, "Too many signups from this connection — try again later"
+            remaining, "Too many signups from this connection. Try again later."
         )
 
     verdict = verify_turnstile(body.turnstileToken, remote_ip=ip)
@@ -556,7 +556,7 @@ def login(
     for key in (account_key, ip_key):
         remaining = auth_service.throttle_check(repo.session, key)
         if remaining is not None:
-            raise _throttled(remaining, "Too many attempts — try again later")
+            raise _throttled(remaining, "Too many attempts. Try again later.")
 
     account = entrant_service.authenticate(
         repo.session, email=email, password=body.password

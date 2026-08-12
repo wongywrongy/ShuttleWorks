@@ -45,7 +45,7 @@ export function DraggablePlayerChip({
         ].join(' ')}
         title={
           heavy
-            ? `High event load — ${eventCount} events`
+            ? `High event load: ${eventCount} events`
             : `${eventCount} event${eventCount === 1 ? '' : 's'}`
         }
         aria-label={heavy ? `High event load: ${eventCount} events` : undefined}

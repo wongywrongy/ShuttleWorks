@@ -304,11 +304,11 @@ export function useLiveTracking() {
                 ? {
                     level: 'warn',
                     message: `${matchLabelOf(matchId)} already moved on`,
-                    detail: `${apiError.message} — the board has been re-synced to the server.`,
+                    detail: `${apiError.message}. The board has been re-synced to the server.`,
                   }
                 : {
                     level: 'error',
-                    message: `${matchLabelOf(matchId)} — version mismatch`,
+                    message: `${matchLabelOf(matchId)}: version mismatch`,
                     detail: apiError.message,
                     actionLabel: 'Retry',
                     onAction: () => {

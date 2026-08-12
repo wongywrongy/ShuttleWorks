@@ -329,7 +329,7 @@ export function SchedulePage() {
                 size="xs"
                 variant="toolbar"
                 onClick={openDirector}
-                title="Director tools — delays, breaks, reopen courts"
+                title="Director tools: delays, breaks, reopen courts"
               >
                 <GearSix aria-hidden="true" />
                 Director
@@ -467,7 +467,7 @@ export function SchedulePage() {
           />
           {!needsConfig && matches.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No matches yet —{' '}
+              No matches yet,{' '}
               <Link
                 to={`/tournaments/${tid}/matches`}
                 replace

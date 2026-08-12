@@ -116,7 +116,7 @@ export function PositionCell({
       ].join(' ')}
     >
       {disabled ? (
-        <span className="block px-1.5 py-1 text-3xs italic opacity-50">—</span>
+        <span className="block px-1.5 py-1 text-3xs italic opacity-50">–</span>
       ) : occupants.length > 0 ? (
         // Filled cell: names view-on-click; double-click anywhere reassigns.
         <div

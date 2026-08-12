@@ -195,7 +195,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
  * into `<head>` at all.
  */
 export const meta: Route.MetaFunction = () => [
-  { title: 'Sign in — ShuttleWorks Tournaments' },
+  { title: 'Sign in · ShuttleWorks Tournaments' },
 ];
 
 export default function LoginPage({ loaderData }: Route.ComponentProps) {
@@ -271,7 +271,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
         {justSignedIn ? (
           <Notice tone="success">
             You are signed in on this device. Open the entry link your organiser
-            gave you to enter a tournament — the form below signs in a different
+            gave you to enter a tournament. The form below signs in a different
             account.
           </Notice>
         ) : null}

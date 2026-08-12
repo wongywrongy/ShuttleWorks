@@ -162,7 +162,7 @@ function CourtOrderRow({
             'inline-flex cursor-grab touch-none items-center gap-2 text-sm font-medium active:cursor-grabbing',
             hidden ? 'text-muted-foreground' : 'text-foreground',
           ].join(' ')}
-          title={`Court ${courtId} — drag to reorder`}
+          title={`Court ${courtId}: drag to reorder`}
         >
           Court {courtId}
           {isNew && (
@@ -191,7 +191,7 @@ function CourtOrderRow({
       {hidden && hasLiveMatch && (
         <div className="mt-1 flex items-center justify-between gap-2 rounded-sm bg-accent/10 px-2 py-1 text-2xs text-accent">
           <span>
-            Court {courtId} (hidden) has a live match — show it?
+            Court {courtId} (hidden) has a live match. Show it?
           </span>
           <button
             type="button"

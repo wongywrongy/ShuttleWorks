@@ -99,7 +99,7 @@ describe('parseEcho', () => {
     expect(echo.showAllEvents).toBe(true);
     expect(echo.totalCents).toBe(3500);
     expect(echo.refusal).toBe(
-      'Player 1, Player 2 — That is more events than this tournament allows for one player. Remove some, then update the total again.',
+      'Player 1, Player 2: That is more events than this tournament allows for one player. Remove some, then update the total again.',
     );
   });
 
@@ -134,7 +134,7 @@ describe('parseEcho', () => {
     expect(
       parseEcho(new URLSearchParams('refusalCode=DISCIPLINE_CAP&refusalSubjects=Ada')).refusal,
     ).toBe(
-      'That is more events in one discipline than this tournament allows for one player. The per-discipline limits are stated on this page — remove some, then update the total again.',
+      'That is more events in one discipline than this tournament allows for one player. The per-discipline limits are stated on this page. Remove some, then update the total again.',
     );
   });
 
@@ -198,7 +198,7 @@ describe('the not-signed-in outcome (R8-E)', () => {
 
     expect(copy).toContain('entrant account');
     expect(copy).toContain('Nothing was recorded');
-    expect(copy).toContain('sign in');
+    expect(copy).toContain('Sign in');
     // Not the generic fallback — that one talks about event selections and
     // would be actively misleading here.
     expect(copy).not.toContain('cannot be entered as it stands');

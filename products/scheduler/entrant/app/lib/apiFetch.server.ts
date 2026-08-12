@@ -49,7 +49,7 @@ export class ApiError extends Error {
 export function apiBaseUrl(): string {
   const base = process.env.API_BASE_URL;
   if (!base) {
-    throw new Error('API_BASE_URL is not set — the entrant server cannot reach the API');
+    throw new Error('API_BASE_URL is not set. The entrant server cannot reach the API.');
   }
   return base.replace(/\/+$/, '');
 }

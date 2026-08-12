@@ -157,8 +157,8 @@ describe('chipLabel', () => {
   it.each([
     [{ kind: 'entriesClosed' } as const, 'Entries closed'],
     [{ kind: 'entriesOpen', closesInDays: null } as const, 'Entries open'],
-    [{ kind: 'entriesOpen', closesInDays: 0 } as const, 'Entries open — closes today'],
-    [{ kind: 'entriesOpen', closesInDays: 4 } as const, 'Entries open — closes in 4d'],
+    [{ kind: 'entriesOpen', closesInDays: 0 } as const, 'Entries open · closes today'],
+    [{ kind: 'entriesOpen', closesInDays: 4 } as const, 'Entries open · closes in 4d'],
   ])('%o → %s', (state, label) => {
     expect(chipLabel(state)).toBe(label);
   });

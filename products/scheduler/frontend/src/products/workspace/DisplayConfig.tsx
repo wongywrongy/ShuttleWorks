@@ -133,7 +133,7 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
       >
         {mintFailed ? (
           <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
-            No public link yet. Only a workspace owner can create one — ask an owner to
+            No public link yet. Only a workspace owner can create one. Ask an owner to
             share it from Settings → Sharing.
           </p>
         ) : (

@@ -181,7 +181,7 @@ export function AppShell() {
         typeof reason === 'object' &&
         (reason as { __handled?: boolean }).__handled
       ) {
-        console.error('[unhandledrejection — already toasted]', reason);
+        console.error('[unhandledrejection: already toasted]', reason);
         return;
       }
       const msg = reason instanceof Error ? reason.message : String(reason ?? 'Unknown error');
@@ -282,7 +282,7 @@ export function AppShell() {
               }}
               onOpenSettings={
                 pane.canOpenSettings && tid
-                  ? // Deep-link to the in-workspace Modules admin — this panel
+                  ? // Deep-link to the in-workspace Modules admin: this panel
                     // shows for a disabled module, so that's where it's enabled.
                     () => navigate(`/tournaments/${tid}/ws-modules`)
                   : undefined

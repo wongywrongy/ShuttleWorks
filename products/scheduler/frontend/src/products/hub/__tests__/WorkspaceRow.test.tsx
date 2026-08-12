@@ -70,7 +70,7 @@ describe('WorkspaceRow', () => {
     render(
       <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
     );
-    expect(screen.getByRole('img', { name: 'Meet — enabled' })).toHaveTextContent('M');
+    expect(screen.getByRole('img', { name: 'Meet: enabled' })).toHaveTextContent('M');
   });
 
   it('shows a dashed kind-default glyph when nothing is enabled', () => {

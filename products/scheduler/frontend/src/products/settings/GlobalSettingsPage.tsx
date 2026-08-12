@@ -271,13 +271,13 @@ const MODULE_DEFAULTS: {
   {
     id: 'meet',
     name: 'Meet',
-    desc: 'Single-day meet cockpit — roster, CP-SAT court assignments, live scoring.',
+    desc: 'Single-day meet cockpit: roster, CP-SAT court assignments, live scoring.',
     defaultState: 'Available',
   },
   {
     id: 'bracket',
     name: 'Bracket',
-    desc: 'Single-elimination + round-robin draws — seeding, advancement, import/export.',
+    desc: 'Single-elimination + round-robin draws: seeding, advancement, import/export.',
     defaultState: 'Available',
   },
   {

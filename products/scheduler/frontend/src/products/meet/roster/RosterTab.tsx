@@ -381,8 +381,8 @@ export function RosterTab() {
                 emptyHint={
                   positionOccupants.length < (isDoublesRank(selectedRank) ? 2 : 1)
                     ? positionOccupants.length === 0
-                      ? 'No one assigned yet — click the cell to assign a player.'
-                      : 'Partner not assigned — double-click the cell to add one.'
+                      ? 'No one assigned yet. Click the cell to assign a player.'
+                      : 'Partner not assigned. Double-click the cell to add one.'
                     : null
                 }
                 onClose={closeDrawer}
@@ -427,7 +427,7 @@ function SchoolTabs({
   if (groups.length === 0) {
     return (
       <div className="shrink-0 border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">
-        No schools yet — add one from the actions bar above.
+        No schools yet. Add one from the actions bar above.
       </div>
     );
   }

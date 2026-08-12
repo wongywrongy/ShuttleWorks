@@ -137,7 +137,7 @@ export function BracketScheduleModal({ api, onClose, onCommitted }: Props) {
             Schedule next round
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {phase === 'solving' && 'Solving — finding court and time assignments…'}
+            {phase === 'solving' && 'Finding court and time assignments…'}
             {phase === 'choosing' && 'Pick a candidate schedule to commit.'}
             {phase === 'committing' && 'Committing the chosen schedule…'}
           </p>

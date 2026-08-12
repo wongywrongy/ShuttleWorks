@@ -180,7 +180,7 @@ function BracketView({
       const participants = [];
       for (let p = 0; p < size; p++) {
         const id = occ[p];
-        if (!id) continue; // bye — omitted; the backend re-inserts it
+        if (!id) continue; // bye: omitted; the backend re-inserts it
         const part = participantById[id];
         participants.push({
           id,
@@ -1008,7 +1008,7 @@ function BracketCell({
         <span>
           {assignment
             ? `slot ${assignment.slot_id} · court ${assignment.court_id}`
-            : "—"}
+            : "–"}
         </span>
       </div>
       <Side

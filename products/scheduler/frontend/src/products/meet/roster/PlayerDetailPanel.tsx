@@ -241,7 +241,7 @@ export function PlayerEventsField({ player }: { player: PlayerDTO }) {
                         aria-pressed={isActive}
                         title={
                           r.assignedTo
-                            ? `${r.value} — ${r.assignedTo}${
+                            ? `${r.value}: ${r.assignedTo}${
                                 blocked
                                   ? ' (full)'
                                   : doubles

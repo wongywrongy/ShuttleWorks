@@ -283,7 +283,7 @@ export function UpNextCard({
               title={
                 light === 'green'
                   ? 'Call match'
-                  : `${light === 'yellow' ? 'Call anyway — ' : ''}${trafficLight?.reason ?? (light === 'red' ? 'Blocked' : 'player still resting')}`
+                  : `${light === 'yellow' ? 'Call anyway: ' : ''}${trafficLight?.reason ?? (light === 'red' ? 'Blocked' : 'player still resting')}`
               }
               aria-label="Call match"
             >
@@ -321,7 +321,7 @@ export function UpNextCard({
               className={`${ACTION_BTN} bg-accent text-accent-ink shadow-glow hover:brightness-110 !px-2 !py-0.5 !text-2xs`}
               title={
                 missingPlayers.length > 0
-                  ? `Start — ${missingPlayers.length} player(s) not yet checked in`
+                  ? `Start: ${missingPlayers.length} player(s) not yet checked in`
                   : 'Start match'
               }
               aria-label="Start match"

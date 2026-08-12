@@ -192,7 +192,7 @@ export function RunLiveBoard({
           data-testid={`run-card-${c.key}`}
           title={`${c.source === 'meet' ? 'Meet' : 'Bracket'} · ${c.label} [${c.late ? 'late' : c.state}]${
             c.pushedSlots > 0
-              ? ` — running ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'} behind plan (starts when its court is free)`
+              ? ` · running ${c.pushedSlots} slot${c.pushedSlots === 1 ? '' : 's'} behind plan (starts when its court is free)`
               : ''
           }`}
           style={{
@@ -295,7 +295,7 @@ export function RunLiveBoard({
           data-testid="run-board-empty"
           className="px-4 py-6 text-center text-2xs text-muted-foreground"
         >
-          No matches on court yet — assign from the queue to fill a court.
+          No matches on court yet. Assign from the queue to fill a court.
         </p>
       </div>
     );

@@ -308,7 +308,7 @@ function GanttChartImpl({
           <button
             type="button"
             onClick={() => onRequestReopenCourt(courtId)}
-            title={`Court ${courtId} closed — open Reopen panel`}
+            title={`Court ${courtId} closed: open Reopen panel`}
             aria-label={`Court ${courtId} is closed. Click to open Reopen panel.`}
             className="flex h-full w-full items-center gap-1 px-2 text-xs font-semibold tabular-nums bg-muted/60 text-muted-foreground hover:bg-status-warning-bg hover:text-status-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
           >
@@ -454,7 +454,7 @@ function GanttChartImpl({
       {staleTimingCount > 0 ? (
         <p className="px-2 pb-1 text-2xs text-muted-foreground">
           Showing planned times for {staleTimingCount}{' '}
-          {staleTimingCount === 1 ? 'match' : 'matches'} — their recorded start
+          {staleTimingCount === 1 ? 'match' : 'matches'}. Their recorded start
           times are not from this tournament&rsquo;s day.
         </p>
       ) : null}

@@ -166,7 +166,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
                 </Button>
               }
             >
-              This is a failed read, not an empty desk — how many entries this
+              This is a failed read, not an empty desk: how many entries this
               workspace has is unknown until it loads.
             </Notice>
           </div>
@@ -212,7 +212,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
                   role="cell"
                   className={`${colClass(COLUMNS[1])} text-xs text-muted-foreground`}
                 >
-                  {e.eventCode ?? '—'}
+                  {e.eventCode ?? '–'}
                 </span>
                 <span role="cell" className={colClass(COLUMNS[2])}>
                   <StatusPill tone={ENTRY_STATE_TONE[e.state]} dot>
@@ -284,7 +284,7 @@ function CommitSummary({
     >
       <p className="text-xs font-medium text-foreground">
         {committed.length === 0 && skipped.length === 0
-          ? 'Nothing new to commit — every confirmed entry is already on the roster.'
+          ? 'Nothing new to commit: every confirmed entry is already on the roster.'
           : `${committed.length} committed to the roster.`}
       </p>
       {skipped.length > 0 ? (
@@ -294,7 +294,7 @@ function CommitSummary({
               <span className="font-medium text-foreground">
                 {nameById.get(s.id) ?? s.id}
               </span>{' '}
-              skipped — {skipReasonLabel(s.reason)}
+              skipped: {skipReasonLabel(s.reason)}
             </li>
           ))}
         </ul>

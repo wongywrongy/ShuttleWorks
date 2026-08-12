@@ -138,7 +138,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
  * of a function that renders into `<head>`.
  */
 export const meta: Route.MetaFunction = () => [
-  { title: 'Create an account — ShuttleWorks Tournaments' },
+  { title: 'Create an account · ShuttleWorks Tournaments' },
 ];
 
 /**
@@ -204,7 +204,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
         <Notice tone="info">
           The human check on this form needs JavaScript. With scripting turned
           off, everything below still fills in and submits, but the check cannot
-          run — ask the organiser to set your account up instead.
+          run. Ask the organiser to set your account up instead.
         </Notice>
 
         <div className="grid gap-6 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">

@@ -47,7 +47,7 @@ export function DrawDetailPanel({
                 query for "Single elimination" finding two elements). */}
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Bracket size</dt>
-              <dd className="sw-num">{ev.bracket_size ?? '—'}</dd>
+              <dd className="sw-num">{ev.bracket_size ?? '–'}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Entered</dt>

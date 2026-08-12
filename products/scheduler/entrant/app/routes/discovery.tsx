@@ -116,13 +116,13 @@ export async function loader({ request }: { request: Request }) {
 }
 
 export const meta: Route.MetaFunction = () => [
-  { title: 'Find a tournament — ShuttleWorks' },
+  { title: 'Find a tournament · ShuttleWorks' },
   {
     name: 'description',
     content:
       'Badminton tournaments taking entries through ShuttleWorks. Every listing says whether you can enter it right now.',
   },
-  { property: 'og:title', content: 'Find a tournament — ShuttleWorks' },
+  { property: 'og:title', content: 'Find a tournament · ShuttleWorks' },
   { property: 'og:type', content: 'website' },
 ];
 

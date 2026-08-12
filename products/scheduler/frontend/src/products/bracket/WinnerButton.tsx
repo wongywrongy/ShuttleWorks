@@ -56,12 +56,12 @@ export function WinnerButton({
         !canEditWorkspace
           ? READ_ONLY_MESSAGE
           : confirm.armed
-            ? `Click again to record ${label} as the winner — this cannot be undone`
+            ? `Click again to record ${label} as the winner. This cannot be undone`
             : `${label} wins`
       }
       aria-label={
         confirm.armed
-          ? `Confirm ${label} as the winner — cannot be undone`
+          ? `Confirm ${label} as the winner. This cannot be undone`
           : `${label} wins`
       }
     >

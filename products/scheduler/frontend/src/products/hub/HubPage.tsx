@@ -313,7 +313,7 @@ export function HubPage() {
           ) : tournaments.length === 0 ? (
             <EmptyState
               title="No workspaces yet"
-              body="A workspace is your event control plane — it runs modules like Meet, Bracket, and Display."
+              body="A workspace is your event control plane: it runs modules like Meet, Bracket, and Display."
               action={<Button onClick={() => navigate('/new')}>Create workspace</Button>}
             />
           ) : visible.length === 0 ? (

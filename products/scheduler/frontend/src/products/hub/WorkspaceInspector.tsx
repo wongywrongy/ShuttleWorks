@@ -152,8 +152,8 @@ export function WorkspaceInspector({ tournament, onOpen, onSetDate, onSettings }
           data-testid="inspector-metrics"
           className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border"
         >
-          <MetricTile value={metrics ? metrics.total : '—'} label="matches" />
-          <MetricTile value={metrics ? metrics.scheduled : '—'} label="scheduled" />
+          <MetricTile value={metrics ? metrics.total : '–'} label="matches" />
+          <MetricTile value={metrics ? metrics.scheduled : '–'} label="scheduled" />
           <MetricTile value={toDo} label="to do" tone={toDo > 0 ? 'warning' : undefined} />
         </div>
       </div>

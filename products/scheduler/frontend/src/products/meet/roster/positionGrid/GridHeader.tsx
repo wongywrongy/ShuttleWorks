@@ -51,7 +51,7 @@ function SortableHeaderCell({
         {...attributes}
         {...listeners}
         className="inline-flex cursor-grab touch-none items-baseline gap-2 active:cursor-grabbing"
-        title={label?.full ? `${label.full} — drag to reorder` : 'Drag to reorder'}
+        title={label?.full ? `${label.full}: drag to reorder` : 'Drag to reorder'}
       >
         {ev.prefix}
         <span className="text-3xs font-medium text-muted-foreground">

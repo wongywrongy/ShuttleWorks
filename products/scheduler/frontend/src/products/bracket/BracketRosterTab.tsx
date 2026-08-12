@@ -224,7 +224,7 @@ function BracketRosterTabCore({
                   role="cell"
                   className="w-16 shrink-0 text-right text-xs text-muted-foreground sw-num hidden @2xl/table:block"
                 >
-                  {p.restSlots ?? '—'}
+                  {p.restSlots ?? '–'}
                 </span>
                 <span
                   role="cell"
@@ -262,7 +262,7 @@ function BracketRosterTabCore({
           {filtered.length === 0 && !adding && (
             <p className="px-5 py-6 text-sm text-muted-foreground">
               {players.length === 0
-                ? 'No players yet — add the first one.'
+                ? 'No players yet. Add the first one.'
                 : 'No players match the search.'}
             </p>
           )}

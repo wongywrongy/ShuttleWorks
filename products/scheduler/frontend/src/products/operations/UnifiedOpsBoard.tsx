@@ -361,7 +361,7 @@ export function UnifiedOpsBoard({
           {hoverCell && validation ? (
             validation.feasible ? (
               <span className="inline-flex items-center gap-1 text-status-done">
-                <Check className="h-3.5 w-3.5" /> Feasible — drop to pin at C{hoverCell.courtId} · S{hoverCell.slotId}
+                <Check className="h-3.5 w-3.5" /> Feasible: drop to pin at C{hoverCell.courtId} · S{hoverCell.slotId}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-destructive">
@@ -370,7 +370,7 @@ export function UnifiedOpsBoard({
             )
           ) : (
             <span className="text-muted-foreground">
-              Drag a match to any cell to reschedule — meet and bracket on one court plan.
+              Drag a match to any cell to reschedule: meet and bracket share one court plan.
             </span>
           )}
         </div>
@@ -466,7 +466,7 @@ function BlockView({
         opacity: translucent && !isDragging ? 0.4 : 1,
       }}
       className={`px-1.5 ${block.done ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}
-      title={`${block.source === 'meet' ? 'Meet' : 'Bracket'} · ${block.label} — ${block.sideA} vs ${block.sideB} [${block.status}]`}
+      title={`${block.source === 'meet' ? 'Meet' : 'Bracket'} · ${block.label}: ${block.sideA} vs ${block.sideB} [${block.status}]`}
     />
   );
 }

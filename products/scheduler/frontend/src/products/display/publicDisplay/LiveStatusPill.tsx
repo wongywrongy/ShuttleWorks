@@ -37,7 +37,7 @@ export function LiveStatusPill({ status }: LiveStatusPillProps) {
     status === 'live'
       ? 'Showing the latest results'
       : status === 'delayed'
-        ? "Results may be a little behind — they'll catch up shortly"
+        ? "Results may be a little behind, but they'll catch up shortly"
         : 'Results may be out of date';
   return (
     <span

@@ -14,7 +14,7 @@ import {
 } from './memberActions';
 
 const ROLE_LEGEND: { role: string; desc: string }[] = [
-  { role: 'Owner', desc: 'Full control — modules, sharing, delete.' },
+  { role: 'Owner', desc: 'Full control: modules, sharing, delete.' },
   { role: 'Operator', desc: 'Run event operations.' },
   { role: 'Viewer', desc: 'Read-only / display support.' },
 ];
@@ -149,7 +149,7 @@ export function PeopleAccessTab({
         } else if (e.status === 404) {
           setError('That member is no longer part of this workspace.');
         } else if (e.status === 403) {
-          setError('Your role in this workspace changed — you can no longer do that.');
+          setError('Your role in this workspace changed. You can no longer do that.');
         } else {
           setError(e.message || 'Could not complete that change. Please try again.');
         }
@@ -254,8 +254,8 @@ export function PeopleAccessTab({
               className="flex items-center justify-between gap-3 p-3 text-sm text-muted-foreground"
             >
               <span>
-                The members list didn&rsquo;t load. This workspace has members —
-                they just aren&rsquo;t known right now.
+                The members list didn&rsquo;t load. This workspace has members.
+                They just aren&rsquo;t known right now.
               </span>
               <Button size="xs" variant="ghost" onClick={() => void load()}>
                 Retry
@@ -265,7 +265,7 @@ export function PeopleAccessTab({
             <li className="p-3 text-sm text-muted-foreground">Loading…</li>
           ) : members.length === 0 ? (
             <li className="p-3 text-sm text-muted-foreground">
-              No members yet — invite collaborators from the Sharing tab.
+              No members yet. Invite collaborators from the Sharing tab.
             </li>
           ) : (
             members.map((m) => {
@@ -393,7 +393,7 @@ export function PeopleAccessTab({
           <Link to={`/tournaments/${tid}/ws-sharing`} className="text-accent hover:underline">
             Sharing
           </Link>
-          {' '}— collaborator invite links carry a role.
+          {': '}collaborator invite links carry a role.
         </p>
       </div>
 
@@ -430,7 +430,7 @@ export function PeopleAccessTab({
                     {displayNameFor(pending.member, summary) ?? shortId(pending.member.userId)}
                   </span>{' '}
                   will become the owner of this workspace. You will become an operator, and
-                  you will not be able to reverse this on your own — only the new owner can
+                  you will not be able to reverse this on your own. Only the new owner can
                   transfer it back.
                 </p>
               )}

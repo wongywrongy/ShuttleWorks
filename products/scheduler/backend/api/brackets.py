@@ -1847,7 +1847,7 @@ async def schedule_next_round_stream(
                 # the exception text is not. Logged with a traceback here,
                 # generic on the wire.
                 log.exception("bracket SSE solver worker failed")
-                error_holder["error"] = "solve failed — see server logs"
+                error_holder["error"] = "solve failed (see server logs)"
             finally:
                 emit({"type": "done"}, critical=True)
 
@@ -2260,8 +2260,8 @@ def generate_event_route(
         detail = (
             "The draw's matches don't fit the current day plan"
             + (f" ({'; '.join(reasons)})" if reasons else "")
-            + ". Free up court time — widen the day window, add courts, or "
-            "reduce other events — then generate again."
+            + ". Free up court time: widen the day window, add courts, or "
+            "reduce other events. Then generate again."
         )
         raise HTTPException(status_code=409, detail=detail)
 

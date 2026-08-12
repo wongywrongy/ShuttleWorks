@@ -64,7 +64,7 @@ export const links: LinksFunction = () => [{ rel: 'stylesheet', href: stylesheet
  */
 export const meta: Route.MetaFunction = ({ error }) => {
   if (!error) return [];
-  return [{ title: 'Page not available — ShuttleWorks Tournaments' }];
+  return [{ title: 'Page not available · ShuttleWorks Tournaments' }];
 };
 
 /**

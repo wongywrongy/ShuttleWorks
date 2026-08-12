@@ -106,7 +106,7 @@ export function TournamentSetupPage() {
           ) : null}
           {isNewTournament ? (
             <div className="motion-enter shrink-0 border-b border-status-started/40 bg-status-started/5 px-4 py-2 text-xs text-status-started">
-              <span className="font-semibold">New tournament — </span>
+              <span className="font-semibold">New tournament: </span>
               configure settings below. Saved on first save.
             </div>
           ) : null}

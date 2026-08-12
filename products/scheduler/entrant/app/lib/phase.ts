@@ -167,8 +167,8 @@ export function cardChipState(
 export function chipLabel(state: ChipState): string {
   if (state.kind === 'entriesClosed') return 'Entries closed';
   if (state.closesInDays === null) return 'Entries open';
-  if (state.closesInDays === 0) return 'Entries open — closes today';
-  return `Entries open — closes in ${state.closesInDays}d`;
+  if (state.closesInDays === 0) return 'Entries open · closes today';
+  return `Entries open · closes in ${state.closesInDays}d`;
 }
 
 /** Same predicate as `chipState`; the hero renders a link OR text, never a

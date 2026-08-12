@@ -201,8 +201,8 @@ function OperationsBody() {
 
   const title = isLive ? 'Run' : 'Plan';
   const subtitle = isLive
-    ? 'Run the floor — by court, then the queue'
-    : 'Plan the day — drag to reschedule, generate, schedule rounds';
+    ? 'Run the floor: by court, then the queue'
+    : 'Plan the day: drag to reschedule, generate, schedule rounds';
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-card">

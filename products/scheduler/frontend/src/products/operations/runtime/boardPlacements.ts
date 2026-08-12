@@ -73,7 +73,7 @@ export function buildPlanChips(blocks: OpsBlock[]): BoardChip[] {
       state,
       late: false,
       overrunSlots: 0,
-      pushedSlots: 0, // the plan board shows the PLAN — nothing is pushed
+      pushedSlots: 0, // the plan board shows the PLAN: nothing is pushed
       label: b.label,
       colorKey: b.colorKey,
       plannedSpan,

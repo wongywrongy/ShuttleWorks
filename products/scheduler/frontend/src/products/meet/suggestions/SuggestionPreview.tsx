@@ -19,7 +19,7 @@ export function SuggestionPreview({ proposalId, config }: Props) {
   const { impact, error } = useProposalImpact(proposalId);
 
   const formatSlot = (slotId: number | null | undefined): string => {
-    if (slotId == null) return '—';
+    if (slotId == null) return '–';
     if (!config) return `slot ${slotId}`;
     return formatSlotTime(slotId, config);
   };

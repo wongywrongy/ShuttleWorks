@@ -91,7 +91,7 @@ export function FinishedCard({
         }}
         disabled={locked}
         className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
-        title="Undo finish — back to in progress"
+        title="Undo finish: back to in progress"
         aria-label="Undo finish"
       >
         {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}

@@ -172,7 +172,7 @@ export function MatchesSpreadsheet({
     const groupsByPrefix = new Map<string, MatchDTO[]>();
     for (const m of filteredMatches) {
       const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
-      const key = prefix || '—';
+      const key = prefix || '–';
       if (!groupsByPrefix.has(key)) groupsByPrefix.set(key, []);
       groupsByPrefix.get(key)!.push(m);
     }
@@ -183,11 +183,11 @@ export function MatchesSpreadsheet({
       ),
     ];
     return orderedKeys.map((key) => {
-      const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
+      const label = key === '–' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
       return {
         key,
         label,
-        code: key === '—' ? undefined : key,
+        code: key === '–' ? undefined : key,
         items: groupsByPrefix.get(key)!,
         testId: `match-group-${label}`,
       };
@@ -639,7 +639,7 @@ function PlayerCellEditor({
                 className="text-foreground transition-colors duration-fast ease-brand hover:text-accent"
                 title={`Click to edit ${side}`}
               >
-                {p.name || '—'}
+                {p.name || '–'}
                 {showSchool ? (
                   <span className="ml-1 text-2xs text-muted-foreground">{groupName}</span>
                 ) : null}

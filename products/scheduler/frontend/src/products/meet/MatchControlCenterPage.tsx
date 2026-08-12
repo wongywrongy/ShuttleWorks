@@ -539,7 +539,7 @@ export function MatchControlCenterPage() {
               size="xs"
               variant="toolbar"
               onClick={() => setDirectorOpen(true)}
-              title="Director tools — delays, breaks, blackouts"
+              title="Director tools: delays, breaks, blackouts"
             >
               <GearSix aria-hidden="true" />
               Director

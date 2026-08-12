@@ -344,7 +344,7 @@ describe('BracketRosterTab — multi-event entry', () => {
     const panel = openPanelFor('p-dana-liu');
     fireEvent.click(within(panel).getByTestId('events-category-singles'));
     expect(within(panel).getByTestId('event-locked-WS')).toHaveTextContent(
-      /locked — draw generated/,
+      /locked: draw generated/,
     );
     expect(within(panel).queryByTestId('event-toggle-WS')).not.toBeInTheDocument();
     expect(mockEventUpsert).not.toHaveBeenCalled();

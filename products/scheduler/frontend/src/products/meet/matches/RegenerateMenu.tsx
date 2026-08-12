@@ -134,7 +134,7 @@ export function RegenerateMenu() {
 
   const infoLine = !canGenerate
     ? ranks.length === 0
-      ? 'No events configured — set them in Configuration.'
+      ? 'No events configured. Set them in Configuration.'
       : groups.length < 2
         ? 'Need at least 2 schools to generate matches.'
         : 'No feasible pairings with the current roster.'
@@ -170,7 +170,7 @@ export function RegenerateMenu() {
           {incompletePairs.length > 0 ? (
             <p className="mt-2 border-l-2 border-status-warning/50 bg-status-warning/5 px-2 py-1 text-xs text-status-warning">
               <span className="font-medium">Skipping incomplete doubles:</span>{' '}
-              {incompletePairs.join(', ')} — assign both partners in Roster.
+              {incompletePairs.join(', ')}: assign both partners in Roster.
             </p>
           ) : null}
           <div className="mt-3 flex items-center justify-end">

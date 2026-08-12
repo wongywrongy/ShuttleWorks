@@ -335,7 +335,7 @@ export function BracketDrawsTab() {
                         ]}
                       />
                     ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <span className="text-xs text-muted-foreground">–</span>
                     )}
                   </span>
                   <span role="cell" className="flex w-28 shrink-0 justify-end">
