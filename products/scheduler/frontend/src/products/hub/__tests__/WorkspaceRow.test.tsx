@@ -86,6 +86,22 @@ describe('WorkspaceRow', () => {
     expect(text.indexOf('Spring')).toBeLessThan(text.indexOf('Jul 1'));
   });
 
+  // 2026-08-11 design audit, T4: the menu was revealed only by
+  // `group-hover:opacity-100`. `:hover` never fires on a touch device, so on
+  // a tablet the row's only route to Settings and Delete did not exist — at
+  // any width. jsdom applies no stylesheet, so the rest state is asserted on
+  // the class that carries it; what is being pinned is that the resting
+  // opacity is not zero.
+  it('the overflow menu is visible at rest, not only on hover', () => {
+    render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} onDelete={noop} />,
+    );
+    const trigger = screen.getByRole('button', { name: /more actions/i });
+    const wrapper = trigger.closest('span[class]')!;
+    expect(wrapper.className).not.toMatch(/\bopacity-0\b/);
+    expect(wrapper.className).toMatch(/\bopacity-\d+\b/);
+  });
+
   it('Delete lives in the overflow menu, not inline', () => {
     const onDelete = vi.fn();
     render(

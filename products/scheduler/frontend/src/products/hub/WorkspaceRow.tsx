@@ -197,7 +197,12 @@ export function WorkspaceRow({
         </span>
       </button>
 
-      <span className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      {/* Quiet at rest, not absent. `opacity-0` + `group-hover` made the only
+          route to Settings and Delete a hover — and `:hover` never fires on a
+          touch device, so on the tablet the owner runs this menu was
+          unreachable at every width. Keyboard always reached it (opacity
+          doesn't leave the tab order); touch had nothing. */}
+      <span className="opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <OverflowMenu items={overflowItems} />
       </span>
     </div>
