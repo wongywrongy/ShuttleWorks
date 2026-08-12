@@ -16,7 +16,8 @@ export function BracketProduct() {
     <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto bg-card">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
-          <div key="bracket" className="h-full animate-block-in">
+          {/* Hard cut, matching MeetProduct — see the note there. */}
+          <div key="bracket" className="h-full">
             <BracketTab />
           </div>
         </Suspense>

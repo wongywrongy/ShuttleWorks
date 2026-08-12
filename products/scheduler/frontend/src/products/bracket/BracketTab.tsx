@@ -251,16 +251,17 @@ function BracketTabBody() {
           message={error}
         />
       )}
-      {/* Re-key on the active view so each sub-tab switch re-runs the
-          ``animate-block-in`` entry — matches the meet's per-tab
-          remount. Keyed on ``view`` (not ``activeTab``) so the
-          normalization transient — one render where ``activeTab`` is
-          still a stale non-bracket id — doesn't cause a spurious
-          remount. ``BracketViewHeader`` sits OUTSIDE this re-keyed
-          div, so the event selector persists across switches. */}
+      {/* Re-key on the active view so each sub-tab switch remounts clean —
+          matches the meet's per-tab remount. The swap is a HARD CUT: sub-tab
+          clicks are MOTION.md §2's High frequency tier, and §6 names this
+          case. Keyed on ``view`` (not ``activeTab``) so the normalization
+          transient — one render where ``activeTab`` is still a stale
+          non-bracket id — doesn't cause a spurious remount.
+          ``BracketViewHeader`` sits OUTSIDE this re-keyed div, so the event
+          selector persists across switches. */}
       <div
         key={view}
-        className="min-h-0 flex-1 overflow-auto animate-block-in"
+        className="min-h-0 flex-1 overflow-auto"
       >
         {view === 'setup' && (
           <ConfigSurface

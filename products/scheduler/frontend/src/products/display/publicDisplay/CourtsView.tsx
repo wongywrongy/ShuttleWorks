@@ -237,11 +237,12 @@ function CourtCard({
 
   return (
     <div
-      className={`overflow-hidden rounded-sm border border-border animate-block-in ${cardBgClass}`}
+      className={`overflow-hidden rounded-sm border border-border sw-float-in ${cardBgClass}`}
       style={{
         height: cardHeightPx,
         // Staggered entry — each tile arrives 60 ms after the previous
-        // so the grid doesn't flash on every poll.
+        // so the grid doesn't flash on every poll. (Cards are keyed by
+        // courtId, so this fires on arrival, not on every poll.)
         animationDelay: `${idx * 60}ms`,
       }}
     >

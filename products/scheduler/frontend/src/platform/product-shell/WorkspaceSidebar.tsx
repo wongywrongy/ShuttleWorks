@@ -33,6 +33,10 @@ interface WorkspaceSidebarProps {
   modulesUnknown?: boolean;
   onRetryModules?: () => void;
   activeTab: AppTab;
+  /** Called after a nav item navigates. The off-canvas host passes a close
+   *  handler — a drawer that stays open over the surface it just navigated to
+   *  hides the thing it was asked for. */
+  onNavigate?: () => void;
 }
 
 export function WorkspaceSidebar({
@@ -42,6 +46,7 @@ export function WorkspaceSidebar({
   modulesUnknown,
   onRetryModules,
   activeTab,
+  onNavigate,
 }: WorkspaceSidebarProps) {
   const navigate = useNavigate();
   // Stable key so the memo doesn't recompute on every render (Set identity).
@@ -67,8 +72,10 @@ export function WorkspaceSidebar({
     }
   }, [activeSection]);
 
-  const go = (segment: AppTab) =>
+  const go = (segment: AppTab) => {
     navigate(`/tournaments/${tid}/${segment}`, { replace: true });
+    onNavigate?.();
+  };
 
   const toggle = (id: string) =>
     setOpenSections((prev) => {
@@ -168,10 +175,10 @@ export function WorkspaceSidebar({
               {open ? (
                 // Category guide-line: a single left border shows the items
                 // belong to this section (replaces per-item icons).
-                // `sw-rail-expand`: sub-pages open with height + fade — the
-                // container mounts on toggle, so the animation fires exactly
-                // once per open and never on unrelated re-renders.
-                <div className="sw-rail-expand ml-3 mt-0.5 space-y-0.5 border-l border-rule-soft">
+                // No open animation: a nav disclosure is high-frequency
+                // during setup (MOTION.md §2) and `sw-rail-expand` animated
+                // max-height, which §10.2 forbids outright.
+                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-rule-soft">
                   {s.items.map((it) => (
                     <NavItem key={it.segment} item={it} nested />
                   ))}

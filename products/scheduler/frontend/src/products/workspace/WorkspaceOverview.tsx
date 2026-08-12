@@ -81,7 +81,7 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
   return (
     <div
       data-testid="workspace-overview"
-      className="sw-float-in mx-auto w-full max-w-[1180px] px-8 py-6"
+      className="mx-auto w-full max-w-[1180px] px-8 py-6"
     >
       <OverviewHeader summary={summary} />
 
