@@ -290,7 +290,7 @@ export function RunLiveBoard({
 
   if (chips.length === 0) {
     return (
-      <div data-testid="run-live-board" data-mode="live" className="w-full border-b border-border">
+      <div data-testid="run-live-board" data-mode="live" className="w-full shrink-0 border-b border-border">
         <p
           data-testid="run-board-empty"
           className="px-4 py-6 text-center text-2xs text-muted-foreground"
@@ -302,7 +302,7 @@ export function RunLiveBoard({
   }
 
   return (
-    <div data-testid="run-live-board" data-mode="live" className="w-full overflow-x-auto border-b border-border">
+    <div data-testid="run-live-board" data-mode="live" className="w-full shrink-0 overflow-x-auto border-b border-border">
       <GanttTimeline
         courts={courts}
         minSlot={minSlot}

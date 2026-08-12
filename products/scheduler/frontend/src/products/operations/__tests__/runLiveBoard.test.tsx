@@ -153,4 +153,34 @@ describe('RunLiveBoard', () => {
     expect(screen.getByTestId('run-board-empty')).toBeInTheDocument();
     expect(screen.queryByTestId('run-card-meet:q')).toBeNull();
   });
+
+  // Pins the flex-shrink CONTRACT, not a rendered height: jsdom does no
+  // layout, so a collapsed-height regression (RunSurface's flex column
+  // starving the board down to its automatic min-size — CSS Flexbox §4.5 —
+  // once overflow-x-auto forces overflow-y to `auto` too) can't be caught by
+  // measuring pixels here. `shrink-0` is what stops flexbox taking space
+  // from this box first; UnifiedOpsBoard's structurally identical wrapper
+  // (the Plan board) already carries it. Both RunLiveBoard root variants
+  // (empty-state and populated) must match that precedent.
+  it('the board root carries shrink-0 so the Run flex column cannot collapse it', () => {
+    const { rerender } = render(
+      <RunLiveBoard
+        blocks={[blk({ id: 'q', court: undefined, slot: undefined })]}
+        courtCount={2}
+        currentSlot={0}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('run-live-board').className.split(' ')).toContain('shrink-0');
+
+    rerender(
+      <RunLiveBoard
+        blocks={[blk({ id: 'x', court: 1, slot: 0, status: 'scheduled' })]}
+        courtCount={1}
+        currentSlot={0}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('run-live-board').className.split(' ')).toContain('shrink-0');
+  });
 });
