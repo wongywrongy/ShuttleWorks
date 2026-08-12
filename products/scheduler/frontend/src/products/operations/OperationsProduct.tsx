@@ -22,6 +22,7 @@ import { useUiStore } from '../../store/uiStore';
 import { useCommandQueue } from '../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { useSchedule } from '../../hooks/useSchedule';
+import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { useMatchStateSync } from '../../hooks/useMatchStateSync';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
@@ -54,6 +55,11 @@ const commitBtn =
   `${schedBtnBase} bg-accent text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
 const solveBtn =
   `${schedBtnBase} border border-border-control bg-card text-foreground hover:bg-muted/40`;
+// Armed re-solve. Destructive tone, not the commit glow: the operator is one
+// press from throwing the plan away, and it must not look like the button
+// beside it that keeps the plan.
+const solveArmedBtn =
+  `${schedBtnBase} border border-destructive bg-destructive/10 text-destructive`;
 
 export function OperationsProduct() {
   const tid = useTournamentId();
@@ -108,6 +114,9 @@ function OperationsBody() {
     () => bracketOccupiedWindows(data),
     [data],
   );
+  // Armed because a re-solve replaces a plan the operator may have adjusted
+  // by hand. Declared after bracketWindows: it closes over it.
+  const reSolve = useConfirmClick(() => void generateSchedule(bracketWindows));
   // Bracket play-units ready to schedule: both sides known, no court yet, no
   // result, all feeders resolved (mirrors the single-engine header count).
   const schedulableCount = useMemo(() => {
@@ -229,8 +238,16 @@ function OperationsBody() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className={solveBtn}
-              onClick={() => void generateSchedule(bracketWindows)}
+              className={reSolve.armed ? solveArmedBtn : solveBtn}
+              onClick={() => {
+                // Only a RE-solve arms. Solving for the first time destroys
+                // nothing, and arming it would teach the operator to click
+                // twice out of habit, which is how an arm stops meaning
+                // anything by the time it guards something.
+                if (schedule) reSolve.press();
+                else void generateSchedule(bracketWindows);
+              }}
+              onBlur={reSolve.reset}
               disabled={generating}
               data-testid="ops-generate-meet"
               title={
@@ -239,7 +256,13 @@ function OperationsBody() {
                   : 'Solve the meet and place its matches'
               }
             >
-              {generating ? 'Generating…' : schedule ? 'Re-solve meet' : 'Generate meet'}
+              {generating
+                ? 'Generating…'
+                : reSolve.armed
+                  ? 'Press again to replace the plan'
+                  : schedule
+                    ? 'Re-solve meet'
+                    : 'Generate meet'}
             </button>
             {schedulableCount > 0 ? (
               <button

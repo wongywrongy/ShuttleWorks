@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { DotsThree } from '@phosphor-icons/react';
 
@@ -22,6 +23,15 @@ export interface OverflowItem {
    *  handle that itself. */
   disabled?: boolean;
   disabledReason?: string;
+  /** Draw a rule ABOVE this item, separating it from the group before it.
+   *
+   *  For the case this exists to answer: a destructive item sitting flush
+   *  against a routine one. The Hub row's menu put `Settings` and `Delete`
+   *  as adjacent 32px targets with no gap and no rule, so a 32px slip took
+   *  the operator from one to the other. A rule does not make the slip
+   *  impossible; it makes the boundary visible, which is what a menu owes
+   *  before its last item deletes a workspace. */
+  separator?: boolean;
 }
 
 /** A compact accessible "…" action menu (Headless UI Menu v2). Anchored to the
@@ -44,7 +54,14 @@ export function OverflowMenu({ label, items }: { label?: string; items: Overflow
           // Deliberately NOT `disabled` on MenuItem: that drops the item
           // out of keyboard navigation entirely, so the reason it exists
           // never reaches anyone navigating by keyboard.
-          <MenuItem key={item.key}>
+          <Fragment key={item.key}>
+          {item.separator ? (
+            // Presentational: the grouping is already carried by the rule
+            // being visible, and a separator role here would add an
+            // announcement without adding information.
+            <div aria-hidden className="my-1 border-t border-border" />
+          ) : null}
+          <MenuItem>
             <button
               type="button"
               data-testid={item.testId}
@@ -83,6 +100,7 @@ export function OverflowMenu({ label, items }: { label?: string; items: Overflow
               {item.label}
             </button>
           </MenuItem>
+          </Fragment>
         ))}
       </MenuItems>
     </Menu>

@@ -163,7 +163,7 @@ export function WorkspaceRow({
   const overflowItems: OverflowItem[] = [
     { key: 'settings', label: 'Settings', onSelect: onSettings },
     ...(onDelete
-      ? [{ key: 'delete', label: 'Delete', onSelect: onDelete, destructive: true, testId: 'overflow-delete' } as OverflowItem]
+      ? [{ key: 'delete', label: 'Delete', onSelect: onDelete, destructive: true, separator: true, testId: 'overflow-delete' } as OverflowItem]
       : []),
   ];
 

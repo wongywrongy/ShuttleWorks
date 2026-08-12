@@ -77,8 +77,11 @@ vi.mock('../../../hooks/useBracketResultQueue', () => ({
   useBracketResultQueue: () => ({ submit: vi.fn() }),
 }));
 
+// Stable handle: the factory used to mint a fresh vi.fn() per call, so a test
+// could never observe whether a click reached it.
+const mockGenerateSchedule = vi.hoisted(() => vi.fn());
 vi.mock('../../../hooks/useSchedule', () => ({
-  useSchedule: () => ({ generateSchedule: vi.fn(), loading: false }),
+  useSchedule: () => ({ generateSchedule: mockGenerateSchedule, loading: false }),
 }));
 
 vi.mock('../../../hooks/useCurrentSlot', () => ({
@@ -220,5 +223,38 @@ describe('OperationsProduct — the Plan header does not pair discard with commi
     // group before the commit button.
     expect(resolve.nextElementSibling).toBe(commit.previousElementSibling);
     expect(commit.previousElementSibling?.className).toMatch(/w-px/);
+  });
+});
+
+// A re-solve replaces a plan the operator may have adjusted by hand, so it
+// arms. Solving for the FIRST time destroys nothing and must not arm: an arm
+// the operator learns to double-click through has stopped guarding anything
+// by the time it guards something real.
+describe('OperationsProduct — re-solve arms, first solve does not', () => {
+  it('does not re-solve on the first press: it arms and names the consequence', () => {
+    mockTab.value = 'schedule';
+    mockSchedule.value = { assignments: [] };
+    render(<OperationsProduct />);
+
+    const btn = screen.getByTestId('ops-generate-meet');
+    expect(btn).toHaveTextContent('Re-solve meet');
+
+    fireEvent.click(btn);
+    expect(mockGenerateSchedule).not.toHaveBeenCalled();
+    expect(btn).toHaveTextContent('Press again to replace the plan');
+
+    fireEvent.click(btn);
+    expect(mockGenerateSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('solves immediately when there is no plan to destroy', () => {
+    mockTab.value = 'schedule';
+    mockSchedule.value = null;
+    render(<OperationsProduct />);
+
+    const btn = screen.getByTestId('ops-generate-meet');
+    expect(btn).toHaveTextContent('Generate meet');
+    fireEvent.click(btn);
+    expect(mockGenerateSchedule).toHaveBeenCalledTimes(1);
   });
 });
