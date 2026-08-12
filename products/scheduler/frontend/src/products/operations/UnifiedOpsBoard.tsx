@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
+  KeyboardSensor,
   MouseSensor,
   TouchSensor,
   useSensor,
@@ -210,9 +211,15 @@ export function UnifiedOpsBoard({
     [meet.config, meet.schedule, meet.matches, players, bracketApi],
   );
 
+  // KeyboardSensor is not optional: without it, drag-to-reschedule — the
+  // planning verb of this whole surface — is pointer-only, so a keyboard
+  // operator can inspect the plan but never change it (WCAG 2.1.1). dnd-kit
+  // ships it; Space/Enter picks a block up, arrows move it over the same
+  // droppable cells the pointer targets, Space/Enter drops, Escape cancels.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor),
   );
 
   const onDragStart = useCallback((e: DragStartEvent) => setActiveKey(String(e.active.id).slice('block:'.length)), []);
