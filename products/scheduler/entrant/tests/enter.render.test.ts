@@ -348,6 +348,34 @@ describe('signing in says so on the page the browser lands on', () => {
     }
   });
 
+  it('sends the sign-UP handoff back to this tournament too (E3)', async () => {
+    // The defect the demo walk found: "Sign in" carried a `next` and "create
+    // one" was a bare `/e/signup`, so signing up lost the tournament the
+    // entrant was in the middle of entering. The slug travels in the path —
+    // one segment, no free-form destination — and `signup.tsx` composes the
+    // return URL from it under the same allowlist.
+    const html = await render();
+
+    expect(html).toContain('href="/e/signup/spring-open"');
+  });
+
+  it('confirms a completed sign-up on the /created variant and nowhere else', async () => {
+    // Where `POST /e/account/signup`'s 303 now lands. Same argument as
+    // `/signed-in`: the backend redirects to `next` only after the sign-up
+    // completed, so arriving here is an OUTCOME, not an identity — and the
+    // copy grants nothing, because this tier cannot read a session either
+    // way. The account exists; the entrant still has to sign in, and the
+    // handoff beside it already carries the destination.
+    const created = await render(PAGE, '/e/spring-open/enter/created');
+    const plain = await render();
+
+    expect(created).toContain('Your entrant account is ready');
+    expect(plain).not.toContain('Your entrant account is ready');
+    expect(created).toContain('/e/login?next=/e/spring-open/enter/signed-in');
+    // Non-vacuity: it is the enter page, not an error boundary.
+    expect(created).toContain('action="/e/api/submit/spring-open"');
+  });
+
   it('keeps both variants of the workflow page out of search results', async () => {
     // The /signed-in variant says "You are signed in" to a crawler that is
     // not; the plain form page's canonical, linkable face is /e/{slug}. Both

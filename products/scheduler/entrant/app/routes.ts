@@ -34,6 +34,21 @@ export default [
   // Static, so it ranks above the `:slug` route below and a workspace can
   // never be called "signup".
   route('signup', 'routes/signup.tsx'),
+  // The same page, told which tournament the entrant came from (E3).
+  //
+  // The sign-in link on `/e/{slug}/enter` has always carried a `next`; the
+  // sign-up link beside it was a bare `/e/signup`, so creating an account
+  // dropped the entrant on a generic page with nothing pointing back at the
+  // tournament they were half-way through entering.
+  //
+  // A PATH SEGMENT, not a `?next=`: what travels is a slug, and the
+  // destination URL is composed from it by code in `signup.tsx` and then
+  // validated by `safeNext` — the same allowlist `login.tsx` uses and the
+  // byte-identical twin of the backend's `_SAFE_NEXT`, which validates it
+  // again when the form posts. So there is no free-form destination for a
+  // crafted link to carry, and the constant the field used to hold is still
+  // what a non-slug lands on.
+  route('signup/:slug', 'routes/signup.tsx', { id: 'signup-for' }),
   // The login PAGE, node-owned for exactly the reason above: `/e/account/login`
   // is FastAPI's POST and a node GET there is a 405 in production and fine in
   // dev, which is the worst pair. Static, so it ranks above `:slug`.
@@ -89,6 +104,16 @@ export default [
   // grants nothing; who may submit is decided at the write. The quote 307's
   // `?signedIn=1` presence flag re-targets here too (`_echo_redirect`).
   route(':slug/enter/signed-in', 'routes/enter.tsx', { id: 'enter-signed-in' }),
+  // And once more, at the URL a completed SIGN-UP lands on (E3). `POST
+  // /e/account/signup` answers 303 to the form's `next` on both of its
+  // branches — created and already-registered — so arriving here says a
+  // sign-up finished and never says whether the address was new; the
+  // enumeration property the backend pays an Argon2 hash to keep is
+  // untouched. Same posture as `/signed-in`: an outcome, not an identity,
+  // granting nothing. What it buys is that the entrant lands back on the
+  // tournament they were entering, one click from a sign-in that returns
+  // here again.
+  route(':slug/enter/created', 'routes/enter.tsx', { id: 'enter-created' }),
   // Last, and dynamic: React Router ranks the static segments above it, so
   // /e/health stays the health route rather than a workspace called "health".
   route(':slug', 'routes/tournament.tsx'),

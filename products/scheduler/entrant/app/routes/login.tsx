@@ -54,6 +54,7 @@ import { data } from 'react-router';
 
 import { PlayShell } from '../components/PlayShell';
 import { FORM_FIELD } from '../lib/formField';
+import { safeNext } from '../lib/nextTarget';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import type { Route } from './+types/login';
 
@@ -78,34 +79,6 @@ import type { Route } from './+types/login';
  * page's `/signed-in` variant takes.
  */
 const DEFAULT_NEXT = '/e/login/signed-in';
-
-/**
- * The one prefix the entrant tier owns — **byte-identical to `_SAFE_NEXT` in
- * `api/entrants.py`**, deliberately, because the two validate the same value
- * for the same reason at two tiers.
- *
- * Anchored, so `//host` and `https://host` both fail. Matching an allowlist
- * rather than stripping is the argued choice: a stripper has to anticipate
- * every encoding and a matcher does not.
- */
-const SAFE_NEXT = /^\/e\/[A-Za-z0-9/_.~-]*$/;
-
-/**
- * The post-login destination, or the fallback.
- *
- * An open redirect on a login route is a phishing primitive: the victim types
- * real credentials on the real origin and is then handed to an attacker's page
- * carrying whatever the link said. The backend refuses a crafted value; this
- * page renders one into the markup, so it refuses one too rather than trusting
- * that the far end will. `..` is excluded separately because a browser
- * normalises `/e/../admin` to `/admin` before the request is ever made, so the
- * traversal never even reaches the pattern.
- */
-function safeNext(raw: string | null): string {
-  const value = raw ?? '';
-  if (value.includes('..') || !SAFE_NEXT.test(value)) return DEFAULT_NEXT;
-  return value;
-}
 
 export interface LoginLoaderData {
   /** The pre-session double-submit token, minted together with the nonce set
@@ -185,7 +158,7 @@ export async function loader({ request }: { request: Request }) {
   const url = new URL(request.url);
   const payload: LoginLoaderData = {
     formCsrf: csrf.token,
-    next: safeNext(url.searchParams.get('next')),
+    next: safeNext(url.searchParams.get('next'), DEFAULT_NEXT),
     justSignedUp: url.pathname.endsWith(SIGNED_UP_SUFFIX),
     signInFailed: url.pathname.endsWith(FAILED_SUFFIX),
     justSignedIn: url.pathname.endsWith(SIGNED_IN_SUFFIX),

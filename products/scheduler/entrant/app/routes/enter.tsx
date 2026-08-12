@@ -59,16 +59,22 @@ export interface EnterLoaderData {
   /** The quote round trip / refusal echo, query-string half. Nothing in it
    * is trusted — see `parseEcho`. */
   echo: FormEcho;
-  /** Which of this module's two routes matched (E3). Not an identity claim
-   * and not a capability: the URL is typeable, the banner grants nothing,
-   * and the write is gated at the write. */
+  /** Which of this module's routes matched (E3). Not an identity claim and
+   * not a capability: the URL is typeable, the banner grants nothing, and
+   * the write is gated at the write. */
   justSignedIn: boolean;
+  /** The `/created` variant — where `POST /e/account/signup`'s 303 lands when
+   * the sign-up started from this tournament. Same argument as
+   * `justSignedIn`: an outcome, not an identity. It says the ACCOUNT exists,
+   * never that this reader is signed in. */
+  justSignedUp: boolean;
   /** SSR render instant, ms — `now` stays a parameter below the loader. */
   nowMs: number;
 }
 
-/** The suffix of the second path bound to this module (`app/routes.ts`). */
+/** The suffixes of the other paths bound to this module (`app/routes.ts`). */
 const SIGNED_IN_SUFFIX = '/signed-in';
+const SIGNED_UP_SUFFIX = '/created';
 
 /** The uniform 404 — an unknown slug and a closed page answer identically,
  * constructed fresh so the causes stay byte-identical here too. */
@@ -106,6 +112,7 @@ export async function loader({
     formCsrf: csrf.token,
     echo: parseEcho(url.searchParams),
     justSignedIn: url.pathname.endsWith(SIGNED_IN_SUFFIX),
+    justSignedUp: url.pathname.endsWith(SIGNED_UP_SUFFIX),
     nowMs: Date.now(),
   };
   return data(payload, csrf.responseInit);
@@ -317,7 +324,7 @@ function PlayerBlock({
 }
 
 export default function Enter({ loaderData, actionData }: Route.ComponentProps) {
-  const { page, idempotencyKey, formCsrf, justSignedIn, nowMs } = loaderData;
+  const { page, idempotencyKey, formCsrf, justSignedIn, justSignedUp, nowMs } = loaderData;
   // The re-posted body wins when there is one: on the 307 landing the loader
   // sees only the query string, and the entrant's own typing arrives in the
   // POST the action read. Same parser both times.
@@ -328,7 +335,10 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
   const chip = chipState(page.events, now);
   const deadline = toDiscoveryCard(page).entriesCloseAt;
   const slug = page.page.slug;
-  const selfPath = `/e/${encodeURIComponent(slug)}/enter${justSignedIn ? SIGNED_IN_SUFFIX : ''}`;
+  // Whichever variant is rendering, the add-player round trip lands back on
+  // it — a plain `/enter` would drop the outcome the URL states.
+  const variant = justSignedIn ? SIGNED_IN_SUFFIX : justSignedUp ? SIGNED_UP_SUFFIX : '';
+  const selfPath = `/e/${encodeURIComponent(slug)}/enter${variant}`;
   const openEvents = page.events.filter((event) => event.isOpen);
   const askBirthYear = openEvents.some((event) => event.ageBracketed);
   const cap = page.policy.maxEventsPerPerson;
@@ -398,18 +408,40 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             &ldquo;Submit entry&rdquo;.
           </Notice>
         ) : (
-          <Notice tone="info">
-            Submitting needs an entrant account.{' '}
+          <Notice tone={justSignedUp ? 'success' : 'info'}>
+            {/* E3: the sign-up outcome, stated on the page the entrant
+                started from. Landing back on the plain form after creating an
+                account said nothing at all, which is indistinguishable from a
+                form that had quietly failed. The copy is true on BOTH of the
+                backend's branches — a new account is ready, and one that
+                already existed is ready too — so it is not the enumeration
+                oracle the uniform 303 exists to avoid, and it claims no
+                session: this tier cannot read one. */}
+            {justSignedUp
+              ? 'Your entrant account is ready.'
+              : 'Submitting needs an entrant account.'}{' '}
             <a
               href={`/e/login?next=/e/${encodeURIComponent(slug)}/enter/signed-in`}
               className="underline underline-offset-4"
             >
               Sign in
-            </a>{' '}
-            or{' '}
-            <a href="/e/signup" className="underline underline-offset-4">
-              create one
-            </a>{' '}
+            </a>
+            {justSignedUp ? null : (
+              <>
+                {' '}
+                or{' '}
+                {/* The slug rides in the PATH, so this hop keeps the
+                    tournament the entrant is half-way through entering.
+                    `signup.tsx` composes the return URL from it, under the
+                    same allowlist the sign-in link's `next` goes through. */}
+                <a
+                  href={`/e/signup/${encodeURIComponent(slug)}`}
+                  className="underline underline-offset-4"
+                >
+                  create one
+                </a>
+              </>
+            )}{' '}
             — you&rsquo;ll come straight back here. Until you are signed in, nothing
             is recorded.
           </Notice>

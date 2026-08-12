@@ -168,7 +168,13 @@ describe('the account pages are reachable by link', () => {
     // failed sign-in 401s and never follows `next`, so arriving there is the
     // one thing this tier can say truthfully about an act it cannot observe.
     expect(hrefs(html)).toContain('/e/login?next=/e/spring-open/enter/signed-in');
-    expect(hrefs(html)).toContain('/e/signup');
+    // **E3: `/e/signup/{slug}`, not the bare `/e/signup` this used to pin.**
+    // The bare link was the defect — the sign-in hop kept the tournament and
+    // the sign-up hop dropped it, so creating an account stranded the entrant
+    // on a generic page. The slug travels as a path segment (no free-form
+    // destination for a crafted link to carry) and `signup.tsx` composes the
+    // return URL from it under the same allowlist.
+    expect(hrefs(html)).toContain('/e/signup/spring-open');
   });
 
   it.each([['login'], ['signup'], ['entry']] as const)(

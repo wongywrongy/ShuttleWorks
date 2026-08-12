@@ -330,6 +330,54 @@ describe('signup is not an account-enumeration oracle', () => {
     expect(typeof route.default).toBe('function');
   });
 
+  it('carries the destination the entrant arrived with, without free text (E3)', async () => {
+    // The journey the demo walk broke: on `/e/{slug}/enter`, "Sign in"
+    // carried a `next` and "create one" did not, so signing up dropped the
+    // entrant on a generic page with nothing linking back to the tournament
+    // they were entering.
+    //
+    // What travels is a SLUG in the path — one segment, no free-form
+    // destination — and this page composes the URL from it. The composed
+    // value then goes through `safeNext`, the same allowlist `login.tsx`
+    // validates against and the byte-identical twin of the backend's
+    // `_SAFE_NEXT`, so the destination is checked at both tiers exactly as
+    // the sign-in path's already is.
+    const html = await render('/e/signup/spring-open');
+    const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(html)?.[1];
+
+    expect(next).toBe('/e/spring-open/enter/created');
+    // Same property the constant-`next` control below asserts, param-aware:
+    // whatever this page posts, node serves it as a GET.
+    const served = nodePaths(routes as RouteConfigEntry[]).map(
+      (path) => new RegExp(`^${path.replace(/:[A-Za-z][A-Za-z0-9]*/g, '[^/]+')}$`),
+    );
+    expect(served.length).toBeGreaterThan(0);
+    expect(served.some((pattern) => pattern.test(next!))).toBe(true);
+    // …and the way back to a sign-in keeps the same journey.
+    expect(html).toContain('href="/e/login?next=/e/spring-open/enter/signed-in"');
+  });
+
+  it('discards a crafted destination for the constant (E3)', async () => {
+    // A slug is one path segment and is percent-encoded before it is
+    // composed, so anything that is not slug-shaped stops being a path this
+    // tier owns and `safeNext` hands back the fallback. The open-redirect
+    // property is the reason the destination was a hard-coded constant in the
+    // first place, and it is unchanged: nothing an attacker writes reaches
+    // the `next` field.
+    // A bare `..` is deliberately NOT in this list: a URL containing one is
+    // normalised away before the request is ever made (`/e/signup/..` is
+    // `/e/`), which is the same reason `safeNext` excludes it separately
+    // rather than trusting the pattern. The encoded form below is the one
+    // that can actually arrive.
+    for (const crafted of ['%2F%2Fevil.example', 'https:%2F%2Fevil.example', '%2e%2e%2fadmin']) {
+      const html = await render(`/e/signup/${crafted}`);
+      const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(html)?.[1];
+
+      expect(next).toBe('/e/login/created');
+      expect(html).not.toContain('evil.example');
+    }
+  });
+
   it('takes no argument through which an address could reach the loader', async () => {
     // `mintFormCsrf.length === 0` is pinned for the same reason in
     // `formCsrf.server.test.ts`: a function with no parameters is

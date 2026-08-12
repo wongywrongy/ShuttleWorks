@@ -55,6 +55,7 @@ import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { apiGet } from '../lib/apiFetch.server';
 import { FORM_FIELD } from '../lib/formField';
+import { safeNext } from '../lib/nextTarget';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import type { Route } from './+types/signup';
 
@@ -122,8 +123,42 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
   return loaderHeaders;
 }
 
-export default function SignupPage({ loaderData }: Route.ComponentProps) {
+/**
+ * Where a completed sign-up lands when this page was reached without a
+ * tournament — the login page's "your account is ready" variant, which is
+ * what the hidden field held unconditionally before E3.
+ */
+const ACCOUNT_READY_PAGE = '/e/login/created';
+
+/**
+ * The entry page this sign-up came from, or `''` (E3).
+ *
+ * **Composed from one path segment, never taken as a destination.** The link
+ * that brings an entrant here carries a slug, not a URL, so there is no
+ * free-form `next` for a crafted link to smuggle in; the slug is
+ * percent-encoded and the result is then matched against `safeNext` — the
+ * same allowlist `login.tsx` validates its own `next` with, and the
+ * byte-identical twin of `_SAFE_NEXT`, which `next_target` applies again when
+ * the form posts. Anything that is not slug-shaped stops being a path this
+ * tier owns and falls back, so the destination cannot carry an
+ * attacker-chosen value — the property the hard-coded constant existed for.
+ *
+ * It is derived in the COMPONENT, from route params, so the loader keeps its
+ * zero-arity signature: the cheapest possible proof that no email address can
+ * reach it, and the control `tests/signup.test.ts` pins.
+ */
+function entryPathFor(slug: string | undefined): string {
+  return slug ? safeNext(`/e/${encodeURIComponent(slug)}/enter`, '') : '';
+}
+
+export default function SignupPage({ loaderData, params }: Route.ComponentProps) {
   const { turnstileSiteKey, formCsrf } = loaderData;
+  // Both suffixes are literals from this file, appended to an already
+  // validated path, so composing them cannot invalidate it.
+  const entryPath = entryPathFor(params.slug);
+  const next = entryPath === '' ? ACCOUNT_READY_PAGE : `${entryPath}/created`;
+  const signInHref =
+    entryPath === '' ? '/e/login' : `/e/login?next=${entryPath}/signed-in`;
 
   return (
     // E1: the page system, not a bare column. Brief §4 — "auth pages as small
@@ -189,8 +224,15 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
                 sign-up completed, because the backend redirects here on
                 success and answers 401/422 without redirecting otherwise.
                 Landing on the bare page said nothing, so a completed sign-up
-                and a silently failed one rendered the same document. */}
-            <input type="hidden" name="next" value="/e/login/created" />
+                and a silently failed one rendered the same document.
+
+                **And now the tournament, when there is one (E3).** The value
+                is composed above from a route param and validated against
+                `safeNext`; without one it is still the constant. Either way
+                it names a node-owned GET, which is what keeps the 303 off a
+                405 — `tests/signup.test.ts` derives that from the route
+                table rather than listing the URL. */}
+            <input type="hidden" name="next" value={next} />
 
             <TextField
               id="signup-email"
@@ -275,7 +317,7 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
                 `tests/login.test.ts` reads every href in this document and
                 fails on any under a backend prefix. */}
             Already have an account?{' '}
-            <a className="text-accent underline underline-offset-4" href="/e/login">
+            <a className="text-accent underline underline-offset-4" href={signInHref}>
               Sign in
             </a>
             .
