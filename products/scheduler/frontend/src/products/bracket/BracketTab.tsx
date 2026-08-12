@@ -115,6 +115,14 @@ function BracketTabBody() {
     }
   }, [data, eventId, searchParams]);
 
+  // The effect above settles `eventId` one render AFTER `data` lands, so the
+  // event Select would see '' first — which it maps to `undefined`, i.e. an
+  // uncontrolled Radix root that then flips to controlled (React warns), and
+  // the Draw canvas flashes its "No draw generated" empty state. Resolve the
+  // id at render; the state stays the operator's choice once it exists.
+  const activeEventId =
+    data?.events.find((e) => e.id === eventId)?.id ?? data?.events[0]?.id ?? '';
+
   const [selectedPlayUnitId, setSelectedPlayUnitId] = useState<string | null>(null);
 
   // Drop the selection when the selected play unit is GONE (regenerate, reset).
@@ -229,7 +237,7 @@ function BracketTabBody() {
         <BracketViewHeader
           view={view}
           data={data}
-          eventId={eventId}
+          eventId={activeEventId}
           onEventId={setEventId}
           onRefresh={refresh}
           drawLayout={drawLayout}
@@ -306,7 +314,7 @@ function BracketTabBody() {
           <div className="h-full overflow-hidden">
             <DrawView
               data={data}
-              eventId={eventId}
+              eventId={activeEventId}
               onChange={setData}
               refresh={refresh}
               layoutMode={drawLayout}
