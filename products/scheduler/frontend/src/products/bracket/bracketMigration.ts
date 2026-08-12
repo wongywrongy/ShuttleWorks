@@ -73,3 +73,43 @@ export function reconcileBracketRoster(
   }
   return Array.from(byId.values());
 }
+
+/**
+ * Repair roster names an EARLIER run of this migration got wrong.
+ *
+ * `reconcileBracketRoster` runs once per bracket and its output is PERSISTED
+ * (`bracketPlayers` on the tournament blob, gated by `bracketRosterMigrated`),
+ * so the version of it that resolved a team member to its raw slug did not
+ * leave a display bug behind — it left DATA behind, frozen against every
+ * later fix. That is why the roster list, the draw participant picker and the
+ * match detail panel still read `cormac-delahunt` after the fix landed while
+ * the matches ROW read "Cormac Delahunt / Jae Hyun Choi": the row resolves
+ * names from the live snapshot's participants, and the other three all read
+ * the stored roster. One seam, one repair.
+ *
+ * `name === id` is the marker: a slug is what the broken path wrote, and
+ * nothing else produces it — the roster's own add path slugs the name to make
+ * the id ("Cormac Delahunt" → `cormac-delahunt`), so a real name never equals
+ * its own id. An operator's edit is never overwritten.
+ *
+ * Returns the SAME array when nothing needs repair, so a caller can run it on
+ * every poll without churning state or the autosave.
+ */
+export function healBracketRosterNames(
+  roster: BracketPlayerDTO[],
+  bracket: BracketTournamentDTO,
+): BracketPlayerDTO[] {
+  if (!roster.some((p) => p.name === p.id)) return roster;
+  const derived = new Map(
+    reconcileBracketRoster(bracket).map((p) => [p.id, p.name]),
+  );
+  let changed = false;
+  const next = roster.map((p) => {
+    if (p.name !== p.id) return p;
+    const better = derived.get(p.id);
+    if (!better || better === p.id) return p;
+    changed = true;
+    return { ...p, name: better };
+  });
+  return changed ? next : roster;
+}

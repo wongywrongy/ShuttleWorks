@@ -63,6 +63,16 @@ interface MatchDetailsPanelProps {
   onRequestMove?: (matchId: string) => void;
 }
 
+/** Match states whose Actions section has at least one button. Kept beside
+ *  the section it gates so the two cannot drift: every `status === …` branch
+ *  inside that section must have its state listed here, and nothing else may
+ *  be. A state not listed renders no heading at all. */
+const ACTIONS_STATUSES: ReadonlySet<MatchStateDTO['status']> = new Set([
+  'scheduled',
+  'called',
+  'started',
+]);
+
 export function MatchDetailsPanel({
   assignment,
   match,
@@ -387,8 +397,15 @@ export function MatchDetailsPanel({
       {/* Lifecycle actions — same Call/Start/Score/Roster surface that
           the WorkflowPanel rows expose, but text-only. Score and
           Roster editors render inline below this row instead of
-          popping a modal — keeps every interaction in the rail. */}
-      {onUpdateStatus && mode === 'idle' && (
+          popping a modal — keeps every interaction in the rail.
+
+          The `ACTIONS_STATUSES` gate is load-bearing, not tidiness: only
+          those three states render a button, so a FINISHED match printed
+          the heading over an empty div (V4, 2026-08-12). A heading that
+          promises controls which do not exist is worse than no heading —
+          the operator reads it as "the buttons failed to load". A finished
+          match's one control is "Edit score", in the Done block above. */}
+      {onUpdateStatus && mode === 'idle' && ACTIONS_STATUSES.has(status) && (
         <div className="mb-3">
           <div className={`mb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
             Actions

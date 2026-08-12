@@ -113,6 +113,40 @@ describe('BandedTable', () => {
     expect(screen.getByTestId('row-r1')).toBeInTheDocument();
   });
 
+  // V5 — the band printed its short code AND its long name, and every caller
+  // resolves the long name with `?? code`. An event with no long name (every
+  // operator-defined code) therefore had the same string in both slots and
+  // the header read "BS BS 20" / "MDC MDC 1" beside a correct
+  // "XD MIXED DOUBLES 11".
+  it('prints a band code once when it is also the label', () => {
+    render(
+      <BandedTable
+        {...baseProps}
+        groups={[
+          { key: 'bs', label: 'BS', code: 'BS', items: ROWS, testId: 'group-bs' },
+        ]}
+      />,
+    );
+    const header = screen.getByTestId('group-bs');
+    // The visible text is the code, the count, and nothing else.
+    expect(header.textContent?.match(/BS/g)).toHaveLength(1);
+    expect(header).toHaveTextContent('2');
+  });
+
+  it('still prints both when the label is a real long name', () => {
+    render(
+      <BandedTable
+        {...baseProps}
+        groups={[
+          { key: 'xd', label: 'Mixed Doubles', code: 'XD', items: ROWS, testId: 'group-xd' },
+        ]}
+      />,
+    );
+    const header = screen.getByTestId('group-xd');
+    expect(header).toHaveTextContent('XD');
+    expect(header).toHaveTextContent('Mixed Doubles');
+  });
+
   it('fires onRowClick with the row item', () => {
     const onRowClick = vi.fn();
     render(<BandedTable {...baseProps} rows={ROWS} onRowClick={onRowClick} />);

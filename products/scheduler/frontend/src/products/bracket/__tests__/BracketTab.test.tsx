@@ -322,3 +322,54 @@ describe('BracketTab — Setup chrome', () => {
     expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * V3 — the D3 fix (`bracketMigration.ts`, slug→name from the TEAM display
+ * name) changed nothing an operator could see, because the migration runs
+ * ONCE per bracket and its output is persisted on the tournament blob. A
+ * workspace migrated by the pre-fix build kept its slug names for good: the
+ * matches ROW resolves names from the live snapshot and read correctly, while
+ * the roster list, the draw participant picker and the match detail panel all
+ * read the stored roster and read `cormac-delahunt`. One stale seam, three
+ * symptoms — so the repair belongs where the roster is loaded, not at each.
+ */
+describe('BracketTab — an already-migrated roster still gets its names fixed', () => {
+  /** Doubles-only draw: the team display name is the only place the two
+   *  members' real names survive. */
+  function doublesOnlyBracket(): BracketTournamentDTO {
+    const b = makePopulatedBracket();
+    b.participants = [
+      {
+        id: 'MD1-T1',
+        name: 'Cormac Delahunt / Jae Hyun Choi',
+        members: ['cormac-delahunt', 'jae-hyun-choi'],
+      },
+    ];
+    return b;
+  }
+
+  it('replaces stored slug names on load and leaves operator names alone', () => {
+    vi.mocked(useBracket).mockReturnValue({
+      data: doublesOnlyBracket(),
+      setData: vi.fn(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    // The state a pre-fix build left behind: migrated, and wrong.
+    useTournamentStore.setState({
+      bracketRosterMigrated: true,
+      bracketPlayers: [
+        { id: 'cormac-delahunt', name: 'cormac-delahunt' },
+        { id: 'jae-hyun-choi', name: 'J. Choi' },
+      ],
+    });
+    useUiStore.setState({ activeTab: 'bracket-roster' });
+    renderBracketTab();
+
+    expect(screen.getByText('Cormac Delahunt')).toBeInTheDocument();
+    expect(screen.queryByText('cormac-delahunt')).toBeNull();
+    // The hand-typed name is not a slug and is never touched.
+    expect(screen.getByText('J. Choi')).toBeInTheDocument();
+  });
+});

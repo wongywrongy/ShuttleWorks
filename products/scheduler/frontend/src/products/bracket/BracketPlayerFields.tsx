@@ -103,6 +103,13 @@ export function BracketEventsField({
   return (
     <EventsControl
       entries={badges}
+      // The disciplines this bracket's draws actually declare — the SAME
+      // array `EventTypeEditor` filters, so a category exists exactly when
+      // it has a row to show. Without it the fixed {MS,WS,MD,WD,XD} table
+      // ran the section: an operator-defined discipline counted in the
+      // header ("1 entered") and appeared under no category, while DOUBLES
+      // offered a caret over an empty body.
+      types={[...new Set(events.map((e) => e.discipline).filter(Boolean))]}
       renderTypeEditor={(type) => (
         <EventTypeEditor
           typeCode={type}

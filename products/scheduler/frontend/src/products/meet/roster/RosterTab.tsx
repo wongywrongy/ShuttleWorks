@@ -259,8 +259,12 @@ export function RosterTab() {
             above then clipped it with no scrollbar and no way to reach the
             trailing control — same "what doesn't fit gets a scrollbar"
             answer already used for the desk row and SchoolTabs below,
-            applied to the one surface in between that didn't have it yet. */}
-        <div className="shrink-0 overflow-x-auto overflow-y-hidden">
+            applied to the one surface in between that didn't have it yet.
+            The `overflow-y-hidden` that came with it is gone: `ActionsBar`
+            now WRAPS to a second row at tablet width, and a hidden y-axis
+            would clip that row off exactly the way this wrapper exists to
+            prevent on the x-axis (V1, 2026-08-12). */}
+        <div className="shrink-0 overflow-x-auto">
           <MeetActionsBar
             title="Roster"
             status={

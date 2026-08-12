@@ -179,4 +179,62 @@ describe('the Roster actions bar reaches its trailing control on a narrow contai
   it('that wrapper does not also clip with overflow-hidden', () => {
     expect(actionsBarWrap).not.toMatch(/\boverflow-hidden\b/);
   });
+
+  it('nor on the y axis, now that the bar can be two rows tall', () => {
+    // `overflow-y-hidden` shipped alongside the x-axis scroller. Harmless
+    // while the bar was a fixed 44px; once `ActionsBar` wraps it would clip
+    // the second row off — the same defect on the other axis.
+    expect(actionsBarWrap).not.toMatch(/\boverflow-y-hidden\b/);
+  });
+});
+
+/**
+ * `ActionsBar` is the top zone of every workspace surface, and at 768px on
+ * Meet Matches it failed twice at once (browser pass, 2026-08-12): the status
+ * text spanned x=142-200 while the search input started at x=166 — 34px of
+ * overlap, one string printed on top of another — and "Regenerate from roster"
+ * ended at x=794 against a document `scrollWidth` of 768, off screen with
+ * nothing to scroll and no way to reach it.
+ *
+ * Cause: `h-11` (a FIXED height, so nothing could move to a second line) with
+ * `shrink-0` control groups (so they could not give width back) and a
+ * `min-w-0` status box (so it was crushed while its text kept its own width
+ * and spilled). The bar now wraps: a minimum height, `flex-wrap` on the bar
+ * and on both groups. Wrapping, not clipping and not an ellipsis — hiding
+ * characters is banned outright by `truncationContract.test.ts`.
+ */
+describe('the shared actions bar wraps rather than clipping at tablet width', () => {
+  const actionsBar = readSrc('components/control-plane/ActionsBar.tsx');
+  const header = /<header className="([^"]*)"/.exec(code(actionsBar))?.[1];
+
+  it('the bar wraps', () => {
+    expect(header).toBeDefined();
+    expect(header).toMatch(/\bflex-wrap\b/);
+  });
+
+  it('its height is a minimum, not a fixed 44px', () => {
+    // `h-11` cannot grow, so a second row has nowhere to be.
+    expect(header).toMatch(/\bmin-h-11\b/);
+    expect(header).not.toMatch(/(?<![\w-])h-11(?![\w-])/);
+  });
+
+  it('the control group wraps and can still yield width', () => {
+    // `shrink-0` on the controls is what put the trailing button past the
+    // viewport edge: the group refused to give anything back, so the overflow
+    // had to go somewhere, and it went off screen.
+    const controls = /<div className="(ml-auto[^"]*)"/.exec(code(actionsBar))?.[1];
+    expect(controls).toBeDefined();
+    expect(controls).toMatch(/\bflex-wrap\b/);
+    expect(controls).not.toMatch(/\bshrink-0\b/);
+  });
+
+  it('the status group wraps instead of overlapping the control beside it', () => {
+    const status = /<div className="(flex min-w-0[^"]*)"/.exec(code(actionsBar))?.[1];
+    expect(status).toBeDefined();
+    expect(status).toMatch(/\bflex-wrap\b/);
+  });
+
+  it('the bar clips on neither axis', () => {
+    expect(header).not.toMatch(/\boverflow-hidden\b/);
+  });
 });

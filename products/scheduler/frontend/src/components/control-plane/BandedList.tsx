@@ -163,6 +163,14 @@ export function GroupBandHeader({
   onToggle,
   'data-testid': testid,
 }: {
+  /** Long name for the band. Rendered as the eyebrow AFTER `code`, and
+   *  DROPPED when it is the same string as `code`. Callers resolve the long
+   *  name with `?? code` (`EVENT_LABEL[key]?.full ?? key`,
+   *  `disciplineLabel`), so an event with no long name — every
+   *  operator-defined code — arrived here with `label === code` and the band
+   *  printed it twice: "BS BS 20", "MDC MDC 1", beside a working "XD MIXED
+   *  DOUBLES 11". The duplication is one fallback landing in both slots, so
+   *  it is resolved here rather than at each of the three callers. */
   label: string;
   /** Optional accent short-code shown before the label (e.g. "MS"). */
   code?: string;
@@ -204,9 +212,13 @@ export function GroupBandHeader({
           {code}
         </span>
       ) : null}
-      <span className={`${EYEBROW_CLASS} shrink-0 text-ink-3`}>
-        {label}
-      </span>
+      {/* The LABEL yields, not the code: the code slot is the one that lines
+          up down the list, so "BS" stays where "XD" is on the band above. */}
+      {label !== code ? (
+        <span className={`${EYEBROW_CLASS} shrink-0 text-ink-3`}>
+          {label}
+        </span>
+      ) : null}
       {detail ? (
         <span className="min-w-0 break-words text-2xs text-muted-foreground">
           {detail}

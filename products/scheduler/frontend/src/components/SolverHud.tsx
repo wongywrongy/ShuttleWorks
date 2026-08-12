@@ -48,7 +48,16 @@ const PHASES: Record<NonNullable<SolverPhase>, PhaseStyle> = {
   },
 };
 
-export function SolverHud() {
+/**
+ * `activeTab === 'schedule'` resolves to TWO different surfaces — the meet's
+ * own Schedule page (single-engine), whose button is `Generate`, and the
+ * unified Operations Plan (both engines), whose button is `Generate meet` /
+ * `Re-solve meet`. The idle footer names a button, so it has to know which
+ * one is on screen; `AppShell` already computes the flag for `ModuleOutlet`.
+ * Without it the footer read "Generate replaces it" under a button labelled
+ * "Re-solve meet".
+ */
+export function SolverHud({ unifiedOps = false }: { unifiedOps?: boolean }) {
   const hud = useUiStore((s) => s.solverHud);
   const isGenerating = useUiStore((s) => s.isGenerating);
   const activeTab = useUiStore((s) => s.activeTab);
@@ -99,10 +108,15 @@ export function SolverHud() {
         <span className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-border" aria-hidden />
           {/* With a schedule in place, "click Generate to begin" read as an
-              invitation to re-solve a possibly-live day — name the stakes. */}
+              invitation to re-solve a possibly-live day — name the stakes.
+              The button NAMED here is the one this surface actually has. */}
           {hasSchedule
-            ? 'Solver idle. A schedule is in place; Generate replaces it.'
-            : 'Solver idle. Click Generate to begin.'}
+            ? `Solver idle. A schedule is in place; ${
+                unifiedOps ? 'Re-solve meet' : 'Generate'
+              } replaces it.`
+            : `Solver idle. Click ${
+                unifiedOps ? 'Generate meet' : 'Generate'
+              } to begin.`}
         </span>
       </footer>
     );

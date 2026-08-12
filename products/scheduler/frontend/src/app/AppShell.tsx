@@ -291,7 +291,7 @@ export function AppShell() {
           )}
         </div>
       </WorkspaceShell>
-      <SolverHud />
+      <SolverHud unifiedOps={bothEnginesEnabled} />
       <ToastStack />
       <UnlockModalHost />
     </div>
