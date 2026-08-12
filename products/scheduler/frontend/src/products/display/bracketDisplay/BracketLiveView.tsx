@@ -3,9 +3,19 @@ import { liveMatches } from './bracketDisplayData';
 
 /** Read-only "what's playing now" view for the bracket TV — the bracket
  *  analog of the meet display's CourtsView. Oversized match cards, one per
- *  on-court / called bracket match, readable across a gym. No controls. */
-export function BracketLiveView({ data }: { data: BracketTournamentDTO }) {
+ *  on-court / next-up bracket match, readable across a gym. No controls.
+ *
+ *  `isFullscreen` buys the same step up the meet board's court cards take
+ *  once the board owns the whole screen. */
+export function BracketLiveView({
+  data,
+  isFullscreen = false,
+}: {
+  data: BracketTournamentDTO;
+  isFullscreen?: boolean;
+}) {
   const rows = liveMatches(data);
+  const sideSize = isFullscreen ? 'text-5xl' : 'text-3xl';
 
   if (rows.length === 0) {
     return (
@@ -47,11 +57,11 @@ export function BracketLiveView({ data }: { data: BracketTournamentDTO }) {
             </span>
           </div>
           <div className="flex flex-col gap-1.5">
-            <span className="truncate text-3xl font-bold leading-tight text-foreground">
+            <span className={`${sideSize} break-words font-bold leading-tight text-foreground`}>
               {m.sideA}
             </span>
             <span className="text-base font-medium text-muted-foreground">vs</span>
-            <span className="truncate text-3xl font-bold leading-tight text-foreground">
+            <span className={`${sideSize} break-words font-bold leading-tight text-foreground`}>
               {m.sideB}
             </span>
           </div>

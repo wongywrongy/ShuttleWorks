@@ -142,9 +142,9 @@ export function BracketDisplayPage() {
         ) : view === 'draw' ? (
           <BracketDrawView data={data} eventId={activeEventId} />
         ) : view === 'results' ? (
-          <BracketResultsView data={data} />
+          <BracketResultsView data={data} isFullscreen={isFullscreen} />
         ) : (
-          <BracketLiveView data={data} />
+          <BracketLiveView data={data} isFullscreen={isFullscreen} />
         )}
       </main>
     </div>

@@ -39,10 +39,15 @@ export function StandingsView({ standings }: StandingsViewProps) {
               <div className="w-14 text-4xl font-black tabular-nums text-muted-foreground">
                 {index + 1}
               </div>
-              <div className="flex-1 truncate text-3xl font-bold">
+              {/* Wrap, never truncate. The name column resolves to ~155px
+                  inside the 384px side panel, so `truncate` cut "Nashville
+                  Prep" to "Nashvill…" on a board read from across a hall — a
+                  clipped name is worse than a second line. `shrink-0` on the
+                  W–L block keeps it from taking that width back. */}
+              <div className="min-w-0 flex-1 break-words text-3xl font-bold leading-tight">
                 {team.groupName}
               </div>
-              <div className="flex items-baseline gap-3 text-xl tabular-nums">
+              <div className="flex shrink-0 items-baseline gap-3 text-xl tabular-nums">
                 <span className="text-status-done">
                   {team.wins}W
                 </span>

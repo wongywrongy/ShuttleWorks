@@ -80,6 +80,19 @@ export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
     .sort((x, y) => x.court - y.court || (x.status === y.status ? 0 : x.status === 'on-court' ? -1 : 1));
 }
 
+/** "Final" / "Semifinal" / "Quarterfinal" / "Round N" for a round position.
+ *
+ *  A board-local twin of the operator DrawView's private `roundLabel` — five
+ *  lines, versus exporting from a 1100-line file in another product and
+ *  taking a cross-product edge for it. */
+export function roundLabel(roundIndex: number, roundCount: number): string {
+  const fromEnd = roundCount - 1 - roundIndex;
+  if (fromEnd === 0) return 'Final';
+  if (fromEnd === 1) return 'Semifinal';
+  if (fromEnd === 2) return 'Quarterfinal';
+  return `Round ${roundIndex + 1}`;
+}
+
 /** Whether the board has nothing left to show as live: something has been
  *  decided and no assigned match is still open. Used to pick the opening
  *  view — a finished tournament opening on Live reads as "not started".
