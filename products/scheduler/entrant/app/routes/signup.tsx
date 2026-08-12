@@ -34,6 +34,13 @@
  * `tests/signup.test.ts` compares the rendered documents for a fresh
  * and an already-registered address byte for byte.
  *
+ * E3 added a second route to this module, `/e/signup/{slug}`, and the
+ * component reads that one path segment to compose its return URL. The
+ * loader is unchanged and still takes nothing. Nor is the segment a way in
+ * for an address: it is percent-encoded and matched against `safeNext`,
+ * whose charset has no `@` and no `%`, so anything shaped like an address
+ * fails the match and the fallback constant is what reaches the markup.
+ *
  * **CSRF on a page with no session.** There is no session yet — obtaining one
  * is what this page is for — which is exactly what the `sw_play_csrf` nonce
  * exists for. `mintFormCsrf()` mints it, the digest goes into `_csrf`, the

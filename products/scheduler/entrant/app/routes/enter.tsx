@@ -1,6 +1,7 @@
 /**
- * `/e/{slug}/enter` (+ `/enter/signed-in`) — the entry flow, on its own page
- * off the hub scroll (SP-P6-2 §3, split approved as G0).
+ * `/e/{slug}/enter` (+ `/enter/signed-in`, `/enter/created`) — the entry
+ * flow, on its own page off the hub scroll (SP-P6-2 §3, split approved as
+ * G0).
  *
  * The mechanics are the SP-P6-1 entry page's, carried forward verbatim:
  *
