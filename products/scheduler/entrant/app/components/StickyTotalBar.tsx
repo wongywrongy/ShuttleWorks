@@ -37,7 +37,12 @@ export function StickyTotalBar({
     <section
       id="total"
       aria-label="Total and submit"
-      className="sticky bottom-0 grid gap-3 rounded-t-lg border border-rule-soft bg-surface-raised p-4 shadow-lg lg:bottom-auto lg:top-6 lg:rounded-lg lg:shadow-sm"
+      // E5: slimmer on a phone, where this used to cost about a third of the
+      // screen. `p-3` and a 2-up button row below `lg:`; in the 18rem side
+      // rail from `lg:` up there is room, so it goes back to `p-4` and
+      // stacked. Nothing is hidden at either width — the same four facts are
+      // on the bar.
+      className="sticky bottom-0 grid gap-2 rounded-t-lg border border-rule-soft bg-surface-raised p-3 shadow-lg lg:bottom-auto lg:top-6 lg:gap-3 lg:rounded-lg lg:p-4 lg:shadow-sm"
     >
       {state.kind === 'quoted' ? (
         <div className="flex items-baseline justify-between gap-4 lg:block">
@@ -67,7 +72,10 @@ export function StickyTotalBar({
           ? ` · ${formatMoment(deadline)}`
           : ''}
       </p>
-      <div className="grid gap-2">
+      {/* Side by side on a phone — two stacked full-width buttons were the
+          single biggest slice of the bar's height. Stacked again in the side
+          rail, where 18rem is too narrow to share. */}
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
         <Button
           type="submit"
           name="action"
@@ -82,7 +90,7 @@ export function StickyTotalBar({
           Submit entry
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs leading-tight text-muted-foreground">
         The total is the organiser&rsquo;s quote and is confirmed on your receipt.
       </p>
     </section>

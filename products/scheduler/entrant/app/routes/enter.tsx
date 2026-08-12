@@ -467,7 +467,13 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             encType="application/x-www-form-urlencoded"
             className="mt-6 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-8"
           >
-            <div className="grid gap-6">
+            {/* E5: `pb-24` is clearance for the sticky bar, which hovers
+                OVER this column while the page scrolls — the acknowledgment
+                checkbox, the last thing to read before submitting, was
+                underneath it. Padding on the scrolling content is the native
+                answer; from `lg:` up the bar is a side rail and there is
+                nothing to clear. */}
+            <div className="grid gap-6 pb-24 lg:pb-0">
               {/* Channel two: the double-submit token — the loader's mint,
                   never `viewer.formCsrf`. The NAME comes from `FORM_FIELD`,
                   so the cross-tier pin on it stays load-bearing. */}

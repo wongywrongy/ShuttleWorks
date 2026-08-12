@@ -300,14 +300,18 @@ describe('HeroHeader', () => {
     expect(html).not.toMatch(/ disabled=""/);
   });
 
-  it('renders status text — not a dead control — when closed', () => {
+  it('states the closed status ONCE, not a dead control and not twice (E5)', () => {
     const html = renderToStaticMarkup(
       h(HeroHeader, { ...base, chip: CLOSED_CHIP, cta: { kind: 'closed' } }),
     );
     expect(html).not.toContain('Enter this tournament');
     expect(html).not.toContain('<button');
     expect(html).not.toMatch(/ disabled=""/);
-    expect(html).toMatch(/<p[^>]*>Entries closed<\/p>/);
+    // The chip is the status, and the chip is what the cards use, so it is
+    // the one that stays. The CTA slot used to repeat it as plain text —
+    // "Entries closed   Entries closed" on one line of the hero.
+    expect(html.match(/Entries closed/g)).toHaveLength(1);
+    expect(html).toContain('Entries closed');
   });
 
   it('is a real hero band: h1 + org + meta line + chip', () => {
@@ -585,6 +589,26 @@ describe('StickyTotalBar', () => {
     );
     expect(noDeadline).toContain('Entries open');
     expect(noDeadline).not.toContain('UTC</p>');
+  });
+
+  it('is slim enough for a phone: one button row, tighter padding (E5)', () => {
+    // At 390px the bar was costing about a third of the screen — two
+    // full-width stacked buttons, `p-4`, and four separate text rows. The
+    // buttons share a row below `lg:` and go back to stacked in the side
+    // rail, where the width is 18rem and there is room.
+    const html = renderToStaticMarkup(
+      h(StickyTotalBar, {
+        state: { kind: 'unquoted' },
+        chip: OPEN_CHIP,
+        deadline: '2026-08-14 23:59 UTC',
+        quoteAction: '/e/api/quote/spring-open',
+      }),
+    );
+
+    expect(classTokens(html, 'sticky')).toEqual(
+      expect.arrayContaining(['p-3', 'lg:p-4']),
+    );
+    expect(classTokens(html, 'grid-cols-2')).toContain('lg:grid-cols-1');
   });
 
   it('is the G0 landing: id="total", a labelled landmark', () => {

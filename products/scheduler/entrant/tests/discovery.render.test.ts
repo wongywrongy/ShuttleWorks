@@ -236,6 +236,37 @@ describe('the filters (Z1 — one GET form, refinement 4: always visible)', () =
     expect(html).toMatch(/<a href="\/e\/"[^>]*>Clear filters<\/a>/);
   });
 
+  it('drops empty filter fields from the URL instead of echoing them (E5)', async () => {
+    // A native GET form submits every named control, including the ones
+    // left blank — so pressing "Apply filters" with nothing chosen produced
+    // `/e/?q=&status=&preset=&from=&to=`, which is what an entrant then
+    // copies out of the address bar and sends to a club mailing list. No
+    // form markup can suppress a blank field without script, so the loader
+    // canonicalises: empty values are dropped and the browser is redirected
+    // once to the clean URL. Nothing about which cards match changes —
+    // `parseFilters` already read `''` as "no filter".
+    const res = await respond('/e/?status=&preset=&from=&to=');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/e/');
+  });
+
+  it('keeps the filters that carry a value while dropping the blanks (E5)', async () => {
+    const res = await respond('/e/?q=&status=open&preset=&from=2099-01-01&to=');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/e/?status=open&from=2099-01-01');
+  });
+
+  it('answers an already-clean URL directly — no redirect, no loop (E5)', async () => {
+    // The half that makes the canonicalisation safe: the redirect target
+    // must itself be answered 200, or every visit is an infinite bounce.
+    for (const path of ['/e/', '/e/?status=open']) {
+      const res = await respond(path);
+      expect(res.status).toBe(200);
+    }
+  });
+
   it('says so honestly when nothing is listed at all — no dead Clear action', async () => {
     const html = await render('/e/', {});
 

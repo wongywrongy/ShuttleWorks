@@ -20,6 +20,8 @@
  * `request` for its URL and nothing else; no CSRF mint (no form here posts
  * a secret — both forms are GETs).
  */
+import { redirect } from 'react-router';
+
 import { EmptyState } from '../components/EmptyState';
 import { FilterStrip } from '../components/FilterStrip';
 import { PlayShell } from '../components/PlayShell';
@@ -46,7 +48,45 @@ export interface DiscoveryLoaderData {
   nowMs: number;
 }
 
+/**
+ * The same query with every empty field dropped, or `null` when it already
+ * is (E5).
+ *
+ * A native GET form submits every named control, blank ones included, so
+ * "Apply filters" with nothing chosen produced `/e/?q=&status=&preset=&from=
+ * &to=` — the URL an entrant then copies out of the address bar and pastes
+ * into a club mailing list. No markup can suppress a blank field without
+ * script (a radio group needs its "All" option to be selectable, and a blank
+ * `<input type="date">` still submits its name), so the canonicalisation
+ * happens here, where a redirect costs one round trip on the way in and
+ * nothing after.
+ *
+ * Only EMPTY values are dropped. An unknown value is left alone: it is
+ * already ignored by `parseFilters`, and quietly rewriting a URL a human
+ * typed is a different, larger behaviour than tidying one a form generated.
+ */
+function canonicalQuery(url: URL): string | null {
+  const clean = new URLSearchParams();
+  for (const [name, value] of url.searchParams) {
+    if (value !== '') clean.append(name, value);
+  }
+  const query = clean.toString();
+  return query === url.searchParams.toString() ? null : query;
+}
+
 export async function loader({ request }: { request: Request }) {
+  const url = new URL(request.url);
+  const canonical = canonicalQuery(url);
+  if (canonical !== null) {
+    // Root-relative and WITHOUT the basename: React Router prefixes
+    // `config.basename` (`/e/`) onto a loader redirect itself, so passing
+    // `url.pathname` here lands on `/e/e/`. Nothing about the host leaks
+    // into the header either way, and the browser re-applies the `#results`
+    // fragment the filter form's action carries, because the Location
+    // carries none of its own.
+    throw redirect(canonical === '' ? '/' : `/?${canonical}`);
+  }
+
   const filters = parseFilters(new URL(request.url).searchParams);
   const listed = await apiGet<{ slug: string }[]>('/e/api/pages');
   const pages = await Promise.all(

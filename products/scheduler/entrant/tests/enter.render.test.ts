@@ -348,6 +348,21 @@ describe('signing in says so on the page the browser lands on', () => {
     }
   });
 
+  it('leaves room under the last field for the sticky bar to hover (E5)', async () => {
+    // At 390px the bar is `position: sticky; bottom: 0`, so while the page
+    // scrolls it sits OVER whatever is behind it — which was the
+    // acknowledgment checkbox, the last thing an entrant has to read before
+    // submitting. The native answer is padding on the scrolling content, so
+    // the last field can scroll clear of the bar; from `lg:` up the bar is a
+    // side rail and the padding goes away.
+    const html = await render();
+    const column =
+      (html.match(/class="[^"]*grid gap-6[^"]*"/g) ?? []).find((a) => a.includes('pb-')) ?? '';
+
+    expect(column).toMatch(/ pb-[0-9]/);
+    expect(column).toContain('lg:pb-0');
+  });
+
   it('sends the sign-UP handoff back to this tournament too (E3)', async () => {
     // The defect the demo walk found: "Sign in" carried a `next` and "create
     // one" was a bare `/e/signup`, so signing up lost the tournament the

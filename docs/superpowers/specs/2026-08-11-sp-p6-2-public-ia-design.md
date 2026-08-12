@@ -697,3 +697,45 @@ is a live form round trip that preserves both players' typing.
 | G5a | `eventCode` on entrant rows | **APPROVED** — restores the binding "Entrants grouped by event". **Must not reintroduce the row duplication** the 2026-08-10 dedup removed: one row per person, carrying their event codes. |
 | G5b | Club column on entrant rows | **DECLINED** — outruns the recorded consent copy. |
 | G6 | Re-derive the page-weight budget at Phase C | **Open** — the enter page at 3.3 KB is nearest the ceiling once real CSRF and idempotency fields land. The gate stays blocking either way. |
+| G7 | A currency on the entry page, so fees can render as money | **Open** — raised 2026-08-11 from the Phase D demo walk (E5). See below. |
+
+### G7 — a currency for the fee display (proposed 2026-08-11, owner's call)
+
+**The finding.** Every fee on the public site renders as `45.00`, with no symbol and no code:
+the Fees card, the per-event checkbox labels, the sticky total and the receipt's "Amount
+recorded". `app/lib/money.ts` is the only place cents become a string and it deliberately
+refuses to add one — *"there is no currency field in the schema, and inventing one in the
+renderer would be a lie with a `£` on it"* — mirroring `_money` in
+`backend/services/entry_fees.py`. That refusal is correct and **nothing in the E1–E5 round
+changed it**: a hard-coded `$` is a claim the software cannot support, and the first
+non-US-dollar tournament makes it a wrong claim on the page an entrant pays from.
+
+**What would carry it.** One nullable column on `entry_pages`, beside the money that is
+already there (`fee_schedule`, `payment_instructions` — `database/models.py`, the "money &
+payment (R14)" block):
+
+```
+currency: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)   # ISO 4217
+```
+
+surfaced as `currency: Optional[str]` on **`EntryPagePublicDTO`** — the projection behind
+`GET /e/api/page/{slug}`, which already carries `feeSchedule` and every `feeCents`. That is
+the one read the public tier makes, so no new endpoint, no second round trip, and no page
+that has fees but not the currency for them.
+
+**Why read-only and minimal, at this gate.**
+
+- *Read-only:* the public tier only renders it. Setting it is the operator app's entry-page
+  configuration form, which already writes every other field in that block — no new write
+  path, no new authorisation surface, nothing on the entrant side that can change it.
+- *Minimal:* one nullable column, one DTO field, one argument to `formatCents`. **Null keeps
+  today's behaviour exactly** — `45.00`, bare — so no existing tournament changes and no
+  migration has to guess. `money.ts` stays the only division; the currency is a prefix on a
+  string it already produces.
+- *Not proposed:* per-event currencies, FX, locale-aware formatting, a symbol table. A code
+  ("USD 45.00") or a symbol resolved from a three-entry map is a display decision the owner
+  can make when the field exists; none of it is needed to stop the page being silent about
+  what the number means.
+
+**If declined**, the rendering stays honest and bare — which is the current, correct
+behaviour, not a regression.

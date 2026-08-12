@@ -46,13 +46,19 @@ export function HeroHeader({
               <StatusChip state={chip} />
             </div>
           </div>
+          {/* E5: when entries are closed there is NOTHING here, because the
+              chip six lines up already says "Entries closed" — the two
+              rendered side by side on one line of the hero, the same two
+              words twice. The chip is the one that stays: it is the
+              semantic token, it is what the discovery cards wear, and it is
+              in the same place on every state of this page. Still never a
+              disabled control (Z8) — that was always the rule, and an empty
+              slot keeps it more literally than status text did. */}
           {cta.kind === 'enter' ? (
             <Button asChild variant="brand" size="lg">
               <a href={cta.href}>Enter this tournament</a>
             </Button>
-          ) : (
-            <p className="text-sm font-medium text-muted-foreground">Entries closed</p>
-          )}
+          ) : null}
         </div>
         {children}
       </div>
