@@ -205,3 +205,16 @@ failure the gate was already rewritten once to fix — measuring something other
   `MatchDetailPanel` carries undo-start, set-by-set scores and armed winner buttons. Bringing
   contingency to Run would be new plumbing, not adoption, and was deliberately left out of the fix.
   *(Found by the agent implementing T2, 2026-08-11.)*
+
+- **T6's root cause was misdiagnosed here.** This document blamed ~198-day-stale timestamps. The
+  staleness is not what breaks it: `getRenderSlot` derives a slot via `msToSlot`, which reads
+  **time-of-day only**. A 21:14 finish inside a 09:00–12:00 day derives slot 24 of a 6-slot day, so
+  the axis stretches and the placement clamp pins every chip to the final column. Any match whose
+  *actual* hour falls outside the configured day breaks it — a tournament running late into the
+  evening does it on the day, with no staleness at all. *(Found by the agent implementing the fix.)*
+- **T7's root cause was also deeper than the missing roles.** A clickable row took `role="button"`
+  from `selectableRowProps`, and `button` is a **name-from-content** role — it flattens every cell
+  into one accessible label. That *is* the "flat run of text" described above, and it would have
+  defeated cell roles even if they had been added. Rows are now `role="row"` + `aria-selected`;
+  `role="button"` remains correct for the non-table surfaces sharing that helper.
+  *(Found by the agent implementing the fix.)*
