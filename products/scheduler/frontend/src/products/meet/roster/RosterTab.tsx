@@ -294,8 +294,15 @@ export function RosterTab() {
           {/* Flex ROW: list · grid · docked detail drawer. The drawer is a
               real layout column (DetailDock) so the grid reflows beside it;
               `relative` anchors the dock's narrow-viewport overlay
-              fallback. minContentWidth accounts for the 260px left aside. */}
-          <div className="relative flex min-h-0 flex-1 overflow-hidden">
+              fallback. minContentWidth accounts for the 260px left aside.
+
+              Scrolls on x rather than clipping: the aside is `shrink-0` and
+              flex `grow` never fires on negative free space, so on a viewport
+              narrower than 260 + the grid's floor the grid used to resolve to
+              literally 0px behind `overflow-hidden` — present in the DOM,
+              invisible, with nothing to say it was there. Same answer as the
+              Entries desk: what doesn't fit gets a scrollbar. */}
+          <div className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
             {/* LEFT — filter + player list */}
             <aside
               data-testid="roster-left-panel"
@@ -326,7 +333,7 @@ export function RosterTab() {
                 and this pane is a third of a desk, not the page. */}
             <div
               data-testid="roster-right-panel"
-              className="flex min-w-0 flex-1 flex-col overflow-hidden"
+              className="flex min-w-[320px] flex-1 flex-col overflow-hidden"
             >
               <div className="min-h-0 flex-1 overflow-auto">
                 {activeSchoolId ? (

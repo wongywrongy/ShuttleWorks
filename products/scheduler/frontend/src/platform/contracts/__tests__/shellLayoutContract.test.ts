@@ -58,3 +58,30 @@ describe('one main landmark per authenticated page', () => {
     expect(mainTags(rosterTab)).toHaveLength(0);
   });
 });
+
+/**
+ * `/roster`'s position grid measured `{width: 0, left: 540}` at 390px. The
+ * mechanism: a `w-[260px] shrink-0` aside next to a `min-w-0 flex-1` grid.
+ * Flex `grow` only fires on POSITIVE free space, so once the aside alone
+ * exceeds the row the grid's hypothetical size (basis 0, min-width 0) stays
+ * 0 — and the row's `overflow-hidden` clipped the result with no scrollbar to
+ * say anything was there.
+ */
+describe('the Roster desk survives a narrow viewport', () => {
+  const deskRow = /<div className="relative flex min-h-0 flex-1 ([^"]*)"/.exec(rosterTab)?.[1];
+  const gridPane = /data-testid="roster-right-panel"\s+className="([^"]*)"/.exec(rosterTab)?.[1];
+
+  it('the grid pane keeps a width floor instead of collapsing to zero', () => {
+    expect(gridPane).toBeDefined();
+    expect(gridPane).toMatch(/\bmin-w-\[\d+px\]/);
+    expect(gridPane).not.toMatch(/\bmin-w-0\b/);
+  });
+
+  it('the desk scrolls horizontally rather than clipping what does not fit', () => {
+    // The Entries desk's prior art: what cannot fit gets a scrollbar, which
+    // is at least an affordance. `overflow-hidden` is not.
+    expect(deskRow).toBeDefined();
+    expect(deskRow).toMatch(/\boverflow-x-auto\b/);
+    expect(deskRow).not.toMatch(/\boverflow-hidden\b/);
+  });
+});
