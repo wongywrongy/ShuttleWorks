@@ -11,9 +11,7 @@ export {
   ColumnHeaderRow,
   GroupBandHeader,
   COLUMN_HEADER_ROW_CLASSES,
-  BANDED_ROW_CLASSES,
-  BANDED_ROW_LINES,
-  BANDED_ROW_MIN_H,
+  BANDED_ROW_BASE,
   NAME_COL_MIN,
   COL_PRIORITY_CLASS,
   COL_PRIORITY_CLASS_FLEX,
@@ -22,6 +20,9 @@ export {
 } from './BandedList';
 export {
   dockMinContentWidth,
+  bandedRowClasses,
+  BANDED_ROW_MIN_H,
+  bandedRowLines,
   COL_PRIORITY_MIN_CONTAINER_PX,
 } from './bandedDockWidth';
 export {
@@ -30,9 +31,14 @@ export {
   type BandedTableGroup,
 } from './BandedTable';
 export {
-  MATCH_LIST_COLUMNS,
-  MATCH_CELL,
-  MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+  MEET_MATCH_LIST_COLUMNS,
+  BRACKET_MATCH_LIST_COLUMNS,
+  MEET_MATCH_CELL,
+  BRACKET_MATCH_CELL,
+  MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+  BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+  MEET_EVENT_COL,
+  BRACKET_EVENT_COL,
 } from './matchListColumns';
 export {
   STATUS_CLASS,

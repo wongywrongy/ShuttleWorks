@@ -23,9 +23,9 @@ import {
   BandedTable,
   ColumnHeaderRow,
   DetailDock,
-  MATCH_CELL,
-  MATCH_LIST_COLUMNS,
-  MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+  MEET_MATCH_CELL,
+  MEET_MATCH_LIST_COLUMNS,
+  MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   STATUS_CLASS,
   STATUS_LABEL,
   type BandedTableGroup,
@@ -34,7 +34,7 @@ import {
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import { usePlayerMap } from '../../../store/selectors';
-import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
+import type { MatchDTO, PlayerDTO } from '../../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../../hooks/useSearchParamState';
 import { useDisruptions } from './useDisruptions';
 import { EVENT_LABEL, EVENT_ORDER } from '../roster/positionGrid/helpers';
@@ -62,7 +62,6 @@ export function MatchesSpreadsheet({
 } = {}) {
   const matches = useTournamentStore((s) => s.matches);
   const players = useTournamentStore((s) => s.players);
-  const groups = useTournamentStore((s) => s.groups);
   const deleteMatch = useTournamentStore((s) => s.deleteMatch);
   const schedule = useTournamentStore((s) => s.schedule);
   const matchStates = useMatchStateStore((s) => s.matchStates);
@@ -198,7 +197,7 @@ export function MatchesSpreadsheet({
 
   return (
     <>
-      {/* @container/table: the column-priority classes in MATCH_CELL query
+      {/* @container/table: the column-priority classes in MEET_MATCH_CELL query
           THIS wrapper's width, so columns collapse as the detail dock takes
           room — not just when the window shrinks. */}
       <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
@@ -206,9 +205,9 @@ export function MatchesSpreadsheet({
           <>
             {/* ColumnHeaderRow publishes role="row"/"columnheader" — they need
                 the table they claim to live in even with no rows under them. */}
-            <div role="table" aria-colcount={MATCH_LIST_COLUMNS.length}>
+            <div role="table" aria-colcount={MEET_MATCH_LIST_COLUMNS.length}>
               <div role="rowgroup">
-                <ColumnHeaderRow columns={MATCH_LIST_COLUMNS} />
+                <ColumnHeaderRow columns={MEET_MATCH_LIST_COLUMNS} />
               </div>
             </div>
             <div className="px-5 py-10 text-center text-sm text-muted-foreground">
@@ -217,7 +216,7 @@ export function MatchesSpreadsheet({
           </>
         ) : (
           <BandedTable
-            columns={MATCH_LIST_COLUMNS}
+            columns={MEET_MATCH_LIST_COLUMNS}
             groups={tableGroups}
             rowId={(m) => m.id}
             onRowClick={(m) =>
@@ -235,7 +234,6 @@ export function MatchesSpreadsheet({
                 index={matches.indexOf(m)}
                 status={meetMatchStatus(m.id, assignedIds, matchStates)}
                 players={players}
-                groups={groups}
                 issues={issuesFor(m)}
                 onDelete={deleteMatch}
               />
@@ -243,12 +241,12 @@ export function MatchesSpreadsheet({
           />
         )}
       </div>
-      {/* Floor derived from MATCH_LIST_COLUMNS, not hand-picked: the old 560
+      {/* Floor derived from MEET_MATCH_LIST_COLUMNS, not hand-picked: the old 560
           default sat under the 672 `@2xl` tier, so selecting a match deleted
           the `#` and `Status` columns. */}
       <DetailDock
         open={selectedMatch != null}
-        minContentWidth={MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
+        minContentWidth={MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
       >
         {selectedMatch ? (
           <MatchDetailPanel
@@ -281,7 +279,6 @@ const MatchRow = memo(function MatchRow({
   index,
   status,
   players,
-  groups,
   issues,
   onDelete,
 }: {
@@ -289,7 +286,6 @@ const MatchRow = memo(function MatchRow({
   index: number;
   status: MatchListStatus;
   players: PlayerDTO[];
-  groups: RosterGroupDTO[];
   /** Pre-computed disruption issues for this match from the global
    *  `useDisruptions` feed. Routing through the hook keeps the
    *  per-row flag and the TabBar badge from drifting out of sync. */
@@ -306,7 +302,7 @@ const MatchRow = memo(function MatchRow({
     <>
       <span
         role="cell"
-        className={`flex ${MATCH_CELL.warnGutter} shrink-0 items-center justify-center`}
+        className={`flex ${MEET_MATCH_CELL.warnGutter} shrink-0 items-center justify-center`}
         title={
           issues.length > 0
             ? issues.map((i) => `• ${i.message}`).join('\n')
@@ -326,13 +322,13 @@ const MatchRow = memo(function MatchRow({
       </span>
       <span
         role="cell"
-        className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}
+        className={`${MEET_MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}
       >
         {match.matchNumber ?? index + 1}
       </span>
       <span
         role="cell"
-        className={`${MATCH_CELL.event} text-sm font-semibold text-accent sw-num`}
+        className={`${MEET_MATCH_CELL.event} text-sm font-semibold text-accent sw-num`}
       >
         {match.eventRank?.trim() || (
           <span className="text-xs font-normal italic text-muted-foreground">
@@ -340,22 +336,12 @@ const MatchRow = memo(function MatchRow({
           </span>
         )}
       </span>
-      <PlayerCellSummary
-        side="Side A"
-        ids={match.sideA ?? []}
-        players={players}
-        groups={groups}
-      />
-      <PlayerCellSummary
-        side="Side B"
-        ids={match.sideB ?? []}
-        players={players}
-        groups={groups}
-      />
+      <PlayerCellSummary side="Side A" ids={match.sideA ?? []} players={players} />
+      <PlayerCellSummary side="Side B" ids={match.sideB ?? []} players={players} />
       <span
         role="cell"
         data-testid={`match-status-${match.id}`}
-        className={`${MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
+        className={`${MEET_MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
       >
         {STATUS_LABEL[status]}
       </span>
@@ -365,7 +351,7 @@ const MatchRow = memo(function MatchRow({
         <ConfirmDeleteButton
           label={match.eventRank ? `match ${match.eventRank}` : 'this match'}
           onConfirm={() => onDelete(match.id)}
-          className={MATCH_CELL.actionGutter}
+          className={MEET_MATCH_CELL.actionGutter}
           testId={`match-delete-${match.id}`}
         />
       </span>
@@ -375,8 +361,18 @@ const MatchRow = memo(function MatchRow({
 
 
 /* =========================================================================
- * PlayerCellSummary — one side, read only: comma-separated names with the
- * school shown once when the pair shares one.
+ * PlayerCellSummary — one side, read only: the players' names, comma
+ * separated. Names ONLY.
+ *
+ * The cell used to print each player's SCHOOL beside the name (once after
+ * the last name when a doubles pair shared one — the `uniformSchool` rule,
+ * which existed solely to de-duplicate it). Owner ruling, 2026-08-12: "the
+ * side A and side B name for every row is too much. we dont need to list it.
+ * waste of space." It was 31 characters a side, a row, for
+ * "Nashville Badminton Association" — a column of identical strings, since a
+ * dual meet has exactly two schools and the sides ARE the schools. The
+ * school stays one click away, on the player card in the detail pane
+ * (`MatchSideSection`), which is where the rest of the player record lives.
  *
  * This cell used to be `PlayerCellEditor`: a name button per player, an
  * inline `✕` per player, a "＋ add" link and a portaled picker, plus a
@@ -388,49 +384,32 @@ function PlayerCellSummary({
   side,
   ids,
   players,
-  groups,
 }: {
   side: string;
   ids: string[];
   players: PlayerDTO[];
-  groups: RosterGroupDTO[];
 }) {
   const named = ids
     .map((id) => players.find((p) => p.id === id))
     .filter(Boolean) as PlayerDTO[];
-  // Doubles partners are (almost) always same-school — repeating the school
-  // per name is noise. When every player on the side shares one, show it
-  // once, after the last name.
-  const uniformSchool =
-    named.length > 1 && named.every((p) => p.groupId === named[0].groupId);
 
   return (
     <span
       role="cell"
       data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
-      className={`${MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed`}
+      className={`${MEET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed`}
     >
       {named.length === 0 ? (
         <span className="text-xs italic text-muted-foreground">No players</span>
       ) : (
-        named.map((p, i) => {
-          const groupName = groups.find((g) => g.id === p.groupId)?.name ?? '';
-          const showSchool =
-            groupName !== '' && (!uniformSchool || i === named.length - 1);
-          return (
-            <span key={p.id} className="inline-flex items-baseline">
-              <span className="text-foreground">{p.name || '–'}</span>
-              {showSchool ? (
-                <span className="ml-1 text-2xs text-muted-foreground">
-                  {groupName}
-                </span>
-              ) : null}
-              {i < named.length - 1 ? (
-                <span className="text-muted-foreground">,</span>
-              ) : null}
-            </span>
-          );
-        })
+        named.map((p, i) => (
+          <span key={p.id} className="inline-flex items-baseline">
+            <span className="text-foreground">{p.name || '–'}</span>
+            {i < named.length - 1 ? (
+              <span className="text-muted-foreground">,</span>
+            ) : null}
+          </span>
+        ))
       )}
     </span>
   );

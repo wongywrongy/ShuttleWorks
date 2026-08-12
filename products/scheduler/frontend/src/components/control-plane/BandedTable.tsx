@@ -4,9 +4,10 @@
  * One component owns what Meet Matches / Bracket Matches / Bracket
  * Roster each hand-assemble today from the BandedList pieces: the
  * column-label row (single- or two-tier), optional collapsible group
- * bands, and the canonical `BANDED_ROW_CLASSES` row shell with optional
- * click + selected treatment. Consumers keep full control of cell
- * content via `renderRow`; the shell only owns the row chrome.
+ * bands, and the canonical row shell (`bandedRowClasses`, whose line
+ * reservation the passed `columns` derive) with optional click + selected
+ * treatment. Consumers keep full control of cell content via `renderRow`;
+ * the shell only owns the row chrome.
  *
  * The underlying `ColumnHeaderRow` / `GroupBandHeader` / class-string
  * exports stay available for surfaces not yet ported (SP-D7 S4).
@@ -19,13 +20,13 @@
 import { useState, type ReactNode } from 'react';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 import {
-  BANDED_ROW_CLASSES,
   COLUMN_HEADER_ROW_CLASSES,
   ColumnHeaderRow,
   GroupBandHeader,
   colClass,
   type BandedListColumn,
 } from './BandedList';
+import { bandedRowClasses } from './bandedDockWidth';
 
 export interface BandedTableColumn extends BandedListColumn {
   /** Optional second-tier label under the main label for two-tier
@@ -100,6 +101,10 @@ export function BandedTable<T>({
       return next;
     });
 
+  // The row shell, including the line reservation THESE columns derive — a
+  // list of names reserves two lines, a list of fixed-width cells one.
+  const rowShell = bandedRowClasses(columns);
+
   const renderRows = (items: T[]) =>
     items.map((item) => {
       const id = rowId(item);
@@ -127,7 +132,7 @@ export function BandedTable<T>({
             onKeyDown: click.onKeyDown,
           })}
           className={[
-            BANDED_ROW_CLASSES,
+            rowShell,
             onRowClick ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : '',
             selected ? 'bg-accent/10 shadow-[inset_2px_0_0_hsl(var(--accent))]' : '',
             rowClassName?.(item) ?? '',

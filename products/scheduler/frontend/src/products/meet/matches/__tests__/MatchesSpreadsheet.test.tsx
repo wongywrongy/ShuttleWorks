@@ -2,8 +2,8 @@
  * Render coverage for MatchesSpreadsheet — the Meet match list, the
  * keystone of the shared banded-list grammar (Bracket Matches mirrors
  * it). Rich fixture: 10 matches across 3 disciplines including doubles
- * (comma-separated pair + per-name school suffix) and an empty side
- * (the muted-italic "＋ add player" placeholder).
+ * (comma-separated pair, names only) and an empty side (the
+ * muted-italic "＋ add player" placeholder).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -148,19 +148,36 @@ describe('<MatchesSpreadsheet />', () => {
     expect(within(row).getAllByRole('button')).toHaveLength(1);
   });
 
-  it('renders doubles sides as comma-separated names, school shown once per side', () => {
+  it('renders doubles sides as comma-separated NAMES, with no school', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m5');
     expect(row.textContent).toContain('Aiko');
     expect(row.textContent).toContain('Ben');
     expect(row.textContent).toContain('Eva');
     expect(row.textContent).toContain('Finn');
-    // Same-school partners share ONE school suffix (after the last name)
-    // instead of repeating it per player.
-    expect(within(row).getAllByText('Alpha High')).toHaveLength(1);
-    expect(within(row).getAllByText('Beta Prep')).toHaveLength(1);
+    // Owner ruling 2026-08-12: "the side A and side B name for every row is
+    // too much. we dont need to list it. waste of space." The school used to
+    // print after the last name of each side (the `uniformSchool` rule, which
+    // existed only to de-duplicate it across a doubles pair); a dual meet has
+    // two schools, so it was the same two strings on every row. It is one
+    // click away in the detail pane instead — asserted below.
+    expect(within(row).queryByText('Alpha High')).toBeNull();
+    expect(within(row).queryByText('Beta Prep')).toBeNull();
     // Comma separator between pair members, one per doubles side.
     expect(within(row).getAllByText(',')).toHaveLength(2);
+  });
+
+  it('keeps the school reachable on the player card in the detail pane', () => {
+    // The ruling removed the school from the ROW, not from the product. The
+    // pane is where the rest of the player record already lives.
+    renderSheet();
+    fireEvent.click(screen.getByTestId('match-row-m5'));
+    const panel = screen.getByTestId('match-detail-panel');
+    // One card per player, each carrying its own school — the pane has room
+    // to repeat it, which is exactly why the de-duplicating `uniformSchool`
+    // rule belonged to the row and left with it.
+    expect(within(panel).getAllByText('Alpha High')).toHaveLength(2);
+    expect(within(panel).getAllByText('Beta Prep')).toHaveLength(2);
   });
 
   it('renders an empty side as a muted-italic reading, not an add control', () => {

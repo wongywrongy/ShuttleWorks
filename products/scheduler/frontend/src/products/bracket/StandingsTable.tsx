@@ -9,17 +9,26 @@
  */
 import type { StandingRowDTO } from "../../api/bracketDto";
 import {
-  BANDED_ROW_CLASSES,
+  NAME_COL_MIN,
   ColumnHeaderRow,
+  bandedRowClasses,
   type BandedListColumn,
 } from "../../components/control-plane";
 import { EYEBROW_CLASS } from '../../lib/utils';
 
 // Numeric columns stay tight (two 2-digit numbers + en-dash at text-xs)
 // so the flex-1 Player cell keeps real width even in the xl side rail.
-const COLUMNS: BandedListColumn[] = [
+//
+// Player carries a NAME — `Participant.name`, a player OR a team, so
+// "Nashville Badminton Association" is in-vocabulary here exactly as it is on
+// the Hub. It therefore floors at NAME_COL_MIN like every other name column,
+// and its rows reserve two lines (`bandedRowClasses` derives that from this
+// spec). `min-w-0` let it reach ~106px in the xl rail, three lines and one
+// short word away from the "Nashville / Badminto / n" mid-word break; the rail
+// is sized to hold this floor (see `StandingsAside` in DrawView).
+export const STANDINGS_COLUMNS: BandedListColumn[] = [
   { label: "Pos", className: "w-7 shrink-0" },
-  { label: "Player", className: "min-w-0 flex-1" },
+  { label: "Player", className: `${NAME_COL_MIN} flex-1` },
   { label: "W–L", className: "w-9 shrink-0 text-right" },
   { label: "Games", className: "w-11 shrink-0 text-right" },
   { label: "Points", className: "w-12 shrink-0 text-right" },
@@ -43,12 +52,12 @@ export function StandingsTable({
         <span className={`${EYEBROW_CLASS} text-ink-3`}>Standings</span>
       </div>
       {/* ColumnHeaderRow publishes role="row"/"columnheader", so this
-          surface — which composes its own rows out of BANDED_ROW_CLASSES
-          rather than going through BandedTable — has to supply the
-          role="table" they live in. */}
-      <div role="table" aria-colcount={COLUMNS.length}>
+          surface — which composes its own rows out of the row shell rather
+          than going through BandedTable — has to supply the role="table"
+          they live in. */}
+      <div role="table" aria-colcount={STANDINGS_COLUMNS.length}>
         <div role="rowgroup">
-          <ColumnHeaderRow columns={COLUMNS} />
+          <ColumnHeaderRow columns={STANDINGS_COLUMNS} />
         </div>
         <div role="rowgroup">
           {ordered.map((row) => {
@@ -58,7 +67,7 @@ export function StandingsTable({
                 key={row.participant_id}
                 role="row"
                 data-testid={`standings-row-${row.position}`}
-                className={`${BANDED_ROW_CLASSES} last:border-b-0`}
+                className={`${bandedRowClasses(STANDINGS_COLUMNS)} last:border-b-0`}
               >
                 <span
                   role="cell"
@@ -73,7 +82,7 @@ export function StandingsTable({
                 </span>
                 <span
                   role="cell"
-                  className="min-w-0 flex-1 break-words text-sm text-card-foreground"
+                  className={`${NAME_COL_MIN} flex-1 break-words text-sm text-card-foreground`}
                 >
                   {nameById[row.participant_id] ?? row.participant_id}
                 </span>

@@ -36,43 +36,16 @@ export const COLUMN_HEADER_ROW_CLASSES =
   'text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint';
 
 /**
- * Lines of text every banded row RESERVES, so a singles row and a doubles
- * pairing measure the same and the list stops being ragged. Derived from the
- * seeded data (194 real side labels, both demo workspaces), not chosen:
- *
- *   longest side label                        37 chars
- *     ("Diego Alcantara / Shruti Kalyanaraman")
- *   it wraps at the " / ", so its longest LINE 19 chars
- *     ("Shruti Kalyanaraman")
- *   19 chars fit one line at `NAME_COL_MIN` below
- *   ⇒ 2 lines holds the measured worst case; p95 (33 chars) also needs 2.
- *
- * One line leaves every doubles pairing wrapping past the row (the ragged
- * list this fixes); three would spend a blank line on the 50%+ of rows at or
- * under the 16-char median.
- */
-export const BANDED_ROW_LINES = 2;
-
-/**
- * `BANDED_ROW_LINES` expressed as a min-height class:
- *
- *   text-sm (0.875rem = 14px) × leading-relaxed (1.625) = 22.75px per line
- *   22.75 × 2 lines                                     = 45.5px
- *   next rung of the spacing ladder at or above 45.5    = 48px = `min-h-12`
- *
- * `min-height`, deliberately, not `height`. Truncation is banned product-wide
- * (`truncationContract.test.ts`), so a label longer than anything in the
- * measured data has to be able to take a third line and push its row taller
- * rather than lose characters. The reservation is sized so nothing in real
- * data does that: uniform in practice, lossless in the exception.
- */
-export const BANDED_ROW_MIN_H = 'min-h-12';
-
-/**
  * Floor for a flexible column carrying a PERSON NAME — a match side, a roster
- * player, an entrant. Replaces `min-w-0`, which is Flexbox §4.5 permission to
- * collapse to zero: at the old 560px dock floor the two match sides measured
- * ~145px each and every doubles pairing shredded into a ribbon.
+ * player, an entrant, a standings line. Replaces `min-w-0`, which is Flexbox
+ * §4.5 permission to collapse to zero: at the old 560px dock floor the two
+ * match sides measured ~145px each and every doubles pairing shredded into a
+ * ribbon.
+ *
+ * It is also the MARKER `bandedRowLines` reads to decide whether a surface's
+ * rows reserve one line or two — the name-ness of a column is declared once,
+ * here, in the column definition, rather than a second time as a per-surface
+ * prop that would have to be kept in step with this one.
  *
  *   the row reserves 2 lines, so the column must hold the longer half of the
  *   worst measured pairing on one line     19 chars ("Shruti Kalyanaraman")
@@ -88,15 +61,17 @@ export const BANDED_ROW_MIN_H = 'min-h-12';
  */
 export const NAME_COL_MIN = 'min-w-[10rem]';
 
-/** Canonical shell for a banded-list data row: flex row, the
- *  `BANDED_ROW_MIN_H` line reservation, `px-5` horizontal gutter, `gap-3`
- *  column rhythm, hairline `border-b`, muted hover wash. Consumers compose
- *  their own cells (and extras like `group` or an accent stripe) on top of
- *  this string so Meet Matches and Bracket Matches rows stay visually
- *  indistinguishable — and so every banded surface inherits the reservation
- *  from one place. */
-export const BANDED_ROW_CLASSES =
-  `flex ${BANDED_ROW_MIN_H} items-center gap-3 border-b border-border px-5 transition-colors duration-fast ease-brand hover:bg-muted/30`;
+/** Canonical shell for a banded-list data row MINUS its line reservation:
+ *  flex row, `px-5` horizontal gutter, `gap-3` column rhythm, hairline
+ *  `border-b`, muted hover wash. Consumers compose their own cells (and
+ *  extras like `group` or an accent stripe) on top of it so Meet Matches and
+ *  Bracket Matches rows stay visually indistinguishable.
+ *
+ *  Not consumed directly: `bandedRowClasses(columns)` prepends the
+ *  `BANDED_ROW_MIN_H` the surface's own columns derive, so the shell comes
+ *  from one place and the reservation from the content. */
+export const BANDED_ROW_BASE =
+  'flex items-center gap-3 border-b border-border px-5 transition-colors duration-fast ease-brand hover:bg-muted/30';
 
 export interface BandedListColumn {
   /** Column label. Empty string renders an `aria-hidden` spacer cell. */

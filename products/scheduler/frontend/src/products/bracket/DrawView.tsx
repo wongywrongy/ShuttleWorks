@@ -1250,7 +1250,14 @@ function RoundRobinView({
 }
 
 /** Standings side panel shared by the 'grid' and 'swiss' renderers:
- *  a right-hand rail on xl+ screens, stacked below the rounds on smaller. */
+ *  a right-hand rail on xl+ screens, stacked below the rounds on smaller.
+ *
+ *  The rail width is the standings row's own floor, not a round number:
+ *  28rem = the 404px `dockMinContentWidth(STANDINGS COLUMNS)` (Pos 28 +
+ *  NAME_COL_MIN 160 + W–L 36 + Games 44 + Points 48, four `gap-3` rhythms
+ *  and the `px-5` inset) plus the card's border and this `p-4`. At the old
+ *  `w-96` the Player cell measured ~106px, so a participant name wrapped to
+ *  two or three lines while the numbers had room to spare. */
 function StandingsAside({
   rows,
   nameById,
@@ -1259,7 +1266,7 @@ function StandingsAside({
   nameById: Record<string, string>;
 }) {
   return (
-    <aside className="max-h-[45%] shrink-0 overflow-auto border-t border-border p-4 xl:max-h-none xl:w-96 xl:border-l xl:border-t-0">
+    <aside className="max-h-[45%] shrink-0 overflow-auto border-t border-border p-4 xl:max-h-none xl:w-[28rem] xl:border-l xl:border-t-0">
       <StandingsTable rows={rows} nameById={nameById} />
     </aside>
   );

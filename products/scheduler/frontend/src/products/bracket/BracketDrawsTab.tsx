@@ -562,7 +562,8 @@ function ActionCell({
 
   if (status === 'draft') {
     return (
-      // xs (28px) — the only Button height that FITS the 32px banded row;
+      // xs (28px). DRAW_COLUMNS carries no name column, so the row reserves
+      // one line (24px) and this button is what actually sets its height;
       // sm (36px) overflowed the row hairlines and dwarfed the bar controls.
       <Button variant="brand" size="xs" disabled={!eventReady} onClick={onGenerate}>
         Generate

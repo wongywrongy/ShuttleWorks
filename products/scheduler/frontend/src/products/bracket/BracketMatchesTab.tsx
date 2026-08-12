@@ -21,9 +21,9 @@ import {
   BandedTable,
   DetailDock,
   EmptyState,
-  MATCH_CELL,
-  MATCH_LIST_COLUMNS,
-  MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+  BRACKET_MATCH_CELL,
+  BRACKET_MATCH_LIST_COLUMNS,
+  BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   OverflowMenu,
   STATUS_CLASS,
   STATUS_LABEL,
@@ -264,7 +264,7 @@ export function BracketMatchesTab({
           ) : (
             <>
               <BandedTable
-                columns={MATCH_LIST_COLUMNS}
+                columns={BRACKET_MATCH_LIST_COLUMNS}
                 groups={tableGroups}
                 rowId={({ pu }) => pu.id}
                 onRowClick={({ pu }) =>
@@ -279,45 +279,50 @@ export function BracketMatchesTab({
                       {/* Gutter spacer — Meet's warning-icon slot;
                           empty here but kept so the columns start
                           at the same x on both surfaces. */}
-                      <span role="cell" className={`${MATCH_CELL.warnGutter} shrink-0`} />
+                      <span role="cell" className={`${BRACKET_MATCH_CELL.warnGutter} shrink-0`} />
                       <span
                         role="cell"
-                        className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}
+                        className={`${BRACKET_MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}
                       >
                         {n}
                       </span>
                       {/* Friendly label; raw id kept on title for
                           traceability (it's also the row testid).
                           px-1.5 mirrors the inner inset of Meet's
-                          editable event field. */}
+                          editable event field — BRACKET_EVENT_COL is
+                          sized with that 12px pair already deducted, so
+                          the 10-char worst case ("XDC L R327") stays on
+                          one line. `break-words` is the backstop for a
+                          longer operator discipline code: it grows the
+                          row rather than spilling into Side A. */}
                       <span
                         role="cell"
-                        className={`${MATCH_CELL.event} break-words px-1.5 text-sm font-semibold text-accent sw-num`}
+                        className={`${BRACKET_MATCH_CELL.event} break-words px-1.5 text-sm font-semibold text-accent sw-num`}
                         title={pu.id}
                       >
                         {labelById.get(pu.id) ?? pu.id}
                       </span>
                       <span
                         role="cell"
-                        className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}
+                        className={`${BRACKET_MATCH_CELL.side} text-sm leading-relaxed text-foreground`}
                       >
                         {renderSide(pu.side_a)}
                       </span>
                       <span
                         role="cell"
-                        className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}
+                        className={`${BRACKET_MATCH_CELL.side} text-sm leading-relaxed text-foreground`}
                       >
                         {renderSide(pu.side_b)}
                       </span>
                       <span
                         role="cell"
-                        className={`${MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
+                        className={`${BRACKET_MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
                       >
                         {STATUS_LABEL[status]}
                       </span>
                       <span
                         role="cell"
-                        className={`flex ${MATCH_CELL.actionGutter} shrink-0 items-center justify-center`}
+                        className={`flex ${BRACKET_MATCH_CELL.actionGutter} shrink-0 items-center justify-center`}
                         onClick={(e) => e.stopPropagation()}
                       >
                         {status !== 'done' && canEdit ? (
@@ -350,10 +355,12 @@ export function BracketMatchesTab({
           )}
         </div>
 
-        {/* Same derived floor as Meet Matches — one column set, one floor. */}
+        {/* Derived from THIS list's columns: same shared anatomy as Meet
+            Matches, but a wider event column for the longer play-unit
+            labels, so a wider floor (712 vs 672). */}
         <DetailDock
           open={selected != null}
-          minContentWidth={MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
+          minContentWidth={BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
         >
         {selected ? (
           <BracketMatchDetailPanel
