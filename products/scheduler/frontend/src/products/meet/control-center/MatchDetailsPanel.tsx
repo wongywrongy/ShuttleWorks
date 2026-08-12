@@ -320,7 +320,7 @@ export function MatchDetailsPanel({
             {winner && winnerNames ? (
               <div className="mt-1 flex items-baseline justify-between gap-2">
                 <span className="min-w-0 break-words">
-                  <span className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
                     Winner
                   </span>{' '}
                   <span className="font-semibold text-status-started">{winnerNames}</span>
@@ -344,7 +344,7 @@ export function MatchDetailsPanel({
                       key={i}
                       className="flex items-center justify-between rounded bg-card px-1.5 py-0.5 sw-num text-2xs"
                     >
-                      <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
                         Set {i + 1}
                       </span>
                       <span className="tabular-nums">
@@ -390,7 +390,7 @@ export function MatchDetailsPanel({
           popping a modal — keeps every interaction in the rail. */}
       {onUpdateStatus && mode === 'idle' && (
         <div className="mb-3">
-          <div className="text-3xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+          <div className={`mb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
             Actions
           </div>
           <div className="flex flex-wrap gap-1">
@@ -491,7 +491,7 @@ export function MatchDetailsPanel({
 
       {/* Players */}
       <div className="mb-3">
-        <div className="text-3xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+        <div className={`mb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
           Players
         </div>
         {(() => {
@@ -543,7 +543,7 @@ export function MatchDetailsPanel({
                 <div className="flex items-center justify-between gap-1">
                   <span className={`${sideClass(side)} inline-flex items-center gap-1.5 min-w-0`}>
                     {winner === side && (
-                      <span className="rounded bg-status-started-bg px-1 text-3xs font-semibold uppercase tracking-wide text-status-started">
+                      <span className={`rounded bg-status-started-bg px-1 ${EYEBROW_CLASS} text-status-started`}>
                         Won
                       </span>
                     )}
@@ -705,7 +705,7 @@ export function MatchDetailsPanel({
           so the operator can audit waits vs. runs at a glance. */}
       {(matchState?.calledAt || matchState?.actualStartTime || matchState?.actualEndTime) && (
         <div className="mb-3">
-          <div className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+          <div className={`mb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
             Timing
           </div>
           <div className="space-y-0.5 text-xs">
@@ -766,7 +766,7 @@ export function MatchDetailsPanel({
           in the rail. Each row is ``<event> · <shared player>``. */}
       {analysis && analysis.directlyImpacted.length > 0 && (
         <div>
-          <div className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+          <div className={`mb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
             Impacted ({analysis.directlyImpacted.length})
           </div>
           <div className="divide-y divide-border/60 rounded bg-muted/40">

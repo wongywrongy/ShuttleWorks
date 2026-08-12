@@ -1,15 +1,26 @@
 import { CircleNotch } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system/components';
 import { useCanEdit } from '../../../hooks/useCanEdit';
+import { useConfirmClick } from '../../../hooks/useConfirmClick';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 
 /**
- * Schedule toolbar — the single primary action for producing a plan.
+ * Schedule toolbar — the single action for producing a plan.
  *
- * Uses the shared `Button size="xs"` so it sits flush with the rest of
- * the toolbar chips (Export, and the Live page's Director / Disruption
- * / Re-optimize). Variant flips: `brand` for the resting/primary state,
- * `destructive` while confirming a replace, `toolbar` while busy.
+ * WEIGHT. With no schedule yet, Generate is the primary action of the surface
+ * and wears the glow. Once a schedule EXISTS the same press replaces it
+ * wholesale, and a destructive action does not get to look like the primary
+ * one: it drops to `outline`, distinct from the four neutral toolbar chips
+ * beside it (Export / Director / Re-plan / Disruption) without inviting the
+ * click, and a rule separates it from them. It goes `destructive` only while
+ * armed, where the colour is a warning rather than an invitation.
+ *
+ * ARMING. The replace press is guarded by `useConfirmClick`, the canon
+ * two-click arm — the same hook Run's Record button and bracket's
+ * WinnerButton use, so Escape cancels an accidental arm instead of the
+ * operator waiting out a timer. It replaces the page-level `confirmingReplace`
+ * state + hand-rolled 4s effect that used to own this, which is precisely the
+ * copy-pasted timer that hook's docstring says it exists to retire.
  *
  * The previous "Re-optimize" sibling button was redundant: it ran the
  * solver with previous assignments as warm start but did NOT pin
@@ -21,11 +32,8 @@ interface ScheduleActionsProps {
   onGenerate: () => void;
   generating: boolean;
   hasSchedule: boolean;
-  /** When true, the Generate button enters a "are-you-sure?" inline state. */
-  confirmingReplace?: boolean;
-  /** The day is under way (matches called/started/finished). The confirm
-   *  copy names the stakes and a caution chip sits beside the button —
-   *  re-solving a live day moves the remaining matches. */
+  /** The day is under way (matches called/started/finished). The armed copy
+   *  names the stakes — re-solving a live day moves the remaining matches. */
   liveDay?: boolean;
   /** There is something to schedule. With no matches the solver has nothing to
    *  place, so Generate would run a pointless solve and return an empty plan
@@ -37,7 +45,6 @@ export function ScheduleActions({
   onGenerate,
   generating,
   hasSchedule,
-  confirmingReplace = false,
   liveDay = false,
   hasMatches = true,
 }: ScheduleActionsProps) {
@@ -45,7 +52,10 @@ export function ScheduleActions({
   // button blocks pointer AND keyboard activation — the seam in
   // `useTournamentState` is the backstop, this is the vocabulary.
   const canEditWorkspace = useCanEdit();
-  const confirming = hasSchedule && confirmingReplace && !generating;
+  const confirm = useConfirmClick(onGenerate);
+  // Only the REPLACE press is destructive; the first solve of the day is not.
+  const replaces = hasSchedule && !generating;
+  const armed = replaces && confirm.armed;
   const disabledReason = !canEditWorkspace
     ? READ_ONLY_MESSAGE
     : !hasMatches
@@ -56,21 +66,25 @@ export function ScheduleActions({
   // matters (Phase 4.3 — the guard replaces the chrome).
   return (
     <div className="flex items-center gap-2">
+      {/* The rule, not the 8px gap, is what separates the action that replaces
+          the whole schedule from the four neutral chips beside it. */}
+      {replaces ? <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" /> : null}
       <Button
         type="button"
         size="xs"
-        variant={generating ? 'toolbar' : confirming ? 'destructive' : 'brand'}
-        onClick={onGenerate}
+        variant={generating ? 'toolbar' : armed ? 'destructive' : replaces ? 'outline' : 'brand'}
+        onClick={replaces ? confirm.press : onGenerate}
+        onBlur={confirm.reset}
         disabled={generating || !canEditWorkspace || !hasMatches}
         title={disabledReason}
         data-testid="schedule-generate"
         aria-busy={generating}
-        className={confirming ? 'sw-pulse' : undefined}
+        className={armed ? 'sw-pulse' : undefined}
       >
         {generating && <CircleNotch aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
         {generating
           ? 'Generating…'
-          : confirming
+          : armed
             ? liveDay
               ? 'Replace LIVE schedule?'
               : 'Click again to replace'

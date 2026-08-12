@@ -13,13 +13,15 @@ import { RUN_STATUS_LABEL } from '../runtime/runMachine';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 
-// ── source initial + square tint (M=meet azure, B=bracket violet) ─────────
-const SOURCE_INITIAL: Record<'meet' | 'bracket', string> = { meet: 'M', bracket: 'B' };
+// ── source label + square tint (M=meet azure, B=bracket violet) ───────────
+// One vocabulary for the engine, everywhere on this surface: the square shows
+// the INITIAL of the same word the row's tooltip and the inspector's
+// `SourceChip` spell out. The inspector used to say "BRKT" beside a "B".
+const SOURCE_LABEL: Record<'meet' | 'bracket', string> = { meet: 'Meet', bracket: 'Bracket' };
 const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
   meet: 'bg-module-meet/15 text-module-meet',
   bracket: 'bg-module-bracket/15 text-module-bracket',
 };
-const SOURCE_LABEL: Record<'meet' | 'bracket', string> = { meet: 'Meet', bracket: 'Bracket' };
 
 // Why an ineligible row can't be sent, in the terms of its own engine —
 // `RunMatch.eligible` means "both sides known" for meet and "every feeder
@@ -87,7 +89,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               title={SOURCE_LABEL[match.source]}
               className={`inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-xs text-[9px] font-semibold sw-num ${SOURCE_SQUARE[match.source]}`}
             >
-              {SOURCE_INITIAL[match.source]}
+              {SOURCE_LABEL[match.source][0]}
             </span>
 
             {/* Match code — tabular */}

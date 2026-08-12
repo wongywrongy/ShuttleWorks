@@ -15,9 +15,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ── 1. Hoist mutable tab so vi.mock factories close over it ───────────────
 
-const { mockTab, mockPlanFinalized } = vi.hoisted(() => ({
+const { mockTab, mockPlanFinalized, mockSchedule } = vi.hoisted(() => ({
   mockTab: { value: 'live' as string },
   mockPlanFinalized: { value: undefined as boolean | undefined },
+  mockSchedule: { value: null as unknown },
 }));
 
 // ── 2. Mock all hook/store/component dependencies ────────────────────────
@@ -55,7 +56,7 @@ vi.mock('../../../store/tournamentStore', () => ({
     selector({
       config: null,
       matches: [],
-      schedule: null,
+      schedule: mockSchedule.value,
       players: [],
       groups: [],
       planFinalized: mockPlanFinalized.value,
@@ -133,6 +134,7 @@ import * as clientModule from '../../../api/client';
 beforeEach(() => {
   vi.clearAllMocks();
   mockPlanFinalized.value = undefined;
+  mockSchedule.value = null;
 });
 
 describe('OperationsProduct — Live segment renders RunSurface', () => {
@@ -193,5 +195,30 @@ describe('OperationsProduct — Run header readiness pill (single header)', () =
     render(<OperationsProduct />);
     expect(screen.getByTestId('run-plan-pending')).toBeInTheDocument();
     expect(screen.queryByTestId('run-plan-finalized')).toBeNull();
+  });
+});
+
+// O2 of the console IA pass. "Re-solve meet" DISCARDS the plan; "Plan ready ✓"
+// commits it. They were the same size, the same accent fill and 8px apart —
+// the destructive one dressed as the primary, in a same-shape pair with the
+// one action that keeps the work.
+describe('OperationsProduct — the Plan header does not pair discard with commit', () => {
+  it('only the commit action wears the primary glow, and a rule separates them', () => {
+    mockTab.value = 'schedule';
+    mockSchedule.value = { assignments: [] };
+    render(<OperationsProduct />);
+
+    const resolve = screen.getByTestId('ops-generate-meet');
+    const commit = screen.getByTestId('ops-plan-finalize-toggle');
+
+    expect(resolve).toHaveTextContent('Re-solve meet');
+    expect(resolve.className).not.toMatch(/bg-accent/);
+    expect(resolve.className).not.toMatch(/shadow-glow/);
+    expect(commit.className).toMatch(/bg-accent/);
+
+    // ...and they are not two chips in one 8px run: a rule closes the solve
+    // group before the commit button.
+    expect(resolve.nextElementSibling).toBe(commit.previousElementSibling);
+    expect(commit.previousElementSibling?.className).toMatch(/w-px/);
   });
 });

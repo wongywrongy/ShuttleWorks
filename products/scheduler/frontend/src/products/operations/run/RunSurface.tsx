@@ -17,7 +17,7 @@ import { useCommandQueue } from '../../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../../hooks/useBracketResultQueue';
 import { useUiStore } from '../../../store/uiStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
-import { DetailDock } from '../../../components/control-plane';
+import { DetailDock, DetailPanel } from '../../../components/control-plane';
 import { ConflictBanner } from '../../../components/ConflictBanner';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import type { OpsBlock } from '../opsBlock';
@@ -480,15 +480,18 @@ export function RunSurface({
           testId="run-detail-dock"
         >
           {selectedMatch ? (
-            <div className="relative h-full min-h-0 overflow-auto">
-              <button
-                type="button"
-                onClick={() => setSelectedKey(null)}
-                aria-label="Close inspector"
-                className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-              >
-                ✕
-              </button>
+            // The dock's pane chrome is `DetailPanel`: the `[MATCH] code`
+            // identity header, the close button, Esc, and — when the dock ran
+            // out of room and demoted itself to an overlay — dialog semantics
+            // and outside-click dismissal. This used to be a bare div with a
+            // hand-rolled ✕ that only a mouse could find.
+            <DetailPanel
+              label="Match"
+              value={selectedMatch.label}
+              mono
+              onClose={() => setSelectedKey(null)}
+              testId="run-detail-panel"
+            >
               <RunInspector
                 match={selectedMatch}
                 role={selectedRole}
@@ -509,7 +512,7 @@ export function RunSurface({
                   <MatchDetailPanel data={bracketData} onChange={onBracketData} hideIdentity />
                 </div>
               ) : null}
-            </div>
+            </DetailPanel>
           ) : null}
         </DetailDock>
       </div>

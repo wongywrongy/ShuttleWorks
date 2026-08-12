@@ -2,9 +2,13 @@
  * RunInspector — context-dependent match inspector for the Run surface.
  *
  * Shows match identity + state + the VALID actions for whatever is selected,
- * driven by the Run state machine's `can()` predicate. Visual design matches
- * the OpsDetailRail idiom: same token vocabulary, button styles, eyebrow
- * labels, and status pill colours.
+ * driven by the Run state machine's `can()` predicate.
+ *
+ * Pure pane CONTENT: `RunSurface` mounts it inside a `DetailPanel` (identity
+ * header, close, dismissal) inside a `DetailDock` (width, narrow fallback).
+ * Every group here is a `DetailPanel.Section`; the rail used to be one
+ * `space-y-3 p-4` stack of eight unlabelled fields carrying its own private
+ * copy of the eyebrow recipe plus two inline re-types. One recipe, imported.
  *
  * Role semantics:
  *   now        → the court's current match; full lifecycle buttons
@@ -22,6 +26,9 @@ import {
 import type { RunMatch } from '../runtime/runModel';
 import { useConfirmClick } from '../../../hooks/useConfirmClick';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
+import { DetailPanel } from '../../../components/control-plane';
+import { SourceChip } from '../../../components/SourceChip';
+import { Row } from '../../../platform/settings/SettingsControls';
 
 // ── button styles (mirrors OpsDetailRail) ────────────────────────────────
 const actionBtn =
@@ -35,25 +42,12 @@ const armedBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-destructive px-2 py-1 ` +
   `text-2xs font-medium text-destructive-foreground hover:brightness-110`;
 
-// ── typography constants ──────────────────────────────────────────────────
-const EYEBROW = 'text-2xs uppercase tracking-[0.08em] text-muted-foreground';
-
 // ── status pill (RunStatus → token class) ────────────────────────────────
 const STATUS_PILL: Record<RunStatus, string> = {
   scheduled: 'text-muted-foreground',
   called: 'text-status-called font-semibold',
   playing: 'text-status-live font-semibold',
   done: 'text-status-done font-semibold',
-};
-
-// ── source dot / label (mirrors RunBoard / RunQueue) ──────────────────────
-const SOURCE_DOT: Record<'meet' | 'bracket', string> = {
-  meet: 'bg-module-meet',
-  bracket: 'bg-module-bracket',
-};
-const SOURCE_LABEL: Record<'meet' | 'bracket', string> = {
-  meet: 'Meet',
-  bracket: 'Brkt',
 };
 
 // ── props ─────────────────────────────────────────────────────────────────
@@ -75,15 +69,6 @@ export interface RunInspectorProps {
 }
 
 // ── root ──────────────────────────────────────────────────────────────────
-// Pure rail CONTENT — geometry (width, border, the narrow-viewport overlay
-// fallback) is owned by the `DetailDock` host this mounts into, exactly as
-// OpsDetailRail does on the Plan branch. The former `w-72 flex-shrink-0`
-// hard-coded a 288px column that never shrank, which collapsed the
-// board+queue column to 0px at tablet width.
-// Scrolling belongs to the dock column too: on a live bracket match the
-// bracket's own MatchDetailPanel stacks below this rail in the same column.
-const RAIL = 'w-full space-y-3 p-4';
-
 export function RunInspector({
   match,
   role,
@@ -96,7 +81,7 @@ export function RunInspector({
   // Empty / unselected state
   if (!match || !role) {
     return (
-      <aside data-testid="run-inspector" className={`${RAIL} text-sm text-muted-foreground`}>
+      <aside data-testid="run-inspector" className="w-full p-4 text-sm text-muted-foreground">
         <p data-testid="run-inspector-empty">
           Select a match to call it to a court, start play, or record the result.
         </p>
@@ -105,24 +90,30 @@ export function RunInspector({
   }
 
   return (
-    <aside data-testid="run-inspector" className={RAIL}>
-      {/* Identity header (shown for all roles) */}
-      <MatchIdentity match={match} formatSlot={formatSlot} />
+    <aside data-testid="run-inspector" className="w-full">
+      <StatusSection match={match} currentSlot={currentSlot} formatSlot={formatSlot} />
 
-      {/* Role-specific content */}
-      {role === 'now' && (
-        <NowActions match={match} currentSlot={currentSlot} onAction={onAction} />
-      )}
+      <DetailPanel.Section eyebrow="Players" testId="run-inspector-players">
+        <div className="space-y-1">
+          <div className="text-sm text-foreground">{match.sideA}</div>
+          <div className={`${EYEBROW_CLASS} text-muted-foreground`}>vs</div>
+          <div className="text-sm text-foreground">{match.sideB}</div>
+        </div>
+      </DetailPanel.Section>
+
+      {role === 'now' && <NowActions match={match} onAction={onAction} />}
 
       {role === 'next-later' && nowRef && (
-        <p className="text-sm text-muted-foreground">
-          Queued behind {nowRef.code} on C{nowRef.court}. Advances when the court clears.
-        </p>
+        <DetailPanel.Section eyebrow="Actions" testId="run-inspector-actions">
+          <p className="text-sm text-muted-foreground">
+            Queued behind {nowRef.code} on C{nowRef.court}. Advances when the court clears.
+          </p>
+        </DetailPanel.Section>
       )}
 
       {role === 'queued' && (
-        freeCourt != null ? (
-          <div className="flex flex-wrap gap-2">
+        <DetailPanel.Section eyebrow="Actions" testId="run-inspector-actions">
+          {freeCourt != null ? (
             <button
               type="button"
               data-testid="run-act-send"
@@ -131,12 +122,12 @@ export function RunInspector({
             >
               Send to C{freeCourt}
             </button>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No court is free yet. Waiting for one to clear.
-          </p>
-        )
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No court is free yet. Waiting for one to clear.
+            </p>
+          )}
+        </DetailPanel.Section>
       )}
     </aside>
   );
@@ -146,17 +137,12 @@ export function RunInspector({
  * Record result — the one TERMINAL action on this rail.
  *
  * `runMachine`'s `done` has no outgoing edge and Meet ships no reopen, so this
- * press cannot be taken back; Postpone next to it can. Two guards carry that
- * difference, both already in the codebase:
- *
- *   - the canon two-click arm (`useConfirmClick`), same as bracket's
- *     `WinnerButton`. `window.confirm` is banned here and blocks the event
- *     loop; a modal would cost a second surface on a desk used at speed. The
- *     arm decays on its own, so a stray press on a busy floor is harmless and
- *     the repeated task pays nothing extra when it goes right.
- *   - weight: accent when idle (this IS the desk's main verb), destructive
- *     when armed. Postpone keeps the neutral border, so at a glance the
- *     irreversible action is never the same shape as the reversible one.
+ * press cannot be taken back; Postpone can. Three guards carry that difference:
+ * the canon two-click arm (`useConfirmClick`, same as bracket's `WinnerButton`
+ * — `window.confirm` is banned and blocks the event loop); accent weight when
+ * idle, destructive when armed, while Postpone keeps the neutral border; and
+ * DISTANCE — Postpone now sits in its own section rather than 10px away in the
+ * same flex row, which is a misclick rather than a decision.
  */
 function RecordButton({ onRecord }: { onRecord: () => void }) {
   const confirm = useConfirmClick(onRecord);
@@ -181,70 +167,23 @@ function RecordButton({ onRecord }: { onRecord: () => void }) {
   );
 }
 
-// ── match identity section ────────────────────────────────────────────────
-function MatchIdentity({
+// ── status section ────────────────────────────────────────────────────────
+// The engine is named by the shared `SourceChip` ("Meet" / "Bracket") rather
+// than this file's own abbreviation table, which said "Brkt" while the queue
+// square beside it said "B". One vocabulary.
+function StatusSection({
   match,
+  currentSlot,
   formatSlot,
 }: {
   match: RunMatch;
+  currentSlot?: number;
   formatSlot?: (slot: number) => string;
 }) {
   const slotLabel =
     match.plannedSlot != null
       ? (formatSlot ? formatSlot(match.plannedSlot) : `S${match.plannedSlot}`)
       : null;
-
-  return (
-    <div className="space-y-2">
-      {/* Source dot + eyebrow + match code */}
-      <div className="flex items-center gap-2">
-        <span
-          aria-hidden
-          className={`h-2 w-2 flex-shrink-0 rounded-full ${SOURCE_DOT[match.source]}`}
-          title={SOURCE_LABEL[match.source]}
-        />
-        <span className={EYEBROW}>{SOURCE_LABEL[match.source]}</span>
-        <span className="sw-num text-2xs uppercase tracking-[0.08em] text-muted-foreground">
-          {match.label}
-        </span>
-      </div>
-
-      {/* Status pill */}
-      <div className={`${EYEBROW} ${STATUS_PILL[match.status]}`}>
-        {RUN_STATUS_LABEL[match.status]}
-      </div>
-
-      {/* Court + planned slot */}
-      {(match.court != null || slotLabel != null) && (
-        <div className="sw-num text-sm text-foreground">
-          {match.court != null && `C${match.court}`}
-          {match.court != null && slotLabel && ' · '}
-          {slotLabel}
-        </div>
-      )}
-
-      {/* Per-side players */}
-      <div className="space-y-1">
-        <div className="text-sm text-foreground">{match.sideA}</div>
-        <div className={`${EYEBROW} text-2xs`}>vs</div>
-        <div className="text-sm text-foreground">{match.sideB}</div>
-      </div>
-    </div>
-  );
-}
-
-// ── now-role action buttons ───────────────────────────────────────────────
-// Candidate set: call, start, record, postpone (never assign — that is for queued).
-// Each button is rendered iff can(status, kind) is true.
-function NowActions({
-  match,
-  currentSlot,
-  onAction,
-}: {
-  match: RunMatch;
-  currentSlot?: number;
-  onAction: RunInspectorProps['onAction'];
-}) {
   const driftSlots = deriveDriftSlots({
     status: match.status,
     plannedSlot: match.plannedSlot,
@@ -253,53 +192,95 @@ function NowActions({
   });
 
   return (
-    <div className="space-y-2">
-      {/* Drift indicator — only when playing and running over */}
+    <DetailPanel.Section
+      eyebrow="Status"
+      right={<SourceChip source={match.source} />}
+      testId="run-inspector-status"
+    >
+      <Row
+        label="State"
+        control={
+          <span className={`${EYEBROW_CLASS} ${STATUS_PILL[match.status]}`}>
+            {RUN_STATUS_LABEL[match.status]}
+          </span>
+        }
+      />
+      <Row
+        label="Court"
+        control={
+          <span className="sw-num text-sm text-foreground">
+            {match.court != null ? `C${match.court}` : 'Not on a court'}
+          </span>
+        }
+      />
+      <Row
+        label="Planned"
+        control={
+          <span className="sw-num text-sm text-foreground">{slotLabel ?? 'Not planned'}</span>
+        }
+        last
+      />
+      {/* Drift — only when playing and running over */}
       {driftSlots > 0 && (
-        <p className={`${EYEBROW_CLASS} text-status-warning`}>
-          Running over
-        </p>
+        <p className={`${EYEBROW_CLASS} pt-2 text-status-warning`}>Running over</p>
+      )}
+    </DetailPanel.Section>
+  );
+}
+
+// ── now-role action sections ──────────────────────────────────────────────
+// Candidate set: call, start, record, postpone (never assign — that is for
+// queued). Each button renders iff can(status, kind) is true. Postpone gets
+// its OWN section: separated, not armed — arming a reversible action teaches
+// the operator that the arm means nothing.
+function NowActions({
+  match,
+  onAction,
+}: {
+  match: RunMatch;
+  onAction: RunInspectorProps['onAction'];
+}) {
+  const showCall = can(match.status, 'call');
+  const showStart = can(match.status, 'start');
+  // Record — playing only, and MEET only. A playing bracket match is recorded
+  // in the bracket's own MatchDetailPanel, which RunSurface mounts below this
+  // rail: set-by-set scores, Undo start, and the canon armed winner buttons
+  // labelled with the real side names.
+  const showRecord = match.source === 'meet' && can(match.status, 'record');
+  const showPostpone = can(match.status, 'postpone');
+
+  return (
+    <>
+      {(showCall || showStart || showRecord) && (
+        <DetailPanel.Section eyebrow="Actions" testId="run-inspector-actions">
+          <div className="flex flex-wrap gap-2">
+            {showCall && (
+              <button
+                type="button"
+                data-testid="run-act-call"
+                className={primaryBtn}
+                onClick={() => onAction('call')}
+              >
+                Call
+              </button>
+            )}
+            {showStart && (
+              <button
+                type="button"
+                data-testid="run-act-start"
+                className={primaryBtn}
+                onClick={() => onAction('start')}
+              >
+                Start
+              </button>
+            )}
+            {showRecord && <RecordButton onRecord={() => onAction('record')} />}
+          </div>
+        </DetailPanel.Section>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {/* Call — scheduled only */}
-        {can(match.status, 'call') && (
-          <button
-            type="button"
-            data-testid="run-act-call"
-            className={primaryBtn}
-            onClick={() => onAction('call')}
-          >
-            Call
-          </button>
-        )}
-
-        {/* Start — called only */}
-        {can(match.status, 'start') && (
-          <button
-            type="button"
-            data-testid="run-act-start"
-            className={primaryBtn}
-            onClick={() => onAction('start')}
-          >
-            Start
-          </button>
-        )}
-
-        {/* Record — playing only, and MEET only. A playing bracket match is
-            recorded in the bracket's own MatchDetailPanel, which RunSurface
-            mounts below this rail: it carries set-by-set scores, Undo start,
-            and the canon armed winner buttons labelled with the real side
-            names. Two identical accent buttons reading "A wins"/"B wins" four
-            pixels apart used to live here instead. */}
-        {match.source === 'meet' && can(match.status, 'record') && (
-          <RecordButton onRecord={() => onAction('record')} />
-        )}
-
-        {/* Postpone — called or playing. Reversible (it just returns the match
-            to the queue), so it stays one press and keeps the neutral border:
-            the accent weight belongs to the action that cannot be taken back. */}
-        {can(match.status, 'postpone') && (
+      {showPostpone && (
+        <DetailPanel.Section eyebrow="Reschedule" testId="run-inspector-reschedule">
           <button
             type="button"
             data-testid="run-act-postpone"
@@ -308,8 +289,11 @@ function NowActions({
           >
             Postpone
           </button>
-        )}
-      </div>
-    </div>
+          <p className="mt-2 text-2xs text-muted-foreground">
+            Returns the match to the queue. Nothing is lost.
+          </p>
+        </DetailPanel.Section>
+      )}
+    </>
   );
 }

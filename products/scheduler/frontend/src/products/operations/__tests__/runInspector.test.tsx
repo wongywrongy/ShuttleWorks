@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { RunInspector } from '../run/RunInspector';
 import type { RunMatch } from '../runtime/runModel';
 
@@ -123,6 +123,60 @@ describe('RunInspector — role: now', () => {
   // MatchDetailPanel, which RunSurface stacks below this rail once the match is
   // playing: armed winner buttons carrying the real side names, plus set
   // scores and Undo start.
+  // O1. The audit measured Record result and Postpone ~10px apart in one
+  // wrapped flex row: a terminal write and a reversible one, same size, one
+  // gap. Record arms; Postpone does not, and should not (arming a reversible
+  // action teaches the operator the arm means nothing). So the fix is
+  // DISTANCE — Postpone moves into its own labelled section, a hairline and a
+  // section's padding away, and the two are no longer one slip apart.
+  it('Record result and Postpone are not siblings: the terminal action stands alone', () => {
+    const m = mkMatch({
+      key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1', status: 'playing',
+    });
+    render(<RunInspector match={m} role="now" onAction={vi.fn()} />);
+
+    const recordSection = screen.getByTestId('run-act-record').closest('section');
+    const postponeSection = screen.getByTestId('run-act-postpone').closest('section');
+
+    expect(recordSection).not.toBeNull();
+    expect(postponeSection).not.toBeNull();
+    expect(recordSection).not.toBe(postponeSection);
+    // ...and the reversible one is named where it now lives, rather than
+    // stranded under the terminal action's heading.
+    expect(within(postponeSection!).getByText('RESCHEDULE')).toBeInTheDocument();
+  });
+
+  // O5. The rail was `space-y-3 p-4` — eight fields, no headings, no rules, no
+  // eyebrow anywhere — while the panel grammar every other dock uses sat
+  // unused. Every group now says what it is, in the one imported recipe.
+  it('every group in the rail carries a heading', () => {
+    const m = mkMatch({
+      key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1', status: 'playing',
+    });
+    render(<RunInspector match={m} role="now" onAction={vi.fn()} />);
+
+    for (const eyebrow of ['STATUS', 'PLAYERS', 'ACTIONS', 'RESCHEDULE']) {
+      expect(screen.getByText(eyebrow)).toBeInTheDocument();
+    }
+    // Fields are labelled too, not a bare stack of values.
+    expect(screen.getByText('State')).toBeInTheDocument();
+    expect(screen.getByText('Court')).toBeInTheDocument();
+    expect(screen.getByText('Planned')).toBeInTheDocument();
+  });
+
+  // O7. The rail named the bracket engine "Brkt" while the queue square two
+  // inches away called it "B" and every tooltip on the surface said "Bracket".
+  // One vocabulary: the shared SourceChip.
+  it('names the engine the way the rest of the surface does', () => {
+    const m = mkMatch({
+      key: 'bracket:pu1', id: 'pu1', source: 'bracket', label: 'QF1', status: 'playing',
+    });
+    render(<RunInspector match={m} role="now" onAction={vi.fn()} />);
+
+    expect(screen.getByTestId('source-chip-bracket')).toHaveTextContent('Bracket');
+    expect(screen.queryByText('Brkt')).toBeNull();
+  });
+
   it('playing bracket → no inline winner buttons; the bracket panel owns recording', () => {
     const onAction = vi.fn();
     const m = mkMatch({

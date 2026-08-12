@@ -150,22 +150,11 @@ export function SchedulePage() {
     (ms) => ms.status && ms.status !== 'scheduled',
   );
 
-  // Two-click inline guard replaces the old window.confirm(): first
-  // click flips the button into "Confirm replace" state for 4s, second
-  // click within the window actually regenerates.
-  const [confirmingReplace, setConfirmingReplace] = useState(false);
-  useEffect(() => {
-    if (!confirmingReplace) return;
-    const t = window.setTimeout(() => setConfirmingReplace(false), 4000);
-    return () => window.clearTimeout(t);
-  }, [confirmingReplace]);
-
+  // The two-click replace guard lives in `ScheduleActions` now, on the canon
+  // `useConfirmClick` (Escape cancels an accidental arm; the window decays on
+  // its own). It used to be this page's own `confirmingReplace` state plus a
+  // hand-rolled 4s effect — one of the copy-pasted timers that hook replaced.
   const handleGenerate = async () => {
-    if (schedule && !confirmingReplace) {
-      setConfirmingReplace(true);
-      return;
-    }
-    setConfirmingReplace(false);
     try {
       await generateSchedule();
     } catch (err) {
@@ -356,7 +345,6 @@ export function SchedulePage() {
                 onGenerate={handleGenerate}
                 generating={isOptimizing}
                 hasSchedule={!!schedule}
-                confirmingReplace={confirmingReplace}
                 liveDay={liveDay}
                 hasMatches={matches.length > 0}
               />
@@ -461,7 +449,6 @@ export function SchedulePage() {
             onGenerate={handleGenerate}
             generating={isOptimizing}
             hasSchedule={!!schedule}
-            confirmingReplace={confirmingReplace}
             liveDay={liveDay}
             hasMatches={matches.length > 0}
           />

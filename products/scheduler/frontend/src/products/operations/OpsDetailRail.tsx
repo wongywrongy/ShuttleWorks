@@ -11,6 +11,12 @@
  *     for scheduling, not running).
  * The bracket id is synced into `uiStore.bracketSelectedMatchId` by the
  * parent so `MatchDetailPanel` (which reads it from the store) stays in sync.
+ *
+ * Pure pane CONTENT. `OperationsProduct` mounts it inside a `DetailPanel`
+ * (identity header, close, dismissal) inside a `DetailDock` (width, narrow
+ * fallback). Groups are `DetailPanel.Section`; label/value pairs are `Row`
+ * from the settings grammar. It was one `space-y-3 p-4` stack with no
+ * headings, no rules and no eyebrow.
  */
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { MatchDetailPanel } from '../bracket/MatchDetailPanel';
@@ -18,6 +24,8 @@ import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
 import { SourceChip } from '../../components/SourceChip';
+import { DetailPanel } from '../../components/control-plane';
+import { Row } from '../../platform/settings/SettingsControls';
 
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card ` +
@@ -25,10 +33,6 @@ const actionBtn =
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
   `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
-
-// Pure rail content — geometry (width, border) is owned by the DetailDock
-// host the rail mounts into.
-const RAIL = 'h-full w-full space-y-3 overflow-auto p-4';
 
 interface Props {
   block: OpsBlock | null;
@@ -39,66 +43,100 @@ interface Props {
   live: boolean;
 }
 
-function Identity({ block }: { block: OpsBlock }) {
-  return (
-    <>
-      <div className="flex items-center gap-2">
-        <SourceChip source={block.source} />
-        <span className="sw-num text-2xs uppercase tracking-[0.08em] text-muted-foreground">{block.label}</span>
-      </div>
-      <div className="sw-num text-sm">{block.court != null ? `Court C${block.court} · slot ${block.slot}` : 'Not scheduled'}</div>
-      <div className="space-y-1">
-        <div className="text-sm">{block.sideA}</div>
-        <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
-        <div className="text-sm">{block.sideB}</div>
-      </div>
-    </>
-  );
+function stateLabel(block: OpsBlock): string {
+  if (block.done) return 'Done';
+  if (block.started) return 'In progress';
+  return block.court != null ? 'Scheduled' : 'Awaiting court';
 }
 
 export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: Props) {
   if (!block) {
-    return <aside className={`${RAIL} text-sm text-muted-foreground`}>Select a match to see details.</aside>;
+    return (
+      <aside className="w-full p-4 text-sm text-muted-foreground">
+        Select a match to see details.
+      </aside>
+    );
   }
 
   // Live + bracket → the rich bracket rail verbatim (Start / Sets / winner / undo).
   if (live && block.source === 'bracket') {
-    if (!data) return <aside className={`${RAIL} text-sm text-muted-foreground`}>Loading bracket…</aside>;
+    if (!data) {
+      return <aside className="w-full p-4 text-sm text-muted-foreground">Loading bracket…</aside>;
+    }
     return <MatchDetailPanel data={data} onChange={onBracketChange} />;
   }
+
+  const showActions = live && block.source === 'meet' && !block.done;
 
   return (
     // Keyed by the match key so switching selection re-mounts the rail and
     // re-triggers `sw-panel-in`; a background poll re-render keeps the same
     // key (block identity may change, its key doesn't) so it never re-fires.
-    <aside key={block.key} className={`${RAIL} sw-panel-in`}>
-      <Identity block={block} />
-      {block.done ? (
-        <div className={`${EYEBROW_CLASS} text-status-done`}>Done</div>
-      ) : live && block.source === 'meet' ? (
-        <div className="flex flex-wrap gap-2">
-          {block.started ? (
-            <button type="button" className={actionBtn} onClick={() => onAction(block, { kind: 'finish' })}>
-              Finish match
-            </button>
-          ) : (
-            <>
-              {block.status !== 'called' && (
-                <button type="button" className={actionBtn} onClick={() => onAction(block, { kind: 'call' })}>
-                  Call to court
-                </button>
-              )}
-              <button type="button" className={primaryBtn} onClick={() => onAction(block, { kind: 'start' })}>
-                Start match
+    <aside key={block.key} className="w-full sw-panel-in">
+      <DetailPanel.Section
+        eyebrow="Status"
+        right={<SourceChip source={block.source} />}
+        testId="ops-rail-status"
+      >
+        <Row
+          label="State"
+          control={
+            <span
+              className={`${EYEBROW_CLASS} ${block.done ? 'text-status-done' : 'text-muted-foreground'}`}
+            >
+              {stateLabel(block)}
+            </span>
+          }
+        />
+        <Row
+          label="Court"
+          control={
+            <span className="sw-num text-sm text-foreground">
+              {block.court != null ? `C${block.court}` : 'Not on a court'}
+            </span>
+          }
+        />
+        <Row
+          label="Slot"
+          control={
+            <span className="sw-num text-sm text-foreground">
+              {block.court != null ? block.slot : 'Not planned'}
+            </span>
+          }
+          last
+        />
+      </DetailPanel.Section>
+
+      <DetailPanel.Section eyebrow="Players" testId="ops-rail-players">
+        <div className="space-y-1">
+          <div className="text-sm text-foreground">{block.sideA}</div>
+          <div className={`${EYEBROW_CLASS} text-muted-foreground`}>vs</div>
+          <div className="text-sm text-foreground">{block.sideB}</div>
+        </div>
+      </DetailPanel.Section>
+
+      {showActions ? (
+        <DetailPanel.Section eyebrow="Actions" testId="ops-rail-actions">
+          <div className="flex flex-wrap gap-2">
+            {block.started ? (
+              <button type="button" className={actionBtn} onClick={() => onAction(block, { kind: 'finish' })}>
+                Finish match
               </button>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
-          {block.started ? 'In progress' : block.court != null ? 'Scheduled' : 'Awaiting court'}
-        </div>
-      )}
+            ) : (
+              <>
+                {block.status !== 'called' && (
+                  <button type="button" className={actionBtn} onClick={() => onAction(block, { kind: 'call' })}>
+                    Call to court
+                  </button>
+                )}
+                <button type="button" className={primaryBtn} onClick={() => onAction(block, { kind: 'start' })}>
+                  Start match
+                </button>
+              </>
+            )}
+          </div>
+        </DetailPanel.Section>
+      ) : null}
     </aside>
   );
 }

@@ -1,6 +1,13 @@
 /**
  * Finished Card — terminal-state row with score readout and Undo
  * (back to in-progress, clearing the score).
+ *
+ * Undo sits INSIDE the row's own click target, and that click target means
+ * "show me this match". A Finished tab is a wall of these rows — 73 of them on
+ * a real meet day — each carrying one control that discards a recorded score,
+ * 8px from the row edge. It is the only destructive control here, so it arms:
+ * `useConfirmClick`, the canon two-click guard (Escape cancels, the window
+ * decays on its own), rather than a confirm dialog on a row you brush past.
  */
 import { useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
@@ -9,6 +16,7 @@ import { getMatchLabel } from '../../../../utils/matchUtils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../../lib/selectableRow';
 import { ACTION_BTN } from './styles';
 import { useCanEdit } from '../../../../hooks/useCanEdit';
+import { useConfirmClick } from '../../../../hooks/useConfirmClick';
 
 export function FinishedCard({
   assignment,
@@ -37,11 +45,6 @@ export function FinishedCard({
   // vocabulary, which blocks pointer AND keyboard.
   const canEditWorkspace = useCanEdit();
   const locked = updating || !canEditWorkspace;
-  if (!match) return null;
-
-  const sideANames = (match.sideA || []).map((id) => playerNames.get(id) || id).join(' & ');
-  const sideBNames = (match.sideB || []).map((id) => playerNames.get(id) || id).join(' & ');
-  const score = matchState?.score;
 
   const handleUndo = async () => {
     setUpdating(true);
@@ -55,6 +58,14 @@ export function FinishedCard({
       setUpdating(false);
     }
   };
+  // Declared above the `!match` bail so it runs on every render (rules of hooks).
+  const confirmUndo = useConfirmClick(() => void handleUndo());
+
+  if (!match) return null;
+
+  const sideANames = (match.sideA || []).map((id) => playerNames.get(id) || id).join(' & ');
+  const sideBNames = (match.sideB || []).map((id) => playerNames.get(id) || id).join(' & ');
+  const score = matchState?.score;
 
   return (
     <div
@@ -85,17 +96,28 @@ export function FinishedCard({
         <span className="text-3xs text-muted-foreground">no score</span>
       )}
       <button
+        type="button"
+        data-testid={`finished-undo-${assignment.matchId}`}
         onClick={(e) => {
           e.stopPropagation();
-          handleUndo();
+          confirmUndo.press();
         }}
+        onBlur={confirmUndo.reset}
         disabled={locked}
-        className={`${ACTION_BTN} bg-muted text-foreground hover:bg-muted/80 !px-2 !py-0.5 !text-2xs`}
-        title="Undo finish: back to in progress"
-        aria-label="Undo finish"
+        className={`${ACTION_BTN} !px-2 !py-0.5 !text-2xs ${
+          confirmUndo.armed
+            ? 'bg-destructive text-destructive-foreground sw-pulse'
+            : 'bg-muted text-foreground hover:bg-muted/80'
+        }`}
+        title={
+          confirmUndo.armed
+            ? 'Press again to undo: the recorded score is discarded'
+            : 'Undo finish: back to in progress, clearing the score'
+        }
+        aria-label={confirmUndo.armed ? 'Confirm undo: the score is discarded' : 'Undo finish'}
       >
         {updating && <CircleNotch aria-hidden="true" className="h-3 w-3 animate-spin" />}
-        Undo
+        {confirmUndo.armed ? 'Press again' : 'Undo'}
       </button>
     </div>
   );

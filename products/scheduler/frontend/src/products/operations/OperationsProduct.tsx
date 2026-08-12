@@ -33,7 +33,7 @@ import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from 
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
 import { OpsDetailRail } from './OpsDetailRail';
-import { DetailDock } from '../../components/control-plane';
+import { DetailDock, DetailPanel } from '../../components/control-plane';
 import { RunSurface } from './run/RunSurface';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
@@ -44,9 +44,16 @@ import { useAction } from '../../hooks/useAction';
 // 28px box, spilling out over the header. The button now takes its content's
 // height, and `whitespace-nowrap` + the header's `flex-wrap` (below) give it
 // its content's width instead of a two-line label.
-const schedBtn =
-  `${INTERACTIVE_BASE} inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-sm bg-accent px-2.5 py-1 text-xs ` +
-  `font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
+const schedBtnBase =
+  `${INTERACTIVE_BASE} inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-sm px-2.5 py-1 text-xs ` +
+  `font-medium disabled:cursor-not-allowed disabled:opacity-50`;
+// "Re-solve meet" DISCARDS the plan that "Plan ready ✓" commits, and the two
+// were the same size, the same accent fill, 8px apart. The glow marks intent;
+// only the action that COMMITS has it. Solve actions are quiet.
+const commitBtn =
+  `${schedBtnBase} bg-accent text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
+const solveBtn =
+  `${schedBtnBase} border border-border-control bg-card text-foreground hover:bg-muted/40`;
 
 export function OperationsProduct() {
   const tid = useTournamentId();
@@ -222,26 +229,34 @@ function OperationsBody() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className={schedBtn}
+              className={solveBtn}
               onClick={() => void generateSchedule(bracketWindows)}
               disabled={generating}
               data-testid="ops-generate-meet"
+              title={
+                schedule
+                  ? 'Re-solve the meet: replaces the current plan'
+                  : 'Solve the meet and place its matches'
+              }
             >
               {generating ? 'Generating…' : schedule ? 'Re-solve meet' : 'Generate meet'}
             </button>
             {schedulableCount > 0 ? (
               <button
                 type="button"
-                className={schedBtn}
+                className={solveBtn}
                 onClick={() => setScheduling(true)}
                 data-testid="ops-schedule-next"
               >
                 Schedule next round ({schedulableCount})
               </button>
             ) : null}
+            {/* The rule closes the solve group: commit must not be one 8px
+                gap away from the action that throws the plan away. */}
+            <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
             <button
               type="button"
-              className={schedBtn}
+              className={commitBtn}
               onClick={() => void planFinalizeAction.run()}
               disabled={planFinalizeAction.pending}
               aria-busy={planFinalizeAction.pending}
@@ -312,15 +327,16 @@ function OperationsBody() {
 
               <DetailDock open={selectedBlock != null} width={320}>
                 {selectedBlock ? (
-                  <div className="relative h-full min-h-0">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedKey(null)}
-                      aria-label="Close details"
-                      className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                    >
-                      ✕
-                    </button>
+                  // Pane chrome: identity header, close, Esc, and dialog
+                  // semantics when the dock demotes itself to an overlay.
+                  // Replaces a hand-rolled ✕ that only a mouse could find.
+                  <DetailPanel
+                    label="Match"
+                    value={selectedBlock.label}
+                    mono
+                    onClose={() => setSelectedKey(null)}
+                    testId="ops-detail-panel"
+                  >
                     <OpsDetailRail
                       block={selectedBlock}
                       data={data}
@@ -328,7 +344,7 @@ function OperationsBody() {
                       onAction={onAction}
                       live={false}
                     />
-                  </div>
+                  </DetailPanel>
                 ) : null}
               </DetailDock>
             </div>
