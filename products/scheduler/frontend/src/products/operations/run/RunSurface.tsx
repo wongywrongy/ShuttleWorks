@@ -16,6 +16,7 @@ import { useBracketApi } from '../../../api/bracketClient';
 import { useCommandQueue } from '../../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../../hooks/useBracketResultQueue';
 import { useUiStore } from '../../../store/uiStore';
+import { DetailDock } from '../../../components/control-plane';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import type { OpsBlock } from '../opsBlock';
 import {
@@ -379,7 +380,7 @@ export function RunSurface({
           is always mounted (showing its "Select a match…" empty state) so the
           surface reads as interactive and operators see where actions live,
           instead of a board that looks read-only until you happen to click. */}
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col overflow-auto">
           {/* Board — the live court×time hero (GanttTimeline + MatchChip) */}
           <RunLiveBoard
@@ -410,29 +411,39 @@ export function RunSurface({
           </div>
         </div>
 
-        {/* Persistent inspector column. RunInspector renders its own empty state
-            when nothing is selected; the close button only appears on selection. */}
-        <div className="relative flex flex-shrink-0">
+        {/* Inspector column — a real DetailDock, same as the Plan branch's rail
+            (OperationsProduct). The dock owns the geometry: it reflows the
+            board+queue beside it when there is room and falls back to a
+            right-edge overlay when there isn't, instead of the hand-rolled
+            288px rail that squeezed the live column to nothing at tablet
+            width. */}
+        <DetailDock
+          open={selectedMatch != null}
+          width={288}
+          testId="run-detail-dock"
+        >
           {selectedMatch ? (
-            <button
-              type="button"
-              onClick={() => setSelectedKey(null)}
-              aria-label="Close inspector"
-              className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-            >
-              ✕
-            </button>
+            <div className="relative h-full min-h-0">
+              <button
+                type="button"
+                onClick={() => setSelectedKey(null)}
+                aria-label="Close inspector"
+                className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              >
+                ✕
+              </button>
+              <RunInspector
+                match={selectedMatch}
+                role={selectedRole}
+                nowRef={nowRef}
+                freeCourt={freeCourt}
+                currentSlot={currentSlot}
+                formatSlot={formatSlot}
+                onAction={handleAction}
+              />
+            </div>
           ) : null}
-          <RunInspector
-            match={selectedMatch}
-            role={selectedRole}
-            nowRef={nowRef}
-            freeCourt={freeCourt}
-            currentSlot={currentSlot}
-            formatSlot={formatSlot}
-            onAction={handleAction}
-          />
-        </div>
+        </DetailDock>
       </div>
     </div>
   );

@@ -70,8 +70,12 @@ export interface RunInspectorProps {
 }
 
 // ── root ──────────────────────────────────────────────────────────────────
-const RAIL =
-  'w-72 flex-shrink-0 space-y-3 overflow-auto border-l border-border p-4';
+// Pure rail CONTENT — geometry (width, border, the narrow-viewport overlay
+// fallback) is owned by the `DetailDock` host this mounts into, exactly as
+// OpsDetailRail does on the Plan branch. The former `w-72 flex-shrink-0`
+// hard-coded a 288px column that never shrank, which collapsed the
+// board+queue column to 0px at tablet width.
+const RAIL = 'h-full w-full space-y-3 overflow-auto p-4';
 
 export function RunInspector({
   match,

@@ -255,6 +255,32 @@ describe('RunSurface — summary band derived counts', () => {
   // (RunSurface no longer renders its own header) — see courtStatus.test.tsx.
 });
 
+// The Plan branch wraps its rail in `DetailDock` (OperationsProduct.tsx), which
+// owns the narrow-viewport overlay fallback. Run hand-rolled a `w-72
+// flex-shrink-0` rail that was ALWAYS mounted, so at 390px the board+queue
+// column measured 0px with nothing reachable (audit T2 / ship blocker #9).
+describe('RunSurface — the inspector is hosted by DetailDock', () => {
+  it('reserves no inspector column until a match is selected, then docks one', () => {
+    render(
+      <RunSurface
+        blocks={makeAutoFillBlocks()}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    // Nothing selected → no rail at all (so no fixed 288px column to steal).
+    expect(screen.queryByTestId('run-inspector')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('run-card-meet:m1'));
+
+    const dock = screen.getByTestId('run-detail-dock');
+    expect(dock).toContainElement(screen.getByTestId('run-inspector'));
+  });
+});
+
 describe('RunSurface — select Now playing meet match + Record result', () => {
   it('calls meetSubmit("finish_match") when Record result is clicked', async () => {
     render(
