@@ -92,23 +92,22 @@ describe('RunInspector — role: now', () => {
     expect(onAction).toHaveBeenCalledWith('record');
   });
 
-  it('playing bracket → A wins / B wins; clicking fires onAction("record",{winnerSide})', () => {
+  // The rail used to render two identical accent buttons, "A wins" and "B
+  // wins", four pixels apart and differing by one letter — for an irreversible
+  // write. Recording a bracket result now belongs to the bracket's own
+  // MatchDetailPanel, which RunSurface stacks below this rail once the match is
+  // playing: armed winner buttons carrying the real side names, plus set
+  // scores and Undo start.
+  it('playing bracket → no inline winner buttons; the bracket panel owns recording', () => {
     const onAction = vi.fn();
     const m = mkMatch({
       key: 'bracket:pu1', id: 'pu1', source: 'bracket', label: 'QF1', status: 'playing',
     });
     render(<RunInspector match={m} role="now" onAction={onAction} />);
 
-    expect(screen.getByTestId('run-act-win-a')).toBeInTheDocument();
-    expect(screen.getByTestId('run-act-win-b')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-act-win-a')).toBeNull();
+    expect(screen.queryByTestId('run-act-win-b')).toBeNull();
     expect(screen.queryByTestId('run-act-record')).toBeNull();
-
-    fireEvent.click(screen.getByTestId('run-act-win-a'));
-    expect(onAction).toHaveBeenCalledWith('record', { winnerSide: 'A' });
-
-    onAction.mockClear();
-    fireEvent.click(screen.getByTestId('run-act-win-b'));
-    expect(onAction).toHaveBeenCalledWith('record', { winnerSide: 'B' });
   });
 
   it('playing bracket → Postpone also rendered', () => {

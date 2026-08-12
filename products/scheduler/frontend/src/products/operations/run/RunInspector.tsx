@@ -75,7 +75,9 @@ export interface RunInspectorProps {
 // OpsDetailRail does on the Plan branch. The former `w-72 flex-shrink-0`
 // hard-coded a 288px column that never shrank, which collapsed the
 // board+queue column to 0px at tablet width.
-const RAIL = 'h-full w-full space-y-3 overflow-auto p-4';
+// Scrolling belongs to the dock column too: on a live bracket match the
+// bracket's own MatchDetailPanel stacks below this rail in the same column.
+const RAIL = 'w-full space-y-3 p-4';
 
 export function RunInspector({
   match,
@@ -240,37 +242,21 @@ function NowActions({
           </button>
         )}
 
-        {/* Record — playing only; engine-specific presentation */}
-        {can(match.status, 'record') && (
-          match.source === 'bracket' ? (
-            <>
-              <button
-                type="button"
-                data-testid="run-act-win-a"
-                className={primaryBtn}
-                onClick={() => onAction('record', { winnerSide: 'A' })}
-              >
-                A wins
-              </button>
-              <button
-                type="button"
-                data-testid="run-act-win-b"
-                className={primaryBtn}
-                onClick={() => onAction('record', { winnerSide: 'B' })}
-              >
-                B wins
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              data-testid="run-act-record"
-              className={actionBtn}
-              onClick={() => onAction('record')}
-            >
-              Record result
-            </button>
-          )
+        {/* Record — playing only, and MEET only. A playing bracket match is
+            recorded in the bracket's own MatchDetailPanel, which RunSurface
+            mounts below this rail: it carries set-by-set scores, Undo start,
+            and the canon armed winner buttons labelled with the real side
+            names. Two identical accent buttons reading "A wins"/"B wins" four
+            pixels apart used to live here instead. */}
+        {match.source === 'meet' && can(match.status, 'record') && (
+          <button
+            type="button"
+            data-testid="run-act-record"
+            className={actionBtn}
+            onClick={() => onAction('record')}
+          >
+            Record result
+          </button>
         )}
 
         {/* Postpone — called or playing */}

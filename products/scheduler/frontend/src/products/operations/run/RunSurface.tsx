@@ -11,7 +11,7 @@
  *
  * Task 16 will wire `OperationsProduct` to pass blocks/bracketData/etc down.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBracketApi } from '../../../api/bracketClient';
 import { useCommandQueue } from '../../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../../hooks/useBracketResultQueue';
@@ -37,6 +37,7 @@ import { RunSummaryBand } from './RunSummaryBand';
 import { RunLiveBoard } from './RunLiveBoard';
 import { RunQueue } from './RunQueue';
 import { RunInspector } from './RunInspector';
+import { MatchDetailPanel } from '../../bracket/MatchDetailPanel';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 
 // ── prop contract ─────────────────────────────────────────────────────────
@@ -324,6 +325,27 @@ export function RunSurface({
     return { code: lane.now.label, court: lane.court };
   }, [selectedRole, selectedMatch, lanes]);
 
+  /**
+   * MatchDetailPanel reads its subject from `uiStore.bracketSelectedMatchId`,
+   * so Run has to publish its selection there — exactly as the Plan branch
+   * does in OperationsProduct.
+   */
+  const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
+  useEffect(() => {
+    setBracketSelectedMatchId(
+      selectedMatch?.source === 'bracket' ? selectedMatch.id : null,
+    );
+  }, [selectedMatch, setBracketSelectedMatchId]);
+
+  /**
+   * The rich bracket rail, mounted only once the match is actually PLAYING.
+   * That is precisely the window where it adds something the run inspector
+   * cannot: Undo start, set-by-set scores, and the armed winner buttons. Before
+   * `start` it would only duplicate the inspector's own Start button.
+   */
+  const showBracketPanel =
+    selectedMatch?.source === 'bracket' && selectedMatch.status === 'playing' && bracketData != null;
+
   /** For a queued match: the first court with no Now match. */
   const freeCourt = useMemo((): number | undefined => {
     if (selectedRole !== 'queued') return undefined;
@@ -458,7 +480,7 @@ export function RunSurface({
           testId="run-detail-dock"
         >
           {selectedMatch ? (
-            <div className="relative h-full min-h-0">
+            <div className="relative h-full min-h-0 overflow-auto">
               <button
                 type="button"
                 onClick={() => setSelectedKey(null)}
@@ -476,6 +498,13 @@ export function RunSurface({
                 formatSlot={formatSlot}
                 onAction={handleAction}
               />
+              {/* Plain wrapper: it neutralises the panel's own `h-full` so the
+                  two rails stack in this one scroll column. */}
+              {showBracketPanel && bracketData ? (
+                <div data-testid="run-bracket-panel" className="border-t border-border">
+                  <MatchDetailPanel data={bracketData} onChange={onBracketData} />
+                </div>
+              ) : null}
             </div>
           ) : null}
         </DetailDock>
