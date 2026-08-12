@@ -10,6 +10,8 @@
  *
  * Events badges derive from `events[].participants` (works pre-generate)
  * — see rosterEvents.ts. Row delete lives in a per-row overflow menu.
+ * The panel body is `BracketPlayerDetailFields` (IDENTITY / AVAILABILITY /
+ * EVENTS / NOTES sections).
  */
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { Download, MagnifyingGlass } from '@phosphor-icons/react';
@@ -31,13 +33,9 @@ import { lockedPlayerIds, ROSTER_LOCKED_REASON } from './lockedPlayers';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { playerSlug } from '../../lib/playerSlug';
-import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
-import {
-  BracketAvailabilityEventsFields,
-  FIELD_INPUT_CLASSES,
-  FIELD_LABEL_CLASSES,
-  type CommitEventFn,
-} from './BracketPlayerFields';
+import { badgesByPlayerId } from './rosterEvents';
+import { FIELD_INPUT_CLASSES, type CommitEventFn } from './BracketPlayerFields';
+import { BracketPlayerDetailFields } from './BracketPlayerDetailFields';
 import { exportBracketRosterXlsx } from './exports/xlsxExports';
 
 /** Column set for the roster table — canonical px-5 banded rhythm. */
@@ -277,7 +275,7 @@ function BracketRosterTabCore({
               onClose={() => setSelectedId(null)}
               testId="bracket-player-detail"
             >
-              <PlayerDetailFields
+              <BracketPlayerDetailFields
                 key={selected.id}
                 player={selected}
                 roster={players}
@@ -294,71 +292,3 @@ function BracketRosterTabCore({
   );
 }
 
-/* =========================================================================
- * PlayerDetailFields — the panel body: notes, min rest (slots), then the
- * shared Availability + Events blocks (BracketAvailabilityEventsFields —
- * the same implementation the Matches panel's player cards expand to).
- * ========================================================================= */
-function PlayerDetailFields({
-  player,
-  roster,
-  bracketData,
-  badges,
-  onUpdate,
-  onCommitEvent,
-}: {
-  player: BracketPlayerDTO;
-  roster: BracketPlayerDTO[];
-  bracketData: BracketTournamentDTO | null;
-  badges: BadgeEntry[];
-  onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
-  onCommitEvent: CommitEventFn | null;
-}) {
-  return (
-    <div className="flex flex-col gap-3 px-3 py-3">
-      <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASSES}>Notes</span>
-        <input
-          key={player.id + '-notes'}
-          type="text"
-          defaultValue={player.notes ?? ''}
-          onBlur={(e) => {
-            if (e.target.value !== (player.notes ?? '')) {
-              onUpdate(player.id, { notes: e.target.value });
-            }
-          }}
-          className={FIELD_INPUT_CLASSES}
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASSES}>Min rest (slots)</span>
-        <input
-          key={player.id + '-rest'}
-          type="number"
-          min={0}
-          defaultValue={player.restSlots != null ? String(player.restSlots) : ''}
-          placeholder="default (1)"
-          aria-label="Min rest (slots)"
-          onBlur={(e) => {
-            const raw = e.target.value;
-            const next = raw === '' ? undefined : Math.max(0, Number(raw) || 0);
-            if (next !== player.restSlots) {
-              onUpdate(player.id, { restSlots: next });
-            }
-          }}
-          className={`${FIELD_INPUT_CLASSES} sw-num`}
-        />
-      </label>
-
-      <BracketAvailabilityEventsFields
-        player={player}
-        roster={roster}
-        bracketData={bracketData}
-        badges={badges}
-        onUpdate={onUpdate}
-        onCommitEvent={onCommitEvent}
-      />
-    </div>
-  );
-}

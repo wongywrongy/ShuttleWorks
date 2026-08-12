@@ -34,6 +34,10 @@ import {
 } from '../../components/control-plane';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { Modal } from '../../components/common/Modal';
+import {
+  MAX_EVENT_CODE_LENGTH,
+  validateEventCode,
+} from '../../platform/settings/MeetEventsSection';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import type { PickedSingle, PickedPair } from './ParticipantPicker';
 import { DrawDetailPanel } from './DrawDetailPanel';
@@ -69,16 +73,25 @@ interface DrawRow {
  *  per-row action buttons (Generate / Configure / Next round / Open). */
 // Fixed cells are `shrink-0` so a docked detail pane can never crush them
 // into overlapping their neighbors. Nothing here ellipsises: Format wraps
-// (the row grows) and yields entirely at priority 3; Progress is a bar, not
-// text.
+// (the row grows) and yields entirely at priority 3; Progress is four
+// counters, not text.
+//
+// Progress is FIXED-WIDTH and Format is the grower (defect D4). The two were
+// the other way round, which put the four DONE/LIVE/READY/PEND counters —
+// ~184px of content that cannot reflow — in whatever the row had left over:
+// a 104px sliver colliding with the STATUS chip at 1280px, and a 904px
+// expanse at full width. `flex-wrap` is the backstop for three-digit tallies:
+// the row grows a line rather than clipping a number.
 const DRAW_COLUMNS: BandedListColumn[] = [
   { label: 'Code', className: 'w-16 shrink-0' },
-  { label: 'Format', className: 'w-44 min-w-0', priority: 3 },
+  { label: 'Format', className: 'min-w-0 flex-1', priority: 3 },
   { label: 'Size', className: 'w-12 shrink-0 text-right', priority: 2 },
   { label: 'Entered', className: 'w-16 shrink-0 text-right' },
-  { label: 'Progress', className: 'min-w-0 flex-1' },
+  { label: 'Progress', className: 'w-52 shrink-0' },
   { label: 'Status', className: 'w-28 shrink-0 text-right' },
-  { label: '', className: 'w-80 shrink-0' },
+  // `ml-auto` keeps the action cluster on the right edge in the narrow case
+  // where Format has yielded and no column is growing.
+  { label: '', className: 'ml-auto w-80 shrink-0' },
 ];
 
 export function BracketDrawsTab() {
@@ -324,9 +337,10 @@ export function BracketDrawsTab() {
                   >
                     {row.partCount}/{row.targetSize}
                   </span>
-                  <span role="cell" className="min-w-0 flex-1 overflow-hidden">
+                  <span role="cell" className={colClass(DRAW_COLUMNS[4])}>
                     {row.counts ? (
                       <StatusBar
+                        className="flex-wrap"
                         items={[
                           { tone: 'done', label: 'DONE', count: row.counts.done },
                           { tone: 'green', label: 'LIVE', count: row.counts.live },
@@ -343,7 +357,7 @@ export function BracketDrawsTab() {
                   </span>
                   <span
                     role="cell"
-                    className="flex w-80 shrink-0 items-center justify-end gap-3"
+                    className="ml-auto flex w-80 shrink-0 items-center justify-end gap-3"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ActionCell
@@ -416,6 +430,7 @@ export function BracketDrawsTab() {
 
       {creating && (
         <NewDrawModal
+          existingIds={events.map((e) => e.id)}
           onClose={() => setCreating(false)}
           onCreate={async ({ id, ...body }) => {
             try {
@@ -778,15 +793,20 @@ interface NewDrawSubmitBody extends ColumnFieldValues {
  * afterward, then the draw is generated.
  */
 function NewDrawModal({
+  existingIds,
   onClose,
   onCreate,
 }: {
+  /** Draw ids already in this bracket — an upsert onto one of them would
+   *  silently replace that draw. */
+  existingIds: readonly string[];
   onClose: () => void;
   onCreate: (body: NewDrawSubmitBody) => void;
 }) {
   const [id, setId] = useState('');
   const [discipline, setDiscipline] = useState('MS');
   const [format, setFormat] = useState<string>('se');
+  const [errors, setErrors] = useState<{ id?: string; discipline?: string }>({});
   const [values, setValues] = useState<FieldValues>(() =>
     defaultFieldValues(descriptorFor('se')?.fields ?? []),
   );
@@ -801,10 +821,33 @@ function NewDrawModal({
 
   const submit = () => {
     if (!id.trim()) return;
+    // The discipline is the grouping prefix, exactly what Meet calls an event
+    // code — so it gets Meet's own rule (letters only, uppercased,
+    // length-capped) instead of the bare free-text box defaulting to the
+    // literal string "MS" that shipped here (console IA pass, Theme 3).
+    // It is NOT deduped: several draws legitimately share one discipline.
+    const disciplineResult = validateEventCode(discipline, []);
+    if ('error' in disciplineResult) {
+      setErrors({ discipline: disciplineResult.error });
+      return;
+    }
+    // The draw ID is the thing that must be unique — `eventUpsert` onto an
+    // existing id silently REPLACES that draw. Digits are legitimate here
+    // (MS1, MS2, U19), so it takes the cap and the dedupe, not the letters
+    // rule Meet needs because its ranks are prefix+digits.
+    const code = id.trim().toUpperCase();
+    if (code.length > MAX_EVENT_CODE_LENGTH) {
+      setErrors({ id: `Draw IDs are at most ${MAX_EVENT_CODE_LENGTH} characters.` });
+      return;
+    }
+    if (existingIds.includes(code)) {
+      setErrors({ id: `${code} is already a draw.` });
+      return;
+    }
     const { column, config } = splitFieldPayload(descriptor.fields, values);
     onCreate({
-      id: id.trim(),
-      discipline,
+      id: code,
+      discipline: disciplineResult.code,
       format: descriptor.id,
       ...column,
       ...(config ? { config } : {}),
@@ -835,20 +878,41 @@ function NewDrawModal({
               type="text"
               value={id}
               autoFocus
-              onChange={(e) => setId(e.target.value)}
+              onChange={(e) => {
+                setId(e.target.value);
+                setErrors((prev) => ({ ...prev, id: undefined }));
+              }}
               onKeyDown={(e) => e.key === 'Enter' && submit()}
               placeholder="MS"
-              className={FIELD_INPUT_CLASS}
+              aria-invalid={errors.id ? true : undefined}
+              /* `uppercase` styles the placeholder too — normal-case keeps the
+                 hint from shouting. Same treatment as Meet's event-code field. */
+              className={`${FIELD_INPUT_CLASS} uppercase placeholder:normal-case`}
             />
+            {errors.id && (
+              <span role="alert" className="mt-1 block text-2xs text-destructive">
+                {errors.id}
+              </span>
+            )}
           </label>
           <label className="block">
             <span className={FIELD_LABEL_CLASS}>Discipline</span>
             <input
               type="text"
               value={discipline}
-              onChange={(e) => setDiscipline(e.target.value)}
-              className={FIELD_INPUT_CLASS}
+              onChange={(e) => {
+                setDiscipline(e.target.value);
+                setErrors((prev) => ({ ...prev, discipline: undefined }));
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              aria-invalid={errors.discipline ? true : undefined}
+              className={`${FIELD_INPUT_CLASS} uppercase placeholder:normal-case`}
             />
+            {errors.discipline && (
+              <span role="alert" className="mt-1 block text-2xs text-destructive">
+                {errors.discipline}
+              </span>
+            )}
           </label>
         </div>
 

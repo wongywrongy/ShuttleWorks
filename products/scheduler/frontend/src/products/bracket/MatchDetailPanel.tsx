@@ -1,6 +1,8 @@
 /**
  * Right rail for the Live tab. Shows the selected match's details +
- * operator actions (Start / A wins / B wins).
+ * operator actions (Start / A wins / B wins), under an identity header
+ * and the shared `SectionCard` grammar (ASSIGNMENT / PLAYERS / RESULT /
+ * ACTIONS).
  *
  * Actions are limited to what the bracket API supports:
  *   matchAction: 'start' | 'finish' | 'reset'
@@ -13,7 +15,8 @@ import { useBracketApi } from '../../api/bracketClient';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
+import { Eyebrow, SectionCard } from '../../components/control-plane';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { BracketScoreEntry } from './BracketScoreEntry';
 import { BracketInlineNotice } from './BracketInlineNotice';
@@ -92,50 +95,65 @@ export function MatchDetailPanel({ data, onChange, hideIdentity }: Props) {
     // pure rail content.
     <aside
       key={matchId}
-      className="h-full w-full p-4 space-y-3 overflow-auto sw-panel-in"
+      className="flex h-full w-full flex-col overflow-auto sw-panel-in"
     >
-      {/* Match id eyebrow */}
-      <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
-        {pu.id}
-      </div>
+      {/* Identity header. This rail had none: six unlabelled blocks under a
+          bare play-unit id (console IA pass, Theme 2). It is not a
+          `DetailPanel` because nothing here owns a close affordance — the
+          host does — so it borrows the same header treatment and the same
+          `SectionCard` grammar below. */}
+      <header className="flex shrink-0 items-baseline gap-2 border-b border-border bg-muted/40 px-4 py-2">
+        <Eyebrow>Match</Eyebrow>
+        <span className="min-w-0 break-words text-sm font-semibold text-foreground sw-num">
+          {pu.id}
+        </span>
+      </header>
 
       {/* Inline conflict surface (SP-F3): a stale or rejected result write. */}
       {conflict && (
-        <BracketInlineNotice
-          tone="error"
-          title="Could not record result"
-          message={conflict}
-        />
+        <div className="px-4 pt-3">
+          <BracketInlineNotice
+            tone="error"
+            title="Could not record result"
+            message={conflict}
+          />
+        </div>
       )}
 
-      {/* Court + slot */}
-      <div className="text-sm sw-num">
-        {assignment
-          ? `Court C${assignment.court_id} · slot ${assignment.slot_id}`
-          : '–'}
-      </div>
+      <SectionCard eyebrow="Assignment">
+        <div className="text-sm sw-num">
+          {assignment
+            ? `Court C${assignment.court_id} · slot ${assignment.slot_id}`
+            : '–'}
+        </div>
+      </SectionCard>
 
       {/* Participants — skipped when the host already showed them (see
           `hideIdentity` above). */}
       {!hideIdentity && (
-        <div className="space-y-1">
-          <div className="text-sm">{labelA}</div>
-          <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
-          <div className="text-sm">{labelB}</div>
-        </div>
+        <SectionCard eyebrow="Players">
+          <div className="space-y-1">
+            <div className="text-sm">{labelA}</div>
+            <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
+            <div className="text-sm">{labelB}</div>
+          </div>
+        </SectionCard>
       )}
 
       {/* Result summary (when finished) */}
       {result && (
-        <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
-          Done: {result.winner_side === 'A' ? labelA : labelB} wins
-        </div>
+        <SectionCard eyebrow="Result">
+          <div className="text-sm text-foreground">
+            {result.winner_side === 'A' ? labelA : labelB} wins
+          </div>
+        </SectionCard>
       )}
 
       {/* Operator actions. Recording a winner is irreversible in the
           bracket API (results reject overwrites with 409), so both win
-          buttons confirm() first; the buttons carry the player names so
+          buttons arm first; the buttons carry the player names so
           the operator never has to map A/B to sides in their head. */}
+      <SectionCard eyebrow="Actions">
       <div className="flex flex-wrap gap-2">
         {/* Start — available when assigned, not yet started, no result */}
         {assignment && !assignment.started && !result && (
@@ -226,6 +244,7 @@ export function MatchDetailPanel({ data, onChange, hideIdentity }: Props) {
           </>
         )}
       </div>
+      </SectionCard>
     </aside>
   );
 }

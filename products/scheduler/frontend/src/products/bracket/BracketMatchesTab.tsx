@@ -37,6 +37,10 @@ import {
   type ContingencyReason,
 } from './BracketMatchDetailPanel';
 import { type CommitEventFn } from './BracketPlayerFields';
+import {
+  exportBracketMatchesXlsx,
+  type BracketMatchExportRow,
+} from './exports/xlsxExports';
 
 const CONTINGENCY_MENU_LABEL: Record<ContingencyReason, string> = {
   walkover: 'Walkover…',
@@ -170,6 +174,21 @@ export function BracketMatchesTab({
   const total = data.play_units.length;
   const shown = groups.reduce((n, g) => n + g.units.length, 0);
 
+  // Spreadsheet projection of exactly what the list shows — same friendly
+  // labels, same resolved names, same status word. Every other surface in the
+  // product exports XLSX; this one shipped a raw CSV link (defect D14).
+  const exportRows: BracketMatchExportRow[] = groups.flatMap(({ ev, units }) =>
+    units.map(({ pu, n }) => ({
+      event: ev.id,
+      discipline: disciplineLabel(ev.discipline),
+      n,
+      match: labelById.get(pu.id) ?? pu.id,
+      sideA: resolveSide(pu.side_a),
+      sideB: resolveSide(pu.side_b),
+      status: STATUS_LABEL[statusOf(pu.id)],
+    })),
+  );
+
   // Grouped-table view of the same data for the shared BandedTable shell.
   const tableGroups: BandedTableGroup<NumberedUnit>[] = groups.map(
     ({ ev, units }) => ({
@@ -220,14 +239,17 @@ export function BracketMatchesTab({
             className="h-7 w-56 rounded-sm border border-border bg-card pl-7 pr-2 text-xs outline-none transition-colors duration-fast ease-brand placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/30"
           />
         </div>
-        <a
-          href={api.exportCsvUrl()}
+        <button
+          type="button"
+          onClick={() => void exportBracketMatchesXlsx(exportRows)}
+          disabled={exportRows.length === 0}
+          title="Export the listed matches to a spreadsheet"
           data-testid="bracket-export-matches"
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
         >
           <Download aria-hidden="true" className="h-3.5 w-3.5" />
-          Export CSV
-        </a>
+          Export XLSX
+        </button>
       </ActionsBar>
 
       {/* Flex ROW: match list + docked detail pane (see BracketRosterTab). */}

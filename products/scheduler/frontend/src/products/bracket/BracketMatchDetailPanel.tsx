@@ -10,6 +10,11 @@
  * "Not yet determined" placeholder with the "Winner of …" reference;
  * structural byes render "Bye". Below the sides sits the read-only
  * status pill — display only, Operations owns run-state.
+ *
+ * Every block is a `DetailPanel.Section` (SIDE A / SIDE B / STATUS /
+ * CONTINGENCY): one label recipe, reached one way. The hand-typed spans
+ * it replaced are how `${EYEBROW_CLASS}` shipped as a literal className
+ * for a year (defect D2).
  */
 import { useMemo, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
@@ -30,7 +35,6 @@ import { disciplineLabel, sideLabel } from './bracketLabels';
 import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
 import {
   BracketAvailabilityEventsFields,
-  FIELD_LABEL_CLASSES,
   type CommitEventFn,
 } from './BracketPlayerFields';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
@@ -105,28 +109,25 @@ export function BracketMatchDetailPanel({
       onClose={onClose}
       testId="bracket-match-detail"
     >
-      <div className="flex flex-col gap-3 px-3 py-3">
-        <SideSection label="Side A" side={pu.side_a} slot={pu.slot_a} {...sideProps} />
-        <SideSection label="Side B" side={pu.side_b} slot={pu.slot_b} {...sideProps} />
-        <div className="flex flex-col gap-1">
-          <span className={FIELD_LABEL_CLASSES}>Status</span>
-          {/* Read-only pill — Operations owns run-state; never interactive. */}
-          <span
-            data-testid="bracket-match-status-pill"
-            className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
-          >
-            {STATUS_LABEL[status]}
-          </span>
-        </div>
-        {onRecordContingency && status !== 'done' ? (
-          <ContingencySection
-            sideALabel={sideLabel(pu.side_a, pu.slot_a, nameById, labelById)}
-            sideBLabel={sideLabel(pu.side_b, pu.slot_b, nameById, labelById)}
-            initial={initialContingency ?? null}
-            onRecord={onRecordContingency}
-          />
-        ) : null}
-      </div>
+      <SideSection label="Side A" side={pu.side_a} slot={pu.slot_a} {...sideProps} />
+      <SideSection label="Side B" side={pu.side_b} slot={pu.slot_b} {...sideProps} />
+      <DetailPanel.Section eyebrow="Status">
+        {/* Read-only pill — Operations owns run-state; never interactive. */}
+        <span
+          data-testid="bracket-match-status-pill"
+          className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
+        >
+          {STATUS_LABEL[status]}
+        </span>
+      </DetailPanel.Section>
+      {onRecordContingency && status !== 'done' ? (
+        <ContingencySection
+          sideALabel={sideLabel(pu.side_a, pu.slot_a, nameById, labelById)}
+          sideBLabel={sideLabel(pu.side_b, pu.slot_b, nameById, labelById)}
+          initial={initialContingency ?? null}
+          onRecord={onRecordContingency}
+        />
+      ) : null}
     </DetailPanel>
   );
 }
@@ -153,58 +154,63 @@ function ContingencySection({
   const confirmB = useConfirmClick(() => reason && onRecord(reason, 'B'));
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className={FIELD_LABEL_CLASSES}>Contingency</span>
-      <div className="flex gap-1">
-        {(['walkover', 'retired', 'forfeit'] as const).map((r) => (
-          <button
-            key={r}
-            type="button"
-            data-testid={`contingency-${r}`}
-            aria-pressed={reason === r}
-            onClick={() => {
-              setReason(r);
-              confirmA.reset();
-              confirmB.reset();
-            }}
-            className={[
-              'rounded-sm border px-2 py-0.5 ${EYEBROW_CLASS}',
-              'transition-colors duration-fast ease-brand',
-              reason === r
-                ? 'border-accent bg-accent/10 text-accent'
-                : 'border-border text-muted-foreground hover:text-foreground',
-            ].join(' ')}
-          >
-            {CONTINGENCY_LABEL[r]}
-          </button>
-        ))}
-      </div>
-      {reason ? (
-        <div className="flex gap-1.5">
-          {([['A', sideALabel, confirmA], ['B', sideBLabel, confirmB]] as const).map(
-            ([side, label, confirm]) => (
-              <button
-                key={side}
-                type="button"
-                data-testid={`contingency-advance-${side}`}
-                onClick={confirm.press}
-                className={[
-                  'flex-1 rounded-sm border px-2 py-1 text-xs',
-                  'transition-colors duration-fast ease-brand',
-                  confirm.armed
-                    ? 'border-destructive bg-destructive/10 text-destructive'
-                    : 'border-border text-foreground hover:bg-muted/40',
-                ].join(' ')}
-              >
-                {confirm.armed
-                  ? `Confirm: ${label} advances`
-                  : `${label} advances`}
-              </button>
-            ),
-          )}
+    <DetailPanel.Section eyebrow="Contingency">
+      <div className="flex flex-col gap-1.5">
+        {/* Picking a kind writes NOTHING — it only reveals the two armed
+            advance buttons below. Three result-writing buttons in a row is
+            exactly the misclick the console IA pass flagged (§1.3). */}
+        <div role="group" aria-label="Contingency kind" className="flex gap-1">
+          {(['walkover', 'retired', 'forfeit'] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              data-testid={`contingency-${r}`}
+              aria-pressed={reason === r}
+              onClick={() => {
+                setReason(r);
+                confirmA.reset();
+                confirmB.reset();
+              }}
+              className={[
+                `rounded-sm border px-2 py-0.5 ${EYEBROW_CLASS}`,
+                'transition-colors duration-fast ease-brand',
+                reason === r
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              {CONTINGENCY_LABEL[r]}
+            </button>
+          ))}
         </div>
-      ) : null}
-    </div>
+        {reason ? (
+          <div className="flex gap-1.5">
+            {([['A', sideALabel, confirmA], ['B', sideBLabel, confirmB]] as const).map(
+              ([side, label, confirm]) => (
+                <button
+                  key={side}
+                  type="button"
+                  data-testid={`contingency-advance-${side}`}
+                  onClick={confirm.press}
+                  onBlur={confirm.reset}
+                  className={[
+                    'flex-1 rounded-sm border px-2 py-1 text-xs',
+                    'transition-colors duration-fast ease-brand',
+                    confirm.armed
+                      ? 'border-destructive bg-destructive/10 text-destructive'
+                      : 'border-border text-foreground hover:bg-muted/40',
+                  ].join(' ')}
+                >
+                  {confirm.armed
+                    ? `Confirm: ${label} advances`
+                    : `${label} advances`}
+                </button>
+              ),
+            )}
+          </div>
+        ) : null}
+      </div>
+    </DetailPanel.Section>
   );
 }
 
@@ -266,8 +272,8 @@ function SideSection({
   }
 
   return (
-    <section className="flex flex-col gap-1.5">
-      <span className={FIELD_LABEL_CLASSES}>{label}</span>
+    <DetailPanel.Section eyebrow={label}>
+      <div className="flex flex-col gap-1.5">
       {humanIds.length === 0 ? (
         slot.feeder_play_unit_id ? (
           <div className="rounded-sm border border-dashed border-border px-3 py-2">
@@ -343,6 +349,7 @@ function SideSection({
           );
         })
       )}
-    </section>
+      </div>
+    </DetailPanel.Section>
   );
 }

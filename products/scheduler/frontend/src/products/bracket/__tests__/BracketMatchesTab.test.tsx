@@ -22,6 +22,13 @@ vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({ exportCsvUrl: () => '/mock-export.csv' }),
 }));
 
+// ExcelJS is lazy-imported inside the export; stub the module so the test
+// asserts the PROJECTION handed to it, not a workbook.
+const mockExportMatchesXlsx = vi.fn().mockResolvedValue(undefined);
+vi.mock('../exports/xlsxExports', () => ({
+  exportBracketMatchesXlsx: (...args: unknown[]) => mockExportMatchesXlsx(...args),
+}));
+
 const slot = (participant_id: string | null = null) => ({
   participant_id,
   feeder_play_unit_id: null,
@@ -302,5 +309,42 @@ describe('<BracketMatchesTab /> — row-level contingency menu gating', () => {
     expect(
       within(row).getByLabelText('Contingency for MS SF2'),
     ).toBeInTheDocument();
+  });
+});
+
+/* D14 — this surface offered "Export CSV" through a raw <a href> to the API's
+ * /export.csv while every other export in the product produces XLSX. The
+ * label was not the lie; the format was the inconsistency. */
+describe('<BracketMatchesTab /> — export', () => {
+  it('exports XLSX, like every other surface, and says so', async () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    const button = screen.getByTestId('bracket-export-matches');
+    expect(button).toHaveTextContent('Export XLSX');
+    expect(button.tagName).toBe('BUTTON');
+    expect(button).not.toHaveAttribute('href');
+    fireEvent.click(button);
+    await vi.waitFor(() => expect(mockExportMatchesXlsx).toHaveBeenCalledTimes(1));
+    const rows = mockExportMatchesXlsx.mock.calls[0][0];
+    // Same projection the operator is looking at: friendly labels, resolved
+    // names, the status word from the STATUS column.
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: 'MS-1',
+          match: 'MS SF1',
+          sideA: 'Aiko Tan',
+          sideB: 'Ben Cruz',
+          status: 'Done',
+        }),
+      ]),
+    );
+  });
+
+  it('disables the export when the search matches nothing', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    fireEvent.change(screen.getByTestId('bracket-matches-search'), {
+      target: { value: 'zzzz' },
+    });
+    expect(screen.getByTestId('bracket-export-matches')).toBeDisabled();
   });
 });

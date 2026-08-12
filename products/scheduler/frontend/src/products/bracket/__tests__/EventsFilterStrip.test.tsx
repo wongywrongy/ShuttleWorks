@@ -55,9 +55,27 @@ describe('EventsFilterStrip', () => {
     expect(buttons[1]).toHaveTextContent('evt-2');
   });
 
-  it('shows EVENTS: label', () => {
+  it('says it HIGHLIGHTS, because dimming is all it has ever done (D12)', () => {
     render(<EventsFilterStrip />);
-    expect(screen.getByText(/EVENTS:/i)).toBeInTheDocument();
+    expect(screen.getByText(/HIGHLIGHT:/i)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Highlight events' })).toBeInTheDocument();
+  });
+
+  it('publishes real toggle state via aria-pressed, not a ☑/☐ glyph', () => {
+    useUiStore.setState({ bracketScheduleEventFilter: { 'evt-1': false } });
+    render(<EventsFilterStrip />);
+    const [btn1, btn2] = screen.getAllByRole('button');
+    expect(btn1).toHaveAttribute('aria-pressed', 'false');
+    expect(btn2).toHaveAttribute('aria-pressed', 'true');
+    // The glyphs announced as "ballot box" and carried no state.
+    expect(btn1.textContent).not.toMatch(/[☑☐]/);
+  });
+
+  it('names each toggle for assistive tech', () => {
+    render(<EventsFilterStrip />);
+    expect(
+      screen.getByRole('button', { name: 'Highlight evt-1' }),
+    ).toBeInTheDocument();
   });
 
   it('clicking a button toggles event off (writes false to filter)', () => {

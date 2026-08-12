@@ -183,6 +183,48 @@ describe('BracketRosterTab — detail panel', () => {
     );
   });
 
+  // B3 — the panel was a flat `flex flex-col gap-3` with no headings, in a
+  // different order and a different label recipe from Meet's. One grammar,
+  // one order: who they are, when they can play, what they play, free text.
+  it('groups the body into Identity / Availability / Events / Notes, in that order', () => {
+    render(<BracketRosterTab />);
+    const panel = openPanelFor('p-alex-tan');
+    const eyebrows = within(panel).getAllByText(
+      /^(IDENTITY|AVAILABILITY|EVENTS|NOTES)$/,
+    );
+    expect(eyebrows.map((e) => e.textContent)).toEqual([
+      'IDENTITY',
+      'AVAILABILITY',
+      'EVENTS',
+      'NOTES',
+    ]);
+  });
+
+  // D9 — the fields were uncontrolled (`defaultValue` + `onBlur`). Escape
+  // closes the panel, which unmounts the input, and React does not reliably
+  // fire blur on unmount: type, press Escape, the edit was gone with nothing
+  // to tell the operator. They commit on change now, so no dismissal path —
+  // Escape, ×, clicking another row, a re-render — can drop one.
+  it('keeps a note typed and then dismissed with Escape', () => {
+    render(<BracketRosterTab />);
+    const panel = openPanelFor('p-alex-tan');
+    fireEvent.change(within(panel).getByLabelText('Notes'), {
+      target: { value: 'ankle taped' },
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(playerById('p-alex-tan')?.notes).toBe('ankle taped');
+  });
+
+  it('keeps a min-rest edit typed and then dismissed with Escape', () => {
+    render(<BracketRosterTab />);
+    const panel = openPanelFor('p-alex-tan');
+    fireEvent.change(within(panel).getByLabelText('Min rest (slots)'), {
+      target: { value: '4' },
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(playerById('p-alex-tan')?.restSlots).toBe(4);
+  });
+
   it('writes a Min rest (slots) edit to the roster record', () => {
     render(<BracketRosterTab />);
     const panel = openPanelFor('p-alex-tan');

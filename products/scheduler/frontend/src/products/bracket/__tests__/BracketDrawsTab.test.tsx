@@ -192,6 +192,32 @@ describe('BracketDrawsTab — draw rows', () => {
     const row = screen.getByTestId('bracket-draw-row-MS');
     expect(within(row).queryByText('DONE')).not.toBeInTheDocument();
   });
+
+  // D4 — PROGRESS was the row's flex-1 grower while Format was fixed-width,
+  // so the four counters (~184px of content that cannot reflow) got whatever
+  // was left: 104px at 1280 (colliding with the STATUS chip) and 904px at
+  // full width. The counters now own a fixed column; Format grows and wraps.
+  it('gives the progress counters a fixed column, not the row leftovers', () => {
+    mockBracketData = makeBracketData({
+      status: 'started',
+      playUnits: [makePlayUnit('pu-1')],
+      results: [
+        { play_unit_id: 'pu-1', winner_side: 'A', walkover: false, finished_at_slot: null },
+      ],
+    });
+    renderDraws();
+    const row = screen.getByTestId('bracket-draw-row-MS');
+    const cell = within(row).getByText('DONE').closest('[role="cell"]');
+    expect(cell?.className).toContain('w-52');
+    expect(cell?.className).not.toContain('flex-1');
+    // Clipping a tally is the same crime as ellipsising a name.
+    expect(cell?.className).not.toContain('overflow-hidden');
+    // The header cell derives from the same column spec, so the two cannot
+    // drift on a future priority change.
+    expect(
+      screen.getByRole('columnheader', { name: 'Progress' }).className,
+    ).toContain('w-52');
+  });
 });
 
 describe('BracketDrawsTab — status + generate', () => {
@@ -323,6 +349,75 @@ describe('BracketDrawsTab — create in a layer', () => {
     fireEvent.click(screen.getByTestId('bracket-new-draw'));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('button', { name: /Create draw/i })).toBeDisabled();
+  });
+});
+
+// The Discipline box was bare free text defaulting to the literal string
+// "MS", while Meet's equivalent field is regex-validated, uppercased and
+// length-capped. It now runs on Meet's own `validateEventCode`.
+describe('BracketDrawsTab — draw identity validation', () => {
+  function openNewDraw() {
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-new-draw'));
+    return screen.getByRole('dialog');
+  }
+
+  it('uppercases both the draw ID and the discipline', async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw();
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), {
+      target: { value: ' ws ' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Discipline/i), {
+      target: { value: 'wd' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith(
+        'WS',
+        expect.objectContaining({ discipline: 'WD' }),
+      ),
+    );
+  });
+
+  it('refuses a discipline carrying digits or spaces', () => {
+    const dialog = openNewDraw();
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), {
+      target: { value: 'WS' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Discipline/i), {
+      target: { value: 'W S1' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/letters only/i);
+    expect(mockEventUpsert).not.toHaveBeenCalled();
+  });
+
+  // An upsert onto an existing id REPLACES that draw, participants and all.
+  it('refuses a draw ID that already exists', () => {
+    const dialog = openNewDraw();
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), {
+      target: { value: 'ms' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/already a draw/i);
+    expect(mockEventUpsert).not.toHaveBeenCalled();
+  });
+
+  // Dedupe belongs to the ID, never the discipline: MS1 and MS2 are both MS.
+  it('lets a second draw share an existing discipline', async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw();
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), {
+      target: { value: 'MS2' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith(
+        'MS2',
+        expect.objectContaining({ discipline: 'MS' }),
+      ),
+    );
   });
 });
 
