@@ -32,6 +32,7 @@
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
 import { data, isRouteErrorResponse, useRouteError } from 'react-router';
 
+import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { StatusChip } from '../components/StatusChip';
 import { StickyTotalBar } from '../components/StickyTotalBar';
@@ -547,17 +548,14 @@ export function ErrorBoundary() {
 
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
-      <main>
-        <h1>This entry page is not available</h1>
-        <p>Check the link, or ask the organiser for the current one.</p>
-      </main>
+      <MessagePage
+        heading="This entry page is not available"
+        body="Check the link, or ask the organiser for the current one."
+      />
     );
   }
 
   return (
-    <main>
-      <h1>Something went wrong</h1>
-      <p>Please try again in a moment.</p>
-    </main>
+    <MessagePage heading="Something went wrong" body="Please try again in a moment." />
   );
 }

@@ -52,6 +52,7 @@
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
 import { data } from 'react-router';
 
+import { PlayShell } from '../components/PlayShell';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import type { Route } from './+types/login';
@@ -213,129 +214,148 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
   const { formCsrf, next, justSignedUp, signInFailed, justSignedIn } = loaderData;
 
   return (
-    <main className="mx-auto grid w-full max-w-md gap-6 p-4">
-      <header className="grid gap-1">
-        <h1 className="text-2xl font-semibold">Sign in</h1>
-        <p className="text-sm text-muted-foreground">
-          Use the entrant account you signed up with. One account enters you
-          into any tournament on this site.
-        </p>
-      </header>
+    // E1: the page system, not a bare column. Brief §4 — "auth pages as small
+    // centered cards" — so the shell holds a `max-w-md` column and the form
+    // sits on the tier's own card skin (`rounded-lg border border-rule-soft
+    // bg-surface-raised`, the one every Overview card wears).
+    <PlayShell>
+      <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
+        <header className="grid gap-1">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            Sign in
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Use the entrant account you signed up with. One account enters you
+            into any tournament on this site.
+          </p>
+        </header>
 
-      {/* The sign-up outcome, in words (E3). Before this, a successful sign-up
-          redirected here and said nothing at all, so it was indistinguishable
-          from a form that had quietly failed.
+        {/* The sign-up outcome, in words (E3). Before this, a successful
+            sign-up redirected here and said nothing at all, so it was
+            indistinguishable from a form that had quietly failed.
 
-          The copy is true on BOTH of the backend's branches — a new account is
-          ready, and one that already existed is ready too — which is what
-          keeps it from becoming the enumeration oracle the uniform 303 exists
-          to avoid. It states no address and no branch, so the documents for a
-          fresh and a registered address stay byte-identical. */}
-      {justSignedUp ? (
-        <Notice tone="success">
-          Your entrant account is ready. Sign in below with the address and
-          password you just gave.
-        </Notice>
-      ) : null}
+            The copy is true on BOTH of the backend's branches — a new account
+            is ready, and one that already existed is ready too — which is
+            what keeps it from becoming the enumeration oracle the uniform 303
+            exists to avoid. It states no address and no branch, so the
+            documents for a fresh and a registered address stay
+            byte-identical. */}
+        {justSignedUp ? (
+          <Notice tone="success">
+            Your entrant account is ready. Sign in below with the address and
+            password you just gave.
+          </Notice>
+        ) : null}
 
-      {/* The refusal, in words (2026-08-10 browser pass). Before this, a
-          wrong password painted `{"detail":{"code":"AUTH_INVALID_CREDENTIALS"
-          ,…}}` across the whole window: a native form post is a navigation,
-          so whatever the backend answers IS the document.
+        {/* The refusal, in words (2026-08-10 browser pass). Before this, a
+            wrong password painted `{"detail":{"code":
+            "AUTH_INVALID_CREDENTIALS",…}}` across the whole window: a native
+            form post is a navigation, so whatever the backend answers IS the
+            document.
 
-          **One sentence for every cause**, matching the single 401 it stands
-          in for. It does not say whether the address is known, whether the
-          account has a password, or which of the two fields was wrong —
-          there is nothing here to say it WITH, because the signal that
-          reaches this page is a path with two values and carries no code.
-          "Check the address and password" is advice, not a diagnosis. */}
-      {signInFailed ? (
-        <Notice tone="warning">
-          We could not sign you in. Check the email address and password, then
-          try again. Nothing about your account has changed.
-        </Notice>
-      ) : null}
+            **One sentence for every cause**, matching the single 401 it
+            stands in for. It does not say whether the address is known,
+            whether the account has a password, or which of the two fields was
+            wrong — there is nothing here to say it WITH, because the signal
+            that reaches this page is a path with two values and carries no
+            code. "Check the address and password" is advice, not a
+            diagnosis. */}
+        {signInFailed ? (
+          <Notice tone="warning">
+            We could not sign you in. Check the email address and password, then
+            try again. Nothing about your account has changed.
+          </Notice>
+        ) : null}
 
-      {/* A sign-in that worked but had nowhere to go (`DEFAULT_NEXT`).
+        {/* A sign-in that worked but had nowhere to go (`DEFAULT_NEXT`).
 
-          The form still renders below, and deliberately: this page cannot
-          read the session cookie, so hiding it would strand anyone who
-          reached this URL by typing it, and "sign in as someone else" is a
-          real thing to want on a shared device. The copy therefore does not
-          leave the reader looking at an unexplained form — it says what the
-          form is now for. */}
-      {justSignedIn ? (
-        <Notice tone="success">
-          You are signed in on this device. Open the entry link your organiser
-          gave you to enter a tournament — the form below signs in a different
-          account.
-        </Notice>
-      ) : null}
+            The form still renders below, and deliberately: this page cannot
+            read the session cookie, so hiding it would strand anyone who
+            reached this URL by typing it, and "sign in as someone else" is a
+            real thing to want on a shared device. The copy therefore does not
+            leave the reader looking at an unexplained form — it says what the
+            form is now for. */}
+        {justSignedIn ? (
+          <Notice tone="success">
+            You are signed in on this device. Open the entry link your organiser
+            gave you to enter a tournament — the form below signs in a different
+            account.
+          </Notice>
+        ) : null}
 
-      {/*
-        Posts ACROSS the tier boundary, not to this page's own URL: all of
-        `/e/account/*` is FastAPI's (R8-A). A plain `<form>`, never React
-        Router's `<Form>`, so RR7 never intercepts and a hydrated browser posts
-        exactly as a scriptless one does — one submission path, not two that
-        can drift. `encType` is omitted: urlencoded is the HTML default.
-      */}
-      <form method="post" action="/e/account/login" className="grid gap-4">
-        {/* Channel two, and the only one available here: there is no session
-            on this page, so the proof-of-intent is the `sw_play_csrf` nonce
-            set on this very response and this is its digest. The NAME comes
-            from `FORM_FIELD` rather than a literal, so the cross-tier pin
-            against `app/form_csrf.FORM_FIELD` is load-bearing. */}
-        <input type="hidden" name={FORM_FIELD} value={formCsrf} />
-        {/* Validated on the way in (`safeNext`) and again on the way out
-            (`next_target`). Rendered unconditionally so the backend's own
-            POST-only fallback is never the destination. */}
-        <input type="hidden" name="next" value={next} />
+        <div className="grid gap-6 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+          {/*
+            Posts ACROSS the tier boundary, not to this page's own URL: all of
+            `/e/account/*` is FastAPI's (R8-A). A plain `<form>`, never React
+            Router's `<Form>`, so RR7 never intercepts and a hydrated browser
+            posts exactly as a scriptless one does — one submission path, not
+            two that can drift. `encType` is omitted: urlencoded is the HTML
+            default.
+          */}
+          <form method="post" action="/e/account/login" className="grid gap-4">
+            {/* Channel two, and the only one available here: there is no
+                session on this page, so the proof-of-intent is the
+                `sw_play_csrf` nonce set on this very response and this is its
+                digest. The NAME comes from `FORM_FIELD` rather than a literal,
+                so the cross-tier pin against `app/form_csrf.FORM_FIELD` is
+                load-bearing. */}
+            <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+            {/* Validated on the way in (`safeNext`) and again on the way out
+                (`next_target`). Rendered unconditionally so the backend's own
+                POST-only fallback is never the destination. */}
+            <input type="hidden" name="next" value={next} />
 
-        <TextField
-          id="login-email"
-          label="Email"
-          name="email"
-          type="email"
-          required
-          maxLength={320}
-          autoComplete="email"
-        />
+            <TextField
+              id="login-email"
+              label="Email"
+              name="email"
+              type="email"
+              required
+              maxLength={320}
+              autoComplete="email"
+            />
 
-        <TextField
-          id="login-password"
-          label="Password"
-          name="password"
-          type="password"
-          required
-          // No `minLength` here, unlike signup: a length rule on a sign-in box
-          // publishes the shape of stored secrets and locks out any account
-          // whose password predates the rule. The server decides.
-          autoComplete="current-password"
-          // **The reveal toggle is deleted, not fixed (E2).** `TextField`
-          // gives every password box a "Show password" control by default,
-          // and it is a `<button type="button">` driven by `onClick` — on a
-          // tier that ships no client JS at all it did nothing when pressed.
-          // A dead control is worse than no control: it teaches the reader
-          // that the page is broken on the one screen where they are typing a
-          // credential. Making it work needs a script budget this tier does
-          // not have (`root.tsx` renders no `<Scripts/>`; the CSP is
-          // `script-src 'self'`), so the affordance is logged in
-          // `docs/audits/debt-log.md` rather than built.
-          revealable={false}
-        />
+            <TextField
+              id="login-password"
+              label="Password"
+              name="password"
+              type="password"
+              required
+              // No `minLength` here, unlike signup: a length rule on a sign-in
+              // box publishes the shape of stored secrets and locks out any
+              // account whose password predates the rule. The server decides.
+              autoComplete="current-password"
+              // **The reveal toggle is deleted, not fixed (E2).** `TextField`
+              // gives every password box a "Show password" control by default,
+              // and it is a `<button type="button">` driven by `onClick` — on a
+              // tier that ships no client JS at all it did nothing when pressed.
+              // A dead control is worse than no control: it teaches the reader
+              // that the page is broken on the one screen where they are typing
+              // a credential. Making it work needs a script budget this tier
+              // does not have (`root.tsx` renders no `<Scripts/>`; the CSP is
+              // `script-src 'self'`), so the affordance is logged in
+              // `docs/audits/debt-log.md` rather than built.
+              revealable={false}
+            />
 
-        <Button type="submit" className="justify-self-start">
-          Sign in
-        </Button>
-      </form>
+            <Button type="submit" className="justify-self-start">
+              Sign in
+            </Button>
+          </form>
 
-      <p className="text-sm">
-        {/* A node-owned GET. Linking to `/e/account/signup` — the POST — is a
-            405 in the entrant's face, which is the defect R8-E removed from
-            the entry page; `tests/login.test.ts` reads every href in this
-            document and fails on any under a FastAPI prefix. */}
-        No account yet? <a className="underline" href="/e/signup">Create one</a>.
-      </p>
-    </main>
+          <p className="border-t border-rule-soft pt-4 text-sm text-muted-foreground">
+            {/* A node-owned GET. Linking to `/e/account/signup` — the POST — is
+                a 405 in the entrant's face, which is the defect R8-E removed
+                from the entry page; `tests/login.test.ts` reads every href in
+                this document and fails on any under a FastAPI prefix. */}
+            No account yet?{' '}
+            <a className="text-accent underline underline-offset-4" href="/e/signup">
+              Create one
+            </a>
+            .
+          </p>
+        </div>
+      </main>
+    </PlayShell>
   );
 }

@@ -51,6 +51,8 @@
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
 import { data } from 'react-router';
 
+import { MessagePage } from '../components/MessagePage';
+import { PlayShell } from '../components/PlayShell';
 import { apiGet } from '../lib/apiFetch.server';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
@@ -124,149 +126,163 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
   const { turnstileSiteKey, formCsrf } = loaderData;
 
   return (
-    <main className="mx-auto grid w-full max-w-md gap-6 p-4">
-      <header className="grid gap-1">
-        <h1 className="text-2xl font-semibold">Create an entrant account</h1>
-        <p className="text-sm text-muted-foreground">
-          One account enters you into any tournament on this site. The organiser
-          sees your name and contact details on the entries they receive.
-        </p>
-      </header>
+    // E1: the page system, not a bare column. Brief §4 — "auth pages as small
+    // centered cards" — the same shape `login.tsx` wears, so the two pages a
+    // visitor bounces between read as one place.
+    <PlayShell>
+      <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
+        <header className="grid gap-1">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            Create an entrant account
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            One account enters you into any tournament on this site. The
+            organiser sees your name and contact details on the entries they
+            receive.
+          </p>
+        </header>
 
-      {/* The one thing on this page that does not work without script, said
-          before the entrant spends five minutes filling the form in. The
-          backend refuses an empty challenge token with no round trip
-          (`services/turnstile.verify_turnstile`), so a scriptless submission
-          is refused as "the human check did not pass" — which reads as an
-          accusation rather than as a missing capability. */}
-      <Notice tone="info">
-        The human check on this form needs JavaScript. With scripting turned
-        off, everything below still fills in and submits, but the check cannot
-        run — ask the organiser to set your account up instead.
-      </Notice>
+        {/* The one thing on this page that does not work without script, said
+            before the entrant spends five minutes filling the form in. The
+            backend refuses an empty challenge token with no round trip
+            (`services/turnstile.verify_turnstile`), so a scriptless submission
+            is refused as "the human check did not pass" — which reads as an
+            accusation rather than as a missing capability. */}
+        <Notice tone="info">
+          The human check on this form needs JavaScript. With scripting turned
+          off, everything below still fills in and submits, but the check cannot
+          run — ask the organiser to set your account up instead.
+        </Notice>
 
-      {/*
-        Posts ACROSS the tier boundary, not to this page's own URL: all of
-        `/e/account/*` is FastAPI's (R8-A), and this page is node's, which is
-        why the two URLs differ. `encType` is omitted — urlencoded is the HTML
-        default for `method=post`.
-        A plain `<form>`, never React Router's `<Form>`, so RR7 never
-        intercepts and a hydrated browser posts exactly as a scriptless one
-        does — one submission path, not two that can drift.
+        <div className="grid gap-6 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+          {/*
+            Posts ACROSS the tier boundary, not to this page's own URL: all of
+            `/e/account/*` is FastAPI's (R8-A), and this page is node's, which
+            is why the two URLs differ. `encType` is omitted — urlencoded is
+            the HTML default for `method=post`.
+            A plain `<form>`, never React Router's `<Form>`, so RR7 never
+            intercepts and a hydrated browser posts exactly as a scriptless one
+            does — one submission path, not two that can drift.
 
-        The answer is a 303 to `/e/account/login` (Task 20) on BOTH branches:
-        account created and account already present are indistinguishable by
-        status, body and target alike. Nothing on this page is allowed to
-        become the distinction the backend refuses to be.
-      */}
-      <form
-        method="post"
-        action="/e/account/signup"
-        className="grid gap-4"
-      >
-        {/* Channel two. There is no session on this page — obtaining one is
-            what it is for — so the proof-of-intent is the `sw_play_csrf`
-            nonce set on this very response, and this is its digest. The NAME
-            comes from `FORM_FIELD` rather than a literal, so the cross-tier
-            pin against `app/form_csrf.FORM_FIELD` is load-bearing. */}
-        <input type="hidden" name={FORM_FIELD} value={formCsrf} />
-        {/* Where the 303 goes. Without it the backend falls back to
-            `/e/account/login` (`api/entrants.py:466`), which is POST-only —
-            so a successful signup ended on a 405. A constant, and a node-owned
-            GET: it carries no per-visitor information, so it cannot become the
-            distinction the uniform 202/303 exists to avoid.
+            The answer is a 303 to `/e/account/login` (Task 20) on BOTH
+            branches: account created and account already present are
+            indistinguishable by status, body and target alike. Nothing on this
+            page is allowed to become the distinction the backend refuses to
+            be.
+          */}
+          <form method="post" action="/e/account/signup" className="grid gap-4">
+            {/* Channel two. There is no session on this page — obtaining one
+                is what it is for — so the proof-of-intent is the `sw_play_csrf`
+                nonce set on this very response, and this is its digest. The
+                NAME comes from `FORM_FIELD` rather than a literal, so the
+                cross-tier pin against `app/form_csrf.FORM_FIELD` is
+                load-bearing. */}
+            <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+            {/* Where the 303 goes. Without it the backend falls back to
+                `/e/account/login` (`api/entrants.py:466`), which is POST-only —
+                so a successful signup ended on a 405. A node-owned GET, and
+                one that carries no per-visitor information, so it cannot
+                become the distinction the uniform 202/303 exists to avoid.
 
-            **`/created`, not bare `/e/login` (E3).** Both are this same login
-            page; the suffix is the one signal node gets that a sign-up
-            completed, because the backend redirects here on success and
-            answers 401/422 without redirecting otherwise. Landing on the bare
-            page said nothing, so a completed sign-up and a silently failed
-            one rendered the same document. The extra segment is still a
-            constant and still carries nothing per-visitor, so the uniform
-            303 stays uniform. */}
-        <input type="hidden" name="next" value="/e/login/created" />
+                **`/created`, not bare `/e/login` (E3).** Both are this same
+                login page; the suffix is the one signal node gets that a
+                sign-up completed, because the backend redirects here on
+                success and answers 401/422 without redirecting otherwise.
+                Landing on the bare page said nothing, so a completed sign-up
+                and a silently failed one rendered the same document. */}
+            <input type="hidden" name="next" value="/e/login/created" />
 
-        <TextField
-          id="signup-email"
-          label="Email"
-          name="email"
-          type="email"
-          required
-          maxLength={320}
-          autoComplete="email"
-          hint="Sign-in address, and where the organiser replies."
-        />
+            <TextField
+              id="signup-email"
+              label="Email"
+              name="email"
+              type="email"
+              required
+              maxLength={320}
+              autoComplete="email"
+              hint="Sign-in address, and where the organiser replies."
+            />
 
-        <TextField
-          id="signup-password"
-          label="Password"
-          name="password"
-          type="password"
-          required
-          // Stated before submission rather than discovered on refusal.
-          // `services/auth.validate_password` is the authority
-          // (`settings.password_min_length`, 8); this is the client-side echo
-          // of it and the server decides either way, so a drift is a form that
-          // asks for the wrong thing, never one that lets the wrong thing in.
-          minLength={8}
-          maxLength={128}
-          autoComplete="new-password"
-          hint="At least 8 characters. Very common passwords are refused."
-          // Deleted for the reason spelled out in `login.tsx`: `TextField`'s
-          // default "Show password" toggle is a `<button type="button">` with
-          // an `onClick`, and this tier ships no client JS, so it was inert.
-          revealable={false}
-        />
+            <TextField
+              id="signup-password"
+              label="Password"
+              name="password"
+              type="password"
+              required
+              // Stated before submission rather than discovered on refusal.
+              // `services/auth.validate_password` is the authority
+              // (`settings.password_min_length`, 8); this is the client-side
+              // echo of it and the server decides either way, so a drift is a
+              // form that asks for the wrong thing, never one that lets the
+              // wrong thing in.
+              minLength={8}
+              maxLength={128}
+              autoComplete="new-password"
+              hint="At least 8 characters. Very common passwords are refused."
+              // Deleted for the reason spelled out in `login.tsx`: `TextField`'s
+              // default "Show password" toggle is a `<button type="button">`
+              // with an `onClick`, and this tier ships no client JS, so it was
+              // inert.
+              revealable={false}
+            />
 
-        <TextField
-          id="signup-name"
-          label="Your name (optional)"
-          name="displayName"
-          maxLength={200}
-          autoComplete="name"
-          hint="How the organiser sees you on an entry."
-        />
+            <TextField
+              id="signup-name"
+              label="Your name (optional)"
+              name="displayName"
+              maxLength={200}
+              autoComplete="name"
+              hint="How the organiser sees you on an entry."
+            />
 
-        <TextField
-          id="signup-phone"
-          label="Phone (optional)"
-          name="phone"
-          type="tel"
-          maxLength={200}
-          autoComplete="tel"
-          hint="Only used if the organiser needs to reach you about an entry."
-        />
+            <TextField
+              id="signup-phone"
+              label="Phone (optional)"
+              name="phone"
+              type="tel"
+              maxLength={200}
+              autoComplete="tel"
+              hint="Only used if the organiser needs to reach you about an entry."
+            />
 
-        {/* Cloudflare's widget writes its solution into a hidden input named
-            `cf-turnstile-response`, which `_payload` maps onto the JSON
-            surface's `turnstileToken` — one spelling of one field, in one
-            codebase (`api/entrants.py`). The sitekey comes from the backend's
-            own config so it cannot drift from the secret it is paired with. */}
-        <div
-          className="cf-turnstile"
-          data-sitekey={turnstileSiteKey}
-          data-action="signup"
-        />
-        <script
-          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-          async
-          defer
-        />
+            {/* Cloudflare's widget writes its solution into a hidden input
+                named `cf-turnstile-response`, which `_payload` maps onto the
+                JSON surface's `turnstileToken` — one spelling of one field, in
+                one codebase (`api/entrants.py`). The sitekey comes from the
+                backend's own config so it cannot drift from the secret it is
+                paired with. */}
+            <div
+              className="cf-turnstile"
+              data-sitekey={turnstileSiteKey}
+              data-action="signup"
+            />
+            <script
+              src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+              async
+              defer
+            />
 
-        <Button type="submit" className="justify-self-start">
-          Create account
-        </Button>
-      </form>
+            <Button type="submit" className="justify-self-start">
+              Create account
+            </Button>
+          </form>
 
-      <p className="text-sm">
-        {/* The other half of Task 20's wiring: the two account pages point at
-            each other, and both targets are node-owned GETs. `/e/account/login`
-            is FastAPI's POST — an `<a href>` to it is a 405, which is what
-            R8-E removed from the entry page. `tests/login.test.ts` reads every
-            href in this document and fails on any under a backend prefix. */}
-        Already have an account? <a className="underline" href="/e/login">Sign in</a>.
-      </p>
-    </main>
+          <p className="border-t border-rule-soft pt-4 text-sm text-muted-foreground">
+            {/* The other half of Task 20's wiring: the two account pages point
+                at each other, and both targets are node-owned GETs.
+                `/e/account/login` is FastAPI's POST — an `<a href>` to it is a
+                405, which is what R8-E removed from the entry page.
+                `tests/login.test.ts` reads every href in this document and
+                fails on any under a backend prefix. */}
+            Already have an account?{' '}
+            <a className="text-accent underline underline-offset-4" href="/e/login">
+              Sign in
+            </a>
+            .
+          </p>
+        </div>
+      </main>
+    </PlayShell>
   );
 }
 
@@ -283,10 +299,5 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
  * slug to be missing, so it has no such conversion and no such branch.
  */
 export function ErrorBoundary() {
-  return (
-    <main>
-      <h1>Something went wrong</h1>
-      <p>Please try again in a moment.</p>
-    </main>
-  );
+  return <MessagePage heading="Something went wrong" body="Please try again in a moment." />;
 }

@@ -276,8 +276,15 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
     expect(body).toContain('35.00');
     expect(body).toContain('Bank transfer on the day.');
     expect(body).toContain('href="/e/spring-open"');
-    // Nothing to re-fire: no form on the page at all.
-    expect(body).not.toContain('<form');
+    // Nothing to re-fire: no form on this page POSTS anything. It used to
+    // read `not.toContain('<form')` — no form of any kind — which E1 made
+    // false without making it any less safe: the page now wears `PlayShell`,
+    // whose header carries the site-wide SEARCH form, and that is a GET to
+    // discovery. The property that matters is unchanged and is what is
+    // asserted instead, alongside the structural half below (this module
+    // exports no `action`, so there is nothing for a re-post to reach).
+    expect(body).not.toMatch(/<form[^>]*method="post"/i);
+    expect(body).not.toContain('action="/e/api/');
     // R10 retired the capability token, and this is the output-side half of
     // that deletion guard — ported from the retired page's
     // `test_the_success_page_carries_no_manage_code`. The mint-side half is

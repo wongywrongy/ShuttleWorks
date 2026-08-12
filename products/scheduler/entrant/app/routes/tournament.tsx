@@ -22,6 +22,7 @@ import { EntrantsList } from '../components/EntrantsList';
 import { EventRow } from '../components/EventRow';
 import { FeeTable } from '../components/FeeTable';
 import { HeroHeader } from '../components/HeroHeader';
+import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { SectionCard } from '../components/SectionCard';
 import { TabBar } from '../components/TabBar';
@@ -245,23 +246,23 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
 }
 
 /** Reads the status and nothing else, so no upstream prose or topology can
- * reach a public page. The 404 copy is the SP-P6-1 posture, carried over. */
+ * reach a public page. The 404 copy is the SP-P6-1 posture, carried over;
+ * what changed in E1 is the page around it — this is the document a mistyped
+ * poster URL lands on, so it wears the shell like everything else. Both
+ * branches hand `MessagePage` fixed copy, so the uniform 404 is unaffected. */
 export function ErrorBoundary() {
   const error = useRouteError();
 
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
-      <main>
-        <h1>This entry page is not available</h1>
-        <p>Check the link, or ask the organiser for the current one.</p>
-      </main>
+      <MessagePage
+        heading="This entry page is not available"
+        body="Check the link, or ask the organiser for the current one."
+      />
     );
   }
 
   return (
-    <main>
-      <h1>Something went wrong</h1>
-      <p>Please try again in a moment.</p>
-    </main>
+    <MessagePage heading="Something went wrong" body="Please try again in a moment." />
   );
 }

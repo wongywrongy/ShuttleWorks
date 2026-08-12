@@ -43,8 +43,10 @@
  * set would let a stranger tell an entrant their entry was a duplicate.
  */
 import { isRouteErrorResponse, useRouteError } from 'react-router';
-import { Card, CardContent } from '@scheduler/design-system/components';
 
+import { MessagePage } from '../components/MessagePage';
+import { PlayShell } from '../components/PlayShell';
+import { SectionCard } from '../components/SectionCard';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { formatCents } from '../lib/money';
@@ -136,43 +138,58 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
   const { page, slug, submissionId, totalCents } = loaderData;
 
   return (
-    <main className="mx-auto grid max-w-2xl gap-4 p-4">
-      {/* One heading, whichever post landed here. A replay is not a different
-          outcome and must not read as one — see the ruling in the header. */}
-      <h1 className="text-2xl font-semibold">Entry received</h1>
+    // E1: the shell every other page wears. The receipt is the last screen of
+    // the entry journey and used to end it outside the page system — no
+    // header, no footer, nowhere to go next. `SectionCard` is the tier's own
+    // card skin, so this page now matches the Overview cards it follows.
+    <PlayShell>
+      <main className="mx-auto grid w-full max-w-2xl gap-6 px-4 py-10 md:py-14">
+        <header className="grid gap-1">
+          {/* One heading, whichever post landed here. A replay is not a
+              different outcome and must not read as one — see the ruling in
+              the module header. */}
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            Entry received
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            The organiser has your entry. Keep the reference below if you need to
+            ask about it.
+          </p>
+        </header>
 
-      <Card>
-        <CardContent className="grid gap-2 text-sm">
+        <SectionCard title="Your entry">
           <p>
             <span className="text-muted-foreground">Tournament</span>{' '}
             {page.tournamentName}
           </p>
           <p className="break-all">
             <span className="text-muted-foreground">Reference</span>{' '}
-            <code>{submissionId}</code>
+            <code className="tabular-nums">{submissionId}</code>
           </p>
           {totalCents === null ? null : (
             <p>
               <span className="text-muted-foreground">Amount recorded</span>{' '}
-              <strong>{formatCents(totalCents)}</strong>
+              <strong className="tabular-nums">{formatCents(totalCents)}</strong>
             </p>
           )}
-        </CardContent>
-      </Card>
+        </SectionCard>
 
-      {page.paymentInstructions ? (
-        <section>
-          <h2 className="text-lg font-semibold">Payment</h2>
-          <p className="whitespace-pre-line text-sm">{page.paymentInstructions}</p>
-        </section>
-      ) : null}
+        {page.paymentInstructions ? (
+          <SectionCard title="Payment">
+            <p className="whitespace-pre-line">{page.paymentInstructions}</p>
+          </SectionCard>
+        ) : null}
 
-      <p className="text-sm">
-        <a className="underline" href={`/e/${slug}`}>
-          Back to the entry page
-        </a>
-      </p>
-    </main>
+        <p className="text-sm">
+          <a
+            className="text-accent underline underline-offset-4"
+            href={`/e/${slug}`}
+          >
+            Back to the tournament page
+          </a>
+        </p>
+      </main>
+    </PlayShell>
   );
 }
 
@@ -184,17 +201,14 @@ export function ErrorBoundary() {
 
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
-      <main>
-        <h1>This receipt is not available</h1>
-        <p>Check the link, or ask the organiser to look the entry up.</p>
-      </main>
+      <MessagePage
+        heading="This receipt is not available"
+        body="Check the link, or ask the organiser to look the entry up."
+      />
     );
   }
 
   return (
-    <main>
-      <h1>Something went wrong</h1>
-      <p>Please try again in a moment.</p>
-    </main>
+    <MessagePage heading="Something went wrong" body="Please try again in a moment." />
   );
 }
