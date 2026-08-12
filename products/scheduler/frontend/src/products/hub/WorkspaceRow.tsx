@@ -43,7 +43,13 @@ const GLYPH_TITLE: Record<ModuleGlyphId, string> = {
 };
 
 /** The row's Modules column — enabled modules as solid tinted glyphs, or a
- *  single dashed kind-default when nothing is enabled (see moduleGlyphs). */
+ *  single dashed kind-default when nothing is enabled (see moduleGlyphs).
+ *
+ *  Each glyph is `role="img"` with the module's name as its label. A `title`
+ *  alone decodes M/B/D/E for a mouse and for nobody else: it is not focusable,
+ *  a screen reader gets a bare letter, and a touch device has no hover. The
+ *  label makes the letter a NAMED image everywhere; the title stays for the
+ *  pointer tooltip. */
 function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
   const glyphs = moduleGlyphs(tournament.modules ?? [], tournament.kind);
   return (
@@ -52,6 +58,8 @@ function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
         <span
           key={g.id}
           data-testid={`row-module-${g.id}`}
+          role="img"
+          aria-label={`${GLYPH_TITLE[g.id]} — ${g.enabled ? 'enabled' : 'available'}`}
           title={`${GLYPH_TITLE[g.id]} — ${g.enabled ? 'enabled' : 'available'}`}
           className={[
             'inline-flex h-5 w-5 items-center justify-center rounded text-[11px] font-semibold',

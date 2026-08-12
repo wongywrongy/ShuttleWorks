@@ -49,6 +49,15 @@ describe('WorkspaceRow', () => {
     expect(glyph.className).not.toMatch(/border-dashed/);
   });
 
+  // T4: the glyphs were `<span title>` — a letter with a tooltip is decoded
+  // for a mouse and for nobody else. Nothing else on the Hub explains M/B/D/E.
+  it('names each module glyph, so the letter is not the only cue', () => {
+    render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+    );
+    expect(screen.getByRole('img', { name: 'Meet — enabled' })).toHaveTextContent('M');
+  });
+
   it('shows a dashed kind-default glyph when nothing is enabled', () => {
     const draft: TournamentSummaryDTO = {
       ...t,
