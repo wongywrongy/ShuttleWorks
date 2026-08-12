@@ -34,7 +34,9 @@ const signals = (over: Partial<WorkspaceSignalsDTO> = {}): WorkspaceSignalsDTO =
 describe('hubSignals', () => {
   it('workspaceHealth prefers signals, falls back to status', () => {
     expect(workspaceHealth(base({ signals: signals({ health: 'attention' }) }))).toBe('attention');
-    expect(workspaceHealth(base({ signals: undefined, status: 'draft' }))).toBe('draft');
+    // A draft nobody owns has nothing to act on — it stays a draft. (The
+    // owner+draft case is the attention fallback; see the harmony suite.)
+    expect(workspaceHealth(base({ signals: undefined, status: 'draft', role: 'viewer' }))).toBe('draft');
     expect(workspaceHealth(base({ signals: undefined, status: 'active' }))).toBe('good');
   });
 
@@ -60,5 +62,44 @@ describe('hubSignals', () => {
     expect(readinessOf(noSig)).toBeNull();
     expect(moduleCountsOf(noSig)).toBeNull();
     expect(collaborationOf(noSig)).toBeNull();
+  });
+});
+
+/**
+ * The Hub's "Needs attention 3" lit no row amber (2026-08-11 design audit,
+ * T4). `needsAttention` reads the attention reasons; `workspaceHealth`
+ * returned `signals.health`, which the backend resolves from `status ===
+ * 'draft'` BEFORE it looks at those reasons — so a draft workspace with two
+ * open setup steps was counted, filtered, and drawn grey.
+ *
+ * The count, the filter and the dot are three renderings of one fact, so they
+ * agree by construction now: attention outranks draft, archived outranks
+ * attention (the precedence hubFacets already applies).
+ */
+describe('the row dot agrees with the count above it', () => {
+  const cases: [string, TournamentSummaryDTO][] = [
+    [
+      'draft + open setup steps (the reported case)',
+      base({
+        status: 'draft',
+        signals: signals({ health: 'draft', attention: [{ code: 'NO_ROSTER', label: 'x' }] }),
+      }),
+    ],
+    ['health: attention', base({ signals: signals({ health: 'attention' }) })],
+    ['good, nothing open', base({ signals: signals() })],
+    ['legacy payload: an owner draft', base({ signals: undefined, status: 'draft' })],
+    ['legacy payload: an active workspace', base({ signals: undefined, status: 'active' })],
+  ];
+
+  it.each(cases)('%s', (_label, t) => {
+    expect(workspaceHealth(t) === 'attention').toBe(needsAttention(t));
+  });
+
+  it('archived still outranks it — an old event does not shout', () => {
+    const t = base({
+      status: 'archived',
+      signals: signals({ health: 'archived', attention: [{ code: 'NO_ROSTER', label: 'x' }] }),
+    });
+    expect(workspaceHealth(t)).toBe('archived');
   });
 });

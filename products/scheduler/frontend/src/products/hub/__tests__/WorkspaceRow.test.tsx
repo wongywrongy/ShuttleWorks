@@ -49,6 +49,21 @@ describe('WorkspaceRow', () => {
     expect(glyph.className).not.toMatch(/border-dashed/);
   });
 
+  it('says "needs attention" for a workspace that does — the dot is aria-hidden', () => {
+    const { rerender } = render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+    );
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    // NEGATIVE CONTROL: a healthy row stays quiet.
+    rerender(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, health: 'good', attention: [] } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.queryByText('Needs attention')).toBeNull();
+  });
+
   // T4: the glyphs were `<span title>` — a letter with a tooltip is decoded
   // for a mouse and for nobody else. Nothing else on the Hub explains M/B/D/E.
   it('names each module glyph, so the letter is not the only cue', () => {

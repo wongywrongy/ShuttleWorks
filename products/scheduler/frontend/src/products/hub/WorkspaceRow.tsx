@@ -164,6 +164,9 @@ export function WorkspaceRow({
           weight. Everything to its right is metadata or an affordance. */}
       <span className="flex min-w-0 flex-1 items-center gap-2.5">
         <HealthDot health={health} />
+        {/* The dot is `aria-hidden` (it has a title, which AT ignores on a
+            span), so the one state worth interrupting a scan for gets words. */}
+        {health === 'attention' ? <span className="sr-only">Needs attention</span> : null}
         <span className="truncate text-sm font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </span>
