@@ -59,6 +59,25 @@ function sourceNames(dir: string): string[] {
 }
 
 /**
+ * EVERY file under `app/` that can put text on a page — the three
+ * directories above plus the files beside them (`root.tsx`, `entry.server.tsx`)
+ * and the stylesheet, walked recursively so a new subdirectory is covered on
+ * the day it lands.
+ *
+ * Wider than `routeFiles`/`libFiles`/`componentFiles` on purpose: those three
+ * serve guards about *server behaviour*, which only the tiers that run on the
+ * server can breach. A rendering guard has no such boundary — a class that
+ * hides text is as effective in `root.tsx` or in `app.css` as in a component —
+ * so this one enumerates the whole tree instead of three named slices of it.
+ */
+export function renderingSourceFiles(): string[] {
+  return readdirSync(new URL('../../app/', import.meta.url), { recursive: true })
+    .map((entry) => String(entry).replaceAll('\\', '/'))
+    .filter((name) => /\.(ts|tsx|css)$/.test(name))
+    .sort();
+}
+
+/**
  * Lines that declare mutable state at module scope.
  *
  * In a node process serving many entrants concurrently, a module-scoped
@@ -93,8 +112,16 @@ export function moduleScopedMutableBindings(source: string): string[] {
   });
 }
 
-/** Strip `//` and block comments so prose about cookies is not a finding. */
-function stripComments(source: string): string {
+/**
+ * Strip `//` and block comments so prose about cookies is not a finding.
+ *
+ * Exported for the same reason it existed privately: every source scan here
+ * needs it. The truncation guard needs it most — this tier documents its own
+ * layout decisions in comments that say the words "ellipsis" and "clipped"
+ * (see `PlayShell`'s placeholder note), and a guard that read those as
+ * violations would punish the file for explaining itself.
+ */
+export function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
