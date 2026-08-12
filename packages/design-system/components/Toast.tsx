@@ -99,8 +99,16 @@ export function Toast({ toast, onDismiss }: ToastProps) {
           </div>
         )}
         <div>{toast.message}</div>
+        {/* No `truncate`: `detail` is the diagnostic line — the upstream
+            message, the constraint that failed, the id to quote in support —
+            and an ellipsis there hides exactly the part worth reading. It
+            wraps instead; the toast grows downward, which the bottom-right
+            stack has room for. `break-words` catches the one shape a wrap
+            cannot handle on its own (a long unbroken id or URL) without
+            degenerating on ordinary prose, because the column is ~24rem —
+            far wider than any single word. */}
         {toast.detail && (
-          <div className="mt-0.5 text-[10px] truncate">
+          <div className="mt-0.5 break-words text-[10px]">
             {toast.detail}
           </div>
         )}
