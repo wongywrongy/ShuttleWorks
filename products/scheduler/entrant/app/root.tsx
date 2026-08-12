@@ -3,6 +3,7 @@ import { Links, Meta, Outlet, type LinksFunction } from 'react-router';
 
 import { MessagePage } from './components/MessagePage';
 import stylesheet from './app.css?url';
+import type { Route } from './+types/root';
 
 /**
  * **There is deliberately no `<Scripts/>`: this tier ships no client JS.**
@@ -39,6 +40,32 @@ import stylesheet from './app.css?url';
  * nothing fetches, which costs more than it saves.
  */
 export const links: LinksFunction = () => [{ rel: 'stylesheet', href: stylesheet }];
+
+/**
+ * Root-level fallback title (2026-08-11 design audit, finding #4).
+ *
+ * Every real route names its own title (`discovery.tsx`, `tournament.tsx`,
+ * `enter.tsx`); this only fires when root's OWN `ErrorBoundary` is what's
+ * rendering — a URL that matches no route at all (`/e/a/b/c`), or any other
+ * error that reaches all the way up here uncaught. `<Meta/>` had nothing to
+ * render for that case, because root exported no `meta` at all: a mistyped
+ * poster link landed on a document with an empty browser-tab title.
+ *
+ * `error` is React Router's own signal for exactly this, so this reads it
+ * instead of guessing from `matches`: root's `meta` runs on EVERY page (it's
+ * always the top of the match chain), but a route's own `meta` export
+ * REPLACES whatever an ancestor returned rather than merging with it (see
+ * `Meta()` in `react-router`) — so returning `[]` here on a normal,
+ * error-free render costs nothing and leaks nothing onto pages that already
+ * title themselves, including the ones with no `meta` of their own
+ * (`login.tsx`, `signup.tsx`, `receipt.tsx` — unchanged, out of this
+ * finding's scope) that would otherwise inherit a false "not available"
+ * title from a normal page load.
+ */
+export const meta: Route.MetaFunction = ({ error }) => {
+  if (!error) return [];
+  return [{ title: 'Page not available — ShuttleWorks Tournaments' }];
+};
 
 /**
  * The document, as a `Layout` rather than inside the default export.

@@ -136,4 +136,22 @@ describe('the not-found page', () => {
     expect(html).toMatch(/^<!DOCTYPE html>/i);
     expect(html).toContain('rel="stylesheet"');
   });
+
+  // 2026-08-11 design audit, finding #4: root's top-level `ErrorBoundary` had
+  // no `meta` export, so `<Meta/>` rendered nothing for a URL that matches no
+  // route at all — a poster link with a typo landed on a blank browser tab.
+  it('titles the unmatched-path document — no empty <title> (finding #4)', async () => {
+    const html = await (await fetchPath('/e/a/b/c')).text();
+
+    expect(html).toMatch(/<title>[^<]+<\/title>/);
+  });
+
+  it('does not leak the root fallback title onto a page that sets its own', async () => {
+    // Root's `meta` must back off once a real route's own `meta` runs, or
+    // every titled page on the tier grows a second (or wrong) <title>.
+    const html = await (await fetchPath('/e/spring-open')).text();
+
+    expect(html.match(/<title>/g)).toHaveLength(1);
+    expect(html).not.toContain('Page not available');
+  });
 });
