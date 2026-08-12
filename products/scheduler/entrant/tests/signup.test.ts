@@ -392,3 +392,17 @@ describe('signup is not an account-enumeration oracle', () => {
     expect(route.loader.length).toBe(0);
   });
 });
+
+// ---- the document title (F-E1-2-E1 follow-up, browser-verified 2026-08-12) -
+
+describe('the sign-up page titles its browser tab', () => {
+  it('renders a non-empty <title>', async () => {
+    // Same gap `login.test.ts` pins, on the sibling page `root.tsx`'s own
+    // fallback-title comment names right alongside it: no `meta` export meant
+    // no `<title>` element at all in the real SSR HTML, not merely an empty
+    // one.
+    const html = await render();
+
+    expect(html).toMatch(/<title>[^<]+<\/title>/);
+  });
+});

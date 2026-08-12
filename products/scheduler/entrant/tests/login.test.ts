@@ -323,6 +323,37 @@ describe('next is a same-origin entrant path or it is discarded', () => {
     // Non-vacuity in the other direction: the plain page must not say it.
     expect(await render('/e/login')).not.toContain('You are signed in on this device');
   });
+
+  // 2026-08-12 browser pass: the shared header (`PlayShell`) is static and
+  // always said "Sign in" — including on this very page, right under body
+  // copy that says the opposite. This tier cannot read the session (R8-D),
+  // but the ROUTE knows its own outcome (same `justSignedIn` flag the body
+  // copy above already reads from the PATH, not the cookie), so only the
+  // header on this specific document needs to stop contradicting the page.
+  it('the header does not invite a "Sign in" the body just said already happened', async () => {
+    const signedIn = await render(DEFAULT_NEXT);
+    const plain = await render('/e/login');
+
+    expect(signedIn).not.toMatch(/href="\/e\/login"[^>]*>\s*Sign in\s*</);
+    // Non-vacuity: every other document's header is untouched.
+    expect(plain).toMatch(/href="\/e\/login"[^>]*>\s*Sign in\s*</);
+  });
+});
+
+// ---- the shared header meets its own tap-target floor ----------------------
+
+describe('the shared header sign-in link meets the 24px tap-target floor', () => {
+  it('is at least 24px tall, not just 44px wide', async () => {
+    // 2026-08-12 browser pass: measured 44×20 — under the height floor
+    // (WCAG 2.5.8). The link is a plain `<a>` sized by its text line-height
+    // alone; this pins that a height-affecting utility class was added
+    // rather than trusting a screenshot on the next redesign.
+    const html = await render('/e/login');
+    const link = /<a href="\/e\/login"[^>]*>/.exec(html)?.[0] ?? '';
+
+    expect(link).toBeTruthy();
+    expect(link).toMatch(/\bmin-h-6\b/);
+  });
 });
 
 // ---- the refusal, as a page rather than as JSON ----------------------------
@@ -435,6 +466,23 @@ describe('login is not an account-enumeration oracle', () => {
     // Non-vacuity: the one parameter that IS allowed through did arrive, so
     // this is not passing because the loader ignores the query string entirely.
     expect(inputNamed(html, 'next')).toContain('value="/e/spring-open"');
+  });
+});
+
+// ---- the document title (F-E1-2-E1 follow-up, browser-verified 2026-08-12) -
+
+describe('the sign-in page titles its browser tab', () => {
+  it('renders a non-empty <title>', async () => {
+    // `root.tsx`'s own fallback-title comment named this page as OUT of that
+    // finding's scope: root only titles its OWN ErrorBoundary (an unmatched
+    // path), so a real, error-free render of a route with no `meta` of its
+    // own carries no `<title>` element at all — confirmed in raw SSR HTML,
+    // not just an empty tag. jsdom runs no layout engine but a real document
+    // string is exactly what `render()` returns, so this pins the actual
+    // markup rather than a stand-in.
+    const html = await render();
+
+    expect(html).toMatch(/<title>[^<]+<\/title>/);
   });
 });
 

@@ -386,10 +386,17 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
   // high-stakes moment (MOTION.md §2's "one delight beat" tier) and read as
   // flat as any neutral content. `.motion-enter` ships free in the imported
   // design-system CSS (zero page-weight cost, already counted separately
-  // from the HTML/JS gate), but is NOT in `globals.css`'s
-  // `prefers-reduced-motion` kill list — that's a design-system fix another
-  // agent owns, so this tier cannot rely on it and guards locally instead.
-  it('gives the receipt heading one motion beat, guarded locally for reduced motion', async () => {
+  // from the HTML/JS gate).
+  //
+  // 2026-08-12: the local per-class guard this finding originally added is
+  // gone. `packages/design-system/globals.css` moved to a UNIVERSAL
+  // `prefers-reduced-motion` rule (`*, *::before, *::after { animation-
+  // duration: 0.01ms !important; ... }` — 0.01ms rather than `none` so
+  // `animationend` still fires) that covers `.motion-enter` along with
+  // everything else, so this tier's own copy is now dead weight — its
+  // `to` keyframe state happens to equal `.motion-enter`'s natural style,
+  // which is the only reason it was harmless rather than merely redundant.
+  it('gives the receipt heading one motion beat, covered by the design system\'s universal reduced-motion rule', async () => {
     vi.stubGlobal('fetch', stubUpstream());
 
     const html = (await fetchEntrant(RECEIPT).then((r) => r.text()));
@@ -397,16 +404,59 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
 
     expect(h1).toContain('motion-enter');
 
-    // `.motion-enter` is not yet in the design system's own kill list
-    // (packages/design-system/globals.css) — out of scope for this tier to
-    // fix — so app.css must guard it locally, or this class would animate
-    // unconditionally under `prefers-reduced-motion: reduce`.
+    // The local override is gone from this tier's CSS...
     const appCss = readFileSync(
       new URL('../app/app.css', import.meta.url),
       'utf8',
     );
-    const reducedMotionBlock =
-      appCss.match(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(reducedMotionBlock).toMatch(/\.motion-enter\b/);
+    expect(appCss).not.toMatch(/\.motion-enter\b/);
+
+    // ...and gone only because the upstream rule that replaces it really is
+    // universal (applies to every element, `.motion-enter` included), not
+    // because the design system quietly dropped reduced-motion coverage.
+    const designSystemGlobals = readFileSync(
+      new URL('../../../../packages/design-system/globals.css', import.meta.url),
+      'utf8',
+    );
+    const universalBlock =
+      designSystemGlobals.match(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(universalBlock).toMatch(/^\s*\*\s*,/m);
+    expect(universalBlock).toMatch(/animation-duration:\s*0\.01ms\s*!important/);
+  });
+});
+
+// ---- the document title (F-E1-2-E1 follow-up, browser-verified 2026-08-12) -
+
+describe('the receipt page titles its browser tab', () => {
+  it('renders a non-empty <title> naming the tournament', async () => {
+    // The sharpest instance of the three ungapped routes: a receipt is the
+    // page an entrant is likeliest to bookmark, and it shipped with no
+    // `<title>` element at all — confirmed in raw SSR HTML, not merely an
+    // empty tag.
+    vi.stubGlobal('fetch', stubUpstream());
+
+    const html = await (await fetchEntrant(RECEIPT)).text();
+
+    expect(html).toMatch(/<title>[^<]*Spring Open[^<]*<\/title>/);
+  });
+
+  it('still titles the not-found branch, generically rather than guessing a name', async () => {
+    // `data` is `undefined` here (`notFound()` thrown before the loader
+    // returns) — same shape `tournament.meta.test.ts` pins for its own 404.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ detail: { code: 'TOURNAMENT_NOT_FOUND', message: 'x' } }),
+            { status: 404, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    );
+
+    const html = await (await fetchEntrant(`/e/does-not-exist/receipt/${SUBMISSION}`)).text();
+
+    expect(html).toMatch(/<title>[^<]+<\/title>/);
+    expect(html).not.toContain('Spring Open');
   });
 });

@@ -134,6 +134,26 @@ export async function loader({
   };
 }
 
+/**
+ * Document title (2026-08-11 design audit, finding #4, deferred half — see
+ * `root.tsx`). The last of the three; a receipt is the page an entrant is
+ * likeliest to bookmark, so an untitled tab here is the sharpest instance of
+ * the gap.
+ *
+ * `data` is `undefined` on the 404 branch (`notFound()` thrown before the
+ * loader returns), so this reads only `data.page` — the same allowlist
+ * `tournament.tsx` and `enter.tsx` hold themselves to (I6) — and falls back to
+ * a generic title rather than guessing a name for a page that never
+ * resolved. `slug` and `submissionId` sit right next to `page` on
+ * `ReceiptLoaderData` and are just as public, but the title has no use for
+ * either, so neither is read.
+ */
+export const meta: Route.MetaFunction = ({ data }) => {
+  if (!data) return [{ title: 'Receipt not available — ShuttleWorks Tournaments' }];
+  const { tournamentName } = data.page;
+  return [{ title: tournamentName ? `Entry received — ${tournamentName}` : 'Entry received' }];
+};
+
 export default function Receipt({ loaderData }: Route.ComponentProps) {
   const { page, slug, submissionId, totalCents } = loaderData;
 

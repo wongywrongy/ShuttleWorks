@@ -131,6 +131,17 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
 }
 
 /**
+ * Document title (2026-08-11 design audit, finding #4, deferred half — see
+ * `root.tsx`). Zero-arg, same shape as `discovery.tsx`'s and this module's own
+ * zero-arity `loader`: nothing loader-derived is worth titling with, and
+ * `SignupLoaderData` carries `formCsrf`, which has no business being in reach
+ * of a function that renders into `<head>`.
+ */
+export const meta: Route.MetaFunction = () => [
+  { title: 'Create an account — ShuttleWorks Tournaments' },
+];
+
+/**
  * Where a completed sign-up lands when this page was reached without a
  * tournament — the login page's "your account is ready" variant, which is
  * what the hidden field held unconditionally before E3.

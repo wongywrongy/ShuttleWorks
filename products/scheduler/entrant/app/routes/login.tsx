@@ -183,6 +183,21 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
   return loaderHeaders;
 }
 
+/**
+ * Document title (2026-08-11 design audit, finding #4, deferred half).
+ *
+ * Root's `meta` only fires a fallback title when ITS OWN `ErrorBoundary`
+ * renders (an unmatched path); every real route is supposed to name its own,
+ * and this one never did, so a browser tab on `/e/login` carried no `<title>`
+ * at all. Zero-arg, same shape as `discovery.tsx`'s: this page has no
+ * loader-derived data worth titling with, and none of `LoginLoaderData`
+ * (which carries `formCsrf`) needs to be in reach of a function that renders
+ * into `<head>` at all.
+ */
+export const meta: Route.MetaFunction = () => [
+  { title: 'Sign in — ShuttleWorks Tournaments' },
+];
+
 export default function LoginPage({ loaderData }: Route.ComponentProps) {
   const { formCsrf, next, justSignedUp, signInFailed, justSignedIn } = loaderData;
 
@@ -191,7 +206,12 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
     // centered cards" — so the shell holds a `max-w-md` column and the form
     // sits on the tier's own card skin (`rounded-lg border border-rule-soft
     // bg-surface-raised`, the one every Overview card wears).
-    <PlayShell>
+    // The header link is otherwise static (R8-D — no page here can read the
+    // session), but this ROUTE, not a session read, already knows its own
+    // outcome from the PATH (`justSignedIn`, same source as the "You are
+    // signed in" copy below) — so only its label changes here, to stop the
+    // header claiming "Sign in" one breath after the body says it happened.
+    <PlayShell signInLabel={justSignedIn ? 'Switch account' : 'Sign in'}>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
