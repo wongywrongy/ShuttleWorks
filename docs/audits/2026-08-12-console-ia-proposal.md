@@ -269,3 +269,67 @@ events get their own nav destination.
    overlaying because the window was under 1200px. The answer changes Phase A's first task.
 2. **Do events get a nav destination**, or stay inside Configuration (Phase C).
 3. **Plan/Run convergence** (Phase E), which is debt-log D4 and predates this pass.
+
+---
+
+## Corrections, written 2026-08-12 after execution
+
+Phases A to D were executed by four agents working from this document. Two of its findings did not
+survive contact with the code, and one was right for the wrong reason. Recorded here rather than
+edited away, because the difference between what a browser pass can see and what is true is the
+useful part.
+
+**1.3 was wrong. The contingency trio does not write results.** This document listed "Walkover /
+Retired (injury) / Forfeit, three buttons that each write a match result, ~8px apart" as a top
+misclick hazard. They do not write anything: `BracketMatchDetailPanel.tsx:159` shows each one calls
+`setReason(r)` and nothing else. The write happens on the separate `contingency-advance-A/B` buttons,
+which **already** ran the two-click arm with a global Escape disarm. The browser pass saw three
+destructive-looking buttons in a row and inferred a hazard from their appearance.
+
+No arm was added. The behaviour was pinned instead (a test walks all three kinds plus a first advance
+press and asserts nothing is recorded), and the row gained `role="group"` so it announces as a choice
+rather than as three actions. **Appearance was the entire defect, and appearance is what changed.**
+
+**D5's "only 6 of 43 controls report disabled" was a measurement artifact.** Meet Configuration
+already wraps its form in `<LockedFieldset locked={resultsLocked}>` driven by the same flag that
+renders the banner. Measured properly: **28 controls rendered, 0 carrying a `disabled` attribute,
+28/28 matching `:disabled`.** The native `fieldset[disabled]` cascade makes every descendant
+actually-disabled without writing the attribute on any of them, so counting `[disabled]` finds only
+the few that carry it for unrelated reasons. **The banner was telling the truth.**
+
+Chasing the wrong hypothesis found a real bug one nav item away: `VenueScheduleTab` carried only the
+*schedule* lock, so court count, slot duration and the day window — by that file's own comment "the
+MOST scheduling-structural fields in the product" — stayed editable with results recorded. A director
+who had just read "Settings are read-only while matches are in play" could move the day window on the
+next tab, autosaving, unguarded. Now behind the same lock.
+
+**D6 was right, and the side was not obvious.** Both values are correct facts: `status` is the stored
+column the Settings pane edits, and every other surface shows `lifecycleBadge(signals.phase, status)`,
+derived from play state. One word, two meanings, and Settings was the only surface using it for the
+stored one. Both now appear there, labelled, and **only when they disagree**.
+
+**Two findings turned out to be data-loss bugs rather than the ergonomic ones reported.**
+
+- The Bracket draw's participant picker opened **empty**, and Commit *replaces* the participant list,
+  so anyone the operator did not re-tick was silently dropped. Reported here only as "76 checkboxes,
+  no search". It now seeds from the existing participants.
+- The raw-slug player names (D3) were not a formatting slip: `bracketMigration.ts:31` builds its
+  slug-to-name map from *player* participants only, so a doubles-only draw has none and every name
+  falls back to its id.
+
+### What was deliberately not done, and why
+
+- **`ScheduleSidebar`'s hard-coded `w-80` stays.** It looks like the pattern `DetailDock` replaced,
+  but it is not a detail pane: it is always mounted and hosts an alerts feed plus a tab strip.
+  `DetailDock` is selection-keyed, and its narrow fallback would make an always-on alerts rail
+  *cover* the Gantt rather than shrink beside it. `debt-log.md:119` stays accurate for it.
+- **`Restore` was not armed.** `useConfirmClick`'s own docblock says a two-click arm is "for the
+  reversible-ish and the merely-irreversible, not the catastrophic", and Restore already has a Modal
+  naming the target file. Arming on top would make it three clicks and substitute a weaker guard for
+  a stronger one. It was restyled and given per-backup accessible names instead (ten identical
+  "Restore" announcements was its own defect).
+- **`Postpone` was not armed**, only separated from `Record result`. Arming a reversible action
+  devalues the arm.
+- **The Bracket highlight strip was not made a filter.** It has only ever dimmed; the label now reads
+  `HIGHLIGHT:` instead of implying a filter it does not perform.
+- **Phase E (Plan/Run convergence) was not touched.** It remains debt-log D4 and an owner decision.
