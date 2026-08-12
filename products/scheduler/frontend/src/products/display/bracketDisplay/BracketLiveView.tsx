@@ -32,15 +32,18 @@ export function BracketLiveView({ data }: { data: BracketTournamentDTO }) {
             <span className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Court {m.court}
             </span>
+            {/* "Next" is the calm state, so it stays a plain muted chip —
+                the warning tint belonged to a "Called" that was never a
+                fact about the data (see bracketDisplayData#liveMatches). */}
             <span
               className={[
                 'rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
                 m.status === 'on-court'
                   ? 'bg-accent/15 text-accent'
-                  : 'bg-status-warning/20 text-status-warning',
+                  : 'border border-border text-muted-foreground',
               ].join(' ')}
             >
-              {m.status === 'on-court' ? 'On court' : 'Called'}
+              {m.status === 'on-court' ? 'On court' : 'Next'}
             </span>
           </div>
           <div className="flex flex-col gap-1.5">

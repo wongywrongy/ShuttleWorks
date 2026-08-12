@@ -8,6 +8,7 @@ import type {
   PlayUnitDTO,
   Participant,
 } from '../../../api/bracketDto';
+import { assignLanes } from '../publicDisplay/courtLanes';
 
 /** Resolve a play-unit side to a participant display name. Prefers the
  *  direct slot participant id, falls back to the resolved member ids
@@ -37,29 +38,46 @@ export interface LiveRow {
   court: number;
   sideA: string;
   sideB: string;
-  status: 'on-court' | 'called';
+  status: 'on-court' | 'next';
 }
 
-/** The bracket matches currently on court (started) or called (assigned,
- *  not yet started), joined to their play_units + participant names and
- *  sorted by court. Finished assignments are excluded. */
+/** What a spectator can see happening: the bracket matches on court right
+ *  now, plus the one match each court plays next. Finished assignments are
+ *  excluded, and so is everything deeper in a court's queue.
+ *
+ *  This used to return EVERY unfinished assignment and label the unstarted
+ *  ones 'called' — so a freshly generated draw rendered its whole first round
+ *  (52 cards, on the audited workspace) as calling to court. A bracket
+ *  assignment carries no called state (`AssignmentDTO` has `started` /
+ *  `finished` and nothing between), so 'called' was never a fact about the
+ *  data; the honest live set is on-court plus imminent.
+ *
+ *  Lane assignment is the board's own `assignLanes` — the same live-gated
+ *  Now/Next/Later rule the meet board's courts run on, so both boards agree
+ *  on what "next" means. */
 export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
   const puById = new Map(data.play_units.map((u) => [u.id, u]));
-  return data.assignments
-    .filter((a) => !a.finished)
+  const open = data.assignments.filter((a) => !a.finished);
+  const started = new Set(open.filter((a) => a.started).map((a) => a.play_unit_id));
+  const lanes = assignLanes(
+    open.map((a) => ({ id: a.play_unit_id, court: a.court_id, plannedSlot: a.slot_id })),
+    started,
+  );
+  return open
     .map((a): LiveRow | null => {
       const pu = puById.get(a.play_unit_id);
-      if (!pu) return null;
+      const lane = lanes.get(a.play_unit_id);
+      if (!pu || (lane !== 'now' && lane !== 'next')) return null;
       return {
         puId: pu.id,
         court: a.court_id,
         sideA: sideLabel(pu, 'a', data.participants),
         sideB: sideLabel(pu, 'b', data.participants),
-        status: a.started ? 'on-court' : 'called',
+        status: lane === 'now' ? 'on-court' : 'next',
       };
     })
     .filter((r): r is LiveRow => r !== null)
-    .sort((x, y) => x.court - y.court);
+    .sort((x, y) => x.court - y.court || (x.status === y.status ? 0 : x.status === 'on-court' ? -1 : 1));
 }
 
 /** The champion of an event: the winner of its final-round play_unit, when
