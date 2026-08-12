@@ -127,5 +127,13 @@ describe('the not-found page', () => {
     expect(html).toContain(SHELL_FOOTER);
     expect(html).not.toContain('Unhandled Thrown Response');
     expect(html).not.toContain('<script');
+    // …and it is a DOCUMENT. A root error boundary renders INSTEAD of the
+    // root component, so while the `<html>` lived in that component this
+    // came back as a bare `<div>` — no doctype, no `<head>`, and therefore
+    // no stylesheet: the shell markup was all there and none of it was
+    // styled. The shell moved into `Layout`, which React Router renders
+    // around the boundary too.
+    expect(html).toMatch(/^<!DOCTYPE html>/i);
+    expect(html).toContain('rel="stylesheet"');
   });
 });

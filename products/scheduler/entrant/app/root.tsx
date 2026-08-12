@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Links, Meta, Outlet, type LinksFunction } from 'react-router';
 
 import { MessagePage } from './components/MessagePage';
@@ -39,7 +40,18 @@ import stylesheet from './app.css?url';
  */
 export const links: LinksFunction = () => [{ rel: 'stylesheet', href: stylesheet }];
 
-export default function Root() {
+/**
+ * The document, as a `Layout` rather than inside the default export.
+ *
+ * React Router renders `Layout` around BOTH the matched route and any error
+ * boundary; a root component that *is* the `<html>` is replaced wholesale by
+ * the boundary when one fires. That is not a style preference — it is why the
+ * unmatched-path 404 came back as a bare `<div>` with no doctype, no `<head>`
+ * and therefore **no stylesheet**: the boundary below had rendered instead of
+ * the document, and the browser laid the fragment out in quirks mode. Moving
+ * the shell here is the framework's own answer, and it costs nothing.
+ */
+export function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
@@ -48,11 +60,13 @@ export default function Root() {
         <Meta />
         <Links />
       </head>
-      <body>
-        <Outlet />
-      </body>
+      <body>{children}</body>
     </html>
   );
+}
+
+export default function Root() {
+  return <Outlet />;
 }
 
 /**
