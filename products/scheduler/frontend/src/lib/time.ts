@@ -160,28 +160,48 @@ export function msToSlot(ms: number, config: TournamentConfig): number {
 }
 
 /**
- * How far past the configured day an actual timestamp is still believable.
- * A real day runs a couple of hours long; a timestamp from another day is
- * not a late match, it is stale data. Matches the Live Gantt's own axis
- * overrun allowance, so a credible actual always has an axis to land on.
+ * The most a real day drifts from its plan. Four hours behind is a bad day;
+ * past that the plan has been re-solved, not merely missed.
+ * Doubles as the ceiling on a derived span — nothing plays for four hours.
  */
-const ACTUAL_TIMING_GRACE_SLOTS = 8;
+const ACTUAL_DRIFT_LIMIT_MINUTES = 240;
 
-function isCredibleSlot(slot: number, config: TournamentConfig): boolean {
-  return slot >= 0 && slot <= calculateTotalSlots(config) + ACTUAL_TIMING_GRACE_SLOTS;
+/**
+ * Is this actual timestamp a believable position for THIS match?
+ *
+ * Asking "does the slot land inside the configured day (plus grace)?" cannot
+ * answer that: `slotOfMs` reads time-of-day only, so an actual from another
+ * day derives an ordinary-looking slot. The seeded demo proved it — a day of
+ * 08:00-20:00 whose 73 actuals were all stamped 20:34, i.e. 34 min past day
+ * end, comfortably inside an 8-slot grace, and every block was positioned at
+ * slot 25: a 72px clump off the right of the axis, on a chart that read empty.
+ *
+ * Positioning is only meaningful RELATIVE TO THE PLAN, so that is what is
+ * measured. A match planned 19:30 that started 20:34 drifted 64 min — late.
+ * Matches planned across a whole day that all "started" 20:34 drifted 7.5 to
+ * 12.5 hours — a clock artifact. Same instant, separated by their plans.
+ *
+ * The trade this cannot make: one match, planned near the actual, is
+ * ambiguous by construction — the data cannot say whether it truly ran late
+ * or merely happens to sit near a stale stamp. It keeps its actual position,
+ * which is the answer that is right when the day is real.
+ */
+function isNearPlan(
+  actualSlot: number,
+  planSlotId: number,
+  config: TournamentConfig,
+): boolean {
+  return (
+    Math.abs(actualSlot - planSlotId) * config.intervalMinutes <= ACTUAL_DRIFT_LIMIT_MINUTES
+  );
 }
 
 /**
  * Where a match should render on the Gantt: paper slot until called/started,
- * actual play head once a CREDIBLE timestamp exists. Falls back safely on
- * missing data.
+ * actual play head once a BELIEVABLE timestamp exists (see `isNearPlan` —
+ * believable means near the plan, not merely inside the day). Falls back
+ * safely on missing data.
  *
- * "Credible" is load-bearing. Positioning is clock-relative, so an actual
- * timestamp whose wall-clock time isn't in the configured day — any past
- * tournament reopened on its Live tab, a restored backup, a seeded demo —
- * derives a slot tens or hundreds of columns off the axis. The chart then
- * stretched to absorb it and clamped every chip onto its last column, i.e.
- * a Gantt that looks unconfigured while all its matches sit off-screen right.
  * The plan slot is the honest fallback; `hasStaleActualTiming` lets the
  * surface say so rather than pass plan off as actual.
  */
@@ -197,17 +217,18 @@ export function getRenderSlot(
     const endMs = parseMatchStartMs(matchState.actualEndTime);
     if (startMs !== null && endMs !== null && endMs >= startMs) {
       const startSlot = slotOfMs(startMs, config);
-      if (isCredibleSlot(startSlot, config)) {
+      if (isNearPlan(startSlot, assignment.slotId, config)) {
+        // Real elapsed minutes, not a time-of-day difference: a believable
+        // start with an end from a later day (Finish pressed the next
+        // morning) is a real start and a dirty span — keep the start, plan
+        // the duration, rather than throw both away.
         const minutes = (endMs - startMs) / 60_000;
-        const duration = Math.max(1, Math.round(minutes / config.intervalMinutes));
-        // A credible start with an end from a later day (Finish pressed the
-        // next morning) is a real start and a dirty span — keep the start,
-        // plan the duration, rather than throw both away.
         return {
-          slotId: startSlot,
-          durationSlots: isCredibleSlot(startSlot + duration, config)
-            ? duration
-            : assignment.durationSlots,
+          slotId: Math.max(0, startSlot),
+          durationSlots:
+            minutes <= ACTUAL_DRIFT_LIMIT_MINUTES
+              ? Math.max(1, Math.round(minutes / config.intervalMinutes))
+              : assignment.durationSlots,
         };
       }
     }
@@ -217,8 +238,8 @@ export function getRenderSlot(
     const startMs = parseMatchStartMs(matchState.actualStartTime);
     if (startMs !== null) {
       const startSlot = slotOfMs(startMs, config);
-      if (isCredibleSlot(startSlot, config)) {
-        return { slotId: startSlot, durationSlots: assignment.durationSlots };
+      if (isNearPlan(startSlot, assignment.slotId, config)) {
+        return { slotId: Math.max(0, startSlot), durationSlots: assignment.durationSlots };
       }
     }
   }
@@ -228,10 +249,12 @@ export function getRenderSlot(
 
 /**
  * True when a match carries an actual start timestamp that `getRenderSlot`
- * REFUSED — it doesn't land in the configured day, so the surface is drawing
- * the match at its planned time, not where it really played.
+ * REFUSED — it is nowhere near the plan, so the surface is drawing the match
+ * at its planned time, not where it really played. Same predicate as the
+ * fallback, so the caption cannot go missing on data that falls back.
  */
 export function hasStaleActualTiming(
+  assignment: { slotId: number },
   matchState: MatchStateDTO | undefined | null,
   config: TournamentConfig,
 ): boolean {
@@ -239,7 +262,7 @@ export function hasStaleActualTiming(
   if (status !== 'started' && status !== 'finished') return false;
   const startMs = parseMatchStartMs(matchState?.actualStartTime);
   if (startMs === null) return false;
-  return !isCredibleSlot(slotOfMs(startMs, config), config);
+  return !isNearPlan(slotOfMs(startMs, config), assignment.slotId, config);
 }
 
 // Token-driven; hues match the board vocabulary (called=amber, playing=green,

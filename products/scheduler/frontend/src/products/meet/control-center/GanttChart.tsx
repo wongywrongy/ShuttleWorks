@@ -133,14 +133,14 @@ function GanttChartImpl({
     return byCourt;
   }, [schedule.assignments, config, matchStates]);
 
-  // Honesty pass. getRenderSlot refuses an actual timestamp that isn't from
-  // the configured day and draws the match at its PLANNED slot instead —
-  // right, but indistinguishable from a match that ran exactly on time. Say
-  // which it is; this is the normal state of every past tournament's Live tab.
+  // Honesty pass. getRenderSlot refuses an actual timestamp that is nowhere
+  // near the match's plan and draws it at its PLANNED slot instead — right,
+  // but indistinguishable from a match that ran exactly on time. Say which it
+  // is; this is the normal state of every past tournament's Live tab.
   const staleTimingCount = useMemo(
     () =>
       schedule.assignments.filter((a) =>
-        hasStaleActualTiming(matchStates[a.matchId], config),
+        hasStaleActualTiming(a, matchStates[a.matchId], config),
       ).length,
     [schedule.assignments, matchStates, config],
   );

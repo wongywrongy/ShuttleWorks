@@ -723,11 +723,51 @@ describe('getRenderSlot', () => {
     expect(getRenderSlot(a, state, cfg)).toEqual({ slotId: 4, durationSlots: 2 });
   });
 
-  it('a late-running day still positions off the clock (within the grace)', () => {
-    // 18:30 PDT → slot 42, past the 40-slot day but inside the 8-slot grace.
-    const a = makeAssignment({ slotId: 5, durationSlots: 2 });
+  it('a late-running day still positions off the clock', () => {
+    // Planned 17:45 (slot 39), started 18:30 → 45 min behind, past the 40-slot
+    // day. A late match, not a clock artifact: keep the real position.
+    const a = makeAssignment({ slotId: 39, durationSlots: 2 });
     const state = makeState({ status: 'started', actualStartTime: '2026-06-30T18:30:00' });
     expect(getRenderSlot(a, state, cfg)).toEqual({ slotId: 42, durationSlots: 2 });
+  });
+
+  // The values below are the SEEDED DEMO's, read out of local.db, not values
+  // picked to sit outside a threshold: config 08:00-20:00 / 30-min slots /
+  // 8 courts, and all 73 actualStartTime rows stamped 2026-08-11T03:34Z =
+  // 20:34 America/Los_Angeles. 20:34 is 34 min past day end — well inside the
+  // old 8-slot (4-hour) grace — so every block was positioned at slot 25 and
+  // clumped into 72px past the right edge of the axis, and the caption that
+  // was supposed to explain it never rendered.
+  describe('the seeded demo (measured values)', () => {
+    const demo = makeConfig({ intervalMinutes: 30, dayStart: '08:00', dayEnd: '20:00' });
+    const DEMO_START = '2026-08-11T03:34:00Z'; // 20:34 local
+    const DEMO_END = '2026-08-11T04:01:00Z'; // 21:01 local
+
+    it('a whole day of matches stamped with one clock time falls back to plan', () => {
+      // Plan slot 10 = 13:00 — the SMALLEST drift in the real data (7h34m).
+      const a = makeAssignment({ slotId: 10, durationSlots: 2 });
+      const state = makeState({
+        status: 'finished',
+        actualStartTime: DEMO_START,
+        actualEndTime: DEMO_END,
+      });
+      expect(getRenderSlot(a, state, demo)).toEqual({ slotId: 10, durationSlots: 2 });
+      // …and the surface must be able to say so.
+      expect(hasStaleActualTiming(a, state, demo)).toBe(true);
+    });
+
+    it('the same timestamp on a match planned for 19:30 keeps its real position', () => {
+      // 34 min past day end, on the day it was played: a late match. Same
+      // instant as the case above — only the plan tells them apart.
+      const a = makeAssignment({ slotId: 23, durationSlots: 1 });
+      const state = makeState({
+        status: 'finished',
+        actualStartTime: DEMO_START,
+        actualEndTime: DEMO_END,
+      });
+      expect(getRenderSlot(a, state, demo)).toEqual({ slotId: 25, durationSlots: 1 });
+      expect(hasStaleActualTiming(a, state, demo)).toBe(false);
+    });
   });
 });
 
@@ -737,21 +777,22 @@ describe('getRenderSlot', () => {
 
 describe('hasStaleActualTiming', () => {
   const cfg = makeConfig();
+  const a = makeAssignment({ slotId: 4 }); // planned 09:00
 
   it('is false without a state, a status or a timestamp', () => {
-    expect(hasStaleActualTiming(undefined, cfg)).toBe(false);
-    expect(hasStaleActualTiming(makeState({ status: 'scheduled' }), cfg)).toBe(false);
-    expect(hasStaleActualTiming(makeState({ status: 'started' }), cfg)).toBe(false);
+    expect(hasStaleActualTiming(a, undefined, cfg)).toBe(false);
+    expect(hasStaleActualTiming(a, makeState({ status: 'scheduled' }), cfg)).toBe(false);
+    expect(hasStaleActualTiming(a, makeState({ status: 'started' }), cfg)).toBe(false);
   });
 
-  it('is false for a timestamp inside the configured day', () => {
+  it('is false for a timestamp near the plan', () => {
     const state = makeState({ status: 'started', actualStartTime: '2026-06-30T16:00:00Z' });
-    expect(hasStaleActualTiming(state, cfg)).toBe(false);
+    expect(hasStaleActualTiming(a, state, cfg)).toBe(false);
   });
 
-  it('is true for a timestamp outside it — whatever day it came from', () => {
+  it('is true for a timestamp nowhere near it — whatever day it came from', () => {
     const state = makeState({ status: 'finished', actualStartTime: '2026-01-25T21:14:00' });
-    expect(hasStaleActualTiming(state, cfg)).toBe(true);
+    expect(hasStaleActualTiming(a, state, cfg)).toBe(true);
   });
 });
 
