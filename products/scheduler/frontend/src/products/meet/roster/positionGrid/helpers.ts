@@ -77,6 +77,21 @@ export const EVENT_LABEL: Record<
   },
 };
 
+/**
+ * Pointer travel (px) before a roster pool row turns into a drag.
+ *
+ * It was 4px, which is INSIDE normal click jitter: a click that drifted four
+ * pixels stopped being a click and became a drag onto whatever cell the
+ * pointer was over (console-IA finding 1.2, the best code-level explanation
+ * of the misclick complaint). 8px is the threshold the platform conventionally
+ * uses and still fires long before a deliberate drag feels sticky.
+ *
+ * Lives here rather than inline in `RosterTab` so it is assertable: jsdom runs
+ * no layout and dispatches no real pointer stream, so a rendering test cannot
+ * observe dnd-kit's activation maths — the number itself is the contract.
+ */
+export const ROSTER_DRAG_ACTIVATION_DISTANCE = 8;
+
 export function isDoubles(prefix: string): boolean {
   return prefix.endsWith('D');
 }

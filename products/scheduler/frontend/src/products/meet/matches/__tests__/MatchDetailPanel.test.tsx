@@ -1,15 +1,23 @@
 /**
- * Tests for the Meet match DetailPanel (SP-D7 S4) — the drawer a clicked
- * match row opens. Pins the load-bearing contract: the side sections
- * render the CANONICAL roster players as expandable cards whose
- * Availability / Events edits write through `updatePlayer` to the
- * player record (never a match-scoped copy). There is NO Slots field —
- * a match takes exactly one slot (product rule, 2026-07-02).
+ * Tests for the Meet match DetailPanel — the drawer a clicked match row
+ * opens, and since the console-IA pass (§0, §1, §4) the place a match is
+ * EDITED rather than merely viewed.
+ *
+ * Pins two contracts:
+ *  - the side sections render the CANONICAL roster players as expandable
+ *    cards whose Availability / Events edits write through `updatePlayer`
+ *    to the player record, never a match-scoped copy (SP-D7 S4);
+ *  - Event and both sides are editable HERE, so the row can go back to
+ *    being a summary. The event control is the shared grouped/searchable
+ *    `EventPicker`, not the 74-option flat Select it replaced.
+ *
+ * There is NO Slots field — a match takes exactly one slot (2026-07-02).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MatchDetailPanel } from '../MatchDetailPanel';
 import { useTournamentStore } from '../../../../store/tournamentStore';
+import { useUiStore } from '../../../../store/uiStore';
 import type {
   MatchDTO,
   PlayerDTO,
@@ -53,6 +61,8 @@ const CONFIG = {
 
 const playerById = (id: string) =>
   useTournamentStore.getState().players.find((p) => p.id === id);
+const matchById = (id: string) =>
+  useTournamentStore.getState().matches.find((m) => m.id === id);
 
 beforeEach(() => {
   useTournamentStore.setState({
@@ -61,6 +71,9 @@ beforeEach(() => {
     players: PLAYERS.map((p) => ({ ...p, ranks: [...(p.ranks ?? [])] })),
     matches: [{ ...MATCH }],
   });
+  // Editing a match is a mutation; the write gate fails closed on an unset
+  // role, and these tests have always been about an operator.
+  useUiStore.setState({ activeTournamentRole: 'owner' });
 });
 
 const renderPanel = (match: MatchDTO = MATCH, onClose = () => {}) =>
@@ -70,9 +83,11 @@ describe('<MatchDetailPanel /> (meet)', () => {
   it('renders the [MATCH] event-code header with the event group name', () => {
     renderPanel();
     const panel = screen.getByTestId('match-detail-panel');
-    expect(within(panel).getByText('Match')).toBeInTheDocument();
-    expect(within(panel).getByText('MS1')).toBeInTheDocument();
-    expect(within(panel).getByText("Men's Singles")).toBeInTheDocument();
+    // Scoped to the header: the code also appears on the Event field below,
+    // which is the point of the pane now being the editor.
+    const header = within(panel).getByText('Match').closest('header')!;
+    expect(within(header).getByText('MS1')).toBeInTheDocument();
+    expect(within(header).getByText("Men's Singles")).toBeInTheDocument();
   });
 
   it('renders each side as collapsed player cards with the school badge', () => {
@@ -90,7 +105,7 @@ describe('<MatchDetailPanel /> (meet)', () => {
     const placeholder = screen.getByText('No players assigned');
     expect(placeholder.className).toContain('border-dashed');
     expect(placeholder.className).toContain('text-muted-foreground');
-    expect(placeholder.tagName).toBe('DIV');
+    expect(placeholder.tagName).toBe('P');
   });
 
   it('flags a stale player reference as "Not on roster" with no expand button', () => {
@@ -108,7 +123,9 @@ describe('<MatchDetailPanel /> (meet)', () => {
     fireEvent.click(card);
     expect(card).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByTestId('availability-control')).toBeInTheDocument();
-    expect(screen.getByText('Events')).toBeInTheDocument();
+    expect(screen.getByTestId('player-events-picker')).toBeInTheDocument();
+    // One label recipe, owned by the section — not re-typed per field.
+    expect(screen.getByText('EVENTS')).toBeInTheDocument();
   });
 
   it('lets several cards stay open at once', () => {
@@ -131,11 +148,10 @@ describe('<MatchDetailPanel /> (meet)', () => {
     expect(playerById('b1')?.availability).toEqual([]);
   });
 
-  it('writes event-chip edits through to the player ranks (roster semantics)', () => {
+  it('writes event edits through to the player ranks (roster semantics)', () => {
     renderPanel();
     fireEvent.click(screen.getByTestId('match-player-card-a1'));
-    fireEvent.click(screen.getByTestId('events-category-singles'));
-    fireEvent.click(screen.getByRole('button', { name: 'MS2' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'MS2' }));
     expect(playerById('a1')?.ranks).toEqual(['MS1', 'MS2']);
   });
 
@@ -143,5 +159,43 @@ describe('<MatchDetailPanel /> (meet)', () => {
     renderPanel();
     expect(screen.queryByLabelText('Slots')).not.toBeInTheDocument();
     expect(screen.queryByText('Slots')).not.toBeInTheDocument();
+  });
+});
+
+/* Console-IA §0/§1/§4 — the pane is now the editor. */
+describe('<MatchDetailPanel /> — the match is edited here', () => {
+  it('chooses the event through the grouped picker, not a flat Select', () => {
+    renderPanel();
+    fireEvent.click(screen.getByTestId('match-event-trigger'));
+    const picker = screen.getByTestId('event-picker');
+    // Grouped by the raw event prefix; the flat 74-option list had no
+    // grouping and no search at all.
+    expect(within(picker).getByRole('group', { name: 'MS' })).toBeInTheDocument();
+    expect(within(picker).getByRole('group', { name: 'WD' })).toBeInTheDocument();
+    // Context rides each option: how many rostered players entered it.
+    expect(within(picker).getByRole('radio', { name: /^MS1 2 entered$/ })).toBeInTheDocument();
+
+    fireEvent.click(within(picker).getByRole('radio', { name: /^WD1/ }));
+    expect(matchById('m1')?.eventRank).toBe('WD1');
+    // The picker never closes itself; the field does, once it has saved.
+    expect(screen.queryByTestId('event-picker')).not.toBeInTheDocument();
+  });
+
+  it('adds a player to an empty side, respecting singles capacity', () => {
+    renderPanel({ ...MATCH, sideB: [] });
+    fireEvent.click(screen.getByTestId('side-add-side-b'));
+    fireEvent.click(screen.getByTestId('match-player-option-a2'));
+    expect(matchById('m1')?.sideB).toEqual(['a2']);
+    // Singles: one seat, nothing else to pick, so the picker closes itself.
+    expect(screen.queryByTestId('match-player-option-a2')).not.toBeInTheDocument();
+  });
+
+  it('removes a player from a side behind the two-click arm', () => {
+    renderPanel();
+    fireEvent.click(screen.getByTestId('side-remove-a1'));
+    expect(matchById('m1')?.sideA).toEqual(['a1']);
+    expect(screen.getByLabelText(/Confirm removal of Aiko from Side A/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('side-remove-a1'));
+    expect(matchById('m1')?.sideA).toEqual([]);
   });
 });

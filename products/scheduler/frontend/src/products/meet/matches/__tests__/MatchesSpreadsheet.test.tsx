@@ -118,14 +118,10 @@ describe('<MatchesSpreadsheet />', () => {
     ).not.toBeInTheDocument();
   });
 
-  // Design audit T7 / WCAG 1.3.1. This is the surface where the cell roles
-  // are hardest to keep honest: three of the seven cells are controls (the
-  // event Select or its free-text fallback, the two player editors, the
-  // delete button), and a `role="cell"` placed ON one of those would REPLACE
-  // its own role. They are wrapped in `display: contents` cells instead — so
-  // this pins the thing that silently rots: cell count === column count, and
-  // the controls still announce as controls.
-  it('exposes a match row as seven cells, controls intact', () => {
+  // Design audit T7 / WCAG 1.3.1: cell count === column count, and the one
+  // remaining control (the armed delete) still announces as a control from
+  // inside its `display: contents` cell.
+  it('exposes a match row as seven cells, the delete control intact', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m5');
     expect(row).toHaveAttribute('role', 'row');
@@ -134,11 +130,22 @@ describe('<MatchesSpreadsheet />', () => {
       screen.getAllByRole('columnheader').length,
     );
     expect(screen.getAllByRole('columnheader')).toHaveLength(7);
-    // The interactive cells did not swallow their controls' roles.
-    expect(within(row).getByRole('combobox', { name: 'Event' })).toBeInTheDocument();
     expect(
       within(row).getByRole('button', { name: /Remove match MS1|Remove match WD1/ }),
     ).toBeInTheDocument();
+  });
+
+  /* Console-IA §0/§1: the row WAS the editor — a live Select, a text input,
+   * four player buttons and five delete buttons per match, each stopping
+   * propagation specifically so the row click could not open the pane. */
+  it('carries no editors: the armed delete is the only control in a row', () => {
+    renderSheet();
+    const row = screen.getByTestId('match-row-m5');
+    expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(row).queryByRole('textbox')).not.toBeInTheDocument();
+    // Four player names and no `✕ remove player` beside any of them.
+    expect(within(row).queryByLabelText(/^Remove (Aiko|Ben|Eva|Finn)$/)).toBeNull();
+    expect(within(row).getAllByRole('button')).toHaveLength(1);
   });
 
   it('renders doubles sides as comma-separated names, school shown once per side', () => {
@@ -156,10 +163,11 @@ describe('<MatchesSpreadsheet />', () => {
     expect(within(row).getAllByText(',')).toHaveLength(2);
   });
 
-  it('renders an empty side as the muted-italic "＋ add player" placeholder', () => {
+  it('renders an empty side as a muted-italic reading, not an add control', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m10');
-    const placeholder = within(row).getByText('＋ add player');
+    const placeholder = within(row).getByText('No players');
+    expect(placeholder.tagName).toBe('SPAN');
     expect(placeholder.className).toContain('italic');
     expect(placeholder.className).toContain('text-muted-foreground');
     expect(placeholder.className).toContain('text-xs');
@@ -183,23 +191,20 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m1'));
     const panel = screen.getByTestId('match-detail-panel');
-    expect(within(panel).getByText('Match')).toBeInTheDocument();
-    expect(within(panel).getByText('MS1')).toBeInTheDocument();
-    expect(within(panel).getByText("Men's Singles")).toBeInTheDocument();
+    const header = within(panel).getByText('Match').closest('header')!;
+    expect(within(header).getByText('MS1')).toBeInTheDocument();
+    expect(within(header).getByText("Men's Singles")).toBeInTheDocument();
     expect(screen.getByTestId('match-row-m1')).toHaveAttribute(
       'data-selected',
       'true',
     );
   });
 
-  it('does NOT open the panel from clicks inside the inline editors', () => {
+  it('opens the panel from a click on a player name too (no editor to swallow it)', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m1');
-    // Event select trigger.
-    fireEvent.click(within(row).getByLabelText('Event'));
-    // A player-name button inside the side cell.
     fireEvent.click(within(row).getByText('Aiko'));
-    expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('match-detail-panel')).toBeInTheDocument();
   });
 
   it('opens the panel from a click on a side cell\'s EMPTY space (no dead zone)', () => {

@@ -1,40 +1,44 @@
 /**
- * Position detail — a floating drawer that opens over the right edge of
- * the position grid when a filled cell is clicked. It is a *position*
- * view, not a single-player view: a doubles cell shows both partners
- * (singles shows the one occupant), each as an editable PlayerDetailFields
- * block. The grid stays full-width behind it (the drawer is a layer on
- * top, dismissed by Esc, the × button, or clicking outside) so the detail
- * is readable instead of squeezed into a narrow side pane.
+ * Position / player detail — the pane docked beside the roster grid, opened
+ * by a grid cell or a pool row. It is a *position* view when a cell opened
+ * it (a doubles cell has two occupants) and a single-player view when the
+ * pool list did.
  *
- * All fields are per-player (school, availability, rest, notes, events) —
- * there is no separate position-level data — so the drawer simply renders
- * one block per occupant. Edits flow through `updatePlayer`.
+ * All fields are per-player (school, availability, rest, events, notes) —
+ * there is no position-level data — and every edit flows through
+ * `updatePlayer` to the canonical roster record.
  *
- * The drawer chrome is the shared control-plane `DetailPanel`;
- * availability editing is the shared `AvailabilityControl` (unavailable-
- * periods UX over the canonical positive windows); the event entries
- * render inside the shared `EventsControl` categorized chrome, with the
- * rank-chip semantics (exclusive codes via useRankAssignment /
- * useRankValidation) unchanged.
+ * WHAT CHANGED (console-IA §2, 2026-08-12):
+ *  - The body was ten editable controls under one flat `flex flex-col gap-3`
+ *    with no headings, each field re-typing its own `text-xs font-medium`
+ *    label. It is now `DetailPanel.Section` groups in ONE order shared with
+ *    Bracket's roster pane — Identity, Availability, Events, Notes — with
+ *    `Row` from the settings grammar inside them. No label recipe is spelled
+ *    out in this file any more.
+ *  - A doubles position rendered that whole form TWICE, stacked, with nothing
+ *    saying where one occupant ended and the next began (the densest thing in
+ *    the app). Two occupants now get a seat switcher and one form at a time.
+ *  - Unassigning moved HERE from the grid cell, behind the canon two-click
+ *    arm (finding 1.1): 24 immediate `×` targets sat ~4px from the name
+ *    buttons whose click means "just show me this".
  */
+import { useState } from 'react';
 import { Select } from '@scheduler/design-system/components';
 import type { PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import {
-  AvailabilityControl,
   DetailPanel,
-  EventsControl,
+  formatWindowSummary,
 } from '../../../components/control-plane';
+import { Row } from '../../../platform/settings/SettingsControls';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { useConfirmClick } from '../../../hooks/useConfirmClick';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
-import { useRankValidation } from './hooks/useRankValidation';
-import { isDoublesRank } from './positionGrid/helpers';
+import { PlayerAvailabilityField, PlayerEventsField } from './PlayerFields';
 
 /* =========================================================================
  * DetailDrawer — Meet's consumer of the shared DetailPanel chrome.
- * Renders one editable block per occupant under the header. Used for a
- * clicked position (a rank's 1–2 occupants) and for a clicked list
- * player (a single occupant).
  * ========================================================================= */
 export function DetailDrawer({
   eyebrow,
@@ -44,6 +48,7 @@ export function DetailDrawer({
   occupants,
   groups,
   emptyHint,
+  rank,
   onClose,
 }: {
   /** Uppercase context label, e.g. "Position" or "Player". */
@@ -58,8 +63,16 @@ export function DetailDrawer({
   groups: RosterGroupDTO[];
   /** Shown below the occupants when the position has open seats. */
   emptyHint?: string | null;
+  /** Set when a POSITION opened the pane: enables "unassign from this rank". */
+  rank?: string | null;
   onClose: () => void;
 }) {
+  const [seat, setSeat] = useState(0);
+  // Clamped rather than reset in an effect: the occupant list changes under
+  // this pane (unassign, displacement) and a stale index must never blank it.
+  const index = Math.min(seat, Math.max(occupants.length - 1, 0));
+  const active = occupants[index] ?? null;
+
   return (
     <DetailPanel
       variant="docked"
@@ -70,11 +83,45 @@ export function DetailDrawer({
       onClose={onClose}
       testId="position-detail-drawer"
     >
-      {occupants.map((occ) => (
-        <PlayerDetailFields key={occ.id} player={occ} groups={groups} />
-      ))}
+      {occupants.length > 1 ? (
+        <div
+          role="tablist"
+          aria-label="Seat"
+          data-testid="seat-switcher"
+          className="flex items-stretch gap-0.5 border-b border-border px-2"
+        >
+          {occupants.map((occ, i) => (
+            <button
+              key={occ.id}
+              type="button"
+              role="tab"
+              aria-selected={i === index}
+              onClick={() => setSeat(i)}
+              data-testid={`seat-tab-${i}`}
+              className={[
+                '-mb-px border-b-2 px-3 py-2 text-sm transition-colors duration-fast ease-brand',
+                i === index
+                  ? 'border-b-accent font-semibold text-foreground'
+                  : 'border-b-transparent text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              {occ.name || '(unnamed)'}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {active ? (
+        <PlayerDetailFields
+          key={active.id}
+          player={active}
+          groups={groups}
+          rank={rank ?? null}
+        />
+      ) : null}
+
       {emptyHint ? (
-        <p className="border-t border-border/60 px-3 py-3 text-xs italic text-muted-foreground">
+        <p className="border-t border-border/60 px-4 py-3 text-xs italic text-muted-foreground">
           {emptyHint}
         </p>
       ) : null}
@@ -83,195 +130,149 @@ export function DetailDrawer({
 }
 
 /* =========================================================================
- * PlayerDetailFields — one occupant's editable block (school, availability,
- * min rest, notes, event pills). Rendered once per occupant in the drawer.
+ * PlayerDetailFields — one occupant's form, in the canonical section order.
  * ========================================================================= */
 function PlayerDetailFields({
   player,
   groups,
+  rank,
 }: {
   player: PlayerDTO;
   groups: RosterGroupDTO[];
+  rank: string | null;
 }) {
   const updatePlayer = useTournamentStore((s) => s.updatePlayer);
   const config = useTournamentStore((s) => s.config);
+  const entered = player.ranks ?? [];
 
   return (
-    <div className="border-b border-border/60 px-3 py-3 last:border-b-0">
-      <div className="mb-2 text-sm font-semibold text-foreground">
-        {player.name || '(unnamed)'}
-      </div>
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">School</label>
-          <Select
-            value={player.groupId}
-            onValueChange={(v) => updatePlayer(player.id, { groupId: v })}
-            options={groups.map((g) => ({ value: g.id, label: g.name }))}
-            ariaLabel="School"
-            size="sm"
-            triggerStyle={{ width: '100%' }}
-          />
-        </div>
-
-        <PlayerAvailabilityField player={player} />
-
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={`player-rest-${player.id}`}
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Min rest
-          </label>
-          <span className="inline-flex items-baseline gap-2">
-            <input
-              id={`player-rest-${player.id}`}
-              type="number"
-              min={0}
-              max={120}
-              value={player.minRestMinutes != null ? String(player.minRestMinutes) : ''}
-              placeholder={
-                config != null ? `default (${config.defaultRestMinutes})` : 'default'
-              }
-              onChange={(e) => {
-                const raw = e.target.value;
-                updatePlayer(player.id, {
-                  minRestMinutes: raw === '' ? undefined : Number(raw) || 0,
-                });
-              }}
-              className="h-7 w-28 rounded-sm border border-border bg-bg-elev px-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+    <>
+      <DetailPanel.Section
+        eyebrow="Identity"
+        right={rank ? <UnassignButton player={player} rank={rank} /> : undefined}
+      >
+        <Row
+          label="Player"
+          control={
+            <span className="text-sm text-foreground">
+              {player.name || '(unnamed)'}
+            </span>
+          }
+        />
+        <Row
+          label="School"
+          last
+          control={
+            <Select
+              value={player.groupId}
+              onValueChange={(v) => updatePlayer(player.id, { groupId: v })}
+              options={groups.map((g) => ({ value: g.id, label: g.name }))}
+              ariaLabel="School"
+              size="sm"
+              triggerStyle={{ width: '11rem' }}
             />
-            <span className="text-xs text-muted-foreground">min</span>
+          }
+        />
+      </DetailPanel.Section>
+
+      <DetailPanel.Section
+        eyebrow="Availability"
+        right={
+          <span className="text-2xs text-muted-foreground">
+            {formatWindowSummary(player.availability ?? [])}
           </span>
-        </div>
+        }
+      >
+        <PlayerAvailabilityField player={player} />
+        <Row
+          label="Min rest"
+          last
+          control={
+            <span className="inline-flex items-baseline gap-2">
+              <input
+                type="number"
+                min={0}
+                max={120}
+                aria-label="Min rest"
+                value={
+                  player.minRestMinutes != null ? String(player.minRestMinutes) : ''
+                }
+                placeholder={
+                  config != null ? `default (${config.defaultRestMinutes})` : 'default'
+                }
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  updatePlayer(player.id, {
+                    minRestMinutes: raw === '' ? undefined : Number(raw) || 0,
+                  });
+                }}
+                className="h-7 w-28 rounded-sm border border-border bg-bg-elev px-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <span className="text-xs text-muted-foreground">min</span>
+            </span>
+          }
+        />
+      </DetailPanel.Section>
 
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={`player-notes-${player.id}`}
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Notes
-          </label>
-          <textarea
-            id={`player-notes-${player.id}`}
-            value={player.notes ?? ''}
-            onChange={(e) =>
-              updatePlayer(player.id, { notes: e.target.value || undefined })
-            }
-            rows={3}
-            placeholder="Optional notes…"
-            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-
+      <DetailPanel.Section
+        eyebrow="Events"
+        right={
+          <span className="text-2xs tabular-nums text-muted-foreground">
+            {entered.length} entered
+          </span>
+        }
+      >
         <PlayerEventsField player={player} />
-      </div>
-    </div>
+      </DetailPanel.Section>
+
+      <DetailPanel.Section eyebrow="Notes">
+        <textarea
+          aria-label="Notes"
+          value={player.notes ?? ''}
+          onChange={(e) =>
+            updatePlayer(player.id, { notes: e.target.value || undefined })
+          }
+          rows={3}
+          placeholder="Optional notes…"
+          className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+      </DetailPanel.Section>
+    </>
   );
 }
 
 /* =========================================================================
- * PlayerAvailabilityField / PlayerEventsField — the two roster field
- * blocks that also expand inside the Matches detail panel's player cards
- * (SP-D7 S4). Extracted so both surfaces render ONE implementation; all
- * edits write through the canonical roster record via `updatePlayer`.
+ * UnassignButton — take this player out of THIS position. Two-click armed
+ * (the canon `useConfirmClick`), visible rather than hover-revealed: in a
+ * pane there is no row to hover, and a destructive control nobody can find
+ * is not safer, only harder to use.
  * ========================================================================= */
-export function PlayerAvailabilityField({ player }: { player: PlayerDTO }) {
-  const updatePlayer = useTournamentStore((s) => s.updatePlayer);
-  const config = useTournamentStore((s) => s.config);
+function UnassignButton({ player, rank }: { player: PlayerDTO; rank: string }) {
+  const { unassignRank } = useRankAssignment();
+  const canEditWorkspace = useCanEdit();
+  const confirm = useConfirmClick(() => unassignRank(player.id, rank));
+  const name = player.name || 'player';
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-muted-foreground">Availability</label>
-      <AvailabilityControl
-        value={player.availability ?? []}
-        dayStart={config?.dayStart ?? '09:00'}
-        dayEnd={config?.dayEnd ?? '17:00'}
-        onChange={(availability) => updatePlayer(player.id, { availability })}
-      />
-    </div>
-  );
-}
-
-export function PlayerEventsField({ player }: { player: PlayerDTO }) {
-  const { assignRank, unassignRank } = useRankAssignment();
-  const { availableRanks, isRankFull } = useRankValidation(
-    player.groupId ?? null,
-    player.id,
-  );
-
-  const handleToggleRank = (rank: string) => {
-    if ((player.ranks ?? []).includes(rank)) {
-      unassignRank(player.id, rank);
-      return;
-    }
-    if (isDoublesRank(rank) && isRankFull(rank)) return;
-    assignRank(player.groupId, player.id, rank);
-  };
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-muted-foreground">Events</label>
-      {Object.keys(availableRanks).length === 0 ? (
-        <span className="text-xs text-muted-foreground">
-          Configure positions in Configuration to assign events.
-        </span>
-      ) : (
-        <EventsControl
-          entries={player.ranks ?? []}
-          renderTypeEditor={(type) => {
-            const cat = availableRanks[type];
-            if (!cat) return null;
-            return (
-              <div className="flex items-center gap-2">
-                <span className="w-7 shrink-0 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {type}
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {cat.ranks.map((r) => {
-                    const isActive = (player.ranks ?? []).includes(r.value);
-                    const doubles = isDoublesRank(r.value);
-                    const takenByOther = !isActive && r.disabled;
-                    const blocked = takenByOther && doubles;
-                    return (
-                      <button
-                        key={r.value}
-                        type="button"
-                        disabled={blocked}
-                        onClick={() => handleToggleRank(r.value)}
-                        aria-pressed={isActive}
-                        title={
-                          r.assignedTo
-                            ? `${r.value}: ${r.assignedTo}${
-                                blocked
-                                  ? ' (full)'
-                                  : doubles
-                                    ? ''
-                                    : ' · assigning moves them out'
-                              }`
-                            : r.value
-                        }
-                        className={[
-                          'rounded-md border px-2 py-0.5 text-2xs font-medium sw-num',
-                          'transition-colors duration-fast ease-brand disabled:cursor-not-allowed',
-                          isActive
-                            ? 'border-accent bg-accent/10 text-accent'
-                            : blocked
-                              ? 'border-border/60 bg-muted/40 text-muted-foreground/50'
-                              : takenByOther
-                                ? 'border-status-warning/40 bg-status-warning-bg/40 text-status-warning'
-                                : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
-                        ].join(' ')}
-                      >
-                        {r.value}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          }}
-        />
-      )}
-    </div>
+    <button
+      type="button"
+      disabled={!canEditWorkspace}
+      onClick={confirm.press}
+      onBlur={confirm.reset}
+      data-testid={`unassign-${player.id}`}
+      title={canEditWorkspace ? undefined : READ_ONLY_MESSAGE}
+      aria-label={
+        confirm.armed
+          ? `Confirm unassign ${name} from ${rank}`
+          : `Unassign ${name} from ${rank}`
+      }
+      className={[
+        'rounded-sm border px-2 py-0.5 text-2xs transition-colors duration-fast ease-brand disabled:cursor-not-allowed disabled:opacity-50',
+        confirm.armed
+          ? 'border-destructive bg-destructive/10 font-medium text-destructive'
+          : 'border-border text-muted-foreground hover:border-destructive/40 hover:text-destructive',
+      ].join(' ')}
+    >
+      {confirm.armed ? 'Click again' : 'Unassign'}
+    </button>
   );
 }

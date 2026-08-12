@@ -38,7 +38,11 @@ import type { PlayerDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { exportRosterXlsx } from '../exports/xlsxExports';
 import { DraggablePlayerChip, PositionGrid } from './PositionGrid';
-import { EVENT_LABEL, isDoublesRank } from './positionGrid/helpers';
+import {
+  EVENT_LABEL,
+  ROSTER_DRAG_ACTIVATION_DISTANCE,
+  isDoublesRank,
+} from './positionGrid/helpers';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { DetailDrawer } from './PlayerDetailPanel';
@@ -143,7 +147,9 @@ export function RosterTab() {
   }, [activeSchoolId]);
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: ROSTER_DRAG_ACTIVATION_DISTANCE },
+    }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
     useSensor(KeyboardSensor),
   );
@@ -378,11 +384,12 @@ export function RosterTab() {
                 }
                 occupants={positionOccupants}
                 groups={groups}
+                rank={selectedRank}
                 emptyHint={
                   positionOccupants.length < (isDoublesRank(selectedRank) ? 2 : 1)
                     ? positionOccupants.length === 0
                       ? 'No one assigned yet. Click the cell to assign a player.'
-                      : 'Partner not assigned. Double-click the cell to add one.'
+                      : 'Partner not assigned. Use ＋ add partner in the cell.'
                     : null
                 }
                 onClose={closeDrawer}

@@ -145,6 +145,14 @@ export const NON_SCHEDULING_KEYS: ReadonlyArray<keyof TournamentConfig> = [
   'clockShiftMinutes',
 ];
 
+/** The same rule for a PLAYER record: fields that never reach the solver, so
+ *  editing one must not invalidate a committed schedule. Every roster
+ *  keystroke used to set `scheduleIsStale` — typing a note put the "schedule
+ *  out of date" banner up and re-armed the whole-blob PUT (console-IA defect
+ *  D16). Availability, rest, ranks, school and identity all DO feed the
+ *  solve, so they stay out of this list. */
+const NON_SCHEDULING_PLAYER_KEYS: ReadonlyArray<keyof PlayerDTO> = ['notes'];
+
 export const useTournamentStore = create<TournamentState>((set, get) => ({
   ...INITIAL,
 
@@ -194,7 +202,11 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   updatePlayer: (id, updates) =>
     set((state) => ({
       players: state.players.map((p) => (p.id === id ? { ...p, ...updates } : p)),
-      scheduleIsStale: true,
+      scheduleIsStale:
+        state.scheduleIsStale ||
+        Object.keys(updates).some(
+          (k) => !NON_SCHEDULING_PLAYER_KEYS.includes(k as keyof PlayerDTO),
+        ),
     })),
   deletePlayer: (id) =>
     set((state) => ({

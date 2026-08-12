@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTournamentStore } from '../../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../../api/dto';
+import { DISCIPLINE_NAMES } from '../../../../lib/disciplineNames';
 import { isDoublesRank } from '../positionGrid/helpers';
 
 interface RankOption {
@@ -15,13 +16,17 @@ interface RankCategory {
   ranks: RankOption[];
 }
 
-const RANK_LABELS: Record<string, string> = {
-  MS: "Men's Singles",
-  WS: "Women's Singles",
-  MD: "Men's Doubles",
-  WD: "Women's Doubles",
-  XD: "Mixed Doubles",
-};
+/**
+ * A meet's events are ITS OWN vocabulary — Meet Setup validates and accepts
+ * any code an operator defines (BS, U10, …), not just the five badminton
+ * disciplines. This hook used to interpolate a hardcoded five-entry label map
+ * straight into a user-visible string, so an operator-defined code rendered
+ * the literal text "BS1 - undefined 1" (console-IA defect D1). The shared,
+ * null-prototype-safe `DISCIPLINE_NAMES` was written for exactly this; an
+ * unknown code has no full name, so the code IS the label.
+ */
+const disciplineName = (code: string): string | undefined =>
+  DISCIPLINE_NAMES[code];
 
 /**
  * useRankValidation Hook
@@ -79,6 +84,7 @@ export function useRankValidation(schoolId: string | null, currentPlayerId?: str
     Object.entries(rankCounts).forEach(([rankKey, count]) => {
       if (count > 0) {
         const ranks: RankOption[] = [];
+        const named = disciplineName(rankKey);
 
         for (let i = 1; i <= count; i++) {
           const rankValue = `${rankKey}${i}`;
@@ -97,7 +103,7 @@ export function useRankValidation(schoolId: string | null, currentPlayerId?: str
 
           ranks.push({
             value: rankValue,
-            label: `${rankValue} - ${RANK_LABELS[rankKey]} ${i}`,
+            label: named ? `${rankValue} - ${named} ${i}` : rankValue,
             disabled: isFull,
             assignedTo,
           });
@@ -105,7 +111,7 @@ export function useRankValidation(schoolId: string | null, currentPlayerId?: str
 
         if (ranks.length > 0) {
           groups[rankKey] = {
-            label: RANK_LABELS[rankKey],
+            label: named ?? rankKey,
             ranks,
           };
         }

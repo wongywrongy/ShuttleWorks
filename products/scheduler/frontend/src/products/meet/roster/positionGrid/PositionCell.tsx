@@ -2,19 +2,22 @@
  * One cell in the position grid. Owns the drag-drop droppable target
  * (pool→cell assign), the inline reassign picker, and the click model:
  *
- *   - filled cell, single click on a name → open that player's detail
- *     panel (debounced so a double-click doesn't also fire it)
- *   - filled cell, double click           → enter edit mode (reassign picker)
- *   - empty cell, single click            → assign picker
+ *   - filled cell, click a name    → open the position's detail pane
+ *   - filled cell, the pencil button → reassign picker
+ *   - empty cell, single click     → assign picker
  *
- * A faint pencil glyph appears on hover of a filled cell to signal that
- * double-click reassigns; the names are `cursor-pointer` to signal that a
- * single click views detail.
+ * Reassign USED TO BE a double-click on a `<div>`: no keyboard path at all
+ * (console-IA defect D13), and it forced a 220ms timer on the single click so
+ * the two gestures could be told apart — every pane open paid that delay. The
+ * pencil is now a real `<button>`, so the gestures land on different targets,
+ * keyboard reaches it by Tab (focus-visible reveals it), and the debounce is
+ * gone: a click on a name opens the pane immediately.
  *
  * The singles-displacement invariant lives in `useRankAssignment`; doubles
- * capacity (≤2) is guarded here before delegating to the hook.
+ * capacity (≤2) is guarded here before delegating to the hook. Unassigning is
+ * NOT here — it lives in the pane, armed (finding 1.1); see `CellChips`.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { PencilSimple } from '@phosphor-icons/react';
 import type { PlayerDTO } from '../../../../api/dto';
@@ -41,48 +44,21 @@ export function PositionCell({
   /** Single-click a filled cell → open the position detail for this rank. */
   onSelectPosition?: (rank: string) => void;
 }) {
-  const { assignRank, unassignRank } = useRankAssignment();
+  const { assignRank } = useRankAssignment();
   const capacity = doubles ? 2 : 1;
   const isFull = occupants.length >= capacity;
 
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Single-click opens detail, double-click opens the reassign picker.
-  // A short timer suppresses the single-click action when a double-click
-  // follows, so the two gestures stay cleanly separated.
-  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (clickTimer.current) clearTimeout(clickTimer.current);
-    },
-    [],
-  );
-  // Single-click selects the whole position (this rank), not one player,
-  // so the detail drawer can show every occupant of a doubles cell.
-  const handleSelect = () => {
-    if (clickTimer.current) clearTimeout(clickTimer.current);
-    clickTimer.current = setTimeout(() => {
-      onSelectPosition?.(rank);
-      clickTimer.current = null;
-    }, 220);
-  };
-  const handleEdit = () => {
-    if (clickTimer.current) {
-      clearTimeout(clickTimer.current);
-      clickTimer.current = null;
-    }
-    setPickerOpen(true);
-  };
+  // Selects the whole position (this rank), not one player, so the detail
+  // pane can show every occupant of a doubles cell.
+  const handleSelect = () => onSelectPosition?.(rank);
 
   const { setNodeRef, isOver, active } = useDroppable({
     id: `cell:${schoolId}:${rank}`,
     data: { schoolId, rank, doubles, capacity },
     disabled: disabled || isFull,
   });
-
-  const removeRank = (playerId: string) => {
-    unassignRank(playerId, rank);
-  };
 
   const assignPlayer = (playerId: string) => {
     if (doubles && occupants.length >= capacity) return;
@@ -118,21 +94,16 @@ export function PositionCell({
       {disabled ? (
         <span className="block px-1.5 py-1 text-3xs italic opacity-50">–</span>
       ) : occupants.length > 0 ? (
-        // Filled cell: names view-on-click; double-click anywhere reassigns.
-        <div
-          onDoubleClick={handleEdit}
-          className="px-1.5 py-1"
-        >
+        // Filled cell: names open the pane; the pencil button reassigns.
+        <div className="px-1.5 py-1">
           <CellChips
             occupants={occupants}
             doubles={doubles}
             onSelect={handleSelect}
-            onRemove={removeRank}
           />
           {doubles && occupants.length === 1 ? (
             <button
               type="button"
-              data-no-picker="true"
               onClick={(e) => {
                 e.stopPropagation();
                 setPickerOpen(true);
@@ -142,11 +113,21 @@ export function PositionCell({
               ＋ add partner
             </button>
           ) : null}
-          {/* Hover affordance: signals double-click reassigns. */}
-          <PencilSimple
-            aria-hidden
-            className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand group-hover/cell:opacity-100"
-          />
+          {/* The reassign gesture, as a real control: reachable by Tab (and
+              revealed by focus-visible), not a double-click on a div. */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPickerOpen(true);
+            }}
+            data-testid={`pos-cell-reassign-${schoolId}-${rank}`}
+            aria-label={`Reassign ${rank}`}
+            title={`Reassign ${rank}`}
+            className="absolute right-0.5 top-0.5 rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:text-accent focus-visible:opacity-100 group-hover/cell:opacity-100"
+          >
+            <PencilSimple aria-hidden className="h-3 w-3" />
+          </button>
         </div>
       ) : (
         // Empty cell: single click assigns.
