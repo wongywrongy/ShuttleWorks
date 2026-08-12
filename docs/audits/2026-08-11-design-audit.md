@@ -43,7 +43,7 @@ already exists one branch over in the same file family**.
 |---|---|---|
 | Board wrapper | `UnifiedOpsBoard.tsx:349` — `shrink-0 overflow-x-auto` | `RunLiveBoard.tsx:293,305` — no `shrink-0` → **collapsed to 1px** |
 | Narrow-viewport rail | wrapped in `DetailDock` (documented overlay fallback) | `RunInspector` hand-rolled `w-72 flex-shrink-0` → **column renders at 0px** |
-| Rich match panel | `MatchDetailPanel` (undo start, set scores, walkover/retired/forfeit) | hardcoded `live={false}`; **unreachable in production** |
+| Rich match panel | `MatchDetailPanel` (undo start, set-by-set scores, armed winner buttons) | hardcoded `live={false}`; **unreachable in production** |
 | Timeline blocks | `DragGantt.tsx:648` — real `<button>`, dnd-kit focus wiring | `GanttChart.tsx:373-408` — `<div onClick>`, **no keyboard access** |
 
 The surface used under the most time pressure, beside the courts, is the one that got less care.
@@ -194,3 +194,14 @@ failure the gate was already rewritten once to fix — measuring something other
   explicit `prefers-reduced-motion` override, since the spec does not disable it automatically.
 - **`SchoolDot.tsx` ships an `lg = 10px (TV, headline contexts)` variant** that was built for the
   Display board and never wired in.
+
+---
+
+## Corrections to this document
+
+- **`MatchDetailPanel` does not carry contingency handling.** T2's table originally credited it with
+  walkover/retired/forfeit. Those live in a *different* component — `BracketMatchDetailPanel`, a
+  roster-editing drawer whose `onRecordContingency` is plumbed by `BracketMatchesTab`.
+  `MatchDetailPanel` carries undo-start, set-by-set scores and armed winner buttons. Bringing
+  contingency to Run would be new plumbing, not adoption, and was deliberately left out of the fix.
+  *(Found by the agent implementing T2, 2026-08-11.)*
