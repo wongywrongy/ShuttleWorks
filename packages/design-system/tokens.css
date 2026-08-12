@@ -155,11 +155,23 @@
     --motion-slow:     450ms;
 
     /* ----- Handoff motion vocabulary ------------------------------------ */
-    --ease:         cubic-bezier(0.4, 0, 0.2, 1);
+    /* ALIASES ONLY. These names came in with the design handoff and are used
+     * across globals.css; the canonical scale above (and MOTION.md §3/§4) is
+     * the source of truth. Every one of them resolves to a canonical token —
+     * do not give one a raw value again. The 2026-08-11 design audit (T3)
+     * found `--ease` holding the flat Material curve MOTION.md §4 forbids by
+     * name, and `--dur-slow`/`--dur-xslow` at 320/480ms with nothing on the
+     * canonical scale to answer to. Enforced by the motion contract test. */
+    --ease:         var(--ease-brand);
     --dur-fast:     var(--motion-fast);      /* 120ms */
     --dur:          var(--motion-standard);  /* 200ms */
-    --dur-slow:     320ms;                   /* mount / rail / panel / drawer */
-    --dur-xslow:    480ms;                   /* go-live wipe */
+    --dur-slow:     var(--motion-moderate);  /* 300ms — mount / rail / panel / drawer */
+    /* --dur-xslow (480ms) is GONE: its one consumer (`sw-go-live`) was above
+     * even the reserved `--motion-slow` tier. Use `--motion-moderate`. */
+
+    /* Loop PERIODS, not one-shot durations — deliberately off the 0–450ms
+     * scale, which describes how long a transition takes, not how slowly a
+     * signal breathes. Both are killed under prefers-reduced-motion. */
     --pulse-dur:    1.6s;                    /* live breathe */
     --nudge-dur:    2s;                      /* late throb */
     --stagger-step: 40ms;                    /* per-child mount delay */
