@@ -32,10 +32,15 @@ import { isTerminalPollError } from '../lib/pollPolicy';
 
 /** Operator-facing label for a match id — the display code ("Match M12")
  *  when we know its `matchNumber`, else a short UUID prefix. Reads the store
- *  live so conflict toasts never surface a raw UUID (see debt-log). */
+ *  live so conflict toasts never surface a raw UUID (see debt-log).
+ *
+ *  The prefix carries NO trailing ellipsis: an id prefix is a handle, not a
+ *  shortened sentence, and "…" told the operator characters were being
+ *  withheld from a label that has none to withhold. Same shape as
+ *  `useActivityLog`'s sibling helper. */
 function matchLabelOf(matchId: string): string {
   const m = useTournamentStore.getState().matches.find((mm) => mm.id === matchId);
-  return m?.matchNumber != null ? `Match M${m.matchNumber}` : `Match ${matchId.slice(0, 8)}…`;
+  return m?.matchNumber != null ? `Match M${m.matchNumber}` : `Match ${matchId.slice(0, 8)}`;
 }
 
 export function useLiveTracking() {

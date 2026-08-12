@@ -173,9 +173,10 @@ export function GroupBandHeader({
    *  even reliably the same string. So bands that carry a value put the
    *  word in `label` and the value here.
    *
-   *  A string rather than a node, deliberately: this is a one-line band
-   *  header that truncates, and a slot that took arbitrary markup would
-   *  become the place a second row of controls appeared. */
+   *  A string rather than a node, deliberately: a slot that took arbitrary
+   *  markup would become the place a second row of controls appeared. The
+   *  value WRAPS (the band header grows) — it used to be ellipsised, which
+   *  cut exactly the identifying tail of an address. */
   detail?: string;
   count: number;
   collapsed: boolean;
@@ -207,7 +208,7 @@ export function GroupBandHeader({
         {label}
       </span>
       {detail ? (
-        <span className="min-w-0 truncate text-2xs text-muted-foreground">
+        <span className="min-w-0 break-words text-2xs text-muted-foreground">
           {detail}
         </span>
       ) : null}

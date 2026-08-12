@@ -62,9 +62,11 @@ export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonEle
   /** Optional team labels for the second line (only shown when `showSides`). */
   sideA?: string;
   sideB?: string;
-  /** Render a compact, truncating `sideA v sideB` line under the label. The
-   *  Gantt (Plan) is label-only; the Run board opts in so the floor sees teams
-   *  at a glance. Truncation + the parent's min-w-0 keep it from forcing width. */
+  /** Render a compact `sideA v sideB` line under the label. The Gantt (Plan)
+   *  is label-only; the Run board opts in so the floor sees teams at a glance.
+   *  It WRAPS rather than truncating — the caller only opts in when the cell
+   *  is tall enough (`box.height >= 48`), and both boards size their lanes
+   *  from `chipLanePx(longest label)`, so the common case reads in full. */
   showSides?: boolean;
   /** Click-to-select. Mapped onto the button's `onClick`. */
   onSelect?: () => void;
@@ -128,7 +130,7 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         >
           {SOURCE_INITIAL[source]}
         </span>
-        <span className={`truncate text-2xs font-semibold sw-num${doneLabel ? ' text-muted-foreground' : ''}`}>{label}</span>
+        <span className={`min-w-0 break-words text-2xs font-semibold sw-num${doneLabel ? ' text-muted-foreground' : ''}`}>{label}</span>
         {doneLabel ? (
           <span aria-hidden className="text-3xs text-muted-foreground">
             ✓
@@ -136,7 +138,7 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         ) : null}
       </span>
       {showSides && sideA != null && sideB != null && (
-        <span className="mt-0.5 truncate text-2xs leading-tight">
+        <span className="mt-0.5 break-words text-2xs leading-tight">
           {sideA} <span className="opacity-60">v</span> {sideB}
         </span>
       )}

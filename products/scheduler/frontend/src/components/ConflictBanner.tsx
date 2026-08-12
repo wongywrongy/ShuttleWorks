@@ -135,7 +135,9 @@ function BannerView({
         `text-2xs leading-tight ${variantClasses} ${className}`
       }
     >
-      <span className="truncate">{text}</span>
+      {/* A conflict message names WHAT collided — an ellipsis on it is the
+          one thing the operator needed. It wraps; the banner grows. */}
+      <span className="min-w-0 break-words">{text}</span>
       {!isStale && (
         <button
           type="button"

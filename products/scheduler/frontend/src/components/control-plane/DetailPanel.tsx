@@ -107,7 +107,7 @@ export function DetailPanel({
       }
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
-        <div className="flex min-w-0 items-baseline gap-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
           <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
             {label}
           </span>
@@ -120,7 +120,7 @@ export function DetailPanel({
             {value}
           </span>
           {sub ? (
-            <span className="truncate text-xs text-muted-foreground">{sub}</span>
+            <span className="min-w-0 break-words text-xs text-muted-foreground">{sub}</span>
           ) : null}
         </div>
         <button
