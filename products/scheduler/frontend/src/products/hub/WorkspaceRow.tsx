@@ -179,7 +179,12 @@ export function WorkspaceRow({
         // resolving to 0px at 390 (`min-w-0 flex-1` against fixed-width
         // siblings with nothing yielding). Same mechanism as BandedTable's
         // `@container/table` columns, scoped to one row instead of a table.
-        'group flex min-h-[40px] cursor-pointer items-center gap-3 px-4 py-2 text-sm @container/table',
+        // `flex-wrap`: wrapping the NAME is only half a fix — at 390px the
+        // fixed-width siblings (w-40 action + Modules + Date + overflow) left
+        // the name column ~63px, so `break-words` broke it MID-WORD
+        // ("Invitatio/nal"). The columns now wrap to a second line instead of
+        // strangling the name; see the `min-w-[12rem]` floor below.
+        'group flex min-h-[40px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm @container/table',
         'transition-colors duration-fast ease-brand',
         receded ? 'opacity-80 hover:opacity-100' : '',
         selected
@@ -189,14 +194,15 @@ export function WorkspaceRow({
     >
       {/* NAME leads — the row's anchor, and the only thing on it at full
           weight. Everything to its right is metadata or an affordance. */}
-      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+      <span className="flex min-w-[12rem] flex-1 items-center gap-2.5">
         <HealthDot health={health} />
         {/* The dot is `aria-hidden` (it has a title, which AT ignores on a
             span), so the one state worth interrupting a scan for gets words. */}
         {health === 'attention' ? <span className="sr-only">Needs attention</span> : null}
         {/* Wraps, never ellipsises: the name is the row's only identifying
-            fact, and the `@container/table` priorities above yield Modules
-            then Date so it has the width to wrap at word boundaries. */}
+            fact, and the row's `flex-wrap` + the 12rem floor above give it the
+            width to wrap at WORD boundaries — wrapping is necessary, not
+            sufficient; the box still has to have room. */}
         <span className="min-w-0 break-words text-sm font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </span>

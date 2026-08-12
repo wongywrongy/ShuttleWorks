@@ -39,8 +39,13 @@ import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 import { useAction } from '../../hooks/useAction';
 
+// `min-h-7` + `py-1`, not `h-7`: a fixed 28px box squeezed to its min-content
+// width at 390px wrapped "Re-solve meet" onto two lines — 38px of text in a
+// 28px box, spilling out over the header. The button now takes its content's
+// height, and `whitespace-nowrap` + the header's `flex-wrap` (below) give it
+// its content's width instead of a two-line label.
 const schedBtn =
-  `${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs ` +
+  `${INTERACTIVE_BASE} inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-sm bg-accent px-2.5 py-1 text-xs ` +
   `font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
 
 export function OperationsProduct() {
@@ -206,7 +211,7 @@ function OperationsBody() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-card">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`${EYEBROW_CLASS} text-muted-foreground`}>{title}</span>
           <span className="text-xs text-muted-foreground">{subtitle}</span>
@@ -214,7 +219,7 @@ function OperationsBody() {
         {/* Plan is the planning surface: build / adjust the plan. Run runs
             what Plan produced — no scheduling actions there. */}
         {!isLive ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               className={schedBtn}

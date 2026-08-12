@@ -117,7 +117,11 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         // Courts omits `onSelect` for a read-only overview — a row with nothing
         // to activate must not be focusable (audit G1).
         {...(onSelect ? selectableRowProps(() => onSelect(b.key), isSelected) : {})}
-        className={`flex items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${
+        // `flex-wrap`: same fix as the Run queue rows — at 390px the dot,
+        // code and court columns plus the action buttons left the sides
+        // column ~72px, so `break-words` broke names MID-WORD ("Damo/n
+        // Ferraro"). Columns wrap to a second line; sides keeps a 10rem floor.
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 hover:bg-muted/30 ${
           onSelect ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : ''
         } ${isSelected ? 'bg-muted/40' : ''}`}
       >
@@ -127,7 +131,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
           {b.court != null ? `C${b.court} · S${b.slot}` : '–'}
         </span>
-        <span className="min-w-0 flex-1 break-words text-sm">
+        <span className="min-w-[10rem] flex-1 break-words text-sm">
           {b.sideA}
           <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           {b.sideB}

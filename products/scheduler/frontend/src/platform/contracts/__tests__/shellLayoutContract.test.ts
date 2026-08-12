@@ -129,8 +129,12 @@ describe('the Hub row keeps its name at a narrow container width', () => {
     expect(workspaceRow).toMatch(/@container\/table/);
   });
 
-  it('the name cell is still the one flexible, unhidden column', () => {
-    expect(workspaceRow).toMatch(/className="flex min-w-0 flex-1 items-center gap-2\.5"/);
+  it('the name cell is still the one flexible, unhidden column — with a floor', () => {
+    // `min-w-0` was the earlier pin. Flexible, but free to collapse: at 390px
+    // it measured 63px and `break-words` then broke the name MID-word
+    // ("Invitatio/nal"). Wrapping is necessary, not sufficient — the box still
+    // has to have room, so the floor is part of the invariant now.
+    expect(workspaceRow).toMatch(/className="flex min-w-\[12rem\] flex-1 items-center gap-2\.5"/);
   });
 
   it('the Modules glyphs yield first — priority 3, hides soonest', () => {

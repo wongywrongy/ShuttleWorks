@@ -67,7 +67,11 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             data-testid={`run-queue-row-${match.key}`}
             data-source={match.source}
             style={{ '--i': i } as CSSProperties}
-            className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
+            // `flex-wrap`: at 390px the fixed columns (#n, source, code) plus
+            // the badges left the sides column ~91px, so `break-words` broke
+            // names MID-WORD ("Winn/er"). The trailing columns now wrap to a
+            // second line instead; the sides column keeps a 10rem floor.
+            className={`flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
               isSelected ? 'bg-muted/40' : ''
             }`}
             {...selectableRowProps(() => onSelect(match.key), isSelected)}
@@ -94,7 +98,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             {/* Sides — wrap; the row grows. The court caller reads names off
                 this queue, and a tooltip is not a thing you can hover on the
                 tablet it runs on. */}
-            <span className="min-w-0 flex-1 break-words text-sm">
+            <span className="min-w-[10rem] flex-1 break-words text-sm">
               {match.sideA}
               <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
                 v
