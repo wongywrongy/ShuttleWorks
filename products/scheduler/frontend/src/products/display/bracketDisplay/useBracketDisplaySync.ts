@@ -12,7 +12,7 @@
  * instead of drifting into separate Reconnecting/Offline language.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../../api/client';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import { isTerminalPollError } from '../../../lib/pollPolicy';
@@ -28,10 +28,13 @@ export interface UseBracketDisplaySyncResult {
 
 export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
   const [searchParams] = useSearchParams();
+  const params = useParams<{ id: string }>();
   // Public capability link (SP-CLOUD-2): ?token= reads the unauthenticated
   // /display/{token}/bracket projection; ?id= keeps the viewer-gated path.
+  // The `:id` route param is the in-shell Preview tab (/tournaments/:id/tv),
+  // which has no query string — same fallback `useDisplaySync` carries.
   const token = searchParams.get('token');
-  const tid = searchParams.get('id');
+  const tid = searchParams.get('id') ?? params.id ?? null;
   const [data, setData] = useState<BracketTournamentDTO | null>(null);
   const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
