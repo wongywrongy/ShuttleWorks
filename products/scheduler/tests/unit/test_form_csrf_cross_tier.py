@@ -69,7 +69,14 @@ _TS_FIELD_PATH = _TS_LIB / "formField.ts"
 # The `next` allowlist is the OTHER security primitive this phase implemented
 # twice, for the same reason and with the same drift risk — see
 # ``test_the_two_tiers_share_one_next_allowlist``.
-_TS_LOGIN_PATH = _TS_LIB.parent / "routes" / "login.tsx"
+#
+# It used to live in ``routes/login.tsx``. It moved to its own module when
+# the SIGN-UP page needed the same check (E3, 2026-08-11): two account pages
+# now render a destination into markup a human reads, and a second
+# hand-written copy of an open-redirect guard is how the two drift. The path
+# moves with it, which is what this file already instructs — an absent
+# constant fails closed below rather than quietly asserting nothing.
+_TS_NEXT_PATH = _TS_LIB / "nextTarget.ts"
 
 
 def _ts_source(path: Path = _TS_PATH) -> str:
@@ -220,7 +227,7 @@ def test_no_secret_is_no_token_on_both_sides(candidate):
 def test_the_two_tiers_share_one_next_allowlist():
     """The second primitive implemented twice, pinned the same way.
 
-    ``login.tsx``'s ``SAFE_NEXT`` docstring claims it is byte-identical to
+    ``nextTarget.ts``'s ``SAFE_NEXT`` docstring claims it is byte-identical to
     ``_SAFE_NEXT`` in ``api/entrants.py``, and it is — but a claim in a
     comment is not a control. The two validate the same value for the same
     reason at two tiers, and drift here is worse than drift in the CSRF
@@ -242,14 +249,14 @@ def test_the_two_tiers_share_one_next_allowlist():
     from api.entrants import _SAFE_NEXT
 
     matches = re.findall(
-        r"^const SAFE_NEXT = /(.*)/;$", _ts_source(_TS_LOGIN_PATH), re.MULTILINE
+        r"^const SAFE_NEXT = /(.*)/;$", _ts_source(_TS_NEXT_PATH), re.MULTILINE
     )
     # Fails CLOSED, exactly like `_ts_constant`: a rename, a reformat that
     # breaks the one-line shape, or a second declaration must go red rather
     # than quietly assert nothing.
     assert len(matches) == 1, (
         f"expected exactly one `const SAFE_NEXT = /.../;` in "
-        f"{_TS_LOGIN_PATH.name}, found {len(matches)}: {matches}"
+        f"{_TS_NEXT_PATH.name}, found {len(matches)}: {matches}"
     )
 
     assert matches[0].replace("\\/", "/") == _SAFE_NEXT.pattern

@@ -1359,3 +1359,50 @@ page-weight gate (blocking, 4 KB/page) **`/e/` 2.0 KB · `/e/{slug}` 2.1 KB · `
 `docs/screenshots/demo/walkthrough.html` §10 was rewritten around the new IA (that path is
 gitignored, so it is a local artefact and carries no commit). **A2 restated: nothing touched
 exposure, DNS, tunnels or keys — the stack is local.**
+
+## SP-P6-2 Phase E — the demo-walk defects, closed (2026-08-11)
+
+Branch `dev/prog1-p6-2-public-ia`. All five Phase D findings fixed, one commit each, each
+with a regression test that was red before it and green after. The seeded stack was left
+running throughout (`:8090` nginx / `:8600` API) and every fix was re-checked in a real
+browser at 390px and 1280px.
+
+| | Fix | Commit |
+|---|---|---|
+| **E1** | `MessagePage` puts sign-in, sign-up, the receipt and every not-found state inside `PlayShell` — one component for five boundaries, not four page chromes. `root.tsx` gains an ErrorBoundary so a path matching NO route (`/e/a/b/c`) stops answering React Router's "Unhandled Thrown Response!" page, which also carried an inline `<script>` the CSP blocks. Auth pages become the small centred cards brief §4 specified. | `de48ece` |
+| **E2** | The discovery card's chip float is now `sm:`-scoped; below that the content column is a flex column and the chip is `order-last` — the bottom row the component's docstring always claimed, with no duplicated markup. Desktop is unchanged: one vertical line of chips, names at full card width. | `88e490a` |
+| **E3** | `/e/{slug}/enter`'s "create one" carries the tournament as a path segment (`/e/signup/{slug}`); `signup.tsx` composes the return URL and validates it with `safeNext`, hoisted into `app/lib/nextTarget.ts` so both account pages share the one allowlist. A non-slug falls back to the old constant. Signup's loader keeps its zero-arity signature. `/e/{slug}/enter/created` is the landing. | `5c99c2a` |
+| **E4** | "Sign out" drops to the outline variant. It stays unconditional (the tier cannot know who is reading) and the hedged copy above it is unchanged; the glow now belongs only to "Submit entry". The header half of the finding is untouched — structural, STOP-1/R8-D. | `cf334a7` |
+| **E5** | Sticky bar: `pb-24` on the scrolling column so the acknowledgment clears it, and a slimmer bar on phones (`p-3`, buttons 2-up) — **176px, 21% of an 844px viewport**. The closed hero states "Entries closed" once (the chip; the CTA slot is empty when there is no action). Discovery canonicalises its query, so a blank filter apply lands on `/e/` rather than `/e/?q=&status=&preset=&from=&to=`. Fees still render `45.00` with no currency, deliberately — written up as **gate proposal G7** in the design document. | `dfa04e5` |
+
+**Three test assertions changed, all reported rather than quietly edited**, because each had
+pinned the defect: `components.test.ts`'s unconditional `float-right` (E2 — now
+`sm:float-right` present *and* a bare `float-right` forbidden, with the phone bottom row
+added); `login.test.ts`'s bare `/e/signup` on the entry page (E3 — now
+`/e/signup/spring-open`); and `receipt.test.ts`'s `not.toContain('<form')` (E1 — now
+`not.toMatch(/<form[^>]*method="post"/)`, since the page wears the shell's GET search form
+and the property was always "nothing here can re-fire the entry POST").
+`tests/unit/test_form_csrf_cross_tier.py` was repointed at `nextTarget.ts` — the same
+byte-identity check, at the constant's new address, exactly as that file instructs.
+
+### Live verification (seeded stack, both widths)
+
+- **Uniform 404 re-proven with `cmp`**: `/e/dave-freeman-classic-2026` (published page,
+  entries shut) and `/e/no-such-thing-2026` (unknown slug) are **byte-identical**, 3085 bytes
+  each, and both now render the full page system.
+- **Sign-up journey end to end in the browser**: `/e/bay-late-summer-2026/enter` → "create
+  one" → `/e/signup/bay-late-summer-2026` → submit → **303 to
+  `/e/bay-late-summer-2026/enter/created`**, which says the account is ready and offers a
+  sign-in that returns to the same page. A crafted slug (`%2F%2Fevil.example`) renders the
+  `/e/login/created` constant instead.
+- **390px card titles** no longer wrap around the chip; no page overflows 390px
+  horizontally; the acknowledgment checkbox is clear of the sticky bar at full scroll.
+- Screenshots: `docs/screenshots/sp-p6-2/fix-*.png` (390 + 1280).
+
+### Gates
+
+entrant vitest **561/561** (was 530); typecheck, eslint and `depcruise app` clean; root
+`npm run depcruise` **0 errors** (14 pre-existing warnings); backend pytest **1596 passed /
+66 skipped**; ruff clean; page-weight gate (blocking, 4 KB/page) **`/e/` 2.0 KB ·
+`/e/{slug}` 2.1 KB · `/e/{slug}/enter` 3.3 KB gzipped, 0 script tags each**. **A2 restated:
+nothing touched exposure, DNS, tunnels or keys — the stack is local, and left running.**
