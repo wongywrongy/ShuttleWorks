@@ -1406,3 +1406,96 @@ entrant vitest **561/561** (was 530); typecheck, eslint and `depcruise app` clea
 66 skipped**; ruff clean; page-weight gate (blocking, 4 KB/page) **`/e/` 2.0 KB ·
 `/e/{slug}` 2.1 KB · `/e/{slug}/enter` 3.3 KB gzipped, 0 script tags each**. **A2 restated:
 nothing touched exposure, DNS, tunnels or keys — the stack is local, and left running.**
+
+---
+
+## SP-P6-2 Phase F — the design audit, its fixes, and the verification that judged them: COMPLETE (2026-08-12)
+
+Six surfaces were audited against the design-motion-principles skill and the impeccable
+craft floor; the consolidated findings live in `docs/audits/2026-08-11-design-audit.md`,
+organised into seven themes because six independent audits converged on a handful of root
+causes. **Read that document's corrections section**: two of its root causes were wrong, and
+both were wrong in the direction of making the defect sound smaller than it was.
+
+### What shipped
+
+Truncation removed at 71 sites across 45 files; em dashes removed across ~110 files; the
+Gantt drift predicate rewritten (`e3de967`); bracket segment layout reshelved (`e5002e3`);
+motion tokens reconciled onto one scale; the operator shell given a 1024px breakpoint and an
+off-canvas drawer; table semantics restored where `role="button"` had flattened every cell.
+
+### The two contracts that keep it removed (`f7bd519`)
+
+`frontend/src/platform/contracts/__tests__/emDashContract.test.ts` and
+`entrant/tests/noEmDash.test.ts` had both been written during the sweep and **never staged**,
+so `02ecbdc` shipped the cleanup without the gate. They enumerate source files from disk and
+strip comments, the shape `truncationContract.test.ts` and `noTruncation.test.ts` already
+use. Each rule was **proven RED by mutation** rather than trusted for being green on an
+already-clean tree: an em dash and a prose en dash injected into `entrant/lib/phase.ts`, an
+em dash into `frontend/products/hub/HubPage.tsx`, each naming its file in the failure, each
+reverted.
+
+Numeric en-dash ranges stay legal because the rule keys on a **letter** adjacent to the dash,
+not the dash. The blind spot (a bad en dash beside a closing JSX brace) is named in the
+frontend file's docblock rather than left to be discovered.
+
+**The backend was never in scope and does not need to be.** An AST scan of every Python
+string literal found 7 surviving em dashes; five are log lines, and the two that looked
+user-facing (`LastOwnerError`) are discarded at `api/tournaments.py:1236`, which substitutes
+its own copy. A contract over `backend/` would fire on 102 files of docstrings to protect
+nothing.
+
+### The verification, and what it overturned
+
+Every fix above shipped on unit tests alone. A browser pass on a rebuilt image judged six of
+them: **five CONFIRMED**, one **BROKEN**.
+
+**The truncation sweep was broken at 390px.** No ellipsis survived, but `break-words` had
+landed on `min-w-0` flex children that collapse to 60-90px, and `overflow-wrap: break-word`
+breaks the word itself when the word cannot fit the line at all. So the sweep replaced one
+way of destroying a value with another: "Invitatio/nal" in a 63px Hub column, "Winn/er" in a
+91px Run queue column. This is the failure the Display standings fix had **already corrected
+once** ("Nashville / Badminto / n"), which is the durable lesson: the sweep applied that
+fix's property and not its reasoning. Wrapping is necessary, not sufficient. Fixed in
+`4e92c84` by giving the columns room (63->302px, 91->229px, 72->292px), never by changing the
+wrapping property back.
+
+`4e92c84` also stopped a banner lying: `start_delay_detected` and `running_behind` were both
+computed from `actualStartTime` stamps the same surface had already rejected, so the Plan
+board read "running 286117 min behind schedule" beside the Gantt caption saying those very
+timestamps are not from this day. Both are now suppressed by the **same** predicate the Gantt
+refuses them with (`hasStaleActualTiming` -> `isNearPlan`), not a second threshold;
+unjudgeable data keeps the advisory. The backend renders a delay over ~2h as hours or days.
+
+One contract baseline moved with it: `shellLayoutContract.test.ts:132` had pinned the literal
+`min-w-0` on the Hub name cell — the exact class that let it collapse to 63px. Re-pinned to
+`min-w-[12rem]`; the stated invariant ("the one flexible, unhidden column") is unchanged, it
+now carries a floor.
+
+### What the verification found that was worth more than its verdict
+
+`isNearPlan` has exactly **one** production consumer, `meet/control-center/GanttChart.tsx`,
+and `app/workspace/ModuleOutlet.tsx:52` routes Operations segments to `OperationsProduct`
+whenever both engines are enabled. So the Gantt fix **never executes on a dual-engine
+workspace** — it reaches single-engine meet workspaces and nothing else, and nothing in the
+file says so. Recorded on debt-log **D4**, which it converts from a UX-inconsistency entry
+into a reachability one.
+
+The Gantt's near-plan branch could not be reached at all: every `actualStartTime` in the
+seeded database is a seed-time clock artifact, and all three bracket tournaments have
+`actual_start_slot == slot_id` exactly. Reported as COULD NOT REACH rather than guessed.
+
+### Gates
+
+`make check` **exit 0** — and since `pytest` is its last step, reaching it cleared lint,
+`tsc -b`, `typecheck:entrant`, frontend vitest, depcruise and ruff. Backend **1598 passed /
+66 skipped**, at baseline. Entrant vitest **584** (581 baseline + the 3 new contract tests).
+Frontend vitest **1591** (1583 baseline + 3 em-dash + 5 advisory-banner). That run is also
+what verified `02ecbdc`, which had been committed unverified after its agent hit a session
+limit — no test was asserting copy that carried an em dash, so nothing had to move.
+
+### Demo data
+
+Local only, cloud mode, `:8090` / `:8600` / `:8081`, **not re-seeded** at any point. One
+artifact removed: an empty "ZZ Verify Temp" school a verifier left in the Nashville roster,
+deleted only after asserting it had zero players referencing it.
