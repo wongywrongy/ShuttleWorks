@@ -1,5 +1,7 @@
 # MOTION — Motion Design Language
 
+**Enforced by:** `products/scheduler/frontend/src/platform/contracts/__tests__/motionContract.test.ts` — the token aliasing (§3), the forbidden curve (§4), the 300ms chrome cap (§10.8), the hard cuts (§2/§6) and reduced-motion coverage (§8) are asserted against the shipped CSS and call sites. This document used to assert things about the code that the code had stopped doing; that is what the test is for.
+
 **Status:** Locked direction. Authoritative for every surface in the scheduler. Companion to `DESIGN_COLOR.md` + `tokens.css` (visual language) and `DESIGN.md` (component-architecture rulebook). `BRAND.md` is superseded — where this file cites it for the visual direction, read `DESIGN_COLOR.md` instead.
 
 **Authored:** 2026-05-12 alongside the first motion audit (see `design/motion-audit-setup-2026-05-12.md`).
@@ -49,6 +51,31 @@ For every animation candidate, decide its **interaction frequency** first:
 
 ---
 
+## 2a. The ambient axis (Display)
+
+The table above measures a director's hands. **The Display board has no hands on it**, and every threshold in §2 is stated in interactions per session — a unit that does not exist on a surface nobody interacts with. Reading a hall screen through the "High frequency: tab click" rule gets the wrong answer, because a tab click is a thing a person did and a board rotation is a thing that happened to them.
+
+The board is the concrete case, so describe the board: **Experience mode, projected in a hall, read across a room by people who did not choose to look at it, unattended for the length of an event, swapping its own content on a 15-second timer** (`MeetDisplayPage.tsx`, `ROTATION_INTERVAL_MS`). Two consequences invert §2's assumptions:
+
+- **Nobody is mid-task, so motion cannot interrupt anything.** The operator rule "motion exists only when it carries information the operator needs to keep moving" relaxes: a spectator has nowhere to be.
+- **Nobody is watching continuously, so a silent change is a change nobody knows happened.** At a desk, the absence of motion is honest; across a hall, an instant content swap reads as "the screen was always like that". Here a short enter beat is the *functional* alternative, not the polish.
+
+| Tier | Threshold | Motion budget |
+|---|---|---|
+| **Ambient one-shot** | An element arrives or leaves on its own — a court card mounting, a match flipping to LIVE | 200–300ms, `--ease-brand`. It must **read at distance**: an 8px translate that's right at a desk is invisible at 3 metres. Stagger siblings ≤60ms per child, and cap the whole cascade under a second. |
+| **Ambient recurring** | The surface swaps itself on a timer — the 15-second standings rotation | One enter beat at `--motion-moderate`, no exit choreography, nothing looping between swaps. The viewer sees this **~240 times an hour, for hours**: it has to be a cut they can look away from, not a transition they wait through. |
+| **Ambient continuous** | Anything that never stops — a pulsing LIVE dot | Only when the loop **is** the state *and* the state is also in text. `sw-pulse` on a LIVE/CALLING dot qualifies: the pill says LIVE either way. Nothing decorative earns a loop on a screen that runs for nine hours. |
+
+Three rules apply only here:
+
+1. **There is no pause control and nobody to hand one to.** §8.4 ("looping animations must be pause-able") is unsatisfiable on this surface — the viewer is a hall. It is therefore met the only way left open: every looping signal honours `prefers-reduced-motion`, and every looping signal has a text equivalent, so a viewer who can't stop it can still read past it. A loop that fails either half doesn't ship to the board.
+2. **Reduced motion still wins.** The board honours the viewer's OS setting exactly like the operator console does. **Where an ambient budget and the accessibility contract disagree, the accessibility contract wins** — including when that means the 15-second rotation swaps with no beat at all for that viewer. Never buy a duration rule with an accessibility exemption.
+3. **Ambient is not a licence for the rest of the surface.** The Display module's *operator-facing* config editor is operator UI and follows §2. Only what the hall sees is ambient.
+
+> Added 2026-08-11 after the design audit found the frequency model had no tier for "automatic, non-interactive, recurring every 15 seconds for hours" — and that the 450ms `block-in` entry the board borrowed for its court cards was governed, absurdly, by a rule written about clicking a tab.
+
+---
+
 ## 3. Duration scale
 
 Locked named tokens. Use these, not raw `ms` values, on every surface:
@@ -61,7 +88,11 @@ Locked named tokens. Use these, not raw `ms` values, on every surface:
 | `--motion-moderate` | `300ms` | Modal/Toast enter, banner mount, success state |
 | `--motion-slow` | `450ms` | Reserved — only solver-theatre + sheen + slide-up. New surfaces don't use this. |
 
-Add these to `tokens.css` (see §9 below). Reach for the next-fastest tier when in doubt — Emil's "180ms feels more responsive than 400ms."
+Reach for the next-fastest tier when in doubt — Emil's "180ms feels more responsive than 400ms."
+
+**The `--dur*` names are aliases of this scale, not a second scale.** `tokens.css` also carries a handoff vocabulary — `--dur-fast`, `--dur`, `--dur-slow` — because the design handoff shipped with those names and `globals.css` is written in them. Every one resolves to a canonical token; none may be given a raw value again. `--pulse-dur` and `--nudge-dur` are the exception that proves it: they are loop *periods* (1.6s, 2s), not one-shot durations, and belong to §2a's ambient-continuous tier rather than to this table.
+
+> The 2026-08-11 design audit found this half-done — `--dur-slow` at 320ms and `--dur-xslow` at 480ms answered to nothing here, and `--ease` held the very curve §4 forbids. A parallel vocabulary is how a locked scale stops being locked.
 
 ---
 
@@ -218,7 +249,9 @@ Existing keyframes lifted from scheduler into `globals.css` carry semantic state
 | `sheen` | One-pass diagonal sweep = "optimal proven" / save-success | Locked |
 | `slide-up` | Toast/dock entry | Locked |
 
-`prefers-reduced-motion: reduce` already kills the infinite ones (`scan-sweep`, `phase-glow`, `marching-ants`, `cell-pulse`) and is asserted in `globals.css:204-212`.
+`prefers-reduced-motion: reduce` kills all of these — see §8, which is now a universal rule rather than the hand-maintained selector list this line used to point at.
+
+> **Correction (2026-08-11).** This paragraph previously said the override "already kills the infinite ones" and named four. It was a list, it had rotted, and four classes shipped unguarded for months on the strength of this sentence — including `.motion-enter`, which drives the Display board's 15-second standings rotation. Two agents read it during the design audit and believed it. If a doc asserts coverage, the coverage has to be enforced by something other than the doc; it is now `motionContract.test.ts`.
 
 ---
 
@@ -226,10 +259,16 @@ Existing keyframes lifted from scheduler into `globals.css` carry semantic state
 
 **Non-negotiable.** Every motion decision must pass:
 
-1. **`prefers-reduced-motion: reduce` global override** — already wired in `globals.css`. New animations must opt in to the cut OR not be additive (transitions on transform/opacity inherit the global override automatically when triggered via Tailwind classes).
+1. **`prefers-reduced-motion: reduce` global override** — wired in `globals.css` as a **universal rule**: under `reduce`, `*, *::before, *::after` get `animation-duration: 0.01ms`, `animation-delay: 0`, `animation-iteration-count: 1`, `transition-duration: 0.01ms`. New animations are covered by default; there is nothing to opt into and no list to remember.
+
+   > **Correction (2026-08-11).** This item used to claim that "transitions on transform/opacity inherit the global override automatically when triggered via Tailwind classes". **That was false, and it was the single most expensive sentence in this document.** Nothing inherits a reduced-motion override — not transitions, and least of all `animation`-based keyframes, which the override in force at the time did not touch unless a human had typed the class name into a list. Four classes were missing from that list. The rule is universal now precisely so the claim can be true.
+
+   `0.01ms` rather than `none` is deliberate: the animation still starts and ends, so `fill-mode` end-states land and `animationend` listeners still fire. (`RunLiveBoard` clears its one-shot call-flash/go-live classes on `animationend`; under `animation: none` that event never arrived and the class stuck forever.)
 2. **No vestibular triggers** — no full-screen zoom, no parallax, no spin. The existing brutalist visual language already forbids these aesthetically.
 3. **Functional alternative** — every animation that carries information must have a non-motion equivalent. The toggle thumb position is meaningful regardless of slide animation; the Seg active state is meaningful regardless of pill animation; the save success text says "Saved" regardless of icon-swap animation.
-4. **Looping animations** that aren't signal-carrying must be pause-able. None currently exist outside solver-theatre, which IS signal-carrying.
+4. **Looping animations** that aren't signal-carrying must be pause-able. None currently exist outside solver-theatre, which IS signal-carrying. On the Display board, where a pause control has no one to reach, §2a rule 1 applies instead.
+
+**This contract outranks every duration and frequency rule in this document.** If honouring reduced motion means a surface loses a beat §2 or §2a would have given it, the surface loses the beat. There is no case in which a motion budget justifies an accessibility exemption — say so out loud when the two meet, rather than quietly splitting the difference.
 
 If a new animation can't pass all 4 — drop it.
 
@@ -237,7 +276,7 @@ If a new animation can't pass all 4 — drop it.
 
 ## 9. Implementation primitives
 
-### Tokens to add to `tokens.css`
+### Tokens in `tokens.css` (present since 2026-05; listed here for reference)
 
 ```css
 :root {
