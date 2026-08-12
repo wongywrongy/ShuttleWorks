@@ -12,17 +12,28 @@ export {
   GroupBandHeader,
   COLUMN_HEADER_ROW_CLASSES,
   BANDED_ROW_CLASSES,
+  BANDED_ROW_LINES,
+  BANDED_ROW_MIN_H,
+  NAME_COL_MIN,
   COL_PRIORITY_CLASS,
   COL_PRIORITY_CLASS_FLEX,
   colClass,
   type BandedListColumn,
 } from './BandedList';
 export {
+  dockMinContentWidth,
+  COL_PRIORITY_MIN_CONTAINER_PX,
+} from './bandedDockWidth';
+export {
   BandedTable,
   type BandedTableColumn,
   type BandedTableGroup,
 } from './BandedTable';
-export { MATCH_LIST_COLUMNS, MATCH_CELL } from './matchListColumns';
+export {
+  MATCH_LIST_COLUMNS,
+  MATCH_CELL,
+  MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+} from './matchListColumns';
 export {
   STATUS_CLASS,
   STATUS_LABEL,

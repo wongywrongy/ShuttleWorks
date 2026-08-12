@@ -29,6 +29,7 @@ import {
   DetailDock,
   EmptyState,
   colClass,
+  dockMinContentWidth,
   type BandedListColumn,
   type BandedTableGroup,
 } from '../../components/control-plane';
@@ -93,6 +94,11 @@ const DRAW_COLUMNS: BandedListColumn[] = [
   // where Format has yielded and no column is growing.
   { label: '', className: 'ml-auto w-80 shrink-0' },
 ];
+
+/** Content floor for the draws dock, derived from DRAW_COLUMNS. The old
+ *  hand-picked 760 sat under the 896 `@4xl` tier `Format` uses, so selecting
+ *  a draw deleted the Format column. */
+const DRAWS_DOCK_MIN_CONTENT_WIDTH = dockMinContentWidth(DRAW_COLUMNS);
 
 export function BracketDrawsTab() {
   const { data, setData, refresh } = useBracket();
@@ -409,10 +415,13 @@ export function BracketDrawsTab() {
           )}
         </div>
 
-        {/* minContentWidth ≈ the draws row's fixed-cell total (with Format
-            collapsed) — below it the dock overlays instead of docking, so
-            the shrink-0 cells never force a squashed/overflowing table. */}
-        <DetailDock open={selectedRow != null} minContentWidth={760}>
+        {/* Below the derived floor the dock overlays instead of docking, so
+            the shrink-0 cells never force a squashed/overflowing table and
+            Format never vanishes just because a row was selected. */}
+        <DetailDock
+          open={selectedRow != null}
+          minContentWidth={DRAWS_DOCK_MIN_CONTENT_WIDTH}
+        >
           {selectedRow ? (
             <DrawDetailPanel
               key={selectedRow.ev.id}

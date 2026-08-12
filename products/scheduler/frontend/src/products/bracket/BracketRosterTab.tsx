@@ -23,7 +23,10 @@ import {
   DetailDock,
   DetailPanel,
   EventBadge,
+  NAME_COL_MIN,
   OverflowMenu,
+  colClass,
+  dockMinContentWidth,
   type BandedTableColumn,
   type OverflowItem,
 } from '../../components/control-plane';
@@ -40,11 +43,17 @@ import { exportBracketRosterXlsx } from './exports/xlsxExports';
 
 /** Column set for the roster table — canonical px-5 banded rhythm. */
 const ROSTER_COLUMNS: BandedTableColumn[] = [
-  { label: 'Player', className: 'min-w-0 flex-1' },
+  // Player carries a person name, so it floors at NAME_COL_MIN rather than
+  // collapsing to zero. Events is badges, which wrap on their own.
+  { label: 'Player', className: `${NAME_COL_MIN} flex-1` },
   { label: 'Events', className: 'min-w-0 flex-1' },
   { label: 'Min rest', subLabel: 'slots', className: 'w-16 shrink-0 text-right', priority: 2 },
   { label: '', className: 'w-8 shrink-0' },
 ];
+
+/** Content floor for the roster dock, derived from ROSTER_COLUMNS. The old
+ *  560 default sat under the 672 `@2xl` tier `Min rest` uses. */
+const ROSTER_DOCK_MIN_CONTENT_WIDTH = dockMinContentWidth(ROSTER_COLUMNS);
 
 export function BracketRosterTab() {
   // Use context presence check to determine if we're inside a provider.
@@ -210,7 +219,10 @@ function BracketRosterTabCore({
             rowTestId={(p) => `roster-row-${p.id}`}
             renderRow={(p) => (
               <>
-                <span role="cell" className="min-w-0 flex-1 break-words text-sm text-foreground">
+                <span
+                  role="cell"
+                  className={`${colClass(ROSTER_COLUMNS[0])} break-words text-sm text-foreground`}
+                >
                   {p.name}
                 </span>
                 <span role="cell" className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
@@ -266,7 +278,10 @@ function BracketRosterTabCore({
           )}
         </div>
 
-        <DetailDock open={selected != null}>
+        <DetailDock
+          open={selected != null}
+          minContentWidth={ROSTER_DOCK_MIN_CONTENT_WIDTH}
+        >
           {selected && (
             <DetailPanel
               variant="docked"

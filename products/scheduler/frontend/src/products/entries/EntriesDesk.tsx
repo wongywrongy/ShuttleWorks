@@ -34,6 +34,7 @@ import {
   ActionsBar,
   BandedTable,
   EmptyState,
+  NAME_COL_MIN,
   colClass,
   type BandedTableColumn,
 } from '../../components/control-plane';
@@ -56,7 +57,8 @@ import {
 const CONFIRMABLE_FROM = 'pending';
 
 const COLUMNS: BandedTableColumn[] = [
-  { label: 'Entrant', className: 'min-w-0 flex-[2]' },
+  // Entrant carries a person name — it floors at NAME_COL_MIN, not zero.
+  { label: 'Entrant', className: `${NAME_COL_MIN} flex-[2]` },
   { label: 'Event', className: 'w-16' },
   { label: 'State', className: 'w-28' },
   { label: 'Attention', className: 'w-32', priority: 2 },
@@ -203,7 +205,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
             rowTestId={(e) => `entry-row-${e.id}`}
             renderRow={(e) => (
               <>
-                <span role="cell" className={`${colClass(COLUMNS[0])} min-w-0`}>
+                <span role="cell" className={colClass(COLUMNS[0])}>
                   <span className="block break-words text-xs text-foreground">
                     {e.playerName}
                   </span>

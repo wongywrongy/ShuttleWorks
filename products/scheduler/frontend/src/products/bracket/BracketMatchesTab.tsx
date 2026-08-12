@@ -23,6 +23,7 @@ import {
   EmptyState,
   MATCH_CELL,
   MATCH_LIST_COLUMNS,
+  MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   OverflowMenu,
   STATUS_CLASS,
   STATUS_LABEL,
@@ -349,7 +350,11 @@ export function BracketMatchesTab({
           )}
         </div>
 
-        <DetailDock open={selected != null}>
+        {/* Same derived floor as Meet Matches — one column set, one floor. */}
+        <DetailDock
+          open={selected != null}
+          minContentWidth={MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
+        >
         {selected ? (
           <BracketMatchDetailPanel
             key={selected.id}

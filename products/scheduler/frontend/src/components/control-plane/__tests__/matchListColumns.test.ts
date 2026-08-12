@@ -11,8 +11,10 @@ describe('MATCH_LIST_COLUMNS — the one column geometry both match lists share'
       'w-4 shrink-0',
       'w-8 shrink-0',
       'w-20 shrink-0',
-      'min-w-0 flex-[3]',
-      'min-w-0 flex-[3]',
+      // The sides floor at NAME_COL_MIN, not at zero — see
+      // `bandedRowGeometry.test.ts` for the arithmetic behind 10rem.
+      'min-w-[10rem] flex-[3]',
+      'min-w-[10rem] flex-[3]',
       'w-[5.5rem] shrink-0 text-right',
       'w-8 shrink-0',
     ]);
@@ -32,7 +34,7 @@ describe('MATCH_LIST_COLUMNS — the one column geometry both match lists share'
       warnGutter: 'w-4 shrink-0',
       number: 'w-8 shrink-0 hidden @2xl/table:block',
       event: 'w-20 shrink-0',
-      side: 'min-w-0 flex-[3]',
+      side: 'min-w-[10rem] flex-[3]',
       status: 'w-[5.5rem] shrink-0 text-right hidden @2xl/table:block',
       actionGutter: 'w-8 shrink-0',
     });

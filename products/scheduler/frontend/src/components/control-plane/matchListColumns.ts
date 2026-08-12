@@ -15,20 +15,29 @@
  * classes; the parity test pins this too.
  */
 import type { BandedListColumn } from './BandedList';
-import { colClass } from './BandedList';
+import { NAME_COL_MIN, colClass } from './BandedList';
+import { dockMinContentWidth } from './bandedDockWidth';
 
 // Fixed-width cells are `shrink-0`: they are flex items, and without it a
 // docked detail pane squeezing the row CRUSHES them — their content then
-// overflows onto the neighboring cells. Only the two flex sides give way.
+// overflows onto the neighboring cells. Only the two flex sides give way, and
+// they give way down to `NAME_COL_MIN`, not to zero: `min-w-0` let both sides
+// reach ~145px at the old dock floor, which is where the doubles pairings
+// started shredding into ribbons.
 export const MATCH_LIST_COLUMNS: BandedListColumn[] = [
   { label: '', className: 'w-4 shrink-0' },
   { label: '#', className: 'w-8 shrink-0', priority: 2 },
   { label: 'Event', className: 'w-20 shrink-0' },
-  { label: 'Side A', className: 'min-w-0 flex-[3]' },
-  { label: 'Side B', className: 'min-w-0 flex-[3]' },
+  { label: 'Side A', className: `${NAME_COL_MIN} flex-[3]` },
+  { label: 'Side B', className: `${NAME_COL_MIN} flex-[3]` },
   { label: 'Status', className: 'w-[5.5rem] shrink-0 text-right', priority: 2 },
   { label: '', className: 'w-8 shrink-0' },
 ];
+
+/** Content floor for either match list's `DetailDock`, derived from the
+ *  columns above rather than hand-picked — see `bandedDockWidth.ts`. */
+export const MATCH_LIST_DOCK_MIN_CONTENT_WIDTH =
+  dockMinContentWidth(MATCH_LIST_COLUMNS);
 
 export const MATCH_CELL = {
   warnGutter: colClass(MATCH_LIST_COLUMNS[0]),

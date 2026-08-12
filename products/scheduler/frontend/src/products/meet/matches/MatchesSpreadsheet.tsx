@@ -25,6 +25,7 @@ import {
   DetailDock,
   MATCH_CELL,
   MATCH_LIST_COLUMNS,
+  MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   STATUS_CLASS,
   STATUS_LABEL,
   type BandedTableGroup,
@@ -242,7 +243,13 @@ export function MatchesSpreadsheet({
           />
         )}
       </div>
-      <DetailDock open={selectedMatch != null}>
+      {/* Floor derived from MATCH_LIST_COLUMNS, not hand-picked: the old 560
+          default sat under the 672 `@2xl` tier, so selecting a match deleted
+          the `#` and `Status` columns. */}
+      <DetailDock
+        open={selectedMatch != null}
+        minContentWidth={MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
+      >
         {selectedMatch ? (
           <MatchDetailPanel
             key={selectedMatch.id}
