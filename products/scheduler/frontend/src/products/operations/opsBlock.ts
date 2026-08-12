@@ -13,7 +13,7 @@ import { matchKey, parseMatchKey } from '../../platform/domain/match';
 import type { MatchDTO, ScheduleDTO, MatchStateDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { playUnitSideLabels, buildPlayUnitLabels } from '../bracket/bracketLabels';
-import { msToSlot, parseMatchStartMs } from '../../lib/time';
+import { msToSlot, parseMatchStartMs, hasStaleActualTiming } from '../../lib/time';
 
 /** @deprecated Use `Match` from `platform/domain/match`. Kept as an alias. */
 export type OpsBlock = Match;
@@ -64,12 +64,26 @@ export function meetToOpsBlocks(
     const status: MatchStatus = st?.status ?? 'scheduled';
     // ACTUAL timing (PLANNED slot/span above stays untouched): a started or
     // finished match exposes its real start; a finished one also its end.
+    //
+    // ...unless the stamp is not believable for THIS match. `msToSlot` reads
+    // time-of-day only, so a timestamp from another day still derives an
+    // ordinary-looking slot — and every match stamped at the same instant then
+    // derives the SAME slot. On the live board those chips anchor at that slot
+    // and are exempt from court pushback (they are "facts"), so a court renders
+    // a dozen simultaneous games: an impossible day, stated confidently. The
+    // seeded demo is exactly this shape — 73 actuals inside one 20-second
+    // window. Same predicate the Gantt and the advisory banner refuse these
+    // stamps with, so the three surfaces cannot disagree about what is real.
+    const staleTiming =
+      config != null && slot != null && hasStaleActualTiming({ slotId: slot }, st, config);
     const actualStartSlot =
-      status === 'started' || status === 'finished'
+      !staleTiming && (status === 'started' || status === 'finished')
         ? meetActualSlot(st?.actualStartTime, config)
         : undefined;
     const actualEndSlot =
-      status === 'finished' ? meetActualSlot(st?.actualEndTime, config) : undefined;
+      !staleTiming && status === 'finished'
+        ? meetActualSlot(st?.actualEndTime, config)
+        : undefined;
     return {
       source: 'meet' as const,
       id: m.id,
