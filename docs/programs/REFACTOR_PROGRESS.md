@@ -371,3 +371,46 @@ stop here means pick up the conversation with Kyle, not the keyboard.>
   changes so the ledger and the code never drift apart.
 - If picking this up mid-phase, do not restart the phase — read what's
   already logged and continue from there.
+
+---
+
+## Measurement snapshot — 2026-07-01
+
+Moved here from `docs/audits/debt-log.md` on 2026-08-12 to keep that log scannable. It is
+SP-REFACTOR's measurement, not open debt, and `CODE_HEALTH.md`'s cover-before-modify rule is
+what reads it.
+
+**Cyclomatic complexity** (`radon cc 6.0.1`, `scheduler_core` + backend
+`app/adapters/services/repositories/api`, tests/migrations excluded): **690 blocks,
+average `A` (3.94)** — healthy in aggregate; this is a *targeted* backlog, not a
+systemic problem. **54 blocks rank `C`+** (>10). Re-run:
+
+```
+python -m radon cc scheduler_core products/scheduler/backend/{app,adapters,services,repositories,api} -nc -s --total-average -e "*/tests/*,*/migrations/*,*/alembic/*"
+```
+
+**Engine coverage** (`pytest --cov=scheduler_core`): 80% total.
+
+### High complexity but well-covered — decompose *when touched*, never speculatively
+
+| Function | Location | Complexity | Coverage |
+| --- | --- | --- | --- |
+| `find_conflicts` | `scheduler_core/engine/validation.py:71` | **F (68)** — worst single score | 83% |
+| `generate_event_route` | `backend/api/brackets.py:1624` | **F (41)** — worst backend | ~81% (API-tested) |
+| `Objective.apply` | `scheduler_core/engine/constraints/objective.py:68` | E (36) | 85% |
+| `_slice_for` | `backend/api/schedule_repair.py:103` | E (35) | — |
+| `compute_impact` | `backend/services/schedule_impact.py:77` | E (32) | — |
+| `_hydrate_session` | `backend/api/brackets.py:442` | D (29) | — |
+| `on_solution_callback` | `scheduler_core/engine/cpsat_backend.py:124` | D (23) | 94% |
+| `process_command` | `backend/repositories/local.py:1504` | D (21) | — |
+
+Moderate watch: `extraction.py:extract_solution` C(18) @ 68%.
+
+### Enforcement gaps
+
+| Gap | Status |
+| --- | --- |
+| **Broad ruff deferred** | Gate is `select=["F"]`; the `E,I,B,UP` set is ~1506 findings (mostly stylistic, plus `B008` FastAPI `Depends()` false-positives). Owner gate decision — see `pyproject.toml` + CLAUDE.md's lean-gate philosophy. |
+| **Stale gate ratchets** | `no-cross-product` is `warn`, blocked on D3; a complexity gate (`radon`/`xenon` threshold) is not wired. Both are owner decisions, logged as candidates rather than tightened unilaterally (`CODE_HEALTH.md` #5). |
+
+---
