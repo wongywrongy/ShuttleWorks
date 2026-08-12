@@ -502,7 +502,11 @@ export function RunSurface({
                   two rails stack in this one scroll column. */}
               {showBracketPanel && bracketData ? (
                 <div data-testid="run-bracket-panel" className="border-t border-border">
-                  <MatchDetailPanel data={bracketData} onChange={onBracketData} />
+                  {/* RunInspector above already shows the two side names +
+                      "vs" (it is always mounted) — hideIdentity so this
+                      panel adds only what it alone carries: undo-start, set
+                      scores, the armed winner buttons. */}
+                  <MatchDetailPanel data={bracketData} onChange={onBracketData} hideIdentity />
                 </div>
               ) : null}
             </div>

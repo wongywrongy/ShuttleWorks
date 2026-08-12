@@ -12,13 +12,24 @@
  * The sign-in link is static: no server-rendered page on this tier can know
  * who is reading it (R8-D), so the header states an affordance, never an
  * identity — the owner's STOP-1 ruling defers every signed-in state to E2.
+ * `signInLabel` is the one deliberate exception: a ROUTE (not a session
+ * read) may still know its own outcome — see `login.tsx`'s `/signed-in`
+ * variant — and hand this shell different label text for it.
  */
 import type { ReactNode } from 'react';
 import { Button } from '@scheduler/design-system/components';
 
 const DISCOVERY_HREF = '/e/';
 
-export function PlayShell({ q = '', children }: { q?: string; children: ReactNode }) {
+export function PlayShell({
+  q = '',
+  signInLabel = 'Sign in',
+  children,
+}: {
+  q?: string;
+  signInLabel?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-rule-soft bg-surface-base">
@@ -57,9 +68,11 @@ export function PlayShell({ q = '', children }: { q?: string; children: ReactNod
           </form>
           <a
             href="/e/login"
-            className="ml-auto text-sm font-medium text-accent underline-offset-4 hover:underline sm:ml-0"
+            // `min-h-6` (24px): the tap target floor (WCAG 2.5.8) — text-sm's
+            // own line-height is 20px, under it with no padding of its own.
+            className="ml-auto inline-flex min-h-6 items-center text-sm font-medium text-accent underline-offset-4 hover:underline sm:ml-0"
           >
-            Sign in
+            {signInLabel}
           </a>
         </div>
       </header>

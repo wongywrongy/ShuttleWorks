@@ -23,6 +23,12 @@ import { WinnerButton } from './WinnerButton';
 interface Props {
   data: BracketTournamentDTO;
   onChange: (t: BracketTournamentDTO) => void;
+  /** Suppress the identity block (side names + "vs"). Standalone (bracket's
+   *  own Live tab, `LiveView.tsx`) this panel is the only rail and owns
+   *  identity; embedded in Run (`RunSurface.tsx`) it stacks below
+   *  `RunInspector`, which already shows the same two names — set true there
+   *  so the pair isn't repeated. */
+  hideIdentity?: boolean;
 }
 
 // Shared hand-rolled button styles (mirror meet's MatchDetailsPanel pattern).
@@ -37,7 +43,7 @@ const primaryActionBtn =
   `bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground ` +
   `hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50`;
 
-export function MatchDetailPanel({ data, onChange }: Props) {
+export function MatchDetailPanel({ data, onChange, hideIdentity }: Props) {
   const api = useBracketApi();
   const matchId = useUiStore((s) => s.bracketSelectedMatchId);
   const config = useTournamentStore((s) => s.config);
@@ -109,12 +115,15 @@ export function MatchDetailPanel({ data, onChange }: Props) {
           : '—'}
       </div>
 
-      {/* Participants */}
-      <div className="space-y-1">
-        <div className="text-sm">{labelA}</div>
-        <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
-        <div className="text-sm">{labelB}</div>
-      </div>
+      {/* Participants — skipped when the host already showed them (see
+          `hideIdentity` above). */}
+      {!hideIdentity && (
+        <div className="space-y-1">
+          <div className="text-sm">{labelA}</div>
+          <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
+          <div className="text-sm">{labelB}</div>
+        </div>
+      )}
 
       {/* Result summary (when finished) */}
       {result && (

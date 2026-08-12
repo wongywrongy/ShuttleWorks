@@ -756,4 +756,39 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
     expect(screen.queryByRole('button', { name: 'Undo start' })).toBeNull();
     expect(screen.getByTestId('run-act-start')).toBeInTheDocument();
   });
+
+  // 2026-08-12: RunInspector's identity block and MatchDetailPanel's own
+  // Participants block both render the two side names + "vs" — wasteful at
+  // 1280, over half the 287px overlay duplicated at 390. RunInspector owns
+  // match identity (it is always mounted, for every role); MatchDetailPanel
+  // — reused standalone in the bracket Live tab, where nothing else shows
+  // identity — drops its own copy only when RunSurface embeds it below an
+  // inspector that already has one.
+  it('does not repeat the team names + vs between the inspector and the bracket panel', () => {
+    const playing: OpsBlock[] = [
+      mkBlock({
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        court: 1, slot: 5, status: 'started', sideA: 'Alice', sideB: 'Bob',
+      }),
+    ];
+
+    render(
+      <RunSurface
+        blocks={playing}
+        bracketData={mkBracketData('pu1', { startedOnCourt: 1 })}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('run-card-bracket:pu1'));
+    // The rich panel really did mount (Undo start only exists there) — so a
+    // count of 1 below is not vacuous.
+    expect(screen.getByRole('button', { name: 'Undo start' })).toBeInTheDocument();
+
+    expect(screen.getAllByText('Alice')).toHaveLength(1);
+    expect(screen.getAllByText('Bob')).toHaveLength(1);
+    expect(screen.getAllByText('vs')).toHaveLength(1);
+  });
 });

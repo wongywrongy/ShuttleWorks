@@ -51,6 +51,45 @@ describe('StandingsView', () => {
     expect(screen.getByText('5W').parentElement?.className).toContain('shrink-0');
   });
 
+  // 2026-08-12 over-correction: `break-words` (overflow-wrap: break-word) is
+  // the right property — it only breaks INSIDE a word when that word alone
+  // can't fit its line — but the name column shared a row with the rank
+  // digit and the W-L block at ~155px, too narrow for an ordinary word at
+  // text-3xl, so break-word kicked in for nearly every word ("Nashville
+  // Badminton Association" rendered across four broken lines). The fix
+  // gives the name its own full-width line — W-L moves below it instead of
+  // beside it — so break-words only ever fires for a genuinely unbreakable
+  // single token, not for "Badminton".
+  it('gives the team name a full-width line instead of squeezing it beside the rank and W-L columns', () => {
+    const { container } = render(
+      <StandingsView
+        standings={[
+          {
+            groupId: 'g1',
+            groupName: 'Nashville Badminton Association',
+            wins: 5,
+            losses: 1,
+            matchesPlayed: 6,
+          },
+        ]}
+      />,
+    );
+
+    const row = container.querySelector('[class*="rounded-sm"]');
+    // Old layout: rank / name / W-L as three siblings all competing for the
+    // row's width. New layout: rank, then a name+W-L wrapper where W-L sits
+    // under the name rather than beside it — so the name gets everything
+    // the row has left over after the rank column alone.
+    expect(row?.children.length).toBe(2);
+
+    const name = screen.getByText('Nashville Badminton Association');
+    const win = screen.getByText('5W');
+    // The W-L block is nested under the SAME wrapper as the name (stacked),
+    // not a third flex sibling squeezing the name from the same row as the
+    // rank digit.
+    expect(win.parentElement?.parentElement).toBe(name.parentElement);
+  });
+
   it('ranks the first row (server-sorted order) with the ink-emphasis highlight, in given order', () => {
     const { container } = render(<StandingsView standings={ROWS} />);
     const rows = container.querySelectorAll('[class*="border-l-2"]');
