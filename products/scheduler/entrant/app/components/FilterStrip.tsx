@@ -29,7 +29,10 @@ function Radio({
   checked: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm text-foreground">
+    // 2026-08-11 design audit, finding #6: `py-0.5` (2px) put this row at
+    // exactly the WCAG 2.2 AA 24px target-size floor with zero margin.
+    // `py-1.5` clears it with real room (~32px) for a mobile-heavy audience.
+    <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm text-foreground">
       <input type="radio" name={name} value={value} defaultChecked={checked} />
       {label}
     </label>

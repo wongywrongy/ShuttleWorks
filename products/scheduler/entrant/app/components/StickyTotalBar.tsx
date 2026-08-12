@@ -42,7 +42,21 @@ export function StickyTotalBar({
       // rail from `lg:` up there is room, so it goes back to `p-4` and
       // stacked. Nothing is hidden at either width — the same four facts are
       // on the bar.
-      className="sticky bottom-0 grid gap-2 rounded-t-lg border border-rule-soft bg-surface-raised p-3 shadow-lg lg:bottom-auto lg:top-6 lg:gap-3 lg:rounded-lg lg:p-4 lg:shadow-sm"
+      //
+      // 2026-08-11 design audit, finding #3: `position: sticky; bottom: 0`
+      // engages the moment its containing block (this `<form>`) exceeds the
+      // viewport height — which one default player block already does at
+      // 390px — so the bar was pinned from initial paint, not just on final
+      // scroll, covering ~21% of the viewport for the whole journey and
+      // clipping the "Club (optional)" field before typing. Native CSS
+      // cannot defer *when* a bottom-sticky element engages without content
+      // to fill that gap, so this takes the finding's other option: read as
+      // a DELIBERATE bottom sheet rather than an accidental one — tighter
+      // `p-2.5`/`gap-1.5`, and `shadow-frame` (the design system's own
+      // overlay-elevation token) instead of the card-weight `shadow-lg`.
+      // `lg:shadow-sm` is untouched: the side rail sits beside content, not
+      // over it, so it was never the overlay this addresses.
+      className="sticky bottom-0 grid gap-1.5 rounded-t-lg border border-rule-soft bg-surface-raised p-2.5 shadow-frame lg:bottom-auto lg:top-6 lg:gap-3 lg:rounded-lg lg:p-4 lg:shadow-sm"
     >
       {state.kind === 'quoted' ? (
         <div className="flex items-baseline justify-between gap-4 lg:block">

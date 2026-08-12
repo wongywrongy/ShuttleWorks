@@ -40,7 +40,14 @@ export function PlayShell({ q = '', children }: { q?: string; children: ReactNod
               type="search"
               name="q"
               defaultValue={q}
-              placeholder="Search tournaments or venues"
+              // 2026-08-11 design audit, finding #5: the box is ~184px
+              // usable after the "Search" button and its padding — the old
+              // placeholder needed ~230px and clipped to "Search
+              // tournaments or venu" with no ellipsis, on every page, at
+              // every width. Shortened here; the full sentence stays on
+              // `aria-label`, which is never visually rendered and so never
+              // clips.
+              placeholder="Search tournaments"
               aria-label="Search tournaments or venues"
               className="h-9 w-full min-w-0 rounded border border-rule-control bg-bg-elev px-3 text-sm text-foreground placeholder:text-muted-foreground"
             />

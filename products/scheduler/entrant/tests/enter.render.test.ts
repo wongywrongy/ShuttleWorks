@@ -181,6 +181,17 @@ describe('the entry form, unhydrated', () => {
     expect(html).not.toContain(`value="0:${SHUT}"`);
   });
 
+  it('gives each event checkbox label more than the bare 24px target-size floor', async () => {
+    // 2026-08-11 design audit, finding #6: `py-0.5` put this row — the
+    // product's single most important action, ticking an event to enter it
+    // — at exactly the WCAG 2.2 AA floor with zero margin.
+    const html = await render();
+
+    const label = html.match(/<label[^>]*class="[^"]*"><input type="checkbox" name="events"/)?.[0] ?? '';
+    expect(label).not.toMatch(/\bpy-0\.5\b/);
+    expect(label).toMatch(/\bpy-1(\.5)?\b/);
+  });
+
   it('requires the acknowledgment in the markup itself', async () => {
     const html = await render();
 

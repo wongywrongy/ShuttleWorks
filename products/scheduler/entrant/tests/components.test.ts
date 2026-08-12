@@ -205,6 +205,36 @@ describe('TournamentCard', () => {
     );
     expect(html).toContain('href="/e/a%20b"');
   });
+
+  // 2026-08-11 design audit (T1 / finding #2): `DateBadge`'s own comment
+  // claimed "the card's text carries the date for AT", and nothing on the
+  // card did — the badge is `aria-hidden` and nothing else named the date.
+  // This is the fix: an `sr-only` text carrying it, outside the stretched
+  // link (so the single-link/anatomy tests above stay exactly true).
+  it('carries the date as sr-only text, since the badge is aria-hidden decoration', () => {
+    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
+    expect(html).toContain(formatDateLong('2026-09-19'));
+    const srOnly = classTokens(html, 'sr-only');
+    expect(srOnly).toContain('sr-only');
+  });
+
+  it('renders no sr-only date paragraph when there is no parseable date', () => {
+    const html = renderToStaticMarkup(
+      h(TournamentCard, { card: card({ tournamentDate: null }), now: NOW }),
+    );
+    expect(classTokens(html, 'sr-only')).toEqual([]);
+  });
+
+  it('transitions border-color WITH box-shadow, both on ease-brand (MOTION.md anti-pattern #1)', () => {
+    // The defect: `transition-shadow` alone, no `ease-brand` — the
+    // Tailwind-default flat curve MOTION.md forbids by name — while
+    // `hover:border-rule-control` changes a property (`border-color`) the
+    // `transition-shadow` shorthand never covers, so the border snapped.
+    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
+    const li = html.match(/<li class="[^"]*"/)?.[0] ?? '';
+    expect(li).toContain('ease-brand');
+    expect(li).toMatch(/transition-\[[^\]]*border-color[^\]]*box-shadow[^\]]*\]/);
+  });
 });
 
 // ---- FilterStrip (refinement 4: always visible, no disclosure) -------------
@@ -261,6 +291,16 @@ describe('FilterStrip', () => {
     const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
     expect(html.match(/<fieldset/g)).toHaveLength(2);
     expect(html).toContain('<legend');
+  });
+
+  // 2026-08-11 design audit, finding #6: `py-0.5` (2px) on a `text-sm`
+  // label put the whole clickable row at exactly the WCAG 2.2 AA target-size
+  // floor (24px) with zero margin, for a mobile-heavy audience.
+  it('gives each radio label row more than the bare 24px target-size floor', () => {
+    const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
+    const label = html.match(/<label[^>]*>/)?.[0] ?? '';
+    expect(label).not.toMatch(/\bpy-0\.5\b/);
+    expect(label).toMatch(/\bpy-1(\.5)?\b/);
   });
 });
 
@@ -596,6 +636,13 @@ describe('StickyTotalBar', () => {
     // full-width stacked buttons, `p-4`, and four separate text rows. The
     // buttons share a row below `lg:` and go back to stacked in the side
     // rail, where the width is 18rem and there is room.
+    //
+    // 2026-08-11 design audit, finding #3: `p-3`/`gap-2` still left the bar
+    // sticking from initial paint (its containing block is taller than the
+    // viewport, so `sticky bottom-0` engages almost immediately with only
+    // ONE default player block above it) at ~176px, ~21% of a 390px-wide
+    // phone's viewport, for the entire scroll journey. `p-2.5`/`gap-1.5`
+    // tighten it further on top of E5's earlier pass.
     const html = renderToStaticMarkup(
       h(StickyTotalBar, {
         state: { kind: 'unquoted' },
@@ -606,9 +653,29 @@ describe('StickyTotalBar', () => {
     );
 
     expect(classTokens(html, 'sticky')).toEqual(
-      expect.arrayContaining(['p-3', 'lg:p-4']),
+      expect.arrayContaining(['p-2.5', 'lg:p-4', 'gap-1.5']),
     );
     expect(classTokens(html, 'grid-cols-2')).toContain('lg:grid-cols-1');
+  });
+
+  it('reads as a deliberate bottom sheet, not an accidental overlay (finding #3)', () => {
+    // Since a native-CSS-only `position: sticky` cannot be told to wait
+    // until it would otherwise leave the viewport (it engages the moment
+    // its containing block exceeds the viewport height, which one default
+    // player block already does), the alternative the finding offers is
+    // this one: read as intentional chrome. `shadow-frame` is the design
+    // system's existing overlay-elevation token (`tokens.css`) — reused
+    // here rather than inventing a bespoke shadow.
+    const html = renderToStaticMarkup(
+      h(StickyTotalBar, { ...base, state: { kind: 'unquoted' } }),
+    );
+    const tokens = classTokens(html, 'sticky');
+
+    expect(tokens).toContain('shadow-frame');
+    expect(tokens).not.toContain('shadow-lg');
+    // The side rail (`lg:`) isn't an overlay — it sits beside the content,
+    // so it keeps its original, quieter elevation.
+    expect(tokens).toContain('lg:shadow-sm');
   });
 
   it('is the G0 landing: id="total", a labelled landmark', () => {
@@ -645,6 +712,24 @@ describe('PlayShell', () => {
     expect(q).toContain('name="q"');
     expect(q).toContain('value="gold"');
     expect(html).toMatch(/<a href="\/e\/login"[^>]*>Sign in<\/a>/);
+  });
+
+  // 2026-08-11 design audit, finding #5: the header search box is ~208px
+  // (18rem minus the "Search" button and the gap), ~184px of that usable
+  // after `px-3` padding — and the OLD placeholder, "Search tournaments or
+  // venues" (29 chars), needs ~230px, so it clipped to "Search tournaments
+  // or venu" with no ellipsis on every page at every width. The accessible
+  // name (`aria-label`) is not visually rendered, so it can stay the fuller
+  // sentence without clipping anything.
+  it('keeps the visible placeholder short enough not to clip in the ~184px box (finding #5)', () => {
+    const q = html.match(/<input[^>]*type="search"[^>]*>/)?.[0] ?? '';
+    const placeholder = q.match(/placeholder="([^"]*)"/)?.[1] ?? '';
+    const ariaLabel = q.match(/aria-label="([^"]*)"/)?.[1] ?? '';
+
+    // ~8px/char average for this font — the audit's own measured figure.
+    expect(placeholder.length).toBeLessThanOrEqual(23);
+    // The accessible name still says what the box searches, unclipped.
+    expect(ariaLabel).toBe('Search tournaments or venues');
   });
 
   it('links nothing into a FastAPI prefix', () => {

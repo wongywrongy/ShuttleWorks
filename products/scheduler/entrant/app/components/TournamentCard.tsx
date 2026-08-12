@@ -9,14 +9,22 @@
  * the eye finds every "can I enter this" answer in one vertical line. On
  * phones it stays the bottom row, where the narrow column leaves it room.
  */
+import { formatDateLong } from '../lib/format';
 import { cardChipState, type DiscoveryCard } from '../lib/phase';
 import { DateBadge } from './DateBadge';
 import { StatusChip } from './StatusChip';
 
 export function TournamentCard({ card, now }: { card: DiscoveryCard; now: Date }) {
   const chip = cardChipState(card, now);
+  const dateText = formatDateLong(card.tournamentDate);
   return (
-    <li className="relative rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-sm transition-shadow duration-fast hover:border-rule-control hover:shadow-md">
+    <li
+      // MOTION.md anti-pattern #1: `ease-brand` on every transition, never
+      // Tailwind's flat default. Both properties that actually change on
+      // hover are named in the arbitrary property list — `shadow` alone let
+      // `hover:border-rule-control`'s colour snap instead of easing with it.
+      className="relative rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-sm transition-[border-color,box-shadow] duration-fast ease-brand hover:border-rule-control hover:shadow-md"
+    >
       <div className="flex items-start gap-3.5">
         <DateBadge date={card.tournamentDate} />
         {/* Two layouts, one markup. Below `sm:` this is a flex column, so
@@ -48,6 +56,12 @@ export function TournamentCard({ card, now }: { card: DiscoveryCard; now: Date }
           >
             {card.name}
           </a>
+          {/* The date `DateBadge` renders is `aria-hidden` decoration — this
+              is where assistive tech actually gets it. Outside the stretched
+              link on purpose: the link's accessible name stays the bare
+              tournament name (§ anatomy above), and this reads as ordinary
+              page text to a screen reader browsing by content, not by tab. */}
+          {dateText ? <p className="sr-only">{dateText}</p> : null}
           {card.venueName ? (
             <p className="mt-0.5 text-sm text-muted-foreground">{card.venueName}</p>
           ) : null}

@@ -281,7 +281,12 @@ function PlayerBlock({
           return (
             <label
               key={event.id}
-              className="flex flex-wrap items-center gap-2 rounded px-1 py-0.5 text-sm text-foreground"
+              // 2026-08-11 design audit, finding #6: `py-0.5` put this row —
+              // the product's single most important action, ticking an
+              // event to enter it — at exactly the WCAG 2.2 AA 24px
+              // target-size floor with zero margin. `py-1.5` clears it with
+              // real room (~32px) for a mobile-heavy audience.
+              className="flex flex-wrap items-center gap-2 rounded px-1 py-1.5 text-sm text-foreground"
             >
               <input type="checkbox" name="events" value={value} defaultChecked={ticked.has(value)} />
               <span>
