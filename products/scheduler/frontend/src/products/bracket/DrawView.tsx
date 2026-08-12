@@ -1091,7 +1091,10 @@ function Side({
       onClick={onClick}
       disabled={disabled}
       className={
-        "w-full flex items-center justify-between rounded-sm px-2 py-1.5 text-sm " +
+        // A posted result recolours this row (winner tint, loser strike-out).
+        // It is an occasional action, so it fades at the 200ms standard band
+        // (MOTION.md §4) instead of snapping.
+        "w-full flex items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors duration-standard ease-brand " +
         (selected
           ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
           : winning
