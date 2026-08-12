@@ -584,20 +584,39 @@ export function computeMirroredBracketLayout(rounds: string[][]): BracketLayout 
 }
 
 // ── Segmented bracket geometry (DE / Monrad / compass) ──────────────────
-// Multi-segment formats stack one one-sided bracket block per segment
+// Multi-segment formats render one one-sided bracket block per segment
 // inside the same pan/zoom canvas: a header band above each block, a gap
-// between blocks. Every block runs the SAME one-sided layout, so column i
-// shares its x position across segments (constant x-pitch) and the
-// round-jump chips can address `data-round="i"` globally.
+// between blocks, flowed into rows (see `computeSegmentedLayout`). Every
+// block runs the SAME one-sided layout, so column i shares its x pitch —
+// the round-jump chips address the first `data-round="i"`, which is the
+// main draw's, since blocks stay in `segment.order`.
 
 export const SEGMENT_HEADER_HEIGHT = 40; // header band above each block.
-// Vertical gap between segment blocks. Generous because BracketCell can
+// Gap between segment blocks, both axes. Generous because BracketCell can
 // exceed the nominal card height (the "Enter score" strip on recordable
-// matches) — the next segment's header must clear it.
+// matches) — the next segment's header must clear it — and because a
+// horizontal gap narrower than BRACKET_COL_GAP would read as another round.
 export const SEGMENT_GAP = 88;
+
+/**
+ * Bounding-box aspect (w/h) the row flow packs toward. `PanZoomCanvas.fit()`
+ * zooms by one uniform `min(w-ratio, h-ratio)`, so the box that fits biggest
+ * is the one shaped like the pane; the draw pane measures ~1400×800 at a
+ * desktop workspace width.
+ */
+const SEGMENT_PANE_ASPECT = 1.6;
+
+/**
+ * Below this many segments the column stack already fits acceptably
+ * (single-elim = 1, double-elim = 3) and the shared x-pitch is a real
+ * cross-segment cue (W → L drop-ins, → GF), so the flow is left alone.
+ */
+const SEGMENT_ROW_FLOW_MIN = 4;
 
 export interface SegmentedBracketBlock {
   segment: SegmentDTO;
+  /** Left edge of the block within the canvas, in pixels. */
+  xOffset: number;
   /** Top of the block's header band within the canvas, in pixels. */
   yOffset: number;
   layout: BracketLayout;
@@ -610,27 +629,92 @@ export interface SegmentedBracketLayout {
   blocks: SegmentedBracketBlock[];
 }
 
+interface MeasuredSegment {
+  segment: SegmentDTO;
+  layout: BracketLayout;
+  width: number;
+  height: number;
+}
+
+/**
+ * Shelf-pack the measured segments into rows no wider than `budget`, in
+ * order — a block that doesn't fit starts a new row, rows are top-aligned
+ * and as tall as their tallest block. A budget of the widest block always
+ * yields one block per row (any pair exceeds it), i.e. the classic column
+ * stack.
+ */
+function flowSegmentsIntoRows(
+  measured: MeasuredSegment[],
+  budget: number,
+): SegmentedBracketLayout {
+  const blocks: SegmentedBracketBlock[] = [];
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+  let contentWidth = 0;
+  for (const m of measured) {
+    if (blocks.length > 0) {
+      if (x + SEGMENT_GAP + m.width > budget) {
+        y += rowHeight + SEGMENT_GAP;
+        x = 0;
+        rowHeight = 0;
+      } else {
+        x += SEGMENT_GAP;
+      }
+    }
+    blocks.push({ segment: m.segment, xOffset: x, yOffset: y, layout: m.layout });
+    x += m.width;
+    rowHeight = Math.max(rowHeight, m.height);
+    contentWidth = Math.max(contentWidth, x);
+  }
+  return { contentWidth, contentHeight: y + rowHeight, blocks };
+}
+
 /**
  * Pure geometry for the segmented canvas: one one-sided bracket layout per
- * segment (sorted by `order`), stacked vertically — each block owns a
- * SEGMENT_HEADER_HEIGHT band, blocks are SEGMENT_GAP apart, and the canvas
- * is as wide as the widest block.
+ * segment (sorted by `order`), flowed into rows sized to their own width.
+ *
+ * The column stack this replaced sized the canvas to the WIDEST segment, so
+ * on an 8-segment compass/Monrad draw seven blocks averaged 44% of the box —
+ * half of it dead space *before* zoom — and the resulting 1:3 portrait box
+ * then fit at 24%. Rows collapse both wastes: the box tends toward the pane's
+ * own aspect, so `fit()` zooms it far larger.
+ *
+ * The packing is a step function of the row budget, so the budget is chosen
+ * by sweeping it from "one block per row" up to "everything on one row" and
+ * keeping the box a pane-shaped viewport would zoom biggest.
  */
 export function computeSegmentedLayout(
   segments: SegmentDTO[],
 ): SegmentedBracketLayout {
-  const sorted = [...segments].sort((a, b) => a.order - b.order);
-  const blocks: SegmentedBracketBlock[] = [];
-  let y = 0;
-  let contentWidth = 0;
-  for (const segment of sorted) {
-    if (blocks.length > 0) y += SEGMENT_GAP;
-    const layout = computeOneSidedBracketLayout(segment.rounds);
-    blocks.push({ segment, yOffset: y, layout });
-    y += SEGMENT_HEADER_HEIGHT + layout.contentHeight;
-    contentWidth = Math.max(contentWidth, layout.contentWidth);
+  const measured: MeasuredSegment[] = [...segments]
+    .sort((a, b) => a.order - b.order)
+    .map((segment) => {
+      const layout = computeOneSidedBracketLayout(segment.rounds);
+      return {
+        segment,
+        layout,
+        width: layout.contentWidth,
+        height: SEGMENT_HEADER_HEIGHT + layout.contentHeight,
+      };
+    });
+  if (measured.length === 0) {
+    return { contentWidth: 0, contentHeight: 0, blocks: [] };
   }
-  return { contentWidth, contentHeight: y, blocks };
+
+  const widest = Math.max(...measured.map((m) => m.width));
+  let best = flowSegmentsIntoRows(measured, widest);
+  if (measured.length >= SEGMENT_ROW_FLOW_MIN) {
+    // ponytail: brute-force sweep — segment counts are single digits, so a
+    // ~4n-candidate scan is free. Revisit only if a format ever ships dozens.
+    const scale = (l: SegmentedBracketLayout) =>
+      Math.min(SEGMENT_PANE_ASPECT / l.contentWidth, 1 / l.contentHeight);
+    for (let k = 1.25; k <= measured.length; k += 0.25) {
+      const candidate = flowSegmentsIntoRows(measured, widest * k);
+      if (scale(candidate) > scale(best)) best = candidate;
+    }
+  }
+  return best;
 }
 
 /**
@@ -770,8 +854,9 @@ function SegmentedBracketView({
                       carries the accent (it is the draw's hero segment). */}
                   <div
                     data-testid={`segment-header-${seg.id}`}
-                    className="absolute left-0 flex items-baseline gap-2"
+                    className="absolute flex items-baseline gap-2"
                     style={{
+                      left: `${block.xOffset}px`,
                       top: `${block.yOffset}px`,
                       height: `${SEGMENT_HEADER_HEIGHT}px`,
                     }}
@@ -798,7 +883,7 @@ function SegmentedBracketView({
                         data-round={col.roundIndex}
                         className="absolute"
                         style={{
-                          left: `${col.left}px`,
+                          left: `${block.xOffset + col.left}px`,
                           top: `${block.yOffset + SEGMENT_HEADER_HEIGHT}px`,
                           width: `${BRACKET_CARD_WIDTH}px`,
                         }}

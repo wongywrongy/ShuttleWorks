@@ -125,6 +125,112 @@ describe('computeSegmentedLayout', () => {
   });
 });
 
+// ── Row flow (compass / Monrad: 8 segments) ──────────────────────────────
+
+/** A segment with `counts[r]` matches in round r — the real draws are not all
+ *  full binary trees (a DE losers bracket is 4,4,2,2,1,1). */
+function seg(id: string, order: number, counts: number[]): SegmentDTO {
+  return {
+    id,
+    label: id,
+    order,
+    rounds: counts.map((n, r) =>
+      Array.from({ length: n }, (_, m) => `${id}-r${r}m${m}`),
+    ),
+  };
+}
+
+/** What `PanZoomCanvas.fit()` would zoom to in the measured ~1400×800 draw
+ *  pane: one uniform min(w-ratio, h-ratio) scale. */
+const fitScale = (w: number, h: number) => Math.min(1400 / w, 800 / h);
+
+/** The column stack the row flow replaces: width = widest block, height =
+ *  every block plus a gap between each. */
+function stackBox(out: ReturnType<typeof computeSegmentedLayout>) {
+  return {
+    w: Math.max(...out.blocks.map((b) => b.layout.contentWidth)),
+    h: out.blocks.reduce(
+      (h, b) => h + SEGMENT_HEADER_HEIGHT + b.layout.contentHeight + SEGMENT_GAP,
+      -SEGMENT_GAP,
+    ),
+  };
+}
+
+describe('computeSegmentedLayout — row flow', () => {
+  it('leaves a single segment alone (nothing to flow)', () => {
+    // Single elimination /32.
+    const out = computeSegmentedLayout([seg('M', 0, [16, 8, 4, 2, 1])]);
+    const [only] = out.blocks;
+    expect(only.xOffset).toBe(0);
+    expect(only.yOffset).toBe(0);
+    expect(out.contentWidth).toBe(only.layout.contentWidth);
+    expect(out.contentHeight).toBe(
+      SEGMENT_HEADER_HEIGHT + only.layout.contentHeight,
+    );
+  });
+
+  it('keeps double elimination (3 segments) one block per row', () => {
+    // Double elimination /16: main draw, the wider losers bracket, the GF.
+    const out = computeSegmentedLayout([
+      seg('W', 0, [8, 4, 2, 1]),
+      seg('L', 1, [4, 4, 2, 2, 1, 1]),
+      seg('GF', 2, [1]),
+    ]);
+    const stack = stackBox(out);
+    expect(out.blocks.map((b) => b.xOffset)).toEqual([0, 0, 0]);
+    let y = 0;
+    for (const b of out.blocks) {
+      expect(b.yOffset).toBe(y);
+      y += SEGMENT_HEADER_HEIGHT + b.layout.contentHeight + SEGMENT_GAP;
+    }
+    expect(out.contentWidth).toBe(stack.w);
+    expect(out.contentHeight).toBe(stack.h);
+  });
+
+  it('flows 8 segments into rows sized to their own width', () => {
+    // Compass /16 in generation order: E is the 4-round main draw, the seven
+    // consolations average 44% of its width — the dead space this fixes.
+    const ids = ['E', 'W', 'N', 'S', 'NE', 'NW', 'SE', 'SW'];
+    const counts = [[8, 4, 2, 1], [4, 2, 1], [2, 1], [1], [2, 1], [1], [1], [1]];
+    const out = computeSegmentedLayout(
+      ids.map((id, i) => seg(id, i, counts[i])),
+    );
+
+    // Generation order survives — rows read left to right, top to bottom.
+    expect(out.blocks.map((b) => b.segment.id)).toEqual(ids);
+    for (let i = 1; i < out.blocks.length; i++) {
+      const prev = out.blocks[i - 1];
+      const cur = out.blocks[i];
+      if (cur.yOffset === prev.yOffset) {
+        // Same row: to the right of its predecessor, gap respected.
+        expect(cur.xOffset).toBeGreaterThanOrEqual(
+          prev.xOffset + prev.layout.contentWidth + SEGMENT_GAP,
+        );
+      } else {
+        expect(cur.yOffset).toBeGreaterThan(prev.yOffset);
+        expect(cur.xOffset).toBe(0);
+      }
+    }
+    // Every block sits inside the reported box.
+    for (const b of out.blocks) {
+      expect(b.xOffset + b.layout.contentWidth).toBeLessThanOrEqual(
+        out.contentWidth,
+      );
+      expect(
+        b.yOffset + SEGMENT_HEADER_HEIGHT + b.layout.contentHeight,
+      ).toBeLessThanOrEqual(out.contentHeight);
+    }
+
+    // The point of the change: the box is landscape, not a 1:3 column, and
+    // fits materially bigger in the same pane.
+    const stack = stackBox(out);
+    expect(out.contentWidth / out.contentHeight).toBeGreaterThan(1);
+    expect(fitScale(out.contentWidth, out.contentHeight)).toBeGreaterThan(
+      1.5 * fitScale(stack.w, stack.h),
+    );
+  });
+});
+
 // ── Render smoke: double elimination ─────────────────────────────────────
 
 const DE_SEGMENTS: SegmentDTO[] = [
