@@ -6,9 +6,10 @@
  * operator-set status) and shows them as one time-sorted flat list.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { HubPage } from '../HubPage';
+import { HUB_FACETS } from '../hubFacets';
 import { apiClient } from '../../../api/client';
 
 vi.mock('../../../api/client', () => ({
@@ -191,5 +192,26 @@ describe('HubPage time-oriented control plane', () => {
     expect(displayRow.textContent).toMatch(/enabled/i);
     const meetRow = screen.getByText('Meet').closest('li')!;
     expect(meetRow.textContent).toMatch(/enabled/i);
+  });
+});
+
+/**
+ * At 390px the last two chips — "Needs attention" among them, the one an
+ * operator scans for — sat at x=390.75 and x=460 with `overflow-x: visible`
+ * clipped by an ancestor's `overflow-hidden`: no scrollbar, no swipe, no way
+ * to reach them (2026-08-11 design audit, T4).
+ */
+describe('HubPage — the facet strip is reachable at any width', () => {
+  it('holds every facet in one horizontally scrollable strip', async () => {
+    mount({ current: '' });
+    const strip = await screen.findByTestId('hub-facet-strip');
+    // Overflowing content gets a scrollbar instead of being clipped away.
+    expect(strip.className).toMatch(/\boverflow-x-auto\b/);
+    // Every facet is INSIDE that strip — including the two that used to fall
+    // off the end — so scrolling reaches all of them.
+    expect(within(strip).getAllByRole('button')).toHaveLength(HUB_FACETS.length);
+    const attention = within(strip).getByRole('button', { name: /needs attention/i });
+    fireEvent.click(attention);
+    expect(attention).toHaveAttribute('aria-pressed', 'true');
   });
 });

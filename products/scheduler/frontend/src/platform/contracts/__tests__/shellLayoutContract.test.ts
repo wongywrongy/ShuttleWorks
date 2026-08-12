@@ -29,6 +29,7 @@ const readSrc = (p: string) => readFileSync(path.join(SRC, p), 'utf8');
 const authedLayout = readSrc('app/AuthedLayout.tsx');
 const appShell = readSrc('app/AppShell.tsx');
 const rosterTab = readSrc('products/meet/roster/RosterTab.tsx');
+const hubPage = readSrc('products/hub/HubPage.tsx');
 
 /** Source with comments removed — these files DISCUSS `<main>` in prose, and
  *  a doc comment is not a landmark. */
@@ -83,5 +84,25 @@ describe('the Roster desk survives a narrow viewport', () => {
     expect(deskRow).toBeDefined();
     expect(deskRow).toMatch(/\boverflow-x-auto\b/);
     expect(deskRow).not.toMatch(/\boverflow-hidden\b/);
+  });
+});
+
+/**
+ * The Hub command bar is one unstacking row (wordmark · search · New
+ * workspace). At 390px the shortcut hint printed on top of the truncated
+ * wordmark. Both are decoration — the rail two centimetres left carries the
+ * same monogram, and a tablet has no Ctrl key — so both stand down and the
+ * two controls that do work get the width.
+ */
+describe('the Hub command bar fits a narrow viewport', () => {
+  it('drops the wordmark below `sm` instead of colliding with the search', () => {
+    expect(hubPage).toMatch(/<ShuttleWorksMark className="[^"]*\bhidden\b[^"]*\bsm:inline-flex\b/);
+  });
+
+  it('drops the keyboard-shortcut hint with it', () => {
+    const kbd = /<kbd className="([^"]*)"/.exec(code(hubPage))?.[1];
+    expect(kbd).toBeDefined();
+    expect(kbd).toMatch(/\bhidden\b/);
+    expect(kbd).toMatch(/\bsm:block\b/);
   });
 });

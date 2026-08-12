@@ -68,7 +68,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-md px-2.5 py-1 text-2xs transition-colors duration-fast ease-brand ${
+      className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-2xs transition-colors duration-fast ease-brand ${
         active
           ? 'bg-surface-active font-medium text-foreground'
           : 'text-muted-foreground hover:text-foreground'
@@ -226,7 +226,10 @@ export function HubPage() {
           avatar the prototype drew here already lives in the app's global
           left rail (its artboard had no rail) — not duplicated. */}
       <header className="flex h-12 shrink-0 items-center gap-3.5 border-b border-border bg-card px-4">
-        <ShuttleWorksMark />
+        {/* Below `sm` the wordmark stands down: the global rail carries the
+            same monogram two centimetres to its left, and it was the thing
+            the search field collided with. */}
+        <ShuttleWorksMark className="hidden shrink-0 sm:inline-flex" />
         <div className="flex min-w-0 flex-1 justify-center">
           <div className="relative w-full max-w-[420px]">
             <input
@@ -238,12 +241,15 @@ export function HubPage() {
               aria-label="Search workspaces"
               className="h-8 w-full rounded-md border border-border bg-bg-elev px-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
-            <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-[10px] text-muted-foreground">
+            {/* Hidden with the wordmark: a shortcut hint is dead weight on a
+                touch device, and it was the half of the collision that sat
+                on top of the other half. */}
+            <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-[10px] text-muted-foreground sm:block">
               {IS_MAC ? '⌘K' : 'Ctrl K'}
             </kbd>
           </div>
         </div>
-        <Button size="sm" onClick={() => navigate('/new')}>
+        <Button size="sm" className="shrink-0" onClick={() => navigate('/new')}>
           <span aria-hidden>＋</span> New workspace
         </Button>
       </header>
@@ -262,8 +268,15 @@ export function HubPage() {
       {!loading && tournaments.length > 0 ? (
         <div className="shrink-0 border-b border-border px-4 pb-2.5 pt-4">
           <h1 className="type-display text-2xl text-foreground">Workspaces</h1>
-          <div className="mt-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-0.5">
+          <div className="mt-2.5 flex items-center justify-between gap-3">
+            {/* The strip SCROLLS when it doesn't fit. It used to overflow the
+                viewport under an ancestor's `overflow-hidden`, which put the
+                last two chips — "Needs attention" among them — past the edge
+                with no scrollbar, no swipe and no way to reach them at all. */}
+            <div
+              data-testid="hub-facet-strip"
+              className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+            >
               {HUB_FACETS.map((f) => (
                 <FilterChip
                   key={f.id}
