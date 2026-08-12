@@ -82,6 +82,36 @@ def test_projection_is_unauthenticated_and_strips_operator_material(
     assert ms.status_code == 200 and ms.json() == {}
 
 
+def test_summary_kind_follows_enabled_modules_not_the_kind_column(
+    client, workspace
+):
+    """A workspace running BOTH operator modules is a supported state
+    (``derive_modules`` seeds the foreign one as ``available``, and the
+    control plane promotes it). Keying the board off the fixed ``kind``
+    column made that workspace's bracket structurally invisible: the board
+    could only ever render one engine, chosen at create time.
+    """
+    tid, token = workspace
+    assert (
+        client.patch(
+            f"/tournaments/{tid}/modules/bracket",
+            json={"status": "enabled"},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+
+    client.cookies.clear()  # anonymous spectator
+    assert client.get(f"/display/{token}/summary").json()["kind"] == "hybrid"
+
+
+def test_summary_kind_is_unchanged_for_single_engine_workspaces(client, workspace):
+    """The seeded shape (one operator module enabled) still answers meet."""
+    _, token = workspace
+    client.cookies.clear()
+    assert client.get(f"/display/{token}/summary").json()["kind"] == "meet"
+
+
 def test_display_token_is_the_only_public_key(client, workspace):
     tid, token = workspace
     client.cookies.clear()

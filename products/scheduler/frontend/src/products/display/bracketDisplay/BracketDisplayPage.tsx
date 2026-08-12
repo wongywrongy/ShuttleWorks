@@ -14,6 +14,7 @@ import { Select } from '@scheduler/design-system/components';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { useFullscreen } from '../publicDisplay/useFullscreen';
 import { FullscreenButton } from '../publicDisplay/FullscreenButton';
+import { BoardSwitch } from '../publicDisplay/BoardSwitch';
 import { LiveStatusPill } from '../publicDisplay/LiveStatusPill';
 import { STALE_CAPTION } from '../publicDisplay/freshness';
 import { useBracketDisplaySync } from './useBracketDisplaySync';
@@ -29,7 +30,10 @@ const VIEWS: { id: BracketView; label: string }[] = [
   { id: 'results', label: 'Results' },
 ];
 
-export function BracketDisplayPage() {
+/** `hybrid` — this workspace also runs a Meet, so the header carries a switch
+ *  back to that board (see `PublicDisplayPage` for why the two boards stay
+ *  separate rather than merging). */
+export function BracketDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as BracketView | null;
   const [now, setNow] = useState<Date>(() => new Date());
@@ -72,11 +76,13 @@ export function BracketDisplayPage() {
     setSearchParams(next, { replace: true });
   };
 
-  const tabClass = (mode: BracketView) =>
+  // Takes the active flag rather than the view id, so the hybrid board switch
+  // (which is never one of this board's views) wears the same chrome.
+  const tabClass = (active: boolean) =>
     [
       INTERACTIVE_BASE,
       'border px-4 py-2 text-base font-semibold',
-      view === mode
+      active
         ? 'border-accent bg-accent/15 text-accent'
         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
     ].join(' ');
@@ -96,12 +102,13 @@ export function BracketDisplayPage() {
               role="tab"
               aria-selected={view === v.id}
               data-testid={`bracket-view-${v.id}`}
-              className={tabClass(v.id)}
+              className={tabClass(view === v.id)}
               onClick={() => setParam('view', v.id)}
             >
               {v.label}
             </button>
           ))}
+          {hybrid ? <BoardSwitch to="meet" className={tabClass(false)} /> : null}
           {view === 'draw' && events.length > 1 ? (
             <span className="ml-2 inline-flex">
               <Select

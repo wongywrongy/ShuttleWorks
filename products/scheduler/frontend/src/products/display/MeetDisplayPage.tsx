@@ -35,6 +35,7 @@ import { STALE_CAPTION } from './publicDisplay/freshness';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
+import { BoardSwitch } from './publicDisplay/BoardSwitch';
 import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
@@ -60,7 +61,14 @@ const ROTATION_INTERVAL_MS = 15_000;
 
 type ViewMode = 'courts' | 'schedule';
 
-export function MeetDisplayPage() {
+/** `hybrid` — this workspace also runs a Bracket. Adds the board switch and,
+ *  crucially, SCOPES the progress footer: `finishedCount / totalCount` counts
+ *  meet assignments only, so on a hybrid workspace an unqualified
+ *  "12 / 24 matches complete · 50%" is an authoritative-looking claim about a
+ *  tournament half of which it cannot see. Meet and Bracket match records are
+ *  non-merged by design (ADR 0006) — there is no cross-engine denominator to
+ *  state, so the honest fix is to name the half being counted. */
+export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
   const [searchParams] = useSearchParams();
   // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
   // task 9 (`?view=standings` was a real, documented param) must still
@@ -346,11 +354,13 @@ export function MeetDisplayPage() {
   // TV view tabs: rounded 1px-border chip in sentence-case sans, active
   // = accent (azure) border + tinted bg + accent text. Readable across a
   // gym without the mono-uppercase shouting.
-  const tabClass = (mode: ViewMode) =>
+  // Takes the active flag rather than the view id, so the hybrid board switch
+  // (which is never one of this board's views) wears the same chrome.
+  const tabClass = (active: boolean) =>
     [
       INTERACTIVE_BASE,
       'rounded border px-4 py-2 text-base font-semibold',
-      view === mode
+      active
         ? 'border-accent bg-accent/15 text-accent'
         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
     ].join(' ');
@@ -443,16 +453,21 @@ export function MeetDisplayPage() {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex gap-2">
-              <button type="button" onClick={() => setView('courts')} className={tabClass('courts')}>
+              <button
+                type="button"
+                onClick={() => setView('courts')}
+                className={tabClass(view === 'courts')}
+              >
                 Courts
               </button>
               <button
                 type="button"
                 onClick={() => setView('schedule')}
-                className={tabClass('schedule')}
+                className={tabClass(view === 'schedule')}
               >
                 Schedule
               </button>
+              {hybrid ? <BoardSwitch to="bracket" className={tabClass(false)} /> : null}
             </div>
             <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
             <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
@@ -523,7 +538,8 @@ export function MeetDisplayPage() {
       <div className="sticky inset-x-0 bottom-0 border-t border-border bg-background/90 px-6 py-3 backdrop-blur">
         <div className="flex items-center justify-between text-base">
           <div className="text-muted-foreground">
-            {finishedCount} / {totalCount} matches complete · {progressPct}%
+            {finishedCount} / {totalCount} {hybrid ? 'meet matches' : 'matches'} complete ·{' '}
+            {progressPct}%
           </div>
           <div className="flex items-center gap-5">
             <span

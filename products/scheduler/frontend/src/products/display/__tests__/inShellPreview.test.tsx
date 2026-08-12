@@ -23,7 +23,7 @@ import type { TournamentSummaryDTO } from '../../../api/dto';
 const BRACKET_WORKSPACE = {
   id: 't1',
   kind: 'bracket',
-  modules: [{ id: 'bracket', label: 'Bracket', status: 'enabled' }],
+  modules: [{ moduleId: 'bracket', status: 'enabled', config: null }],
 } as unknown as TournamentSummaryDTO;
 
 /** The preview route: workspace id in the path, nothing in the query. */
