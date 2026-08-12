@@ -371,15 +371,21 @@ function GanttChartImpl({
         .join(' · ');
 
       return (
-        <div
+        // A real <button>, like the sibling Plan Gantt's blocks (DragGantt) and
+        // like this file's own Reopen court label. As a `<div onClick>` it had
+        // no tabIndex, no role and no key handler, so the whole Live timeline
+        // was unreachable without a mouse (WCAG 2.1.1).
+        <button
+          type="button"
           onClick={() => onMatchSelect(matchId)}
-          className={`absolute inset-x-0 top-0.5 rounded border cursor-pointer
+          className={`absolute inset-x-0 top-0.5 block rounded border text-left cursor-pointer
             ${styles.bg} ${exceptionBorder} ${exceptionExtra}
             transition-[transform,box-shadow,filter] duration-fast ease-brand
             ${isAnimated ? 'scale-105' : ''}
             ${selectionRing}
             ${isInProgress ? 'shadow-sm' : ''}
-            hover:brightness-95`}
+            hover:brightness-95
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
           style={{ height: box.height - 4 }}
           title={title}
         >
@@ -405,7 +411,7 @@ function GanttChartImpl({
               className={`pointer-events-none absolute right-0.5 top-0.5 h-3 w-3 ${glyphTone}`}
             />
           )}
-        </div>
+        </button>
       );
     },
     [

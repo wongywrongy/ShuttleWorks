@@ -98,3 +98,21 @@ describe('GanttChart intensity encoding', () => {
     expect(screen.getByText('M3').closest('[title]')?.getAttribute('title')).toMatch(/postponed/);
   });
 });
+
+// A `<div onClick>` with no tabIndex, no role and no key handler is invisible
+// to a keyboard operator — WCAG 2.1.1. The sibling Plan Gantt (DragGantt) has
+// always rendered its blocks as real `<button>`s, and this file's own
+// `renderCourtLabel` Reopen control proves the pattern was known here.
+describe('GanttChart keyboard access', () => {
+  it('renders each block as a real button, focusable and Enter-activatable', () => {
+    const { onMatchSelect } = renderChart();
+
+    const block = screen.getByRole('button', { name: /M2/ });
+    block.focus();
+    expect(document.activeElement).toBe(block);
+
+    fireEvent.keyDown(block, { key: 'Enter' });
+    fireEvent.click(block); // what the browser synthesises for Enter on a button
+    expect(onMatchSelect).toHaveBeenCalledWith('m2');
+  });
+});
