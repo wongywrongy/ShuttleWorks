@@ -212,18 +212,22 @@ function BracketRosterTabCore({
             rowTestId={(p) => `roster-row-${p.id}`}
             renderRow={(p) => (
               <>
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                <span role="cell" className="min-w-0 flex-1 truncate text-sm text-foreground">
                   {p.name}
                 </span>
-                <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                <span role="cell" className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
                   {(badgesById.get(p.id) ?? []).map((b) => (
                     <EventBadge key={b.code} code={b.code} />
                   ))}
                 </span>
-                <span className="w-16 shrink-0 text-right text-xs text-muted-foreground sw-num hidden @2xl/table:block">
+                <span
+                  role="cell"
+                  className="w-16 shrink-0 text-right text-xs text-muted-foreground sw-num hidden @2xl/table:block"
+                >
                   {p.restSlots ?? '—'}
                 </span>
                 <span
+                  role="cell"
                   className="flex w-8 shrink-0 justify-end opacity-0 transition-opacity duration-fast ease-brand focus-within:opacity-100 group-hover:opacity-100"
                   onClick={(e) => e.stopPropagation()}
                 >

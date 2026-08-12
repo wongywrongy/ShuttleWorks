@@ -67,7 +67,13 @@ export function BandedTable<T>({
   /** Stable row identity — React key + `selectedId` comparison. */
   rowId: (item: T) => string;
   /** Cell content for one row. The shell supplies the row wrapper
-   *  (`BANDED_ROW_CLASSES` + click/selected chrome) around it. */
+   *  (`BANDED_ROW_CLASSES` + click/selected chrome + `role="row"`) around
+   *  it. Each cell MUST carry `role="cell"` — the shell publishes a table
+   *  and cannot reach inside `renderRow` to mark them, so a row without
+   *  them is a row that promises structure it doesn't have. Wrap a cell
+   *  that is itself a control (an input, a select, a menu button) in
+   *  `<span role="cell" className="contents">` so the control keeps its
+   *  own role and the layout is untouched. */
   renderRow: (item: T) => ReactNode;
   onRowClick?: (item: T) => void;
   /** Row id to render with the selected treatment (accent wash +
@@ -98,15 +104,28 @@ export function BandedTable<T>({
     items.map((item) => {
       const id = rowId(item);
       const selected = selectedId != null && selectedId === id;
+      // A clickable row must be reachable by keyboard (audit G1) — the row
+      // only becomes focusable when it is actually clickable. Its keyboard
+      // contract comes from selectableRowProps; its ROLE does not. `button`
+      // is a name-from-content role, so it flattens every cell in the row
+      // into one label — the flat run of text the T7 audit found. Inside a
+      // table the row is a `row`, and selection is `aria-selected`.
+      const click = onRowClick
+        ? selectableRowProps(() => onRowClick(item), selected)
+        : null;
       return (
         <div
           key={id}
           {...(rowAttrs?.(item) ?? {})}
           data-testid={rowTestId?.(item)}
           data-selected={selected ? 'true' : undefined}
-          // A clickable row must be reachable by keyboard (audit G1) — the row
-          // only becomes focusable when it is actually clickable.
-          {...(onRowClick ? selectableRowProps(() => onRowClick(item), selected) : {})}
+          role="row"
+          aria-selected={click ? selected : undefined}
+          {...(click && {
+            tabIndex: click.tabIndex,
+            onClick: click.onClick,
+            onKeyDown: click.onKeyDown,
+          })}
           className={[
             BANDED_ROW_CLASSES,
             onRowClick ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : '',
@@ -123,33 +142,45 @@ export function BandedTable<T>({
 
   const twoTier = columns.some((c) => c.subLabel);
 
+  // The wrappers below are plain block boxes carrying only roles — the flex
+  // rows, the column widths and the `@container/table` priority classes are
+  // untouched, so the layout is byte-identical to the role-less version.
   return (
-    <>
-      {twoTier ? (
-        <TwoTierHeaderRow columns={columns} inset={headerInset} />
-      ) : (
-        <ColumnHeaderRow columns={columns} inset={headerInset} />
-      )}
+    <div role="table" aria-colcount={columns.length}>
+      <div role="rowgroup">
+        {twoTier ? (
+          <TwoTierHeaderRow columns={columns} inset={headerInset} />
+        ) : (
+          <ColumnHeaderRow columns={columns} inset={headerInset} />
+        )}
+      </div>
       {groups
         ? groups.map((g) => {
             const isCollapsed = collapsed.has(g.key);
             return (
-              <div key={g.key}>
-                <GroupBandHeader
-                  label={g.label}
-                  code={g.code}
-                  detail={g.detail}
-                  count={g.items.length}
-                  collapsed={isCollapsed}
-                  onToggle={() => toggle(g.key)}
-                  data-testid={g.testId}
-                />
+              // One rowgroup per band: the collapse toggle then owns a real
+              // section, so collapsing it removes a group of rows rather than
+              // an unexplained stretch of text.
+              <div role="rowgroup" key={g.key}>
+                <div role="row">
+                  <div role="cell" aria-colspan={columns.length}>
+                    <GroupBandHeader
+                      label={g.label}
+                      code={g.code}
+                      detail={g.detail}
+                      count={g.items.length}
+                      collapsed={isCollapsed}
+                      onToggle={() => toggle(g.key)}
+                      data-testid={g.testId}
+                    />
+                  </div>
+                </div>
                 {!isCollapsed ? renderRows(g.items) : null}
               </div>
             );
           })
-        : renderRows(rows ?? [])}
-    </>
+        : <div role="rowgroup">{renderRows(rows ?? [])}</div>}
+    </div>
   );
 }
 
@@ -168,21 +199,23 @@ function TwoTierHeaderRow({
 }) {
   return (
     <div
+      role="row"
       className={[
         'flex items-start gap-3 border-b border-border bg-muted/40 py-1.5',
         inset,
       ].join(' ')}
     >
       {columns.map((col, i) => (
+        // Label-less spacer columns stay columnheaders — see ColumnHeaderRow.
         <span
           key={i}
+          role="columnheader"
           // Two-tier cells stack label over sub-label with `flex flex-col`,
           // so a collapsed-priority column must restore to `flex` (the
           // default `block` restore would unstack this one).
           className={['flex flex-col', colClass(col, 'flex')]
             .filter(Boolean)
             .join(' ')}
-          aria-hidden={col.label || col.subLabel ? undefined : true}
         >
           <span className={COLUMN_HEADER_ROW_CLASSES}>{col.label}</span>
           {col.subLabel ? (

@@ -40,42 +40,66 @@ export function StandingsTable({
       className="overflow-hidden rounded-lg border border-border bg-card"
     >
       <div className="border-b border-border px-5 py-2">
-        <span className={`${EYEBROW_CLASS} text-ink-3`}>
-          Standings
-        </span>
+        <span className={`${EYEBROW_CLASS} text-ink-3`}>Standings</span>
       </div>
-      <ColumnHeaderRow columns={COLUMNS} />
-      {ordered.map((row) => {
-        const leader = row.position === 1;
-        return (
-          <div
-            key={row.participant_id}
-            data-testid={`standings-row-${row.position}`}
-            className={`${BANDED_ROW_CLASSES} last:border-b-0`}
-          >
-            <span
-              data-testid={leader ? "standings-pos-1" : undefined}
-              className={`w-7 shrink-0 text-xs sw-num ${
-                leader ? "font-semibold text-accent" : "text-muted-foreground"
-              }`}
-            >
-              {row.position}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm text-card-foreground">
-              {nameById[row.participant_id] ?? row.participant_id}
-            </span>
-            <span className="w-9 shrink-0 text-right text-xs font-medium text-card-foreground sw-num">
-              {row.wins}–{row.losses}
-            </span>
-            <span className="w-11 shrink-0 text-right text-xs text-muted-foreground sw-num">
-              {row.games_won}–{row.games_lost}
-            </span>
-            <span className="w-12 shrink-0 text-right text-xs text-muted-foreground sw-num">
-              {row.points_won}–{row.points_lost}
-            </span>
-          </div>
-        );
-      })}
+      {/* ColumnHeaderRow publishes role="row"/"columnheader", so this
+          surface — which composes its own rows out of BANDED_ROW_CLASSES
+          rather than going through BandedTable — has to supply the
+          role="table" they live in. */}
+      <div role="table" aria-colcount={COLUMNS.length}>
+        <div role="rowgroup">
+          <ColumnHeaderRow columns={COLUMNS} />
+        </div>
+        <div role="rowgroup">
+          {ordered.map((row) => {
+            const leader = row.position === 1;
+            return (
+              <div
+                key={row.participant_id}
+                role="row"
+                data-testid={`standings-row-${row.position}`}
+                className={`${BANDED_ROW_CLASSES} last:border-b-0`}
+              >
+                <span
+                  role="cell"
+                  data-testid={leader ? "standings-pos-1" : undefined}
+                  className={`w-7 shrink-0 text-xs sw-num ${
+                    leader
+                      ? "font-semibold text-accent"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {row.position}
+                </span>
+                <span
+                  role="cell"
+                  className="min-w-0 flex-1 truncate text-sm text-card-foreground"
+                >
+                  {nameById[row.participant_id] ?? row.participant_id}
+                </span>
+                <span
+                  role="cell"
+                  className="w-9 shrink-0 text-right text-xs font-medium text-card-foreground sw-num"
+                >
+                  {row.wins}–{row.losses}
+                </span>
+                <span
+                  role="cell"
+                  className="w-11 shrink-0 text-right text-xs text-muted-foreground sw-num"
+                >
+                  {row.games_won}–{row.games_lost}
+                </span>
+                <span
+                  role="cell"
+                  className="w-12 shrink-0 text-right text-xs text-muted-foreground sw-num"
+                >
+                  {row.points_won}–{row.points_lost}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

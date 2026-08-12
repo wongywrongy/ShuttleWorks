@@ -203,20 +203,23 @@ export function EntriesDesk({ tid }: { tid: string }) {
             rowTestId={(e) => `entry-row-${e.id}`}
             renderRow={(e) => (
               <>
-                <span className={`${colClass(COLUMNS[0])} min-w-0`}>
+                <span role="cell" className={`${colClass(COLUMNS[0])} min-w-0`}>
                   <span className="block truncate text-xs text-foreground">
                     {e.playerName}
                   </span>
                 </span>
-                <span className={`${colClass(COLUMNS[1])} text-xs text-muted-foreground`}>
+                <span
+                  role="cell"
+                  className={`${colClass(COLUMNS[1])} text-xs text-muted-foreground`}
+                >
                   {e.eventCode ?? '—'}
                 </span>
-                <span className={colClass(COLUMNS[2])}>
+                <span role="cell" className={colClass(COLUMNS[2])}>
                   <StatusPill tone={ENTRY_STATE_TONE[e.state]} dot>
                     {ENTRY_STATE_LABEL[e.state]}
                   </StatusPill>
                 </span>
-                <span className={`${colClass(COLUMNS[3])} flex flex-wrap gap-1`}>
+                <span role="cell" className={`${colClass(COLUMNS[3])} flex flex-wrap gap-1`}>
                   {e.pendingReasons.map((code) => (
                     <span
                       key={code}
@@ -232,12 +235,13 @@ export function EntriesDesk({ tid }: { tid: string }) {
                   ))}
                 </span>
                 <span
+                  role="cell"
                   className={`${colClass(COLUMNS[4])} min-w-0 truncate text-2xs text-muted-foreground`}
                   title={e.remarks ?? undefined}
                 >
                   {e.remarks ?? ''}
                 </span>
-                <span className={`${colClass(COLUMNS[5])}`}>
+                <span role="cell" className={`${colClass(COLUMNS[5])}`}>
                   {canEdit && e.state === CONFIRMABLE_FROM ? (
                     <Button
                       size="xs"

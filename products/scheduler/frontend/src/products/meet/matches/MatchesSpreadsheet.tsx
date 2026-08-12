@@ -221,7 +221,13 @@ export function MatchesSpreadsheet({
       <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
         {filteredMatches.length === 0 ? (
           <>
-            <ColumnHeaderRow columns={MATCH_LIST_COLUMNS} />
+            {/* ColumnHeaderRow publishes role="row"/"columnheader" — they need
+                the table they claim to live in even with no rows under them. */}
+            <div role="table" aria-colcount={MATCH_LIST_COLUMNS.length}>
+              <div role="rowgroup">
+                <ColumnHeaderRow columns={MATCH_LIST_COLUMNS} />
+              </div>
+            </div>
             <div className="px-5 py-10 text-center text-sm text-muted-foreground">
               No matches match the current search.
             </div>
@@ -349,8 +355,8 @@ const MatchRow = memo(function MatchRow({
   return (
     <>
       <span
+        role="cell"
         className={`flex ${MATCH_CELL.warnGutter} shrink-0 items-center justify-center`}
-        aria-hidden={issues.length === 0}
         title={
           issues.length > 0
             ? issues.map((i) => `• ${i.message}`).join('\n')
@@ -368,7 +374,10 @@ const MatchRow = memo(function MatchRow({
           />
         ) : null}
       </span>
-      <span className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}>
+      <span
+        role="cell"
+        className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}
+      >
         {match.matchNumber ?? index + 1}
       </span>
       {configuredRanks.length > 0 ? (
@@ -376,7 +385,7 @@ const MatchRow = memo(function MatchRow({
         // clicks from the Select trigger AND its portaled options (React
         // events bubble through the component tree) so picking an event
         // never opens the row's detail panel.
-        <span className="contents" onClick={(e) => e.stopPropagation()}>
+        <span role="cell" className="contents" onClick={(e) => e.stopPropagation()}>
           <Select
             triggerRef={eventFieldRef as React.RefObject<HTMLButtonElement>}
             value={currentRank}
@@ -397,6 +406,11 @@ const MatchRow = memo(function MatchRow({
           />
         </span>
       ) : (
+        // `display: contents` wrapper: carries the cell role without
+        // generating a box, so the input keeps its own textbox role AND its
+        // place in the row's flex geometry. A `role="cell"` on the input
+        // itself would REPLACE textbox.
+        <span role="cell" className="contents">
         <input
           ref={eventFieldRef as React.RefObject<HTMLInputElement>}
           value={currentRank}
@@ -413,6 +427,7 @@ const MatchRow = memo(function MatchRow({
             'hover:border-border/60 focus:border-accent focus:bg-card',
           ].join(' ')}
         />
+        </span>
       )}
       <PlayerCellEditor
         side="Side A"
@@ -433,6 +448,7 @@ const MatchRow = memo(function MatchRow({
         eligibleForRank={match.eventRank}
       />
       <span
+        role="cell"
         data-testid={`match-status-${match.id}`}
         className={`${MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
       >
@@ -440,12 +456,14 @@ const MatchRow = memo(function MatchRow({
       </span>
       {/* Two-click arm: deleting a match used to take one hover-revealed click,
           with no confirm and no undo (audit F1). */}
-      <ConfirmDeleteButton
-        label={match.eventRank ? `match ${match.eventRank}` : 'this match'}
-        onConfirm={() => onDelete(match.id)}
-        className={MATCH_CELL.actionGutter}
-        testId={`match-delete-${match.id}`}
-      />
+      <span role="cell" className="contents">
+        <ConfirmDeleteButton
+          label={match.eventRank ? `match ${match.eventRank}` : 'this match'}
+          onConfirm={() => onDelete(match.id)}
+          className={MATCH_CELL.actionGutter}
+          testId={`match-delete-${match.id}`}
+        />
+      </span>
     </>
   );
 });
@@ -581,6 +599,7 @@ function PlayerCellEditor({
     // the cell is editor interaction.
     <div
       ref={cellRef}
+      role="cell"
       data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
       className={`relative ${MATCH_CELL.side}`}
       onClick={(e: ReactMouseEvent<HTMLElement>) => {

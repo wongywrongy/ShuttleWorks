@@ -88,6 +88,33 @@ describe('EntriesDesk — the list', () => {
     ).toBeInTheDocument();
   });
 
+  // Design audit T7 / WCAG 1.3.1: the desk is a data-dense reading view, and
+  // built from bare div/span it gave a screen reader a flat run of text with
+  // no programmatic link between an entrant and their state.
+  it('exposes the desk as a table — an entrant and their state are one row', async () => {
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
+      entry({ id: 'e-1', playerName: 'Alice Chen', eventCode: 'MS', state: 'pending' }),
+    ]);
+
+    render(<EntriesDesk tid="t-1" />);
+    const r = await screen.findByTestId('entry-row-e-1');
+
+    expect(screen.getByRole('table')).toContainElement(r);
+    expect(r).toHaveAttribute('role', 'row');
+    const cells = within(r).getAllByRole('cell');
+    expect(cells).toHaveLength(6);
+    expect(cells[0]).toHaveTextContent('Alice Chen');
+    expect(cells[2]).toHaveTextContent('Pending');
+    expect(screen.getAllByRole('columnheader').map((c) => c.textContent)).toEqual([
+      'Entrant',
+      'Event',
+      'State',
+      'Attention',
+      'Remarks',
+      '',
+    ]);
+  });
+
   it('shows the submitting address on the act — the operator surface, not the public one', async () => {
     // The public entrant list is a strict projection (names + events only).
     // The desk is the opposite: the operator is the person who has to email

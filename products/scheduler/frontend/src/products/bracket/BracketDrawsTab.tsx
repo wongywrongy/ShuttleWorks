@@ -288,6 +288,7 @@ export function BracketDrawsTab() {
               renderRow={(row) => (
                 <>
                   <span
+                    role="cell"
                     className="w-16 shrink-0 truncate text-sm font-semibold text-accent sw-num"
                     title={row.ev.id}
                   >
@@ -296,7 +297,10 @@ export function BracketDrawsTab() {
                   {/* Cell visibility derives from the column spec (colClass)
                       so header and body can never drift on a priority
                       change. */}
-                  <span className={`${colClass(DRAW_COLUMNS[1])} truncate text-xs text-muted-foreground`}>
+                  <span
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[1])} truncate text-xs text-muted-foreground`}
+                  >
                     {formatLabel(row.ev.format)}
                     {row.isSwiss && row.swissRounds !== undefined && row.generated ? (
                       <span className="ml-1.5 sw-num">
@@ -304,10 +308,14 @@ export function BracketDrawsTab() {
                       </span>
                     ) : null}
                   </span>
-                  <span className={`${colClass(DRAW_COLUMNS[2])} text-xs text-muted-foreground sw-num`}>
+                  <span
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[2])} text-xs text-muted-foreground sw-num`}
+                  >
                     {row.targetSize}
                   </span>
                   <span
+                    role="cell"
                     className={`w-16 shrink-0 text-right text-xs sw-num ${
                       row.partCount < row.targetSize
                         ? 'text-status-warning'
@@ -316,7 +324,7 @@ export function BracketDrawsTab() {
                   >
                     {row.partCount}/{row.targetSize}
                   </span>
-                  <span className="min-w-0 flex-1 overflow-hidden">
+                  <span role="cell" className="min-w-0 flex-1 overflow-hidden">
                     {row.counts ? (
                       <StatusBar
                         items={[
@@ -330,10 +338,11 @@ export function BracketDrawsTab() {
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </span>
-                  <span className="flex w-28 shrink-0 justify-end">
+                  <span role="cell" className="flex w-28 shrink-0 justify-end">
                     <StatusPillFor status={row.status} completed={row.completed} />
                   </span>
                   <span
+                    role="cell"
                     className="flex w-80 shrink-0 items-center justify-end gap-3"
                     onClick={(e) => e.stopPropagation()}
                   >

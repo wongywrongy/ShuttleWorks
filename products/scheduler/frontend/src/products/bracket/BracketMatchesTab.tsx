@@ -256,8 +256,11 @@ export function BracketMatchesTab({
                       {/* Gutter spacer — Meet's warning-icon slot;
                           empty here but kept so the columns start
                           at the same x on both surfaces. */}
-                      <span className={`${MATCH_CELL.warnGutter} shrink-0`} aria-hidden />
-                      <span className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}>
+                      <span role="cell" className={`${MATCH_CELL.warnGutter} shrink-0`} />
+                      <span
+                        role="cell"
+                        className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}
+                      >
                         {n}
                       </span>
                       {/* Friendly label; raw id kept on title for
@@ -265,23 +268,32 @@ export function BracketMatchesTab({
                           px-1.5 mirrors the inner inset of Meet's
                           editable event field. */}
                       <span
+                        role="cell"
                         className={`${MATCH_CELL.event} truncate px-1.5 text-sm font-semibold text-accent sw-num`}
                         title={pu.id}
                       >
                         {labelById.get(pu.id) ?? pu.id}
                       </span>
-                      <span className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}>
+                      <span
+                        role="cell"
+                        className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}
+                      >
                         {renderSide(pu.side_a)}
                       </span>
-                      <span className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}>
+                      <span
+                        role="cell"
+                        className={`${MATCH_CELL.side} text-sm leading-relaxed text-foreground`}
+                      >
                         {renderSide(pu.side_b)}
                       </span>
                       <span
+                        role="cell"
                         className={`${MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
                       >
                         {STATUS_LABEL[status]}
                       </span>
                       <span
+                        role="cell"
                         className={`flex ${MATCH_CELL.actionGutter} shrink-0 items-center justify-center`}
                         onClick={(e) => e.stopPropagation()}
                       >

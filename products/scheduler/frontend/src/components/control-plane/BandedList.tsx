@@ -8,6 +8,16 @@
  *   - `ColumnHeaderRow`   — the column-label row (`padding: 6px 20px`,
  *     border-b, band background). Columns carry their own width/flex/
  *     alignment classes so each surface keeps its exact column set.
+ *
+ * The grammar carries real table semantics via ARIA roles (`table` /
+ * `rowgroup` / `row` / `columnheader` / `cell`) rather than `<table>`
+ * elements: these rows are flex containers whose cells carry `flex-1` /
+ * `shrink-0` widths and `@container/table` priority classes, and several
+ * "cells" are `<input>`s, selects and menus. Real `<td>`s would need every
+ * one of those re-expressed in table layout. The roles are the same
+ * structure `PositionGrid`'s `<table>` publishes, over the DOM we have.
+ * They are only complete if the CELLS carry `role="cell"`, which is the
+ * consumer's job — `renderRow` owns the cells.
  *   - `GroupBandHeader`   — the collapsible band header button: caret +
  *     optional accent short-code (e.g. "MS") + label + count.
  *   - `COLUMN_HEADER_ROW_CLASSES` — the canonical column-label type
@@ -86,6 +96,10 @@ export const colClass = (
 /**
  * ColumnHeaderRow — a flex row of column labels sitting above the
  * data rows with the same horizontal rhythm.
+ *
+ * Carries `role="row"` + `role="columnheader"`, so it must be rendered
+ * inside a `role="table"` (BandedTable supplies one). A standalone use —
+ * a header shown above an empty state — has to wrap itself in one.
  */
 export function ColumnHeaderRow({
   columns,
@@ -104,6 +118,7 @@ export function ColumnHeaderRow({
 }) {
   return (
     <div
+      role="row"
       className={[
         'flex items-center gap-3 border-b border-border bg-muted/40 py-1.5',
         inset,
@@ -113,12 +128,16 @@ export function ColumnHeaderRow({
         .join(' ')}
     >
       {columns.map((col, i) => (
+        // A label-less spacer column (a gutter, an action column) is still a
+        // column: it stays a columnheader rather than being aria-hidden, or
+        // the header count stops matching the cell count and every column
+        // after it is announced one place off.
         <span
           key={i}
+          role="columnheader"
           className={[COLUMN_HEADER_ROW_CLASSES, colClass(col)]
             .filter(Boolean)
             .join(' ')}
-          aria-hidden={col.label ? undefined : true}
         >
           {col.label}
         </span>

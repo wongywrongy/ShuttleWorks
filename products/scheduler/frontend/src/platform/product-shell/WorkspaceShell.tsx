@@ -87,19 +87,24 @@ export function WorkspaceShell({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
-        {compact ? (
-          <button
-            type="button"
-            data-testid="workspace-nav-trigger"
-            aria-label="Workspace sections"
-            aria-expanded={navOpen}
-            onClick={() => setNavOpen(true)}
-            className="-ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <List aria-hidden className="h-5 w-5" />
-          </button>
-        ) : null}
-        <WorkspaceIdentityBar identity={identity} onBackToHub={onBackToHub} />
+        {/* One group, so `justify-between` splits identity from actions —
+            not trigger from identity from actions, which would strand the
+            workspace name in the middle of the bar. */}
+        <div className="flex min-w-0 items-center gap-2">
+          {compact ? (
+            <button
+              type="button"
+              data-testid="workspace-nav-trigger"
+              aria-label="Workspace sections"
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen(true)}
+              className="-ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <List aria-hidden className="h-5 w-5" />
+            </button>
+          ) : null}
+          <WorkspaceIdentityBar identity={identity} onBackToHub={onBackToHub} />
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
