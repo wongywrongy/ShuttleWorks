@@ -73,6 +73,19 @@ function filters(overrides: Partial<Filters> = {}): Filters {
   return { status: null, preset: null, from: null, to: null, q: '', ...overrides };
 }
 
+/**
+ * The class tokens of the one element carrying `token`, so a layout
+ * assertion names an element by a class it must have rather than by its
+ * position in the markup. `[]` when nothing carries it — which is a failing
+ * `toContain`, i.e. the right answer for "that element is gone".
+ */
+function classTokens(html: string, token: string): string[] {
+  const attr = (html.match(/class="[^"]*"/g) ?? [])
+    .map((a) => a.slice(7, -1).split(/\s+/))
+    .find((tokens) => tokens.includes(token));
+  return attr ?? [];
+}
+
 // ---- StatusChip: every state of the ruled two-state union ------------------
 
 describe('StatusChip', () => {
@@ -146,14 +159,36 @@ describe('TournamentCard', () => {
     expect(html).toContain('after:absolute after:inset-0');
   });
 
-  it('pins the chip to a fixed right-aligned position, not a bottom row (refinement 2)', () => {
+  it('pins the chip to a fixed right-aligned column FROM sm: UP (refinement 2)', () => {
     const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
-    // A float: one vertical line of chips down the list, while long names
-    // keep the full card width and wrap under the chip.
-    expect(html).toMatch(/<span class="float-right[^"]*">/);
-    // …and the chip precedes the name in the markup (floats must), so it is
-    // structurally not a bottom row.
-    expect(html.indexOf('float-right')).toBeLessThan(html.indexOf('Spring Open'));
+    const chip = classTokens(html, 'sm:float-right');
+
+    // A float, still: one vertical line of chips down the list, while long
+    // names keep the full card width and wrap under the chip. What changed
+    // is that it is now breakpoint-scoped — the desktop property is intact.
+    expect(chip).toContain('sm:float-right');
+    // …and the chip precedes the name in the markup (floats must), so at
+    // desktop widths it is structurally not a bottom row.
+    expect(html.indexOf('sm:float-right')).toBeLessThan(html.indexOf('Spring Open'));
+    // The defect: an UNCONDITIONAL float. At 390px a long name wrapped
+    // around the chip ("2026 Bay" / "Badminton Late Summer Open"), against
+    // this component's own docstring. A bare `float-right` token here is
+    // that defect returning.
+    expect(chip).not.toContain('float-right');
+  });
+
+  it('keeps the chip the bottom row on phones, as the docstring always said', () => {
+    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
+
+    // Native, no duplicated markup and no second copy for a screen reader:
+    // below `sm:` the content column is a flex column and the chip is
+    // `order-last`, so it lays out last while staying first in the DOM
+    // (which the float requires). From `sm:` up the column is `display:
+    // block` again, `order` goes inert and the float takes over.
+    expect(classTokens(html, 'sm:float-right')).toContain('order-last');
+    expect(classTokens(html, 'flex-col')).toEqual(
+      expect.arrayContaining(['flex', 'sm:block']),
+    );
   });
 
   it('collapses absent fields without breaking the anatomy order', () => {

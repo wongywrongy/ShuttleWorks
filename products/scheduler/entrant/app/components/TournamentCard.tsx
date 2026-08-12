@@ -19,14 +19,25 @@ export function TournamentCard({ card, now }: { card: DiscoveryCard; now: Date }
     <li className="relative rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-sm transition-shadow duration-fast hover:border-rule-control hover:shadow-md">
       <div className="flex items-start gap-3.5">
         <DateBadge date={card.tournamentDate} />
-        <div className="min-w-0 flex-1">
-          {/* Refinement 2 via a FLOAT, not a flex column: the chip pins to
-              the card's top-right corner — one vertical line of chips down
-              the results list — while a long tournament name keeps the full
-              card width, wrapping under the chip instead of into a pinched
-              column beside it. Announced before the name; the chip is the
-              card's one-glance answer, so leading with it reads correctly. */}
-          <span className="float-right mb-1 ml-3">
+        {/* Two layouts, one markup. Below `sm:` this is a flex column, so
+            `order-last` on the chip lays it out as the bottom row while it
+            stays FIRST in the DOM (which the float requires) — no second
+            copy of the chip for a screen reader to read twice. From `sm:` up
+            it is `display: block` again, `order` goes inert, and the float
+            below takes over. */}
+        <div className="flex min-w-0 flex-1 flex-col sm:block">
+          {/* Refinement 2 via a FLOAT, not a flex column: from `sm:` up the
+              chip pins to the card's top-right corner — one vertical line of
+              chips down the results list — while a long tournament name keeps
+              the full card width, wrapping under the chip instead of into a
+              pinched column beside it.
+
+              **Scoped to `sm:`, which it was not.** Unconditional, the float
+              made a long name wrap AROUND the chip at 390px ("2026 Bay" /
+              "Badminton Late Summer Open") — where the column is too narrow
+              for a name and a chip to share a line, and where this
+              component's docstring always said the chip is the bottom row. */}
+          <span className="order-last mt-2 sm:float-right sm:mb-1 sm:ml-3 sm:mt-0">
             <StatusChip state={chip} />
           </span>
           {/* The single link: stretched via the ::after overlay, so the
