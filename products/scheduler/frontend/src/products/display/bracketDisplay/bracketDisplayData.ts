@@ -73,7 +73,10 @@ export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
         court: a.court_id,
         sideA: sideLabel(pu, 'a', data.participants),
         sideB: sideLabel(pu, 'b', data.participants),
-        status: lane === 'now' ? 'on-court' : 'next',
+        // The lane decides INCLUSION; `started` decides the label. Two
+        // started matches on one court is a data anomaly, but labelling the
+        // second one "Next" would be a claim about a match already playing.
+        status: a.started ? 'on-court' : 'next',
       };
     })
     .filter((r): r is LiveRow => r !== null)
