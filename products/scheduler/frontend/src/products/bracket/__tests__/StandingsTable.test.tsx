@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { StandingsTable, STANDINGS_COLUMNS } from '../StandingsTable';
+import { StandingsTable } from '../StandingsTable';
+import { STANDINGS_COLUMNS } from '../standingsColumns';
 import {
   bandedRowLines,
   dockMinContentWidth,

@@ -128,6 +128,7 @@ describe('a row reserves the lines ITS OWN columns need', () => {
       'products/bracket/BracketRosterTab.tsx',
       'products/bracket/BracketDrawsTab.tsx',
       'products/bracket/StandingsTable.tsx',
+      'products/bracket/standingsColumns.ts',
       'products/entries/EntriesDesk.tsx',
     ];
     for (const rel of SURFACES) {
@@ -227,7 +228,7 @@ describe('flexible name columns have a real minimum, not `min-w-0`', () => {
       ['components/control-plane/matchListColumns.ts', "label: 'Side A'"],
       ['components/control-plane/matchListColumns.ts', "label: 'Side B'"],
       ['products/bracket/BracketRosterTab.tsx', "label: 'Player'"],
-      ['products/bracket/StandingsTable.tsx', 'label: "Player"'],
+      ['products/bracket/standingsColumns.ts', "label: 'Player'"],
       ['products/entries/EntriesDesk.tsx', "label: 'Entrant'"],
     ];
     for (const [file, marker] of NAME_COLUMNS) {

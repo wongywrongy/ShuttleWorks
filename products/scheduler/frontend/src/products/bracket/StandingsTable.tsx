@@ -12,27 +12,10 @@ import {
   NAME_COL_MIN,
   ColumnHeaderRow,
   bandedRowClasses,
-  type BandedListColumn,
 } from "../../components/control-plane";
 import { EYEBROW_CLASS } from '../../lib/utils';
+import { STANDINGS_COLUMNS } from './standingsColumns';
 
-// Numeric columns stay tight (two 2-digit numbers + en-dash at text-xs)
-// so the flex-1 Player cell keeps real width even in the xl side rail.
-//
-// Player carries a NAME — `Participant.name`, a player OR a team, so
-// "Nashville Badminton Association" is in-vocabulary here exactly as it is on
-// the Hub. It therefore floors at NAME_COL_MIN like every other name column,
-// and its rows reserve two lines (`bandedRowClasses` derives that from this
-// spec). `min-w-0` let it reach ~106px in the xl rail, three lines and one
-// short word away from the "Nashville / Badminto / n" mid-word break; the rail
-// is sized to hold this floor (see `StandingsAside` in DrawView).
-export const STANDINGS_COLUMNS: BandedListColumn[] = [
-  { label: "Pos", className: "w-7 shrink-0" },
-  { label: "Player", className: `${NAME_COL_MIN} flex-1` },
-  { label: "W–L", className: "w-9 shrink-0 text-right" },
-  { label: "Games", className: "w-11 shrink-0 text-right" },
-  { label: "Points", className: "w-12 shrink-0 text-right" },
-];
 
 export function StandingsTable({
   rows,
