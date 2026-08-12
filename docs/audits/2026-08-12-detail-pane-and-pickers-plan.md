@@ -221,6 +221,30 @@ sized. None of it needs a new component, because the component already exists.
 
 ---
 
+## A4. The Hub is already stuck, and it sharpens ruling 1
+
+Measured 2026-08-12 in a browser, after the fixes above: **the Hub dock runs in overlay mode at
+1280px**, and the overlay paints over x=937-1280, covering the Date column, Next action, and the
+row's "..." button at x=1236, which becomes unclickable at the most common desktop width.
+
+The arithmetic is closed, which is what makes it useful:
+
+- Docking requires `container >= minContentWidth + width` = `928 + 344` = **1272px**.
+- A 1280px viewport cannot supply 1272px of container after the 56px global rail.
+- Therefore 1280 **always** overlays.
+- The 928 floor exists *because* of D11. Lowering it so the Hub docks at 1280 re-creates the exact
+  defect it was raised to fix: the Modules column silently vanishing on selection.
+- Shrinking the 344px pane to ~296 would win the breakpoint, but that is magic-number fiddling below
+  the house pane width, and it buys one breakpoint rather than fixing the model.
+
+So the Hub cannot be fixed inside the Hub. It is the first surface where the current geometry has run
+out of room entirely, and it is evidence for S1-S4 rather than a separate task.
+
+**One thing to weigh in the ruling:** the overlay costs less than it looks. The inspector already
+carries *Open workspace* and *Settings*, so the only action it hides is **Delete** - which commit
+`32ba7f5` deliberately moved *into* the row menu, and moving it into the pane header would re-open
+that decision.
+
 ## What needs a ruling before work starts
 
 1. **S5, the tablet question**: four design systems say ~768px should show one pane, not two. The
