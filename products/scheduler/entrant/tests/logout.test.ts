@@ -136,6 +136,33 @@ describe('the sign-out form, unhydrated', () => {
     expect(hrefs(html).filter((h) => h.startsWith('/e/account/'))).toEqual([]);
   });
 
+  it('is not dressed as the page’s primary action (E4)', async () => {
+    // This page cannot know who is reading it, so "Sign out" is rendered
+    // unconditionally and is wrong in one direction or the other — a
+    // signed-out visitor is offered a control that does nothing for them.
+    // The shipped answer to that, on the copy beside it, is to HEDGE
+    // ("Signed in on this device?"), and the weight has to match the hedge:
+    // primary weight on a control the page cannot know applies is the same
+    // over-claim in CSS.
+    //
+    // Derived from the design system rather than spelled: `shadow-glow` is
+    // what the `default`/`brand` variants add and nothing else does
+    // (`packages/design-system/components/Button.tsx`), so this asks "is it
+    // the glow button" without naming a class the page chose.
+    const html = await fetchEntry();
+    const signOut = logoutForm(html);
+
+    expect(signOut).toMatch(/<button[^>]*type="submit"/);
+    expect(signOut).not.toContain('shadow-glow');
+    // Non-vacuity, and the positive half: the control is really rendered
+    // through the design system and really picked the quiet variant —
+    // `border-border-control` is `outline`'s chrome. Without this the
+    // negative above would pass over a button with no classes at all.
+    expect(signOut).toContain('border-border-control');
+    // The copy half of the same argument, still in place.
+    expect(html).toContain('Signed in on this device?');
+  });
+
   it('carries the double-submit token as a hidden field named by FORM_FIELD', async () => {
     // The NAME is read from `FORM_FIELD` rather than pasted, so this really
     // pins "whatever node calls the field" and not one spelling of it. That

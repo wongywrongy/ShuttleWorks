@@ -561,7 +561,15 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             {/* Never omitted: `logout`'s own fallback is `/e/account/login`,
                 which is POST-only — a 405 after a successful sign-out. */}
             <input type="hidden" name="next" value={`/e/${encodeURIComponent(slug)}`} />
-            <Button type="submit">Sign out</Button>
+            {/* E4: outline, not the glow button. This page cannot know who
+                is reading it, so the control is unconditional — and a
+                control the page cannot know applies must not be dressed as
+                the page's primary action, which here is submitting the
+                entry. The hedge above it is the copy half of the same
+                argument. */}
+            <Button type="submit" variant="outline" size="sm">
+              Sign out
+            </Button>
             <span className="text-muted-foreground">
               Signs you out on this device only. Entries you have already submitted
               are unaffected.
