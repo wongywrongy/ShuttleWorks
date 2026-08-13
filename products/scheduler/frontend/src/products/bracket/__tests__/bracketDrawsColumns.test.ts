@@ -42,3 +42,54 @@ describe('the Draws row cannot drift from its column spec', () => {
     }
   });
 });
+
+/**
+ * The row has a width BUDGET, and it has been blown twice.
+ *
+ * At 1280 the Draws content box is about 950px. Widening one column without
+ * checking the total is what put "FORMAT" ink on top of "SIZE" and turned
+ * "Single elimination" into one character per line at 273px a row: the
+ * `flex-1` column absorbs every overrun by collapsing, so the damage never
+ * appears where the change was made.
+ *
+ * jsdom cannot lay this out, so the check is arithmetic on the spec itself.
+ */
+
+const CONTENT_BUDGET_PX = 950; // ~1280 viewport, minus the rail and sidebar
+const GAP_PX = 12; // gap-3 between cells
+const INSET_PX = 40; // px-5 pair on the row
+
+/** px a Tailwind width/min-width class declares; 0 when it declares none. */
+function declaredPx(cls: string): number {
+  const rem = /(?:^|\s)(?:min-)?w-\[(\d+(?:\.\d+)?)rem\]/.exec(cls);
+  if (rem) return parseFloat(rem[1]) * 16;
+  const step = /(?:^|\s)(?:min-)?w-(\d+(?:\.\d+)?)(?:\s|$)/.exec(cls);
+  return step ? parseFloat(step[1]) * 4 : 0;
+}
+
+describe('the Draws row fits its width budget', () => {
+  // Parsed from the source so the test reads the shipped spec, not a copy.
+  const specBlock = SRC.slice(SRC.indexOf('const DRAW_COLUMNS'), SRC.indexOf('];', SRC.indexOf('const DRAW_COLUMNS')));
+  const classNames = [...specBlock.matchAll(/className: '([^']+)'/g)].map((m) => m[1]);
+
+  it('declares seven columns', () => {
+    expect(classNames).toHaveLength(7);
+  });
+
+  it('every column, at its declared floor, fits the content box', () => {
+    const declared = classNames.map(declaredPx);
+    // A column declaring nothing would silently pass; none may.
+    expect(declared.filter((px) => px === 0)).toEqual([]);
+    const total =
+      declared.reduce((a, b) => a + b, 0) + GAP_PX * (classNames.length - 1) + INSET_PX;
+    expect(total, `columns total ${total}px against a ${CONTENT_BUDGET_PX}px box`).
+      toBeLessThanOrEqual(CONTENT_BUDGET_PX);
+  });
+
+  it('the growing column carries a floor, so it cannot be crushed to zero', () => {
+    const grower = classNames.find((c) => c.includes('flex-1'));
+    expect(grower).toBeDefined();
+    expect(grower, 'the flex-1 column must not be min-w-0').not.toContain('min-w-0');
+    expect(declaredPx(grower!)).toBeGreaterThan(0);
+  });
+});

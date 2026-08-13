@@ -208,7 +208,12 @@ describe('BracketDrawsTab — draw rows', () => {
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
     const cell = within(row).getByText('DONE').closest('[role="cell"]');
-    expect(cell?.className).toContain('w-52');
+    // w-48, not w-52: the row's seven columns overran their ~950px budget and
+    // the flex-1 Format column absorbed it by collapsing to zero. Progress
+    // gave back 16px as part of re-budgeting the row. The PROPERTY under test
+    // is unchanged - a fixed column rather than the leftovers - and
+    // `bracketDrawsColumns.test.ts` now holds the total.
+    expect(cell?.className).toContain('w-48');
     expect(cell?.className).not.toContain('flex-1');
     // Clipping a tally is the same crime as ellipsising a name.
     expect(cell?.className).not.toContain('overflow-hidden');
@@ -216,7 +221,7 @@ describe('BracketDrawsTab — draw rows', () => {
     // drift on a future priority change.
     expect(
       screen.getByRole('columnheader', { name: 'Progress' }).className,
-    ).toContain('w-52');
+    ).toContain('w-48');
   });
 });
 

@@ -230,9 +230,6 @@ describe('flexible name columns have a real minimum, not `min-w-0`', () => {
       ['products/bracket/BracketRosterTab.tsx', "label: 'Player'"],
       ['products/bracket/standingsColumns.ts', "label: 'Player'"],
       ['products/entries/EntriesDesk.tsx', "label: 'Entrant'"],
-      // A draw code is operator text capped at 40 chars, not a fixed token:
-      // at w-16 it wrapped "md-classic" in every row. Name-like by nature.
-      ['products/bracket/BracketDrawsTab.tsx', "label: 'Code'"],
     ];
     for (const [file, marker] of NAME_COLUMNS) {
       const line = read(file)

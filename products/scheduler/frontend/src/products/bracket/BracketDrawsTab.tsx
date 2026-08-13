@@ -28,7 +28,6 @@ import {
   BandedTable,
   DetailDock,
   EmptyState,
-  NAME_COL_MIN,
   colClass,
   dockMinContentWidth,
   type BandedListColumn,
@@ -85,23 +84,28 @@ interface DrawRow {
 // expanse at full width. `flex-wrap` is the backstop for three-digit tallies:
 // the row grows a line rather than clipping a number.
 const DRAW_COLUMNS: BandedListColumn[] = [
-  // Code carries an operator-defined draw id, capped at MAX_EVENT_CODE_LENGTH
-  // (40) rather than at anything a fixed column could hold. At w-16 (64px) the
-  // seeded "md-classic" wrapped to "md-" / "classic" in every row: the same
-  // defect as the bracket match label, one list over. It is a NAME-like column
-  // by nature, so it is marked as one, and the derivation gives it both a real
-  // floor and the two-line reservation that goes with wrappable operator text.
-  // That costs Draws the 7px it was winning by declaring no name column, which
-  // it was only winning because the code was wrapping anyway.
-  { label: 'Code', className: `${NAME_COL_MIN} shrink-0` },
-  { label: 'Format', className: 'min-w-0 flex-1', priority: 3 },
+  // THE ROW'S WIDTH BUDGET. At 1280 the content box is ~950px, and these seven
+  // columns have to live inside it. Sized from what each actually holds, after
+  // two failures worth recording:
+  //
+  //   w-16 (64px) for Code wrapped "md-classic" into "md-" / "classic".
+  //   NAME_COL_MIN (160px) fixed that and overran the budget by 34px, which
+  //   `flex-1 min-w-0` Format absorbed by collapsing to ZERO: its header ink
+  //   painted over SIZE, and "Single elimination" broke to one character per
+  //   line, making every row 273px tall.
+  //
+  // So Code is sized for a draw id (~14 chars) rather than for a person's
+  // name, and Format carries a real floor instead of `min-w-0` so it can never
+  // be the crush victim again. Total with Format at its floor: 904px.
+  { label: 'Code', className: 'w-28 shrink-0' },
+  { label: 'Format', className: 'min-w-[5rem] flex-1', priority: 3 },
   { label: 'Size', className: 'w-12 shrink-0 text-right', priority: 2 },
   { label: 'Entered', className: 'w-16 shrink-0 text-right' },
-  { label: 'Progress', className: 'w-52 shrink-0' },
+  { label: 'Progress', className: 'w-48 shrink-0' },
   { label: 'Status', className: 'w-28 shrink-0 text-right' },
   // `ml-auto` keeps the action cluster on the right edge in the narrow case
   // where Format has yielded and no column is growing.
-  { label: '', className: 'ml-auto w-80 shrink-0' },
+  { label: '', className: 'ml-auto w-56 shrink-0' },
 ];
 
 /** Content floor for the draws dock, derived from DRAW_COLUMNS. The old
