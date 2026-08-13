@@ -318,7 +318,7 @@ export function BracketDrawsTab() {
                 <>
                   <span
                     role="cell"
-                    className="w-16 shrink-0 break-words text-sm font-semibold text-accent sw-num"
+                    className={`${colClass(DRAW_COLUMNS[0])} break-words text-sm font-semibold text-accent sw-num`}
                   >
                     {row.ev.id}
                   </span>
@@ -344,7 +344,7 @@ export function BracketDrawsTab() {
                   </span>
                   <span
                     role="cell"
-                    className={`w-16 shrink-0 text-right text-xs sw-num ${
+                    className={`${colClass(DRAW_COLUMNS[3])} text-right text-xs sw-num ${
                       row.partCount < row.targetSize
                         ? 'text-status-warning'
                         : 'text-muted-foreground'
@@ -367,12 +367,12 @@ export function BracketDrawsTab() {
                       <span className="text-xs text-muted-foreground">–</span>
                     )}
                   </span>
-                  <span role="cell" className="flex w-28 shrink-0 justify-end">
+                  <span role="cell" className={`${colClass(DRAW_COLUMNS[5])} flex justify-end`}>
                     <StatusPillFor status={row.status} completed={row.completed} />
                   </span>
                   <span
                     role="cell"
-                    className="ml-auto flex w-80 shrink-0 items-center justify-end gap-3"
+                    className={`${colClass(DRAW_COLUMNS[6])} flex items-center justify-end gap-3`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ActionCell
