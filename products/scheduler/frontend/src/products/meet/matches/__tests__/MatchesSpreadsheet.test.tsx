@@ -148,9 +148,10 @@ describe('<MatchesSpreadsheet />', () => {
     expect(within(row).getAllByRole('button')).toHaveLength(1);
   });
 
-  it('renders doubles sides as comma-separated NAMES, with no school', () => {
+  it('renders doubles sides as slash-joined BWF names, with no school', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m5');
+    // Console direction (2026-08-13): rows read "SURNAME Given".
     expect(row.textContent).toContain('Aiko');
     expect(row.textContent).toContain('Ben');
     expect(row.textContent).toContain('Eva');
@@ -163,8 +164,9 @@ describe('<MatchesSpreadsheet />', () => {
     // click away in the detail pane instead — asserted below.
     expect(within(row).queryByText('Alpha High')).toBeNull();
     expect(within(row).queryByText('Beta Prep')).toBeNull();
-    // Comma separator between pair members, one per doubles side.
-    expect(within(row).getAllByText(',')).toHaveLength(2);
+    // Slash separator between pair members, one per doubles side (the
+    // draw-sheet convention the Console mock uses).
+    expect(within(row).getAllByText('/')).toHaveLength(2);
   });
 
   it('keeps the school reachable on the player card in the detail pane', () => {

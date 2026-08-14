@@ -425,10 +425,11 @@ describe('RunSurface — auto-pull after record empties a court', () => {
     // Count UNCHANGED — rerender did not trigger another auto-pull
     expect(mockMeetSubmit).toHaveBeenCalledTimes(2);
 
-    // m1 is done → on the LIVE board it stays as a completed block on the
-    // timeline (buildLiveChips keeps court-assigned done blocks, spanning their
-    // actual length) — unlike the old positional lane that dropped done matches.
-    expect(screen.getByTestId('run-card-meet:m1')).toBeInTheDocument();
+    // m1 is done → it VACATES its court card (Console grid: a card states the
+    // court's CURRENT condition; finished matches leave the board — the
+    // whole-day record lives on Plan). Court 1 now reads free.
+    expect(screen.queryByTestId('run-card-meet:m1')).toBeNull();
+    expect(screen.getByTestId('run-court-free-1')).toBeInTheDocument();
     await flushAssignSettle();
   });
 });
@@ -783,12 +784,16 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
     );
 
     fireEvent.click(screen.getByTestId('run-card-bracket:pu1'));
-    // The rich panel really did mount (Undo start only exists there) — so a
-    // count of 1 below is not vacuous.
+    // The rich panel really did mount (Undo start only exists there) — so the
+    // counts below are not vacuous.
     expect(screen.getByRole('button', { name: 'Undo start' })).toBeInTheDocument();
 
-    expect(screen.getAllByText('Alice')).toHaveLength(1);
-    expect(screen.getAllByText('Bob')).toHaveLength(1);
+    // The court CARD names the sides (Console grid, by design) and the
+    // inspector names them once more — but the embedded bracket panel must
+    // NOT add a third copy. "vs" belongs to the inspector alone (cards
+    // stack the sides without a joiner).
+    expect(screen.getAllByText('Alice')).toHaveLength(2);
+    expect(screen.getAllByText('Bob')).toHaveLength(2);
     expect(screen.getAllByText('vs')).toHaveLength(1);
   });
 });

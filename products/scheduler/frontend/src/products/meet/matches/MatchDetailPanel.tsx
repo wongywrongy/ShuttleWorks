@@ -22,11 +22,12 @@ import {
   DetailPanel,
   EventPicker,
   PickerPopover,
-  STATUS_CLASS,
   STATUS_LABEL,
+  STATUS_PILL_TONE,
   type EventPickerOption,
   type MatchListStatus,
 } from '../../../components/control-plane';
+import { StatusPill } from '../../../components/StatusPill';
 import { Row } from '../../../platform/settings/SettingsControls';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import type { MatchDTO } from '../../../api/dto';
@@ -133,11 +134,10 @@ export function MatchDetailPanel({
       {status ? (
         <DetailPanel.Section eyebrow="Status">
           {/* Read-only pill — Operations owns run-state; never interactive. */}
-          <span
-            data-testid="match-status-pill"
-            className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 ${STATUS_CLASS[status]}`}
-          >
-            {STATUS_LABEL[status]}
+          <span data-testid="match-status-pill" className="inline-flex w-fit">
+            <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+              {STATUS_LABEL[status]}
+            </StatusPill>
           </span>
         </DetailPanel.Section>
       ) : null}

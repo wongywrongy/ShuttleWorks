@@ -44,6 +44,7 @@ it, you don't set it.
 | **Display dependency** | Enabling `display` requires ≥1 enabled operational module (`display_dependency_satisfied`). |
 | **No-data-loss disable** | A module with persisted data (meet→matches, bracket→bracket_events) cannot be disabled. |
 | **Last operational** | The last enabled operational module (`OPERATIONAL_MODULES = meet, bracket`) cannot be disabled. |
+| **Cloud-only** | A module in `CLOUD_ONLY_MODULES` (today: `entries`) cannot be enabled in local mode — `MODULE_REQUIRES_CLOUD`. It is not seeded there either, and an inherited row is filtered at read time. See [Entries](/modules/entries). |
 
 ## From the frontend
 

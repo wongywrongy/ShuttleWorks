@@ -13,10 +13,9 @@
  * (flex vs grid) differs. Both modes use the same status tint tokens so
  * the visual language stays consistent.
  */
-import type { ReactNode } from 'react';
-
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
 import { formatElapsed } from '../../../lib/timeFormatters';
+import { sideNameLines } from '../../../lib/names';
 import { formatPlayers, isCourtClosedNow } from './helpers';
 
 type CourtStatus = 'active' | 'called' | 'empty';
@@ -160,10 +159,7 @@ function CourtsCardMode({
   gridColsClass,
   cardHeightPx,
   cardPadX,
-  courtNumSize,
-  eventCodeSize,
   playerSize,
-  tvAccent,
   tvShowScores,
   isFullscreen,
   playerNames,
@@ -185,10 +181,7 @@ function CourtsCardMode({
           isClosed={isCourtClosedNow(config, row.courtId, now)}
           cardHeightPx={cardHeightPx}
           cardPadX={cardPadX}
-          courtNumSize={courtNumSize}
-          eventCodeSize={eventCodeSize}
           playerSize={playerSize}
-          tvAccent={tvAccent}
           tvShowScores={tvShowScores}
           isFullscreen={isFullscreen}
           playerNames={playerNames}
@@ -204,47 +197,56 @@ interface CourtCardProps {
   isClosed: boolean;
   cardHeightPx: number;
   cardPadX: string;
-  courtNumSize: string;
-  eventCodeSize: string;
   playerSize: string;
-  tvAccent: string;
   tvShowScores: boolean;
   isFullscreen: boolean;
   playerNames: Map<string, string>;
 }
 
+/**
+ * The Console board card (2026-08-13): a colored condition BAND heads the
+ * card ("COURT 2 · WD2 | LIVE · 0:21"), the body stacks each player on a
+ * line (BWF presentation) with per-set score columns on the right — the
+ * won set's number reads in the live hue, the current set in full ink.
+ * The Next/Later idle-court lanes and the closed-court state are unchanged
+ * behavior under the new skin. Live/called bands use the AA-proven status
+ * tokens (an arbitrary `tvAccent` hex cannot promise readable ink).
+ */
 function CourtCard({
   row,
   idx,
   isClosed,
   cardHeightPx,
   cardPadX,
-  courtNumSize,
-  eventCodeSize,
   playerSize,
-  tvAccent,
   tvShowScores,
   isFullscreen,
   playerNames,
 }: CourtCardProps) {
   const { courtId, match, state, status, nextMatch, nextStartTime, laterMatch, laterStartTime } = row;
   const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-  // Active / called cards get a tinted background carrying state. Full-card
-  // tint + inset highlight ring replaces the banned left-stripe accent.
-  const cardBgClass = isClosed
-    ? 'bg-muted/30 opacity-60'
+  const code = match ? match.eventRank || `M${match.matchNumber || '?'}` : null;
+  const sets = tvShowScores && status === 'active' ? state?.sets ?? [] : [];
+  // No per-set breakdown but an aggregate exists → show it as one score
+  // column per side, so a score-carrying match never renders scoreless.
+  const scoresA = sets.length > 0 ? sets.map((s) => s.sideA)
+    : tvShowScores && status === 'active' && state?.score ? [state.score.sideA] : [];
+  const scoresB = sets.length > 0 ? sets.map((s) => s.sideB)
+    : tvShowScores && status === 'active' && state?.score ? [state.score.sideB] : [];
+
+  const band = isClosed
+    ? { cls: 'bg-muted text-muted-foreground', word: 'CLOSED' }
     : status === 'active'
-      ? 'bg-status-live-bg/80 ring-1 ring-status-live/30 shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.25)]'
+      ? { cls: 'bg-status-live-solid text-status-live-ink', word: elapsed ? `LIVE · ${elapsed}` : 'LIVE' }
       : status === 'called'
-        ? 'bg-status-called-bg/70 ring-1 ring-status-called/25'
-        : 'bg-card/60';
-  const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
-  const sideA = match ? formatPlayers(match.sideA, playerNames) : '';
-  const sideB = match ? formatPlayers(match.sideB, playerNames) : '';
+        ? { cls: 'bg-status-called-solid text-status-called-ink', word: 'CALLED' }
+        : { cls: 'bg-muted text-muted-foreground', word: 'FREE' };
 
   return (
     <div
-      className={`rounded-sm border border-border sw-float-in ${cardBgClass}`}
+      className={`flex flex-col overflow-hidden rounded border border-border bg-card sw-float-in ${
+        isClosed ? 'opacity-60' : ''
+      } ${status === 'empty' && !isClosed ? 'border-dashed' : ''}`}
       style={{
         minHeight: cardHeightPx,
         // Staggered entry — each tile arrives 60 ms after the previous
@@ -254,118 +256,94 @@ function CourtCard({
       }}
     >
       <div
-        className={`grid min-h-full items-center gap-3 py-2 ${cardPadX} grid-cols-[auto_auto_1fr_auto_auto]`}
+        className={`flex items-center justify-between gap-2 whitespace-nowrap ${cardPadX} ${
+          isFullscreen ? 'py-2 text-base' : 'py-1.5 text-xs'
+        } font-extrabold uppercase tracking-[0.06em] ${band.cls}`}
       >
-        {/* Court number — anchor of the card */}
-        <div className="flex items-baseline gap-2">
-          <span className="text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Court
-          </span>
-          <span className={`${courtNumSize} font-black tabular-nums leading-none`}>{courtId}</span>
-        </div>
-
-        {/* Event code */}
-        {/* Blank, not a dash, when no match is ON the court. Only one court
-            is usually in play, so a placeholder glyph here put a meaningless
-            mark beside every other court number on the board. The min-width
-            holds the column so the players still line up. */}
-        <div className={`min-w-[3.5rem] ${eventCodeSize} font-bold text-foreground tabular-nums`}>
-          {match ? match.eventRank || `M${match.matchNumber || '?'}` : ''}
-        </div>
-
-        {/* Players (grows). Each side on its own line, and each side wraps —
-            between the two, a full doubles pairing always reads. */}
-        <div className={`min-w-0 ${playerSize} leading-tight text-foreground`}>
-          {isClosed ? (
-            <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
-          ) : match ? (
-            <PlayerStack sideA={sideA} sideB={sideB} isFullscreen={isFullscreen} />
-          ) : nextMatch ? (
-            <NextUp
-              nextStartTime={nextStartTime}
-              nextSideA={formatPlayers(nextMatch.sideA, playerNames)}
-              nextSideB={formatPlayers(nextMatch.sideB, playerNames)}
-              laterStartTime={laterStartTime}
-              laterSideA={laterMatch ? formatPlayers(laterMatch.sideA, playerNames) : undefined}
-              laterSideB={laterMatch ? formatPlayers(laterMatch.sideB, playerNames) : undefined}
-              isFullscreen={isFullscreen}
-            />
-          ) : (
-            <span className="text-muted-foreground">Available</span>
-          )}
-        </div>
-
-        {/* Status pill */}
-        <div>
-          {status === 'active' && (
-            <CourtStatusPill
-              label="Live"
-              bgAlpha={`${tvAccent}33`}
-              color={tvAccent}
-              dotColor={tvAccent}
-              isFullscreen={isFullscreen}
-              pulse
-            />
-          )}
-          {status === 'called' && (
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full bg-status-called/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-status-called`}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-status-called sw-pulse" />
-              Calling
-            </span>
-          )}
-        </div>
-
-        {/* Score + elapsed */}
-        <div
-          className={`flex items-baseline gap-3 tabular-nums ${isFullscreen ? 'text-2xl' : 'text-lg'}`}
-        >
-          {tvShowScores && aggregate && <span className="font-semibold text-foreground">{aggregate}</span>}
-          {elapsed && (
-            <span className="text-muted-foreground min-w-[4.5rem] text-right">{elapsed}</span>
-          )}
-        </div>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span>Court {courtId}</span>
+          {code ? <span className="sw-num opacity-90">{code}</span> : null}
+        </span>
+        <span className="sw-num">{band.word}</span>
       </div>
 
-      {/* Per-set breakdown */}
-      {tvShowScores && status === 'active' && state?.sets && state.sets.length > 0 && (
-        <div
-          className={`border-t border-border px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 sw-num`}
-        >
-          {state.sets.map((s, i) => (
-            <span
-              key={i}
-              className={`rounded-sm bg-muted ${isFullscreen ? 'px-2.5 py-1' : 'px-1.5 py-0.5'} tabular-nums text-foreground`}
-              title={`Set ${i + 1}`}
-            >
-              {s.sideA}–{s.sideB}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className={`flex flex-1 flex-col justify-center gap-1 ${cardPadX} py-2`}>
+        {isClosed ? (
+          <span className={`${playerSize} uppercase tracking-wider text-muted-foreground`}>
+            Court closed
+          </span>
+        ) : match ? (
+          <>
+            <SideScoreRow
+              names={sideNameLines(formatPlayers(match.sideA, playerNames), ' & ')}
+              scores={scoresA}
+              others={scoresB}
+              playerSize={playerSize}
+            />
+            <SideScoreRow
+              names={sideNameLines(formatPlayers(match.sideB, playerNames), ' & ')}
+              scores={scoresB}
+              others={scoresA}
+              playerSize={playerSize}
+            />
+          </>
+        ) : nextMatch ? (
+          <NextUp
+            nextStartTime={nextStartTime}
+            nextSideA={formatPlayers(nextMatch.sideA, playerNames)}
+            nextSideB={formatPlayers(nextMatch.sideB, playerNames)}
+            laterStartTime={laterStartTime}
+            laterSideA={laterMatch ? formatPlayers(laterMatch.sideA, playerNames) : undefined}
+            laterSideB={laterMatch ? formatPlayers(laterMatch.sideB, playerNames) : undefined}
+            isFullscreen={isFullscreen}
+          />
+        ) : (
+          <span className={`${playerSize} text-muted-foreground`}>court free</span>
+        )}
+      </div>
     </div>
   );
 }
 
-function PlayerStack({
-  sideA,
-  sideB,
-  isFullscreen,
+/** One side of the board card: stacked BWF-formatted player lines with the
+ *  side's per-set scores right-aligned. A decided set's winning number takes
+ *  the live hue; the set in progress (the last one) stays full ink. */
+function SideScoreRow({
+  names,
+  scores,
+  others,
+  playerSize,
 }: {
-  sideA: string;
-  sideB: string;
-  isFullscreen: boolean;
+  names: string[];
+  scores: number[];
+  others: number[];
+  playerSize: string;
 }) {
+  const last = scores.length - 1;
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="block break-words font-medium">{sideA}</span>
-      <span
-        className={`${isFullscreen ? 'text-sm' : 'text-xs'} uppercase tracking-widest text-muted-foreground`}
-      >
-        vs
-      </span>
-      <span className="block break-words font-medium">{sideB}</span>
+    <div className="flex min-h-[30px] items-center gap-2">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-px">
+        {names.map((n, i) => (
+          <span key={i} className={`${playerSize} break-words font-semibold leading-tight text-foreground`}>
+            {n}
+          </span>
+        ))}
+      </div>
+      {scores.map((v, i) => (
+        <span
+          key={i}
+          title={`Set ${i + 1}`}
+          className={`w-7 shrink-0 text-right tabular-nums ${playerSize} ${
+            i === last
+              ? 'font-extrabold text-foreground'
+              : v > (others[i] ?? 0)
+                ? 'font-bold text-status-live'
+                : 'text-muted-foreground'
+          }`}
+        >
+          {v}
+        </span>
+      ))}
     </div>
   );
 }
@@ -434,31 +412,3 @@ function NextUp({
   );
 }
 
-function CourtStatusPill({
-  label,
-  bgAlpha,
-  color,
-  dotColor,
-  isFullscreen,
-  pulse,
-}: {
-  label: ReactNode;
-  bgAlpha: string;
-  color: string;
-  dotColor: string;
-  isFullscreen: boolean;
-  pulse?: boolean;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider`}
-      style={{ backgroundColor: bgAlpha, color }}
-    >
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${pulse ? 'sw-pulse' : ''}`}
-        style={{ backgroundColor: dotColor }}
-      />
-      {label}
-    </span>
-  );
-}

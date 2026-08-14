@@ -21,16 +21,20 @@ import {
   BandedTable,
   DetailDock,
   EmptyState,
+  MatchStatusFilter,
   BRACKET_MATCH_CELL,
   BRACKET_MATCH_LIST_COLUMNS,
   BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   OverflowMenu,
-  STATUS_CLASS,
+  parseMatchStatusFilter,
   STATUS_LABEL,
+  STATUS_PILL_TONE,
   type BandedTableGroup,
   type BracketMatchStatus,
 } from '../../components/control-plane';
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
+import { StatusPill } from '../../components/StatusPill';
+import { formatSideName } from '../../lib/names';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
 import {
@@ -70,6 +74,9 @@ export function BracketMatchesTab({
   // Same URL-backed `?q=` contract as Meet Matches — the URL is the shared
   // source of truth, so a pasted link restores the operator's filter.
   const [query, setQuery] = useSearchParamState('q', '');
+  // Status facet (?status=) — the same strip Meet Matches renders.
+  const [statusParam, setStatusParam] = useSearchParamState('status', '');
+  const statusFilter = parseMatchStatusFilter(statusParam);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Row-menu deep-link into the detail panel's Contingency section (a
   // winner must still be chosen there — this only pre-selects the kind).
@@ -110,11 +117,13 @@ export function BracketMatchesTab({
   // Render form of a side: unresolved slots get the same muted-italic
   // placeholder treatment as Meet's empty side ("＋ add player") so the
   // two match lists read identically — TBD is a placeholder, not a name.
+  // Real names take the BWF presentation ("NAKAMURA Kei / TRAN Vincent");
+  // exports keep the raw `resolveSide` projection.
   const renderSide = (ids: string[] | null) =>
     !ids || ids.length === 0 ? (
       <span className="text-xs italic text-muted-foreground">TBD</span>
     ) : (
-      resolveSide(ids)
+      formatSideName(resolveSide(ids))
     );
 
   const statusOf = (puId: string): BracketMatchStatus => {
@@ -124,6 +133,20 @@ export function BracketMatchesTab({
     if (a) return 'ready';
     return 'pending';
   };
+
+  // Counts over the FULL play-unit list for the filter strip (a chip states
+  // what selecting it will show, so the search must not shrink it).
+  const statusCounts = useMemo(() => {
+    const counts: Record<BracketMatchStatus, number> = {
+      done: 0,
+      live: 0,
+      ready: 0,
+      pending: 0,
+    };
+    for (const pu of data.play_units) counts[statusOf(pu.id)] += 1;
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.play_units, assignmentByPu, resultSet]);
 
   const q = query.toLowerCase().trim();
   // Group every play unit by its event, ordered by the events list, then
@@ -154,6 +177,8 @@ export function BracketMatchesTab({
           )
           .map((pu, idx) => ({ pu, n: idx + 1 }))
           .filter(({ pu }) => {
+            if (statusFilter !== 'all' && statusOf(pu.id) !== statusFilter)
+              return false;
             if (!q) return true;
             const hay = [
               pu.id,
@@ -170,7 +195,7 @@ export function BracketMatchesTab({
       })
       .filter((g) => g.units.length > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.play_units, data.events, q, participantById]);
+  }, [data.play_units, data.events, q, statusFilter, assignmentByPu, resultSet, participantById]);
 
   const total = data.play_units.length;
   const shown = groups.reduce((n, g) => n + g.units.length, 0);
@@ -255,7 +280,7 @@ export function BracketMatchesTab({
 
       {/* Flex ROW: match list + docked detail pane (see BracketRosterTab). */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col @container/table">
           {total === 0 ? (
             <EmptyState
               title="No matches yet"
@@ -263,6 +288,13 @@ export function BracketMatchesTab({
             />
           ) : (
             <>
+              <MatchStatusFilter
+                counts={statusCounts}
+                active={statusFilter}
+                onChange={(v) => setStatusParam(v === 'all' ? '' : v)}
+                testIdPrefix="bracket-matches"
+              />
+              <div className="min-h-0 flex-1 overflow-auto">
               <BandedTable
                 columns={BRACKET_MATCH_LIST_COLUMNS}
                 groups={tableGroups}
@@ -316,9 +348,11 @@ export function BracketMatchesTab({
                       </span>
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
+                        className={`${BRACKET_MATCH_CELL.status} flex items-center justify-end`}
                       >
-                        {STATUS_LABEL[status]}
+                        <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+                          {STATUS_LABEL[status]}
+                        </StatusPill>
                       </span>
                       <span
                         role="cell"
@@ -348,9 +382,10 @@ export function BracketMatchesTab({
               />
               {shown === 0 ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                  No matches match the current search.
+                  No matches match the current filters.
                 </div>
               ) : null}
+              </div>
             </>
           )}
         </div>

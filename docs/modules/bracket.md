@@ -192,4 +192,5 @@ Bracket's inputs are its own create/seed/result shapes — **`BracketCreateIn`, 
 - [Bracket draw canvas](/architecture/bracket-draw-canvas) · [Bracket schedule streaming](/architecture/bracket-schedule-streaming)
 - [Scheduling unification](/architecture/scheduling-unification) · [ADR 0006](/decisions/0006-unified-scheduling-core)
 - [Operations module](/modules/operations) · [Meet module](/modules/meet) · [Display module](/modules/display)
+- [Entries module](/modules/entries) — online entry; its commit seam writes bracket participants, and it refuses to touch a draw that is already generated or started
 - [Data flow](/architecture/data-flow)

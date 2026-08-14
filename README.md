@@ -31,9 +31,10 @@ you enable **modules** — installable product systems:
 | **Bracket** | engine | BWF-conformant single-elimination + round-robin draws — seeding, draw generation, advancement, import/export (JSON / CSV / ICS), schedule-next-round via the shared CP-SAT engine. **Produces** matches. |
 | **Operations** | live-ops | The day-of control plane over both engines' matches: a **Plan** board (drag-to-reschedule) and a **Run** surface (live court board, match-state machine, idempotent command queue, inline conflict UX). |
 | **Display** | output | Read-only public TV display (live matches / draw / results), served over a per-workspace capability-token URL — no auth. |
+| **Entries** | intake | Online entry: a public entry page keyed by slug, an operator entry desk, and a re-runnable commit that turns confirmed entries into roster players. **Cloud mode only** — the cloud dependency ends at commit, so event day still runs offline. |
 
 Operations is **always-on** (a Tier-2 architectural module, no enable toggle);
-Meet, Bracket, and Display are the user-enableable modules. Create a workspace
+Meet, Bracket, Display and Entries are the user-enableable modules. Create a workspace
 from a template (Meet Day / Bracket Tournament / Hybrid / Blank) or a **Custom**
 module mix. Per-workspace **Settings** cover Overview,
 the module catalog, People & Access, Sharing (public display link vs
@@ -41,6 +42,15 @@ collaborator invites), and Sync & Backups. A module dock switches the running
 module; module status (enabled / available / disabled) drives the chrome and
 routing. The design record for this control-plane redesign lives in
 [`docs/superpowers/specs/`](./docs/superpowers/specs) (the `2026-06-*` specs).
+
+### The public tier
+
+Everything above is the **operator console**. A tournament's public face — where a player
+finds it, sees the fees and deadlines, and enters it — is a **second frontend**
+([`products/scheduler/entrant/`](./products/scheduler/entrant)) served under `/e/`: React
+Router 7, server-rendered, **zero client JavaScript**, held to a blocking 4 KB per-page weight
+budget. It shares `packages/design-system` with the console and nothing else. See
+[the entrant tier](./docs/architecture/entrant-tier.md).
 
 All modules depend on the shared
 [`scheduler_core/`](./scheduler_core) — a pure-Python CP-SAT engine
@@ -65,11 +75,13 @@ Start here:
 | Page | For |
 | ---- | --- |
 | [Quickstart](./docs/getting-started/quickstart.md) | Running it in a couple of minutes |
-| [System overview](./docs/architecture/system-overview.md) | The four-module model (Meet · Bracket · Operations · Display) |
+| [System overview](./docs/architecture/system-overview.md) | The five-module model (Entries · Meet · Bracket · Operations · Display) |
 | [Module contracts](./docs/contracts/index.md) | The test-enforced seams between modules |
 | [Extending ShuttleWorks](./docs/how-to/index.md) | How to add a module, surface, endpoint, constraint, or seam |
 | [Build a module (tutorial)](./docs/tutorials/build-a-module.md) | A guided, build-it-together walkthrough |
 | [Data flow](./docs/architecture/data-flow.md) | Seams, the match-state machine, the command pipeline, persistence |
+| [Entrant tier](./docs/architecture/entrant-tier.md) | The public site under `/e/` — and the three constraints it is built within |
+| [Progress reports](./docs/progress/index.md) | What has been built, program by program, and what is still open |
 
 ### Code intelligence (codanna)
 

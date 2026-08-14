@@ -13,7 +13,7 @@ references a longer source, it names the file rather than duplicating it.
 
 | # | Decision | Status |
 | --- | --- | --- |
-| [0001](/decisions/0001-four-module-split) | Four-module split (Meet · Bracket · Operations · Display) | Accepted |
+| [0001](/decisions/0001-four-module-split) | Four-module split (Meet · Bracket · Operations · Display) | Accepted (extended 2026-08-06 — Entries joined Tier-1) |
 | [0002](/decisions/0002-workspace-as-control-plane) | Workspace as the control plane | Accepted |
 | [0003](/decisions/0003-sqlite-as-primary-persistence) | SQLite as primary persistence | Accepted (mirror clause superseded by 0012) |
 | [0004](/decisions/0004-ortools-cpsat-engine) | OR-Tools CP-SAT as the scheduling engine | Accepted |

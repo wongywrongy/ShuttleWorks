@@ -32,14 +32,22 @@ export function PlayShell({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-rule-soft bg-surface-base">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
-          <a
-            href={DISCOVERY_HREF}
-            className="font-display text-lg font-semibold tracking-tight text-foreground"
-          >
-            ShuttleWorks
-            <span className="ml-2 text-sm font-normal text-muted-foreground">Tournaments</span>
+      {/* Console banner (2026-08-13): the public tier leads with the solid
+          accent bar and the skewed white wordmark chip from the mock. Every
+          functional element (search form, sign-in) is unchanged — only the
+          ground moved. Text on the bar is full white (AA against the accent,
+          verified by the token contrast gate's text-on-accent pair). */}
+      <header className="bg-accent">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-2.5">
+          <a href={DISCOVERY_HREF} className="inline-flex items-center gap-3">
+            <span className="inline-block -skew-x-12 bg-card px-3 py-1.5 shadow-md">
+              <span className="inline-block skew-x-12 font-display text-[15px] font-extrabold tracking-tight text-accent">
+                ShuttleWorks
+              </span>
+            </span>
+            <span className="text-xs font-bold uppercase tracking-[0.06em] text-accent-ink">
+              Tournaments
+            </span>
           </a>
           <form
             role="search"
@@ -53,16 +61,13 @@ export function PlayShell({
               defaultValue={q}
               // 2026-08-11 design audit, finding #5: the box is ~184px
               // usable after the "Search" button and its padding — the old
-              // placeholder needed ~230px and clipped to "Search
-              // tournaments or venu" with no ellipsis, on every page, at
-              // every width. Shortened here; the full sentence stays on
-              // `aria-label`, which is never visually rendered and so never
-              // clips.
+              // placeholder needed ~230px and clipped. The full sentence
+              // stays on `aria-label`, which never visually renders.
               placeholder="Search tournaments"
               aria-label="Search tournaments or venues"
-              className="h-9 w-full min-w-0 rounded border border-rule-control bg-bg-elev px-3 text-sm text-foreground placeholder:text-muted-foreground"
+              className="h-9 w-full min-w-0 rounded border border-transparent bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground"
             />
-            <Button type="submit" variant="outline" size="sm">
+            <Button type="submit" variant="secondary" size="sm">
               Search
             </Button>
           </form>
@@ -70,7 +75,7 @@ export function PlayShell({
             href="/e/login"
             // `min-h-6` (24px): the tap target floor (WCAG 2.5.8) — text-sm's
             // own line-height is 20px, under it with no padding of its own.
-            className="ml-auto inline-flex min-h-6 items-center text-sm font-medium text-accent underline-offset-4 hover:underline sm:ml-0"
+            className="ml-auto inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline sm:ml-0"
           >
             {signInLabel}
           </a>

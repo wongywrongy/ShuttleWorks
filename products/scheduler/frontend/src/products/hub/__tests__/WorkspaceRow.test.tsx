@@ -99,6 +99,36 @@ describe('WorkspaceRow', () => {
     expect(cta).toHaveFocus();
   });
 
+  // Console-mock adoption (2026-08-13): the row states its lifecycle via the
+  // shared lifecycleBadge precedence; resting rows stay unbadged.
+  it('badges a live row, and leaves a resting row unbadged', () => {
+    const { rerender } = render(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, phase: 'live' } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Live');
+    // NEGATIVE CONTROL: setup/ready rows carry no pill.
+    rerender(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, phase: 'ready' } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.queryByTestId('row-lifecycle')).toBeNull();
+  });
+
+  it('an archived workspace never badges Live (shared precedence)', () => {
+    render(
+      <WorkspaceRow
+        tournament={{ ...t, status: 'archived', signals: { ...t.signals!, phase: 'live' } }}
+        group="past" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Archived');
+  });
+
   it('name leads the row — the date is trailing metadata, not the first cell', () => {
     const { container } = render(
       <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,

@@ -173,21 +173,22 @@ describe('<BracketMatchesTab />', () => {
     expect(screen.getByText('MS SF1')).toHaveAttribute('title', 'pu-ms-1');
   });
 
-  it('joins doubles sides with a slash', () => {
+  it('joins doubles sides with a slash, in BWF presentation (SURNAME Given)', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    expect(screen.getAllByText('Elle Kim / Fay Wu').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Gia Lopez / Hana Sato').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('KIM Elle / WU Fay').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('LOPEZ Gia / SATO Hana').length).toBeGreaterThan(0);
   });
 
-  it('tones the status column per state (done/live/ready/pending)', () => {
+  it('tones the status column per state as pills (Console direction)', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    expect(screen.getByText('Done').className).toContain('text-status-done');
-    expect(screen.getByText('Live').className).toContain('text-status-live');
+    // The status cell is a StatusPill; assert its tinted-fill tone classes.
+    expect(screen.getByText('Done').className).toContain('bg-status-done-bg');
+    expect(screen.getByText('Live').className).toContain('bg-status-live-bg');
     for (const el of screen.getAllByText('Ready')) {
-      expect(el.className).toContain('text-status-warning');
+      expect(el.className).toContain('bg-status-started-bg');
     }
     for (const el of screen.getAllByText('Pending')) {
-      expect(el.className).toContain('text-muted-foreground');
+      expect(el.className).toContain('bg-status-idle-bg');
     }
   });
 
@@ -223,13 +224,31 @@ describe('<BracketMatchesTab />', () => {
     expect(screen.getByText('· showing 1')).toBeInTheDocument();
   });
 
+  it('filters by status via the strip, with full-list counts on the chips', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    // Counts come from the FULL list: 1 done, 1 live, 2 ready, 2 pending.
+    expect(screen.getByTestId('bracket-matches-status-all')).toHaveTextContent('All · 6');
+    expect(screen.getByTestId('bracket-matches-status-live')).toHaveTextContent('Live · 1');
+    expect(screen.getByTestId('bracket-matches-status-ready')).toHaveTextContent('Ready · 2');
+
+    fireEvent.click(screen.getByTestId('bracket-matches-status-live'));
+    const rows = screen.getAllByTestId(/^bracket-match-row-/);
+    expect(rows).toHaveLength(1);
+    // pu-wd-1 is WD's first match — numbering stays stable under the facet.
+    expect(rows[0]).toHaveAttribute('data-testid', 'bracket-match-row-pu-wd-1');
+    expect(indexOfRow(rows[0])).toBe('1');
+
+    fireEvent.click(screen.getByTestId('bracket-matches-status-all'));
+    expect(screen.getAllByTestId(/^bracket-match-row-/)).toHaveLength(6);
+  });
+
   it('shows the no-results message when the search matches nothing', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.change(screen.getByTestId('bracket-matches-search'), {
       target: { value: 'zzz-no-such-player' },
     });
     expect(
-      screen.getByText('No matches match the current search.'),
+      screen.getByText('No matches match the current filters.'),
     ).toBeInTheDocument();
     expect(screen.queryAllByTestId(/^bracket-match-row-/)).toHaveLength(0);
   });

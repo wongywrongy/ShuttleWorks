@@ -1,6 +1,18 @@
 # ADR 0001 — Four-module split (Meet · Bracket · Operations · Display)
 
-**Status:** Accepted (2026-06, branch `dev/workspace-suite`)
+**Status:** Accepted (2026-06, branch `dev/workspace-suite`) · **extended 2026-08-06** — a fifth
+module, **Entries**, joined Tier-1 in SP-PROGRAM-1. The decomposition below is unchanged; the set it
+enumerates grew.
+
+::: info What changed, and what did not
+`ModuleId` is now `'meet' | 'bracket' | 'display' | 'entries'`, `entriesContract` is the fifth
+descriptor, and `entriesCommitted` is a fourth named `SeamEdge`. The two-tier split, the
+enableable-versus-always-on distinction, and the test-enforced descriptor layer all survived the
+addition without change — which is the outcome this record was betting on. Entries adds one wrinkle
+the original set did not have: it is Tier-1 but **cloud-only** (`CLOUD_ONLY_MODULES`), so
+"user-enableable" is now conditioned on deployment mode. See [Entries](/modules/entries) and
+[Progress reports](/progress/2026-08-public-platform).
+:::
 
 ## Context
 

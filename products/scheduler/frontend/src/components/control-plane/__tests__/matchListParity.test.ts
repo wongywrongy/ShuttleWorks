@@ -23,7 +23,7 @@ const SURFACES = [
 /** The shared names a surface must take from control-plane, never define.
  *  The first two are per-list, so they arrive under the surface's prefix. */
 const PREFIXED_NAMES = ['MATCH_LIST_COLUMNS', 'MATCH_CELL'];
-const SHARED_NAMES = ['STATUS_LABEL', 'STATUS_CLASS'];
+const SHARED_NAMES = ['STATUS_LABEL', 'STATUS_PILL_TONE'];
 
 describe('match-list parity', () => {
   for (const { rel, prefix } of SURFACES) {
@@ -51,7 +51,7 @@ describe('match-list parity', () => {
       // Redefining a shared name locally — under its own name, a prefixed one
       // or the old one — is exactly the drift this guard exists to stop.
       expect(src).not.toMatch(
-        /(?:const|let|var|function|enum)\s+(?:(?:MEET_|BRACKET_)?MATCH_LIST_COLUMNS|MATCH_COLUMNS|(?:MEET_|BRACKET_)?MATCH_CELL|STATUS_LABEL|STATUS_CLASS)\b/,
+        /(?:const|let|var|function|enum)\s+(?:(?:MEET_|BRACKET_)?MATCH_LIST_COLUMNS|MATCH_COLUMNS|(?:MEET_|BRACKET_)?MATCH_CELL|STATUS_LABEL|STATUS_CLASS|STATUS_PILL_TONE)\b/,
       );
       expect(src).not.toMatch(/from '\.\/matchStatus'/);
     });

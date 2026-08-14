@@ -159,4 +159,5 @@ consideration only for very large problems.
 - [Data flow](/architecture/data-flow) — how the command / proposal pipelines and cross-module seams fit together.
 - [Scheduling unification](/architecture/scheduling-unification) and [ADR 0006](/decisions/0006-unified-scheduling-core) — the shared `scheduler_core` engine Meet and Bracket both solve through.
 - [ADR 0004](/decisions/0004-ortools-cpsat-engine) — why CP-SAT, and [How to add a CP-SAT constraint](/how-to/add-a-cpsat-constraint).
+- [Entries](/modules/entries) — where roster players come from when online entry is enabled (the commit seam writes `PlayerDTO`s into the roster blob Meet reads).
 - [ADR 0001](/decisions/0001-four-module-split) — the four-module split that makes Meet a Tier-1 engine.

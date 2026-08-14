@@ -17,6 +17,8 @@ import {
   COL_PRIORITY_CLASS_FLEX,
   type OverflowItem,
 } from '../../components/control-plane';
+import { StatusPill } from '../../components/StatusPill';
+import { lifecycleBadge } from '../../platform/domain/lifecycle';
 import { workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
@@ -155,6 +157,11 @@ export function WorkspaceRow({
 }: RowProps) {
   const health = workspaceHealth(tournament);
   const action = rowActionFor(tournament, group);
+  // Console-mock adoption (2026-08-13): the row states its lifecycle where
+  // the operator scans, not just in the inspector. Shared precedence
+  // (Archived > Live > Complete); resting setup/ready rows stay unbadged —
+  // the facet strip and next action already say it.
+  const badge = lifecycleBadge(tournament.signals?.phase, tournament.status);
   const receded = group === 'past';
   // "Set date" (and any reason-coded setup step) is the attention-y next
   // action — it warms to amber; Open/View results stay quiet.
@@ -206,6 +213,13 @@ export function WorkspaceRow({
         <span className="min-w-0 break-words text-sm font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </span>
+        {badge ? (
+          <span data-testid="row-lifecycle" className="shrink-0">
+            <StatusPill tone={badge.tone} dot={badge.tone === 'green'}>
+              {badge.text}
+            </StatusPill>
+          </span>
+        ) : null}
       </span>
 
       <ModulesCell tournament={tournament} />

@@ -37,7 +37,7 @@ folder (`products/meet/`, `products/bracket/`) when you lay yours out.
 
 ```ts
 // products/scheduler/frontend/src/platform/product-shell/types.ts
-export type ModuleId = 'meet' | 'bracket' | 'display' | 'scoreboard';
+export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries' | 'scoreboard';
 ```
 
 ::: warning Operations is NOT a `ModuleId`

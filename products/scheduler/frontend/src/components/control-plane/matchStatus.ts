@@ -4,6 +4,8 @@
  * their detail panels. Display-only: Operations owns run-state, so nothing
  * here is interactive and nothing writes.
  */
+import type { PillTone } from '@scheduler/design-system/components';
+
 export type MatchListStatus = 'done' | 'live' | 'ready' | 'pending';
 
 /** @deprecated Use MatchListStatus — kept so bracket call sites read naturally during migration. */
@@ -16,9 +18,12 @@ export const STATUS_LABEL: Record<MatchListStatus, string> = {
   pending: 'Pending',
 };
 
-export const STATUS_CLASS: Record<MatchListStatus, string> = {
-  done: 'text-status-done',
-  live: 'text-status-live',
-  ready: 'text-status-warning',
-  pending: 'text-muted-foreground',
+/** StatusPill tone per status (Console direction, 2026-08-13 — pills replaced
+ *  the colored-text column): live = green, ready(scheduled) = blue, done and
+ *  pending = neutral. One map so the two lists and both panels agree. */
+export const STATUS_PILL_TONE: Record<MatchListStatus, PillTone> = {
+  done: 'done',
+  live: 'green',
+  ready: 'blue',
+  pending: 'idle',
 };

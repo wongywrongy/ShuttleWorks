@@ -207,7 +207,10 @@ describe('<BracketMatchDetailPanel />', () => {
     renderPanel(PU_MS, 'live');
     const pill = screen.getByTestId('bracket-match-status-pill');
     expect(pill).toHaveTextContent('Live');
-    expect(pill.className).toContain('text-status-live');
+    // The wrapper hosts a design-system StatusPill; live carries the green
+    // tinted fill (Console pill vocabulary).
+    expect(pill.querySelector('.bg-status-live-bg')).not.toBeNull();
     expect(pill.tagName).toBe('SPAN');
+    expect(pill.querySelector('button, a, input')).toBeNull();
   });
 });

@@ -20,10 +20,11 @@ import { useMemo, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import {
   DetailPanel,
-  STATUS_CLASS,
   STATUS_LABEL,
+  STATUS_PILL_TONE,
   type BracketMatchStatus,
 } from '../../components/control-plane';
+import { StatusPill } from '../../components/StatusPill';
 import { useTournamentStore } from '../../store/tournamentStore';
 import type {
   BracketTournamentDTO,
@@ -113,11 +114,10 @@ export function BracketMatchDetailPanel({
       <SideSection label="Side B" side={pu.side_b} slot={pu.slot_b} {...sideProps} />
       <DetailPanel.Section eyebrow="Status">
         {/* Read-only pill — Operations owns run-state; never interactive. */}
-        <span
-          data-testid="bracket-match-status-pill"
-          className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
-        >
-          {STATUS_LABEL[status]}
+        <span data-testid="bracket-match-status-pill" className="inline-flex w-fit">
+          <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+            {STATUS_LABEL[status]}
+          </StatusPill>
         </span>
       </DetailPanel.Section>
       {onRecordContingency && status !== 'done' ? (

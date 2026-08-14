@@ -6,7 +6,7 @@
  * Meet-enabled workspaces.
  */
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { DisplayConfig } from '../DisplayConfig';
 import { apiClient } from '../../../api/client';
 import { useTournamentStore } from '../../../store/tournamentStore';
@@ -94,11 +94,15 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
   it('reflects an unsaved editor edit in the preview immediately (live-draft preview)', () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />);
     const preview = screen.getByTestId('display-preview-frame');
-    expect(preview).toHaveTextContent('11–7');
+    // Console board cards render the score per SIDE row (11 / 7), not as a
+    // joined "11–7" aggregate — assert both columns are on the board.
+    expect(within(preview).getByText('11')).toBeInTheDocument();
+    expect(within(preview).getByText('7')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: 'Show scores' }));
 
-    expect(preview).not.toHaveTextContent('11–7');
+    expect(within(preview).queryByText('11')).toBeNull();
+    expect(within(preview).queryByText('7')).toBeNull();
   });
 });
 

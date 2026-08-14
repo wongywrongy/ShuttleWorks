@@ -23,14 +23,18 @@ import {
   BandedTable,
   ColumnHeaderRow,
   DetailDock,
+  MatchStatusFilter,
   MEET_MATCH_CELL,
   MEET_MATCH_LIST_COLUMNS,
   MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
-  STATUS_CLASS,
+  parseMatchStatusFilter,
   STATUS_LABEL,
+  STATUS_PILL_TONE,
   type BandedTableGroup,
   type MatchListStatus,
 } from '../../../components/control-plane';
+import { StatusPill } from '../../../components/StatusPill';
+import { formatPlayerName } from '../../../lib/names';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import { usePlayerMap } from '../../../store/selectors';
@@ -43,7 +47,6 @@ import { meetMatchStatus } from './meetMatchStatus';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 import { getActiveAssignments } from '../../../lib/getActiveAssignments';
-import { EYEBROW_CLASS } from '../../../lib/utils';
 
 /** Stable empty-array reference so MatchRow's useMemo deps don't churn
  *  when a match has no disruptions. */
@@ -72,6 +75,11 @@ export function MatchesSpreadsheet({
 
   // Subscribes to the same URL-backed search the page header writes to.
   const [searchQuery] = useSearchParamState('q', '');
+  // Status facet (?status=): the filter strip above the list. Same URL
+  // contract as `?q=` — no debounce needed for a click, but consistency
+  // beats a second mechanism.
+  const [statusParam, setStatusParam] = useSearchParamState('status', '');
+  const statusFilter = parseMatchStatusFilter(statusParam);
   // Legacy filter params kept for URL backward compatibility — not
   // currently surfaced in any UI; if the user lands with these set, the
   // matches list still respects them.
@@ -81,12 +89,35 @@ export function MatchesSpreadsheet({
 
   const playerById = usePlayerMap();
 
+  // One status per match, computed once — feeds the filter strip counts,
+  // the status facet, and each row's Status cell.
+  const statusById = useMemo(() => {
+    const map = new Map<string, MatchListStatus>();
+    for (const m of matches) {
+      map.set(m.id, meetMatchStatus(m.id, assignedIds, matchStates));
+    }
+    return map;
+  }, [matches, assignedIds, matchStates]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<MatchListStatus, number> = {
+      done: 0,
+      live: 0,
+      ready: 0,
+      pending: 0,
+    };
+    for (const s of statusById.values()) counts[s] += 1;
+    return counts;
+  }, [statusById]);
+
   const filteredMatches = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     const eventActive = eventFilter.size > 0;
     const schoolActive = schoolFilter.size > 0;
     const typeActive = typeFilter.size > 0;
-    if (!q && !eventActive && !schoolActive && !typeActive) return matches;
+    const statusActive = statusFilter !== 'all';
+    if (!q && !eventActive && !schoolActive && !typeActive && !statusActive)
+      return matches;
 
     const playerName = (id: string) =>
       playerById.get(id)?.name?.toLowerCase() ?? '';
@@ -116,9 +147,19 @@ export function MatchesSpreadsheet({
       if (typeActive) {
         if (!typeFilter.has(m.matchType ?? 'dual')) return false;
       }
+      if (statusActive && statusById.get(m.id) !== statusFilter) return false;
       return true;
     });
-  }, [matches, searchQuery, eventFilter, schoolFilter, typeFilter, playerById]);
+  }, [
+    matches,
+    searchQuery,
+    eventFilter,
+    schoolFilter,
+    typeFilter,
+    statusFilter,
+    statusById,
+    playerById,
+  ]);
 
   const disruptions = useDisruptions();
 
@@ -200,7 +241,14 @@ export function MatchesSpreadsheet({
       {/* @container/table: the column-priority classes in MEET_MATCH_CELL query
           THIS wrapper's width, so columns collapse as the detail dock takes
           room — not just when the window shrinks. */}
-      <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col @container/table">
+        <MatchStatusFilter
+          counts={statusCounts}
+          active={statusFilter}
+          onChange={(v) => setStatusParam(v === 'all' ? '' : v)}
+          testIdPrefix="matches"
+        />
+        <div className="min-h-0 flex-1 overflow-auto">
         {filteredMatches.length === 0 ? (
           <>
             {/* ColumnHeaderRow publishes role="row"/"columnheader" — they need
@@ -211,7 +259,7 @@ export function MatchesSpreadsheet({
               </div>
             </div>
             <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-              No matches match the current search.
+              No matches match the current filters.
             </div>
           </>
         ) : (
@@ -232,7 +280,7 @@ export function MatchesSpreadsheet({
               <MatchRow
                 match={m}
                 index={matches.indexOf(m)}
-                status={meetMatchStatus(m.id, assignedIds, matchStates)}
+                status={statusById.get(m.id) ?? 'pending'}
                 players={players}
                 issues={issuesFor(m)}
                 onDelete={deleteMatch}
@@ -240,6 +288,7 @@ export function MatchesSpreadsheet({
             )}
           />
         )}
+        </div>
       </div>
       {/* Floor derived from MEET_MATCH_LIST_COLUMNS, not hand-picked: the old 560
           default sat under the 672 `@2xl` tier, so selecting a match deleted
@@ -252,7 +301,7 @@ export function MatchesSpreadsheet({
           <MatchDetailPanel
             key={selectedMatch.id}
             match={selectedMatch}
-            status={meetMatchStatus(selectedMatch.id, assignedIds, matchStates)}
+            status={statusById.get(selectedMatch.id) ?? 'pending'}
             onClose={() => setSelectedId(null)}
           />
         ) : null}
@@ -341,9 +390,11 @@ const MatchRow = memo(function MatchRow({
       <span
         role="cell"
         data-testid={`match-status-${match.id}`}
-        className={`${MEET_MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
+        className={`${MEET_MATCH_CELL.status} flex items-center justify-end`}
       >
-        {STATUS_LABEL[status]}
+        <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+          {STATUS_LABEL[status]}
+        </StatusPill>
       </span>
       {/* Two-click arm: deleting a match used to take one hover-revealed click,
           with no confirm and no undo (audit F1). */}
@@ -404,9 +455,14 @@ function PlayerCellSummary({
       ) : (
         named.map((p, i) => (
           <span key={p.id} className="inline-flex items-baseline">
-            <span className="text-foreground">{p.name || '–'}</span>
+            {/* BWF presentation ("NAKAMURA Kei") — display-only; the stored
+                name, search and exports stay as typed. Pairs join with the
+                slash the mock (and every draw sheet) uses. */}
+            <span className="text-foreground">
+              {p.name ? formatPlayerName(p.name) : '–'}
+            </span>
             {i < named.length - 1 ? (
-              <span className="text-muted-foreground">,</span>
+              <span className="px-1 text-muted-foreground">/</span>
             ) : null}
           </span>
         ))

@@ -1,7 +1,7 @@
 /**
  * RunSurface — the Operations Run keystone.
  *
- * Composes RunSummaryBand + RunLiveBoard + RunQueue + RunInspector and owns:
+ * Composes RunSummaryBand + RunCourtGrid + RunQueue + RunInspector and owns:
  *   - All seam hooks (meet command queue, bracket API, bracket result queue).
  *   - Selection state (`selectedKey`) and role resolution.
  *   - Transient `calledBracketIds` (bracket has no persisted "called" status).
@@ -34,7 +34,7 @@ import { buildLiveChips } from '../runtime/boardPlacements';
 import { runAction, slotForAssign, type RunSeams } from '../runtime/runActions';
 import type { RunActionKind } from '../runtime/runMachine';
 import { RunSummaryBand } from './RunSummaryBand';
-import { RunLiveBoard } from './RunLiveBoard';
+import { RunCourtGrid } from './RunCourtGrid';
 import { RunQueue } from './RunQueue';
 import { RunInspector } from './RunInspector';
 import { MatchDetailPanel } from '../../bracket/MatchDetailPanel';
@@ -211,10 +211,10 @@ export function RunSurface({
         : b,
     );
   }, [blocks, calledBracketIds]);
-  // Re-build the live chips here purely to count `late` for the summary band so
-  // it equals what RunLiveBoard renders (band == board). We can't lift the chips
-  // out of RunLiveBoard — its prop contract is KEEP-unchanged — so this pure,
-  // cheap re-derive from the SAME `liveBlocks`/`currentSlot` is deliberate.
+  // Live chips are re-derived purely to count `late` for the summary band.
+  // The band's late = every court-assigned scheduled/called chip past its
+  // planned slot — which the operator now sees split across the court grid
+  // (LATE bands) and the queue (LATE badges); the total still matches.
   const liveChips = useMemo(
     () => buildLiveChips(liveBlocks, currentSlot ?? 0, !!planFinalized),
     [liveBlocks, currentSlot, planFinalized],
@@ -439,16 +439,24 @@ export function RunSurface({
           instead of a board that looks read-only until you happen to click. */}
       <div className="relative flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col overflow-auto">
-          {/* Board — the live court×time hero (GanttTimeline + MatchChip) */}
-          <RunLiveBoard
+          {/* Board — the per-court "now" card grid (Console direction). The
+              whole-day court×time picture lives on Plan; this states each
+              court's CURRENT condition. Derives from the same `lanes` model
+              as the queue/inspector, so the three can never disagree. */}
+          <RunCourtGrid
+            lanes={lanes}
             blocks={liveBlocks}
-            courtCount={courtCount}
             currentSlot={currentSlot}
-            running={!!planFinalized}
-            formatSlot={formatSlot}
             slotMinutes={slotMinutes}
+            formatSlot={formatSlot}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}
+            hasEligible={nextEligible(queue) != null}
+            onAssignNext={(court) => {
+              const head = nextEligible(queue);
+              if (!head) return;
+              fireAssign(head, court, slotForAssign(court, matches, currentSlot ?? 0));
+            }}
           />
 
           {/* Queue — below the board. No border-t here: the board's own

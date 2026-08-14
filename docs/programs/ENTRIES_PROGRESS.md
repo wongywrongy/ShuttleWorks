@@ -16,7 +16,7 @@ program brief — that file is the plan; deviation is a STOP).
 | 2 | Deploy on wongworks.dev | not started | — |
 | 3 | SP-UI-1 appearance pass | **pre-executed** (see contradiction C1) | — |
 | 4 | Dogfood (floating) | not started | — |
-| 5 | E1 walking skeleton | **E1 SHIPPED 2026-08-06** (merged `86182af`, under Amendment A1); **phase open** — delta slice E1-2 (SP-ENTRIES-R3) not started | public-exposure [USER SIGN-OFF] gate still owed, after Phase 2 |
+| 5 | E1 walking skeleton | **E1 SHIPPED 2026-08-06** (merged `86182af`, under Amendment A1); **delta slice E1-2 SHIPPED 2026-08-07** (phases A–E below; this row said "not started" until 2026-08-12, when the docs pass caught it); **phase open** | public-exposure [USER SIGN-OFF] gate still owed, after Phase 2 |
 | 6 | play.* scaffold + email | **steps 1/2/4 COMPLETE 2026-08-10**; step 3 (email) deferred entirely | **SHIPPABLE.** The one BLOCKING defect (the signup page's Turnstile script blocked by our own CSP → *every* signup 403) is **RESOLVED**: the CSP now admits `challenges.cloudflare.com` in `script-src`/`frame-src` on `/e/signup` only, verified end to end in a browser (see the Phase 6 entry, "The ship blocker — resolved"). Exit gate's "a real verification-class email lands in a real inbox" clause stays **OPEN by ruling** |
 | 7 | E2 lifecycle | not started | — |
 | 8 | E3 doubles | not started | — |
@@ -1183,6 +1183,16 @@ resolution of the CSP-duplication tension. **Named exit: Phase 11's origin split
    type before writing a line". **A plan is a hypothesis about the code; verify it against the
    code at dispatch, not at review.**
 
+### F-E1-2 is CLOSED (`fc26f5a`, 2026-08-10) — recorded 2026-08-12 by the docs pass
+
+The finding carried forward from SP-E1-2 ("per-entry roster duplication, ruling owed in E2/Phase 7
+with F-E1") was **fixed during this phase's browser pass and never written down here.** The seam
+keyed the roster row on the entry; a roster row is a human, so it now keys on `entry_player_id`,
+and `_adoptable` matches either that deterministic id or the row's `sourceEntryId` so rosters
+written by the old build are adopted rather than duplicated. Meet extends the existing player's
+`ranks[]`; Bracket puts one shared participant id into every draw the person entered; `_entrants`
+groups the public list by person. **F-E1 is unaffected and stays open.**
+
 ### Deliberately not done
 
 Email (above); a `play.*` subdomain (R8-A — Phase 11); E2 lifecycle (withdrawals, partner
@@ -1499,3 +1509,49 @@ limit — no test was asserting copy that carried an em dash, so nothing had to 
 Local only, cloud mode, `:8090` / `:8600` / `:8081`, **not re-seeded** at any point. One
 artifact removed: an empty "ZZ Verify Temp" school a verifier left in the Nashville roster,
 deleted only after asserting it had zero players referencing it.
+
+## Documentation pass — the site catches up with the program: COMPLETE (2026-08-12)
+
+Branch `dev/prog1-p6-2-public-ia`. Not a program phase — a docs-only sweep run because the
+VitePress site still described a four-module product with one frontend, two months after Entries
+and the entrant tier shipped. Program rule 6 ("docs update in the same commit as the code they
+describe") had held for the ledgers and for `backend/README.md`, and not at all for the site.
+
+### What the site was claiming
+
+`system-overview`, `what-is-shuttleworks`, `glossary`, `index.md`, `workspace-model`,
+`contracts/index`, `modules/settings`, `how-to/add-a-module` and `tutorials/build-a-module` all
+stated **four modules** and a `ModuleId` union of `'meet' | 'bracket' | 'display'`. There was no
+Entries page, no entrant-tier page, and no mention anywhere on the site that a second frontend
+exists. `docs/api/index.md` and `docs/architecture/backend-structure.md` were the two exceptions —
+both already current, both updated by the phases that changed them.
+
+### What landed
+
+Two new reference pages (`modules/entries.md`, `architecture/entrant-tier.md`), two new progress
+pages (`progress/index.md` — the board across every program; `progress/2026-08-public-platform.md` —
+this program phase by phase), and factual corrections across 17 existing files plus the root
+`README.md`, `products/scheduler/README.md` and `FRONTEND.md` (which claimed four Zustand stores;
+there are five). ADR 0001 was **extended, not rewritten** — the record states that the
+decomposition survived the addition and that Tier-1 now has a cloud-only member. Sidebar gains
+Entries, the entrant tier, a Progress section and ADR 0012 (which existed on disk, unlinked).
+
+`scripts/docs-freshness.mjs` gains two areas — the entrant tier and the Entries module. Neither
+was in the map, which is exactly how they stayed undocumented: the tool reported green while the
+two largest additions to the product had no page at all. **A freshness map that does not name a
+subsystem cannot report it as stale.**
+
+### One finding, from reading the code rather than the ledger
+
+**F-E1-2 was fixed on 2026-08-10 (`fc26f5a`) and never recorded as closed** — the Phase 6 entry
+still listed it as owed in E2/Phase 7. Recorded above, under Phase 6. F-E1 is unaffected and stays
+open. This is the second time a real fix reached the tree without reaching the ledger this week;
+the first was the em-dash contracts, which shipped unstaged.
+
+### Gates
+
+`npm run docs:build` **exit 0** (the dead-link gate — the reason every internal link above
+resolves). No source file was touched, so no test gate applies; `make check` was not re-run.
+`npm run docs:freshness` compares **committed** history, so the eight BEHIND areas clear only once
+these edits are committed; two of them (API reference, State management) were read and found
+already accurate, so their BEHIND flag was a timestamp artifact rather than drift.

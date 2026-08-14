@@ -43,83 +43,81 @@
    * Raw scales. Theme-independent. DO NOT use in components.
    * ====================================================================== */
   :root {
-    /* Warm-neutral gray ramp (hue ~30–40, low saturation). 0 = white … 13 =
-     * near-black ink.
+    /* Cool-neutral gray ramp (hue ~220). 0 = white … 13 = near-black ink.
      *
-     * DIRECTION A (2026-08-06 design review): the ramp used to sit at hue
-     * ~220 — the cool gray every Tailwind/shadcn starter ships — which is
-     * the single biggest reason the product read as generated rather than
-     * designed. It is now a low-saturation warm neutral: a sports-hall floor
-     * rather than a screenshot. The LIGHTNESS STEPS ARE UNCHANGED, so the
+     * CONSOLE DIRECTION (2026-08-13, supersedes Direction A's warm ramp by
+     * owner ruling): the product adopts the "Console" mock's utility-software
+     * language — white cards on a cool #F6F7F9 ground, #E5E7EB hairlines.
+     * The LIGHTNESS STEPS ARE UNCHANGED from the previous ramp, so the
      * elevation ladder (dark 7/10/16/22%) and every contrast pair hold. */
     --gray-0:  0 0% 100%;     /* #FFFFFF */
-    --gray-1:  40 33% 97%;    /* #FAF8F3 */
-    --gray-2:  38 28% 93%;    /* #F1ECE4 */
-    --gray-3:  36 25% 88%;    /* #E8E0D5 */
-    --gray-4:  34 18% 80%;    /* #D3CABC */
-    --gray-5:  33 13% 68%;    /* #B4ADA1 */
-    --gray-6:  32 11% 52%;    /* #8F857B — lightest gray that clears 3:1 on white */
-    --gray-7:  31 11% 41%;    /* #746B60 */
-    --gray-8:  30 12% 33%;    /* #5E554A */
-    --gray-9:  30 12% 26%;    /* #4A4239 */
-    --gray-10: 32 10% 22%;    /* #3E382F — dark overlay */
-    --gray-11: 33 10% 16%;    /* #2D2823 — dark raised */
-    --gray-12: 35 11% 10%;    /* #1D1912 — dark base */
-    --gray-13: 36 12% 7%;     /* #14110C — dark sunken / light ink */
+    --gray-1:  220 20% 97%;   /* #F6F7F9 the Console page ground */
+    --gray-2:  220 12% 94%;   /* #EDEFF2 */
+    --gray-3:  220 13% 91%;   /* #E5E7EB hairlines */
+    --gray-4:  218 11% 84%;   /* #D1D5DB control borders */
+    --gray-5:  218 11% 65%;   /* #9CA3AF */
+    --gray-6:  220 9% 46%;    /* #6B7280 — clears 3:1 on white */
+    --gray-7:  220 10% 40%;   /* #5C6470 */
+    --gray-8:  217 19% 27%;   /* #374151 */
+    --gray-9:  218 20% 20%;   /* #29303D */
+    --gray-10: 220 12% 22%;   /* #313640 — dark overlay */
+    --gray-11: 220 12% 16%;   /* #24272E — dark raised */
+    --gray-12: 221 13% 10%;   /* #16181D — dark base */
+    --gray-13: 222 14% 7%;    /* #0F1114 — dark sunken / near-ink */
 
     /* Azure (brand/action). 7 = light-theme action, 5 = dark-theme action.
      *
-     * DIRECTION A: the accent was #2563EB — Tailwind `blue-600`, the most-used
-     * accent value on the web. It now leans cyan (hue 221→209) and sits
-     * deeper, which is what lets it hold against the warm ground instead of
-     * floating on it. */
-    --blue-1:  206 70% 94%;   /* #E0F0FA selected-bg (light) */
-    --blue-2:  207 66% 87%;   /* #C4E1F4 */
-    --blue-3:  208 64% 77%;   /* #9CCBEC */
-    --blue-4:  206 77% 74%;   /* #8BC0F0 dark hover */
-    --blue-5:  206 74% 65%;   /* #64A8E8 dark action */
-    --blue-6:  208 80% 48%;   /* #178CDC */
-    --blue-7:  209 85% 39%;   /* #0F62B8 light action */
-    --blue-8:  209 86% 31%;   /* #0B4E94 light hover */
-    --blue-9:  210 70% 24%;   /* #123D68 */
-    --blue-10: 208 45% 17%;   /* #182F3F dark selected-bg */
-    --blue-ink: 208 49% 10%;  /* #0D1A26 text on dark accent */
+     * CONSOLE DIRECTION: the accent returns to #2563EB — the mock's blue —
+     * with #1D4ED8 hover and the #EFF6FF selection tint. #1E40AF (blue-9)
+     * is the Console's deep band-header blue. */
+    --blue-1:  214 100% 97%;  /* #EFF6FF selected-bg (light) */
+    --blue-2:  214 95% 93%;   /* #DBEAFE */
+    --blue-3:  213 97% 87%;   /* #BFDBFE */
+    --blue-4:  213 94% 74%;   /* #82B6FB dark hover */
+    --blue-5:  217 91% 65%;   /* #558CF6 dark action */
+    --blue-6:  221 83% 60%;   /* #4372ED */
+    --blue-7:  221 83% 53%;   /* #2563EB light action */
+    --blue-8:  224 76% 48%;   /* #1D4ED8 light hover */
+    --blue-9:  226 71% 40%;   /* #1E40AF Console band-header blue */
+    --blue-10: 224 45% 18%;   /* #192642 dark selected-bg */
+    --blue-ink: 226 50% 10%;  /* #0D1226 text on dark accent */
 
-    /* Green — success / complete / live-match only. */
-    --green-1: 140 45% 94%;   /* #E9F6EB light bg tint (warmed — Direction A) */
-    --green-2: 148 48% 85%;   /* #C7EBD5 */
-    --green-4: 152 45% 62%;   /* #72CA9F dark fg (desat 65→45) */
-    --green-5: 155 47% 30%;   /* #28714F dark solid */
-    --green-6: 150 62% 28%;   /* #1B7343 light solid */
-    --green-7: 152 65% 26%;   /* #176D42 light fg */
-    --green-9: 150 40% 15%;   /* #173524 dark bg tint */
+    /* Green — success / complete / live-match only. Solids sit one shade
+     * deeper than the mock's #16A34A so light ink clears 4.5:1 (WCAG gate). */
+    --green-1: 141 79% 93%;   /* #DFFBE9 light bg tint */
+    --green-2: 141 75% 85%;   /* #BCF5D0 */
+    --green-4: 142 55% 60%;   /* #61CF8B dark fg */
+    --green-5: 150 45% 30%;   /* #2A6F4E dark solid */
+    --green-6: 142 72% 29%;   /* #15803D light solid (mock's LIVE, AA depth) */
+    --green-7: 143 64% 24%;   /* #166437 light fg */
+    --green-9: 145 40% 14%;   /* #153223 dark bg tint */
 
-    /* Amber — warning / called. */
-    --amber-1: 40 85% 93%;    /* #FCF0D9 */
-    --amber-2: 40 80% 85%;    /* #F7E0B4 */
-    --amber-4: 42 62% 60%;    /* #D8B15A dark fg (desat 92→62) */
-    --amber-5: 40 62% 30%;    /* #7C611D dark solid */
-    --amber-6: 34 90% 31%;    /* #964F08 light solid */
-    --amber-7: 32 92% 33%;    /* #A25907 light fg */
-    --amber-9: 42 45% 15%;    /* #383015 dark bg tint */
+    /* Amber — warning / called. Same AA-depth rule vs the mock's #D97706. */
+    --amber-1: 48 96% 89%;    /* #FDF2C8 */
+    --amber-2: 48 90% 76%;    /* #F9E08B */
+    --amber-4: 43 65% 60%;    /* #DBAF57 dark fg */
+    --amber-5: 35 55% 30%;    /* #775422 dark solid */
+    --amber-6: 28 91% 34%;    /* #A54D08 light solid */
+    --amber-7: 27 92% 31%;    /* #984906 light fg */
+    --amber-9: 40 45% 14%;    /* #342B14 dark bg tint */
 
-    /* Red — danger / blocked / destructive. */
-    --red-1:  8 70% 96%;      /* #FDEEEA (warmed — Direction A) */
-    --red-2:  0 70% 90%;      /* #F7D4D4 */
-    --red-4:  0 60% 68%;      /* #DE7C7C dark fg (desat 72→60) */
-    --red-6:  0 66% 50%;      /* #D42B2B */
-    --red-7:  0 70% 41%;      /* #B21F1F light fg */
-    --red-9:  0 45% 16%;      /* #3B1616 dark bg tint */
+    /* Red — danger / blocked / late. */
+    --red-1:  0 86% 97%;      /* #FEF2F2 */
+    --red-2:  0 93% 94%;      /* #FEE2E2 */
+    --red-4:  0 65% 68%;      /* #E27878 dark fg */
+    --red-6:  0 72% 51%;      /* #DC2626 (mock LATE) */
+    --red-7:  0 74% 40%;      /* #B21A1A light fg */
+    --red-9:  0 45% 15%;      /* #371515 dark bg tint */
 
     /* Sky — informational / scheduled-state. */
-    --sky-1:  200 60% 94%;    /* #E5F1F8 (warmed — Direction A) */
-    --sky-4:  200 60% 62%;    /* #64AFD9 dark fg (desat 98→60) */
-    --sky-7:  201 90% 32%;    /* #08689B light fg */
-    --sky-9:  202 50% 16%;    /* #14293D dark bg tint */
+    --sky-1:  204 94% 94%;    /* #E1F3FE */
+    --sky-4:  199 60% 60%;    /* #5BAED6 dark fg */
+    --sky-7:  201 96% 30%;    /* #036296 light fg */
+    --sky-9:  202 50% 15%;    /* #133039 dark bg tint */
 
     /* Violet — bracket-module identity (categorical, non-interactive). */
     --violet-4: 255 65% 75%;  /* #A78BF3 dark */
-    --violet-7: 262 60% 48%;  /* #6A31C4 light */
+    --violet-7: 262 68% 50%;  /* #6B29D6 light (mock's bracket #7C3AED, AA depth) */
 
     /* ----- Spacing ladder ------------------------------------------------- */
     --space-0:    0;
@@ -251,9 +249,9 @@
     --surface-overlay: var(--gray-0);   /* #FFFFFF menus / dialogs (+shadow) */
 
     /* Text ramp (gray scale, never opacity) */
-    --text-primary:    var(--gray-13);  /* #0F1114 */
-    --text-secondary:  var(--gray-8);   /* #4C5361 */
-    --text-muted:      var(--gray-7);   /* #5F6877 */
+    --text-primary:    221 39% 11%;     /* #111827 — the Console ink */
+    --text-secondary:  var(--gray-8);   /* #374151 */
+    --text-muted:      var(--gray-7);   /* #5C6470 */
     --text-on-accent:  var(--gray-0);   /* #FFFFFF */
 
     /* Interaction washes (Phase 0a) — hover/selected must be VISIBLE on
@@ -286,12 +284,12 @@
     --bg:           var(--surface-base);
     --bg-elev:      var(--surface-raised);
     --ink:          var(--text-primary);
-    --ink-2:        32 22% 12%;               /* #251F18 body                */
+    --ink-2:        220 22% 14%;              /* #1C222B body                */
     --ink-3:        var(--text-secondary);
     --ink-muted:    var(--text-muted);
     --ink-faint:    var(--text-muted);
     --rule:         var(--border-hairline);
-    --rule-soft:    36 22% 92%;               /* #EFE9E0 in-table divider    */
+    --rule-soft:    220 11% 94%;              /* #EDEFF2 in-table divider    */
     --accent:       var(--action-primary);
     --accent-bg:    var(--action-selected-bg);
     --accent-ink:   var(--text-on-accent);
@@ -404,7 +402,7 @@
     --surface-overlay: var(--gray-10);  /* #313640 menus / dialogs           */
 
     /* Text ramp — off-white, never #FFF body text */
-    --text-primary:    40 20% 94%;      /* #F3F0E9 */
+    --text-primary:    220 14% 94%;     /* #EDEFF3 */
     --text-secondary:  var(--gray-4);   /* #D1D7DE */
     --text-muted:      var(--gray-5);   /* #ACB4C0 — clears 4.5 on overlay   */
     --text-on-accent:  var(--blue-ink); /* #0E1A2F navy on the light accent  */
@@ -415,8 +413,8 @@
     --surface-selected-wash: var(--blue-10);  /* #14213D */
 
     /* Borders */
-    --border-hairline: 33 10% 21%;      /* #3B352D divider on base/raised    */
-    --border-strong:   var(--gray-6);   /* #7E8798 inputs — ≥3:1 on raised   */
+    --border-hairline: 220 10% 21%;     /* #30343B divider on base/raised    */
+    --border-strong:   var(--gray-6);   /* inputs — ≥3:1 on raised           */
     --border-focus:    var(--blue-5);
 
     /* Action — desaturated + lightened for dark (S 83→68) */
@@ -438,12 +436,12 @@
     --bg:           var(--surface-base);
     --bg-elev:      var(--surface-raised);
     --ink:          var(--text-primary);
-    --ink-2:        38 14% 89%;               /* #E9E3D9 body                */
+    --ink-2:        220 12% 89%;              /* #DFE2E7 body                */
     --ink-3:        var(--text-secondary);
     --ink-muted:    var(--text-muted);
     --ink-faint:    var(--text-muted);
     --rule:         var(--border-hairline);
-    --rule-soft:    33 11% 18%;               /* #332E28 in-table divider    */
+    --rule-soft:    220 10% 18%;              /* #292D33 in-table divider    */
     --accent:       var(--action-primary);
     --accent-bg:    var(--action-selected-bg);
     --accent-ink:   var(--text-on-accent);

@@ -7,11 +7,11 @@ why Settings is deliberately *not* a module in the engine sense.
 
 ## Settings is not a `ModuleId`
 
-The user-facing module union is exactly three engines/outputs:
+The user-facing module union is exactly four intake/engine/output modules:
 
 ```ts
 // platform/product-shell/types.ts
-export type ModuleId = 'meet' | 'bracket' | 'display';
+export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries';
 ```
 
 There is no `settings` member, **no `workspace_modules` row for "settings"**, it

@@ -704,7 +704,10 @@ describe('PlayShell', () => {
   const html = renderToStaticMarkup(h(PlayShell, { q: 'gold', children: h('main', null, 'X') }));
 
   it('carries the wordmark home link, the search landmark and the sign-in link', () => {
-    expect(html).toMatch(/<a href="\/e\/"[^>]*>ShuttleWorks/);
+    // The wordmark sits inside the Console banner chip (nested spans since
+    // 2026-08-13) — assert the home link still wraps it, not adjacency.
+    const home = html.match(/<a href="\/e\/"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? '';
+    expect(home).toContain('ShuttleWorks');
     const search = html.match(/<form[^>]*role="search"[^>]*>/)?.[0] ?? '';
     expect(search).toContain('method="get"');
     expect(search).toContain('action="/e/#results"');

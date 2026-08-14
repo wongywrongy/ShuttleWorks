@@ -88,6 +88,25 @@ const AREAS = [
     docs: ['docs/decisions/0004-ortools-cpsat-engine.md'],
     src: ['scheduler_core'],
   },
+  {
+    // The public tier is a whole second frontend with its own rules (zero
+    // client JS, the page-weight gate, the route table). It had no area here
+    // for its first two months, which is exactly how it stayed undocumented.
+    name: 'Entrant tier (the public site)',
+    docs: ['docs/architecture/entrant-tier.md'],
+    src: ['products/scheduler/entrant/app', 'products/scheduler/entrant/scripts'],
+  },
+  {
+    name: 'Entries module',
+    docs: ['docs/modules/entries.md'],
+    src: [
+      'products/scheduler/backend/services/entries.py',
+      'products/scheduler/backend/api/entries.py',
+      'products/scheduler/backend/api/entries_json.py',
+      'products/scheduler/backend/api/entrants.py',
+      'products/scheduler/frontend/src/products/entries',
+    ],
+  },
 ]
 
 const args = new Set(process.argv.slice(2))

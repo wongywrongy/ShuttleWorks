@@ -39,9 +39,13 @@ docs should **link here** instead of redefining a term locally.
   what it owns / produces / consumes and which seams it touches. Honest, not
   aspirational. See [What a module contract is](/contracts/).
 
-## The four architectural modules
+## The five architectural modules
 
-Four modules share one anatomy — **intake → engine → emit**:
+Five modules share one anatomy — **intake → engine → emit**:
+
+- **Entries** — the **intake module**: the public entry page and the operator's
+  entry desk, plus the commit that turns confirmed entries into roster players.
+  Tier-1 and the only **cloud-only** module. See [Entries](/modules/entries).
 
 - **Meet** — the **scheduling engine**: roster + config → the shared CP-SAT
   engine → a solved schedule of matches. See [Meet](/modules/meet).
@@ -69,6 +73,7 @@ Four modules share one anatomy — **intake → engine → emit**:
   | **B** | draw → floor | Bracket → Operations | `drawGenerated` | wired |
   | **C** | finish → advancement | Operations → Bracket | *(none)* | **unwired** |
   | **D** | floor → screen | Operations → Display | `matchStateChanged` | wired |
+  | *(unlettered)* | entry → roster | Entries → Meet \| Bracket | `entriesCommitted` | wired |
 
   The three wired seams each have a [contract page](/contracts/). **Seam C**
   (Operations → Bracket advancement) is intentionally not wired — advancement is
@@ -81,6 +86,29 @@ Four modules share one anatomy — **intake → engine → emit**:
   > command path also says "Seam C" — that is a separate SP-G1 name for
   > **bracket-owned recording** (`POST …/bracket/commands`), not a cross-module
   > seam. See [Bracket result command queue](/architecture/bracket-result-queue).
+
+## The public (entrant) tier
+
+- **Entrant tier** — the second frontend: a server-rendered React Router app at
+  `products/scheduler/entrant`, served under `/e/`, shipping **zero client
+  JavaScript**. Not a module; a delivery tier in front of Entries' public data
+  plane. See [Entrant tier](/architecture/entrant-tier).
+- **Entrant** — a person who enters a tournament. Entrants have their own
+  accounts, tables and `sw_play_session` cookie, entirely separate from
+  operator `users`.
+- **Entry page** — a workspace's public face, keyed by a **slug** (never a raw
+  workspace UUID) and visible only once its organiser opens it. A closed page
+  and an unknown slug answer a byte-identical 404.
+- **Submission** — one act of entering: one account, one acceptance of the
+  regulations, one fee total, and one or more entries across events and players
+  (`account → submission → entries → players`, ruling R13). The idempotency key
+  lives here.
+- **Entry** — one event, for one player-unit, within one submission. Its `state`
+  starts at `pending`; only `confirmed` is committable.
+- **Commit seam** — the operator-pressed run that turns confirmed entries into
+  roster players; named edge `entriesCommitted`. Re-runnable, additive,
+  idempotent, and it reports what it skipped instead of guessing. See
+  [Entries](/modules/entries#the-commit-seam).
 
 ## Engine & scheduling
 

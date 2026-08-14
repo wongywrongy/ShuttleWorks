@@ -131,16 +131,40 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
   const seg = segments(summary.kind);
   const m = summary.signals?.matches;
   const nextUp = summary.signals?.nextUp ?? [];
+  // Play-through progress (played = terminally-resolved, the same state the
+  // phase reads). Optional on older payloads — the bar simply doesn't render.
+  const played = m?.played;
+  const showProgress = m != null && played != null && m.total > 0;
+  const pct = showProgress
+    ? Math.round((Math.min(played, m.total) / m.total) * 100)
+    : 0;
   return (
     <section className="space-y-5">
       <div>
         <SectionLabel>In progress</SectionLabel>
         <Figures
           items={[
+            ...(played != null ? [{ value: played, label: 'played' }] : []),
             { value: m ? m.total : '–', label: 'matches' },
             { value: m ? m.scheduled : '–', label: 'scheduled' },
           ]}
         />
+        {showProgress ? (
+          <div
+            role="progressbar"
+            aria-label="Matches played"
+            aria-valuemin={0}
+            aria-valuemax={m.total}
+            aria-valuenow={Math.min(played, m.total)}
+            data-testid="overview-played-progress"
+            className="mt-3 h-1.5 max-w-80 overflow-hidden rounded-full bg-surface-sunken"
+          >
+            <div
+              className="h-full rounded-full bg-status-success-fg"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        ) : null}
       </div>
       <div>
         <Button onClick={() => onNavigate(seg.run)}>Open live day</Button>

@@ -62,7 +62,7 @@ export function WorkspaceIdentityBar({ identity, onBackToHub }: WorkspaceIdentit
         <ArrowLeft size={14} aria-hidden="true" />
       </button>
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-        <span className="min-w-0 break-words text-sm font-semibold text-foreground">
+        <span className="min-w-0 break-words text-[15px] font-bold text-foreground">
           {identity.name || 'Untitled'}
         </span>
         {identity.date ? (

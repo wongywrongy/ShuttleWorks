@@ -749,6 +749,10 @@ interface MatchMetricsDTO {
   total: number;
   scheduled: number;
   toDo: number;
+  /** Terminally-resolved matches (finished/retired; bracket: recorded
+   *  results) — the Overview's live-progress readout. Optional for older
+   *  payloads. */
+  played?: number;
 }
 
 /** One upcoming match for the inspector's "Next up" list. `status` is

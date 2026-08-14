@@ -41,11 +41,16 @@ export {
   BRACKET_EVENT_COL,
 } from './matchListColumns';
 export {
-  STATUS_CLASS,
   STATUS_LABEL,
+  STATUS_PILL_TONE,
   type BracketMatchStatus,
   type MatchListStatus,
 } from './matchStatus';
+export {
+  MatchStatusFilter,
+  parseMatchStatusFilter,
+  type MatchStatusFilterValue,
+} from './MatchStatusFilter';
 export { DetailPanel } from './DetailPanel';
 export { DetailDock } from './DetailDock';
 export { DockModeContext } from './dockMode';

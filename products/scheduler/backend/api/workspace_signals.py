@@ -62,10 +62,18 @@ class CollaborationDTO(BaseModel):
 
 
 class MatchMetricsDTO(BaseModel):
-    """The inspector's metric triplet. ``toDo`` = attention-reason count."""
+    """The inspector's metric triplet. ``toDo`` = attention-reason count.
+
+    ``played`` counts terminally-resolved matches (finished/retired on the
+    meet side, recorded results on the bracket side) — the same play state
+    the lifecycle phase reads, so the Overview's live-progress readout can
+    never disagree with ``phase``. Live called/started counts stay off this
+    DTO by design (Operations Run owns them).
+    """
     total: int = 0
     scheduled: int = 0
     toDo: int = 0
+    played: int = 0
 
 
 class NextMatchDTO(BaseModel):
@@ -196,7 +204,16 @@ def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
     interval = config.get("intervalMinutes") or 30
 
     metrics = MatchMetricsDTO(
-        total=len(matches), scheduled=len(assignments), toDo=to_do
+        total=len(matches),
+        scheduled=len(assignments),
+        toDo=to_do,
+        # Guarded on blob membership so an orphaned match_states row (its
+        # match deleted from the blob) can't inflate the readout.
+        played=sum(
+            1
+            for mid, s in status_by_id.items()
+            if s in _TERMINAL and mid in by_id
+        ),
     )
 
     def slot_of(a):
@@ -257,6 +274,7 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         total=counts.bracket_matches,
         scheduled=len(assignments),
         toDo=to_do,
+        played=len(counts.bracket_resolved_ids),
     )
 
     def slot_of(a):

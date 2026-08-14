@@ -159,6 +159,20 @@ describe('WorkspaceOverview', () => {
       expect(screen.getByText('MS1')).toBeInTheDocument();
     });
 
+    it('live: renders the played-progress bar when the payload carries played', () => {
+      const s = { ...base, signals: signals({ phase: 'live', matches: { total: 10, scheduled: 10, toDo: 0, played: 4 } }) };
+      renderOverview(s);
+      const bar = screen.getByTestId('overview-played-progress');
+      expect(bar).toHaveAttribute('aria-valuenow', '4');
+      expect(bar).toHaveAttribute('aria-valuemax', '10');
+      expect(screen.getByTestId('overview-figures')).toHaveTextContent('played');
+    });
+
+    it('live: no progress bar on an older payload without played', () => {
+      renderOverview(withPhase('live'));
+      expect(screen.queryByTestId('overview-played-progress')).toBeNull();
+    });
+
     it('complete: frames the event as results', () => {
       renderOverview(withPhase('complete'));
       screen.getByRole('button', { name: 'View results' }).click();
