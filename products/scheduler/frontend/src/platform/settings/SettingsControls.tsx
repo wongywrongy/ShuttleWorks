@@ -110,7 +110,7 @@ export function SectionHeader({ children }: { children: ReactNode }) {
  * settings a director actually reads visible.
  *
  * EVERY row inside sits at ONE indent. Dependent rows used to be pushed in
- * with a left rule (points-per-set under score type, the utilisation weight
+ * with a left rule (points-per-set under score type, the utilization weight
  * under its toggle), which meant the eye had to track two rails down a form
  * that already had four section levels. Dependency is carried by the dimmed
  * + aria-disabled state instead, which is the part that actually tells you

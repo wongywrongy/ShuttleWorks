@@ -31,7 +31,7 @@ const CONFIG = { turnstileSiteKey: '3x00000000000000000000FF', authMode: 'cloud'
 const SUBMISSION = '3f1c2a44-5d6e-4f70-8a91-b2c3d4e5f607';
 
 /** The one line only `PlayShell`'s footer renders — the shell's fingerprint. */
-const SHELL_FOOTER = 'Every entry is confirmed by the organiser.';
+const SHELL_FOOTER = 'Every entry is confirmed by the organizer.';
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 afterAll(() => vite.close());

@@ -168,6 +168,7 @@ export default defineConfig({
           { text: 'Bracket draw canvas', link: '/architecture/bracket-draw-canvas' },
           { text: 'Draw formats', link: '/architecture/draw-formats' },
           { text: 'Quality attributes', link: '/architecture/quality-attributes' },
+          { text: 'Console naming', link: '/design/console-naming' },
         ],
       },
       {

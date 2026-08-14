@@ -264,7 +264,7 @@ function PlayerBlock({
             inputMode="numeric"
             maxLength={4}
             defaultValue={said.birthYear}
-            hint="This tournament runs age-bracketed events, so the organiser needs a year to place this player."
+            hint="This tournament runs age-bracketed events, so the organizer needs a year to place this player."
           />
         ) : (
           // Positional round-trip: the parser reads these lists by index, so
@@ -313,7 +313,7 @@ function PlayerBlock({
           htmlFor={`${prefix}remarks`}
           className="mb-1 block text-xs font-medium text-foreground"
         >
-          Anything the organiser should know (optional)
+          Anything the organizer should know (optional)
         </label>
         <textarea
           id={`${prefix}remarks`}
@@ -525,7 +525,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                 />
                 <span>
                   Show every event, including ones not usually open to a player. A
-                  mismatch is accepted &mdash; the organiser sees a flag and decides.
+                  mismatch is accepted &mdash; the organizer sees a flag and decides.
                 </span>
               </label>
 
@@ -602,7 +602,7 @@ export function ErrorBoundary() {
     return (
       <MessagePage
         heading="This entry page is not available"
-        body="Check the link, or ask the organiser for the current one."
+        body="Check the link, or ask the organizer for the current one."
       />
     );
   }

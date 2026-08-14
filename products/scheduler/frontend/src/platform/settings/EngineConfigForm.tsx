@@ -3,7 +3,7 @@
  * both the Meet and Bracket modules.
  *
  * Both modules write the SAME TournamentConfig blob and drive the same
- * CP-SAT engine, so Scoring / Timing / Advanced solver / Optimisation goals
+ * CP-SAT engine, so Scoring / Timing / Advanced solver / Optimization goals
  * render identically for both — the one declared exception is Bracket's
  * "Rest between rounds" knob (see ENGINE_CONFIG_FIELDS `modules`).
  *
@@ -247,7 +247,7 @@ export function EngineConfigForm({
           order nothing on the page stated, while Venue & schedule ran one
           column off these same primitives. Order is now operator-first:
           what the matches are, then when they run, then what the solver
-          optimises for, with the solver's own internals last. */}
+          optimizes for, with the solver's own internals last. */}
       <div className="max-w-3xl space-y-2">
           {/* The module's own sections lead — Meet's inline Events below,
               Bracket's via the `leadingSections` slot. Both engines put
@@ -356,18 +356,18 @@ export function EngineConfigForm({
             ) : null}
           </Section>
 
-          <Section title="Optimisation goals">
+          <Section title="Optimization goals">
             <Row
-              label="Maximise court utilisation"
+              label="Maximize court utilization"
               control={
                 <Toggle
                   value={formData.enableCourtUtilization ?? true}
                   onChange={(v) => set('enableCourtUtilization', v)}
-                  ariaLabel="Maximise court utilisation"
+                  ariaLabel="Maximize court utilization"
                 />
               }
             />
-            {/* Weight applies only when court-utilisation optimisation is on —
+            {/* Weight applies only when court-utilization optimization is on —
                 indented + disabled to read as dependent (the value still saves). */}
             <div
               className={[
@@ -376,14 +376,14 @@ export function EngineConfigForm({
               aria-disabled={!(formData.enableCourtUtilization ?? true)}
             >
               <Row
-                label="Court utilisation weight"
+                label="Court utilization weight"
                 control={
                   <RangeSlider
                     value={Math.round(formData.courtUtilizationPenalty ?? 50)}
                     onChange={(v) => set('courtUtilizationPenalty', v)}
                     min={0}
                     max={100}
-                    ariaLabel="Court utilisation weight"
+                    ariaLabel="Court utilization weight"
                   />
                 }
                 last

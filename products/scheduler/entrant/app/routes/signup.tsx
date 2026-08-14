@@ -190,7 +190,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
           </h1>
           <p className="text-sm text-muted-foreground">
             One account enters you into any tournament on this site. The
-            organiser sees your name and contact details on the entries they
+            organizer sees your name and contact details on the entries they
             receive.
           </p>
         </header>
@@ -204,7 +204,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
         <Notice tone="info">
           The human check on this form needs JavaScript. With scripting turned
           off, everything below still fills in and submits, but the check cannot
-          run. Ask the organiser to set your account up instead.
+          run. Ask the organizer to set your account up instead.
         </Notice>
 
         <div className="grid gap-6 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
@@ -260,7 +260,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               required
               maxLength={320}
               autoComplete="email"
-              hint="Sign-in address, and where the organiser replies."
+              hint="Sign-in address, and where the organizer replies."
             />
 
             <TextField
@@ -292,7 +292,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               name="displayName"
               maxLength={200}
               autoComplete="name"
-              hint="How the organiser sees you on an entry."
+              hint="How the organizer sees you on an entry."
             />
 
             <TextField
@@ -302,7 +302,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               type="tel"
               maxLength={200}
               autoComplete="tel"
-              hint="Only used if the organiser needs to reach you about an entry."
+              hint="Only used if the organizer needs to reach you about an entry."
             />
 
             {/* Cloudflare's widget writes its solution into a hidden input

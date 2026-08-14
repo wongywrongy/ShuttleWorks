@@ -30,7 +30,7 @@
  * intentional preview-fidelity gap, not a bug.
  *
  * ---- Court order + hide (task 7) ------------------------------------
- * Below the tv* rows, a "Court order & visibility" list drives
+ * Below the tv* rows, a "Court order and visibility" list drives
  * `courtOrder`/`hiddenCourts` — the same two config fields
  * `MeetDisplayPage`/`CourtsView` apply to the real board (see
  * `publicDisplay/courtLayout.ts`). Drag-reorder + hide toggle mirror the
@@ -364,14 +364,14 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
         Operations keeps scheduling the court — rides on the hide control's
         own label instead of a paragraph over the whole group. */}
     <Section
-      title="Court order & visibility"
+      title="Court order and visibility"
       action={
         isCustomized ? (
           <button
             type="button"
             onClick={resetCourtLayout}
-            aria-label="Reset court order & visibility"
-            title="Reset court order & visibility"
+            aria-label="Reset court order and visibility"
+            title="Reset court order and visibility"
             className="inline-flex items-center gap-1 rounded p-1 text-2xs text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground"
           >
             <ArrowCounterClockwise aria-hidden className="h-3.5 w-3.5" />

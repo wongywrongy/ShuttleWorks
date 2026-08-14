@@ -158,7 +158,7 @@ export function SharingTab({ tid }: { tid: string }) {
   return (
     <div className="max-w-3xl p-6">
       <div className="pb-4">
-        <h2 className="text-base font-semibold tracking-tight text-foreground">Links &amp; access</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">Sharing</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           The public display link is view-only; collaborator invites let people sign in
           and operate this workspace. They are separate. Share each deliberately.

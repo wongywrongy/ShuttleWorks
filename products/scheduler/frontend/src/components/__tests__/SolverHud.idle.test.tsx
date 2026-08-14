@@ -1,10 +1,10 @@
 /**
  * V6 — the idle footer named a button the surface did not have. `activeTab
  * === 'schedule'` resolves to two different surfaces (the meet's own Schedule
- * page, button "Generate"; the unified Operations Plan, button "Re-solve
- * meet"), and the footer hard-coded the first one's label onto both. The Plan
+ * page, button "Generate"; the unified Operations Plan, button "Re-plan
+ * day"), and the footer hard-coded the first one's label onto both. The Plan
  * board read "A schedule is in place; Generate replaces it." under a button
- * saying "Re-solve meet".
+ * saying "Re-plan day".
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -21,12 +21,12 @@ beforeEach(() => {
 });
 
 describe('the idle solver footer names the button that is on screen', () => {
-  it('says Re-solve meet on the unified Operations Plan', () => {
+  it('says Re-plan day on the unified Operations Plan', () => {
     useTournamentStore.setState({ schedule: SCHEDULE });
     render(<SolverHud unifiedOps />);
     expect(
       screen.getByText(
-        'Solver idle. A schedule is in place; Re-solve meet replaces it.',
+        'Solver idle. A schedule is in place; Re-plan day replaces it.',
       ),
     ).toBeInTheDocument();
   });

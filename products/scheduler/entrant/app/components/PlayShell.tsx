@@ -85,7 +85,7 @@ export function PlayShell({
       <footer className="border-t border-rule-soft">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-baseline justify-between gap-2 px-4 py-6 text-xs text-muted-foreground">
           <p>ShuttleWorks · tournament entries</p>
-          <p>Every entry is confirmed by the organiser.</p>
+          <p>Every entry is confirmed by the organizer.</p>
         </div>
       </footer>
     </div>

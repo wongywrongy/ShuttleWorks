@@ -41,14 +41,14 @@ import { isLiveSegment } from './operationsSegments';
 import { useAction } from '../../hooks/useAction';
 
 // `min-h-7` + `py-1`, not `h-7`: a fixed 28px box squeezed to its min-content
-// width at 390px wrapped "Re-solve meet" onto two lines — 38px of text in a
+// width at 390px wrapped "Re-plan day" onto two lines — 38px of text in a
 // 28px box, spilling out over the header. The button now takes its content's
 // height, and `whitespace-nowrap` + the header's `flex-wrap` (below) give it
 // its content's width instead of a two-line label.
 const schedBtnBase =
   `${INTERACTIVE_BASE} inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-sm px-2.5 py-1 text-xs ` +
   `font-medium disabled:cursor-not-allowed disabled:opacity-50`;
-// "Re-solve meet" DISCARDS the plan that "Plan ready ✓" commits, and the two
+// "Re-plan day" DISCARDS the plan that "Plan ready ✓" commits, and the two
 // were the same size, the same accent fill, 8px apart. The glow marks intent;
 // only the action that COMMITS has it. Solve actions are quiet.
 const commitBtn =
@@ -147,7 +147,7 @@ function OperationsBody() {
     return Math.max(1, fromCfg, fromBlocks);
   }, [config?.courtCount, data?.courts, blocks]);
 
-  // ---- planFinalized — Plan-side "ready to run" toggle (Task 17) ----
+  // ---- planFinalized — Plan-side "plan ready" toggle (Task 17) ----
   const planFinalized = useTournamentStore((s) => s.planFinalized);
   const setPlanFinalized = useTournamentStore((s) => s.setPlanFinalized);
 
@@ -220,7 +220,7 @@ function OperationsBody() {
     [meetSubmit, bracketApi, bracketSubmit, data, setData],
   );
 
-  const title = isLive ? 'Run' : 'Plan';
+  const title = isLive ? 'Live day' : 'Plan';
   const subtitle = isLive
     ? 'Run the floor: by court, then the queue'
     : 'Plan the day: drag to reschedule, generate, schedule rounds';
@@ -252,7 +252,7 @@ function OperationsBody() {
               data-testid="ops-generate-meet"
               title={
                 schedule
-                  ? 'Re-solve the meet: replaces the current plan'
+                  ? 'Re-plan the day: replaces the current plan'
                   : 'Solve the meet and place its matches'
               }
             >
@@ -261,7 +261,7 @@ function OperationsBody() {
                 : reSolve.armed
                   ? 'Press again to replace the plan'
                   : schedule
-                    ? 'Re-solve meet'
+                    ? 'Re-plan day'
                     : 'Generate meet'}
             </button>
             {schedulableCount > 0 ? (
@@ -285,7 +285,7 @@ function OperationsBody() {
               aria-busy={planFinalizeAction.pending}
               data-testid="ops-plan-finalize-toggle"
             >
-              {planFinalized ? 'Plan ready ✓' : 'Mark plan ready to run'}
+              {planFinalized ? 'Plan ready ✓' : 'Mark plan ready'}
             </button>
           </div>
         ) : (
@@ -297,7 +297,7 @@ function OperationsBody() {
                 data-testid="run-plan-finalized"
                 className="inline-flex items-center rounded-full border border-status-done/30 bg-status-done/10 px-2.5 py-0.5 text-xs font-medium text-status-done"
               >
-                Plan finalized · ready to run
+                Plan finalized · ready for live day
               </span>
             ) : (
               <span data-testid="run-plan-pending" className="text-xs text-muted-foreground">

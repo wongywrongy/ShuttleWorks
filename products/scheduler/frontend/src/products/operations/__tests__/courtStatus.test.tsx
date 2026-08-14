@@ -160,13 +160,13 @@ describe('OperationsProduct — Courts (Plan) segment renders the interactive bo
   });
 });
 
-describe('OperationsProduct — Plan-side "ready to run" toggle (Task 17)', () => {
-  it('renders the toggle with "Mark plan ready to run" when planFinalized is falsy', () => {
+describe('OperationsProduct — Plan-side "plan ready" toggle (Task 17)', () => {
+  it('renders the toggle with "Mark plan ready" when planFinalized is falsy', () => {
     mockTab.value = 'schedule';
     render(<OperationsProduct />);
     const toggle = screen.getByTestId('ops-plan-finalize-toggle');
     expect(toggle).toBeInTheDocument();
-    expect(toggle).toHaveTextContent('Mark plan ready to run');
+    expect(toggle).toHaveTextContent('Mark plan ready');
   });
 
   it('clicking the toggle calls apiClient.setPlanFinalized with negated value', async () => {
@@ -183,8 +183,8 @@ describe('OperationsProduct — Plan-side "ready to run" toggle (Task 17)', () =
   });
 });
 
-describe('OperationsProduct — Run header readiness pill (single header)', () => {
-  it('Live + planFinalized shows the "ready to run" pill, not the pending note', () => {
+describe('OperationsProduct — Live-day header readiness pill (single header)', () => {
+  it('Live + planFinalized shows the "ready for live day" pill, not the pending note', () => {
     mockTab.value = 'live';
     mockPlanFinalized.value = true;
     render(<OperationsProduct />);
@@ -201,7 +201,7 @@ describe('OperationsProduct — Run header readiness pill (single header)', () =
   });
 });
 
-// O2 of the console IA pass. "Re-solve meet" DISCARDS the plan; "Plan ready ✓"
+// O2 of the console IA pass. "Re-plan day" DISCARDS the plan; "Plan ready ✓"
 // commits it. They were the same size, the same accent fill and 8px apart —
 // the destructive one dressed as the primary, in a same-shape pair with the
 // one action that keeps the work.
@@ -214,7 +214,7 @@ describe('OperationsProduct — the Plan header does not pair discard with commi
     const resolve = screen.getByTestId('ops-generate-meet');
     const commit = screen.getByTestId('ops-plan-finalize-toggle');
 
-    expect(resolve).toHaveTextContent('Re-solve meet');
+    expect(resolve).toHaveTextContent('Re-plan day');
     expect(resolve.className).not.toMatch(/bg-accent/);
     expect(resolve.className).not.toMatch(/shadow-glow/);
     expect(commit.className).toMatch(/bg-accent/);
@@ -237,7 +237,7 @@ describe('OperationsProduct — re-solve arms, first solve does not', () => {
     render(<OperationsProduct />);
 
     const btn = screen.getByTestId('ops-generate-meet');
-    expect(btn).toHaveTextContent('Re-solve meet');
+    expect(btn).toHaveTextContent('Re-plan day');
 
     fireEvent.click(btn);
     expect(mockGenerateSchedule).not.toHaveBeenCalled();

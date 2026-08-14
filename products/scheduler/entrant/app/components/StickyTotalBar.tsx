@@ -105,7 +105,7 @@ export function StickyTotalBar({
         </Button>
       </div>
       <p className="text-xs leading-tight text-muted-foreground">
-        The total is the organiser&rsquo;s quote and is confirmed on your receipt.
+        The total is the organizer&rsquo;s quote and is confirmed on your receipt.
       </p>
     </section>
   );

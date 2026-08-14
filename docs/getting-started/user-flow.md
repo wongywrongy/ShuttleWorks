@@ -18,7 +18,7 @@ Every step maps to a real surface in the workspace's left navigation:
 | --- | --- | --- |
 | Pick / create the event | Hub (`/`), New Workspace (`/new`) | Control plane |
 | Orient | **Overview** | Workspace shell |
-| Set up the venue | **Workspace → Venue & schedule**, **Modules** | Control plane |
+| Set up the venue | **Workspace → Venue and schedule**, **Modules** | Control plane |
 | Author the competition | **Meet:** Roster · Matches · Configuration — or — **Bracket:** Roster · Draws · Matches · Configuration | Meet / Bracket |
 | Run the day | **Operations → Courts · Live** | Operations |
 | Show the room | **Display → Preview · Configuration**, public `/display` | Display |
@@ -54,7 +54,7 @@ the operator immediately sees what's done and what's missing.
 
 Two setup surfaces, both under the **Workspace** admin block:
 
-- **Venue & schedule** — courts, slot duration, and the day's start/end window. This is shared by both
+- **Venue and schedule** — courts, slot duration, and the day's start/end window. This is shared by both
   engines (it writes the same `config` the engines read), so you set it once.
 - **Modules** — the module catalog: enable / disable Meet, Bracket, and Display. The control plane
   enforces the rules here: **Display can't be enabled without an operational engine**, a workspace keeps

@@ -169,7 +169,7 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
                 // offer, so it is a sentence rather than an EmptyState.
                 <p className="mt-4 text-sm text-muted-foreground">
                   No tournament is taking entries right now. Check back soon, or open
-                  the entry link your organiser gave you.
+                  the entry link your organizer gave you.
                 </p>
               )
             ) : (

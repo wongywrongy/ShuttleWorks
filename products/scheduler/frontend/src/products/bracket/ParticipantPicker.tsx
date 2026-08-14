@@ -131,7 +131,7 @@ function SinglesPicker({
             )
           }
         >
-          Commit
+          Save participants
         </Button>
       </div>
     </div>
@@ -210,14 +210,14 @@ function DoublesPicker({
           disabled={pairs.length === 0 || step === 'B'}
           title={
             pairs.length === 0
-              ? 'Form at least one pair to commit'
+              ? 'Form at least one pair to save'
               : step === 'B'
                 ? 'Finish the current pair first'
                 : ''
           }
           onClick={() => onCommit(pairs)}
         >
-          Commit pairs
+          Save pairs
         </Button>
       </div>
     </div>

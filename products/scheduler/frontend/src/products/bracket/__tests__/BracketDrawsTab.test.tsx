@@ -300,7 +300,7 @@ describe('BracketDrawsTab — draw detail panel', () => {
     const checkboxes = within(panel).getAllByRole('checkbox');
     fireEvent.click(checkboxes[0]);
     fireEvent.click(checkboxes[1]);
-    fireEvent.click(within(panel).getByRole('button', { name: /^Commit$/i }));
+    fireEvent.click(within(panel).getByRole('button', { name: /^Save participants$/i }));
     await vi.waitFor(() =>
       expect(mockEventUpsert).toHaveBeenCalledWith(
         'MS',

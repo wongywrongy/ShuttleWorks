@@ -134,14 +134,14 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
         {mintFailed ? (
           <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
             No public link yet. Only a workspace owner can create one. Ask an owner to
-            share it from Settings → Sharing.
+            share it from Sharing.
           </p>
         ) : (
           <FieldRow
             readOnly
             label="Public display URL"
             value={publicUrl ?? 'Creating link…'}
-            hint="View-only. Anyone with this link can watch, with no sign-in. Rotate it in Settings → Sharing to revoke it."
+            hint="View-only. Anyone with this link can watch, with no sign-in. Rotate it in Sharing to revoke it."
             inputClassName="font-mono"
             last
           />

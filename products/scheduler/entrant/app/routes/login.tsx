@@ -270,7 +270,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             form is now for. */}
         {justSignedIn ? (
           <Notice tone="success">
-            You are signed in on this device. Open the entry link your organiser
+            You are signed in on this device. Open the entry link your organizer
             gave you to enter a tournament. The form below signs in a different
             account.
           </Notice>

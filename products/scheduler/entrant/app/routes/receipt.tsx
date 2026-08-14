@@ -85,7 +85,7 @@ export interface ReceiptLoaderData {
 
 /** The redirect only ever names a submission's UUID. Anything else is a
  * stranger's sentence, and this page would render it as the "Reference" under
- * the organiser's own name — content injection, not XSS. */
+ * the organizer's own name — content injection, not XSS. */
 const SUBMISSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The uniform 404, constructed fresh — never copied from upstream, so the
@@ -181,7 +181,7 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
             Entry received
           </h1>
           <p className="text-sm text-muted-foreground">
-            The organiser has your entry. Keep the reference below if you need to
+            The organizer has your entry. Keep the reference below if you need to
             ask about it.
           </p>
         </header>
@@ -232,7 +232,7 @@ export function ErrorBoundary() {
     return (
       <MessagePage
         heading="This receipt is not available"
-        body="Check the link, or ask the organiser to look the entry up."
+        body="Check the link, or ask the organizer to look the entry up."
       />
     );
   }

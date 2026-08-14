@@ -257,7 +257,7 @@ export function ErrorBoundary() {
     return (
       <MessagePage
         heading="This entry page is not available"
-        body="Check the link, or ask the organiser for the current one."
+        body="Check the link, or ask the organizer for the current one."
       />
     );
   }

@@ -46,7 +46,7 @@ describe('DrawDetailPanel', () => {
     expect(screen.getByText(/Pick participants/i)).toBeInTheDocument();
     // Options are grouped by initial and sorted: Alex Tan, then Ben Carter.
     fireEvent.click(screen.getByRole('checkbox', { name: /Ben Carter/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^Commit$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Save participants$/i }));
     await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
     const picks = onCommitPicks.mock.calls[0][0];
     expect(picks).toEqual(

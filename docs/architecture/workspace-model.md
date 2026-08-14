@@ -123,7 +123,7 @@ enabled)` in `platform/product-shell/workspaceNav.ts`, which emits:
 - **Overview** (always, top).
 - One **section per enabled module** — Meet / Bracket (engines), Operations (shared), Display
   (output) — each tagged with a role badge.
-- A **Workspace** admin block (always, bottom): Venue & schedule, Members, Sharing, Modules,
+- A **Workspace** admin block (always, bottom): Venue and schedule, Members, Sharing, Modules,
   Sync and backups, Settings.
 
 The Operations section points at the *active engine's* schedule/live surfaces (single-engine ships

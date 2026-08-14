@@ -56,7 +56,7 @@ nav, routes, and a store slice, but it is always-on and has no enable flag. In c
 :::
 
 There is also a per-workspace **Settings** surface (Overview, Modules, People & Access, Sharing,
-Sync & Backups, Venue & schedule). It is the workspace's admin chrome, not a `ModuleId` — see
+Sync and backups, Venue and schedule). It is the workspace's admin chrome, not a `ModuleId` — see
 the [Settings page](/modules/settings).
 
 ::: tip The public site is a tier, not a module

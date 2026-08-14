@@ -125,11 +125,11 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
       items: opsBracket
         ? [
             { segment: 'bracket-schedule', label: 'Plan' },
-            { segment: 'bracket-live', label: 'Run' },
+            { segment: 'bracket-live', label: 'Live day' },
           ]
         : [
             { segment: 'schedule', label: 'Plan' },
-            { segment: 'live', label: 'Run' },
+            { segment: 'live', label: 'Live day' },
           ],
     });
   }
@@ -151,7 +151,7 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
     admin: {
       label: 'Workspace',
       items: [
-        { segment: 'ws-venue', label: 'Venue & schedule' },
+        { segment: 'ws-venue', label: 'Venue and schedule' },
         { segment: 'ws-members', label: 'Members' },
         { segment: 'ws-sharing', label: 'Sharing' },
         { segment: 'ws-modules', label: 'Modules' },

@@ -180,7 +180,7 @@ describe('narrowEvents', () => {
   });
 
   it('is presentational only — it never drops an event the server would accept', () => {
-    // R12: a gender mismatch is ACCEPTED and flagged for the organiser
+    // R12: a gender mismatch is ACCEPTED and flagged for the organizer
     // (`check_policy` decides, Python-side). Narrowing is a default view, so
     // the override must be able to restore every single event.
     expect(narrowEvents(EVENTS, 'M', [], true)).toEqual(EVENTS);

@@ -117,7 +117,7 @@ export function AlertsActivityPanel({ onReview, className = '' }: AlertsActivity
           ) : (
             <CaretDown aria-hidden="true" className="h-3 w-3" />
           )}
-          Alerts &amp; Activity
+          Alerts and activity
         </span>
         {warningCount > 0 && (
           <StatusPill tone="yellow" className="tabular-nums">

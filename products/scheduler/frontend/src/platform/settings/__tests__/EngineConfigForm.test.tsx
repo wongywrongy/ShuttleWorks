@@ -128,7 +128,7 @@ describe('<EngineConfigForm /> — shared groups', () => {
       expect(screen.getByText('Scoring')).toBeInTheDocument();
       expect(screen.getByText('Timing')).toBeInTheDocument();
       expect(screen.getByText('Advanced solver')).toBeInTheDocument();
-      expect(screen.getByText('Optimisation goals')).toBeInTheDocument();
+      expect(screen.getByText('Optimization goals')).toBeInTheDocument();
     },
   );
 
@@ -138,7 +138,7 @@ describe('<EngineConfigForm /> — shared groups', () => {
       mount(module);
       expect(screen.getByLabelText('Reproducible solver run')).toBeInTheDocument();
       expect(screen.getByLabelText('Freeze horizon in slots')).toBeInTheDocument();
-      expect(screen.getByLabelText('Maximise court utilisation')).toBeInTheDocument();
+      expect(screen.getByLabelText('Maximize court utilization')).toBeInTheDocument();
       expect(screen.getByLabelText('Enforce game spacing')).toBeInTheDocument();
       expect(screen.getByLabelText('Compact schedule')).toBeInTheDocument();
       expect(screen.getByLabelText('Allow player overlap')).toBeInTheDocument();
@@ -263,7 +263,7 @@ describe('<EngineConfigForm /> — collapsible sections', () => {
       'aria-expanded',
       'true',
     );
-    expect(screen.getByLabelText('Maximise court utilisation')).toBeInTheDocument();
+    expect(screen.getByLabelText('Maximize court utilization')).toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: /Advanced solver/ })).toHaveAttribute(
       'aria-expanded',

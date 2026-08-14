@@ -49,7 +49,7 @@ const MODULE_IDS: (keyof CustomState)[] = ['meet', 'bracket', 'display'];
 
 const MODULE_STATES: { value: ModuleState; label: string }[] = [
   { value: 'enabled', label: 'On' },
-  { value: 'available', label: 'Later' },
+  { value: 'available', label: 'Available' },
   { value: 'off', label: 'Off' },
 ];
 

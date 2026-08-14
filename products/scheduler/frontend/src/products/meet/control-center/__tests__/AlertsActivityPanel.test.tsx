@@ -44,7 +44,7 @@ describe('AlertsActivityPanel', () => {
     useAlertStore.getState().syncAdvisories([adv({ id: 'w', severity: 'warn' })]);
     render(<AlertsActivityPanel />);
     expect(screen.getByText('w summary')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /alerts & activity/i }));
+    fireEvent.click(screen.getByRole('button', { name: /alerts and activity/i }));
     expect(screen.queryByText('w summary')).not.toBeInTheDocument(); // list hidden
     expect(screen.getByText('1')).toBeInTheDocument(); // count still shown
   });

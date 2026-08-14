@@ -12,7 +12,7 @@
  * **This query string is a shareable GET, and that is the threat model.** It
  * addresses the real entry page on the real tournament host, so anything it
  * renders verbatim is content a stranger can put in front of an entrant by
- * sending them a link — a plausible organiser warning, on a page about money.
+ * sending them a link — a plausible organizer warning, on a page about money.
  * React escapes it, so this was never XSS; it is that the URL is *reachable by
  * someone other than its author*. Hence: no free text crosses this boundary.
  * `refusalCode` is server vocabulary mapped here to FIXED local copy
@@ -30,7 +30,7 @@
  *
  * `narrowEvents` mirrors the incumbent's gender filter
  * (`api/entries_public.py:924`). It is presentational — a default view, not a
- * gate. A submitted mismatch is ACCEPTED and flagged for the organiser (R12),
+ * gate. A submitted mismatch is ACCEPTED and flagged for the organizer (R12),
  * and that decision stays Python-side in `check_policy`.
  *
  * No fee rule lives here. Every number is read, none is derived.

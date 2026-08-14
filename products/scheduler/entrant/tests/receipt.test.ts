@@ -186,7 +186,7 @@ describe('receipt loader', () => {
     // The path segment is attacker-chosen and lands on a branded page as the
     // "Reference". React escapes it, so this is not XSS — it is content
     // injection: `/e/spring-open/receipt/YOUR%20ENTRY%20WAS%20REJECTED%20CALL…`
-    // renders that sentence inside the organiser's own receipt. The redirect
+    // renders that sentence inside the organizer's own receipt. The redirect
     // only ever names a UUID, so anything else is refused at the boundary.
     vi.stubGlobal('fetch', stubUpstream());
 
