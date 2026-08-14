@@ -1,8 +1,9 @@
 /**
  * "Next up" list — a workspace's next ≤3 scheduled matches (from
- * `signals.nextUp`). Each row: match code · time · court · a "Sched" tag.
- * Renders nothing when there's nothing scheduled. The match code (e.g. "MS1")
- * carries the discipline, so no separate module glyph is needed.
+ * `signals.nextUp`). Each row: match code · time · court. Renders nothing
+ * when there's nothing scheduled. The match code (e.g. "MS1") carries the
+ * discipline, so no separate module glyph is needed. (The old trailing
+ * "Sched" tag said nothing time · court didn't — SP-CONSOLE-REFINE H2.1.)
  *
  * Shared by the Hub inspector and the workspace Overview — it lives here
  * rather than under either product so neither imports the other's internals
@@ -23,7 +24,6 @@ export function NextUpList({ items }: { items: NextMatchDTO[] }) {
           <span className="min-w-0 flex-1 break-words text-2xs sw-num text-muted-foreground">
             {[n.timeLabel, n.courtLabel].filter(Boolean).join(' · ')}
           </span>
-          <span className="shrink-0 text-2xs font-semibold sw-num text-status-started">Sched</span>
         </div>
       ))}
     </div>

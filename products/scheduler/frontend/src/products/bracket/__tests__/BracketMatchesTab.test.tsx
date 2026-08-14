@@ -132,9 +132,9 @@ function makeRichData(): BracketTournamentDTO {
   };
 }
 
-/** The `#` cell of a rendered match row (first w-8 span). */
-const indexOfRow = (row: HTMLElement) =>
-  row.querySelector('.w-8')?.textContent;
+/** The event-label cell of a rendered match row. */
+const labelOfRow = (row: HTMLElement) =>
+  row.querySelector('.w-28')?.textContent;
 
 /** Render BracketMatchesTab within a MemoryRouter for useSearchParamState support. */
 const renderWithRouter = (component: React.ReactElement) =>
@@ -158,19 +158,18 @@ describe('<BracketMatchesTab />', () => {
     expect(screen.getAllByTestId(/^bracket-match-row-/)).toHaveLength(6);
   });
 
-  it('restarts the # index for each event group', () => {
+  it('strips the group discipline prefix from row labels (G6 — no repetition inside a band)', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
-    expect(rows.map(indexOfRow)).toEqual(['1', '2', '3', '1', '2', '3']);
-  });
-
-  it('renders friendly play-unit codes instead of raw ids', () => {
-    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    for (const code of ['MS SF1', 'MS SF2', 'MS F', 'WD SF1', 'WD SF2', 'WD F']) {
-      expect(screen.getByText(code)).toBeInTheDocument();
-    }
-    // Raw id survives as the traceability tooltip.
-    expect(screen.getByText('MS SF1')).toHaveAttribute('title', 'pu-ms-1');
+    // The band header already says MS / WD — row identity is SF1, SF2, F
+    // (both groups, whatever their banding order).
+    expect(rows.map(labelOfRow)).toEqual(['SF1', 'SF2', 'F', 'SF1', 'SF2', 'F']);
+    // The full labels are gone from the rows…
+    expect(screen.queryByText('MS SF1')).toBeNull();
+    // …and the raw id survives as the traceability tooltip.
+    const msSf1 = screen.getByTestId('bracket-match-row-pu-ms-1');
+    expect(labelOfRow(msSf1)).toBe('SF1');
+    expect(msSf1.querySelector('.w-28')).toHaveAttribute('title', 'pu-ms-1');
   });
 
   it('joins doubles sides with a slash, in BWF presentation (SURNAME Given)', () => {
@@ -208,19 +207,21 @@ describe('<BracketMatchesTab />', () => {
     fireEvent.click(screen.getByTestId('bracket-match-group-MS-1'));
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
     expect(rows).toHaveLength(3);
-    expect(rows.map(indexOfRow)).toEqual(['1', '2', '3']);
+    for (const row of rows) {
+      expect(row.getAttribute('data-testid')).toMatch(/^bracket-match-row-pu-wd/);
+    }
   });
 
-  it('keeps # numbers stable under search (no renumbering of filtered rows)', () => {
+  it('search filters rows without renumbering anything (row identity is the label)', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.change(screen.getByTestId('bracket-matches-search'), {
       target: { value: 'Carol' },
     });
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
     expect(rows).toHaveLength(1);
-    // pu-ms-2 is the second match of MS-1 — it must keep #2.
+    // pu-ms-2 is MS SF2 — its identity survives filtering as its label.
     expect(rows[0]).toHaveAttribute('data-testid', 'bracket-match-row-pu-ms-2');
-    expect(indexOfRow(rows[0])).toBe('2');
+    expect(labelOfRow(rows[0])).toBe('SF2');
     expect(screen.getByText('· showing 1')).toBeInTheDocument();
   });
 
@@ -234,9 +235,9 @@ describe('<BracketMatchesTab />', () => {
     fireEvent.click(screen.getByTestId('bracket-matches-status-live'));
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
     expect(rows).toHaveLength(1);
-    // pu-wd-1 is WD's first match — numbering stays stable under the facet.
+    // pu-wd-1 is WD's first match — its label survives the facet unchanged.
     expect(rows[0]).toHaveAttribute('data-testid', 'bracket-match-row-pu-wd-1');
-    expect(indexOfRow(rows[0])).toBe('1');
+    expect(labelOfRow(rows[0])).toBe('SF1');
 
     fireEvent.click(screen.getByTestId('bracket-matches-status-all'));
     expect(screen.getAllByTestId(/^bracket-match-row-/)).toHaveLength(6);

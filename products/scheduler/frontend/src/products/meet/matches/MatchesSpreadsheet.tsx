@@ -28,10 +28,14 @@ import {
   MEET_MATCH_LIST_COLUMNS,
   MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   parseMatchStatusFilter,
+  ScoreLane,
+  setsWinner,
   STATUS_LABEL,
   STATUS_PILL_TONE,
+  WinnerDot,
   type BandedTableGroup,
   type MatchListStatus,
+  type SetPair,
 } from '../../../components/control-plane';
 import { StatusPill } from '../../../components/StatusPill';
 import { formatPlayerName } from '../../../lib/names';
@@ -279,8 +283,8 @@ export function MatchesSpreadsheet({
             renderRow={(m) => (
               <MatchRow
                 match={m}
-                index={matches.indexOf(m)}
                 status={statusById.get(m.id) ?? 'pending'}
+                sets={matchStates[m.id]?.sets}
                 players={players}
                 issues={issuesFor(m)}
                 onDelete={deleteMatch}
@@ -325,15 +329,18 @@ export function MatchesSpreadsheet({
 // now skip re-render.
 const MatchRow = memo(function MatchRow({
   match,
-  index,
   status,
+  sets,
   players,
   issues,
   onDelete,
 }: {
   match: MatchDTO;
-  index: number;
   status: MatchListStatus;
+  /** Recorded set scores from the match state — present once finished. On
+   *  DONE rows they REPLACE the status pill (G6: scores + winner dot say
+   *  "done"; a pill restating it is paid-for redundancy). */
+  sets?: SetPair[];
   players: PlayerDTO[];
   /** Pre-computed disruption issues for this match from the global
    *  `useDisruptions` feed. Routing through the hook keeps the
@@ -346,6 +353,8 @@ const MatchRow = memo(function MatchRow({
   // come from the global `useDisruptions` feed (consumed by the parent),
   // so the per-row Warning icon and the TabBar badge always agree.
   const severity = maxSeverity(issues);
+  const scored = status === 'done' && (sets?.length ?? 0) > 0;
+  const winner = scored ? setsWinner(sets) : null;
 
   return (
     <>
@@ -371,12 +380,6 @@ const MatchRow = memo(function MatchRow({
       </span>
       <span
         role="cell"
-        className={`${MEET_MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}
-      >
-        {match.matchNumber ?? index + 1}
-      </span>
-      <span
-        role="cell"
         className={`${MEET_MATCH_CELL.event} text-2sm font-semibold text-accent sw-num`}
       >
         {match.eventRank?.trim() || (
@@ -385,16 +388,30 @@ const MatchRow = memo(function MatchRow({
           </span>
         )}
       </span>
-      <PlayerCellSummary side="Side A" ids={match.sideA ?? []} players={players} />
-      <PlayerCellSummary side="Side B" ids={match.sideB ?? []} players={players} />
+      <PlayerCellSummary
+        side="Side A"
+        ids={match.sideA ?? []}
+        players={players}
+        winner={winner === 'A'}
+      />
+      <PlayerCellSummary
+        side="Side B"
+        ids={match.sideB ?? []}
+        players={players}
+        winner={winner === 'B'}
+      />
       <span
         role="cell"
         data-testid={`match-status-${match.id}`}
         className={`${MEET_MATCH_CELL.status} flex items-center justify-end`}
       >
-        <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
-          {STATUS_LABEL[status]}
-        </StatusPill>
+        {scored ? (
+          <ScoreLane sets={sets!} data-testid={`match-score-${match.id}`} />
+        ) : (
+          <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+            {STATUS_LABEL[status]}
+          </StatusPill>
+        )}
       </span>
       {/* Two-click arm: deleting a match used to take one hover-revealed click,
           with no confirm and no undo (audit F1). */}
@@ -435,10 +452,13 @@ function PlayerCellSummary({
   side,
   ids,
   players,
+  winner = false,
 }: {
   side: string;
   ids: string[];
   players: PlayerDTO[];
+  /** Marks this side as the recorded winner (G6 winner dot). */
+  winner?: boolean;
 }) {
   const named = ids
     .map((id) => players.find((p) => p.id === id))
@@ -450,6 +470,7 @@ function PlayerCellSummary({
       data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
       className={`${MEET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed`}
     >
+      {winner ? <WinnerDot className="self-center" /> : null}
       {named.length === 0 ? (
         <span className="text-xs italic text-muted-foreground">No players</span>
       ) : (

@@ -15,6 +15,7 @@ import type {
 } from "../../api/bracketDto";
 import { useBracketResultQueue } from "../../hooks/useBracketResultQueue";
 import { INTERACTIVE_BASE } from "../../lib/utils";
+import { REASON_BADGE, WinnerDot } from "../../components/control-plane";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
 import { BracketScoreEntry } from "./BracketScoreEntry";
@@ -370,7 +371,13 @@ function BracketView({
 //     subtree).
 
 const BRACKET_CARD_WIDTH = 256; // matches the old w-64 card.
-const BRACKET_CARD_HEIGHT = 88; // fixed so feeder midpoints are deterministic.
+// 160, was 88: a doubles PAIR ("Hugo Marchetti-Silva / Tao Ming Zhu") wraps
+// each side to two 13px lines, and at 88 the card's content overlapped the
+// card below. The fixed height exists for deterministic feeder midpoints, so
+// it must budget the worst case its own data produces: p-3 (24) + header
+// (14) + two 2-line sides (52 each) + the space-y-2 gaps (16) ≈ 158. The
+// canvas auto-fit absorbs the extra height; truncation and overlap may not.
+const BRACKET_CARD_HEIGHT = 160;
 const BRACKET_COL_GAP = 56;
 const BRACKET_ROW_GAP = 28;
 const BRACKET_LABEL_HEIGHT = 28; // room for the round label above the cards.
@@ -975,28 +982,18 @@ function BracketCell({
   const posB = posA + 1;
   const setsMode = scoringFormat === "badminton";
   const [scoring, setScoring] = useState(false);
-  // Winner-perspective set score ("21-18 21-15"); "w/o" for a walkover.
   // The score blob is opaque server-side (RecordResultIn.score: dict), so a
   // non-frontend writer (import, sync restore, API client) can hand us any
   // shape — guard every level and fall back to winner-only rather than
   // rendering "undefined-undefined" or throwing on `.map` of a non-array.
+  // Each side renders ITS OWN set values in the fixed column lane (G6), so
+  // set numbers align vertically across every card on the canvas.
   const validSets = Array.isArray(result?.score?.sets)
     ? result.score.sets.filter(
         (s): s is BracketSetScore =>
           !!s && typeof s.sideA === "number" && typeof s.sideB === "number",
       )
     : [];
-  const score = result
-    ? result.walkover
-      ? "w/o"
-      : validSets.length > 0
-        ? validSets
-            .map((s) =>
-              winner === "A" ? `${s.sideA}-${s.sideB}` : `${s.sideB}-${s.sideA}`,
-            )
-            .join(" ")
-        : undefined
-    : undefined;
 
   return (
     <Card
@@ -1012,10 +1009,12 @@ function BracketCell({
         </span>
       </div>
       <Side
+        side="A"
         label={aName}
         winning={winner === "A"}
         loser={result && winner === "B"}
-        score={winner === "A" ? score : undefined}
+        sets={validSets}
+        walkover={result?.walkover ?? false}
         bye={pu.side_a === null}
         seeding={seeding}
         selected={seeding && selectedPos === posA}
@@ -1025,10 +1024,12 @@ function BracketCell({
         onWin={canRecord && !setsMode ? () => onResult("A") : undefined}
       />
       <Side
+        side="B"
         label={bName}
         winning={winner === "B"}
         loser={result && winner === "A"}
-        score={winner === "B" ? score : undefined}
+        sets={validSets}
+        walkover={result?.walkover ?? false}
         bye={pu.side_b === null}
         seeding={seeding}
         selected={seeding && selectedPos === posB}
@@ -1062,22 +1063,27 @@ function BracketCell({
 }
 
 function Side({
+  side,
   label,
   winning,
   loser,
   bye,
-  score,
+  sets = [],
+  walkover = false,
   seeding = false,
   selected = false,
   onSlotClick,
   onWin,
 }: {
+  side: "A" | "B";
   label: string;
   winning?: boolean;
   loser?: boolean;
   bye?: boolean;
-  /** Winner-perspective score, shown on the winning side only. */
-  score?: string;
+  /** Recorded sets — each side renders its OWN values in the fixed w-9
+   *  column lane (G6), so sets align vertically across the canvas. */
+  sets?: BracketSetScore[];
+  walkover?: boolean;
   seeding?: boolean;
   selected?: boolean;
   onSlotClick?: () => void;
@@ -1085,6 +1091,7 @@ function Side({
 }) {
   const onClick = seeding ? onSlotClick : onWin;
   const disabled = seeding ? !!bye : !onWin || bye;
+  const decided = winning || loser;
 
   return (
     <button
@@ -1094,7 +1101,7 @@ function Side({
         // A posted result recolours this row (winner tint, loser strike-out).
         // It is an occasional action, so it fades at the 200ms standard band
         // (MOTION.md §4) instead of snapping.
-        "w-full flex items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors duration-standard ease-brand " +
+        "w-full flex items-center justify-between gap-1.5 rounded-sm px-2 py-1.5 text-2sm transition-colors duration-standard ease-brand " +
         (selected
           ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
           : winning
@@ -1111,11 +1118,33 @@ function Side({
       {/* A draw slot IS the participant's name — ellipsising it cut exactly
           the surname that tells two entrants apart. It wraps; the card grows
           into the 28px row gap rather than hiding characters. */}
-      <span className="min-w-0 break-words text-left">{label}</span>
+      <span className="min-w-0 flex-1 break-words text-left">{label}</span>
       {seeding && !bye ? (
         <span className="text-3xs text-muted-foreground">⇄</span>
-      ) : winning && score ? (
-        <span className="text-2xs font-semibold sw-num">{score}</span>
+      ) : decided ? (
+        <span className="flex shrink-0 items-center gap-1">
+          {winning && walkover && sets.length === 0 ? (
+            <span className="rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {REASON_BADGE.walkover}
+            </span>
+          ) : null}
+          {winning ? <WinnerDot /> : <span className="w-1.5" aria-hidden />}
+          {/* w-6, not the lane's w-9: a side shows its OWN value (1-2
+              digits), and the narrower column keeps the name from wrapping
+              into the fixed-height card below. */}
+          {sets.map((s, i) => (
+            <span
+              key={i}
+              className={`w-6 text-right text-2xs sw-num ${
+                (side === "A" ? s.sideA > s.sideB : s.sideB > s.sideA)
+                  ? "font-semibold"
+                  : "opacity-70"
+              }`}
+            >
+              {side === "A" ? s.sideA : s.sideB}
+            </span>
+          ))}
+        </span>
       ) : onWin && !bye ? (
         <span className="text-3xs text-muted-foreground">↵ wins</span>
       ) : null}

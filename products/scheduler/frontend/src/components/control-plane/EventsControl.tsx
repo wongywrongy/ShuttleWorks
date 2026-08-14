@@ -100,12 +100,14 @@ const entryType = (e: string | EventsEntry) =>
 
 /**
  * EventBadge — compact accent chip for an entered event code ("MD1").
- * Also used standalone in roster/matches tables (S3/S4).
+ * Also used standalone in roster/matches tables (S3/S4). `seed` renders
+ * inline — "MD1 (3)" — never as a separate column (G6).
  */
-export function EventBadge({ code }: { code: string }) {
+export function EventBadge({ code, seed }: { code: string; seed?: number | null }) {
   return (
     <span className="rounded-sm border border-accent/30 bg-accent/10 px-1 py-px text-3xs font-semibold text-accent sw-num">
       {code}
+      {seed != null ? <span className="font-normal opacity-80"> ({seed})</span> : null}
     </span>
   );
 }

@@ -344,19 +344,20 @@ describe('the dock floor is derived from the column set', () => {
   });
 
   it('re-derives per list when the event column changes width', () => {
-    // Meet: 16 + 32 + 48 + 160 + 160 + 88 + 32 = 536 columns, + 6 × 12 gap =
-    // 608, + 40 inset = 648 — under the 672 tier, so the TIER binds.
+    // Meet (no ordinal column since G6): 16 + 48 + 160 + 160 + 112 + 32 =
+    // 528 columns, + 5 × 12 gap = 588, + 40 inset = 628 — under the 672
+    // tier, so the TIER binds.
     expect(dockMinContentWidth(MEET_MATCH_LIST_COLUMNS)).toBe(672);
-    // Bracket: the same sum with a 112px event column = 600, + 72 + 40 = 712,
-    // above the tier, so the sum binds. One shared floor could not be both.
-    expect(dockMinContentWidth(BRACKET_MATCH_LIST_COLUMNS)).toBe(712);
+    // Bracket: the same sum with a 112px event column = 592, + 60 + 40 =
+    // 692, above the tier, so the sum binds. One shared floor could not be
+    // both.
+    expect(dockMinContentWidth(BRACKET_MATCH_LIST_COLUMNS)).toBe(692);
   });
 
-  it('reads `w-[5.5rem]` and `min-w-[10rem]` as well as ladder steps', () => {
-    // The arbitrary-value columns have to count toward the sum or the floor
-    // silently under-reports by 248px on both lists.
-    expect(BRACKET_MATCH_LIST_COLUMNS[5].className).toContain('w-[5.5rem]');
-    expect(BRACKET_MATCH_LIST_COLUMNS[3].className).toContain('min-w-[10rem]');
+  it('reads `min-w-[10rem]` arbitrary values as well as ladder steps', () => {
+    // The arbitrary-value name columns have to count toward the sum or the
+    // floor silently under-reports on both lists.
+    expect(BRACKET_MATCH_LIST_COLUMNS[2].className).toContain('min-w-[10rem]');
     expect(dockMinContentWidth(BRACKET_MATCH_LIST_COLUMNS)).toBeGreaterThan(
       highestTier(BRACKET_MATCH_LIST_COLUMNS),
     );

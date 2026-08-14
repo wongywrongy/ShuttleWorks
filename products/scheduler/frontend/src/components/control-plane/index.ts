@@ -47,6 +47,15 @@ export {
   type MatchListStatus,
 } from './matchStatus';
 export {
+  MatchCard,
+  ScoreLane,
+  WinnerDot,
+  setsWinner,
+  REASON_BADGE,
+  type SetPair,
+  type MatchReason,
+} from './MatchCard';
+export {
   MatchStatusFilter,
   parseMatchStatusFilter,
   type MatchStatusFilterValue,

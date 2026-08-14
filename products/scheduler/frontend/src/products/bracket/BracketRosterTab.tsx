@@ -94,6 +94,13 @@ function BracketRosterTabCore({
   const addPlayer = useTournamentStore((s) => s.addBracketPlayer);
   const updatePlayer = useTournamentStore((s) => s.updateBracketPlayer);
   const deletePlayer = useTournamentStore((s) => s.deleteBracketPlayer);
+  const config = useTournamentStore((s) => s.config);
+  // The session default a blank per-player override falls back to — the same
+  // derivation the solver-side checker runs (constraintChecker.ts).
+  const defaultRestSlots =
+    config && config.intervalMinutes > 0
+      ? Math.ceil(config.defaultRestMinutes / config.intervalMinutes)
+      : null;
 
   // Derived view: player id → sorted badge codes, from each event's own
   // participants (draft draws included — no play_units dependency).
@@ -227,14 +234,19 @@ function BracketRosterTabCore({
                 </span>
                 <span role="cell" className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
                   {(badgesById.get(p.id) ?? []).map((b) => (
-                    <EventBadge key={b.code} code={b.code} />
+                    <EventBadge key={b.code} code={b.code} seed={b.seed} />
                   ))}
                 </span>
+                {/* Effective rest, always populated (B1.2): the per-player
+                    override in foreground ink, the session default muted. A
+                    column of dashes was a broken promise. */}
                 <span
                   role="cell"
-                  className="w-16 shrink-0 text-right text-xs text-muted-foreground sw-num hidden @2xl/table:block"
+                  className={`w-16 shrink-0 text-right text-xs sw-num hidden @2xl/table:block ${
+                    p.restSlots != null ? 'text-foreground' : 'text-muted-foreground'
+                  }`}
                 >
-                  {p.restSlots ?? '–'}
+                  {p.restSlots ?? defaultRestSlots ?? '–'}
                 </span>
                 <span
                   role="cell"

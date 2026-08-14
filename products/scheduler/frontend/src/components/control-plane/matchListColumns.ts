@@ -60,13 +60,17 @@ export const BRACKET_EVENT_COL = 'w-28';
 // they give way down to `NAME_COL_MIN`, not to zero: `min-w-0` let both sides
 // reach ~145px at the old dock floor, which is where the doubles pairings
 // started shredding into ribbons.
+// No ordinal `#` column (SP-CONSOLE-REFINE G6): the row's identity is its
+// event code / play-unit label; a per-group counter carried no information.
+// Status is `w-28` because on DONE rows it is the SCORE LANE — up to three
+// `w-9` set pairs ("21-15 21-17 21-19") right-aligned so sets line up
+// vertically down the list.
 const matchListColumns = (eventColWidth: string): BandedListColumn[] => [
   { label: '', className: 'w-4 shrink-0' },
-  { label: '#', className: 'w-8 shrink-0', priority: 2 },
   { label: 'Event', className: `${eventColWidth} shrink-0` },
   { label: 'Side A', className: `${NAME_COL_MIN} flex-[3]` },
   { label: 'Side B', className: `${NAME_COL_MIN} flex-[3]` },
-  { label: 'Status', className: 'w-[5.5rem] shrink-0 text-right', priority: 2 },
+  { label: 'Status', className: 'w-28 shrink-0 text-right', priority: 2 },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
@@ -87,11 +91,10 @@ export const BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH = dockMinContentWidth(
 const matchCell = (columns: BandedListColumn[]) =>
   ({
     warnGutter: colClass(columns[0]),
-    number: colClass(columns[1]),
-    event: colClass(columns[2]),
-    side: colClass(columns[3]),
-    status: colClass(columns[5]),
-    actionGutter: colClass(columns[6]),
+    event: colClass(columns[1]),
+    side: colClass(columns[2]),
+    status: colClass(columns[4]),
+    actionGutter: colClass(columns[5]),
   }) as const;
 
 export const MEET_MATCH_CELL = matchCell(MEET_MATCH_LIST_COLUMNS);

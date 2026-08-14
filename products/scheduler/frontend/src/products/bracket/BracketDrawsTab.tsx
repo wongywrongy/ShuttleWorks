@@ -360,12 +360,14 @@ export function BracketDrawsTab() {
                     {row.counts ? (
                       <StatusBar
                         className="flex-wrap"
+                        // Zero-count tokens are noise, not information —
+                        // suppressed for calm (SP-CONSOLE-REFINE B2.1).
                         items={[
-                          { tone: 'done', label: 'DONE', count: row.counts.done },
-                          { tone: 'green', label: 'LIVE', count: row.counts.live },
-                          { tone: 'amber', label: 'READY', count: row.counts.ready },
-                          { tone: 'idle', label: 'PEND', count: row.counts.pending },
-                        ]}
+                          { tone: 'done' as const, label: 'DONE', count: row.counts.done },
+                          { tone: 'green' as const, label: 'LIVE', count: row.counts.live },
+                          { tone: 'amber' as const, label: 'READY', count: row.counts.ready },
+                          { tone: 'idle' as const, label: 'PEND', count: row.counts.pending },
+                        ].filter((i) => i.count > 0)}
                       />
                     ) : (
                       <span className="text-xs text-muted-foreground">–</span>

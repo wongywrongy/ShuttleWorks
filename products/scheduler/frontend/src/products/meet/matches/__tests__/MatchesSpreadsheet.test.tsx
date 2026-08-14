@@ -121,7 +121,7 @@ describe('<MatchesSpreadsheet />', () => {
   // Design audit T7 / WCAG 1.3.1: cell count === column count, and the one
   // remaining control (the armed delete) still announces as a control from
   // inside its `display: contents` cell.
-  it('exposes a match row as seven cells, the delete control intact', () => {
+  it('exposes a match row as six cells (no ordinal — G6), the delete control intact', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m5');
     expect(row).toHaveAttribute('role', 'row');
@@ -129,7 +129,7 @@ describe('<MatchesSpreadsheet />', () => {
     expect(within(row).getAllByRole('cell')).toHaveLength(
       screen.getAllByRole('columnheader').length,
     );
-    expect(screen.getAllByRole('columnheader')).toHaveLength(7);
+    expect(screen.getAllByRole('columnheader')).toHaveLength(6);
     expect(
       within(row).getByRole('button', { name: /Remove match MS1|Remove match WD1/ }),
     ).toBeInTheDocument();

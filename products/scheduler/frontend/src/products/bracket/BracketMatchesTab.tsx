@@ -27,8 +27,10 @@ import {
   BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   OverflowMenu,
   parseMatchStatusFilter,
+  ScoreLane,
   STATUS_LABEL,
   STATUS_PILL_TONE,
+  WinnerDot,
   type BandedTableGroup,
   type BracketMatchStatus,
 } from '../../components/control-plane';
@@ -100,14 +102,37 @@ export function BracketMatchesTab({
     () => new Map(data.assignments.map((a) => [a.play_unit_id, a])),
     [data.assignments],
   );
-  const resultSet = useMemo(
-    () => new Set(data.results.map((r) => r.play_unit_id)),
+  // Full result per play unit — the row's score lane and winner dot read
+  // it; `has()` still answers the status question `resultSet` used to.
+  const resultByPu = useMemo(
+    () => new Map(data.results.map((r) => [r.play_unit_id, r])),
     [data.results],
   );
   // Operator-friendly play-unit labels ("MS QF1") — the same names the
   // Draw / Live / Operations surfaces show, instead of the raw
   // R{round}·M{match} indices.
   const labelById = useMemo(() => buildPlayUnitLabels(data), [data]);
+
+  // Row form of the label INSIDE its event group (G6): the group band
+  // already says "MS", so "MS QF1" rows repeat it — row identity is "QF1".
+  // Exports and titles keep the full label.
+  const shortLabelById = useMemo(() => {
+    // `buildPlayUnitLabels` prefixes with the raw discipline CODE — strip
+    // exactly that, not the long `disciplineLabel` form.
+    const prefixByEvent = new Map(
+      data.events.map((ev) => [ev.id, `${ev.discipline} `]),
+    );
+    const out = new Map<string, string>();
+    for (const pu of data.play_units) {
+      const full = labelById.get(pu.id) ?? pu.id;
+      const prefix = prefixByEvent.get(pu.event_id);
+      out.set(
+        pu.id,
+        prefix && full.startsWith(prefix) ? full.slice(prefix.length) : full,
+      );
+    }
+    return out;
+  }, [data.events, data.play_units, labelById]);
 
   const resolveSide = (ids: string[] | null): string => {
     if (!ids || ids.length === 0) return 'TBD';
@@ -127,7 +152,7 @@ export function BracketMatchesTab({
     );
 
   const statusOf = (puId: string): BracketMatchStatus => {
-    if (resultSet.has(puId)) return 'done';
+    if (resultByPu.has(puId)) return 'done';
     const a = assignmentByPu.get(puId);
     if (a?.started && !a.finished) return 'live';
     if (a) return 'ready';
@@ -146,7 +171,7 @@ export function BracketMatchesTab({
     for (const pu of data.play_units) counts[statusOf(pu.id)] += 1;
     return counts;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.play_units, assignmentByPu, resultSet]);
+  }, [data.play_units, assignmentByPu, resultByPu]);
 
   const q = query.toLowerCase().trim();
   // Group every play unit by its event, ordered by the events list, then
@@ -195,7 +220,7 @@ export function BracketMatchesTab({
       })
       .filter((g) => g.units.length > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.play_units, data.events, q, statusFilter, assignmentByPu, resultSet, participantById]);
+  }, [data.play_units, data.events, q, statusFilter, assignmentByPu, resultByPu, participantById]);
 
   const total = data.play_units.length;
   const shown = groups.reduce((n, g) => n + g.units.length, 0);
@@ -304,55 +329,63 @@ export function BracketMatchesTab({
                 }
                 selectedId={selectedId}
                 rowTestId={({ pu }) => `bracket-match-row-${pu.id}`}
-                renderRow={({ pu, n }) => {
+                renderRow={({ pu }) => {
                   const status = statusOf(pu.id);
+                  const result = resultByPu.get(pu.id);
+                  const sets = result?.score?.sets ?? [];
+                  const reason =
+                    result?.reason ?? (result?.walkover ? 'walkover' : null);
+                  // `winner_side` can be 'none' (double W.O.) — no dot then.
+                  const winner =
+                    result?.winner_side === 'A' || result?.winner_side === 'B'
+                      ? result.winner_side
+                      : null;
                   return (
                     <>
                       {/* Gutter spacer — Meet's warning-icon slot;
                           empty here but kept so the columns start
                           at the same x on both surfaces. */}
                       <span role="cell" className={`${BRACKET_MATCH_CELL.warnGutter} shrink-0`} />
-                      <span
-                        role="cell"
-                        className={`${BRACKET_MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}
-                      >
-                        {n}
-                      </span>
-                      {/* Friendly label; raw id kept on title for
-                          traceability (it's also the row testid).
+                      {/* Friendly label, group prefix stripped (the band
+                          header already carries "MS"); raw id kept on title
+                          for traceability (it's also the row testid).
                           px-1.5 mirrors the inner inset of Meet's
-                          editable event field — BRACKET_EVENT_COL is
-                          sized with that 12px pair already deducted, so
-                          the 10-char worst case ("XDC L R327") stays on
-                          one line. `break-words` is the backstop for a
-                          longer operator discipline code: it grows the
+                          editable event field. `break-words` is the backstop
+                          for a longer operator discipline code: it grows the
                           row rather than spilling into Side A. */}
                       <span
                         role="cell"
                         className={`${BRACKET_MATCH_CELL.event} break-words px-1.5 text-2sm font-semibold text-accent sw-num`}
                         title={pu.id}
                       >
-                        {labelById.get(pu.id) ?? pu.id}
+                        {shortLabelById.get(pu.id) ?? pu.id}
                       </span>
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.side} text-2sm leading-relaxed text-foreground`}
+                        className={`${BRACKET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed text-foreground`}
                       >
+                        {winner === 'A' ? <WinnerDot className="self-center" /> : null}
                         {renderSide(pu.side_a)}
                       </span>
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.side} text-2sm leading-relaxed text-foreground`}
+                        className={`${BRACKET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed text-foreground`}
                       >
+                        {winner === 'B' ? <WinnerDot className="self-center" /> : null}
                         {renderSide(pu.side_b)}
                       </span>
                       <span
                         role="cell"
+                        data-testid={`bracket-match-status-${pu.id}`}
                         className={`${BRACKET_MATCH_CELL.status} flex items-center justify-end`}
                       >
-                        <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
-                          {STATUS_LABEL[status]}
-                        </StatusPill>
+                        {sets.length > 0 || reason ? (
+                          <ScoreLane sets={sets} reason={reason} />
+                        ) : (
+                          <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+                            {STATUS_LABEL[status]}
+                          </StatusPill>
+                        )}
                       </span>
                       <span
                         role="cell"
