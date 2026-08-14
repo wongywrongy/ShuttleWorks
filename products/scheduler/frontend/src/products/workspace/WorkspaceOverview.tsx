@@ -23,6 +23,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import type { AppTab } from '../../store/uiStore';
 import { apiClient } from '../../api/client';
@@ -78,12 +79,23 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
   const railRows = buildRailRows(summary, displayShared);
   const go = (segment: AppTab) => navigate(`/tournaments/${summary.id}/${segment}`);
 
+  // The phase's primary CTA, hoisted to the header (G3.1). During LIVE this
+  // is the single most important control in the product — it must not sit
+  // mid-page below the stats. The panels keep their secondary actions.
+  const br = summary.kind === 'bracket';
+  const headerAction =
+    phase === 'ready' || phase === 'live' ? (
+      <Button onClick={() => go(br ? 'bracket-live' : 'live')}>Open live day</Button>
+    ) : phase === 'complete' ? (
+      <Button onClick={() => go(br ? 'bracket-matches' : 'matches')}>View results</Button>
+    ) : null;
+
   return (
     <div
       data-testid="workspace-overview"
       className="mx-auto w-full max-w-[1180px] px-8 py-6"
     >
-      <OverviewHeader summary={summary} />
+      <OverviewHeader summary={summary} action={headerAction} />
 
       {/* The spine: only the phases that exist for this workspace. */}
       {phases.length > 0 ? (

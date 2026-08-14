@@ -88,17 +88,18 @@ export function AppStatusPopover() {
     );
   };
 
-  // Status chip — wired to the semantic ``status-*`` tokens. The chip is
-  // the most-monitored badge in the shell; it reads at a glance from
-  // across an operator's desk. Made visibly larger than the previous
-  // text-xs / py-0.5 version so the colour + label register without
-  // squinting.
-  const chipLabel = isGenerating ? 'Solving' : health?.status === 'degraded' ? 'Degraded' : 'Idle';
+  // Status chip — wired to the semantic ``status-*`` tokens. Idle carries NO
+  // label (SP-CONSOLE-REFINE G1): a resting solver is not something the
+  // operator needs told about, and the bare "● Idle" chip read as ambiguous
+  // chrome. The chip speaks only when there is something to say — Solving /
+  // Degraded — and otherwise shrinks to a quiet dot that keeps the App-status
+  // popover reachable.
+  const chipLabel = isGenerating ? 'Solving' : health?.status === 'degraded' ? 'Degraded' : null;
   const chipTone = isGenerating
     ? 'bg-status-warning-bg text-status-warning border border-status-warning/40'
     : health?.status === 'degraded'
       ? 'bg-status-blocked-bg text-status-blocked border border-status-blocked/40'
-      // Color budget: idle is NOT a success — neutral muted dot + label.
+      // Color budget: idle is NOT a success — neutral muted dot.
       // Green is reserved for success/complete/live-play.
       : 'bg-status-idle-bg text-text-muted border border-border';
   const chipDot = isGenerating
@@ -115,6 +116,8 @@ export function AppStatusPopover() {
         data-testid="app-status-chip"
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-label={chipLabel ?? 'App status'}
+        title="App status"
         className={`${INTERACTIVE_BASE} inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs font-semibold ${chipTone} hover:brightness-95`}
       >
         <span

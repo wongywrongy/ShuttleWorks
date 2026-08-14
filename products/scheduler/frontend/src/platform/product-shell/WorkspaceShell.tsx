@@ -106,6 +106,9 @@ export function WorkspaceShell({
           <WorkspaceIdentityBar identity={identity} onBackToHub={onBackToHub} />
         </div>
         <div className="flex items-center gap-2">
+          {/* Labelled, not glyph-only: the rail's account gear is the same
+              icon with a different scope, and the two are visible at once
+              (SP-CONSOLE-REFINE G4). */}
           <button
             type="button"
             data-testid="workspace-admin-gear"
@@ -114,13 +117,14 @@ export function WorkspaceShell({
             title="Workspace administration"
             onClick={onOpenAdmin}
             className={[
-              'inline-flex h-7 w-7 items-center justify-center rounded transition-colors',
+              'inline-flex h-7 items-center gap-1.5 rounded px-2 text-xs font-medium transition-colors',
               adminActive
                 ? 'bg-accent/10 text-accent'
                 : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
             ].join(' ')}
           >
             <GearSix aria-hidden className="h-4 w-4" />
+            Workspace
           </button>
           {statusSlot}
         </div>

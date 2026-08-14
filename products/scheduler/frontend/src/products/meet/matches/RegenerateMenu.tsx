@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { ArrowsClockwise } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import type { MatchDTO } from '../../../api/dto';
 
@@ -39,6 +40,17 @@ export function RegenerateMenu() {
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+
+  // LIVE = any match has moved past `scheduled`. Regenerated lineup slots get
+  // fresh ids, which severs their recorded status/results and orphans their
+  // schedule assignments (the schedule is marked stale) — verified against
+  // `importMatches`, which replaces the list wholesale. Custom matches keep
+  // their ids and survive.
+  const matchStates = useMatchStateStore((s) => s.matchStates);
+  const isLiveDay = useMemo(
+    () => Object.values(matchStates).some((st) => st.status !== 'scheduled'),
+    [matchStates],
+  );
 
   const ranks = useMemo(() => expandRanks(config?.rankCounts), [config?.rankCounts]);
   const groupByPlayer = useMemo(
@@ -146,13 +158,17 @@ export function RegenerateMenu() {
 
   return (
     <div ref={ref} className="relative">
+      {/* Deliberately NOT the primary style (SP-CONSOLE-REFINE G3.3): this
+          rebuilds lineup matches with fresh identities, which on a live day
+          destroys their recorded state. A destructive-leaning action must not
+          be the most prominent button on the surface. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid="regenerate-toggle"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded bg-accent px-2.5 text-xs font-semibold text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40`}
       >
         <ArrowsClockwise aria-hidden="true" className="h-3.5 w-3.5" />
         Regenerate from roster
@@ -167,6 +183,16 @@ export function RegenerateMenu() {
             Regenerate from roster
           </div>
           <p className="text-xs text-muted-foreground">{infoLine}</p>
+          {isLiveDay ? (
+            <p
+              data-testid="regenerate-live-warning"
+              className="mt-2 border-l-2 border-destructive/50 bg-destructive/5 px-2 py-1 text-xs text-destructive"
+            >
+              <span className="font-medium">This day is live.</span> Rebuilt lineup
+              matches lose their recorded status, results, and schedule
+              assignments: the plan must be re-planned. Custom matches are kept.
+            </p>
+          ) : null}
           {incompletePairs.length > 0 ? (
             <p className="mt-2 border-l-2 border-status-warning/50 bg-status-warning/5 px-2 py-1 text-xs text-status-warning">
               <span className="font-medium">Skipping incomplete doubles:</span>{' '}
@@ -179,9 +205,13 @@ export function RegenerateMenu() {
               onClick={regenerate}
               disabled={!canGenerate}
               data-testid="regenerate-confirm"
-              className="rounded-sm border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:opacity-50"
+              className={
+                isLiveDay
+                  ? 'rounded-sm border border-destructive bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive transition-colors duration-fast ease-brand hover:bg-destructive/20 disabled:opacity-50'
+                  : 'rounded-sm border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:opacity-50'
+              }
             >
-              Regenerate
+              {isLiveDay ? 'Regenerate anyway' : 'Regenerate'}
             </button>
           </div>
         </div>

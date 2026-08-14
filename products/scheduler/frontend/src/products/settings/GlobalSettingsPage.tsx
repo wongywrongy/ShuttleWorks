@@ -91,7 +91,15 @@ function ProfilePage() {
         </div>
       </div>
 
-      <Section title="Your details" defaultOpen>
+      <Section
+        title="Your details"
+        defaultOpen
+        action={
+          <Button size="sm" disabled={locked}>
+            Save changes
+          </Button>
+        }
+      >
         <FieldRow
           label="Full name"
           defaultValue={displayName}
@@ -101,12 +109,7 @@ function ProfilePage() {
         <FieldRow label="Email" type="email" defaultValue={email} disabled={locked} last />
       </Section>
 
-      <div className="flex items-center gap-3">
-        <Button disabled={locked}>Save changes</Button>
-        {locked ? (
-          <Note>Profile editing unlocks once you sign in with an account.</Note>
-        ) : null}
-      </div>
+      {locked ? <Note>Profile editing unlocks once you sign in with an account.</Note> : null}
     </div>
   );
 }
@@ -153,7 +156,19 @@ function SecurityPage() {
     <div className="max-w-xl space-y-6 p-6">
       <PageHead title="Security" subtitle="Manage your password and account security." />
 
-      <Section title="Change password" defaultOpen>
+      <Section
+        title="Change password"
+        defaultOpen
+        action={
+          <Button
+            size="sm"
+            disabled={locked || busy || !current || !next || !confirm}
+            onClick={() => void updatePassword()}
+          >
+            {busy ? 'Updating…' : 'Update password'}
+          </Button>
+        }
+      >
         <FieldRow
           label="Current password"
           type="password"
@@ -190,27 +205,19 @@ function SecurityPage() {
         />
       </Section>
 
-      <div className="flex items-center gap-3">
-        <Button
-          disabled={locked || busy || !current || !next || !confirm}
-          onClick={() => void updatePassword()}
+      {locked ? (
+        <Note>Password management is available once you sign in with an account.</Note>
+      ) : feedback ? (
+        <p
+          role="status"
+          className={[
+            'text-xs leading-relaxed',
+            feedback.kind === 'success' ? 'text-accent' : 'text-destructive',
+          ].join(' ')}
         >
-          {busy ? 'Updating…' : 'Update password'}
-        </Button>
-        {locked ? (
-          <Note>Password management is available once you sign in with an account.</Note>
-        ) : feedback ? (
-          <p
-            role="status"
-            className={[
-              'text-xs leading-relaxed',
-              feedback.kind === 'success' ? 'text-accent' : 'text-destructive',
-            ].join(' ')}
-          >
-            {feedback.message}
-          </p>
-        ) : null}
-      </div>
+          {feedback.message}
+        </p>
+      ) : null}
     </div>
   );
 }

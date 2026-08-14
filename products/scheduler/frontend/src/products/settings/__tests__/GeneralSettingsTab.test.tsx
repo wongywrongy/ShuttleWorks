@@ -1,20 +1,20 @@
 /**
- * Defect D6: Workspace › Settings showed "Draft" while the shell header and the
- * Hub showed LIVE for the same workspace.
+ * Lifecycle is DISPLAY-ONLY on Settings (SP-CONSOLE-REFINE A6.1).
  *
- * Neither was stale. `status` is the stored lifecycle column this pane edits;
- * every other surface's "status" is `lifecycleBadge(signals.phase, status)`,
- * derived from real play state, and a workspace with matches in progress reads
- * Live whatever the column says. Two facts, one word, and this pane was the one
- * using the word for the other thing.
+ * The pane used to carry a stored-status dropdown the rest of the app
+ * ignored (D6 put the derived badge beside it to stop the two facts
+ * contradicting each other). The dropdown is gone: the row shows the SAME
+ * derivation the Hub and shell header use, and the one explicit lifecycle
+ * action is Archive / Unarchive in the danger zone.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { GeneralSettingsTab } from '../GeneralSettingsTab';
+import { apiClient } from '../../../api/client';
 import type { TournamentSummaryDTO } from '../../../api/dto';
 
 vi.mock('../../../api/client', () => ({
-  apiClient: { updateTournament: vi.fn() },
+  apiClient: { updateTournament: vi.fn().mockResolvedValue({}) },
 }));
 
 function summaryWith(over: Partial<TournamentSummaryDTO> = {}): TournamentSummaryDTO {
@@ -34,8 +34,8 @@ function summaryWith(over: Partial<TournamentSummaryDTO> = {}): TournamentSummar
 
 const noop = () => {};
 
-describe('GeneralSettingsTab — the two status facts (D6)', () => {
-  it('shows the DERIVED state beside the stored one when they disagree', () => {
+describe('GeneralSettingsTab — lifecycle is display-only', () => {
+  it('shows the DERIVED state and offers no stored-status control', () => {
     render(
       <GeneralSettingsTab
         tid="t1"
@@ -43,15 +43,16 @@ describe('GeneralSettingsTab — the two status facts (D6)', () => {
         onSaved={noop}
       />,
     );
-    // What the Hub and the shell header show, on the same screen as the column
-    // that says draft — so the operator can see they are two things.
-    expect(screen.getByTestId('general-derived-status')).toHaveTextContent(/live/i);
-    expect(screen.getByTestId('general-derived-note')).toHaveTextContent(/Hub/);
-    // The control still edits the stored column, unchanged.
-    expect(screen.getByLabelText('Workspace status')).toBeInTheDocument();
+    expect(screen.getByTestId('general-lifecycle')).toHaveTextContent(/live/i);
+    expect(screen.queryByLabelText('Workspace status')).toBeNull();
   });
 
-  it('says nothing extra when the two agree — one fact, said once', () => {
+  it('falls back to the phase label when no badge applies (setup, not archived)', () => {
+    render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
+    expect(screen.getByTestId('general-lifecycle')).toHaveTextContent(/setup/i);
+  });
+
+  it('reads Archived from the stored column — archive stays the danger-zone action', () => {
     render(
       <GeneralSettingsTab
         tid="t1"
@@ -59,14 +60,15 @@ describe('GeneralSettingsTab — the two status facts (D6)', () => {
         onSaved={noop}
       />,
     );
-    // lifecycleBadge returns "Archived" here, which is exactly the stored
-    // column: a badge restating the select beside it would be noise.
-    expect(screen.queryByTestId('general-derived-status')).toBeNull();
-    expect(screen.queryByTestId('general-derived-note')).toBeNull();
+    expect(screen.getByTestId('general-lifecycle')).toHaveTextContent(/archived/i);
   });
 
-  it('says nothing on a payload with no signals (older server)', () => {
+  it('Save sends name and date only — never a lifecycle status', async () => {
     render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
-    expect(screen.queryByTestId('general-derived-status')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(vi.mocked(apiClient.updateTournament)).toHaveBeenCalled());
+    const body = vi.mocked(apiClient.updateTournament).mock.calls[0][1];
+    expect(body).toEqual({ name: 'Spring Meet', tournamentDate: '2026-05-15' });
+    expect(body).not.toHaveProperty('status');
   });
 });

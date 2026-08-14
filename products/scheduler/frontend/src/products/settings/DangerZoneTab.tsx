@@ -19,10 +19,14 @@ export function DangerZoneTab({
   const [busy, setBusy] = useState(false);
   const isBracket = summary?.kind === 'bracket';
 
-  async function archive() {
+  const archived = summary?.status === 'archived';
+
+  // Same seam both ways — the stored-status dropdown this used to point at
+  // ("reactivate from General") is gone, so unarchive lives here too.
+  async function toggleArchive() {
     setBusy(true);
     try {
-      await apiClient.updateTournament(tid, { status: 'archived' });
+      await apiClient.updateTournament(tid, { status: archived ? 'active' : 'archived' });
       onChanged();
     } finally {
       setBusy(false);
@@ -49,11 +53,13 @@ export function DangerZoneTab({
         <div>
           <div className="text-sm font-medium text-foreground">Archive workspace</div>
           <div className="text-xs text-muted-foreground">
-            Hide it from the active list. You can reactivate later from General.
+            {archived
+              ? 'Archived: hidden from the active list. Unarchive to bring it back.'
+              : 'Hide it from the active list. Unarchive any time.'}
           </div>
         </div>
-        <Button variant="ghost" onClick={archive} disabled={busy || summary?.status === 'archived'}>
-          {summary?.status === 'archived' ? 'Archived' : 'Archive'}
+        <Button variant="ghost" onClick={toggleArchive} disabled={busy}>
+          {archived ? 'Unarchive' : 'Archive'}
         </Button>
       </div>
 

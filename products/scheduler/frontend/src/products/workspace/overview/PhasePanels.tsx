@@ -117,8 +117,9 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
           ]}
         />
       </div>
-      <div className="flex gap-2">
-        <Button onClick={() => onNavigate(seg.run)}>Open live day</Button>
+      {/* The phase's primary CTA ("Open live day") lives in the page header
+          (G3.1) — the panel keeps only its secondary action. */}
+      <div>
         <Button variant="outline" onClick={() => onNavigate(seg.plan)}>
           Review the plan
         </Button>
@@ -127,8 +128,7 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
   );
 }
 
-function LivePanel({ summary, onNavigate }: PanelProps) {
-  const seg = segments(summary.kind);
+function LivePanel({ summary }: PanelProps) {
   const m = summary.signals?.matches;
   const nextUp = summary.signals?.nextUp ?? [];
   // Play-through progress (played = terminally-resolved, the same state the
@@ -166,9 +166,7 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
           </div>
         ) : null}
       </div>
-      <div>
-        <Button onClick={() => onNavigate(seg.run)}>Open live day</Button>
-      </div>
+      {/* "Open live day" lives in the page header (G3.1). */}
       {nextUp.length > 0 ? (
         <div>
           <SectionLabel>Next up</SectionLabel>
@@ -180,7 +178,6 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
 }
 
 function CompletePanel({ summary, onNavigate }: PanelProps) {
-  const seg = segments(summary.kind);
   const m = summary.signals?.matches;
   return (
     <section className="space-y-5">
@@ -188,8 +185,8 @@ function CompletePanel({ summary, onNavigate }: PanelProps) {
         <SectionLabel>Results</SectionLabel>
         <Figures items={[{ value: m ? m.total : '–', label: 'matches played' }]} />
       </div>
-      <div className="flex gap-2">
-        <Button onClick={() => onNavigate(seg.matches)}>View results</Button>
+      {/* "View results" lives in the page header (G3.1). */}
+      <div>
         <Button variant="outline" onClick={() => onNavigate('ws-sync')}>
           Back up this event
         </Button>

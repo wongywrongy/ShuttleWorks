@@ -20,7 +20,9 @@ govern everything below:
 | Solver actions (Plan toolbar) | **"Re-plan day"** (full re-solve, replaces the plan); **"Generate meet"** (first solve) | Retires "Re-solve meet" as button copy. Composes with the existing warm-restart action **"Re-plan from here"** (mid-day, keeps started/finished fixed, stays close): *day* = the whole plan from scratch, *from here* = the rest of the day, minimally disturbed. |
 | Module tri-state | **On / Available / Off** (workspace builder) | Retires "Later". Matches the Modules catalog vocabulary (Enabled / Available / Off) and the backend statuses (`enabled` / `available` / `disabled`). |
 | Config surfaces | Meet **Configuration**, Bracket **Configuration** | Unchanged — the section headers disambiguate. |
-| Header idle chip | *Pending sign-off (Phase 1 STOP):* label it "Solver idle" or confine it to the Plan footer | The bare "● Idle" chip in the workspace header is ambiguous. |
+| Header status chip | **Silent when idle** — a quiet dot (aria-label "App status") that keeps the popover reachable; the label appears only when it says something ("Solving", "Degraded") | The bare "● Idle" chip was retired: a resting solver is not information the operator needs pushed at them. The Plan footer still says "Solver idle…" where solving is actually done. |
+| Workspace header gear | Labelled **"Workspace"** (glyph + text) | Disambiguates from the rail's account-settings gear — same icon, different scope, both visible at once. |
+| Lifecycle on Settings | **Display-only** (derived badge); the one explicit action is **Archive / Unarchive** in the danger zone | Retires the stored-status dropdown the app ignored. |
 
 ## Locale
 

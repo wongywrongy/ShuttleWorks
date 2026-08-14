@@ -1,14 +1,24 @@
 /**
  * The Overview's identity block — name, kind/date line, lifecycle badge, in
  * one tight tier instead of the loose stack it replaced (SP-UI-1 3b).
+ *
+ * `action` is the phase's primary CTA (SP-CONSOLE-REFINE G3.1): the primary
+ * action lives top-right of the content header, not mid-page below the stats.
  */
+import type { ReactNode } from 'react';
 import { StatusPill } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../../api/dto';
 import { lifecycleBadge } from '../../../platform/domain/lifecycle';
 import { resolvePhase } from '../../../platform/domain/overviewPhase';
 import { formatEventDate } from './railRows';
 
-export function OverviewHeader({ summary }: { summary: TournamentSummaryDTO }) {
+export function OverviewHeader({
+  summary,
+  action,
+}: {
+  summary: TournamentSummaryDTO;
+  action?: ReactNode;
+}) {
   const kindLabel = summary.kind === 'bracket' ? 'Bracket tournament' : 'Meet day';
   const date = formatEventDate(summary.tournamentDate);
   // Reuse the SHARED precedence (archived > live > complete) rather than
@@ -26,11 +36,14 @@ export function OverviewHeader({ summary }: { summary: TournamentSummaryDTO }) {
           {date ? ` · ${date}` : ''}
         </p>
       </div>
-      {badge ? (
-        <StatusPill tone={badge.tone} dot className="mt-1 shrink-0">
-          {badge.text}
-        </StatusPill>
-      ) : null}
+      <div className="flex shrink-0 items-center gap-3">
+        {badge ? (
+          <StatusPill tone={badge.tone} dot className="mt-1">
+            {badge.text}
+          </StatusPill>
+        ) : null}
+        {action}
+      </div>
     </div>
   );
 }
