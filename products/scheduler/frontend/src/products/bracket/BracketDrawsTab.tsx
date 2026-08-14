@@ -322,7 +322,7 @@ export function BracketDrawsTab() {
                 <>
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[0])} break-words text-sm font-semibold text-accent sw-num`}
+                    className={`${colClass(DRAW_COLUMNS[0])} break-words text-2sm font-semibold text-accent sw-num`}
                   >
                     {row.ev.id}
                   </span>

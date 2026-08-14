@@ -72,16 +72,17 @@ const LONGEST_BRACKET_LABEL = 10; // "XDC L R327"
 const LONGEST_MEET_RANK = 4; // "XD11"
 
 // ── The type scale the rows are built from ─────────────────────────────────
-/** `text-sm` = `--text-sm` = 0.875rem. */
-const TEXT_SM_PX = 14;
+/** `text-2sm` = `--text-2sm` = 0.8125rem — the data-row body size since the
+ *  G5 density pass (SP-CONSOLE-REFINE); `BANDED_ROW_BASE` carries it. */
+const TEXT_2SM_PX = 13;
 /** `leading-relaxed`, the heaviest leading any banded cell uses. */
 const LEADING_RELAXED = 1.625;
-const LINE_BOX_PX = TEXT_SM_PX * LEADING_RELAXED; // 22.75
+const LINE_BOX_PX = TEXT_2SM_PX * LEADING_RELAXED; // 21.125
 /** Conservative mixed-case advance for Geist — real names run nearer 0.5em,
  *  so every derivation below has slack rather than being on the edge. */
-const CHAR_PX = 0.55 * TEXT_SM_PX; // 7.7
+const CHAR_PX = 0.55 * TEXT_2SM_PX; // 7.15
 /** Both event cells are `font-semibold`, which is wider than body text. */
-const CHAR_PX_SEMIBOLD = 0.58 * TEXT_SM_PX; // 8.12
+const CHAR_PX_SEMIBOLD = 0.58 * TEXT_2SM_PX; // 7.54
 /** `px-1.5`, both sides — the inner inset on the bracket event cell. Its
  *  content box is that much narrower than the column. */
 const BRACKET_EVENT_INSET_PX = 12;
@@ -137,7 +138,7 @@ describe('a row reserves the lines ITS OWN columns need', () => {
   });
 
   it('every reservation is at least that many line boxes tall', () => {
-    // 22.75px a line; the class must cover it or a wrapped row is taller than
+    // 21.125px a line; the class must cover it or a wrapped row is taller than
     // an unwrapped one again and the list goes ragged.
     for (const lines of [1, 2] as const) {
       expect(classPx(BANDED_ROW_MIN_H[lines])).toBeGreaterThanOrEqual(

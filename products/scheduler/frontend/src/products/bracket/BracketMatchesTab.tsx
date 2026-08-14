@@ -329,20 +329,20 @@ export function BracketMatchesTab({
                           row rather than spilling into Side A. */}
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.event} break-words px-1.5 text-sm font-semibold text-accent sw-num`}
+                        className={`${BRACKET_MATCH_CELL.event} break-words px-1.5 text-2sm font-semibold text-accent sw-num`}
                         title={pu.id}
                       >
                         {labelById.get(pu.id) ?? pu.id}
                       </span>
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.side} text-sm leading-relaxed text-foreground`}
+                        className={`${BRACKET_MATCH_CELL.side} text-2sm leading-relaxed text-foreground`}
                       >
                         {renderSide(pu.side_a)}
                       </span>
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.side} text-sm leading-relaxed text-foreground`}
+                        className={`${BRACKET_MATCH_CELL.side} text-2sm leading-relaxed text-foreground`}
                       >
                         {renderSide(pu.side_b)}
                       </span>

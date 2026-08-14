@@ -131,7 +131,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
           {b.court != null ? `C${b.court} · S${b.slot}` : '–'}
         </span>
-        <span className="min-w-[10rem] flex-1 break-words text-sm">
+        <span className="min-w-[10rem] flex-1 break-words text-2sm">
           {b.sideA}
           <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           {b.sideB}

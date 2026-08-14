@@ -340,7 +340,7 @@ export function PeopleAccessTab({
                 <li
                   key={m.userId}
                   data-testid={`member-${m.userId}`}
-                  className="flex items-center justify-between gap-3 p-3"
+                  className="flex items-center justify-between gap-3 px-3 py-1.5"
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <span

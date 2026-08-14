@@ -35,6 +35,7 @@ module.exports = {
         '3xs':  ['var(--text-3xs)',  { lineHeight: '0.875rem', letterSpacing: '0.02em' }],
         '2xs':  ['var(--text-2xs)',  { lineHeight: '1rem',   letterSpacing: '0.02em' }],
         xs:     ['var(--text-xs)',   { lineHeight: '1rem' }],
+        '2sm':  ['var(--text-2sm)',  { lineHeight: '1.25rem' }],
         sm:     ['var(--text-sm)',   { lineHeight: '1.25rem' }],
         base:   ['var(--text-base)', { lineHeight: '1.5rem' }],
         lg:     ['var(--text-lg)',   { lineHeight: '1.75rem' }],

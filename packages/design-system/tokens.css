@@ -175,17 +175,23 @@
     --stagger-step: 40ms;                    /* per-child mount delay */
 
     /* ----- Density (comfortable defaults) -------------------------------- */
-    --density-row-h:        36px;
-    --density-cell-py:       8px;
+    /* 36→32 / 8→6 (SP-CONSOLE-REFINE G5): one step denser on data surfaces.
+     * Type and padding shrink together — shrinking type alone reads sparser,
+     * not denser. Interaction targets (buttons, inputs) do not read these. */
+    --density-row-h:        32px;
+    --density-cell-py:       6px;
     --density-cell-px:      12px;
     --density-gap:          16px;
     --density-section-gap:  24px;
     --density-badge-h:      22px;
 
-    /* ----- Type ladder px (strict 10/11/12/14/16/18/24) ----------------- */
+    /* ----- Type ladder px (strict 10/11/12/13/14/16/18/24) --------------- */
     --text-3xs:  0.625rem;  /* 10px footnote / status pill / micro-stamp     */
     --text-2xs:  0.6875rem; /* 11px overline / eyebrow / SectionHeader       */
     --text-xs:   0.75rem;   /* 12px metadata / mono ids                      */
+    --text-2sm:  0.8125rem; /* 13px DATA-ROW body — tables/lists/queue rows/
+                               inspector facts (SP-CONSOLE-REFINE G5). Forms,
+                               buttons and prose stay on --text-sm.          */
     --text-sm:   0.875rem;  /* 14px body default                             */
     --text-base: 1rem;      /* 16px                                          */
     --text-lg:   1.125rem;  /* 18px                                          */

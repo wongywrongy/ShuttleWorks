@@ -191,7 +191,7 @@ export function WorkspaceRow({
         // the name column ~63px, so `break-words` broke it MID-WORD
         // ("Invitatio/nal"). The columns now wrap to a second line instead of
         // strangling the name; see the `min-w-[12rem]` floor below.
-        'group flex min-h-[40px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm @container/table',
+        'group flex min-h-[40px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-2sm @container/table',
         'transition-colors duration-fast ease-brand',
         receded ? 'opacity-80 hover:opacity-100' : '',
         selected
@@ -210,7 +210,7 @@ export function WorkspaceRow({
             fact, and the row's `flex-wrap` + the 12rem floor above give it the
             width to wrap at WORD boundaries — wrapping is necessary, not
             sufficient; the box still has to have room. */}
-        <span className="min-w-0 break-words text-sm font-semibold text-foreground">
+        <span className="min-w-0 break-words text-2sm font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </span>
         {badge ? (

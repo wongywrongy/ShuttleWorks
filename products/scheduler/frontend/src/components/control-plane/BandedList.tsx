@@ -70,8 +70,11 @@ export const NAME_COL_MIN = 'min-w-[10rem]';
  *  Not consumed directly: `bandedRowClasses(columns)` prepends the
  *  `BANDED_ROW_MIN_H` the surface's own columns derive, so the shell comes
  *  from one place and the reservation from the content. */
+/** `text-2sm` (13px) is the data-row body size (SP-CONSOLE-REFINE G5) —
+ *  cells inherit it unless they opt into a smaller meta tier. Forms,
+ *  buttons and prose stay on `text-sm`. */
 export const BANDED_ROW_BASE =
-  'flex items-center gap-3 border-b border-border px-5 transition-colors duration-fast ease-brand hover:bg-muted/30';
+  'flex items-center gap-3 border-b border-border px-5 text-2sm transition-colors duration-fast ease-brand hover:bg-muted/30';
 
 export interface BandedListColumn {
   /** Column label. Empty string renders an `aria-hidden` spacer cell. */
@@ -153,7 +156,7 @@ export function ColumnHeaderRow({
     <div
       role="row"
       className={[
-        'flex items-center gap-3 border-b border-border bg-muted/40 py-1.5',
+        'flex items-center gap-3 border-b border-border bg-muted/40 py-1',
         inset,
         className,
       ]
@@ -227,7 +230,7 @@ export function GroupBandHeader({
       onClick={onToggle}
       aria-expanded={!collapsed}
       data-testid={testid}
-      className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-5 py-1.5 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
+      className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-5 py-1 text-left transition-colors duration-fast ease-brand hover:bg-muted/60"
     >
       <CaretRight
         aria-hidden

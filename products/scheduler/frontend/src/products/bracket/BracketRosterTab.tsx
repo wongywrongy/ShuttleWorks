@@ -221,7 +221,7 @@ function BracketRosterTabCore({
               <>
                 <span
                   role="cell"
-                  className={`${colClass(ROSTER_COLUMNS[0])} break-words text-sm text-foreground`}
+                  className={`${colClass(ROSTER_COLUMNS[0])} break-words text-2sm text-foreground`}
                 >
                   {p.name}
                 </span>

@@ -65,7 +65,7 @@ export function StandingsTable({
                 </span>
                 <span
                   role="cell"
-                  className={`${NAME_COL_MIN} flex-1 break-words text-sm text-card-foreground`}
+                  className={`${NAME_COL_MIN} flex-1 break-words text-2sm text-card-foreground`}
                 >
                   {nameById[row.participant_id] ?? row.participant_id}
                 </span>

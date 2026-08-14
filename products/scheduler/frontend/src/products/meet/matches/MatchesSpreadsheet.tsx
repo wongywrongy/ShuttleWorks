@@ -377,7 +377,7 @@ const MatchRow = memo(function MatchRow({
       </span>
       <span
         role="cell"
-        className={`${MEET_MATCH_CELL.event} text-sm font-semibold text-accent sw-num`}
+        className={`${MEET_MATCH_CELL.event} text-2sm font-semibold text-accent sw-num`}
       >
         {match.eventRank?.trim() || (
           <span className="text-xs font-normal italic text-muted-foreground">
@@ -448,7 +448,7 @@ function PlayerCellSummary({
     <span
       role="cell"
       data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
-      className={`${MEET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed`}
+      className={`${MEET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed`}
     >
       {named.length === 0 ? (
         <span className="text-xs italic text-muted-foreground">No players</span>

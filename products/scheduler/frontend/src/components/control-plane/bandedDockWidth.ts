@@ -40,13 +40,15 @@ import { BANDED_ROW_BASE, NAME_COL_MIN } from './BandedList';
 /**
  * A row's line reservation, per line count, as a min-height class:
  *
- *   text-sm (0.875rem = 14px) × leading-relaxed (1.625) = 22.75px per line
- *   1 line  → 22.75px → 24px = `min-h-6`   (first spacing-ladder rung above
+ *   text-2sm (0.8125rem = 13px) × leading-relaxed (1.625) = 21.125px per line
+ *   1 line  → 21.125px → 24px = `min-h-6`  (first spacing-ladder rung above
  *                                           it, and exactly WCAG 2.2 SC
  *                                           2.5.8's 24px minimum target for
  *                                           a clickable row)
- *   2 lines → 45.50px → 48px = `min-h-12`  (the next rung; 64 would waste
- *                                           18px on every row)
+ *   2 lines → 42.25px → 48px = `min-h-12`  (the first rung at or above it —
+ *                                           44 is not on the BRAND.md ladder,
+ *                                           so the G5 density step lands in
+ *                                           the type, not the reservation)
  *
  * `min-height`, deliberately, not `height`. Truncation is banned product-wide
  * (`truncationContract.test.ts`), so a label longer than anything in the
