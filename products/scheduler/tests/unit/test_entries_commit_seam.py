@@ -608,6 +608,15 @@ def test_one_person_in_two_meet_events_is_one_player_carrying_both_ranks(
     xd = _entry_event(session, tid, code="XD")
     first = _entry(session, tid, ms, player_name="Alice Chen")
     second = _entry(session, tid, xd, player=first.player)
+    # Distinct submitted_at: the seam orders by (submitted_at, id), and two
+    # same-transaction inserts can share one timestamp — the random-UUID id
+    # then breaks the tie arbitrarily and ranks[] arrives ["XD", "MS"]. The
+    # assertion below is about ORDER, so the fixture must actually make the
+    # MS entry earlier.
+    from datetime import timedelta
+
+    second.submitted_at = first.submitted_at + timedelta(seconds=1)
+    session.commit()
 
     commit_entries(repo, tid)
 
