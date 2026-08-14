@@ -285,6 +285,7 @@ export function MatchesSpreadsheet({
                 match={m}
                 status={statusById.get(m.id) ?? 'pending'}
                 sets={matchStates[m.id]?.sets}
+                score={matchStates[m.id]?.score}
                 players={players}
                 issues={issuesFor(m)}
                 onDelete={deleteMatch}
@@ -331,6 +332,7 @@ const MatchRow = memo(function MatchRow({
   match,
   status,
   sets,
+  score,
   players,
   issues,
   onDelete,
@@ -341,6 +343,11 @@ const MatchRow = memo(function MatchRow({
    *  DONE rows they REPLACE the status pill (G6: scores + winner dot say
    *  "done"; a pill restating it is paid-for redundancy). */
   sets?: SetPair[];
+  /** Aggregate sets-won score — the PERSISTED meet result (per-set detail
+   *  is session-only until D19 lands). "2-0" in the lane beats a bare
+   *  DONE pill, and keeps the meet and bracket status columns speaking
+   *  the same language (owner ruling, P4 review). */
+  score?: SetPair;
   players: PlayerDTO[];
   /** Pre-computed disruption issues for this match from the global
    *  `useDisruptions` feed. Routing through the hook keeps the
@@ -353,8 +360,10 @@ const MatchRow = memo(function MatchRow({
   // come from the global `useDisruptions` feed (consumed by the parent),
   // so the per-row Warning icon and the TabBar badge always agree.
   const severity = maxSeverity(issues);
-  const scored = status === 'done' && (sets?.length ?? 0) > 0;
-  const winner = scored ? setsWinner(sets) : null;
+  const laneSets =
+    status !== 'done' ? null : sets?.length ? sets : score ? [score] : null;
+  const scored = laneSets != null;
+  const winner = scored ? setsWinner(laneSets) : null;
 
   return (
     <>
@@ -405,8 +414,8 @@ const MatchRow = memo(function MatchRow({
         data-testid={`match-status-${match.id}`}
         className={`${MEET_MATCH_CELL.status} flex items-center justify-end`}
       >
-        {scored ? (
-          <ScoreLane sets={sets!} data-testid={`match-score-${match.id}`} />
+        {laneSets ? (
+          <ScoreLane sets={laneSets} data-testid={`match-score-${match.id}`} />
         ) : (
           <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
             {STATUS_LABEL[status]}

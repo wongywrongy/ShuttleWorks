@@ -12,10 +12,16 @@
  * Cards expand in place to the shared roster field blocks, so an availability
  * or event edit made here writes the CANONICAL roster record.
  */
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import { DetailPanel, PickerPopover } from '../../../components/control-plane';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
+import { SchoolChip } from '../../../components/SchoolChip';
+import {
+  buildGroupIndex,
+  getPlayerSchoolAccent,
+  type SchoolAccent,
+} from '../../../lib/schoolAccent';
 import type { PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import {
   PlayerAvailabilityField,
@@ -42,6 +48,7 @@ export function MatchSideSection({
 }) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
+  const groupsById = useMemo(() => buildGroupIndex(groups), [groups]);
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const slug = label.replace(/\s+/g, '-').toLowerCase();
   const atCapacity = ids.length >= capacity;
@@ -94,7 +101,7 @@ export function MatchSideSection({
                 id={id}
                 side={label}
                 player={player}
-                school={groups.find((g) => g.id === player?.groupId)?.name ?? ''}
+                accent={getPlayerSchoolAccent(player, groupsById)}
                 open={openIds.has(id)}
                 onToggle={() => toggle(id)}
                 onRemove={() => onChange(ids.filter((x) => x !== id))}
@@ -143,7 +150,7 @@ function PlayerCard({
   id,
   side,
   player,
-  school,
+  accent,
   open,
   onToggle,
   onRemove,
@@ -151,7 +158,7 @@ function PlayerCard({
   id: string;
   side: string;
   player: PlayerDTO | null;
-  school: string;
+  accent: SchoolAccent;
   open: boolean;
   onToggle: () => void;
   onRemove: () => void;
@@ -192,11 +199,9 @@ function PlayerCard({
           <span className="min-w-0 flex-1 break-words text-sm text-foreground">
             {player.name || '(unnamed)'}
           </span>
-          {school ? (
-            <span className="shrink-0 rounded-sm border border-border bg-muted/40 px-1 py-px text-3xs text-muted-foreground">
-              {school}
-            </span>
-          ) : null}
+          {/* Short-code chip, not the full school name (G6/M2.6) — the
+              full name stays one hover away in the chip's tooltip. */}
+          <SchoolChip accent={accent} />
         </button>
         <ConfirmDeleteButton
           label={`${player.name || 'player'} from ${side}`}

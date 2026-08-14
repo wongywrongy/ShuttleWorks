@@ -90,14 +90,18 @@ describe('<MatchDetailPanel /> (meet)', () => {
     expect(within(header).getByText("Men's Singles")).toBeInTheDocument();
   });
 
-  it('renders each side as collapsed player cards with the school badge', () => {
+  it('renders each side as collapsed player cards with the school CHIP (code, name in tooltip)', () => {
     renderPanel();
+    // G6/M2.6: the full-width school-name pill became a short-code chip —
+    // "AH" for Alpha High — with the full name one hover away in `title`.
     const cardA = screen.getByTestId('match-player-card-a1');
     expect(cardA).toHaveTextContent('Aiko');
-    expect(cardA).toHaveTextContent('Alpha High');
+    expect(cardA).toHaveTextContent('AH');
+    expect(within(cardA).getByTitle('Alpha High')).toBeInTheDocument();
     const cardB = screen.getByTestId('match-player-card-b1');
     expect(cardB).toHaveTextContent('Eva');
-    expect(cardB).toHaveTextContent('Beta Prep');
+    expect(cardB).toHaveTextContent('BP');
+    expect(within(cardB).getByTitle('Beta Prep')).toBeInTheDocument();
   });
 
   it('renders an empty side as the dashed non-interactive placeholder', () => {

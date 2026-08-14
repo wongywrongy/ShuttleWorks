@@ -161,12 +161,13 @@ export function BracketViewHeader({
       }
     >
       <StatusBar
+        // Zero-count tokens are noise, not information (B2.1's mirror).
         items={[
-          { tone: "done", label: "DONE", count: counts.done },
-          { tone: "green", label: "LIVE", count: counts.live },
-          { tone: "amber", label: "READY", count: counts.ready },
-          { tone: "idle", label: "PEND", count: counts.pending },
-        ]}
+          { tone: "done" as const, label: "DONE", count: counts.done },
+          { tone: "green" as const, label: "LIVE", count: counts.live },
+          { tone: "amber" as const, label: "READY", count: counts.ready },
+          { tone: "idle" as const, label: "PEND", count: counts.pending },
+        ].filter((i) => i.count > 0)}
       />
       {view === "schedule" && <ExportMenu api={api} />}
       {(view === "schedule" || view === "live") && schedulableCount > 0 && (

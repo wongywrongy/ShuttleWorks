@@ -977,6 +977,14 @@ function BracketCell({
   const winner = result?.winner_side;
   const aName = labelFor(pu.side_a, pu.slot_a, nameById);
   const bName = labelFor(pu.side_b, pu.slot_b, nameById);
+  // Stacked members for RESOLVED pair sides (owner ruling, P4 review): the
+  // card gives each player their own line, so the " / " join is noise there.
+  // A doubles side is ONE participant whose NAME carries the join — split it
+  // too. Feeder/bye placeholders and the score-entry labels keep the string.
+  const membersOf = (ids: string[] | null) =>
+    ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
+  const aMembers = membersOf(pu.side_a);
+  const bMembers = membersOf(pu.side_b);
   const canRecord = !!pu.side_a && !!pu.side_b && !result && !seeding;
   const posA = pu.match_index * 2;
   const posB = posA + 1;
@@ -1011,6 +1019,7 @@ function BracketCell({
       <Side
         side="A"
         label={aName}
+        members={aMembers}
         winning={winner === "A"}
         loser={result && winner === "B"}
         sets={validSets}
@@ -1026,6 +1035,7 @@ function BracketCell({
       <Side
         side="B"
         label={bName}
+        members={bMembers}
         winning={winner === "B"}
         loser={result && winner === "A"}
         sets={validSets}
@@ -1065,6 +1075,7 @@ function BracketCell({
 function Side({
   side,
   label,
+  members = null,
   winning,
   loser,
   bye,
@@ -1077,6 +1088,10 @@ function Side({
 }: {
   side: "A" | "B";
   label: string;
+  /** Resolved member names — rendered one per line, WITHOUT the " / " join
+   *  (the line break already separates the pair). Null for feeder/bye
+   *  placeholders, which render `label` as one string. */
+  members?: string[] | null;
   winning?: boolean;
   loser?: boolean;
   bye?: boolean;
@@ -1118,7 +1133,15 @@ function Side({
       {/* A draw slot IS the participant's name — ellipsising it cut exactly
           the surname that tells two entrants apart. It wraps; the card grows
           into the 28px row gap rather than hiding characters. */}
-      <span className="min-w-0 flex-1 break-words text-left">{label}</span>
+      <span className="min-w-0 flex-1 break-words text-left">
+        {members && members.length > 0
+          ? members.map((n, i) => (
+              <span key={i} className="block">
+                {n}
+              </span>
+            ))
+          : label}
+      </span>
       {seeding && !bye ? (
         <span className="text-3xs text-muted-foreground">⇄</span>
       ) : decided ? (

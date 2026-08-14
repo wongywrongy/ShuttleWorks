@@ -21,7 +21,9 @@ import { useMemo, useRef, useState } from 'react';
 import {
   DetailPanel,
   EventPicker,
+  MatchCard,
   PickerPopover,
+  setsWinner,
   STATUS_LABEL,
   STATUS_PILL_TONE,
   type EventPickerOption,
@@ -30,6 +32,9 @@ import {
 import { StatusPill } from '../../../components/StatusPill';
 import { Row } from '../../../platform/settings/SettingsControls';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
+import { formatPlayerName } from '../../../lib/names';
+import { slotToTime } from '../../../lib/time';
 import type { MatchDTO } from '../../../api/dto';
 import { EVENT_LABEL, isDoublesRank } from '../roster/positionGrid/helpers';
 import { MatchSideSection } from './MatchSideSection';
@@ -53,7 +58,39 @@ export function MatchDetailPanel({
   const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
   const config = useTournamentStore((s) => s.config);
+  const schedule = useTournamentStore((s) => s.schedule);
   const updateMatch = useTournamentStore((s) => s.updateMatch);
+  const matchState = useMatchStateStore((s) => s.matchStates[match.id]);
+
+  // G6 summary facts: the recorded score (per-set when the session has it,
+  // the persisted aggregate otherwise) and the footer meta strip — court +
+  // planned time, so the pane answers "where/when" without a trip to Plan.
+  const laneSets =
+    status === 'done'
+      ? matchState?.sets?.length
+        ? matchState.sets
+        : matchState?.score
+          ? [matchState.score]
+          : null
+      : null;
+  const assignment = schedule?.assignments.find((a) => a.matchId === match.id);
+  const meta = assignment
+    ? `Court ${assignment.courtId}${config ? ` · ${slotToTime(assignment.slotId, config)}` : ''}`
+    : null;
+  const sideNames = (ids: string[] | undefined) => {
+    const named = (ids ?? [])
+      .map((id) => players.find((p) => p.id === id)?.name)
+      .filter((n): n is string => !!n);
+    return named.length === 0 ? (
+      <span className="italic text-muted-foreground">No players</span>
+    ) : (
+      named.map((n, i) => (
+        <span key={i} className="block">
+          {formatPlayerName(n)}
+        </span>
+      ))
+    );
+  };
 
   const code = match.eventRank?.trim() ?? '';
   const prefix = code.match(/^[A-Z]+/)?.[0] ?? '';
@@ -132,13 +169,31 @@ export function MatchDetailPanel({
       />
 
       {status ? (
-        <DetailPanel.Section eyebrow="Status">
-          {/* Read-only pill — Operations owns run-state; never interactive. */}
-          <span data-testid="match-status-pill" className="inline-flex w-fit">
-            <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
-              {STATUS_LABEL[status]}
-            </StatusPill>
-          </span>
+        <DetailPanel.Section eyebrow={laneSets ? 'Result' : 'Status'}>
+          {/* Read-only — Operations owns run-state; never interactive. A
+              finished match with a recorded score renders the G6 card
+              (scores + winner dot say "done"); otherwise the pill. */}
+          {laneSets ? (
+            <MatchCard
+              sideA={sideNames(match.sideA)}
+              sideB={sideNames(match.sideB)}
+              sets={laneSets}
+              winner={setsWinner(laneSets)}
+              meta={meta}
+              data-testid="match-result-card"
+            />
+          ) : (
+            <>
+              <span data-testid="match-status-pill" className="inline-flex w-fit">
+                <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+                  {STATUS_LABEL[status]}
+                </StatusPill>
+              </span>
+              {meta ? (
+                <p className="mt-1.5 text-2xs text-muted-foreground">{meta}</p>
+              ) : null}
+            </>
+          )}
         </DetailPanel.Section>
       ) : null}
     </DetailPanel>

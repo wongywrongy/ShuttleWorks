@@ -20,13 +20,18 @@ import { useMemo, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import {
   DetailPanel,
+  MatchCard,
   STATUS_LABEL,
   STATUS_PILL_TONE,
   type BracketMatchStatus,
+  type MatchReason,
 } from '../../components/control-plane';
 import { StatusPill } from '../../components/StatusPill';
 import { useTournamentStore } from '../../store/tournamentStore';
+import { sideNameLines } from '../../lib/names';
+import { formatBracketSlot } from './formatBracketSlot';
 import type {
+  BracketSetScore,
   BracketTournamentDTO,
   Participant,
   PlayUnitDTO,
@@ -100,6 +105,39 @@ export function BracketMatchDetailPanel({
     onCommitEvent,
   };
 
+  // G6 Result card facts: the recorded result + the footer meta strip
+  // (court + planned time), so the pane answers "who won, where, when".
+  const result = data.results.find((r) => r.play_unit_id === pu.id) ?? null;
+  const validSets = Array.isArray(result?.score?.sets)
+    ? result.score.sets.filter(
+        (s): s is BracketSetScore =>
+          !!s && typeof s.sideA === 'number' && typeof s.sideB === 'number',
+      )
+    : [];
+  const winner =
+    result?.winner_side === 'A' || result?.winner_side === 'B'
+      ? result.winner_side
+      : null;
+  const reason: MatchReason | null =
+    result?.reason ?? (result?.walkover ? 'walkover' : null);
+  const assignment = data.assignments.find((a) => a.play_unit_id === pu.id);
+  const meta = assignment
+    ? `Court ${assignment.court_id} · ${formatBracketSlot(assignment.slot_id, data)}`
+    : null;
+  // Stacked member lines for the card — each player on their own line, no
+  // " / " join (the line break already separates the pair).
+  const sideLines = (ids: string[] | null) => {
+    if (!ids || ids.length === 0)
+      return <span className="italic text-muted-foreground">TBD</span>;
+    return ids
+      .flatMap((id) => sideNameLines(participantById.get(id)?.name ?? id))
+      .map((n, i) => (
+        <span key={i} className="block">
+          {n}
+        </span>
+      ));
+  };
+
   return (
     <DetailPanel
       variant="docked"
@@ -112,13 +150,33 @@ export function BracketMatchDetailPanel({
     >
       <SideSection label="Side A" side={pu.side_a} slot={pu.slot_a} {...sideProps} />
       <SideSection label="Side B" side={pu.side_b} slot={pu.slot_b} {...sideProps} />
-      <DetailPanel.Section eyebrow="Status">
-        {/* Read-only pill — Operations owns run-state; never interactive. */}
-        <span data-testid="bracket-match-status-pill" className="inline-flex w-fit">
-          <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
-            {STATUS_LABEL[status]}
-          </StatusPill>
-        </span>
+      <DetailPanel.Section eyebrow={result ? 'Result' : 'Status'}>
+        {/* Read-only — Operations owns run-state; never interactive. A
+            recorded result renders the G6 card (stacked sides, score lane,
+            winner dot, W.O./Ret. on the affected side); otherwise the pill. */}
+        {result ? (
+          <MatchCard
+            sideA={sideLines(pu.side_a)}
+            sideB={sideLines(pu.side_b)}
+            sets={validSets}
+            winner={winner}
+            reason={reason}
+            reasonSide={reason && winner ? (winner === 'A' ? 'B' : 'A') : null}
+            meta={meta}
+            data-testid="bracket-match-result-card"
+          />
+        ) : (
+          <>
+            <span data-testid="bracket-match-status-pill" className="inline-flex w-fit">
+              <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+                {STATUS_LABEL[status]}
+              </StatusPill>
+            </span>
+            {meta ? (
+              <p className="mt-1.5 text-2xs text-muted-foreground">{meta}</p>
+            ) : null}
+          </>
+        )}
       </DetailPanel.Section>
       {onRecordContingency && status !== 'done' ? (
         <ContingencySection

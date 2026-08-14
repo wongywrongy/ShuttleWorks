@@ -271,13 +271,17 @@ describe('<BracketMatchesTab /> — match detail panel', () => {
     );
   });
 
-  it('shows the selected match\'s read-only status pill in the panel', () => {
+  it('shows the G6 result card for a decided match, the pill for an undecided one', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    // pu-ms-1 has a recorded result → Done.
+    // pu-ms-1 has a recorded result → the Result card replaces the pill
+    // (scores + winner dot say "done"; a pill restating it is redundancy).
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
+    expect(screen.getByTestId('bracket-match-result-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('bracket-match-status-pill')).toBeNull();
+    // An undecided match keeps the read-only pill.
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-2'));
     const pill = screen.getByTestId('bracket-match-status-pill');
-    expect(pill).toHaveTextContent('Done');
-    expect(pill.tagName).toBe('SPAN');
+    expect(pill).toHaveTextContent(/Live|Ready|Pending/);
   });
 
   it('closes the panel via the × button', () => {

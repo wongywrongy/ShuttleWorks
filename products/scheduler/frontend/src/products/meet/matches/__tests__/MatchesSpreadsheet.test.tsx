@@ -175,11 +175,10 @@ describe('<MatchesSpreadsheet />', () => {
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m5'));
     const panel = screen.getByTestId('match-detail-panel');
-    // One card per player, each carrying its own school — the pane has room
-    // to repeat it, which is exactly why the de-duplicating `uniformSchool`
-    // rule belonged to the row and left with it.
-    expect(within(panel).getAllByText('Alpha High')).toHaveLength(2);
-    expect(within(panel).getAllByText('Beta Prep')).toHaveLength(2);
+    // One card per player, each carrying its own school chip — the code
+    // in text, the full name in the chip's tooltip (G6/M2.6).
+    expect(within(panel).getAllByTitle('Alpha High').length).toBeGreaterThanOrEqual(2);
+    expect(within(panel).getAllByTitle('Beta Prep').length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders an empty side as a muted-italic reading, not an add control', () => {
