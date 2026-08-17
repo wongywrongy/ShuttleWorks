@@ -52,7 +52,7 @@ stable tiebreaker + `require_tournament_access` on new routes). Two additions fr
 | 0 | Baseline, ledger, landing-zone map, premise audit. **STOP.** | **Complete — awaiting owner ruling on the O-items below.** |
 | 1 | X1 + X5 (glossary, casing ruling, status tokens, DUE/LATE thresholds) + the R-A/R-B renames | **Complete** |
 | 2 | X2 sweep (control-column slots across the 7 config surfaces) + NEW-4/WSV-2 ownership | **Complete** |
-| 3 | X3/X4 + list and ops surfaces | Not started |
+| 3 | X3/X4 + list and ops surfaces | **Complete**, minus INS-4 / OV-1's click / OV-4 → Phase 5 (see below) |
 | 4 | TV + display-config (incl. TV-6 property test + negative control) | Not started |
 | 5 | Guardrails + admin (the real backend work) | Not started |
 | 6 | Playwright recapture + before/after report. **STOP.** | Not started |
@@ -487,13 +487,115 @@ number box and matches Venue and schedule's row exactly.
 **Gates after Phase 2:** vitest 1750 · entrant 586 (solo) · contrast 68/68 · eslint 0 errors /
 118 warnings · depcruise 0 errors / 15 warnings · tsc 0. Backend untouched.
 
+## Phase 3 — what shipped
+
+Sequenced by surface rather than by item ID, since the items cluster by file.
+
+**Match lists (X3, MAT-1/3/4, BMAT-1/2/4).** The status column said a *state*
+on some rows and a *number* on others — a finished match replaced its chip with
+the score — so nothing down the column was comparable and a done row could only
+be identified by reading it. The chip is permanent now with the score beside it,
+which cost 64px of column width (`w-28` → `w-44`) taken from the two flex sides;
+both dock floors moved (meet 672 → 692, bracket 692 → 756) and the geometry
+tests moved with them.
+
+The winner was marked by a **green dot floating before its first name**. Green
+means live everywhere else in this console, so at scan speed the dot said the
+opposite of what the row meant. Winner is weight now; the outcome is in the
+result cell.
+
+MAT-4 turned out to be a palette problem, not a chip problem: `schoolAccent`
+carried emerald, amber, rose and orange, so a two-school meet could hand its
+clubs a red dot and an orange one inches from real status chips — and its amber
+was literally `--status-called`'s value. Schools draw from blue / violet / cyan
+/ slate plus pink now, **and the marker is a rounded square**, so shape keeps
+identity out of the status vocabulary even before hue does.
+
+BMAT-4 (feeder provenance instead of "TBD") is deliberately **narrower than
+written**: `sideLabel` reads a feeder-less empty slot as "Bye", which is right
+for a real bye and a lie for a round the draw has not built yet, and the list
+cannot tell those apart. No feeder, no claim.
+
+**Detail panes (MAT-5, BMAT-3).** An unfinished match now leads with where and
+when it plays; that fact sat at the very bottom under the sides, below a heading
+reading "Status". The bracket pane showed a bare name and a chevron where the
+meet pane showed a name and its identity chip, so the two panes read as two
+products; the bracket card carries its entrant's event badge.
+
+**Bracket lists and the draw (DRW-1/2, DRAW-1/2/3).** The progress tally ran
+together as one string where the only separation between adjacent tokens was
+hue — no separation at all for the two neutral tones. Each token is a tinted
+chip; every tint is a `-fg` on its own `-bg`, so the contrast gate already
+covers the pairs. Each draws row offered two link-shaped things and only one
+navigated: the code was accent-blue and inert, so it is body ink and "Open draw"
+carries the accent. A won first-round match was the loudest element in the app
+on the surface nobody watches during a live day. The slot/court caption is the
+only schedule information in the tree and was nearly invisible.
+
+DRAW-2 needed the tally derivation out of `BracketViewHeader` — `DrawView`
+cannot import from it without closing a cycle, since the header already imports
+`BracketLayoutMode` from `DrawView`. New `bracket/drawProgress.ts`. Caught by
+depcruise going 15 → 16 warnings, which is exactly what that ratchet is for.
+
+**Hub (HUB-1/2/3, INS-2).** HUB-3 resolved as O-3 recommended: the M/D/B column
+printed static configuration — the same three letters on every row of a season,
+repeating what the inspector states in full — on the one surface whose job is
+naming which workspace needs the director now. It carries the first attention
+reason and is silent otherwise. `moduleGlyphs` had no other caller and was
+deleted with its test, which is most of the vitest delta below.
+
+**Rosters (RST-1/2/3, BRST-1/2), Overview (OV-2/5), Operations (PLAN-1..4,
+LIVE-3/6).** Detail in the commits. Two worth flagging here:
+
+- **LIVE-6 as written is not buildable.** Elapsed time is slot arithmetic, so
+  "suppress the timer for the first minute" cannot be expressed: with the
+  default 30-minute slot the card reads 0:00 for up to half an hour. It is
+  suppressed for the first **slot** — the same idea at the resolution the data
+  has. Deviation, with cause.
+- **PLAN-1 keeps the saturated fills.** The brief offered "legend row *or*
+  switch cells to chip language"; the fills are already the correct status
+  tokens (live green, called amber) and re-language would have cost the board
+  its at-a-glance read. It was the *unexplained* saturation that was the
+  problem, so the legend names them.
+
+### Deferred into Phase 5, with reason
+
+Three items are not presentation and cannot be finished on the frontend:
+
+- **INS-4 / OV-4** (free courts + playing-now during LIVE). `MatchMetricsDTO`
+  deliberately excludes live counts — its docstring says so ("Live called/
+  started counts stay off this DTO by design (Operations Run owns them)"). The
+  Hub inspector reads only these server-computed signals, so there is no
+  client-side route for the Hub half. Phase 5 enriches `workspace_signals.py`
+  and records that it reverses that note with cause.
+- **OV-1's click half** ("the three rows open that match in /live"). `NextMatchDTO`
+  carries `code`/`timeLabel`/`courtLabel`/`status` and **no match id**, so the
+  row cannot select anything. The rename half shipped in Phase 1.
+
+Grouping them into Phase 5 keeps the backend to one `generate-api` +
+`dto.ts` reconciliation pass rather than two, and Phase 5 is where the directive
+puts backend work.
+
+**Gates after Phase 3:** vitest **1745** · contrast 68/68 · eslint 0 errors /
+118 warnings · depcruise 0 errors / 15 warnings · tsc 0. The vitest count fell
+from 1750 because `moduleGlyphs` and its 5-test suite were deleted as dead code
+(HUB-3); the surviving suites gained tests for `deriveTimeliness`, the attention
+column and BMAT-4's feeder branch.
+
 ## Session log
 
 - **2026-08-17 — Phase 0.** Baseline measured, ledger created, map above written, premise audit
   produced 7 owner items. Pre-existing dead-nav work committed at `6a5b177` on
   `dev/prog1-p6-2-public-ia`; branched `design/console-2`. STOP — owner approved all.
 - **2026-08-17 — Phase 1.** X1 + X5 as above.
-- **2026-08-17 — Phase 2.** X2 as above. Next: Phase 3 (X3/X4 + the list and ops surfaces),
-  where the three-parallel-`/schedule`-surfaces trap from the Phase 0 map applies — restyling
-  the unified surface leaves the meet-only and bracket-only legacy surfaces untouched, and
-  Phase 3 must say so per item rather than silently widening.
+- **2026-08-17 — Phase 2.** X2 as above.
+- **2026-08-17 — Phase 3.** As above. **Scope ruling taken, per the Phase 0 map:** every
+  PLAN-*/LIVE-* change lands on the *unified* Operations surface
+  (`OperationsProduct` / `UnifiedOpsBoard` / `run/RunSurface`), which is what the review PDF
+  captured. The meet-only legacy Gantt (`meet/SchedulePage`, `meet/MatchControlCenterPage`)
+  and the bracket-only views (`bracket/ScheduleView`, `bracket/LiveView`) are untouched and
+  keep their old treatment. They are reachable only in single-engine workspaces; widening to
+  them was not in the evidence and is not silently assumed. Log to the debt-log if the owner
+  wants parity.
+  Next: Phase 4 (TV + display-config), which carries the `TournamentConfig` schema work
+  named under "Backend scope, corrected".
