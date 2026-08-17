@@ -194,6 +194,13 @@ export function RunSurface({
   }, [baseMatches, optimisticAssigns]);
   // `late` is gated on the floor running (planFinalized) and applies to the Now
   // match only — deriveCourtLanes owns that rule.
+  // Which engines are actually on the floor — the band's done figure counts
+  // them all, so it says which ones (LIVE-3).
+  const sourceScope = useMemo(() => {
+    const present = new Set(matches.map((m) => m.source));
+    return (['meet', 'bracket'] as const).filter((s) => present.has(s)).join(' + ');
+  }, [matches]);
+
   const lanes = useMemo(
     () => deriveCourtLanes(matches, courtCount, { running: !!planFinalized, currentSlot }),
     [matches, courtCount, planFinalized, currentSlot],
@@ -415,7 +422,7 @@ export function RunSurface({
   return (
     <div data-testid="run-surface" className="relative flex h-full min-h-0 flex-col bg-card">
       {/* Summary band */}
-      <RunSummaryBand summary={summary} />
+      <RunSummaryBand summary={summary} scope={sourceScope} />
 
       {/* Rejected-command strip. Each banner is the store-subscribing
           ConflictBanner (its documented production shape), prefixed with the

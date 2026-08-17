@@ -122,7 +122,16 @@ export function RunCourtGrid({
     }
     if (now.status === 'playing' && slotMinutes != null) {
       const started = startSlotByKey.get(now.key);
-      if (started != null) return hmm((currentSlot - started) * slotMinutes);
+      // Nothing until a slot has actually elapsed. Elapsed time is slot
+      // arithmetic, so a match started in the current slot reads 0:00 — and
+      // with the default 30-minute slot it reads 0:00 for up to half an hour,
+      // which looks like a stopped clock rather than a fresh match (LIVE-6).
+      // "Suppress for the first minute", as the brief put it, is not buildable
+      // on slot granularity; suppressing for the first SLOT is the same idea
+      // at the resolution the data actually has.
+      if (started != null && currentSlot > started) {
+        return hmm((currentSlot - started) * slotMinutes);
+      }
     }
     if (!behind && now.status === 'scheduled' && now.plannedSlot != null && formatSlot) {
       return formatSlot(now.plannedSlot);
