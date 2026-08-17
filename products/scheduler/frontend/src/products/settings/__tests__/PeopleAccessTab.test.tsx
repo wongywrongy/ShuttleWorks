@@ -171,13 +171,19 @@ describe('PeopleAccessTab — last-owner guard', () => {
     CURRENT_USER = { id: 'u-owner' };
   });
 
-  it('renders the reason inline on the row, not only as a hover tooltip', async () => {
+  it('keeps the reason off the resting card — it surfaces on attempt (WSM-1)', async () => {
+    const user = userEvent.setup();
     mockMembers(OWNER, OPERATOR); // exactly one owner
     render(<PeopleAccessTab tid="t1" summary={summary} />);
-    const reason = await screen.findByTestId('member-reason-u-owner');
-    expect(reason).toHaveTextContent(/at least one owner/i);
-    // It names the way out, not just the refusal.
-    expect(reason).toHaveTextContent(/transfer ownership/i);
+    await screen.findByTestId('member-u-owner');
+    // The last-owner rule used to sit as a standing third line on the owner's
+    // own card — a warning about an action nobody had taken.
+    expect(screen.queryByTestId('member-reason-u-owner')).toBeNull();
+    // On attempt, the blocked item itself carries the rule and the way out.
+    await openMenu(user, 'Olive Owner');
+    expect(screen.getByTestId('role-viewer-u-owner').getAttribute('aria-label')).toMatch(
+      /at least one owner/i,
+    );
   });
 
   it('marks the blocked demotion aria-disabled, keeping it focusable', async () => {
@@ -227,9 +233,10 @@ describe('PeopleAccessTab — last-owner guard', () => {
     render(<PeopleAccessTab tid="t1" summary={summary} />);
     await screen.findByTestId('member-00000000-0000-0000-0000-000000000000');
 
+    // No resting warning on the lone bootstrap owner either (WSM-1).
     expect(
-      screen.getByTestId('member-reason-00000000-0000-0000-0000-000000000000'),
-    ).toHaveTextContent(/at least one owner/i);
+      screen.queryByTestId('member-reason-00000000-0000-0000-0000-000000000000'),
+    ).toBeNull();
 
     await openMenu(user, 'local@dev');
     // Nothing offered here can succeed, so nothing is left actionable.

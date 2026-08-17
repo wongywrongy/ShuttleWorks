@@ -189,6 +189,25 @@ export function WorkspaceInspector({
             </>
           )}
         </div>
+        {/* The live line (INS-4). played/remaining/total is planning
+            information; during LIVE the question this pane is being asked is
+            "is anything happening, and is a court free" — which the triplet
+            cannot answer. One quiet row, only while it is true. */}
+        {tournament.signals?.phase === 'live' &&
+        metrics?.playing != null &&
+        metrics.playing > 0 ? (
+          <p
+            data-testid="inspector-live-line"
+            className="mt-2 text-xs text-muted-foreground"
+          >
+            <span className="font-medium text-status-live">
+              {metrics.playing} on court
+            </span>
+            {metrics.courtsFree != null
+              ? ` · ${metrics.courtsFree} court${metrics.courtsFree === 1 ? '' : 's'} free`
+              : ''}
+          </p>
+        ) : null}
       </DetailPanel.Section>
 
       {steps.length > 0 ? (
@@ -252,7 +271,14 @@ export function WorkspaceInspector({
 
       {(tournament.signals?.nextUp?.length ?? 0) > 0 ? (
         <DetailPanel.Section eyebrow="Up next" testId="inspector-next-up">
-          <NextUpList items={tournament.signals?.nextUp ?? []} />
+          <NextUpList
+            items={tournament.signals?.nextUp ?? []}
+            linkFor={(n) =>
+              n.matchId && n.source
+                ? `/tournaments/${tournament.id}/live?select=${n.source}:${n.matchId}`
+                : null
+            }
+          />
         </DetailPanel.Section>
       ) : null}
     </DetailPanel>

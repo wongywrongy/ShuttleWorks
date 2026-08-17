@@ -10,12 +10,20 @@ const OPERATIONAL_IDS = new Set(['meet', 'bracket']);
 export function ModulesSettingsTab({ tid }: { tid: string }) {
   const { modules, enable, disable } = useWorkspaceModules(tid);
 
-  // The two server rules the client can evaluate from the list it already
-  // holds — the action disables visibly instead of 409-toasting on click.
+  // Every disable rule now surfaces BEFORE the click. Two were always
+  // client-evaluable from the list; has-data used to be server-only — the
+  // operator learned it from a 409 toast — and now rides the DTO (WSMOD-2).
   const enabledOps = (modules ?? []).filter(
     (m) => OPERATIONAL_IDS.has(m.id) && m.status === 'enabled',
   ).length;
-  const blockedReason = (m: { id: string; status: string }): string | undefined => {
+  const blockedReason = (m: {
+    id: string;
+    status: string;
+    hasData?: boolean;
+  }): string | undefined => {
+    if (m.status === 'enabled' && m.hasData) {
+      return 'This module has matches or draws. Clear its data before disabling it.';
+    }
     if (m.status === 'enabled' && OPERATIONAL_IDS.has(m.id) && enabledOps <= 1) {
       return 'A workspace keeps at least one operational module enabled.';
     }

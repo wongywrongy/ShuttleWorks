@@ -16,6 +16,7 @@ import { v4 as uuid } from 'uuid';
 import { ArrowsClockwise } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
+import { useMeetResultsLock } from '../../../hooks/useMeetResultsLock';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import type { MatchDTO } from '../../../api/dto';
 
@@ -41,12 +42,21 @@ export function RegenerateMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
-  // LIVE = any match has moved past `scheduled`. Regenerated lineup slots get
-  // fresh ids, which severs their recorded status/results and orphans their
-  // schedule assignments (the schedule is marked stale) — verified against
-  // `importMatches`, which replaces the list wholesale. Custom matches keep
-  // their ids and survive.
+  // Two tiers of guard, unified with the rest of the app (MAT-2 / O-4):
+  //
+  // * RESULTS EXIST (`useMeetResultsLock`, started/finished) → the action is
+  //   DISABLED, with the reason where the button is. This is the same lock
+  //   Configuration's ribbon runs on; this surface used to run its own wider
+  //   definition beside it, so "settings are read-only while matches are in
+  //   play" was true one nav item away and false here.
+  // * LIVE but no results yet (anything past `scheduled`, e.g. called) →
+  //   allowed, behind the armed confirm below that states what is destroyed.
+  //
+  // Regenerated lineup slots get fresh ids, which severs recorded status and
+  // orphans schedule assignments — verified against `importMatches`, which
+  // replaces the list wholesale. Custom matches keep their ids and survive.
   const matchStates = useMatchStateStore((s) => s.matchStates);
+  const resultsLocked = useMeetResultsLock();
   const isLiveDay = useMemo(
     () => Object.values(matchStates).some((st) => st.status !== 'scheduled'),
     [matchStates],
@@ -167,8 +177,14 @@ export function RegenerateMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        disabled={resultsLocked}
+        title={
+          resultsLocked
+            ? 'Results are recorded. Regenerating would destroy them; the action unlocks when the results lock does.'
+            : undefined
+        }
         data-testid="regenerate-toggle"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40`}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50`}
       >
         <ArrowsClockwise aria-hidden="true" className="h-3.5 w-3.5" />
         Regenerate from roster
@@ -189,8 +205,9 @@ export function RegenerateMenu() {
               className="mt-2 border-l-2 border-destructive/50 bg-destructive/5 px-2 py-1 text-xs text-destructive"
             >
               <span className="font-medium">This day is live.</span> Rebuilt lineup
-              matches lose their recorded status, results, and schedule
-              assignments: the plan must be re-planned. Custom matches are kept.
+              matches lose their recorded status and schedule assignments: the
+              plan must be re-planned. Custom matches are kept, and a backup of
+              the current state is snapshotted automatically on the next save.
             </p>
           ) : null}
           {incompletePairs.length > 0 ? (

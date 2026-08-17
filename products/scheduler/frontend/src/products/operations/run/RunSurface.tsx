@@ -141,6 +141,30 @@ export function RunSurface({
 
   // ── transient state ───────────────────────────────────────────────────────
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  // Deep-linked selection (OV-1): the Overview's and Hub inspector's
+  // "Up next" rows land here as /live?select={source}:{id}. Consumed once on
+  // mount and removed from the URL, so the selection behaves like a click
+  // afterwards (closable, replaceable) rather than a URL that keeps
+  // re-selecting. Read from window.location, not useSearchParams: this
+  // surface has no other Router dependency, and a one-shot read does not
+  // need to subscribe to navigation.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get('select');
+    if (!key) return;
+    // One-shot mount read — the canonical consume-a-param-on-mount pattern
+    // (same shape as useTournamentBackups' load-on-mount).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedKey(key);
+    params.delete('select');
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      window.location.pathname + (qs ? `?${qs}` : ''),
+    );
+  }, []);
   /** Bracket has no persisted "called" status — overlay it locally. */
   const [calledBracketIds, setCalledBracketIds] = useState<Set<string>>(new Set());
   /**

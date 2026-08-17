@@ -41,6 +41,9 @@ export interface TournamentBackups {
   refresh: () => Promise<void>;
   createBackup: () => Promise<void>;
   restoreBackup: (filename: string) => Promise<void>;
+  deleteBackup: (filename: string) => Promise<void>;
+  /** Browser-native download URL for one snapshot (WSB-3). */
+  downloadUrl: (filename: string) => string;
 }
 
 export function useTournamentBackups(): TournamentBackups {
@@ -102,7 +105,38 @@ export function useTournamentBackups(): TournamentBackups {
     [tid, refresh],
   );
 
-  return { entries, loading, error, busyAction, refresh, createBackup, restoreBackup };
+  const deleteBackup = useCallback(
+    async (filename: string) => {
+      setBusyAction(filename);
+      setError(null);
+      try {
+        await apiClient.deleteTournamentBackup(tid, filename);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Delete failed');
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [tid, refresh],
+  );
+
+  const downloadUrl = useCallback(
+    (filename: string) => apiClient.backupDownloadUrl(tid, filename),
+    [tid],
+  );
+
+  return {
+    entries,
+    loading,
+    error,
+    busyAction,
+    refresh,
+    createBackup,
+    restoreBackup,
+    deleteBackup,
+    downloadUrl,
+  };
 }
 
 /**

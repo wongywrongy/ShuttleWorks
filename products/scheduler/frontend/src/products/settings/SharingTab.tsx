@@ -219,10 +219,14 @@ export function SharingTab({ tid }: { tid: string }) {
                   ? 'Confirm: revoke and replace'
                   : 'Rotate link'}
             </Button>
+            {/* The re-share consequence lives in the ARMED state, where the
+                decision is being made — not as resting text warning about an
+                action nobody has taken (WSS-2, WSM-1's principle). At rest
+                the line only says what the button does. */}
             <p className="text-2xs text-muted-foreground">
               {confirmRotate.armed
-                ? 'Any venue display still on the old link goes blank until you re-share. Press Escape to cancel.'
-                : 'Revokes the current link immediately and issues a new one. Every venue display has to be re-shared.'}
+                ? 'Every venue display goes blank until you re-share the new link. Press Escape to cancel.'
+                : 'Revokes the current link immediately and issues a new one.'}
             </p>
           </div>
         </SectionCard>
@@ -230,7 +234,7 @@ export function SharingTab({ tid }: { tid: string }) {
 
       {/* Collaborator invite links. */}
       <SectionCard eyebrow="COLLABORATOR INVITES" testId="sharing-invites">
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className="mb-2 text-xs text-muted-foreground">
           Invited people can sign in and operate this workspace. Revoke a link any time.
         </p>
         <div className="flex items-center gap-2">
@@ -254,7 +258,9 @@ export function SharingTab({ tid }: { tid: string }) {
           </Button>
         </div>
 
-        <ul className="divide-y divide-border rounded border border-border">
+        {/* Same internal anatomy as the public-link card (WSS-1):
+            description, one action row, a rule, then the body. */}
+        <ul className="mt-3 divide-y divide-border rounded border border-border">
           {invitesFailed ? (
             <li
               role="alert"

@@ -597,6 +597,10 @@ export interface BackupEntryDTO {
   filename: string;
   sizeBytes: number;
   modifiedAt: string;
+  /** `auto` (a state write snapshotted the prior payload) or `manual` (the
+   *  director asked for it). Only auto rows rotate (WSB-3), so the list says
+   *  which is which. Optional for older payloads. */
+  origin?: 'auto' | 'manual';
 }
 
 export interface BackupListDTO {
@@ -633,6 +637,10 @@ export interface WorkspaceModuleDTO {
   moduleId: 'meet' | 'bracket' | 'display' | 'entries';
   status: 'enabled' | 'available' | 'disabled' | 'coming_soon';
   config: Record<string, unknown> | null;
+  /** Whether this module owns operational data (matches, draws). Disabling
+   *  such a module 409s, and the catalog says so BEFORE the click (WSMOD-2).
+   *  Server-computed; optional for older payloads. */
+  hasData?: boolean;
 }
 
 // ---- Entries (SP-E1-1) ------------------------------------------------
@@ -760,6 +768,12 @@ interface MatchMetricsDTO {
    *  results) — the Overview's live-progress readout. Optional for older
    *  payloads. */
   played?: number;
+  /** Matches on a court right now (started; called deliberately excluded —
+   *  its players are still walking). INS-4/OV-4. Optional for older payloads. */
+  playing?: number;
+  /** Courts with nothing playing on them. `null` when the workspace has no
+   *  court count to subtract from — an unknown is not zero. */
+  courtsFree?: number | null;
 }
 
 /** One upcoming match for the inspector's "Next up" list. `status` is
@@ -770,6 +784,12 @@ export interface NextMatchDTO {
   timeLabel: string | null;
   courtLabel: string | null;
   status: string;
+  /** Identity, so a "Up next" row can be a door rather than a readout (OV-1).
+   *  `source` matters as much as the id: Operations keys selection
+   *  `{source}:{id}` because meet and bracket records are non-merged
+   *  (ADR 0006). Optional for older payloads. */
+  matchId?: string | null;
+  source?: 'meet' | 'bracket' | null;
 }
 
 export interface WorkspaceSignalsDTO {
