@@ -9,7 +9,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { HubPage } from '../HubPage';
-import { HUB_FACETS } from '../hubFacets';
+
 import { apiClient } from '../../../api/client';
 
 vi.mock('../../../api/client', () => ({
