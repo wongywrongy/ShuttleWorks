@@ -40,7 +40,7 @@ _BACKEND = Path(__file__).resolve().parents[2] / "backend"
 # The revision that creates the entries family, the one that narrows its
 # idempotency scope (the new head), and the one the family must follow.
 ENTRIES_REVISION = "s3d8f2b5c0e1"
-HEAD_REVISION = "u5f0b4d7e2a3"
+HEAD_REVISION = "v6b2d6f9a4c5"
 PREVIOUS_REVISION = "r2c7e1f4a9b3"
 
 # Every table the Entries family owns after the R13 reshape. The account

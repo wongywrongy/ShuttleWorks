@@ -794,6 +794,22 @@ class EntryPageUpsertDTO(StrictModel):
     venueAddress: Optional[Notes] = None
 
 
+class EntryPagePublicationPatchDTO(StrictModel):
+    """PATCH body for the publication card (SP-P7 §4).
+
+    Every field optional and independent — patch semantics: only the flags
+    the card actually toggled travel, so two operators flipping different
+    switches near-simultaneously cannot clobber each other through a
+    whole-state PUT. Strict, so a typoed flag name is a 422 rather than a
+    silently ignored no-op that leaves the operator believing they
+    published.
+    """
+
+    entrantsPublished: Optional[bool] = None
+    drawsPublished: Optional[bool] = None
+    resultsPublished: Optional[bool] = None
+
+
 class EntryPageDTO(BaseModel):
     """The stored entry page as the operator sees it back."""
     slug: str
@@ -802,6 +818,7 @@ class EntryPageDTO(BaseModel):
     regulationsText: Optional[str] = None
     waiverRequired: bool
     regulationsVersion: int
+    regulationsUpdatedAt: Optional[str] = None
     feeSchedule: Optional[dict] = None
     paymentInstructions: Optional[str] = None
     maxEventsPerPerson: Optional[int] = None
@@ -809,6 +826,12 @@ class EntryPageDTO(BaseModel):
     collectPhone: bool = False
     venueName: Optional[str] = None
     venueAddress: Optional[str] = None
+    # SP-P7 §4 publication gates, default-off. Read by the Sharing tab's
+    # publication card; the public tier reads them off its own projection,
+    # never this operator DTO.
+    entrantsPublished: bool = False
+    drawsPublished: bool = False
+    resultsPublished: bool = False
 
     @classmethod
     def from_row(cls, row) -> "EntryPageDTO":
@@ -819,6 +842,14 @@ class EntryPageDTO(BaseModel):
             regulationsText=row.regulations_text,
             waiverRequired=bool(row.waiver_required),
             regulationsVersion=row.regulations_version,
+            regulationsUpdatedAt=(
+                row.regulations_updated_at.isoformat()
+                if row.regulations_updated_at is not None
+                else None
+            ),
+            entrantsPublished=bool(row.entrants_published),
+            drawsPublished=bool(row.draws_published),
+            resultsPublished=bool(row.results_published),
             feeSchedule=row.fee_schedule,
             paymentInstructions=row.payment_instructions,
             maxEventsPerPerson=row.max_events_per_person,

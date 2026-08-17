@@ -1608,6 +1608,30 @@ class EntryPage(Base):
     regulations_version: Mapped[int] = mapped_column(
         Integer, default=1, nullable=False
     )
+    # When the regulations text last actually changed (set alongside the
+    # version bump, same actually-changed condition). ``updated_at`` cannot
+    # serve the public document row — it bumps on any field. NULL = never
+    # edited since the column existed; the row renders version-only.
+    regulations_updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # ---- publication gates (SP-P7 §4) ----------------------------------
+    # TD-controlled, default OFF, independent — the public tier reads them
+    # and renders any combination coherently. Same home argument as the
+    # venue columns below: public-page configuration, outside the blob, so
+    # a toggle can never 409 against CONFIG_LOCKED. My-entries is NOT gated
+    # by these (an entrant always sees their own), except per-event result
+    # badges, which respect ``results_published``.
+    entrants_published: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    draws_published: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    results_published: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     # ---- money & payment (R14) ----------------------------------------
     # CUMULATIVE totals in cents by event count — {"1":4000,"2":5500} — not
