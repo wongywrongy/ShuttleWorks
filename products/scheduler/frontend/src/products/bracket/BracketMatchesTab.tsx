@@ -12,7 +12,7 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import { Download, MagnifyingGlass } from '@phosphor-icons/react';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
+import type { BracketTournamentDTO, PlayUnitDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { useCanEdit } from '../../hooks/useCanEdit';
@@ -30,7 +30,6 @@ import {
   ScoreLane,
   STATUS_LABEL,
   STATUS_PILL_TONE,
-  WinnerDot,
   type BandedTableGroup,
   type BracketMatchStatus,
 } from '../../components/control-plane';
@@ -38,7 +37,7 @@ import { StatusPill } from '../../components/StatusPill';
 import { formatSideName } from '../../lib/names';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
-import { buildPlayUnitLabels, disciplineLabel } from './bracketLabels';
+import { buildPlayUnitLabels, disciplineLabel, sideLabel } from './bracketLabels';
 import {
   BracketMatchDetailPanel,
   type ContingencyReason,
@@ -139,17 +138,33 @@ export function BracketMatchesTab({
     return ids.map((id) => participantById.get(id)?.name ?? id).join(' / ');
   };
 
-  // Render form of a side: unresolved slots get the same muted-italic
-  // placeholder treatment as Meet's empty side ("＋ add player") so the
-  // two match lists read identically — TBD is a placeholder, not a name.
-  // Real names take the BWF presentation ("NAKAMURA Kei / TRAN Vincent");
-  // exports keep the raw `resolveSide` projection.
-  const renderSide = (ids: string[] | null) =>
-    !ids || ids.length === 0 ? (
-      <span className="text-xs italic text-muted-foreground">TBD</span>
-    ) : (
-      formatSideName(resolveSide(ids))
+  // Render form of a side. Real names take the BWF presentation
+  // ("NAKAMURA Kei / TRAN Vincent"); exports keep the raw `resolveSide`
+  // projection.
+  //
+  // An unresolved slot says WHAT it is waiting for — "Winner of QF1" —
+  // rather than a bare italic "TBD" (BMAT-4). The provenance was already
+  // computed and already shown in the ops queue and the detail pane; this
+  // list was the one place that dropped it and printed a placeholder.
+  //
+  // ONLY when a feeder exists. `sideLabel` reads a feeder-less empty slot
+  // as "Bye", which is right for a real bye and a lie for a round the draw
+  // has not built yet — and this list cannot tell those apart. No feeder,
+  // no claim: it stays "TBD".
+  const renderSide = (ids: string[] | null, slot: PlayUnitDTO['slot_a']) => {
+    if (ids && ids.length > 0) return formatSideName(resolveSide(ids));
+    if (!slot?.feeder_play_unit_id) {
+      return <span className="text-xs italic text-muted-foreground">TBD</span>;
+    }
+    const nameById = Object.fromEntries(
+      [...participantById.entries()].map(([id, p]) => [id, p.name]),
     );
+    return (
+      <span className="text-xs italic text-muted-foreground">
+        {sideLabel(ids, slot, nameById, shortLabelById)}
+      </span>
+    );
+  };
 
   const statusOf = (puId: string): BracketMatchStatus => {
     if (resultByPu.has(puId)) return 'done';
@@ -360,32 +375,40 @@ export function BracketMatchesTab({
                       >
                         {shortLabelById.get(pu.id) ?? pu.id}
                       </span>
+                      {/* Winner by WEIGHT, not by a green dot floating before
+                          the name — green reads as live at scan speed, which a
+                          finished match is not (BMAT-2 / MAT-3). */}
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed text-foreground`}
+                        className={`${BRACKET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed text-foreground ${
+                          winner === 'A' ? 'font-semibold' : ''
+                        }`}
                       >
-                        {winner === 'A' ? <WinnerDot className="self-center" /> : null}
-                        {renderSide(pu.side_a)}
+                        {renderSide(pu.side_a, pu.slot_a)}
                       </span>
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed text-foreground`}
+                        className={`${BRACKET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed text-foreground ${
+                          winner === 'B' ? 'font-semibold' : ''
+                        }`}
                       >
-                        {winner === 'B' ? <WinnerDot className="self-center" /> : null}
-                        {renderSide(pu.side_b)}
+                        {renderSide(pu.side_b, pu.slot_b)}
                       </span>
                       <span
                         role="cell"
                         data-testid={`bracket-match-status-${pu.id}`}
                         className={`${BRACKET_MATCH_CELL.status} flex items-center justify-end`}
                       >
-                        {sets.length > 0 || reason ? (
-                          <ScoreLane sets={sets} reason={reason} />
-                        ) : (
+                        {/* Chip ALWAYS, score beside it (X3) — see the meet
+                            list for why the score no longer replaces it. */}
+                        <span className="flex items-center gap-2">
                           <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
                             {STATUS_LABEL[status]}
                           </StatusPill>
-                        )}
+                          {sets.length > 0 || reason ? (
+                            <ScoreLane sets={sets} reason={reason} />
+                          ) : null}
+                        </span>
                       </span>
                       <span
                         role="cell"

@@ -344,14 +344,14 @@ describe('the dock floor is derived from the column set', () => {
   });
 
   it('re-derives per list when the event column changes width', () => {
-    // Meet (no ordinal column since G6): 16 + 48 + 160 + 160 + 112 + 32 =
-    // 528 columns, + 5 × 12 gap = 588, + 40 inset = 628 — under the 672
-    // tier, so the TIER binds.
-    expect(dockMinContentWidth(MEET_MATCH_LIST_COLUMNS)).toBe(672);
-    // Bracket: the same sum with a 112px event column = 592, + 60 + 40 =
-    // 692, above the tier, so the sum binds. One shared floor could not be
-    // both.
-    expect(dockMinContentWidth(BRACKET_MATCH_LIST_COLUMNS)).toBe(692);
+    // Meet (no ordinal column since G6): 16 + 48 + 160 + 160 + 176 + 32 =
+    // 592 columns, + 5 × 12 gap = 652, + 40 inset = 692 — the Status column
+    // grew from 112 to 176 to hold a chip AND the score lane (X3), which
+    // pushed this sum past the 672 tier, so the SUM now binds on both lists.
+    expect(dockMinContentWidth(MEET_MATCH_LIST_COLUMNS)).toBe(692);
+    // Bracket: the same sum with a 112px event column = 656, + 60 + 40 =
+    // 756, further above the tier. One shared floor could not be both.
+    expect(dockMinContentWidth(BRACKET_MATCH_LIST_COLUMNS)).toBe(756);
   });
 
   it('reads `min-w-[10rem]` arbitrary values as well as ladder steps', () => {

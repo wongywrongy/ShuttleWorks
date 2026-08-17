@@ -1,8 +1,12 @@
 /**
- * Tiny colored dot used as a school identifier across player chips,
+ * Tiny colored marker used as a school identifier across player chips,
  * match cards, and live ops blocks. Deliberately minimal — 8×8 px,
  * no border, no label. Tooltip carries the school name for screen
  * readers and hover.
+ *
+ * A rounded SQUARE, not a circle (SP-CONSOLE-2 MAT-4): a round dot means
+ * match state everywhere else in the console, so shape keeps school
+ * identity out of the status vocabulary even before hue does.
  */
 import type { SchoolAccent } from '../lib/schoolAccent';
 
@@ -26,7 +30,7 @@ export function SchoolDot({ accent, size = 'sm', className = '' }: SchoolDotProp
   const px = SIZE_PX[size];
   return (
     <span
-      className={`inline-block shrink-0 rounded-full align-middle ${className}`}
+      className={`inline-block shrink-0 rounded-[2px] align-middle ${className}`}
       style={{ width: px, height: px, backgroundColor: accent.color }}
       aria-label={`School: ${accent.name}`}
       title={accent.name}

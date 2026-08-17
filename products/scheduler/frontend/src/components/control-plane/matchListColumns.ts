@@ -62,15 +62,21 @@ export const BRACKET_EVENT_COL = 'w-28';
 // started shredding into ribbons.
 // No ordinal `#` column (SP-CONSOLE-REFINE G6): the row's identity is its
 // event code / play-unit label; a per-group counter carried no information.
-// Status is `w-28` because on DONE rows it is the SCORE LANE — up to three
+//
+// Status holds a chip AND, on done rows, the score lane beside it: up to three
 // `w-9` set pairs ("21-15 21-17 21-19") right-aligned so sets line up
-// vertically down the list.
+// vertically down the list. It was `w-28`, sized for the lane ALONE, because
+// the score used to REPLACE the chip — which meant the column said a state on
+// some rows and a number on others, and a scanning eye could not tell a
+// finished match from an unfinished one without reading the cell (X3). Fitting
+// both costs 64px, taken from the two flex sides, which have their own
+// `NAME_COL_MIN` floor.
 const matchListColumns = (eventColWidth: string): BandedListColumn[] => [
   { label: '', className: 'w-4 shrink-0' },
   { label: 'Event', className: `${eventColWidth} shrink-0` },
   { label: 'Side A', className: `${NAME_COL_MIN} flex-[3]` },
   { label: 'Side B', className: `${NAME_COL_MIN} flex-[3]` },
-  { label: 'Status', className: 'w-28 shrink-0 text-right', priority: 2 },
+  { label: 'Status', className: 'w-44 shrink-0 text-right', priority: 2 },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
