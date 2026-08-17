@@ -142,7 +142,7 @@ def _seed_submission(page, email, player_name="Robin Seeded", state="pending",
         )
         session.add(entry)
         session.commit()
-        return str(entry.id)
+        return {"entry": str(entry.id), "player": str(player.id)}
     finally:
         session.close()
 
@@ -222,7 +222,8 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
         "events",
     }
     assert all(
-        set(line) == {"eventCode", "discipline", "playerName", "state"}
+        set(line)
+        == {"eventCode", "discipline", "playerName", "state", "resultBadge"}
         for line in card["events"]
     )
     assert card["slug"] == "winter-cup"
@@ -290,6 +291,86 @@ def test_withdrawn_and_rejected_pass_through(client, page, turnstile):
     # No live entry remains, so the card is not "awaiting" anything.
     assert card["status"] == "withdrawn"
     assert {line["state"] for line in card["events"]} == {"withdrawn", "rejected"}
+
+
+def test_result_badges_respect_results_published(client, page, turnstile):
+    """§3.1's one gated field, both directions: the badge appears with the
+    flag on and disappears — from the entrant's own card — when the TD
+    unpublishes results."""
+    _sign_in(client, "parent@example.com")
+    seeded = _seed_submission(
+        page, "parent@example.com", player_name="Ada Chen", state="confirmed"
+    )
+
+    # A 2-entrant SE final in the same workspace, the entered person on it.
+    body = {
+        "courts": 1,
+        "total_slots": 16,
+        "rest_between_rounds": 0,
+        "interval_minutes": 30,
+        "time_limit_seconds": 1.0,
+        "events": [
+            {
+                "id": "MS",
+                "discipline": "Men's Singles",
+                "format": "se",
+                "participants": [
+                    {"id": f"entry-{seeded['player']}", "name": "Ada Chen"},
+                    {"id": "P2", "name": "Rival Person"},
+                ],
+                "duration_slots": 1,
+            }
+        ],
+    }
+    assert (
+        client.post(
+            f"/tournaments/{page['tid']}/bracket", json=body, headers=CSRF
+        ).status_code
+        == 200
+    )
+    state = client.get(f"/tournaments/{page['tid']}/bracket", headers=CSRF).json()
+    (final,) = [u for u in state["play_units"] if u["event_id"] == "MS"]
+    winner = "A" if f"entry-{seeded['player']}" in (final["side_a"] or []) else "B"
+    assert (
+        client.post(
+            f"/tournaments/{page['tid']}/bracket/commands",
+            json={
+                "id": str(uuid.uuid4()),
+                "kind": "record_result",
+                "play_unit_id": final["id"],
+                "winner_side": winner,
+                "seen_version": final["version"],
+            },
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+
+    def badge():
+        (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+        (line,) = card["events"]
+        return line["resultBadge"]
+
+    assert badge() is None  # results unpublished
+
+    from database.models import EntryPage
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        session.get(EntryPage, uuid.UUID(page["tid"])).results_published = True
+        session.commit()
+    finally:
+        session.close()
+    assert badge() == "Winner"
+
+    session = SessionLocal()
+    try:
+        session.get(EntryPage, uuid.UUID(page["tid"])).results_published = False
+        session.commit()
+    finally:
+        session.close()
+    assert badge() is None  # unpublishing takes it back
 
 
 def test_two_submissions_fold_into_one_card_with_summed_quotes(

@@ -56,6 +56,10 @@ class MyEntryLineDTO(BaseModel):
     discipline: str
     playerName: str
     state: str
+    # "Winner" | "Runner-up" | "Semifinalist" — the §3.1 carve-out's one
+    # publication-gated field: present only while the workspace has
+    # ``results_published`` on, absent again the moment it goes off.
+    resultBadge: Optional[str] = None
 
 
 class MyTournamentCardDTO(BaseModel):
@@ -100,6 +104,42 @@ def _entry_state(raw: str) -> str:
     # one page an entrant has — the same fail-calm posture as the page
     # projection's fee normalization.
     return _ENTRY_STATE.get(raw, "awaiting")
+
+
+def _badges_for(repo: LocalRepository, tournament_id) -> Dict[str, Dict[str, str]]:
+    """bracket event id → {participant key → badge}, for one workspace.
+
+    Reuses the winners projection's derivation (``entries_site``) so the
+    badge on an entrant's own card and the public Winners tab can never
+    disagree about who won. Called only when ``results_published`` — the
+    gate lives at the call site, so an off flag means this never runs.
+    """
+    from api.entries_site import _bracket, _bracket_indexes, _event_winner
+
+    payload = _bracket(repo, tournament_id)
+    if payload is None:
+        return {}
+    units, results, _ = _bracket_indexes(payload)
+    out: Dict[str, Dict[str, str]] = {}
+    for event in payload.events:
+        winner_key, runner_key, semi_keys = _event_winner(event, units, results)
+        badges: Dict[str, str] = {}
+        for key in semi_keys:
+            badges[key] = "Semifinalist"
+        if runner_key:
+            badges[runner_key] = "Runner-up"
+        if winner_key:
+            badges[winner_key] = "Winner"
+        if badges:
+            # Key by both the event id and the participant's members, so a
+            # doubles entrant finds their pair's badge by their own roster id.
+            expanded: Dict[str, str] = dict(badges)
+            for participant in event.participants:
+                if participant.id in badges and participant.members:
+                    for member in participant.members:
+                        expanded[member] = badges[participant.id]
+            out[event.id] = expanded
+    return out
 
 
 def _card_status(entry_states: List[str], date_iso: Optional[str], today_iso: str) -> str:
@@ -198,15 +238,26 @@ def my_entries(
         own_subs = [s for s in submissions if s.tournament_id == tid]
         own_entries = [e for e in entries if e.tournament_id == tid]
 
+        badges = (
+            _badges_for(repo, tid)
+            if page is not None and page.results_published
+            else {}
+        )
         lines = []
         for entry in own_entries:
             event = events.get((tid, entry.entry_event_id))
+            event_badges = (
+                badges.get(event.bracket_event_id or event.code, {})
+                if event is not None
+                else {}
+            )
             lines.append(
                 MyEntryLineDTO(
                     eventCode=event.code if event else "?",
                     discipline=event.discipline if event else "",
                     playerName=entry.player_name or "",
                     state=_entry_state(entry.state),
+                    resultBadge=event_badges.get(f"entry-{entry.entry_player_id}"),
                 )
             )
         lines.sort(key=lambda line: (line.playerName, line.eventCode))
