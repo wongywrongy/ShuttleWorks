@@ -58,14 +58,14 @@ describe('LiveView', () => {
     expect(screen.getByText(/Generate draws in Events first/i)).toBeInTheDocument();
   });
 
-  it('renders the Waiting queue (not the empty state) when draws exist but nothing is assigned', () => {
+  it('renders the Pending queue (not the empty state) when draws exist but nothing is assigned', () => {
     const unassigned: BracketTournamentDTO = {
       ...WITH_ONE_ASSIGNMENT,
       assignments: [],
     };
     render(<LiveView data={unassigned} onChange={() => {}} refresh={async () => {}} />);
     expect(screen.queryByRole('heading', { name: 'No scheduled bracket matches' })).not.toBeInTheDocument();
-    expect(screen.getByText(/Waiting · 1/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pending · 1/i)).toBeInTheDocument();
   });
 
   it('renders play_unit chip + list row when an assignment exists', () => {

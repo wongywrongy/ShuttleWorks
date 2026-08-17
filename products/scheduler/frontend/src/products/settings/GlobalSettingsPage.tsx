@@ -292,7 +292,7 @@ export function GlobalSettingsPage() {
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
         <ShuttleWorksMark />
-        <span className="text-sm font-semibold text-foreground">Settings</span>
+        <span className="text-sm font-semibold text-foreground">Account</span>
       </header>
 
       <div className="flex min-h-0 flex-1">

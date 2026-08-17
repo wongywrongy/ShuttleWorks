@@ -70,10 +70,11 @@ export function buildRailRows(
     const invites = collab.activeInviteCount;
     rows.push({
       key: 'collaborators',
-      label: 'Collaborators',
-      value:
-        `${collab.memberCount} member${collab.memberCount === 1 ? '' : 's'}` +
-        (invites > 0 ? ` · ${invites} invited` : ''),
+      // The row names the workspace surface it links to (Members), and the
+      // value is the count alone — "Collaborators: 1 member" said the same
+      // noun twice (OV-3).
+      label: 'Members',
+      value: `${collab.memberCount}` + (invites > 0 ? ` · ${invites} invited` : ''),
       segment: 'ws-members',
     });
   }

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
 import { Select, StatusBar } from "@scheduler/design-system";
+import { statusTallyItems } from "../../components/control-plane";
 import type { BracketView } from "../../lib/bracketTabs";
 import { useTournamentId } from "../../hooks/useTournamentId";
 import { INTERACTIVE_BASE } from "../../lib/utils";
@@ -40,10 +41,12 @@ interface Props {
   onDrawLayout?: (mode: BracketLayoutMode) => void;
 }
 
+// Sentence case: ActionsBar's eyebrow uppercases in CSS, so an uppercase
+// literal here is a second copy of a decision the stylesheet already made.
 const VIEW_LABEL: Record<Props["view"], string> = {
-  draw: "DRAW",
-  schedule: "SCHEDULE",
-  live: "LIVE",
+  draw: "Draw",
+  schedule: "Schedule",
+  live: "Live",
 };
 
 /**
@@ -160,15 +163,7 @@ export function BracketViewHeader({
         </>
       }
     >
-      <StatusBar
-        // Zero-count tokens are noise, not information (B2.1's mirror).
-        items={[
-          { tone: "done" as const, label: "DONE", count: counts.done },
-          { tone: "green" as const, label: "LIVE", count: counts.live },
-          { tone: "amber" as const, label: "READY", count: counts.ready },
-          { tone: "idle" as const, label: "PEND", count: counts.pending },
-        ].filter((i) => i.count > 0)}
-      />
+      <StatusBar items={statusTallyItems(counts)} />
       {view === "schedule" && <ExportMenu api={api} />}
       {(view === "schedule" || view === "live") && schedulableCount > 0 && (
         <button

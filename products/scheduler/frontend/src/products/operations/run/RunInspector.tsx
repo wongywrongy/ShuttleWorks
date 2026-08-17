@@ -192,11 +192,7 @@ function StatusSection({
   });
 
   return (
-    <DetailPanel.Section
-      eyebrow="Status"
-      right={<SourceChip source={match.source} />}
-      testId="run-inspector-status"
-    >
+    <DetailPanel.Section eyebrow="Status" testId="run-inspector-status">
       <Row
         label="State"
         control={
@@ -205,6 +201,11 @@ function StatusSection({
           </span>
         }
       />
+      {/* The engine badge used to ride the section's right slot, where it read
+          as the section's own value — a second, unlabeled status. It is a
+          different fact about the match, so it gets a labeled row like every
+          other fact (LIVE-4). */}
+      <Row label="Source" control={<SourceChip source={match.source} />} />
       <Row
         label="Court"
         control={

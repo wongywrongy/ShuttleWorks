@@ -168,7 +168,7 @@ export function WorkspaceRow({
   const attention = action.kind === 'set-date';
 
   const overflowItems: OverflowItem[] = [
-    { key: 'settings', label: 'Settings', onSelect: onSettings },
+    { key: 'settings', label: 'Workspace settings', onSelect: onSettings },
     ...(onDelete
       ? [{ key: 'delete', label: 'Delete', onSelect: onDelete, destructive: true, separator: true, testId: 'overflow-delete' } as OverflowItem]
       : []),

@@ -26,7 +26,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
-import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import {
   FieldRow,
@@ -49,7 +48,6 @@ const MODULE_IDS: (keyof CustomState)[] = ['meet', 'bracket', 'display'];
 
 const MODULE_STATES: { value: ModuleState; label: string }[] = [
   { value: 'enabled', label: 'On' },
-  { value: 'available', label: 'Available' },
   { value: 'off', label: 'Off' },
 ];
 
@@ -125,8 +123,9 @@ export function NewWorkspacePage() {
       </header>
 
       <div className="sw-float-in mx-auto max-w-3xl space-y-2 px-6 py-10">
+        {/* No eyebrow: "CONTROL PLANE" named the product category, not this
+            page, and the H1 below already says where you are (NEW-1). */}
         <div className="space-y-1 pb-2">
-          <Eyebrow framed>CONTROL PLANE</Eyebrow>
           <h1 className="type-display text-2xl text-foreground">New workspace</h1>
         </div>
 

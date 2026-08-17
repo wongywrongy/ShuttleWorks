@@ -50,7 +50,7 @@ stable tiebreaker + `require_tournament_access` on new routes). Two additions fr
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Baseline, ledger, landing-zone map, premise audit. **STOP.** | **Complete — awaiting owner ruling on the O-items below.** |
-| 1 | X1 + X5 (glossary, casing ruling, status tokens, DUE/LATE thresholds) + the R-A/R-B renames | Not started |
+| 1 | X1 + X5 (glossary, casing ruling, status tokens, DUE/LATE thresholds) + the R-A/R-B renames | **Complete** |
 | 2 | X2 sweep (control-column slots across the 7 config surfaces) + NEW-4/WSV-2 ownership | Not started |
 | 3 | X3/X4 + list and ops surfaces | Not started |
 | 4 | TV + display-config (incl. TV-6 property test + negative control) | Not started |
@@ -358,9 +358,81 @@ audit:
   (`EventsControl.tsx:106-113`). Label it as such.
 - **CFG-3 and BRST-3 confirmed no-ops** (pattern references, kept for ID continuity).
 
+## Phase 1 — what shipped
+
+Owner approved B-1 and O-1..O-7 as recommended (2026-08-17), so the re-scoped X1/X5 below is
+the approved shape, not a deviation.
+
+**X1 — one vocabulary, one casing rule.** New `frontend/src/lib/stateWords.ts` (`STATE_WORD`)
+is the single definition of Live / Called / Due / Late / Ready / Pending / Done / Scheduled /
+Free / Closed. The three label maps (`matchStatus.ts`, `runMachine.ts` `RUN_STATUS_LABEL`) and
+all four hardcoded duplicates now read from it: the Run court band, the public Display court
+band, and the two bracket progress strips.
+
+The **casing ruling** is what stops the drift returning: words are defined in sentence case
+once, and board tiers get uppercase from CSS (`EYEBROW_CLASS`, `StatusCount`, a band's own
+class), never from a second literal. `StatusCount` was *already* uppercasing, so the strips'
+hand-truncated `'PEND'` was a string nobody needed — passing the canonical `Pending` renders
+PENDING for free. There is now no uppercase status literal left in the tree, which is what
+makes the retired-terms grep meaningful. `BracketViewHeader`'s `VIEW_LABEL` (DRAW/SCHEDULE/
+LIVE) and the public `ScheduleView` heading ("Up Next") were caught by that grep and fixed.
+
+**The bracket strips also had a tone drift** the collapse fixed for free: READY rendered blue
+in the match lists (`STATUS_PILL_TONE`) and amber in the progress strips. One
+`statusTallyItems()` builder in `matchStatus.ts` now serves both, so a state cannot read one
+color in a list and another in a strip.
+
+**LIVE-1's thresholds, and the root cause of "LATE +0".** The old `deriveLate` was
+`currentSlot >= plannedSlot`, so a match went late the instant its own slot began — `+0` was
+never a late match, it was the DUE case with no name. New `deriveTimeliness` returns
+`ontime | due | late | overdue`. **Thresholds are in slots, not minutes**, because
+`getCurrentSlot` floors to a slot index: with the default 30-minute slot a minute-based amber
+tier could only ever evaluate to 0 or 30 and would never once appear on screen. 0 slots past =
+DUE (keeps the status treatment, shows its planned time, no `+0`), 1 = LATE amber, 2+ = LATE
+red. `deriveLate` survives, re-expressed via `deriveTimeliness`, so the summary band and Plan
+chips keep counting exactly what they counted before — no silent count move. `RunMatch` gained
+`timeliness` alongside `late`. Four run-test fixtures updated.
+
+**X5 — tokens.** `--status-late-*` (amber) and `--status-overdue-*` (red) as full five-part
+families in both themes, plus their Tailwind mappings. Late shares CALLED's amber deliberately
+(both mean "needs the desk soon") and stays legible beside it because their *form* differs —
+CALLED is a solid band, LATE is always a `+N` figure — and on the band they are mutually
+exclusive anyway. Both families are registered in `check-contrast.mjs`'s ink-on-solid loop,
+which now carries a comment naming the hazard: a family added to `tokens.css` and not to that
+list is silently unchecked and the gate still reports green.
+
+Adding `overdue` immediately earned its keep: **light-theme red failed the gate at 4.35:1**.
+`--red-6` is the mock's LATE fill and the ramp had no deeper step, so `--red-8` was added — the
+same one-shade-deeper AA rule green and amber already carried. Contrast is now **68/68** (was
+64/64; +4 pairs).
+
+**Renames.** ACC-3 + WSSET-1 (R-A), WSB-1, INS-1, INS-3/OV-1's "Up next", OV-3, HUB-4, NEW-1,
+NEW-2 (R-B), WSMOD-1, LIVE-2, LIVE-4, DRW-1's PEND half. Three worth noting:
+
+- **R-A exposed a real duplication.** The rail has two links to `/settings` — a gear and the
+  account avatar — and renaming the gear to "Account" gave both the same accessible name. The
+  avatar now carries the *person* (`aria-label` = display name, email fallback), which is the
+  fact it actually holds and the only thing that distinguishes the two in a screen reader.
+- **WSMOD-1 was not a no-op.** The catalog chip printed `module.status` straight through, so it
+  read "enabled"/"disabled" while the glossary said On/Off. Now mapped.
+- **LIVE-4** moved the engine badge out of the section's `right` slot — where it read as the
+  STATUS section's own value, a second unlabeled status — into a labeled `Source` row.
+
+`docs/design/console-naming.md` gained the state table, the casing ruling, the threshold table,
+and a structured retired-terms list, in the same commit (constraint 2). It also records that a
+retired word is retired *as a state label*, not as English: "Waiting to connect…" and a
+traffic-light reason reading "Playing MD3" are sentences, not labels, and stay.
+
+**Gates after Phase 1:** `make check` exit 0 · vitest **1750** (was 1746; +4 from the
+`deriveTimeliness` suite) · entrant 586 (solo) · pytest 1600 passed / 66 skipped · contrast
+**68/68** both themes · eslint 0 errors / 118 warnings · depcruise 0 errors / 15 warnings
+(589 modules).
+
 ## Session log
 
 - **2026-08-17 — Phase 0.** Baseline measured, ledger created, map above written, premise audit
   produced 7 owner items. Pre-existing dead-nav work committed at `6a5b177` on
-  `dev/prog1-p6-2-public-ia`; branched `design/console-2`. **STOP — awaiting owner rulings on
-  B-1 and O-1..O-7.**
+  `dev/prog1-p6-2-public-ia`; branched `design/console-2`. STOP — owner approved all.
+- **2026-08-17 — Phase 1.** X1 + X5 as above. Next: Phase 2 (X2 control-column slots), which
+  O-1 re-scoped from "build the primitive" to "give `Row` fixed control widths and rule
+  `Section` vs `SectionHeader`".

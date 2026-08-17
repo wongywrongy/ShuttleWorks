@@ -180,7 +180,7 @@ function LivePanel({ summary }: PanelProps) {
       {/* "Open live day" lives in the page header (G3.1). */}
       {nextUp.length > 0 ? (
         <div>
-          <SectionLabel>Next up</SectionLabel>
+          <SectionLabel>Up next</SectionLabel>
           <NextUpList items={nextUp} />
         </div>
       ) : null}

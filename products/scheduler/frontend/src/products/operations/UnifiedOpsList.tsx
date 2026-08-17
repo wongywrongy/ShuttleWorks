@@ -12,6 +12,7 @@ import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
+import { STATE_WORD } from '../../lib/stateWords';
 
 interface Props {
   blocks: OpsBlock[];
@@ -161,7 +162,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
     // seam (seamed, not gapped).
     <ul className="divide-y divide-border/60">
       {section('Up next', upNext)}
-      {section('Waiting', waiting)}
+      {section(STATE_WORD.pending, waiting)}
       {section('Finished', finished)}
     </ul>
   );

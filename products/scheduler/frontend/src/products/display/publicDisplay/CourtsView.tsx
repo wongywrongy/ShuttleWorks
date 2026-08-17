@@ -16,6 +16,7 @@
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
 import { formatElapsed } from '../../../lib/timeFormatters';
 import { sideNameLines } from '../../../lib/names';
+import { STATE_WORD } from '../../../lib/stateWords';
 import { formatPlayers, isCourtClosedNow } from './helpers';
 
 type CourtStatus = 'active' | 'called' | 'empty';
@@ -235,12 +236,15 @@ function CourtCard({
     : tvShowScores && status === 'active' && state?.score ? [state.score.sideB] : [];
 
   const band = isClosed
-    ? { cls: 'bg-muted text-muted-foreground', word: 'CLOSED' }
+    ? { cls: 'bg-muted text-muted-foreground', word: STATE_WORD.closed }
     : status === 'active'
-      ? { cls: 'bg-status-live-solid text-status-live-ink', word: elapsed ? `LIVE · ${elapsed}` : 'LIVE' }
+      ? {
+          cls: 'bg-status-live-solid text-status-live-ink',
+          word: elapsed ? `${STATE_WORD.live} · ${elapsed}` : STATE_WORD.live,
+        }
       : status === 'called'
-        ? { cls: 'bg-status-called-solid text-status-called-ink', word: 'CALLED' }
-        : { cls: 'bg-muted text-muted-foreground', word: 'FREE' };
+        ? { cls: 'bg-status-called-solid text-status-called-ink', word: STATE_WORD.called }
+        : { cls: 'bg-muted text-muted-foreground', word: STATE_WORD.free };
 
   return (
     <div

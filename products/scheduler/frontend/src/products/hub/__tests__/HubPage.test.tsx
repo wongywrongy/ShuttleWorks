@@ -125,7 +125,7 @@ describe('HubPage time-oriented control plane', () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
     expect(screen.getByTestId('hub-quiet-create')).toHaveTextContent(
-      'Create your next workspace',
+      'Create a workspace',
     );
   });
 

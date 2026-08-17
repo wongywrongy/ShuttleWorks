@@ -146,8 +146,8 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
         { segment: 'ws-members', label: 'Members' },
         { segment: 'ws-sharing', label: 'Sharing' },
         { segment: 'ws-modules', label: 'Modules' },
-        { segment: 'ws-sync', label: 'Sync and backups' },
-        { segment: 'ws-settings', label: 'Settings' },
+        { segment: 'ws-sync', label: 'Backups' },
+        { segment: 'ws-settings', label: 'Workspace settings' },
       ],
     },
   };

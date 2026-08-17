@@ -12,6 +12,7 @@ import type { RunMatch } from '../runtime/runModel';
 import { RUN_STATUS_LABEL } from '../runtime/runMachine';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 import { EYEBROW_CLASS } from '../../../lib/utils';
+import { STATE_WORD } from '../../../lib/stateWords';
 
 // ── source label + square tint (M=meet azure, B=bracket violet) ───────────
 // One vocabulary for the engine, everywhere on this surface: the square shows
@@ -26,9 +27,9 @@ const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
 // Why an ineligible row can't be sent, in the terms of its own engine —
 // `RunMatch.eligible` means "both sides known" for meet and "every feeder
 // resolved" for bracket (see toRunMatches).
-const WAITING_REASON: Record<'meet' | 'bracket', string> = {
-  meet: 'Waiting on both sides to be decided',
-  bracket: 'Waiting on an earlier result to decide a side',
+const PENDING_REASON: Record<'meet' | 'bracket', string> = {
+  meet: 'Both sides have to be decided first',
+  bracket: 'An earlier result decides a side',
 };
 
 // ── props ─────────────────────────────────────────────────────────────────
@@ -116,10 +117,10 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             {lateKeys?.has(match.key) && (
               <span
                 data-testid={`queue-late-${match.key}`}
-                aria-label="Late"
-                className={`sw-late-nudge flex-shrink-0 ${EYEBROW_CLASS} text-status-warning`}
+                aria-label={STATE_WORD.late}
+                className={`sw-late-nudge flex-shrink-0 ${EYEBROW_CLASS} text-status-late`}
               >
-                Late
+                {STATE_WORD.late}
               </span>
             )}
 
@@ -130,10 +131,10 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             {!match.eligible ? (
               <span
                 data-testid={`queue-blocked-${match.key}`}
-                title={WAITING_REASON[match.source]}
+                title={PENDING_REASON[match.source]}
                 className={`flex-shrink-0 ${EYEBROW_CLASS} text-ink-faint`}
               >
-                Waiting
+                {STATE_WORD.pending}
               </span>
             ) : match.status !== 'scheduled' ? (
               <span

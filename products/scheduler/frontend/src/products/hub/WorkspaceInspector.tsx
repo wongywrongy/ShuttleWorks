@@ -36,7 +36,7 @@ import { NextUpList } from '../../components/control-plane/NextUpList';
 import { SetupChecklist } from '../../components/control-plane/SetupChecklist';
 import { buildChecklist } from '../../platform/domain/setupChecklist';
 
-/** One metric tile in the "This event" triplet. */
+/** One metric tile in the "This workspace" triplet. */
 function MetricTile({
   value,
   label,
@@ -145,7 +145,7 @@ export function WorkspaceInspector({
       </div>
 
       <DetailPanel.Section
-        eyebrow="This event"
+        eyebrow="This workspace"
         right={
           tournament.signals ? (
             <StatusPill tone={pill.tone} dot className="shrink-0">
@@ -246,7 +246,7 @@ export function WorkspaceInspector({
       </DetailPanel.Section>
 
       {(tournament.signals?.nextUp?.length ?? 0) > 0 ? (
-        <DetailPanel.Section eyebrow="Next up" testId="inspector-next-up">
+        <DetailPanel.Section eyebrow="Up next" testId="inspector-next-up">
           <NextUpList items={tournament.signals?.nextUp ?? []} />
         </DetailPanel.Section>
       ) : null}

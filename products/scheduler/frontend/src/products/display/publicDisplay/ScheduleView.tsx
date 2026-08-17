@@ -1,5 +1,5 @@
 /**
- * Public Display — "Up Next" schedule view.
+ * Public Display — "Up next" schedule view.
  *
  * Renders the next 10 scheduled matches as a vertical list with court +
  * time + rosters. Pure presentation; all derivation happens in the page
@@ -28,7 +28,7 @@ export function ScheduleView({
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-4 text-xl font-semibold uppercase tracking-widest text-muted-foreground">
-        Up Next
+        Up next
       </div>
       {upcomingMatches.length === 0 ? (
         <div className="py-12 text-center text-xl text-muted-foreground">

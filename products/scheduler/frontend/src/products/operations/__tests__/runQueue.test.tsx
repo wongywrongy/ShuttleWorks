@@ -10,6 +10,7 @@ function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' |
     span: 1,
     status: 'scheduled',
     late: false,
+    timeliness: 'ontime' as const,
     eligible: true,
     ...p,
   };
@@ -103,7 +104,7 @@ describe('RunQueue — readiness is legible on the row', () => {
     mkMatch({ key: 'meet:m7', id: 'm7', source: 'meet', label: 'MS7', status: 'called' }),
   ];
 
-  it('separates playable-now, waiting-on-an-earlier-result, and already-called', () => {
+  it('separates playable-now, pending-on-an-earlier-result, and already-called', () => {
     render(<RunQueue queue={READINESS} onSelect={vi.fn()} onSend={vi.fn()} />);
 
     // Playable now: the send affordance.
@@ -112,7 +113,7 @@ describe('RunQueue — readiness is legible on the row', () => {
     // Blocked: no send, and it SAYS why rather than just going quiet.
     expect(screen.queryByTestId('queue-send-bracket:pu9')).toBeNull();
     const blocked = screen.getByTestId('queue-blocked-bracket:pu9');
-    expect(blocked.textContent).toMatch(/waiting/i);
+    expect(blocked.textContent).toMatch(/pending/i);
     expect(blocked).toHaveAttribute('title', expect.stringMatching(/earlier result/i));
 
     // Already called: no send either, but a different reason.
