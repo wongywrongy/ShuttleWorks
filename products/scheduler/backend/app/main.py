@@ -14,6 +14,7 @@ from api import (
     display as display_api,  # SP-CLOUD-2 — capability-token spectator display
     entries as entries_api,  # SP-E1-1 — the operator's Entries desk
     entries_json as entries_json_api,  # SP-PROGRAM-1 Phase 6 — the entrant tier's JSON surface
+    entries_me as entries_me_api,  # SP-P7 — the signed-in entrant's own record
     entrants as entrants_api,  # SP-E1-2 — the entrant principal's auth surface
     schedule,
     solve_jobs as solve_jobs_api,  # SP-CLOUD-1 — async solve rail
@@ -455,6 +456,11 @@ app.include_router(entries_api.router, dependencies=_AUTH_DEP)
 # ``/e/{slug}`` (different segment counts), regardless of registration
 # order.
 app.include_router(entries_json_api.router)
+# SP-P7 §3.1: the entrant's own record. No ``_AUTH_DEP`` — the operator
+# dependency is the WRONG principal here; the route declares
+# ``get_current_entrant`` itself (the D-A3 two-seams rule) and 401s a bare
+# request, so nothing on it is anonymous either.
+app.include_router(entries_me_api.router)
 # Entrant auth (SP-E1-2, ruling R10): the second principal's front door,
 # registered WITHOUT ``_AUTH_DEP`` for the same reason ``auth_api`` below
 # is — signup and login are how a session is *obtained*, so requiring one
