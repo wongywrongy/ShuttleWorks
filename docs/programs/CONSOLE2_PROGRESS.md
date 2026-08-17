@@ -210,6 +210,14 @@ L75, dispatch L67; config editor `fe/products/workspace/displayConfig/DisplayLay
   down into `MeetDisplayPage`/`BracketDisplayPage` — nothing to key off today.
 - Public routes: `be/api/display.py` (`public_router` L38; `/summary` L149, `/state` L171,
   `/match-states` L204, `/bracket` L214; projection `_MEET_PROJECTION_FIELDS` L161-168).
+- **TV-6/7 home** (a directive-named map item): TV-6's grid contract belongs in the existing
+  pure modules `publicDisplay/courtLayout.ts` (`defaultColumns` L63-73 — today a court-count
+  tier table that ignores card area, and has no pagination) and `publicDisplay/tvSizing.ts`
+  (`resolveCardHeightPx`/`resolveCardSizeClasses`). Both are already pure and already have unit
+  tests (`__tests__/courtLayout.test.ts`, `tvSizing.test.ts`), so the property test **and** its
+  negative control (remove the pagination cap → min-card-area property must fail) land there
+  with no new seam. TV-7 replaces the single-axis rotation effect at `MeetDisplayPage.tsx:60`
+  + L145-154 + L483-493.
 
 ### Backend (Phase 5)
 
@@ -338,9 +346,14 @@ audit:
 - **NEW-4 / WSV-2 resolution is already visible.** `/ws-venue` already owns courts, slot
   duration *and* the day window. So `/ws-venue` is the single owner; `/new` should ask only what
   creation needs and link there. No new fields on `/new`.
-- **DC-1 is nearly free.** `CourtsView.tsx:67` dispatches `displayMode === 'list' ? list : cards`
-   — `strip` and `grid` already render identically. Retiring `strip` changes the *default*
-  (`MeetDisplayPage.tsx:373` defaults to `'strip'`), not the rendering.
+- **DC-1 is *not* free — it changes what every existing display shows.** `strip` is a real,
+  distinct mode: `CourtsView.tsx:169` gives `grid` a CSS grid with `gridColsClass` and `strip`
+  a `flex flex-col` single column. It is also the **default** (`MeetDisplayPage.tsx:373`,
+  `DisplayLayoutEditor.tsx:228`, `DisplayPreview.tsx:146` all `?? 'strip'`), and the 2026-08-17
+  capture is in it — the four stacked full-width court cards *are* strip mode. Retiring it and
+  mapping stored `strip` → Auto flips every untouched workspace from one column to the TV-6
+  grid. That is the intent, but it is a visible change to every live display, not a no-op;
+  land it deliberately and call it out in the Phase 6 report.
 - **BRST-2 answered:** the "(1)" / "(4)" suffix on MDC/XDC chips is the **seed**
   (`EventsControl.tsx:106-113`). Label it as such.
 - **CFG-3 and BRST-3 confirmed no-ops** (pattern references, kept for ID continuity).
