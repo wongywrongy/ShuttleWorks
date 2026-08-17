@@ -361,8 +361,8 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
     {/* The section title names what these rows are; the drag affordance is
         carried by the grab cursor and the row's own title attribute. The
         one fact the title can't carry — that hiding is board-only and
-        Operations keeps scheduling the court — rides on the hide control's
-        own label instead of a paragraph over the whole group. */}
+        Operations keeps scheduling the court — is the single helper line
+        under the list (D2.2). */}
     <Section
       title="Court order and visibility"
       action={
@@ -394,6 +394,9 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
           ))}
         </SortableContext>
       </DndContext>
+      <p className="pb-3 pt-2 text-2xs text-muted-foreground">
+        Hiding a court affects this board only. Operations are untouched.
+      </p>
     </Section>
     </>
   );

@@ -58,7 +58,9 @@ export function StandingsView({ standings }: StandingsViewProps) {
                     {team.wins}W
                   </span>
                   <span className="text-muted-foreground">–</span>
-                  <span className="text-destructive">
+                  {/* Secondary ink, NOT alarm-red: a loss count is information,
+                      and this board renders no alerts (D1.1). */}
+                  <span className="text-muted-foreground">
                     {team.losses}L
                   </span>
                 </div>

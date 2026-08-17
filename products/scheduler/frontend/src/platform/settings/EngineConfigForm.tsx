@@ -248,7 +248,7 @@ export function EngineConfigForm({
           column off these same primitives. Order is now operator-first:
           what the matches are, then when they run, then what the solver
           optimizes for, with the solver's own internals last. */}
-      <div className="max-w-3xl space-y-2">
+      <div className="mx-auto max-w-3xl space-y-2">
           {/* The module's own sections lead — Meet's inline Events below,
               Bracket's via the `leadingSections` slot. Both engines put
               "what is being contested" above "how it is scored". */}
@@ -345,7 +345,15 @@ export function EngineConfigForm({
                   <NumberWithSuffix
                     value={formData.restBetweenRounds ?? 1}
                     onChange={(v) => set('restBetweenRounds', v)}
-                    suffix="slots"
+                    // Slots are the stored unit, but nobody thinks in slots —
+                    // echo the wall-clock conversion so the knob is legible.
+                    suffix={
+                      config?.intervalMinutes
+                        ? `${(formData.restBetweenRounds ?? 1) === 1 ? 'slot' : 'slots'} · ${
+                            (formData.restBetweenRounds ?? 1) * config.intervalMinutes
+                          } min`
+                        : 'slots'
+                    }
                     min={0}
                     max={32}
                     ariaLabel="Rest between rounds (slots)"

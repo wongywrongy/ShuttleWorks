@@ -18,7 +18,7 @@ function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' |
 const QUEUE: RunMatch[] = [
   mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1', sideA: 'Alpha', sideB: 'Beta' }),
   mkMatch({ key: 'bracket:pu1', id: 'pu1', source: 'bracket', label: 'QF1', sideA: 'Gamma', sideB: 'Delta' }),
-  mkMatch({ key: 'meet:m3', id: 'm3', source: 'meet', label: 'MD2', sideA: 'Epsilon', sideB: 'Zeta', late: true }),
+  mkMatch({ key: 'meet:m3', id: 'm3', source: 'meet', label: 'MD2', sideA: 'Epsilon', sideB: 'Zeta' }),
 ];
 
 describe('RunQueue', () => {
@@ -50,12 +50,17 @@ describe('RunQueue', () => {
     expect(screen.queryByTestId(/^run-queue-row-/)).toBeNull();
   });
 
-  it('a row with late:true shows the late marker', () => {
-    render(<RunQueue queue={QUEUE} onSelect={vi.fn()} />);
+  it('a row in lateKeys shows the late marker', () => {
+    // `lateKeys` is the ONE late seam for queue rows: `RunMatch.late` is never
+    // true off toRunMatches (deriveCourtLanes sets it on lane clones only), so
+    // the old badge keyed on it was dead code and was removed (SP-CONSOLE-REFINE).
+    render(<RunQueue queue={QUEUE} onSelect={vi.fn()} lateKeys={new Set(['meet:m3'])} />);
     const lateRow = screen.getByTestId('run-queue-row-meet:m3');
     expect(lateRow).toBeInTheDocument();
     // "Late" text must be visible inside the row
     expect(lateRow.textContent).toMatch(/late/i);
+    // ...and only on the flagged row.
+    expect(screen.getByTestId('run-queue-row-meet:m1').textContent).not.toMatch(/late/i);
   });
 
   it('clicking a row fires onSelect with the match key', () => {

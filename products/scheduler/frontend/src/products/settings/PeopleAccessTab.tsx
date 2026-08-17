@@ -205,7 +205,7 @@ export function PeopleAccessTab({
   };
 
   return (
-    <div className="max-w-3xl space-y-5 p-6">
+    <div className="mx-auto max-w-3xl space-y-5 p-6">
       <div>
         <h2 className="text-base font-semibold tracking-tight text-foreground">Members and roles</h2>
         {summary?.ownerName && (
@@ -265,7 +265,11 @@ export function PeopleAccessTab({
             <li className="p-3 text-sm text-muted-foreground">Loading…</li>
           ) : members.length === 0 ? (
             <li className="p-3 text-sm text-muted-foreground">
-              No members yet. Invite collaborators from the Sharing tab.
+              No members yet. Invite collaborators from the{' '}
+              <Link to={`/tournaments/${tid}/ws-sharing`} className="text-accent hover:underline">
+                Sharing
+              </Link>{' '}
+              tab.
             </li>
           ) : (
             members.map((m) => {

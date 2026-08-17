@@ -44,7 +44,7 @@ export function DangerZoneTab({
   }
 
   return (
-    <div className="max-w-3xl space-y-4 p-6">
+    <div className="mx-auto max-w-3xl space-y-4 p-6">
       <div>
         <h2 className="text-base font-semibold tracking-tight text-foreground">Archive or delete</h2>
       </div>

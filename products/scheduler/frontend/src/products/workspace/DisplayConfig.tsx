@@ -11,6 +11,7 @@
  * the config unification.
  */
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
@@ -134,14 +135,32 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
         {mintFailed ? (
           <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
             No public link yet. Only a workspace owner can create one. Ask an owner to
-            share it from Sharing.
+            share it from{' '}
+            <Link
+              to={`/tournaments/${tid}/ws-sharing`}
+              className="text-accent hover:underline"
+            >
+              Sharing
+            </Link>
+            .
           </p>
         ) : (
           <FieldRow
             readOnly
             label="Public display URL"
             value={publicUrl ?? 'Creating link…'}
-            hint="View-only. Anyone with this link can watch, with no sign-in. Rotate it in Sharing to revoke it."
+            hint={
+              <>
+                View-only. Anyone with this link can watch, with no sign-in. Rotate it in{' '}
+                <Link
+                  to={`/tournaments/${tid}/ws-sharing`}
+                  className="text-accent hover:underline"
+                >
+                  Sharing
+                </Link>{' '}
+                to revoke it.
+              </>
+            }
             inputClassName="font-mono"
             last
           />

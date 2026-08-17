@@ -9,7 +9,7 @@
  * The segment ids are intentionally unchanged; only the labels are renamed.
  */
 import { describe, it, expect } from 'vitest';
-import { buildWorkspaceNav, roleBadge } from '../workspaceNav';
+import { buildWorkspaceNav } from '../workspaceNav';
 
 describe('buildWorkspaceNav — Operations nav labels (Task 17)', () => {
   it('meet-only arm: Operations items are Plan + Live day with correct segments', () => {
@@ -81,14 +81,14 @@ describe('buildWorkspaceNav — the Entries section', () => {
     );
   });
 
-  it('badges it Intake — the anatomy is intake → engine → emit', () => {
+  it('models it as intake — the anatomy is intake → engine → emit', () => {
     // Reusing `shared` would have been a one-word change and would have lied:
-    // Operations is shared BETWEEN the engines, Entries feeds them.
+    // Operations is shared BETWEEN the engines, Entries feeds them. (The role
+    // is model-only since SP-CONSOLE-REFINE G2 — the sidebar badge is gone;
+    // the taxonomy reads out in the Modules catalog descriptions instead.)
     const nav = buildWorkspaceNav('meet', new Set(['meet', 'entries']));
     const entries = nav.sections.find((s) => s.id === 'entries')!;
     expect(entries.role).toBe('intake');
-    expect(roleBadge(entries.role)).toBe('Intake');
-    expect(roleBadge('shared')).toBe('Shared');
   });
 
   it('places intake first, ahead of the engines it feeds', () => {

@@ -69,15 +69,16 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             data-testid={`run-queue-row-${match.key}`}
             data-source={match.source}
             style={{ '--i': i } as CSSProperties}
-            // `flex-wrap`: at 390px the fixed columns (#n, source, code) plus
-            // the badges left the sides column ~91px, so `break-words` broke
-            // names MID-WORD ("Winn/er"). The trailing columns now wrap to a
-            // second line instead; the sides column keeps a 10rem floor.
-            className={`flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
+            className={`cursor-pointer px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
               isSelected ? 'bg-muted/40' : ''
             }`}
             {...selectableRowProps(() => onSelect(match.key), isSelected)}
           >
+            {/* `flex-wrap`: at 390px the fixed columns (#n, source, code) plus
+                the badges left the sides column ~91px, so `break-words` broke
+                names MID-WORD ("Winn/er"). The trailing columns now wrap to a
+                second line instead; the sides column keeps a 10rem floor. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {/* Position */}
             <span className="w-6 flex-shrink-0 text-right text-2xs sw-num text-ink-faint">
               #{i + 1}
@@ -108,25 +109,17 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               {match.sideB}
             </span>
 
-            {/* Late marker */}
-            {match.late && (
-              <span
-                data-testid={`run-queue-late-${match.key}`}
-                aria-label="Late"
-                className={`sw-late-nudge flex-shrink-0 ${EYEBROW_CLASS} text-status-warning`}
-              >
-                Late
-              </span>
-            )}
-
-            {/* Behind-plan badge — same voice as the board's run-late marker */}
+            {/* Behind-plan badge — same voice as the board's run-late marker.
+                (`match.late` is NEVER true on queue rows — runModel derives
+                late only onto court-lane Now clones — so the old second badge
+                keyed on it was dead code; `lateKeys` is the one source.) */}
             {lateKeys?.has(match.key) && (
               <span
                 data-testid={`queue-late-${match.key}`}
                 aria-label="Late"
-                className="sw-late-nudge flex-shrink-0 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
+                className={`sw-late-nudge flex-shrink-0 ${EYEBROW_CLASS} text-status-warning`}
               >
-                LATE
+                Late
               </span>
             )}
 
@@ -162,6 +155,13 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
                 ↵ send
               </button>
             ) : null}
+            </div>
+
+            {/* Reserved second line (O2.2) — the future blocker-reason strip.
+                Empty on purpose: reserving the height NOW means the rows don't
+                reflow the day the reason text ships. Aligned under the sides
+                column (past #n's w-6 + gap-3). */}
+            <div aria-hidden className="min-h-4 pl-9 text-2xs text-muted-foreground" />
           </li>
         );
       })}

@@ -542,14 +542,10 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
             {progressPct}%
           </div>
           <div className="flex items-center gap-5">
-            <span
-              className="inline-flex items-center gap-2"
-              style={{ color: tvAccent }}
-            >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: tvAccent }}
-              />
+            {/* Same token as the card LIVE band (one status, one hue — D1.3);
+                the arbitrary tvAccent hex is brand chrome, not a status. */}
+            <span className="inline-flex items-center gap-2 text-status-live">
+              <span className="h-2 w-2 rounded-full bg-status-live" />
               {matchesByStatus.started.length} active
             </span>
             <span className="inline-flex items-center gap-2 text-status-called">

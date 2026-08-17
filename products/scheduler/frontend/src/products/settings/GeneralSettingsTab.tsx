@@ -57,7 +57,7 @@ export function GeneralSettingsTab({
     : null;
 
   return (
-    <div className="max-w-3xl p-6">
+    <div className="mx-auto max-w-3xl p-6">
       {/* H1 echoes the nav label verbatim (G1); the workspace name already
           lives in the header chrome, so it is not repeated here. */}
       <h2 className="pb-4 text-base font-semibold tracking-tight text-foreground">Settings</h2>

@@ -1,6 +1,6 @@
 /**
  * The workspace left sidebar — primary in-workspace navigation, in three tiers:
- *  - Tier 1: section triggers (uppercase label + role badge + chevron). Clicking
+ *  - Tier 1: section triggers (uppercase label + chevron). Clicking
  *    toggles that section open/closed; sections are independent — any number can
  *    be open at once. Navigating into a section auto-opens it. Triggers don't
  *    navigate.
@@ -16,7 +16,6 @@ import type { AppTab } from '../../store/uiStore';
 import type { ModuleId, WorkspaceModule } from './types';
 import {
   buildWorkspaceNav,
-  roleBadge,
   sectionOfSegment,
   type WsKind,
   type WsNavItem,
@@ -156,13 +155,8 @@ export function WorkspaceSidebar({
                 onClick={() => toggle(s.id)}
                 className="flex w-full items-center justify-between gap-2 px-3.5 pb-0.5 pt-2.5 text-left hover:bg-muted/40"
               >
-                <span className="flex items-center gap-1.5">
-                  <span className="text-3xs font-bold uppercase tracking-[0.08em] text-muted-foreground">
-                    {s.label}
-                  </span>
-                  <span className="rounded-sm border border-border px-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {roleBadge(s.role)}
-                  </span>
+                <span className="text-3xs font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                  {s.label}
                 </span>
                 <CaretRight
                   aria-hidden

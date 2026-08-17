@@ -78,7 +78,7 @@ export function VenueScheduleTab() {
   };
 
   return (
-    <div className="max-w-2xl space-y-4 p-6">
+    <div className="mx-auto max-w-2xl space-y-4 p-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Venue and schedule</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">

@@ -12,10 +12,15 @@ export function ModuleCatalogRow({
   module,
   onEnable,
   onDisable,
+  blockedReason,
 }: {
   module: WorkspaceModule;
   onEnable: () => void | Promise<unknown>;
   onDisable: () => void | Promise<unknown>;
+  /** A server rule the CLIENT can evaluate (last operational module; Display
+   *  needs an engine): the action renders visibly disabled with this reason.
+   *  Rules needing server state (a module with data) stay 409→toast. */
+  blockedReason?: string;
 }) {
   const meta = catalogMeta(module.id);
   const enabled = module.status === 'enabled';
@@ -56,14 +61,19 @@ export function ModuleCatalogRow({
         {meta?.dependency ? (
           <p className="text-2xs text-muted-foreground">{meta.dependency}</p>
         ) : null}
+        {/* Don't repeat the dependency line word-for-word as the reason. */}
+        {blockedReason && blockedReason !== meta?.dependency ? (
+          <p className="text-2xs text-muted-foreground">{blockedReason}</p>
+        ) : null}
       </div>
       <div className="shrink-0">
         {module.status === 'enabled' ? (
           <Button
             variant="ghost"
             onClick={() => void toggle.run()}
-            disabled={toggle.pending}
+            disabled={toggle.pending || blockedReason !== undefined}
             aria-busy={toggle.pending}
+            title={blockedReason}
             className="text-muted-foreground"
           >
             Disable
@@ -71,8 +81,9 @@ export function ModuleCatalogRow({
         ) : isModuleEnableable(module.status) ? (
           <Button
             onClick={() => void toggle.run()}
-            disabled={toggle.pending}
+            disabled={toggle.pending || blockedReason !== undefined}
             aria-busy={toggle.pending}
+            title={blockedReason}
           >
             Enable
           </Button>

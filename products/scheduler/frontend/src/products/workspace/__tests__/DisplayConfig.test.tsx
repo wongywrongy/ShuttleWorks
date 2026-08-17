@@ -7,6 +7,8 @@
  */
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+// The Sharing mentions are real <Link>s now (D2.1) — renders need a router.
+import { MemoryRouter } from 'react-router-dom';
 import { DisplayConfig } from '../DisplayConfig';
 import { apiClient } from '../../../api/client';
 import { useTournamentStore } from '../../../store/tournamentStore';
@@ -43,7 +45,7 @@ beforeEach(() => {
 
 describe('<DisplayConfig /> — Board layout + Preview mount', () => {
   it('shows Board layout + Preview when Meet is enabled', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(screen.getByRole('heading', { name: 'Board layout' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Preview' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Display mode' })).toBeInTheDocument();
@@ -51,13 +53,13 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
   });
 
   it('hides Board layout + Preview for a bracket-only workspace (tv* fields do not drive it)', () => {
-    render(<DisplayConfig tid="t1" modules={BRACKET_ONLY} />);
+    render(<DisplayConfig tid="t1" modules={BRACKET_ONLY} />, { wrapper: MemoryRouter });
     expect(screen.queryByRole('heading', { name: 'Board layout' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Preview' })).toBeNull();
   });
 
   it('still renders the existing Feeds + Public link sections untouched', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(screen.getByRole('heading', { name: 'Feeds' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Public link' })).toBeInTheDocument();
     expect(screen.getByLabelText('Public display URL')).toBeInTheDocument();
@@ -69,7 +71,7 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
   // off or never existed", and the client blames an expired session that never
   // existed. The real public link is the capability token.
   it('shows the minted ?token= capability link, never the viewer-gated ?id= URL', async () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     const field = screen.getByLabelText('Public display URL') as HTMLInputElement;
     await waitFor(() =>
       expect(field.value).toBe(`${window.location.origin}/display?token=cap-tok`),
@@ -80,7 +82,7 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
 
   it('says what to do instead of handing over a URL when no link can be minted', async () => {
     vi.spyOn(apiClient, 'getDisplayToken').mockRejectedValue(new Error('404'));
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(await screen.findByTestId('display-link-unavailable')).toBeInTheDocument();
     expect(screen.queryByLabelText('Public display URL')).toBeNull();
   });
@@ -92,7 +94,7 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
   // score disappear from the preview frame in the SAME render pass, with no
   // debounced PUT needed (setConfig writes to the store synchronously).
   it('reflects an unsaved editor edit in the preview immediately (live-draft preview)', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     const preview = screen.getByTestId('display-preview-frame');
     // Console board cards render the score per SIDE row (11 / 7), not as a
     // joined "11–7" aggregate — assert both columns are on the board.
@@ -116,7 +118,7 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
  */
 describe('<DisplayConfig /> — the Preview says its data is a sample', () => {
   it('captions the preview, before the board, naming what is invented', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     const caption = screen.getByTestId('display-preview-caption');
     expect(caption).toHaveTextContent(/sample data/i);
     expect(caption).toHaveTextContent(/players, scores and courts are invented/i);
@@ -128,7 +130,7 @@ describe('<DisplayConfig /> — the Preview says its data is a sample', () => {
   });
 
   it('carries the sample warning in the accessible name too', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(screen.getByTestId('display-preview-frame')).toHaveAttribute(
       'aria-label',
       'Board layout preview, sample data',
