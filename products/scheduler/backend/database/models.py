@@ -316,6 +316,14 @@ class TournamentBackup(Base):
     filename: Mapped[str] = mapped_column(String(260), nullable=False)
     snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    # ``auto`` (a state write snapshotting the prior payload) or ``manual``
+    # (the director pressed Create backup). Retention rotates ``auto`` rows
+    # and never touches ``manual`` ones: ten routine writes during setup used
+    # to be enough to evict the snapshot a director took deliberately that
+    # morning, which is the one entry the feature exists for.
+    origin: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="auto", default="auto"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

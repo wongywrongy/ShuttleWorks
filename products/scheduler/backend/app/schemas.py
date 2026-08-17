@@ -632,11 +632,23 @@ class WorkspaceModuleDTO(BaseModel):
     moduleId: str
     status: str
     config: Optional[Dict[str, Any]] = None
+    #: Whether this module owns operational data (matches, draws). Disabling
+    #: such a module is refused with a 409, and the catalog could not know
+    #: that until it had already asked — so the operator learned the rule from
+    #: a failure toast rather than from a control that was plainly unavailable
+    #: (SP-CONSOLE-2 WSMOD-2). Server-computed, because "has data" is a
+    #: question about rows the client does not hold.
+    hasData: bool = False
 
     @classmethod
-    def from_row(cls, row) -> "WorkspaceModuleDTO":
+    def from_row(cls, row, has_data: bool = False) -> "WorkspaceModuleDTO":
         """Build the DTO from a ``WorkspaceModule`` ORM row (duck-typed)."""
-        return cls(moduleId=row.module_id, status=row.status, config=row.config)
+        return cls(
+            moduleId=row.module_id,
+            status=row.status,
+            config=row.config,
+            hasData=has_data,
+        )
 
 
 # ---- Entries (SP-E1-1) -----------------------------------------------

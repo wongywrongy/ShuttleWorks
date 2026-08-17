@@ -87,7 +87,10 @@ def list_modules(
     """Return the workspace's module rows (seeding them from ``kind`` if
     absent)."""
     modules = _resolve_modules(tournament_id, repo)
-    return [WorkspaceModuleDTO.from_row(m) for m in modules]
+    return [
+        WorkspaceModuleDTO.from_row(m, _module_has_data(m.module_id, tournament_id, repo))
+        for m in modules
+    ]
 
 
 @router.patch(

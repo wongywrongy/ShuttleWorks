@@ -43,6 +43,24 @@ import sqlalchemy as sa
 from tests.unit.test_entries_migration import alembic_cfg  # noqa: F401
 
 ORPHAN_PURGE_REVISION = "u5f0b4d7e2a3"
+
+
+def _revision_reached(url: str, revision: str) -> bool:
+    """Whether the migration history at ``url`` includes ``revision`` —
+    i.e. the current head is it or a descendant of it."""
+    from alembic.script import ScriptDirectory
+    from alembic.config import Config as _Cfg
+    import os as _os
+
+    here = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    cfg = _Cfg(_os.path.join(here, "backend", "alembic.ini"))
+    cfg.set_main_option("script_location", _os.path.join(here, "backend", "alembic"))
+    script = ScriptDirectory.from_config(cfg)
+    head = _head_revision(url)
+    return any(
+        rev.revision == revision
+        for rev in script.iterate_revisions(head, "base")
+    )
 PREVIOUS_REVISION = "t4e9a3c6d1f2"
 
 _MIGRATION = (
@@ -251,7 +269,9 @@ def test_upgrade_removes_only_the_rows_foreign_key_check_reports(alembic_cfg):  
 
     command.upgrade(cfg, "head")
 
-    assert _head_revision(url) == ORPHAN_PURGE_REVISION
+    # To (at least) the purge revision — "head" keeps moving as later
+    # migrations land, and this test is about the purge, not the head.
+    assert _revision_reached(url, ORPHAN_PURGE_REVISION)
     assert _violations(url) == []
 
     # The orphans are gone…
