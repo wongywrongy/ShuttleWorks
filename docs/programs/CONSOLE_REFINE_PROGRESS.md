@@ -62,58 +62,49 @@ Naming source of truth: `docs/design/console-naming.md` (VitePress Architecture 
   `936a05e` entries submitted_at. Debt-log gained **D19**: meet set scores are NOT persisted
   (match_states has no sets column; `_dto_to_fields` drops them) — meet per-set lane is
   session-only until a migration; bracket persists fine. Out of scope here (rule 1).
+- **P5 part 2 (2026-08-17) — Phase 5 COMPLETE.** A7 `mx-auto` on all six listed wrappers
+  (EngineConfigForm's covers both Meet Setup + Bracket hosts) **plus ModulesSettingsTab and
+  SyncBackupsTab** — same admin column, consistency; A2.1 Sharing is a real Link (reused the
+  file's own line-393 pattern); A5.1 restore confirm names "Aug 12, 3:04 PM" + states
+  matches/results/settings replaced and since-changes discarded; A5.2 rows grouped by day
+  ("Today"/"Aug 12", year appended off-year), lead = time-of-day · size, filename demoted to
+  mono 2xs secondary (aria-labels/testids keep the filename — unique + pinned); G2 roleBadge
+  deleted entirely (fn + render + import; `role` stays as model, test now pins model only);
+  A4.1 taxonomy folded into catalog capabilities as "Engine · …/Output · …/Intake · …"
+  (middot, NOT the ledger's em-dash examples — the emDashContract bans U+2014 in copy);
+  A4.2 `blockedReason` prop computed in ModulesSettingsTab (client-knowable rules only:
+  last-operational, display-needs-engine; skips the reason line when it would repeat the
+  dependency line verbatim); B4.1 dynamic suffix "slot(s) · N min" from config.intervalMinutes;
+  D1.1 loss count → muted ink (deviation note for report); D1.3 WAS drifted — footer legend
+  "active" used the arbitrary tvAccent hex while cards band with status-live; now one token
+  (tvAccent stays on progress fill + brand chrome only); D2.1 both Sharing mentions are real
+  Links (FieldRow `hint` is ReactNode — no restructure needed; DisplayConfig tests now wrap
+  in MemoryRouter); D2.2 helper line under the court list (comment there claimed the fact
+  rode the hide control's label — it didn't; fixed); O2.2 rows are now a column with a
+  reserved empty muted second line (min-h-4, pl-9 aligned); O2.3 court cards verified ONE
+  late rule (`bandFor` → destructive band). **Boy-Scout: RunQueue's `match.late` badge was
+  DEAD CODE** — runModel only ever sets `late` on court-lane Now clones, never on queue rows
+  — deleted; `lateKeys` is the one seam, its badge unified onto EYEBROW_CLASS; the runQueue
+  test now drives the marker through `lateKeys` (the fixture's `late: true` was a state
+  production cannot produce).
+- **P6 (2026-08-17) — Phase 6 COMPLETE (code).** P1.1 shipped ZERO-JS: facet radios became
+  instant-apply **links** (the tier's own `?tab=` idiom) — each carries the whole current
+  query with its one facet swapped; the GET form remains for the free date range only, with
+  chosen facets + q as hidden fields ("Apply dates"); selected facet carries
+  `aria-current="true"`; the py-1.5 target-size ruling carried over to the link rows; tests
+  updated (components + discovery.render) to pin hrefs, aria-current, hidden carry-through,
+  labelled navs. **P2.1 = documented deviation, no code:** viewer-local needs JS (banned +
+  CSP + weight gate), venue-local needs a timezone the data model doesn't record (schema
+  change = out of program scope), and `<time>` does NOT localize display without script —
+  UTC-labeled display stays; carry this to the report's deviations list.
+- Gates after P5p2+P6: `make check` exit 0 · vitest 1751 · **entrant 586** (was 584; +2 from
+  the FilterStrip suite) · pytest green · contrast 64/64 both themes · tsc/eslint/depcruise 0.
 
-## Remaining — Phase 5 (in progress)
+## Remaining — recapture-time verifications (fold into Phase 7)
 
-- **A7 (decided: narrow admin column, option b)** — center the admin/config content column
-  (`mx-auto` on the max-w wrappers) so the emptiness reads deliberate: VenueScheduleTab
-  (max-w-2xl), PeopleAccessTab, SharingTab, GeneralSettingsTab+DangerZoneTab (max-w-3xl),
-  Meet TournamentSetupPage + Bracket BracketTab (EngineConfigForm hosts). Right context
-  rails stay a future enhancement (note in console-naming.md if desired).
-- **A2.1** — PeopleAccessTab:268 "No members yet. Invite collaborators from the Sharing tab."
-  → make "Sharing" a real `<Link>` to `/tournaments/{tid}/ws-sharing`.
-- **A5.1/A5.2** — SyncBackupsTab: Restore confirm EXISTS (Modal "Restore this backup?",
-  ~lines 124-148) — make it name the backup's human timestamp + restate what is replaced.
-  Rows: lead with human timestamp + size; demote filename to mono secondary/tooltip; group
-  by day ("Today", "Aug 12") when list grows. A5.3 (Create backup top-right) already true.
-- **G2 + A4.1** — remove ENGINE/SHARED/OUTPUT role badges from WorkspaceSidebar
-  (`roleBadge` in platform/product-shell/workspaceNav.ts + WorkspaceSidebar.tsx render);
-  fold the taxonomy into ModuleCatalogRow descriptions on /ws-modules (e.g. "Engine —
-  produces matches", "Projects results"). Sidebar keeps section labels + chevrons.
-  Check WorkspaceSidebar tests + workspaceNav roleBadge test (badges it Intake test!).
-- **A4.2** — ModuleCatalogRow disable buttons: visibly disable WITH reason where the client
-  can know it (last operational module; Display needs an engine); data-presence 409 stays
-  toast-only (client can't know) — presentation of existing server rules only.
-- **B4.1** — EngineConfigForm "Rest between rounds" row (~343-356): suffix the slots value
-  with the minutes conversion ("1 slot · 30 min") from intervalMinutes; stored unit unchanged.
-- **D1.1** — display StandingsView.tsx:56-63: "6W – 6L" loss count uses alarm-red → mute
-  the L to secondary ink (losses are information, not alerts). Deviation note for report.
-- **D1.3** — MeetDisplayPage.tsx:545-558 "2 active · 2 called" legend: verify legend colors
-  are the same tokens as the card condition bands (one token, two uses); fix if drifted.
-- **D2.1** — DisplayConfig.tsx:137+144: "share it from Sharing" / "Rotate it in Sharing" —
-  copy done in P1; make them REAL links to ws-sharing (FieldRow hint may be string-typed —
-  restructure or add a link line).
-- **D2.2** — DisplayLayoutEditor court-visibility list: one helper line "Hiding a court
-  affects this board only — operations are untouched."
-- **D2.3** — verified wired by exploration (Strip/Grid/List, columns, card size, show scores,
-  standings mode) — spot-check round-trip at recapture; remove any dead control found.
-- **O2.2** — Live-day queue rows: reserve an empty muted second line (layout only) for the
-  future blocker-reason feature. Queue rows live under products/operations/run/ (RunSurface
-  queue), NOT meet control-center WorkflowPanel.
-- **O2.3** — verify the two LATE treatments (solid red condition band vs red header card)
-  are one rule in the Run court cards; unify if drifted. O2.4: stat-strip labels are already
-  eyebrow-tier; verify at recapture.
-
-## Remaining — Phase 6 (public tier, entrant app)
-
-- **P1.1** discovery.tsx: status/date-preset radios apply instantly (form auto-submit);
-  keep the Apply button only for the free date-range inputs. (Zero-JS constraint: the
-  entrant tier is no-JS by design — instant-apply may be impossible without JS; if so,
-  document the deviation instead of adding a script. CHECK `entrant-tier` docs first.)
-- **P2.1** lib/format.ts `formatUtcInstant` + TimelineCard: display in viewer-local time
-  (or venue-local, labeled) with UTC demoted to tooltip/secondary. NOTE no-JS constraint:
-  server renders can't know the viewer's timezone — likely resolution is venue-local labeled,
-  or a <time> element browsers localize; decide honestly, don't add JS.
+- **D2.3** — layout-editor controls verified wired by exploration; spot-check round-trip at
+  recapture; remove any dead control found.
+- **O2.4** — stat-strip labels already eyebrow-tier; verify at recapture.
 - **P3.1** entry-form OPEN state exists (enter.tsx:474 two-col + StickyTotalBar) — must be
   CAPTURED in the Phase 7 report (seed an open-entries tournament via demo/entry scenarios).
 - **P5.1** Turnstile: site key comes from `/e/api/config` — verify prod config renders the
@@ -124,9 +115,11 @@ Naming source of truth: `docs/design/console-naming.md` (VitePress Architecture 
 
 Re-capture ALL 31 surfaces + entry-form open state + prod Turnstile; author
 `docs/audits/<date>-console-refine-report.html`; diff against the 13 Aug before; final STOP
-review. Include the "deliberate deviations" list (red-L ruling if kept, D19 meet-sets gap,
-B2.2 already-done note, "Lock draw" resolution, StaleBanner "Re-solve" left as-is on the
-meet-only surface, EntriesDesk "Commit to roster" left as-is — out of directive scope).
+review. Include the "deliberate deviations" list (muted-L ruling (D1.1 shipped muted, note
+it), D19 meet-sets gap, B2.2 already-done note, "Lock draw" resolution, StaleBanner
+"Re-solve" left as-is on the meet-only surface, EntriesDesk "Commit to roster" left as-is —
+out of directive scope, **P2.1 UTC-stays deviation (zero-JS + no venue timezone in the
+data)**, and the A4.1 middot-not-em-dash spelling forced by the emDashContract).
 
 ## Done conditions (from the prompt)
 
