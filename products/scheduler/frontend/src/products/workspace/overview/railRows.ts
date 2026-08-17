@@ -59,8 +59,12 @@ export function buildRailRows(
   rows.push({
     key: 'display',
     label: 'Public display',
+    // "Live link" named the OBJECT the row links to, so the rail read
+    // "Public display: Live link" — a label and its own synonym, stating
+    // nothing. The row answers whether the display is shared (OV-2); the
+    // link itself lives on Sharing, which is where this row goes.
     value:
-      displayShared === null ? '–' : displayShared ? 'Live link' : 'Not shared',
+      displayShared === null ? '–' : displayShared ? 'Active' : 'Not shared',
     tone: displayShared ? undefined : 'muted',
     segment: 'ws-sharing',
   });

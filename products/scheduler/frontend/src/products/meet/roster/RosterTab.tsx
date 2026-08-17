@@ -46,6 +46,7 @@ import {
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { DetailDrawer } from './PlayerDetailPanel';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 import { DetailDock, PickerPopover } from '../../../components/control-plane';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
@@ -268,7 +269,12 @@ export function RosterTab() {
           <MeetActionsBar
             title="Roster"
             status={
+              // Both objects, because the surface holds both and its primary
+              // action makes SCHOOLS (RST-1). A header that counted only
+              // players sat above a "+ Add school" button, so the readout and
+              // the action described different models.
               <span className="text-sm font-semibold text-foreground tabular-nums">
+                {groups.length} school{groups.length === 1 ? '' : 's'} ·{' '}
                 {players.length} player{players.length === 1 ? '' : 's'}
               </span>
             }
@@ -332,8 +338,23 @@ export function RosterTab() {
                   <InlineSearch
                     query={query}
                     onQueryChange={setQuery}
-                    placeholder={`Filter ${schoolPlayers.length} player${schoolPlayers.length === 1 ? '' : 's'}…`}
+                    // No count: this one was the ACTIVE school's, while the
+                    // header above stated every school's, so the page showed
+                    // two different player counts at once (RST-3).
+                    placeholder="Filter players…"
                   />
+                </div>
+              )}
+              {/* Column header for the list. The trailing number per row had
+                  no header and no visible name, so it was a digit the reader
+                  had to guess at (RST-2). */}
+              {schoolPlayers.length > 0 && (
+                <div
+                  aria-hidden
+                  className={`flex items-center justify-between gap-2 border-b border-border/60 px-4 py-1 ${EYEBROW_CLASS} text-ink-faint`}
+                >
+                  <span>Player</span>
+                  <span>Events</span>
                 </div>
               )}
               <PlayerListSection

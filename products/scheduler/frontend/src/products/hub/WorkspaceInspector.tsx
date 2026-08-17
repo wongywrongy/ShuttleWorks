@@ -135,12 +135,17 @@ export function WorkspaceInspector({
         >
           {action.label === 'Open workspace' ? 'Open workspace →' : action.label}
         </Button>
+        {/* Named, not a naked gear (INS-2). The console already shows two
+            gears at once — the rail's Account gear and the workspace header's
+            — so a third, unlabeled one sitting beside the primary action was
+            the same ambiguity a third time. The glyph carried no meaning the
+            word does not. */}
         <Button
           variant="outline"
-          aria-label="Workspace settings"
+          className="shrink-0"
           onClick={() => onSettings(tournament.id)}
         >
-          ⚙
+          Workspace settings
         </Button>
       </div>
 

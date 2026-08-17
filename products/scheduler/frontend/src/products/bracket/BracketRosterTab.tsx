@@ -47,12 +47,10 @@ const ROSTER_COLUMNS: BandedTableColumn[] = [
   // collapsing to zero. Events is badges, which wrap on their own.
   { label: 'Player', className: `${NAME_COL_MIN} flex-1` },
   { label: 'Events', className: 'min-w-0 flex-1' },
-  { label: 'Min rest', subLabel: 'slots', className: 'w-16 shrink-0 text-right', priority: 2 },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
-/** Content floor for the roster dock, derived from ROSTER_COLUMNS. The old
- *  560 default sat under the 672 `@2xl` tier `Min rest` uses. */
+/** Content floor for the roster dock, derived from ROSTER_COLUMNS. */
 const ROSTER_DOCK_MIN_CONTENT_WIDTH = dockMinContentWidth(ROSTER_COLUMNS);
 
 export function BracketRosterTab() {
@@ -236,18 +234,21 @@ function BracketRosterTabCore({
                   {(badgesById.get(p.id) ?? []).map((b) => (
                     <EventBadge key={b.code} code={b.code} seed={b.seed} />
                   ))}
+                  {/* Min rest lost its column (BRST-1). It held the session
+                      default for every player — a column of identical 1s,
+                      which is a column that says nothing — and the value is
+                      still edited in the row detail. Only a player who
+                      DIFFERS from the default is worth a mark here. */}
+                  {p.restSlots != null && p.restSlots !== defaultRestSlots ? (
+                    <span
+                      className="rounded-sm border border-border px-1 py-px text-3xs text-muted-foreground sw-num"
+                      title={`Minimum rest between this player's matches: ${p.restSlots} slot${p.restSlots === 1 ? '' : 's'} (default is ${defaultRestSlots ?? 1})`}
+                    >
+                      rest {p.restSlots}
+                    </span>
+                  ) : null}
                 </span>
-                {/* Effective rest, always populated (B1.2): the per-player
-                    override in foreground ink, the session default muted. A
-                    column of dashes was a broken promise. */}
-                <span
-                  role="cell"
-                  className={`w-16 shrink-0 text-right text-xs sw-num hidden @2xl/table:block ${
-                    p.restSlots != null ? 'text-foreground' : 'text-muted-foreground'
-                  }`}
-                >
-                  {p.restSlots ?? defaultRestSlots ?? '–'}
-                </span>
+
                 <span
                   role="cell"
                   className="flex w-8 shrink-0 justify-end opacity-0 transition-opacity duration-fast ease-brand focus-within:opacity-100 group-hover:opacity-100"

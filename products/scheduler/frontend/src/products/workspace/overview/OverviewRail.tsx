@@ -39,14 +39,24 @@ export function OverviewRail({ rows, onNavigate }: Props) {
                       ? 'text-status-warning'
                       : row.tone === 'muted'
                         ? 'text-text-muted'
-                        : 'text-foreground',
+                        // A row offering a VERB ("Set date") is an action and
+                        // takes the accent; a row stating a fact keeps fact
+                        // ink and lets the chevron carry the affordance.
+                        : row.actionLabel
+                          ? 'text-accent'
+                          : 'text-foreground',
                   ].join(' ')}
                 >
                   {row.actionLabel ?? row.value}
                 </span>
+                {/* Always visible. Every row here is a door to the surface
+                    that owns its fact, and a chevron that only appears on
+                    hover is not an affordance on a touch device or to an eye
+                    scanning the rail (OV-5). It brightens on hover instead of
+                    appearing. */}
                 <span
                   aria-hidden
-                  className="text-text-muted opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100"
+                  className="text-text-muted transition-colors duration-fast ease-brand group-hover:text-accent"
                 >
                   &rsaquo;
                 </span>
