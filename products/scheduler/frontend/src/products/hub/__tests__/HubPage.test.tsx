@@ -146,15 +146,13 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByText('MODULES')).toBeInTheDocument();
   });
 
-  it('rows carry a Modules column (dashboard redesign)', async () => {
+  it('rows carry an Attention column, not a Modules one (HUB-3)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    // The redesign re-adds a Modules column: one cell per row. The seeded
-    // workspaces have no enabled modules → a dashed kind-default glyph (M for
-    // the meet, B for the bracket).
-    expect(screen.getAllByTestId('row-modules')).toHaveLength(2);
-    expect(screen.getByTestId('row-module-meet')).toBeInTheDocument();
-    expect(screen.getByTestId('row-module-bracket')).toBeInTheDocument();
+    expect(screen.getAllByTestId('row-attention')).toHaveLength(2);
+    // Modules are static config and belong to the inspector, not to the
+    // surface whose job is naming which workspace needs the director now.
+    expect(screen.queryByTestId('row-modules')).toBeNull();
   });
 
   it('shows a footer summary bar with workspace + attention counts', async () => {

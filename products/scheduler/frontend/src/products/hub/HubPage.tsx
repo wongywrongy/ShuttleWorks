@@ -81,7 +81,11 @@ function FilterChip({
           : 'text-muted-foreground hover:text-foreground'
       }`}
     >
-      {label} <span className={`sw-num ${countTone}`}>{count}</span>
+      {/* Same "label · count" grammar the match lists use (HUB-2). The two
+          strips claimed to share a grammar and did not: this one ran the
+          count straight on after a space. */}
+      {label} <span className="text-ink-faint">·</span>{' '}
+      <span className={`sw-num ${countTone}`}>{count}</span>
     </button>
   );
 }
@@ -351,8 +355,8 @@ export function HubPage() {
                 className={`flex items-center gap-3 border-b border-border px-4 py-2 @container/table ${EYEBROW_CLASS} text-ink-faint`}
               >
                 <span className="min-w-0 flex-1">Workspace</span>
-                <span className={['w-[108px] shrink-0', COL_PRIORITY_CLASS[3]].join(' ')}>
-                  Modules
+                <span className={['w-[132px] shrink-0', COL_PRIORITY_CLASS[3]].join(' ')}>
+                  Attention
                 </span>
                 {showDates ? (
                   <span className={['w-16 shrink-0 text-right', COL_PRIORITY_CLASS[2]].join(' ')}>
