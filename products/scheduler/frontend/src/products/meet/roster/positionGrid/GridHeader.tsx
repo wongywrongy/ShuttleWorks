@@ -83,6 +83,9 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
       <tr>
         <th className="w-9 border-b border-r border-border bg-muted/40 px-1 py-1.5 align-top text-center text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div className="flex flex-col items-center gap-1">
+            {/* The one deliberate ordinal in the console: this column is the
+                position/rank number players are assigned TO, not a row count
+                (SP-CONSOLE-REFINE no-ordinal rule, documented exception). */}
             <span>#</span>
             {hidden.map((p) => (
               <button

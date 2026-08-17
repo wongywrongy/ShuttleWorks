@@ -100,26 +100,39 @@ Naming source of truth: `docs/design/console-naming.md` (VitePress Architecture 
 - Gates after P5p2+P6: `make check` exit 0 · vitest 1751 · **entrant 586** (was 584; +2 from
   the FilterStrip suite) · pytest green · contrast 64/64 both themes · tsc/eslint/depcruise 0.
 
-## Remaining — recapture-time verifications (fold into Phase 7)
+## P7 (2026-08-17) — Phase 7 COMPLETE. Program COMPLETE pending final STOP review.
 
-- **D2.3** — layout-editor controls verified wired by exploration; spot-check round-trip at
-  recapture; remove any dead control found.
-- **O2.4** — stat-strip labels already eyebrow-tier; verify at recapture.
-- **P3.1** entry-form OPEN state exists (enter.tsx:474 two-col + StickyTotalBar) — must be
-  CAPTURED in the Phase 7 report (seed an open-entries tournament via demo/entry scenarios).
-- **P5.1** Turnstile: site key comes from `/e/api/config` — verify prod config renders the
-  real widget for the capture; no code change expected.
-- P1.3: G5 does NOT apply to public-tier body type. P4 (login) needs nothing.
+All 31 surfaces re-captured live (backend :8600 + Vite :5173 + entrant SSR :5175, the
+Nashville signed-in session) and authored into
+`docs/audits/2026-08-17-console-refine-report.html` (same hand-authored anatomy as the
+13 Aug before; embedded JPEGs; PNG keepers in `docs/screenshots/report-2026-08-17/`, which
+also holds two per-product review PDFs — operator console 26pp, public site 5pp). The report
+carries the full deliberate-deviations list (D1.1 muted-L, D19 meet-sets gap, B2.2
+already-done, "Lock draw" resolution, StaleBanner "Re-solve", EntriesDesk + director-proposal
+"Commit" retained, P2.1 UTC-stays, A4.1 middot, contrast-floor carryovers).
 
-## Remaining — Phase 7 (final report, STOP)
+Recapture-time verifications, all folded in:
+- **D2.3** ✓ — display-mode Strip→Grid persisted across a full reload (tv* blob round-trip),
+  reverted after; no dead control found.
+- **O2.4** ✓ — Live-day stat-strip labels render at eyebrow tier.
+- **P3.1** ✓ — entry form captured in its OPEN state against "2026 Dave Freeman Jr Open"
+  (entries open, closes in 8d) — no seeding needed, the discovery data already had two open.
+- **P5.1** ✓ — /e/signup renders the REAL Cloudflare Turnstile widget from the
+  `/e/api/config` site key (local test key auto-passes; prod swaps the key by env, no code).
+- P1.3/P4: nothing needed, as predicted.
 
-Re-capture ALL 31 surfaces + entry-form open state + prod Turnstile; author
-`docs/audits/<date>-console-refine-report.html`; diff against the 13 Aug before; final STOP
-review. Include the "deliberate deviations" list (muted-L ruling (D1.1 shipped muted, note
-it), D19 meet-sets gap, B2.2 already-done note, "Lock draw" resolution, StaleBanner
-"Re-solve" left as-is on the meet-only surface, EntriesDesk "Commit to roster" left as-is —
-out of directive scope, **P2.1 UTC-stays deviation (zero-JS + no venue timezone in the
-data)**, and the A4.1 middot-not-em-dash spelling forced by the emDashContract).
+Two code fixes surfaced by the done-condition greps (both trivial, no behavior):
+- `WarmRestartDialog.tsx` — rendered hint "re-optimises" → "re-optimizes" (P1 en-US escape).
+- `positionGrid/GridHeader.tsx` — comment documenting the `#` header as the console's one
+  deliberate ordinal (the Meet-pairings exception the done conditions require documented).
+
+Done-condition greps otherwise clean: no "Links & access"/"Re-solve meet"/"&" nav labels/
+-ise/-isation/organiser in rendered copy (comment instances deliberately left — the P1 sweep
+scoped to rendered copy); the remaining "Commit" buttons are proposal/entries commits, not
+the renamed draw picker (deviation-listed).
+
+Gates after P7: `make check` exit 0 · vitest 1751 · entrant 586 (run solo) · pytest green ·
+contrast 64/64 both themes · tsc/eslint/depcruise 0.
 
 ## Done conditions (from the prompt)
 

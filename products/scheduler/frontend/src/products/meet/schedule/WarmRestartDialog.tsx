@@ -32,7 +32,7 @@ interface Props {
 const WEIGHTS: Array<{ id: 'conservative' | 'balanced' | 'aggressive'; label: string; weight: number; hint: string }> = [
   { id: 'conservative', label: 'Conservative', weight: 10, hint: 'Strongest stay-close: very few moves' },
   { id: 'balanced',     label: 'Balanced',     weight: 5,  hint: 'Default: moves when objective improves' },
-  { id: 'aggressive',   label: 'Aggressive',   weight: 1,  hint: 'Lowest stay-close: re-optimises freely' },
+  { id: 'aggressive',   label: 'Aggressive',   weight: 1,  hint: 'Lowest stay-close: re-optimizes freely' },
 ];
 
 export function WarmRestartDialog({ isOpen, onClose }: Props) {
