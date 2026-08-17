@@ -33,7 +33,10 @@ const VIEWS: { id: BracketView; label: string }[] = [
 /** `hybrid` — this workspace also runs a Meet, so the header carries a switch
  *  back to that board (see `PublicDisplayPage` for why the two boards stay
  *  separate rather than merging). */
-export function BracketDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
+export function BracketDisplayPage({
+  hybrid = false,
+  preview = false,
+}: { hybrid?: boolean; preview?: boolean } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as BracketView | null;
   const [now, setNow] = useState<Date>(() => new Date());
@@ -94,20 +97,25 @@ export function BracketDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}
       className="flex min-h-[100dvh] flex-col bg-background text-foreground"
     >
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        {/* Venue render drops the view tabs and the fullscreen button — the
+            board is not operated from the wall (TV-8). */}
         <div role="tablist" aria-label="Display view" className="flex items-center gap-2">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={view === v.id}
-              data-testid={`bracket-view-${v.id}`}
-              className={tabClass(view === v.id)}
-              onClick={() => setParam('view', v.id)}
-            >
-              {v.label}
-            </button>
-          ))}
+          {preview
+            ? VIEWS.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v.id}
+                  data-testid={`bracket-view-${v.id}`}
+                  className={tabClass(view === v.id)}
+                  onClick={() => setParam('view', v.id)}
+                >
+                  {v.label}
+                </button>
+              ))
+            : null}
+          {/* Survives the venue render — see the meet board's note. */}
           {hybrid ? <BoardSwitch to="meet" className={tabClass(false)} /> : null}
           {view === 'draw' && events.length > 1 ? (
             <span className="ml-2 inline-flex">
@@ -124,7 +132,9 @@ export function BracketDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}
         <div className="flex items-center gap-3">
           <span className="tabular-nums text-base text-muted-foreground">{currentTime}</span>
           <LiveStatusPill status={freshness} />
-          <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+          {preview ? (
+            <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+          ) : null}
         </div>
       </header>
 

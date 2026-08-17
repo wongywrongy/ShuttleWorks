@@ -78,6 +78,7 @@ import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
 import { Row, Seg, Section, Toggle } from '../../../platform/settings/SettingsControls';
 import { orderCourts, courtsWithActiveMatch, reorderIds } from '../../display/publicDisplay/courtLayout';
+import { DEFAULT_DWELL_SECONDS } from '../../display/publicDisplay/rotation';
 
 // Same required-field shape as BracketEngineSection's FALLBACK_CONFIG — the
 // TournamentConfig fields with no `?` in the DTO.
@@ -118,11 +119,22 @@ const CARD_SIZE_OPTIONS = [
 ];
 
 // 'auto' is the "Auto" sentinel for standingsMode's `null`.
+// Side and Rotate are gone (DC-3): rotation subsumes them. Side was a
+// persistent panel that took roughly a third of the board's width from the
+// courts (TV-5), and Rotate is what every board does now — so the only
+// question left about standings is whether they are on the board at all.
 const STANDINGS_MODE_OPTIONS = [
-  { value: 'auto' as const, label: 'Auto' },
+  { value: 'auto' as const, label: 'On' },
   { value: 'off' as const, label: 'Off' },
-  { value: 'side' as const, label: 'Side' },
-  { value: 'rotate' as const, label: 'Rotate' },
+];
+
+/** Dwell choices, in seconds, for a glance slide. Courts holds twice this
+ *  (rotation.ts) because it is the slide the hall is reading. */
+const DWELL_OPTIONS = [
+  { value: 5, label: '5s' },
+  { value: 10, label: '10s' },
+  { value: 20, label: '20s' },
+  { value: 30, label: '30s' },
 ];
 
 /** One draggable row in the court-order list. Mirrors GridHeader's
@@ -235,7 +247,10 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
   const tvGridColumns = config?.tvGridColumns ?? 0;
   const tvCardSize = config?.tvCardSize ?? 'auto';
   const tvShowScores = config?.tvShowScores !== false;
-  const standingsMode = config?.standingsMode ?? 'auto';
+  // 'side' and 'rotate' both mean "on the board" now (DC-3).
+  const storedStandings = config?.standingsMode ?? null;
+  const standingsMode: 'auto' | 'off' = storedStandings === 'off' ? 'off' : 'auto';
+  const dwellSeconds = config?.tvRotationDwellSeconds ?? DEFAULT_DWELL_SECONDS;
 
   // ---- Court order + hide ---------------------------------------------
   const courtCount = config?.courtCount ?? FALLBACK_CONFIG.courtCount;
@@ -351,16 +366,31 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
         }
       />
       <Row
-        label="Standings mode"
+        label="Standings"
         control={
           <Seg
             options={STANDINGS_MODE_OPTIONS}
             value={standingsMode}
             onChange={(v) => update({ standingsMode: v === 'auto' ? null : v })}
-            ariaLabel="Standings mode"
+            ariaLabel="Standings"
           />
         }
+      />
+      {/* The board cycles courts → standings → up next; a slide with no data
+          is skipped rather than shown blank, so this only sets the ceiling.
+          Courts always holds twice the dwell — it is what people are reading,
+          the rest are glances (DC-3 / TV-7). */}
+      <Row
+        label="Slide dwell"
         last
+        control={
+          <Seg
+            options={DWELL_OPTIONS}
+            value={dwellSeconds}
+            onChange={(v) => update({ tvRotationDwellSeconds: v })}
+            ariaLabel="Slide dwell"
+          />
+        }
       />
     </Section>
 

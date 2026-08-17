@@ -70,7 +70,10 @@ type ViewMode = 'courts' | 'schedule';
  *  tournament half of which it cannot see. Meet and Bracket match records are
  *  non-merged by design (ADR 0006) — there is no cross-engine denominator to
  *  state, so the honest fix is to name the half being counted. */
-export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
+export function MeetDisplayPage({
+  hybrid = false,
+  preview = false,
+}: { hybrid?: boolean; preview?: boolean } = {}) {
   const [searchParams] = useSearchParams();
   // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
   // task 9 (`?view=standings` was a real, documented param) must still
@@ -516,26 +519,40 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
             )}
             <LiveStatusPill status={freshness} />
           </div>
+          {/* Venue render keeps the clock and nothing else (TV-8): nobody is
+              standing at the TV to press a tab or a fullscreen button, and
+              the board already rotates through what those tabs showed. */}
           <div className="flex items-center gap-3">
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setView('courts')}
-                className={tabClass(view === 'courts')}
-              >
-                Courts
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('schedule')}
-                className={tabClass(view === 'schedule')}
-              >
-                Schedule
-              </button>
+              {preview ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setView('courts')}
+                    className={tabClass(view === 'courts')}
+                  >
+                    Courts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView('schedule')}
+                    className={tabClass(view === 'schedule')}
+                  >
+                    Schedule
+                  </button>
+                </>
+              ) : null}
+              {/* The board switch SURVIVES the venue render: on a hybrid
+                  workspace it is the only route to the other engine's board,
+                  and dropping it would make half the event invisible to the
+                  hall. The view tabs go, because rotation already shows what
+                  they showed. */}
               {hybrid ? <BoardSwitch to="bracket" className={tabClass(false)} /> : null}
             </div>
             <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
-            <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+            {preview ? (
+              <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+            ) : null}
           </div>
         </div>
       </div>
@@ -614,18 +631,24 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
             {finishedCount} / {totalCount} {hybrid ? 'meet matches' : 'matches'} complete ·{' '}
             {progressPct}%
           </div>
-          <div className="flex items-center gap-5">
-            {/* Same token as the card LIVE band (one status, one hue — D1.3);
-                the arbitrary tvAccent hex is brand chrome, not a status. */}
-            <span className="inline-flex items-center gap-2 text-status-live">
-              <span className="h-2 w-2 rounded-full bg-status-live" />
-              {matchesByStatus.started.length} active
-            </span>
-            <span className="inline-flex items-center gap-2 text-status-called">
-              <span className="h-2 w-2 rounded-full bg-status-called sw-pulse" />
-              {matchesByStatus.called.length} called
-            </span>
-          </div>
+          {/* Operator diagnostics, not spectator information: "2 active · 2
+              called" restates what the court cards already show, in numbers,
+              to an audience that is looking at the cards (TV-8). Progress
+              stays — that is the one thing the grid cannot say. */}
+          {preview ? (
+            <div className="flex items-center gap-5">
+              {/* Same token as the card LIVE band (one status, one hue — D1.3);
+                  the arbitrary tvAccent hex is brand chrome, not a status. */}
+              <span className="inline-flex items-center gap-2 text-status-live">
+                <span className="h-2 w-2 rounded-full bg-status-live" />
+                {matchesByStatus.started.length} active
+              </span>
+              <span className="inline-flex items-center gap-2 text-status-called">
+                <span className="h-2 w-2 rounded-full bg-status-called sw-pulse" />
+                {matchesByStatus.called.length} called
+              </span>
+            </div>
+          ) : null}
         </div>
         {/* Track stays full-width; the fill animates via transform: scaleX
             so we never trip a layout reflow on the parent grid each tick. */}
