@@ -192,6 +192,14 @@ export function NewWorkspacePage() {
             }
           />
         </Section>
+        {/* Venue and schedule owns venue configuration; this form seeds the one
+            number that shapes everything downstream and names where the rest
+            lives (NEW-4 / WSV-2). It cannot link there — the workspace does not
+            exist yet — so it names the destination instead. */}
+        <p className="pt-1 text-xs text-muted-foreground">
+          Slot length and the day window default to 30 minutes and 9:00 AM to
+          6:00 PM. Change them in Venue and schedule once the workspace exists.
+        </p>
 
         <Section title="Details">
           <FieldRow

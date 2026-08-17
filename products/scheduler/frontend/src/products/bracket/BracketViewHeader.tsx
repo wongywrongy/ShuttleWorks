@@ -154,6 +154,8 @@ export function BracketViewHeader({
                   value={drawLayout}
                   onChange={onDrawLayout}
                   ariaLabel="Bracket layout"
+                  // Toolbar, not a settings row: sized by its own labels.
+                  fill={false}
                 />
               )}
             </>

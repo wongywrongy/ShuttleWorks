@@ -59,17 +59,22 @@ export function GeneralSettingsTab({
   return (
     <div className="mx-auto max-w-3xl p-6">
       {/* H1 echoes the nav label verbatim (G1); the workspace name already
-          lives in the header chrome, so it is not repeated here. */}
-      <h2 className="pb-4 text-base font-semibold tracking-tight text-foreground">Workspace settings</h2>
-      <Section
-        title="Workspace details"
-        defaultOpen
-        action={
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save changes'}
-          </Button>
-        }
-      >
+          lives in the header chrome, so it is not repeated here.
+
+          Save sits on the page-header row, not in the first section's action
+          slot. In the slot it hung mid-page beside a collapsible heading while
+          the row above it sat empty, and it looked like it saved that one
+          section rather than the page (ACC-1). This is also where every other
+          primary action on every other surface lives. */}
+      <div className="flex items-center justify-between gap-4 pb-4">
+        <h2 className="text-base font-semibold tracking-tight text-foreground">
+          Workspace settings
+        </h2>
+        <Button size="sm" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
+      <Section title="Workspace details" defaultOpen>
         {/* Free text takes a FieldRow; a fixed-option control takes a Row.
             This pane used to hand-roll both as stacked <label> blocks. */}
         <FieldRow

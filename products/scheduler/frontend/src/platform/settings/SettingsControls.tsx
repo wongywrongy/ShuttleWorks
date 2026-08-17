@@ -41,20 +41,65 @@ interface RowProps {
   label: ReactNode;
   control: ReactNode;
   last?: boolean;
+  /**
+   * This row states a fact rather than offering a control.
+   *
+   * Bracket Configuration opens with five rows of derived summary (active
+   * disciplines, then one line per event) laid out exactly like the editable
+   * rows beneath them, so the page read as uniformly editable and the summary
+   * read as five settings that had lost their inputs. A readout is shorter,
+   * carries no separator, and puts its value in the muted tier: a run of them
+   * reads as one block of facts, and the first real control after it is
+   * unmistakable.
+   */
+  readOnly?: boolean;
 }
 
-export function Row({ label, control, last }: RowProps) {
+/**
+ * The control column, fixed for every row on every config surface.
+ *
+ * `justify-between` alone already put controls on a common right edge, so the
+ * misalignment the 2026-08-17 review saw was one level in: a segmented control
+ * is as wide as its own labels, so "Dual | Tri" (88px) and
+ * "11 points | 15 points | 21 points" (222px) shared a right edge and started
+ * 134px apart. Three rows, three apparent layouts. A fixed column plus a `Seg`
+ * that fills it gives every segmented row the same two edges.
+ *
+ * ONE width, not the four slot sizes the brief sketched (xs/sm/md/full): every
+ * slot would share this right edge anyway, so a per-row width knob would only
+ * vary where a control's LEFT edge fell, and no row in the app wants that. The
+ * controls that should fill the column do; the rest sit right-aligned in it.
+ * 240px is the widest segmented control the app renders ("Best of 1 / Best of
+ * 3 / Best of 5", 226px) rounded to the spacing ladder.
+ */
+const CONTROL_COL = 'w-60';
+
+export function Row({ label, control, last, readOnly }: RowProps) {
   return (
     <div
       className={[
-        'flex items-center justify-between gap-6 h-11',
-        last ? '' : 'border-b border-border/60',
+        'flex items-center justify-between gap-6',
+        readOnly ? 'h-9' : 'h-11',
+        last || readOnly ? '' : 'border-b border-border/60',
       ].join(' ')}
     >
-      <span className="flex-1 text-sm font-medium text-foreground">
+      <span
+        className={[
+          'flex-1 text-sm',
+          readOnly ? 'text-foreground' : 'font-medium text-foreground',
+        ].join(' ')}
+      >
         {label}
       </span>
-      <div className="flex-shrink-0">{control}</div>
+      <div
+        className={[
+          'flex flex-shrink-0 items-center justify-end',
+          CONTROL_COL,
+          readOnly ? 'text-sm text-muted-foreground' : '',
+        ].join(' ')}
+      >
+        {control}
+      </div>
     </div>
   );
 }
@@ -180,6 +225,7 @@ export function Seg<T extends string | number>({
   onChange,
   ariaLabel,
   disabled = false,
+  fill = true,
 }: {
   options: readonly SegOption<T>[];
   value: T;
@@ -188,13 +234,21 @@ export function Seg<T extends string | number>({
   /** Real per-button `disabled` — a wrapper's `pointer-events-none` only
    *  blocks the mouse; the buttons would stay keyboard-operable. */
   disabled?: boolean;
+  /** Span the parent (the settings `Row` control column) with equal-width
+   *  options, so every segmented row shares both edges. Default, because
+   *  every use but one is a settings row. Pass `false` in a toolbar, where
+   *  the control should be as wide as its own labels. */
+  fill?: boolean;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
-      className="inline-flex overflow-hidden border border-border"
+      className={[
+        'overflow-hidden border border-border',
+        fill ? 'flex w-full' : 'inline-flex',
+      ].join(' ')}
     >
       {options.map((opt) => {
         const isActive = opt.value === value;
@@ -211,6 +265,7 @@ export function Seg<T extends string | number>({
               // so the hover crossfade reads as intentional, not as a
               // Tailwind default.
               'px-3 py-1 text-xs font-medium transition-colors duration-fast ease-brand',
+              fill ? 'flex-1 whitespace-nowrap' : '',
               isActive
                 ? 'bg-accent/15 text-accent'
                 : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
@@ -335,6 +390,12 @@ export function NumberWithSuffix({
   ariaLabel?: string;
 }) {
   return (
+    // The unit gets a fixed column so the INPUT lands at the same x down the
+    // form. Right-aligning the pair as a unit (the old behavior) meant the
+    // suffix's own length set the box's right edge, so "8 positions" and
+    // "30 min" put their boxes 29px apart on the same page. The reserved width
+    // fits the longest unit the app renders ("slots · 60 min"); shorter ones
+    // leave whitespace, which is invisible, unlike a stepped column of boxes.
     <span className="inline-flex items-baseline gap-2">
       <NumberInput
         value={value}
@@ -344,7 +405,7 @@ export function NumberWithSuffix({
         width={width}
         ariaLabel={ariaLabel}
       />
-      <span className="text-xs text-muted-foreground">{suffix}</span>
+      <span className="w-24 text-xs text-muted-foreground">{suffix}</span>
     </span>
   );
 }
@@ -400,7 +461,13 @@ export function RangeSlider({
   ariaLabel?: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-3">
+    // Fills the row's control column, so the track is the same length on every
+    // slider row and the readout never moves as the number changes (CFG-2).
+    // The readout sits at the column's right edge rather than lining up with
+    // the number inputs' boxes: those now sit left of their fixed unit column,
+    // and aligning one slider to them would misalign every slider with every
+    // other control. Boxes align with boxes; the readout holds its own slot.
+    <span className="flex w-full items-center gap-3">
       <input
         type="range"
         min={min}
@@ -408,9 +475,9 @@ export function RangeSlider({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label={ariaLabel}
-        className="h-1.5 w-32 cursor-pointer appearance-none rounded-full bg-muted accent-accent"
+        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-muted accent-accent"
       />
-      <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
+      <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {value}
       </span>
     </span>

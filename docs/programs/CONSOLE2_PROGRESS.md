@@ -51,7 +51,7 @@ stable tiebreaker + `require_tournament_access` on new routes). Two additions fr
 |---|---|---|
 | 0 | Baseline, ledger, landing-zone map, premise audit. **STOP.** | **Complete — awaiting owner ruling on the O-items below.** |
 | 1 | X1 + X5 (glossary, casing ruling, status tokens, DUE/LATE thresholds) + the R-A/R-B renames | **Complete** |
-| 2 | X2 sweep (control-column slots across the 7 config surfaces) + NEW-4/WSV-2 ownership | Not started |
+| 2 | X2 sweep (control-column slots across the 7 config surfaces) + NEW-4/WSV-2 ownership | **Complete** |
 | 3 | X3/X4 + list and ops surfaces | Not started |
 | 4 | TV + display-config (incl. TV-6 property test + negative control) | Not started |
 | 5 | Guardrails + admin (the real backend work) | Not started |
@@ -428,11 +428,72 @@ traffic-light reason reading "Playing MD3" are sentences, not labels, and stay.
 **68/68** both themes · eslint 0 errors / 118 warnings · depcruise 0 errors / 15 warnings
 (589 modules).
 
+## Phase 2 — what shipped
+
+Per O-1 this was never "build the primitive": `Section`/`Row`/`FieldRow` existed and all seven
+surfaces were on them. Measuring the captures gave the actual defect list.
+
+**The control column.** `justify-between` already put controls on a common right edge, so the
+misalignment was one level in: a segmented control is as wide as its own labels, so
+"Dual | Tri" (88px) and "11 points | 15 points | 21 points" (222px) shared a right edge and
+started 134px apart. `Row` now has a fixed 240px control column and `Seg` fills it with
+equal-width options, so every segmented row shares both edges. 240px is the widest segmented
+control the app renders ("Best of 1 / Best of 3 / Best of 5", 226px) rounded to the ladder.
+
+**One width, not the brief's four slots (xs/sm/md/full).** Every slot would share this right
+edge anyway, so a per-row width knob could only vary where a control's LEFT edge fell, and no
+row wants that. Deviation recorded here rather than silently taken.
+
+**The number rows.** `NumberWithSuffix` right-aligned the box+unit pair as a unit, so the
+*unit's own length* set the box's right edge: "8 positions" and "30 min" put their boxes 29px
+apart on the same page. The unit now has a reserved column, so boxes align down the form. The
+reserved width fits the longest unit rendered ("slots · 60 min"); short units leave whitespace,
+which is invisible in a way a stepped column of boxes is not.
+
+**CFG-2, with one deviation.** `RangeSlider` fills the column: fixed track, readout in a fixed
+slot. The brief wanted the readout to "right-align with the number inputs", but the fix above
+moved those boxes left of their unit column, and aligning one slider to them would misalign
+every slider with every other control. Boxes align with boxes; the readout holds its own slot.
+
+**`Section` vs `SectionHeader` is now ruled.** Flat `SectionHeader` runs became collapsible
+`Section`s on Venue and schedule, Appearance, and Bracket data (Export / Danger zone).
+`SectionHeader` survives only in `MatchDetailsPanel`, which is a detail pane, not a config
+surface. Appearance was also the last surface running a two-column grid with a centre rule,
+against this file's own documented single-column rule — now single column.
+
+**BCFG-1** added `Row readOnly`: shorter, no separator, value in the muted tier. Bracket
+Configuration opens with five rows of derived summary laid out exactly like the editable rows
+beneath, so the page read as uniformly editable and the summary read as five settings that had
+lost their inputs. **BCFG-2**: "Manage draws" / "Manage participants" leave the page while
+every row around them changes it, so they are links with a direction arrow, not bordered
+buttons.
+
+**ACC-1 was a premise contradiction resolved by revising the glossary, not the pages.** Both
+surfaces were already identical — both put Save in the first section's `action` slot, which is
+exactly what `console-naming.md` prescribed. They agreed on the wrong position: a primary
+button mid-page beside a collapsible heading, reading as saving that section, with the title
+row above it empty. Save now sits on the page-header title row on Profile, Security and
+Workspace settings, and the glossary's in-place-save pattern was rewritten to match.
+
+**One content max-width.** Config surfaces ran `max-w-xl` / `2xl` / `3xl`, three of them
+without `mx-auto`. All are `mx-auto max-w-3xl … p-6` now.
+
+**NEW-4 / WSV-2.** Venue and schedule is the single owner — it already held courts, slot
+duration *and* the day window. `/new` keeps courts (the one number that shapes everything
+downstream) and now names where the rest lives. It cannot link there: the workspace does not
+exist yet. Courts on `/new` also gained the "courts" unit, so its box aligns with every other
+number box and matches Venue and schedule's row exactly.
+
+**Gates after Phase 2:** vitest 1750 · entrant 586 (solo) · contrast 68/68 · eslint 0 errors /
+118 warnings · depcruise 0 errors / 15 warnings · tsc 0. Backend untouched.
+
 ## Session log
 
 - **2026-08-17 — Phase 0.** Baseline measured, ledger created, map above written, premise audit
   produced 7 owner items. Pre-existing dead-nav work committed at `6a5b177` on
   `dev/prog1-p6-2-public-ia`; branched `design/console-2`. STOP — owner approved all.
-- **2026-08-17 — Phase 1.** X1 + X5 as above. Next: Phase 2 (X2 control-column slots), which
-  O-1 re-scoped from "build the primitive" to "give `Row` fixed control widths and rule
-  `Section` vs `SectionHeader`".
+- **2026-08-17 — Phase 1.** X1 + X5 as above.
+- **2026-08-17 — Phase 2.** X2 as above. Next: Phase 3 (X3/X4 + the list and ops surfaces),
+  where the three-parallel-`/schedule`-surfaces trap from the Phase 0 map applies — restyling
+  the unified surface leaves the meet-only and bracket-only legacy surfaces untouched, and
+  Phase 3 must say so per item rather than silently widening.

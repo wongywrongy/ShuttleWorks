@@ -74,7 +74,7 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
   };
 
   return (
-    <div className="max-w-3xl space-y-2 p-6">
+    <div className="mx-auto max-w-3xl space-y-2 p-6">
       <div className="pb-2">
         <h2 className="type-display text-2xl text-foreground">Display</h2>
       </div>

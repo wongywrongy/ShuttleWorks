@@ -101,10 +101,22 @@ changes never touch stored data or wire formats.
 Exactly two, chosen per what the form does:
 
 1. **In-place save** — settings the operator edits and stays on (Profile,
-   workspace Settings): Save sits top-right of the form's section header,
-   matching the primary-action rule (content-header top-right).
+   Security, Workspace settings): Save sits top-right of the **page header**,
+   on the title row, matching the primary-action rule everywhere else in the
+   console.
+
+   Revised by SP-CONSOLE-2 ACC-1. It used to sit in the first section's action
+   slot, which put a primary button mid-page beside a collapsible heading while
+   the title row above it stood empty — and made it read as saving that one
+   section rather than the page. Both surfaces already agreed with each other;
+   they agreed on the wrong position.
 2. **Terminal create** — a form the operator leaves on success (New
    workspace): Cancel bottom-left, primary create action bottom-right.
+
+Some surfaces have **no save at all** (Venue and schedule, Display
+configuration): every field applies as it changes. Those say so in a line under
+the page description rather than growing a button that would lie about when the
+write happens.
 
 ## Retired terms (grep list)
 

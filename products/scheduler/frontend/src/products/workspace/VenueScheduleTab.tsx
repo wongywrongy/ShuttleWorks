@@ -24,8 +24,7 @@ import { LockRibbon } from '../../components/status/LockRibbon';
 import { LockedFieldset } from '../../platform/settings/ConfigSurface';
 import {
   Row,
-  SectionHeader,
-  NumberInput,
+  Section,
   NumberWithSuffix,
   TimeInput,
 } from '../../platform/settings/SettingsControls';
@@ -78,7 +77,7 @@ export function VenueScheduleTab() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 p-6">
+    <div className="mx-auto max-w-3xl space-y-4 p-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Venue and schedule</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
@@ -136,14 +135,14 @@ export function VenueScheduleTab() {
       )}
 
       <LockedFieldset locked={resultsLocked}>
-        <section>
-          <SectionHeader>Venue</SectionHeader>
+        <Section title="Venue">
           <Row
             label="Courts"
             control={
-              <NumberInput
+              <NumberWithSuffix
                 value={config?.courtCount ?? 4}
                 onChange={(v) => set('courtCount', v)}
+                suffix="courts"
                 min={1}
                 max={32}
                 ariaLabel="Court count"
@@ -164,10 +163,9 @@ export function VenueScheduleTab() {
             }
             last
           />
-        </section>
+        </Section>
 
-        <section>
-          <SectionHeader>Day window</SectionHeader>
+        <Section title="Day window">
           <Row
             label="Start time"
             control={
@@ -189,7 +187,7 @@ export function VenueScheduleTab() {
             }
             last
           />
-        </section>
+        </Section>
       </LockedFieldset>
     </div>
   );
