@@ -29,7 +29,33 @@ export function formatSideName(side: string, joiner: ' / ' | ' & ' = ' / '): str
 }
 
 /** The players of a pre-joined side, formatted, one entry per player — the
- *  court cards render each on its own line (Console card anatomy). */
+ *  match lists and draw tree render each on its own line. */
 export function sideNameLines(side: string, joiner: ' / ' | ' & ' = ' / '): string[] {
   return side.split(joiner).map(formatPlayerName);
+}
+
+/**
+ * A side as ONE line of surnames — "FAKHOURI / WHITMORE" (SP-CONSOLE-2 TV-1).
+ *
+ * For the venue board only. A doubles card printing every player's full
+ * "SURNAME Given" spends four lines on two sides, which halves the type size
+ * the 1-inch-per-10-feet rule says the hall needs; at that size nobody reads
+ * the given names anyway. Given names stay everywhere an operator works — the
+ * lists, the panes, the draw — because the desk is at desk distance and two
+ * players can share a surname.
+ *
+ * Placeholders ("Winner of QF1", "TBD") pass through whole: they are not
+ * names and have no surname to take.
+ */
+export function sideSurnameLine(side: string, joiner: ' / ' | ' & ' = ' / '): string {
+  return side
+    .split(joiner)
+    .map((raw) => {
+      const t = raw.trim();
+      if (!t || t === 'TBD' || PLACEHOLDER.test(t)) return t;
+      const parts = t.split(/\s+/);
+      return parts[parts.length - 1].toLocaleUpperCase();
+    })
+    .filter(Boolean)
+    .join(' / ');
 }

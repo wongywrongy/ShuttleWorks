@@ -91,8 +91,12 @@ const FALLBACK_CONFIG: TournamentConfig = {
   freezeHorizonSlots: 0,
 };
 
+// Strip is gone (DC-1): a single tall column showed three or four courts on
+// a venue screen and scrolled the rest out of sight, which a passive display
+// cannot do. Auto replaces it as the default and sizes the grid to the board
+// (courtLayout.ts#autoLayout); Grid keeps the director's own column count.
 const DISPLAY_MODE_OPTIONS = [
-  { value: 'strip' as const, label: 'Strip' },
+  { value: 'auto' as const, label: 'Auto' },
   { value: 'grid' as const, label: 'Grid' },
   { value: 'list' as const, label: 'List' },
 ];
@@ -225,7 +229,9 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
   // Mirror MeetDisplayPage's own defaulting (MeetDisplayPage.tsx:264-276) so
   // the editor's "current value" always matches what the board is actually
   // showing.
-  const tvDisplayMode = config?.tvDisplayMode ?? 'strip';
+  // Stored `strip` shows as Auto — the mode it maps to on the board.
+  const storedDisplayMode = config?.tvDisplayMode ?? 'auto';
+  const tvDisplayMode = storedDisplayMode === 'strip' ? 'auto' : storedDisplayMode;
   const tvGridColumns = config?.tvGridColumns ?? 0;
   const tvCardSize = config?.tvCardSize ?? 'auto';
   const tvShowScores = config?.tvShowScores !== false;

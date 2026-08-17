@@ -42,7 +42,7 @@ import { StandingsView } from './publicDisplay/StandingsView';
 import { CourtsView } from './publicDisplay/CourtsView';
 import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
-import { orderCourts, visibleCourts, defaultColumns } from './publicDisplay/courtLayout';
+import { orderCourts, visibleCourts, defaultColumns, autoLayout } from './publicDisplay/courtLayout';
 import { standingsPlacement } from './publicDisplay/standingsLayout';
 import {
   resolveTvAccent,
@@ -226,10 +226,11 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
       match: (typeof matches)[number] | null;
       state: (typeof matchStates)[string] | null;
       status: 'active' | 'called' | 'empty';
-      // When ``status === 'empty'``, the Next/Later lane preview for this
-      // court (if any). Used by the public TV to render relative
-      // "Next"/"Later" labels (de-emphasized planned clock) instead of an
-      // inert "Available" placeholder.
+      // The Next/Later lane preview for this court (if any). On an EMPTY
+      // court it replaces an inert "Available" placeholder with relative
+      // "Next"/"Later" labels; on an occupied one the card shows just the
+      // next line, which is the question a spectator watching that court
+      // actually has (TV-3).
       nextMatch?: (typeof matches)[number] | null;
       nextStartTime?: string;
       laterMatch?: (typeof matches)[number] | null;
@@ -238,6 +239,16 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
     const courts: Row[] = [];
 
     for (let courtId = 1; courtId <= config.courtCount; courtId++) {
+      // Derived for EVERY court, not only free ones (TV-3).
+      const upNextId = previewByCourt.next.get(courtId) ?? null;
+      const upNextAssignment = upNextId ? assignmentByMatchId.get(upNextId) : undefined;
+      const upNext = {
+        nextMatch: upNextId ? matchMap.get(upNextId) || null : null,
+        nextStartTime: upNextAssignment
+          ? formatSlotTime(upNextAssignment.slotId, config)
+          : undefined,
+      };
+
       const activeId = matchesByCourt.active.get(courtId);
       if (activeId) {
         courts.push({
@@ -245,6 +256,7 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
           match: matchMap.get(activeId) || null,
           state: matchStates[activeId] || null,
           status: 'active',
+          ...upNext,
         });
         continue;
       }
@@ -255,11 +267,12 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
           match: matchMap.get(calledId) || null,
           state: matchStates[calledId] || null,
           status: 'called',
+          ...upNext,
         });
         continue;
       }
-      const nextId = previewByCourt.next.get(courtId) ?? null;
-      const nextAssignment = nextId ? assignmentByMatchId.get(nextId) : undefined;
+      const nextId = upNextId;
+      const nextAssignment = upNextAssignment;
       const laterId = previewByCourt.later.get(courtId) ?? null;
       const laterAssignment = laterId ? assignmentByMatchId.get(laterId) : undefined;
       courts.push({
@@ -370,7 +383,13 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
   // venue's setup stays consistent across reloads. The picker UI lives
   // in the Public-display settings card (admin TV tab) — never on the
   // standalone /display window.
-  const tvDisplayMode: 'strip' | 'grid' | 'list' = config.tvDisplayMode ?? 'strip';
+  // Strip is retired (DC-1): a single tall column showed three or four
+  // courts on a venue screen and scrolled the rest off, which is the one
+  // thing a passive display cannot do. Stored `strip` maps to `auto` on
+  // read, so no workspace needs migrating and a rollback still renders.
+  const storedMode = config.tvDisplayMode ?? 'auto';
+  const tvDisplayMode: 'auto' | 'grid' | 'list' =
+    storedMode === 'strip' ? 'auto' : storedMode;
 
   // ---- TV sizing + accent knobs (per-tournament) -----------------------
   // Shared with DisplayPreview — see publicDisplay/tvSizing.ts for the
@@ -382,11 +401,19 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
   const cardHeightPx = resolveCardHeightPx(tvCardSize, isFullscreen);
   const { courtNumSize, eventCodeSize, playerSize, cardPadX } = resolveCardSizeClasses(cardHeightPx);
 
-  // Grid columns — director override wins; otherwise a responsive
-  // default derived from how many courts are actually visible (see
-  // courtLayout.ts#defaultColumns). Hidden courts never count toward
-  // the column math since they're never on screen.
-  const resolvedColumns = defaultColumns(displayedCourtRows.length, config.tvGridColumns ?? null);
+  // Columns — director override wins; otherwise derived. In `auto` the
+  // derivation reads the BOARD's shape as well as the court count
+  // (courtLayout.ts#autoLayout), because what decides legibility across a
+  // hall is card area, not how many courts happen to exist. Hidden courts
+  // never count: they are never on screen.
+  const boardAspect =
+    typeof window === 'undefined' || window.innerHeight === 0
+      ? 16 / 9
+      : window.innerWidth / window.innerHeight;
+  const resolvedColumns =
+    tvDisplayMode === 'auto'
+      ? autoLayout(displayedCourtRows.length, boardAspect, config.tvGridColumns ?? null).columns
+      : defaultColumns(displayedCourtRows.length, config.tvGridColumns ?? null);
   const gridColsClass = resolveGridColsClass(resolvedColumns);
 
   // Built once and reused verbatim whether or not the SIDE standings panel

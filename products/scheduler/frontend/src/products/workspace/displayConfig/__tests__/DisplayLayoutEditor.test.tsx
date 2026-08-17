@@ -55,7 +55,14 @@ describe('<DisplayLayoutEditor />', () => {
 
   it('reflects the board fallback defaults when config fields are unset', () => {
     render(<DisplayLayoutEditor />);
-    expect(screen.getByRole('radio', { name: 'Strip' })).toHaveAttribute('aria-checked', 'true');
+    // Auto, not Strip: Strip is retired (DC-1). Scoped, because "Auto" is
+    // now a valid option in two groups on this page.
+    const modeGroup = screen.getByRole('radiogroup', { name: 'Display mode' });
+    expect(within(modeGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(modeGroup).queryByRole('radio', { name: 'Strip' })).toBeNull();
     expect(screen.getByRole('switch', { name: 'Show scores' })).toHaveAttribute('aria-checked', 'true');
     const gridGroup = screen.getByRole('radiogroup', { name: 'Grid columns' });
     expect(within(gridGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
@@ -140,9 +147,25 @@ describe('<DisplayLayoutEditor />', () => {
     expect(last.standingsMode).toBeNull();
   });
 
+  it('shows a workspace still storing the retired "strip" as Auto (DC-1)', () => {
+    // Strip was the DEFAULT, so every workspace that never touched the
+    // setting has it stored. It maps on read; nothing is migrated.
+    resetStore({ tvDisplayMode: 'strip' });
+    render(<DisplayLayoutEditor />);
+    const modeGroup = screen.getByRole('radiogroup', { name: 'Display mode' });
+    expect(within(modeGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
   it('resyncs displayed values when store config changes externally', () => {
     render(<DisplayLayoutEditor />);
-    expect(screen.getByRole('radio', { name: 'Strip' })).toHaveAttribute('aria-checked', 'true');
+    const modeGroup = screen.getByRole('radiogroup', { name: 'Display mode' });
+    expect(within(modeGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     act(() => {
       resetStore({ tvDisplayMode: 'list' });
     });

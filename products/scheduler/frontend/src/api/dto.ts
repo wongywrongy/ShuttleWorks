@@ -67,7 +67,9 @@ export interface TournamentConfig {
   //   strip — one tall row per court (default; best 3-6 courts, 1080p).
   //   grid  — 2-column responsive grid (best 8-16 courts).
   //   list  — dense one-line rows (best 16+ courts, side display).
-  tvDisplayMode?: 'strip' | 'grid' | 'list';
+  /** 'strip' is retired but still accepted from stored blobs — the board
+   *  maps it to 'auto' on read (DC-1). New writes never send it. */
+  tvDisplayMode?: 'auto' | 'strip' | 'grid' | 'list';
   // Brand accent for the public display — hex (``#RRGGBB``). Drives
   // the LIVE border, the LIVE pill, and the progress bar. Defaults to
   // emerald (``#10b981``) when unset.

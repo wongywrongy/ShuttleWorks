@@ -6,21 +6,24 @@
  *   • 'list'        — compact rows, one per court. Best for 16+ courts on
  *                     1080p TVs; trades the giant court-number for one-line
  *                     scannability.
- *   • 'strip'       — single-column tall cards stacked vertically.
- *   • 'grid'        — N-column responsive grid of the same card shape.
+ *   • 'auto'        — N-column grid whose column count is derived from the
+ *                     BOARD's shape and the court count, paginating rather
+ *                     than shrinking past the legibility floor (TV-6).
+ *   • 'grid'        — the same card grid at the director's own column count.
  *
- * Strip and Grid share the same card render — only the wrapping container
- * (flex vs grid) differs. Both modes use the same status tint tokens so
- * the visual language stays consistent.
+ * Auto and Grid share the card render and differ only in who chose the
+ * column count; the retired 'strip' mode was this same render in a single
+ * flex column, and stored values map to 'auto' before they reach here.
+ * Every mode uses the same status tint tokens.
  */
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
 import { formatElapsed } from '../../../lib/timeFormatters';
-import { sideNameLines } from '../../../lib/names';
+import { sideSurnameLine } from '../../../lib/names';
 import { STATE_WORD } from '../../../lib/stateWords';
 import { formatPlayers, isCourtClosedNow } from './helpers';
 
 type CourtStatus = 'active' | 'called' | 'empty';
-type CourtDisplayMode = 'list' | 'strip' | 'grid';
+type CourtDisplayMode = 'list' | 'auto' | 'grid';
 
 interface CourtRow {
   courtId: number;
@@ -167,12 +170,12 @@ function CourtsCardMode({
 }: CourtsViewProps) {
   return (
     <div
-      className={`w-full ${displayMode === 'grid' ? `grid gap-3 ${gridColsClass}` : 'flex flex-col gap-2'}`}
+      className={`w-full ${displayMode === 'list' ? 'flex flex-col gap-2' : `grid gap-3 ${gridColsClass}`}`}
       // `minmax(h, auto)`, not a fixed track: the card height is the DESIGNED
       // height, not a cap. A doubles pairing too long for one line grows its
       // row instead of being clipped by the card — nothing on a hall board is
       // readable at half a name.
-      style={displayMode === 'grid' ? { gridAutoRows: `minmax(${cardHeightPx}px, auto)` } : undefined}
+      style={displayMode === 'list' ? undefined : { gridAutoRows: `minmax(${cardHeightPx}px, auto)` }}
     >
       {courts.map((row, idx) => (
         <CourtCard
@@ -279,17 +282,28 @@ function CourtCard({
         ) : match ? (
           <>
             <SideScoreRow
-              names={sideNameLines(formatPlayers(match.sideA, playerNames), ' & ')}
+              name={sideSurnameLine(formatPlayers(match.sideA, playerNames), ' & ')}
               scores={scoresA}
               others={scoresB}
               playerSize={playerSize}
             />
             <SideScoreRow
-              names={sideNameLines(formatPlayers(match.sideB, playerNames), ' & ')}
+              name={sideSurnameLine(formatPlayers(match.sideB, playerNames), ' & ')}
               scores={scoresB}
               others={scoresA}
               playerSize={playerSize}
             />
+            {/* What this court does NEXT, on the card itself (TV-3). The ETA
+                was already derived and already shown on FREE cards; a
+                spectator watching an occupied court is the one who most wants
+                it. Client-side from the schedule the projection already
+                ships — no new field, no new route. */}
+            {nextMatch ? (
+              <span className="text-2xs uppercase tracking-[0.06em] text-muted-foreground sw-num">
+                next: {nextMatch.eventRank || `M${nextMatch.matchNumber || '?'}`}
+                {nextStartTime ? ` ~${nextStartTime}` : ''}
+              </span>
+            ) : null}
           </>
         ) : nextMatch ? (
           <NextUp
@@ -309,16 +323,26 @@ function CourtCard({
   );
 }
 
-/** One side of the board card: stacked BWF-formatted player lines with the
- *  side's per-set scores right-aligned. A decided set's winning number takes
- *  the live hue; the set in progress (the last one) stays full ink. */
+/**
+ * One side of the board card: a single line of surnames with the side's
+ * per-set scores right-aligned (TV-1). A decided set's winning number takes
+ * the live hue; the set in progress (the last one) stays full ink.
+ *
+ * The score columns are the DOMINANT element (TV-2 / ruling R-C): two rows of
+ * them own roughly 38% of the card's height budget, sized a step and a half
+ * above the names, because a score is the one thing a spectator crosses a
+ * hall to read. The slot renders empty today for meet matches — the wire
+ * carries no per-set data and there is no live score entry in the domain — and
+ * it is laid out anyway, so a future score-relay app lights it up without
+ * redesigning the card.
+ */
 function SideScoreRow({
-  names,
+  name,
   scores,
   others,
   playerSize,
 }: {
-  names: string[];
+  name: string;
   scores: number[];
   others: number[];
   playerSize: string;
@@ -326,28 +350,31 @@ function SideScoreRow({
   const last = scores.length - 1;
   return (
     <div className="flex min-h-[30px] items-center gap-2">
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-px">
-        {names.map((n, i) => (
-          <span key={i} className={`${playerSize} break-words font-semibold leading-tight text-foreground`}>
-            {n}
+      <span
+        className={`${playerSize} min-w-0 flex-1 break-words font-semibold leading-tight text-foreground`}
+      >
+        {name}
+      </span>
+      {/* Reserved even when empty — the lane is part of the card, not a
+          conditional. Two of these stack to the score block's budget. */}
+      <span className="flex shrink-0 items-center gap-1.5">
+        {scores.length === 0 ? <span aria-hidden className="w-9" /> : null}
+        {scores.map((v, i) => (
+          <span
+            key={i}
+            title={`Set ${i + 1}`}
+            className={`w-9 shrink-0 text-right text-3xl font-bold leading-none tabular-nums ${
+              i === last
+                ? 'text-foreground'
+                : v > (others[i] ?? 0)
+                  ? 'text-status-live'
+                  : 'text-muted-foreground'
+            }`}
+          >
+            {v}
           </span>
         ))}
-      </div>
-      {scores.map((v, i) => (
-        <span
-          key={i}
-          title={`Set ${i + 1}`}
-          className={`w-7 shrink-0 text-right tabular-nums ${playerSize} ${
-            i === last
-              ? 'font-extrabold text-foreground'
-              : v > (others[i] ?? 0)
-                ? 'font-bold text-status-live'
-                : 'text-muted-foreground'
-          }`}
-        >
-          {v}
-        </span>
-      ))}
+      </span>
     </div>
   );
 }

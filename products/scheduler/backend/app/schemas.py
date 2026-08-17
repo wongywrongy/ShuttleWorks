@@ -140,7 +140,11 @@ class TournamentConfig(StrictModel):
     pointsPerSet: Optional[int] = Field(None, ge=11, le=30)
     deuceEnabled: Optional[bool] = None
     # Public TV display mode (UI-only metadata; preserved across PUT).
-    tvDisplayMode: Optional[Literal["strip", "grid", "list"]] = None
+    # "strip" is RETIRED as a choice (SP-CONSOLE-2 DC-1) but stays accepted:
+    # it was the default, so every workspace that never touched the setting
+    # has it stored. The board maps it to "auto" on read — no migration, and
+    # a rollback keeps working. New writes only ever send auto/grid/list.
+    tvDisplayMode: Optional[Literal["auto", "strip", "grid", "list"]] = None
     # Public-display branding + layout knobs (all UI-only).
     # Hex "#RRGGBB". Validated here as well as in the browser: the
     # frontend's ``resolveTvAccent`` is a client-side control over a
