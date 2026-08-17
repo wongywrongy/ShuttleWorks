@@ -168,7 +168,15 @@ class TournamentConfig(StrictModel):
     hiddenCourts: Optional[List[Annotated[int, Field(ge=1, le=MAX_COURTS)]]] = Field(
         None, max_length=MAX_COURTS
     )
+    # "side" is retired as a PLACEMENT (SP-CONSOLE-2 TV-5) — the persistent
+    # panel took a third of the board's width from the courts — but stays
+    # accepted, and "off" still means off. Everything else rotates.
     standingsMode: Optional[Literal["off", "side", "rotate"]] = None
+    # Board rotation (TV-7 / DC-3). None = every slide that has data.
+    tvRotationSlides: Optional[
+        List[Literal["courts", "standings", "upNext"]]
+    ] = Field(None, max_length=3)
+    tvRotationDwellSeconds: Optional[int] = Field(None, ge=5, le=120)
     # Roster position-grid event-column order + visibility (UI-only).
     eventOrder: Optional[List[Code]] = Field(None, max_length=MAX_RANKS)
     eventVisible: Optional[Dict[Code, bool]] = Field(None, max_length=MAX_RANKS)

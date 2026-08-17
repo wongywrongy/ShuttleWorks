@@ -39,6 +39,11 @@ import { BoardSwitch } from './publicDisplay/BoardSwitch';
 import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
+import {
+  DEFAULT_DWELL_SECONDS,
+  rotationSlides,
+  slideAt,
+} from './publicDisplay/rotation';
 import { CourtsView } from './publicDisplay/CourtsView';
 import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
@@ -52,12 +57,9 @@ import {
 } from './publicDisplay/tvSizing';
 
 // How often the ROTATE placement (Task 9) swaps the main content area
-// between the current view (courts/schedule) and a full-bleed standings
-// screen. Symmetric — same dwell time on each side — since the brief
-// doesn't call for asymmetric timing and a single interval is simplest
-// to reason about (and to fake-timer test) than a ping-pong of two
-// different durations.
-const ROTATION_INTERVAL_MS = 15_000;
+
+/** How long the NOW CALLING strip holds before the board moves on. */
+const NOW_CALLING_DWELL_MS = 8_000;
 
 type ViewMode = 'courts' | 'schedule';
 
@@ -132,26 +134,13 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
     config?.courtCount ?? 0,
     config?.standingsMode,
   );
-  const showStandingsSidePanel = hasStandings && resolvedStandingsPlacement === 'side';
-  const rotateStandings = hasStandings && resolvedStandingsPlacement === 'rotate';
+  // The persistent SIDE panel is retired (TV-5): it took roughly a third of
+  // the board's width away from the courts, which are what the hall is
+  // actually looking at, to hold a table nobody reads continuously. Standings
+  // are a rotation slide now. `standingsMode: 'off'` still means off — that
+  // is a director saying "not on my board", not a placement preference.
+  const standingsEnabled = hasStandings && resolvedStandingsPlacement !== 'off';
 
-  // Timed rotation: alternate the main content area between the current
-  // view (courts/schedule) and a full-bleed standings screen. Only ticks
-  // while rotation is actually active; flips back to "showing the normal
-  // view" the instant rotation stops (mode change, standings disappear,
-  // Meet gets disabled), so switching away never leaves the board stuck
-  // mid-rotation on a screen that's no longer supposed to exist.
-  const [rotationShowingStandings, setRotationShowingStandings] = useState(false);
-  useEffect(() => {
-    if (!rotateStandings) {
-      setRotationShowingStandings(false);
-      return;
-    }
-    const t = window.setInterval(() => {
-      setRotationShowingStandings((prev) => !prev);
-    }, ROTATION_INTERVAL_MS);
-    return () => window.clearInterval(t);
-  }, [rotateStandings]);
 
   // Indexing helpers we'll reuse below. O(1) by-matchId lookups so the
   // courts / standings derivations don't re-scan the full matchesByStatus
@@ -314,6 +303,55 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
     }));
   }, [matchesByStatus.scheduled, matchMap, schedule]);
 
+  // NOW CALLING dwell (TV-4). Keyed on the called match's identity, so a
+  // second call while the first is still showing replaces it rather than
+  // queueing — the floor moved on, and so should the board.
+  const calledEntry = useMemo(() => {
+    for (const row of displayedCourtRows) {
+      if (row.status === 'called' && row.match) {
+        return {
+          key: row.match.id,
+          code: row.match.eventRank || `M${row.match.matchNumber || '?'}`,
+          courtId: row.courtId,
+        };
+      }
+    }
+    return null;
+  }, [displayedCourtRows]);
+  const [callingKey, setCallingKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!calledEntry) return;
+    setCallingKey(calledEntry.key);
+    const t = window.setTimeout(() => setCallingKey(null), NOW_CALLING_DWELL_MS);
+    return () => window.clearTimeout(t);
+  }, [calledEntry?.key]);
+  const nowCalling = calledEntry && callingKey === calledEntry.key ? calledEntry : null;
+
+  // Timed rotation (TV-7). The slide is derived from ELAPSED time rather than
+  // counted off timer ticks, so a re-render never skips a slide and a board
+  // left running for a week cannot drift. One 1s tick drives it; `rotation.ts`
+  // owns what the sequence is.
+  const dwellSeconds = config?.tvRotationDwellSeconds ?? DEFAULT_DWELL_SECONDS;
+  const slides = useMemo(
+    () =>
+      rotationSlides(
+        { standings: standingsEnabled, upNext: upcomingMatches.length > 0 },
+        config?.tvRotationSlides,
+      ),
+    [standingsEnabled, upcomingMatches.length, config?.tvRotationSlides],
+  );
+  const [rotationSeconds, setRotationSeconds] = useState(0);
+  useEffect(() => {
+    if (slides.length < 2) {
+      setRotationSeconds(0);
+      return;
+    }
+    const t = window.setInterval(() => setRotationSeconds((n) => n + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [slides.length]);
+  // The operator preview and the manual tab picker both pin a view; rotation
+  // only drives the board when the operator has not chosen one.
+  const activeSlide = slides.length < 2 ? 'courts' : slideAt(slides, rotationSeconds, dwellSeconds);
   // ===== Rendering =====================================================
 
   // ── Preset resolution ─────────────────────────────────────────
@@ -502,21 +540,46 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
         </div>
       </div>
 
+      {/* NOW CALLING (TV-4). A called match is the one moment the board has
+          to interrupt for: two players are being asked to walk to a court,
+          and a court card two rows down in a twelve-card grid does not carry
+          that. The strip appears when a match ENTERS called and dwells for a
+          fixed few seconds, then leaves — it is an announcement, not a
+          status, and a permanent banner would be ignored by the third time
+          anyone saw it. */}
+      {nowCalling ? (
+        <div
+          data-testid="now-calling-banner"
+          className="motion-enter flex items-center justify-center gap-4 bg-status-called-solid px-6 py-3 text-status-called-ink"
+        >
+          <span className="text-xl font-extrabold uppercase tracking-[0.12em]">
+            Now calling
+          </span>
+          <span className="sw-num text-3xl font-black">
+            {nowCalling.code} → Court {nowCalling.courtId}
+          </span>
+        </div>
+      ) : null}
+
       {/* View swap area. `key` + `motion-enter` so changing tabs (or the
           ROTATE placement taking over the screen) materializes the new
           content via the brand recipe rather than snapping in — visible
           from across a gym. */}
       <div
-        key={rotateStandings && rotationShowingStandings ? 'standings-rotation' : view}
+        key={view === 'courts' ? `slide-${activeSlide}` : view}
         className="motion-enter px-6 pb-28 pt-6"
       >
-        {rotateStandings && rotationShowingStandings ? (
-          // ROTATE placement (task 9): periodically takes over the whole
-          // content area instead of a permanent side panel — for larger
-          // venues where a persistent panel would crowd an already-busy
-          // court grid. See ./publicDisplay/standingsLayout.ts.
+        {view === 'courts' && activeSlide === 'standings' ? (
           <div data-testid="standings-rotation-screen">
             <StandingsView standings={standings} />
+          </div>
+        ) : view === 'courts' && activeSlide === 'upNext' ? (
+          <div data-testid="up-next-rotation-screen">
+            <ScheduleView
+              upcomingMatches={upcomingMatches}
+              config={config}
+              playerNames={playerNames}
+            />
           </div>
         ) : (
           <>
@@ -528,24 +591,7 @@ export function MeetDisplayPage({ hybrid = false }: { hybrid?: boolean } = {}) {
                   </div>
                 )}
                 <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
-                  {showStandingsSidePanel ? (
-                    // SIDE placement (task 9): a persistent panel next to
-                    // the court grid — shrinks the space available to it,
-                    // it never resizes the grid's own column math (that
-                    // stays viewport-keyed via defaultColumns/CourtsView's
-                    // responsive classes, unrelated to this panel's width).
-                    <div className="flex flex-col gap-6 xl:flex-row">
-                      <div className="min-w-0 flex-1">{courtsViewNode}</div>
-                      <div
-                        className="w-full flex-none xl:w-96"
-                        data-testid="standings-side-panel"
-                      >
-                        <StandingsView standings={standings} />
-                      </div>
-                    </div>
-                  ) : (
-                    courtsViewNode
-                  )}
+                  {courtsViewNode}
                 </div>
               </>
             )}

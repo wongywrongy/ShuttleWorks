@@ -1,5 +1,4 @@
-import {
-  sideSurnameLine, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { formatPlayerName, formatSideName, sideNameLines, sideSurnameLine } from '../names';
 
 describe('BWF name presentation', () => {

@@ -94,6 +94,11 @@ export interface TournamentConfig {
   courtOrder?: number[] | null;
   hiddenCourts?: number[] | null;
   standingsMode?: 'off' | 'side' | 'rotate' | null;
+  /** Board rotation (TV-7 / DC-3). `null` = every slide that has data.
+   *  'side' and 'rotate' on standingsMode are equivalent now — the side
+   *  panel is retired — and only 'off' still changes anything. */
+  tvRotationSlides?: ('courts' | 'standings' | 'upNext')[] | null;
+  tvRotationDwellSeconds?: number | null;
   // Optional event-column ordering and visibility for the Roster
   // position grid. Defaults to the canonical MD / WD / XD / WS / MS
   // sequence. Hidden columns are stored as ``false`` per rank.
