@@ -114,9 +114,9 @@ describe('VenueScheduleTab — the results lock the read-only banner promised (D
       'href',
       '/tournaments/t1/matches',
     );
-    expect(screen.getByTestId('venue-save-note')).toHaveTextContent(
-      /read-only while matches are in play/i,
-    );
+    // One lock message, one place (A1.1): the ribbon carries the lock; the
+    // no-Save note is GONE under the results lock rather than restating it.
+    expect(screen.queryByTestId('venue-save-note')).toBeNull();
   });
 
   it('the results lock supersedes the schedule ribbon rather than stacking', () => {

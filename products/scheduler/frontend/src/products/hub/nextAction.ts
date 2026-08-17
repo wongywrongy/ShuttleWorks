@@ -23,6 +23,10 @@ type RowActionKind = 'open' | 'set-date' | 'results';
 export interface RowAction {
   label: string;
   kind: RowActionKind;
+  /** In-workspace segment the CTA lands on — a button that navigates names
+   *  its DESTINATION (G1), so "Open live day" must open the live day, not
+   *  the Overview. Absent → the Overview default. */
+  segment?: string;
 }
 
 export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAction {
@@ -33,12 +37,16 @@ export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAct
   // persist, so an archived tournament keeps phase 'live'/'complete' forever
   // and must not be offered "Open live day".
   const phase = t.signals?.phase;
+  const br = t.kind === 'bracket';
   if (t.status !== 'archived') {
-    if (phase === 'live') return { label: 'Open live day', kind: 'open' };
-    if (phase === 'complete') return { label: 'View results', kind: 'results' };
+    if (phase === 'live')
+      return { label: 'Open live day', kind: 'open', segment: br ? 'bracket-live' : 'live' };
+    if (phase === 'complete')
+      return { label: 'View results', kind: 'results', segment: br ? 'bracket-matches' : 'matches' };
   }
   if (group === 'undated') return { label: 'Set date', kind: 'set-date' };
-  if (group === 'past') return { label: 'View results', kind: 'results' };
+  if (group === 'past')
+    return { label: 'View results', kind: 'results', segment: br ? 'bracket-matches' : 'matches' };
   const next = nextActionFor(t);
   return { label: next.reasonCode ? next.label : 'Open workspace', kind: 'open' };
 }

@@ -98,22 +98,35 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
   });
 
-  it('offers the lifecycle facet strip (All / Setup / Ready / Live / Complete / Shared / attention / Archived)', async () => {
+  it('hides zero-count facet chips — only All and the facets with content render (H1.1)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    for (const name of [/^All\b/, /^Setup\b/, /^Ready\b/, /^Live\b/, /^Complete\b/, /^Shared\b/, /^Archived\b/]) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument();
-    }
+    // Both seeded workspaces are un-started drafts: All + Setup carry counts,
+    // every other facet is zero and must stay off the strip — eight "0" chips
+    // above two rows is a big dashboard's clothes on an empty one.
+    // The two drafts flag "Needs attention", so that chip has a count too.
+    expect(screen.getByRole('button', { name: /^All\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Setup\b/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Needs attention/ })).toBeInTheDocument();
+    for (const name of [/^Ready\b/, /^Live\b/, /^Complete\b/, /^Shared\b/, /^Archived\b/]) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
   });
 
-  it('a lifecycle facet filters the flat list (Live hides both un-started workspaces)', async () => {
+  it('a lifecycle facet filters the flat list (Setup shows the un-started pair)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    // Neither seeded workspace has been played, so the Live facet empties the list.
-    fireEvent.click(screen.getByRole('button', { name: /^Live\b/ }));
-    expect(screen.queryByText('Bracket A')).not.toBeInTheDocument();
-    expect(screen.queryByText('Meet A')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Setup\b/ }));
+    expect(screen.getByText('Bracket A')).toBeInTheDocument();
+    expect(screen.getByText('Meet A')).toBeInTheDocument();
+  });
+
+  it('offers the quiet create affordance while the list is short (H1.2)', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    expect(screen.getByTestId('hub-quiet-create')).toHaveTextContent(
+      'Create your next workspace',
+    );
   });
 
   it('search filters the workspace list by name', async () => {
@@ -207,9 +220,12 @@ describe('HubPage — the facet strip is reachable at any width', () => {
     const strip = await screen.findByTestId('hub-facet-strip');
     // Overflowing content gets a scrollbar instead of being clipped away.
     expect(strip.className).toMatch(/\boverflow-x-auto\b/);
-    // Every facet is INSIDE that strip — including the two that used to fall
+    // Every VISIBLE facet is INSIDE that strip (zero-count chips are hidden
+    // since H1.1) — including "Needs attention", the one that used to fall
     // off the end — so scrolling reaches all of them.
-    expect(within(strip).getAllByRole('button')).toHaveLength(HUB_FACETS.length);
+    for (const chip of within(strip).getAllByRole('button')) {
+      expect(strip.contains(chip)).toBe(true);
+    }
     const attention = within(strip).getByRole('button', { name: /needs attention/i });
     fireEvent.click(attention);
     expect(attention).toHaveAttribute('aria-pressed', 'true');

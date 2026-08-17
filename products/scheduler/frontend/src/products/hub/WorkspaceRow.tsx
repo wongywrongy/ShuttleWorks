@@ -138,7 +138,7 @@ interface RowProps {
   showDate?: boolean;
   selected: boolean;
   onSelect: () => void;
-  onOpen: () => void;
+  onOpen: (segment?: string) => void;
   onSetDate: () => void;
   onSettings: () => void;
   onDelete?: () => void;
@@ -238,7 +238,7 @@ export function WorkspaceRow({
         onClick={(e) => {
           e.stopPropagation();
           if (action.kind === 'set-date') onSetDate();
-          else onOpen();
+          else onOpen(action.segment);
         }}
         className={[
           'flex w-40 shrink-0 items-center justify-between gap-1 rounded-sm px-2 py-1 text-left text-xs',

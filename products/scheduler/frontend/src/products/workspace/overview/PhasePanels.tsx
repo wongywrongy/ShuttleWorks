@@ -142,12 +142,23 @@ function LivePanel({ summary }: PanelProps) {
     <section className="space-y-5">
       <div>
         <SectionLabel>In progress</SectionLabel>
+        {/* Played / Remaining / Total (W1.2): "matches" and "scheduled"
+            duplicated whenever everything was scheduled. Remaining counts
+            down as played counts up; total anchors both. The Hub inspector
+            speaks the same triplet. */}
         <Figures
-          items={[
-            ...(played != null ? [{ value: played, label: 'played' }] : []),
-            { value: m ? m.total : '–', label: 'matches' },
-            { value: m ? m.scheduled : '–', label: 'scheduled' },
-          ]}
+          items={
+            m && played != null
+              ? [
+                  { value: played, label: 'played' },
+                  { value: Math.max(0, m.total - played), label: 'remaining' },
+                  { value: m.total, label: 'total' },
+                ]
+              : [
+                  { value: m ? m.total : '–', label: 'matches' },
+                  { value: m ? m.scheduled : '–', label: 'scheduled' },
+                ]
+          }
         />
         {showProgress ? (
           <div

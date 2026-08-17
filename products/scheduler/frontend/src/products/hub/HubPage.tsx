@@ -198,9 +198,11 @@ export function HubPage() {
     [tournaments, selectedId],
   );
 
-  // Open a workspace on its readiness Overview (the in-workspace default).
+  // Open a workspace — on the CTA's named destination when it has one
+  // ("Open live day" opens the live day, G1), else the Overview default.
   const openTournament = useCallback(
-    (id: string) => navigate(`/tournaments/${id}/overview`),
+    (id: string, segment?: string) =>
+      navigate(`/tournaments/${id}/${segment ?? 'overview'}`),
     [navigate],
   );
 
@@ -284,7 +286,13 @@ export function HubPage() {
               data-testid="hub-facet-strip"
               className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
             >
-              {HUB_FACETS.map((f) => (
+              {/* Zero-count facets are HIDDEN (H1.1): eight chips reading "0"
+                  above one row is a big dashboard's clothes on an empty one.
+                  "All" always shows, and the ACTIVE facet stays visible even
+                  at zero so a selection that empties remains escapable. */}
+              {HUB_FACETS.filter(
+                (f) => f.id === 'all' || counts[f.id] > 0 || facet === f.id,
+              ).map((f) => (
                 <FilterChip
                   key={f.id}
                   label={f.label}
@@ -363,13 +371,26 @@ export function HubPage() {
                     showDate={showDates}
                     selected={t.id === selectedId}
                     onSelect={() => setSelectedId(t.id)}
-                    onOpen={() => openTournament(t.id)}
+                    onOpen={(segment) => openTournament(t.id, segment)}
                     onSetDate={() => navigate(`/tournaments/${t.id}/settings?tab=general`)}
                     onSettings={() => navigate(`/tournaments/${t.id}/settings`)}
                     onDelete={t.role === 'owner' ? () => setDeleteTarget(t) : undefined}
                   />
                 ))}
               </div>
+              {/* Quiet empty-region treatment (H1.2): a short list leaves the
+                  canvas mostly bare — a subdued create affordance makes the
+                  emptiness read deliberate. Gone once the list fills out. */}
+              {tournaments.length < 4 ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/new')}
+                  data-testid="hub-quiet-create"
+                  className="mx-4 my-3 flex h-9 items-center gap-1.5 rounded-sm border border-dashed border-border px-3 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-foreground"
+                >
+                  ＋ Create your next workspace
+                </button>
+              ) : null}
             </div>
           )}
           </div>

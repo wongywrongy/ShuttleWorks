@@ -123,13 +123,17 @@ export function VenueScheduleTab() {
           Saying when it actually fires is the fix. The ribbon copy itself is
           shared with both engine Configuration surfaces, which DO have a Save,
           so it stays right for them and gets its local caveat here. */}
-      <p className="text-xs text-muted-foreground" data-testid="venue-save-note">
-        {resultsLocked
-          ? 'These are read-only while matches are in play. Nothing on this page can be changed until the event is done.'
-          : isLocked
+      {/* One lock message, one place (A1.1): under the results lock the
+          ribbon above already says everything — repeating it here made the
+          page state the same fact twice. The note survives only for its
+          no-Save explanation, which the ribbon does not carry. */}
+      {resultsLocked ? null : (
+        <p className="text-xs text-muted-foreground" data-testid="venue-save-note">
+          {isLocked
             ? 'There is no Save on this page: each field applies as you change it. Because a schedule is committed, the next change asks you to confirm first, and confirming clears that schedule.'
             : 'There is no Save on this page: each field applies as you change it.'}
-      </p>
+        </p>
+      )}
 
       <LockedFieldset locked={resultsLocked}>
         <section>

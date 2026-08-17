@@ -66,7 +66,7 @@ function fmtDate(iso: string | null): string {
 
 interface InspectorProps {
   tournament: TournamentSummaryDTO | null;
-  onOpen: (id: string) => void;
+  onOpen: (id: string, segment?: string) => void;
   onSetDate: (id: string) => void;
   onSettings: (id: string) => void;
   /** Clear the selection. The pane's × and Escape both route here. */
@@ -131,7 +131,7 @@ export function WorkspaceInspector({
       <div className="flex gap-2 border-b border-border p-4">
         <Button
           className="flex-1"
-          onClick={() => (action.kind === 'set-date' ? onSetDate(tournament.id) : onOpen(tournament.id))}
+          onClick={() => (action.kind === 'set-date' ? onSetDate(tournament.id) : onOpen(tournament.id, action.segment))}
         >
           {action.label === 'Open workspace' ? 'Open workspace →' : action.label}
         </Button>
@@ -154,15 +154,35 @@ export function WorkspaceInspector({
           ) : null
         }
       >
-        {/* Metric tiles — grid-lines triplet: matches / scheduled / to do.
-            Falls back to – when a payload predates the match signals. */}
+        {/* Metric tiles — the SAME triplet vocabulary as the Overview (W1.2):
+            a playing/played event reads played / remaining / total (remaining
+            counts down, total anchors — "scheduled" duplicated "matches"
+            whenever everything was scheduled); before play it stays the
+            setup-useful matches / scheduled / to do. Falls back to – when a
+            payload predates the match signals. */}
         <div
           data-testid="inspector-metrics"
           className="grid grid-cols-3 gap-px overflow-hidden rounded-sm border border-border bg-border"
         >
-          <MetricTile value={metrics ? metrics.total : '–'} label="matches" />
-          <MetricTile value={metrics ? metrics.scheduled : '–'} label="scheduled" />
-          <MetricTile value={toDo} label="to do" tone={toDo > 0 ? 'warning' : undefined} />
+          {metrics &&
+          metrics.played != null &&
+          (tournament.signals?.phase === 'live' ||
+            tournament.signals?.phase === 'complete') ? (
+            <>
+              <MetricTile value={metrics.played} label="played" />
+              <MetricTile
+                value={Math.max(0, metrics.total - metrics.played)}
+                label="remaining"
+              />
+              <MetricTile value={metrics.total} label="total" />
+            </>
+          ) : (
+            <>
+              <MetricTile value={metrics ? metrics.total : '–'} label="matches" />
+              <MetricTile value={metrics ? metrics.scheduled : '–'} label="scheduled" />
+              <MetricTile value={toDo} label="to do" tone={toDo > 0 ? 'warning' : undefined} />
+            </>
+          )}
         </div>
       </DetailPanel.Section>
 
