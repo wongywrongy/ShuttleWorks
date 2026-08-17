@@ -24,7 +24,7 @@ interface Props {
   /** Bare view name — drives the eyebrow. Derived from ``activeTab``
    *  by ``BracketTabBody`` (``bracket-draw`` -> ``draw``). Only the
    *  draw / schedule / live views render this header — Setup, Roster
-   *  and Events own their header strips (SettingsShell / tab-local),
+   *  and Events own their tab-local header strips,
    *  mirroring how each meet tab owns its single header baseline. */
   view: Extract<BracketView, "draw" | "schedule" | "live">;
   data: TournamentDTO;

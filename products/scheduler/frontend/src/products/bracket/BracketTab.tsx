@@ -241,9 +241,9 @@ function BracketTabBody() {
 
   return (
     <div className="flex h-full flex-col bg-card">
-      {/* Setup / Roster / Events own their header strips (SettingsShell
-          or tab-local) — rendering the view header there produced a
-          double-header stack the meet never shows. */}
+      {/* Setup / Roster / Events own their tab-local header strips —
+          rendering the view header there produced a double-header
+          stack the meet never shows. */}
       {data && (view === 'draw' || view === 'schedule' || view === 'live') && (
         <BracketViewHeader
           view={view}
