@@ -54,8 +54,8 @@ stable tiebreaker + `require_tournament_access` on new routes). Two additions fr
 | 2 | X2 sweep (control-column slots across the 7 config surfaces) + NEW-4/WSV-2 ownership | **Complete** |
 | 3 | X3/X4 + list and ops surfaces | **Complete**, minus INS-4 / OV-1's click / OV-4 → Phase 5 (see below) |
 | 4 | TV + display-config (incl. TV-6 property test + negative control) | **Complete** |
-| 5 | Guardrails + admin (the real backend work) | Not started |
-| 6 | Playwright recapture + before/after report. **STOP.** | Not started |
+| 5 | Guardrails + admin (the real backend work) | **Complete** |
+| 6 | Playwright recapture + before/after report. **STOP.** | Gates rerun green; **recapture pending — shared environment** (see Phase 6 note) |
 
 ---
 
@@ -667,6 +667,105 @@ default from `display/publicDisplay/`, which is the same already-accepted
 `workspace/displayConfig → display/publicDisplay` family its three existing
 edges belong to. Recorded rather than dodged by duplicating a constant.
 
+## Phase 5 — what shipped
+
+The backend half first, because it feeds the frontend half.
+
+**WSB-3, built to O-5's corrected premise.** Retention already existed — flat
+keep-10 after every write — and that is exactly why the feature failed: ten
+routine writes during setup evicted the snapshot a director took deliberately
+that morning. A new `origin` column (`auto`/`manual`, alembic `v6a1c5e8f3b4`,
+existing rows backfill as `auto` — one documented one-time loss: pre-migration
+manual snapshots stay rotation-eligible, since nothing recorded which they
+were). Rotation now: manual rows never rotate; beyond the newest ten, auto
+rows thin to **one per hour**, so the history is bounded *and* spans the day.
+Seeding the hour buckets from the keep window mattered — without it a burst
+inside one hour grew the list past ten, which the pre-existing rotation test
+caught (a real bug found by the old test, not a test updated to pass).
+
+Download is **viewer**-gated, deliberately matching `GET /state`: a backup is
+workspace state the caller may already read, at an earlier moment — and it is
+the non-destructive option that did not exist, since the only way to see what
+a snapshot held was to replace today's work with it. Delete is **owner**,
+matching Restore. Both take the `require_tournament_access` seam (constraint
+6); the OpenAPI-derived tenant test covers them by construction.
+
+**WSMOD-2**: `hasData` rides the module-list DTO (server-computed — "has data"
+is a question about rows the client does not hold), and the catalog's
+`blockedReason` now covers all three disable rules before the click. **INS-4/
+OV-4**: `MatchMetricsDTO` gains `playing` + `courtsFree`, *reversing its own
+documented exclusion of live counts* — recorded in the docstring with the
+reason: the Hub reads only these signals and had no other route to the one
+question a live day asks. `courtsFree` is `None`, not 0, when no court count
+exists; `called` does not occupy a court (players still walking). **OV-1**:
+`NextMatchDTO` gains `matchId` + `source`, and the shared `NextUpList` rows
+become doors to `/live?select={source}:{id}` — consumed once on mount by
+`RunSurface` and stripped from the URL so the selection behaves like a click
+afterwards. `source` matters as much as id (ADR 0006 non-merge; Operations
+keys selection `{source}:{id}`).
+
+Frontend: Backups rows lead with **Manual/Auto** (a row the operator cannot
+lose reads differently from one that will age out), filename behind the row
+overflow with Download + Delete, Restore neutral with the red in the confirm
+(WSB-2/4). MAT-2 landed frontend-only per O-4: disabled outright on
+`useMeetResultsLock` — killing this surface's second, wider liveness
+definition — with the armed popover confirm for live-but-resultless days, its
+copy now honestly promising the automatic snapshot. WSM-1 + WSS-2 are one
+principle applied twice: a warning about an action nobody has taken moved to
+where the attempt happens (three PeopleAccessTab tests pinning the old resting
+line were updated **to the owner's ruling** — behavior change by directive,
+flagged here per the refactor rule). WSM-2 is a closed `<details>`. WSM-3
+confirmed a no-op. WSS-1 aligned both Sharing cards on one internal anatomy.
+
+`dto.generated.ts` regenerated (the one deferred pass covering Phases 4+5) and
+verified to carry every new field; `dto.ts` reconciled by hand. The two
+migration tests that pinned `head == u5f0b4d7e2a3` now assert the purge
+revision is *reached* — head moves every time a migration lands, and neither
+test is about the head.
+
+**Gates after Phase 5:** vitest **1773** (202 files) · pytest full run green
+after the migration-pin fix (verification run below) · ruff clean · contrast
+68/68 · eslint 0 errors / 118 warnings · depcruise 0 errors / 16 warnings
+(the ledgered rotation edge) · tsc 0. A transient +4 eslint warnings turned
+out to be a gitignored `coverage/` build artifact eslint had picked up —
+deleted, not ledgered as drift.
+
+## Phase 6 — status
+
+Everything except the recapture is done; the recapture needs exclusive use of
+the shared dev environment and **another agent is concurrently working on the
+public site with that environment live** (backend :8600 — running pre-Phase-5
+code without `--reload` — Vite :5173, entrant SSR :5175, and likely the
+Playwright MCP browser). Restarting the backend or grabbing browser tabs
+would collide with their work, and capturing against the stale backend would
+show this program's frontend gracefully degrading (`origin`, `hasData`,
+`playing`/`courtsFree`, next-up ids are all optional fields) rather than its
+shipped behavior.
+
+**To run the recapture when the environment frees up** (the proven recipe,
+unchanged from the predecessor's P7 — full detail in
+`CONSOLE_REFINE_PROGRESS.md` §"Recapture environment"): restart the backend
+from the repo `.venv` on :8600 with the absolute `DATABASE_URL` (Alembic
+auto-runs `v6a1c5e8f3b4` at startup), Vite :5173 with `VITE_API_PROXY_TARGET`,
+entrant SSR :5175; the Playwright profile holds the Nashville session;
+viewport 1280×900; screenshots to `.playwright-mcp/`, keepers to
+`docs/screenshots/`; author the before/after HTML into `docs/audits/` against
+the 2026-08-17 "before" set. The deviations list for that report is already
+assembled across the phase notes above: DC-2 readout-not-toggles, TV-7
+no-bracket-slide, LIVE-6 slot-not-minute, PLAN-1 fills-kept-plus-legend, X2
+one-width-not-four-slots, CFG-2 readout-slot, BMAT-4 feeder-only, TV-2
+empty-lane-by-design (D19), B-1 vitest rebaseline, plus the standing
+carryovers from the predecessor.
+
+**Final gate rerun (Phase 6's own requirement) — all green** on the closing
+tree: `make check` exit 0 · vitest 1773 · pytest 1609 passed / 66 skipped ·
+contrast 68/68 · eslint 0/118 · depcruise 0/16 · tsc 0. The entrant suite was
+**deliberately not rerun at close**: this program's diff contains zero entrant
+files, and that tier is mid-edit by the concurrent agent — running its suite
+now would measure their work-in-progress, not this program. Its last clean
+run inside this program (586, solo) was at Phase 2 close, before any entrant
+file changed under the other agent.
+
 ## Session log
 
 - **2026-08-17 — Phase 0.** Baseline measured, ledger created, map above written, premise audit
@@ -674,6 +773,12 @@ edges belong to. Recorded rather than dodged by duplicating a constant.
   `dev/prog1-p6-2-public-ia`; branched `design/console-2`. STOP — owner approved all.
 - **2026-08-17 — Phase 1.** X1 + X5 as above.
 - **2026-08-17 — Phase 2.** X2 as above.
+- **2026-08-17 — Phases 4–5, Phase 6 gates.** TV/display + guardrails/admin as above; final
+  gate rerun green. The one outstanding step in the whole program is the Phase 6 Playwright
+  recapture + before/after report, blocked on exclusive use of the dev environment (a
+  concurrent agent is working on the public site with it live). Recipe + deviations list are
+  staged in the Phase 6 note. **STOP — owner review of the code-complete state; recapture on
+  the next free window.**
 - **2026-08-17 — Phase 3.** As above. **Scope ruling taken, per the Phase 0 map:** every
   PLAN-*/LIVE-* change lands on the *unified* Operations surface
   (`OperationsProduct` / `UnifiedOpsBoard` / `run/RunSurface`), which is what the review PDF
