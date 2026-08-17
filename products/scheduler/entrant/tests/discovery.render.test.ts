@@ -204,14 +204,14 @@ describe('the cards', () => {
 });
 
 describe('the filters (Z1 — one GET form, refinement 4: always visible)', () => {
-  it('filters server-side and echoes the choice back checked', async () => {
+  it('filters server-side and echoes the choice back as the selected link', async () => {
     const html = await render('/e/?status=open');
 
     expect(html).toContain('Wessex Autumn Gold');
     expect(html).not.toContain('Meadowbank Masters');
     expect(html).toContain('1 of 3 tournaments');
-    const radio = html.match(/<input[^>]*value="open"[^>]*>/)?.[0] ?? '';
-    expect(radio).toContain('checked');
+    // P1.1: facets are instant-apply links; the chosen one carries aria-current.
+    expect(html).toMatch(/<a[^>]*aria-current="true"[^>]*>Entries open<\/a>/);
   });
 
   it('searches name and venue from the header form vocabulary', async () => {

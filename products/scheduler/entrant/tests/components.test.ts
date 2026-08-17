@@ -237,10 +237,10 @@ describe('TournamentCard', () => {
   });
 });
 
-// ---- FilterStrip (refinement 4: always visible, no disclosure) -------------
+// ---- FilterStrip (refinement 4: always visible; P1.1: facets are links) ----
 
 describe('FilterStrip', () => {
-  it('is one GET form aimed at the results fragment', () => {
+  it('keeps one GET form, aimed at the results fragment, for the date range', () => {
     const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
     const form = html.match(/<form[^>]*>/)?.[0] ?? '';
     expect(form).toContain('method="get"');
@@ -255,14 +255,35 @@ describe('FilterStrip', () => {
     expect(html).not.toMatch(/\bhidden\b/);
   });
 
-  it('echoes the chosen facets back as checked state', () => {
+  // P1.1: a facet is a LINK carrying the whole current query with that one
+  // facet swapped — instant apply as plain GET navigation, zero client JS.
+  it('renders each facet as a link that swaps only its own facet', () => {
+    const html = renderToStaticMarkup(
+      h(FilterStrip, { filters: filters({ status: 'open', q: 'gold' }) }),
+    );
+    // Picking a preset keeps the chosen status and the search text.
+    expect(html).toMatch(
+      /<a href="\/e\/\?q=gold&(amp;)?status=open&(amp;)?preset=30d#results"/,
+    );
+    // Picking "All tournaments" drops status but keeps the search text.
+    expect(html).toMatch(/<a href="\/e\/\?q=gold#results"/);
+  });
+
+  it('echoes the chosen facets back as the selected link (aria-current)', () => {
     const html = renderToStaticMarkup(
       h(FilterStrip, { filters: filters({ status: 'open', preset: '30d' }) }),
     );
-    const openRadio = html.match(/<input[^>]*value="open"[^>]*>/)?.[0] ?? '';
-    expect(openRadio).toContain('checked');
-    const presetRadio = html.match(/<input[^>]*value="30d"[^>]*>/)?.[0] ?? '';
-    expect(presetRadio).toContain('checked');
+    expect(html).toMatch(/<a[^>]*aria-current="true"[^>]*>Entries open<\/a>/);
+    expect(html).toMatch(/<a[^>]*aria-current="true"[^>]*>Next month<\/a>/);
+    expect(html).not.toMatch(/<a[^>]*aria-current="true"[^>]*>Upcoming<\/a>/);
+  });
+
+  it('carries chosen facets into the date form as hidden fields', () => {
+    const html = renderToStaticMarkup(
+      h(FilterStrip, { filters: filters({ status: 'open', preset: '30d' }) }),
+    );
+    expect(html).toMatch(/<input type="hidden" name="status" value="open"/);
+    expect(html).toMatch(/<input type="hidden" name="preset" value="30d"/);
   });
 
   it('offers the custom range as two native date inputs', () => {
@@ -287,20 +308,20 @@ describe('FilterStrip', () => {
     ).toContain('Clear');
   });
 
-  it('groups each facet under a fieldset with a legend', () => {
+  it('groups each facet under a labelled nav', () => {
     const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
-    expect(html.match(/<fieldset/g)).toHaveLength(2);
-    expect(html).toContain('<legend');
+    expect(html).toContain('<nav aria-label="Status"');
+    expect(html).toContain('<nav aria-label="Dates"');
   });
 
-  // 2026-08-11 design audit, finding #6: `py-0.5` (2px) on a `text-sm`
-  // label put the whole clickable row at exactly the WCAG 2.2 AA target-size
-  // floor (24px) with zero margin, for a mobile-heavy audience.
-  it('gives each radio label row more than the bare 24px target-size floor', () => {
+  // 2026-08-11 design audit, finding #6 (carried from the radio rows):
+  // `py-0.5` (2px) on a `text-sm` row sat at exactly the WCAG 2.2 AA
+  // target-size floor (24px) with zero margin, for a mobile-heavy audience.
+  it('gives each facet link row more than the bare 24px target-size floor', () => {
     const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
-    const label = html.match(/<label[^>]*>/)?.[0] ?? '';
-    expect(label).not.toMatch(/\bpy-0\.5\b/);
-    expect(label).toMatch(/\bpy-1(\.5)?\b/);
+    const link = html.match(/<a[^>]*>All tournaments<\/a>/)?.[0] ?? '';
+    expect(link).not.toMatch(/\bpy-0\.5\b/);
+    expect(link).toMatch(/\bpy-1(\.5)?\b/);
   });
 });
 
