@@ -55,7 +55,7 @@ stable tiebreaker + `require_tournament_access` on new routes). Two additions fr
 | 3 | X3/X4 + list and ops surfaces | **Complete**, minus INS-4 / OV-1's click / OV-4 → Phase 5 (see below) |
 | 4 | TV + display-config (incl. TV-6 property test + negative control) | **Complete** |
 | 5 | Guardrails + admin (the real backend work) | **Complete** |
-| 6 | Playwright recapture + before/after report. **STOP.** | Gates rerun green; **recapture pending — shared environment** (see Phase 6 note) |
+| 6 | Playwright recapture + before/after report. **STOP.** | **Complete** — report at `docs/audits/2026-08-17-console2-report.html` |
 
 ---
 
@@ -730,7 +730,39 @@ after the migration-pin fix (verification run below) · ruff clean · contrast
 out to be a gitignored `coverage/` build artifact eslint had picked up —
 deleted, not ledgered as drift.
 
-## Phase 6 — status
+## Phase 6 — complete
+
+The environment freed up (owner confirmed the concurrent agent was only editing
+files), so the recapture ran the same session. **Report:**
+`docs/audits/2026-08-17-console2-report.html` — 26 operator surfaces, embedded
+JPEGs, per-item notes, the full deviations list. PNG keepers:
+`docs/screenshots/report-2026-08-17-console2/` (gitignored).
+
+Recapture facts worth keeping:
+
+- Backend restarted **from the repo venv** with the absolute `DATABASE_URL`
+  (the process found running used the system Python and no explicit DB URL —
+  its Alembic state would have silently diverged). `v6a1c5e8f3b4` auto-applied
+  at startup; `origin` column verified in the SQLite schema before capturing.
+- **Vite had to be restarted too**, and the first Live-day capture proved why:
+  the Tailwind preset changes (the `--status-late/overdue` classes) are config,
+  not source — HMR never picks them up, and the overdue bands rendered
+  unstyled. A stale dev server can silently un-ship token work; screenshot
+  gates should always confirm the dev server postdates any preset change.
+- The captures double as end-to-end verification of the Phase 5 backend on
+  real data: the Backups list shows the **hourly-tiered retention working in
+  production data** (ten dense rows from the current hour plus the 5:16 PM
+  keeper a flat keep-10 would have evicted, and a Manual row created live
+  through the UI), the module catalog shows both engines' has-data reasons
+  pre-click, the Live-day board shows the DUE/LATE/OVERDUE tiers, the
+  scope-labeled stat band, PENDING queue rows, and the Source row in the
+  inspector.
+
+The entrant tier was under concurrent development at capture time and is out of
+this program's scope (zero entrant files in the diff); its five "before" pages
+are deliberately not in this report.
+
+### Phase 6 — original block note (kept for the record)
 
 Everything except the recapture is done; the recapture needs exclusive use of
 the shared dev environment and **another agent is concurrently working on the
@@ -773,6 +805,9 @@ file changed under the other agent.
   `dev/prog1-p6-2-public-ia`; branched `design/console-2`. STOP — owner approved all.
 - **2026-08-17 — Phase 1.** X1 + X5 as above.
 - **2026-08-17 — Phase 2.** X2 as above.
+- **2026-08-17 — Phase 6 recapture + report.** Environment freed; recaptured all 26 operator
+  surfaces on the Phase-5 backend and authored `docs/audits/2026-08-17-console2-report.html`.
+  **Program complete. STOP — owner review of the report.**
 - **2026-08-17 — Phases 4–5, Phase 6 gates.** TV/display + guardrails/admin as above; final
   gate rerun green. The one outstanding step in the whole program is the Phase 6 Playwright
   recapture + before/after report, blocked on exclusive use of the dev environment (a
