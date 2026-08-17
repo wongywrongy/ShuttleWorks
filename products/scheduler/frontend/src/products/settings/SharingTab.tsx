@@ -4,7 +4,7 @@ import { Select } from '@scheduler/design-system/components';
 import { SectionCard } from '../../components/control-plane';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { apiClient } from '../../api/client';
-import type { InviteRole, InviteSummaryDTO } from '../../api/dto';
+import type { EntryPageDTO, InviteRole, InviteSummaryDTO } from '../../api/dto';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
 
 const ROLE_OPTIONS = [
@@ -53,6 +53,11 @@ export function SharingTab({ tid }: { tid: string }) {
   const [rotating, setRotating] = useState(false);
   const displayLink = displayToken ? `${origin}/display?token=${displayToken}` : null;
 
+  // Public-site publication (SP-P7): null until loaded OR when the
+  // workspace has no entry page (the GET 404s) — either way, no card.
+  const [entryPage, setEntryPage] = useState<EntryPageDTO | null>(null);
+  const [publicationBusy, setPublicationBusy] = useState(false);
+
   const [invites, setInvites] = useState<InviteSummaryDTO[] | null>(null);
   // Same class as the Entries desk (2026-08-10 browser pass): a rejected read
   // became `[]` and rendered "No invite links yet." An owner reading that
@@ -80,6 +85,31 @@ export function SharingTab({ tid }: { tid: string }) {
       cancelled = true;
     };
   }, [tid]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEntryPage(null);
+    apiClient
+      .getEntryPage(tid)
+      .then((p) => !cancelled && setEntryPage(p))
+      // 404 = no entry page (or no access): nothing to gate, no card.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [tid]);
+
+  async function publish(
+    key: 'entrantsPublished' | 'drawsPublished' | 'resultsPublished',
+    value: boolean,
+  ) {
+    setPublicationBusy(true);
+    try {
+      setEntryPage(await apiClient.patchEntryPagePublication(tid, { [key]: value }));
+    } finally {
+      setPublicationBusy(false);
+    }
+  }
 
   // A no-cancel reload used after a create/revoke mutation (user-initiated).
   const refresh = useCallback(() => {
@@ -224,6 +254,56 @@ export function SharingTab({ tid }: { tid: string }) {
                 ? 'Any venue display still on the old link goes blank until you re-share. Press Escape to cancel.'
                 : 'Revokes the current link immediately and issues a new one. Every venue display has to be re-shared.'}
             </p>
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Public-site publication (SP-P7 §4). Hidden when the workspace has
+          no entry page — there is no public tournament page to gate. The
+          card is deliberately minimal: three independent, reversible
+          toggles; the software flags, the operator decides. */}
+      {entryPage !== null && (
+        <SectionCard eyebrow="PUBLIC SITE" testId="sharing-publication">
+          <p className="mb-3 text-xs text-muted-foreground">
+            What the public tournament page shows beyond the entry form.
+            Everything starts unpublished; publish each part when it is ready.
+          </p>
+          <div className="grid gap-2">
+            {(
+              [
+                {
+                  key: 'entrantsPublished',
+                  label: 'Entrant list',
+                  detail:
+                    'Names and clubs of confirmed entrants, and their player pages.',
+                },
+                {
+                  key: 'drawsPublished',
+                  label: 'Draws & seeded entries',
+                  detail: 'Bracket trees, round-robin groups, and seed lists.',
+                },
+                {
+                  key: 'resultsPublished',
+                  label: 'Results',
+                  detail:
+                    'Scores, standings, winners, and win-loss records. Off, draws show structure and schedule only.',
+                },
+              ] as const
+            ).map(({ key, label, detail }) => (
+              <label key={key} className="flex items-start gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={entryPage[key]}
+                  disabled={publicationBusy}
+                  onChange={(e) => void publish(key, e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">{label}</span>
+                  <span className="block text-xs text-muted-foreground">{detail}</span>
+                </span>
+              </label>
+            ))}
           </div>
         </SectionCard>
       )}

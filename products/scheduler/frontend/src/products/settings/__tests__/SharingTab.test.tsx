@@ -10,8 +10,21 @@ vi.mock('../../../api/client', () => ({
     revokeInvite: vi.fn(),
     getDisplayToken: vi.fn(),
     rotateDisplayToken: vi.fn(),
+    getEntryPage: vi.fn(),
+    patchEntryPagePublication: vi.fn(),
   },
 }));
+
+/** A stored entry page with every gate off — the migration default. */
+const entryPage = (over: Record<string, unknown> = {}) =>
+  ({
+    slug: 'spring-open',
+    isOpen: true,
+    entrantsPublished: false,
+    drawsPublished: false,
+    resultsPublished: false,
+    ...over,
+  }) as never;
 
 describe('SharingTab', () => {
   beforeEach(() => {
@@ -31,6 +44,13 @@ describe('SharingTab', () => {
       token: 'tok-new',
       url: '/display?token=tok-new',
     } as never);
+    vi.mocked(apiClient.getEntryPage).mockReset();
+    vi.mocked(apiClient.patchEntryPagePublication).mockReset();
+    // Default: no entry page — the publication card stays hidden, and every
+    // pre-SP-P7 test in this file renders exactly what it used to.
+    vi.mocked(apiClient.getEntryPage).mockRejectedValue(
+      Object.assign(new Error('404'), { response: { status: 404 } }),
+    );
   });
 
   it('shows the capability display link fetched from getDisplayToken', async () => {
@@ -187,12 +207,81 @@ describe('SharingTab', () => {
  * `listInvites` became `[]` and rendered as "No invite links yet." An owner
  * reading that would mint a duplicate invite for someone who already has one.
  */
+describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
+    vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
+      token: 'tok-abc',
+      url: '/display?token=tok-abc',
+    } as never);
+    vi.mocked(apiClient.getEntryPage).mockRejectedValue(
+      Object.assign(new Error('404'), { response: { status: 404 } }),
+    );
+    vi.mocked(apiClient.patchEntryPagePublication).mockReset();
+  });
+
+  it('is absent when the workspace has no entry page', async () => {
+    render(<SharingTab tid="t1" />);
+    await screen.findByLabelText('Public display link');
+    expect(screen.queryByTestId('sharing-publication')).toBeNull();
+  });
+
+  it('renders the three gates off by default and flips only the one toggled', async () => {
+    vi.mocked(apiClient.getEntryPage).mockResolvedValue(entryPage());
+    vi.mocked(apiClient.patchEntryPagePublication).mockResolvedValue(
+      entryPage({ drawsPublished: true }),
+    );
+    render(<SharingTab tid="t1" />);
+
+    const card = await screen.findByTestId('sharing-publication');
+    const boxes = within(card).getAllByRole('checkbox');
+    expect(boxes).toHaveLength(3);
+    expect(boxes.every((b) => !(b as HTMLInputElement).checked)).toBe(true);
+
+    fireEvent.click(within(card).getByLabelText(/Draws & seeded entries/));
+    await waitFor(() =>
+      expect(apiClient.patchEntryPagePublication).toHaveBeenCalledWith('t1', {
+        drawsPublished: true,
+      }),
+    );
+    // The card re-renders from the server's answer, not optimistic state.
+    await waitFor(() =>
+      expect(
+        (within(card).getByLabelText(/Draws & seeded entries/) as HTMLInputElement)
+          .checked,
+      ).toBe(true),
+    );
+    expect(
+      (within(card).getByLabelText(/Entrant list/) as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  it('unpublishing sends false — the gate is reversible from the same control', async () => {
+    vi.mocked(apiClient.getEntryPage).mockResolvedValue(
+      entryPage({ resultsPublished: true }),
+    );
+    vi.mocked(apiClient.patchEntryPagePublication).mockResolvedValue(entryPage());
+    render(<SharingTab tid="t1" />);
+
+    const card = await screen.findByTestId('sharing-publication');
+    fireEvent.click(within(card).getByLabelText(/Results/));
+    await waitFor(() =>
+      expect(apiClient.patchEntryPagePublication).toHaveBeenCalledWith('t1', {
+        resultsPublished: false,
+      }),
+    );
+  });
+});
+
 describe('SharingTab — a failed read is not an empty invite list', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
       token: 'tok-abc',
       url: '/display?token=tok-abc',
     } as never);
+    vi.mocked(apiClient.getEntryPage).mockRejectedValue(
+      Object.assign(new Error('404'), { response: { status: 404 } }),
+    );
   });
 
   it('says the invites did not load, and never claims there are none', async () => {

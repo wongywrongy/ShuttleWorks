@@ -839,6 +839,36 @@ export interface DisplayTokenDTO {
   url: string;
 }
 
+/** The stored entry page as the operator sees it (SP-P7 adds the
+ *  publication gates; the Sharing tab's card reads and flips them). */
+export interface EntryPageDTO {
+  slug: string;
+  isOpen: boolean;
+  introText: string | null;
+  regulationsText: string | null;
+  waiverRequired: boolean;
+  regulationsVersion: number;
+  regulationsUpdatedAt: string | null;
+  feeSchedule: Record<string, number> | null;
+  paymentInstructions: string | null;
+  maxEventsPerPerson: number | null;
+  disciplineCaps: Record<string, unknown> | null;
+  collectPhone: boolean;
+  venueName: string | null;
+  venueAddress: string | null;
+  entrantsPublished: boolean;
+  drawsPublished: boolean;
+  resultsPublished: boolean;
+}
+
+/** PATCH body for the publication card — patch semantics: only the flags
+ *  the operator actually toggled travel. */
+export interface EntryPagePublicationPatchDTO {
+  entrantsPublished?: boolean;
+  drawsPublished?: boolean;
+  resultsPublished?: boolean;
+}
+
 // Invite links (Step 7)
 export type InviteRole = 'operator' | 'viewer';
 

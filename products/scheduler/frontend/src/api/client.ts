@@ -42,6 +42,8 @@ import type {
   CommandConflictDTO,
   UserDTO,
   DisplayTokenDTO,
+  EntryPageDTO,
+  EntryPagePublicationPatchDTO,
 } from './dto';
 import { SOLVE_JOB_TERMINAL_STATUSES } from './dto';
 import type {
@@ -530,6 +532,30 @@ class ApiClient {
   async rotateDisplayToken(tid: string): Promise<DisplayTokenDTO> {
     const r = await this.client.post<DisplayTokenDTO>(
       `/tournaments/${tid}/display-token/rotate`,
+    );
+    return r.data;
+  }
+
+  // ---- Public-site publication (SP-P7) ---------------------------------
+
+  /** The stored entry page — 404 (ENTRY_PAGE_NOT_FOUND) when the workspace
+   *  has never configured one; the Sharing card hides on that. */
+  async getEntryPage(tid: string): Promise<EntryPageDTO> {
+    const r = await this.client.get<EntryPageDTO>(
+      `/tournaments/${tid}/entry-page`,
+    );
+    return r.data;
+  }
+
+  /** Flip publication gates — a sliver of the page, so the card can never
+   *  race a desk edit into a lost update. */
+  async patchEntryPagePublication(
+    tid: string,
+    body: EntryPagePublicationPatchDTO,
+  ): Promise<EntryPageDTO> {
+    const r = await this.client.patch<EntryPageDTO>(
+      `/tournaments/${tid}/entry-page/publication`,
+      body,
     );
     return r.data;
   }
