@@ -27,6 +27,7 @@ import {
   Section,
   NumberWithSuffix,
   TimeInput,
+  UnitSlot,
 } from '../../platform/settings/SettingsControls';
 
 const FALLBACK_CONFIG: TournamentConfig = {
@@ -169,21 +170,29 @@ export function VenueScheduleTab() {
           <Row
             label="Start time"
             control={
-              <TimeInput
-                value={config?.dayStart ?? '09:00'}
-                onChange={(v) => set('dayStart', v)}
-                ariaLabel="Day start"
-              />
+              // Empty unit column: a time field reports a quantity too, so it
+              // ends where the Courts and Slot-duration boxes end.
+              <span className="inline-flex items-baseline gap-2">
+                <TimeInput
+                  value={config?.dayStart ?? '09:00'}
+                  onChange={(v) => set('dayStart', v)}
+                  ariaLabel="Day start"
+                />
+                <UnitSlot />
+              </span>
             }
           />
           <Row
             label="End time"
             control={
-              <TimeInput
-                value={config?.dayEnd ?? '18:00'}
-                onChange={(v) => set('dayEnd', v)}
-                ariaLabel="Day end"
-              />
+              <span className="inline-flex items-baseline gap-2">
+                <TimeInput
+                  value={config?.dayEnd ?? '18:00'}
+                  onChange={(v) => set('dayEnd', v)}
+                  ariaLabel="Day end"
+                />
+                <UnitSlot />
+              </span>
             }
             last
           />

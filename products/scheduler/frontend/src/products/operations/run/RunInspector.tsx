@@ -193,7 +193,7 @@ function StatusSection({
 
   return (
     <DetailPanel.Section eyebrow="Status" testId="run-inspector-status">
-      <Row
+      <Row pane
         label="State"
         control={
           <span className={`${EYEBROW_CLASS} ${STATUS_PILL[match.status]}`}>
@@ -205,8 +205,8 @@ function StatusSection({
           as the section's own value — a second, unlabeled status. It is a
           different fact about the match, so it gets a labeled row like every
           other fact (LIVE-4). */}
-      <Row label="Source" control={<SourceChip source={match.source} />} />
-      <Row
+      <Row pane label="Source" control={<SourceChip source={match.source} />} />
+      <Row pane
         label="Court"
         control={
           <span className="sw-num text-sm text-foreground">
@@ -214,7 +214,7 @@ function StatusSection({
           </span>
         }
       />
-      <Row
+      <Row pane
         label="Planned"
         control={
           <span className="sw-num text-sm text-foreground">{slotLabel ?? 'Not planned'}</span>

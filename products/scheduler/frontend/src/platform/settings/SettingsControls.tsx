@@ -53,6 +53,18 @@ interface RowProps {
    * unmistakable.
    */
   readOnly?: boolean;
+  /**
+   * This row is in a detail pane, not on a config surface: keep the control
+   * at its natural width instead of reserving the shared column.
+   *
+   * `Row` is shared by the five detail panes (both match panels, both roster
+   * panels, the Live-day inspector and the ops rail) as well as the seven
+   * config surfaces. The dock is 380px wide, so reserving 240px of it for a
+   * control column would leave ~84px for labels that read "Original slot" —
+   * the column exists to align a long form's controls with each other, and a
+   * pane has neither the width nor the rows to need it.
+   */
+  pane?: boolean;
 }
 
 /**
@@ -74,7 +86,7 @@ interface RowProps {
  */
 const CONTROL_COL = 'w-60';
 
-export function Row({ label, control, last, readOnly }: RowProps) {
+export function Row({ label, control, last, readOnly, pane }: RowProps) {
   return (
     <div
       className={[
@@ -94,7 +106,7 @@ export function Row({ label, control, last, readOnly }: RowProps) {
       <div
         className={[
           'flex flex-shrink-0 items-center justify-end',
-          CONTROL_COL,
+          pane ? '' : CONTROL_COL,
           readOnly ? 'text-sm text-muted-foreground' : '',
         ].join(' ')}
       >
@@ -319,6 +331,24 @@ export function Toggle({
 /* =========================================================================
  * Sized inputs — consistent right-side control vocabulary.
  * ========================================================================= */
+
+/**
+ * The reserved unit column that sits after a value input.
+ *
+ * Every input that reports a quantity ends at the same x because this column
+ * is a fixed width whether or not it has a word in it. Without it, the unit's
+ * own length set the input's right edge, so "8 positions" and "30 min" put
+ * their boxes 29px apart on one page; and a unit-less input like a time field
+ * ran 96px past both. Width fits the longest unit rendered ("slots · 60 min").
+ */
+export function UnitSlot({ children }: { children?: ReactNode }) {
+  return (
+    <span className="w-24 text-xs text-muted-foreground" aria-hidden={!children}>
+      {children}
+    </span>
+  );
+}
+
 const INPUT_CLASS =
   'h-7 rounded-sm border border-border bg-bg-elev px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
 
@@ -390,12 +420,6 @@ export function NumberWithSuffix({
   ariaLabel?: string;
 }) {
   return (
-    // The unit gets a fixed column so the INPUT lands at the same x down the
-    // form. Right-aligning the pair as a unit (the old behavior) meant the
-    // suffix's own length set the box's right edge, so "8 positions" and
-    // "30 min" put their boxes 29px apart on the same page. The reserved width
-    // fits the longest unit the app renders ("slots · 60 min"); shorter ones
-    // leave whitespace, which is invisible, unlike a stepped column of boxes.
     <span className="inline-flex items-baseline gap-2">
       <NumberInput
         value={value}
@@ -405,7 +429,7 @@ export function NumberWithSuffix({
         width={width}
         ariaLabel={ariaLabel}
       />
-      <span className="w-24 text-xs text-muted-foreground">{suffix}</span>
+      <UnitSlot>{suffix}</UnitSlot>
     </span>
   );
 }

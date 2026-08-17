@@ -78,7 +78,7 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: 
         right={<SourceChip source={block.source} />}
         testId="ops-rail-status"
       >
-        <Row
+        <Row pane
           label="State"
           control={
             <span
@@ -88,7 +88,7 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: 
             </span>
           }
         />
-        <Row
+        <Row pane
           label="Court"
           control={
             <span className="sw-num text-sm text-foreground">
@@ -96,7 +96,7 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: 
             </span>
           }
         />
-        <Row
+        <Row pane
           label="Slot"
           control={
             <span className="sw-num text-sm text-foreground">

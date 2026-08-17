@@ -46,7 +46,7 @@ export function BracketPlayerDetailFields({
           second copy in a 380px pane. What identity adds is the stable key
           the exports, the draw participants and the URLs all use. */}
       <DetailPanel.Section eyebrow="Identity">
-        <Row
+        <Row pane
           last
           label="Roster ID"
           control={
@@ -65,7 +65,7 @@ export function BracketPlayerDetailFields({
             onUpdate={onUpdate}
           />
         </div>
-        <Row
+        <Row pane
           last
           label="Min rest (slots)"
           control={

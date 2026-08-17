@@ -134,7 +134,7 @@ export function MatchDetailPanel({
       testId="match-detail-panel"
     >
       <DetailPanel.Section eyebrow="Event">
-        <Row
+        <Row pane
           label="Event"
           last
           control={
