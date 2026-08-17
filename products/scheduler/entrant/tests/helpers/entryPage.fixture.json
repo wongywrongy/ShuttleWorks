@@ -15,6 +15,7 @@
     "introText": "Entries close on the 1st.",
     "regulationsText": "BWF laws apply.",
     "regulationsVersion": 3,
+    "regulationsUpdatedAt": "2026-08-12T10:00:00+00:00",
     "paymentInstructions": "Bank transfer on the day.",
     "feeSchedule": {
       "2": 2500
@@ -25,6 +26,11 @@
     "disciplineCaps": null,
     "collectPhone": false,
     "waiverRequired": false
+  },
+  "publication": {
+    "entrants": true,
+    "draws": false,
+    "results": false
   },
   "events": [
     {
@@ -78,15 +84,21 @@
   ],
   "entrants": [
     {
+      "personKey": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       "name": "Ada Lovelace",
+      "club": "Analytical BC",
       "eventCodes": ["MS", "WD"]
     },
     {
+      "personKey": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       "name": "Grace Hopper",
+      "club": null,
       "eventCodes": ["WD"]
     },
     {
+      "personKey": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       "name": "Katherine Johnson",
+      "club": "Orbit SC",
       "eventCodes": ["MS", "XD"]
     }
   ]

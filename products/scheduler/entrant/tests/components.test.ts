@@ -566,8 +566,21 @@ describe('EntrantsList', () => {
     event({ id: '33333333-3333-4333-8333-333333333333', code: 'WS', discipline: "Women's Singles" }),
   ];
   const entrants = [
-    { name: 'Tom Barker', eventCodes: ['MS', 'XD'] },
-    { name: 'Priya Radhakrishnan', eventCodes: ['XD'] },
+    // personKey/club joined the wire row in SP-P7; the component itself
+    // still renders neither (the tab upgrade is a later phase), which the
+    // "names and nothing else" test below keeps honest until it does.
+    {
+      personKey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: 'Tom Barker',
+      club: null,
+      eventCodes: ['MS', 'XD'],
+    },
+    {
+      personKey: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      name: 'Priya Radhakrishnan',
+      club: null,
+      eventCodes: ['XD'],
+    },
   ];
 
   it('groups by event: a two-event player appears under both, one row each', () => {

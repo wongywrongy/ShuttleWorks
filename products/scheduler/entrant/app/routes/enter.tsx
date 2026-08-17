@@ -535,8 +535,8 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                   <input type="checkbox" name="acknowledged" value="on" required />
                   <span>
                     I have read and accept the regulations, and I understand each
-                    player&rsquo;s name will appear on this page&rsquo;s public entrant
-                    list.
+                    player&rsquo;s name and club will appear on this page&rsquo;s
+                    public entrant list once the organizer publishes it.
                   </span>
                 </label>
               </section>

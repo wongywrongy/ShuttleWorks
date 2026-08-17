@@ -43,7 +43,13 @@ export interface EntryEventDTO {
 }
 
 export interface EntrantListRowDTO {
+  /** The player-page address (SP-P7 §3.3): an opaque person-in-tournament
+   * id, never the name — two entrants sharing a name is routine at a club. */
+  personKey: string;
   name: string;
+  /** Free text off `entry_players`, licensed by the C4 consent-copy update
+   * ("name and club") in `enter.tsx`. */
+  club: string | null;
   /** The event dimension the Entrants tab groups by (G5a). Codes, not ids —
    * the public page names events by code. */
   eventCodes: string[];
@@ -54,10 +60,22 @@ export interface EntryPageContentDTO {
   introText: string | null;
   regulationsText: string | null;
   regulationsVersion: number;
+  /** ISO instant of the last actual text change (SP-P7 §3.7's document row).
+   * Null = never edited since the field existed; render version-only. */
+  regulationsUpdatedAt: string | null;
   paymentInstructions: string | null;
   /** String keys: this mirrors a JSON column, and JSON has no integer keys.
    * Normalized backend-side so the card cannot quote a tier the pricing drops. */
   feeSchedule: Record<string, number>;
+}
+
+/** The TD's publication gates (SP-P7 §4) — how the tier tells "gated" from
+ * "empty": an unpublished entrant list arrives as an empty array plus
+ * `entrants: false`, on the same 200 either way. */
+export interface EntryPublicationDTO {
+  entrants: boolean;
+  draws: boolean;
+  results: boolean;
 }
 
 export interface EntryPolicyDTO {
@@ -96,6 +114,7 @@ export interface EntryPageDTO {
   venue: EntryVenueDTO | null;
   page: EntryPageContentDTO;
   policy: EntryPolicyDTO;
+  publication: EntryPublicationDTO;
   events: EntryEventDTO[];
   entrants: EntrantListRowDTO[];
   viewer: EntryPageViewerDTO;

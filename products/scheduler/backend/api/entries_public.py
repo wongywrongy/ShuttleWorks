@@ -49,11 +49,19 @@ from services import entrants as entrant_service
 
 log = logging.getLogger("scheduler.api.entries_public")
 
-# States that appear on the public entrant list. Withdrawn and rejected are
-# absent because they are not entrants any more; ``unverified`` is absent
-# because an unconfirmed address must not be able to publish a name. The
-# list shows *who entered*, never their state — entry is not acceptance.
-_LISTED_STATES = frozenset({"pending", "confirmed", "waitlisted"})
+# States that appear on the public entrant list — ``confirmed`` alone since
+# SP-P7 §3.2 (the incumbent's processed-only model, ruled at the Phase 0
+# STOP). ``pending``/``waitlisted`` are submissions awaiting an operator's
+# decision and must never appear publicly; withdrawn and rejected are not
+# entrants any more; ``unverified`` never could publish a name. The list
+# still shows *who entered*, never their state — a narrower set does not
+# change that a state string is absent from every row.
+#
+# ``_entry_counts`` shares this set ON PURPOSE (its docstring's recorded
+# invariant): the number over the events list and the names under it must
+# count the same people, so a desk that has not confirmed yet shows a small
+# honest count rather than a large speculative one.
+_LISTED_STATES = frozenset({"confirmed"})
 
 
 # ---- small helpers -------------------------------------------------------
@@ -123,8 +131,19 @@ def _event_is_open(event: EntryEvent, now: datetime) -> bool:
 
 def _entrants(
     repo: LocalRepository, tournament_id: uuid.UUID
-) -> List[Tuple[str, List[str]]]:
-    """The public entrant list: ``(full_name, event codes)``, one row per PERSON.
+) -> List[Tuple[uuid.UUID, str, Optional[str], List[str]]]:
+    """The public entrant list: ``(person id, full_name, club, event codes)``,
+    one row per PERSON.
+
+    SP-P7 widened the row by two fields, each with its own licence. The
+    person id becomes ``personKey`` — the player-page address — because a
+    page keyed on the name would collide two entrants who share one, which
+    is routine at a club (the same argument that made it the GROUPING key
+    below, now carried onto the wire). The club rides because the C4 ruling
+    updated the acknowledgment copy to consent to it (``enter.tsx``,
+    "name and club"): the EntrantRowDTO discipline — a field appears here
+    only after the copy that consents to it does — is satisfied, not
+    waived.
 
     A **strict projection** (Q4/I6): the SELECT names the published name,
     the published codes and the id it groups on — nothing else — so contact
@@ -155,7 +174,12 @@ def _entrants(
     entries rather than people and is deliberately a different query.
     """
     rows = repo.session.execute(
-        select(EntryPlayer.full_name, Entry.entry_player_id, EntryEvent.code)
+        select(
+            EntryPlayer.full_name,
+            EntryPlayer.club,
+            Entry.entry_player_id,
+            EntryEvent.code,
+        )
         # Explicit, because no column is selected off ``entries`` itself
         # besides its grouping key, and SQLAlchemy would otherwise infer
         # ``entry_players`` as the left side and fail to join it to itself.
@@ -179,15 +203,20 @@ def _entrants(
         # twice is a judgement an operator makes, not a 409 the database
         # returns (``Entry``'s non-unique ``ix_entries_event_player``), so
         # the grouping is what keeps one code from being listed twice.
-        .group_by(Entry.entry_player_id, EntryPlayer.full_name, EntryEvent.code)
+        .group_by(
+            Entry.entry_player_id,
+            EntryPlayer.full_name,
+            EntryPlayer.club,
+            EntryEvent.code,
+        )
         # Alphabetical, with the person id as the tiebreaker the house rule
         # asks for — two entrants share a name often enough at a club — and
         # the code last so a person's codes read in a stable order.
         .order_by(EntryPlayer.full_name, Entry.entry_player_id, EntryEvent.code)
     ).all()
-    grouped: Dict[uuid.UUID, Tuple[str, List[str]]] = {}
-    for name, player_id, code in rows:
-        grouped.setdefault(player_id, (name, []))[1].append(code)
+    grouped: Dict[uuid.UUID, Tuple[uuid.UUID, str, Optional[str], List[str]]] = {}
+    for name, club, player_id, code in rows:
+        grouped.setdefault(player_id, (player_id, name, club, []))[3].append(code)
     # ``dict`` keeps first-insertion order, which is the ORDER BY's.
     return list(grouped.values())
 

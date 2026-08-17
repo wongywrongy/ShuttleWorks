@@ -84,6 +84,10 @@ def page(client):
                 payment_instructions="Zelle to treasurer@club.example.",
                 venue_name="Riverside Sports Hall",
                 venue_address="12 Mill Lane",
+                # SP-P7 §4: the list tests below exercise the list, so the
+                # gate is on; the off state has its own tests in
+                # ``test_entries_page_api.py``.
+                entrants_published=True,
             )
         )
         ms = EntryEvent(
@@ -158,6 +162,34 @@ def _seed_one_entry(client, page):
         },
         follow_redirects=False,
     )
+
+
+def _confirm_all(page):
+    """Stand-in for the desk's pending → confirmed clicks (ruling D1).
+
+    SP-P7 §3.2 narrowed the public list to confirmed entries, so a test
+    whose subject is the LIST — grouping, codes, contact absence — must
+    first move its submissions past the operator's decision. A direct
+    column write rather than N desk calls, because the desk transition has
+    its own suite and re-driving it here would test the desk twice and the
+    list once.
+    """
+    import uuid as _uuid
+
+    from database.models import Entry
+    from database.session import SessionLocal
+    from sqlalchemy import update
+
+    session = SessionLocal()
+    try:
+        session.execute(
+            update(Entry)
+            .where(Entry.tournament_id == _uuid.UUID(page["tid"]))
+            .values(state="confirmed")
+        )
+        session.commit()
+    finally:
+        session.close()
 
 
 # ---- GET /e/api/page/{slug} ---------------------------------------------
@@ -263,21 +295,23 @@ def test_a_signed_in_viewer_gets_their_email_and_a_form_token(
 def test_the_projection_never_carries_an_entrants_contact_data(
     client, page, entrant
 ):
-    """Invariant I6 — the strict one-column projection, at the JSON seam.
+    """Invariant I6 — the strict projection, at the JSON seam.
 
     NEGATIVE CONTROL. To prove this is not vacuous: add ``"email":
     entrant_account.email`` to ``EntrantRowDTO`` and populate it in
-    ``entry_page_projection`` (or publish the ``entry_player_id``
-    ``_entrants`` groups on, or the club sitting beside the name on
-    ``entry_players``). Both assertions below go red. Put it back.
+    ``entry_page_projection`` (or the ``gender`` or ``birth_year`` sitting
+    beside the name on ``entry_players`` — R12 collects both and consents
+    to neither). Both assertions below go red. Put it back.
 
     The key set is asserted EXACTLY rather than by absence of known-bad
-    names, which is why it moved when SP-P6-2's ruled addition landed
-    (``eventCodes``, G5a) instead of quietly tolerating it: a third field
-    still fails here, and a field the consent copy does not cover is a
-    ruling, not a refactor.
+    names, which is why it moved when each ruled addition landed —
+    ``eventCodes`` (SP-P6-2 G5a), then ``personKey`` and ``club`` (SP-P7,
+    C4 updating the consent copy to "name and club") — instead of quietly
+    tolerating them: a fifth field still fails here, and a field the
+    consent copy does not cover is a ruling, not a refactor.
     """
     assert _seed_one_entry(client, page).status_code == 303
+    _confirm_all(page)
     # A STRANGER reads the page — the viewer block legitimately carries the
     # signed-in reader's own address, so it must not be in the frame.
     client.cookies.clear()
@@ -286,7 +320,10 @@ def test_the_projection_never_carries_an_entrants_contact_data(
     assert r.status_code == 200, r.text
     body = r.json()
     assert [row["name"] for row in body["entrants"]] == ["Alice Chen"]
-    assert all(set(row) == {"name", "eventCodes"} for row in body["entrants"])
+    assert all(
+        set(row) == {"personKey", "name", "club", "eventCodes"}
+        for row in body["entrants"]
+    )
     assert "parent@example.com" not in r.text
     assert body["viewer"] == {"signedIn": False, "email": None, "formCsrf": ""}
     # The count over the list and the names under it are one query apart and
@@ -318,6 +355,7 @@ def test_one_person_entering_two_events_is_listed_once(client, page, entrant):
         follow_redirects=False,
     )
     assert r.status_code == 303, r.text
+    _confirm_all(page)
     client.cookies.clear()
 
     body = client.get(f"/e/api/page/{page['slug']}").json()
@@ -346,6 +384,7 @@ def test_two_entrants_who_share_a_name_are_both_listed(client, page, entrant):
             ).status_code
             == 303
         )
+    _confirm_all(page)
     client.cookies.clear()
 
     body = client.get(f"/e/api/page/{page['slug']}").json()
@@ -392,6 +431,7 @@ def test_an_entrants_row_carries_their_event_codes_without_re_duplicating(
     submit("Alice Chen", [f"0:{page['ms']}", f"0:{page['ws']}"])
     submit("Bob Lee", [f"0:{page['ws']}"])
     submit("Bob Lee", [f"0:{page['ws']}"])
+    _confirm_all(page)
     client.cookies.clear()
 
     body = client.get(f"/e/api/page/{page['slug']}").json()

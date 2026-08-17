@@ -86,6 +86,10 @@ def page(client):
                 payment_instructions="Zelle to treasurer@club.example.",
                 venue_name="Riverside Sports Hall",
                 venue_address="12 Mill Lane",
+                # The published baseline (SP-P7 §4): the entrant-list tests
+                # exercise the list, so the gate is on; the gate's own
+                # off-state tests flip it back deliberately.
+                entrants_published=True,
             )
         )
         ms = EntryEvent(
@@ -183,6 +187,7 @@ def _add_entry(tid, event_id, **kwargs):
             account_id=account.id,
             full_name=kwargs.pop("player_name", "Seeded Player"),
             gender=kwargs.pop("gender", "F"),
+            club=kwargs.pop("club", None),
         )
         session.add_all([submission, player])
         session.flush()
@@ -191,7 +196,9 @@ def _add_entry(tid, event_id, **kwargs):
             entry_event_id=uuid.UUID(event_id),
             submission_id=submission.id,
             entry_player_id=player.id,
-            state=kwargs.pop("state", "pending"),
+            # ``confirmed`` = the listed state since SP-P7 §3.2 narrowed the
+            # public set; tests about the awaiting states pass one in.
+            state=kwargs.pop("state", "confirmed"),
             **kwargs,
         )
         session.add(row)
@@ -271,20 +278,25 @@ def test_the_projection_carries_the_venue(client, page):
 # ---- the strict entrant list (Q4/I6) ------------------------------------
 
 
-def test_the_projection_lists_entrant_names_and_their_event_codes_only(client, page):
-    """The whole row, asserted as a literal — so a third field cannot arrive
-    unnoticed.
+def test_the_projection_lists_entrant_rows_with_exactly_four_fields(client, page):
+    """The whole row's key-set, asserted exactly — so a fifth field cannot
+    arrive unnoticed (SP-P7 §5's allow-list discipline).
 
-    ``eventCodes`` is SP-P6-2's ruled addition (G5a): the Entrants tab groups
-    by event, and the codes ride ON the person's row rather than fanning it
-    back out into one row per person-per-event. Nothing else joins them —
-    the club sits beside the name on ``entry_players`` and is absent because
-    the consent copy covers the name.
+    ``eventCodes`` is SP-P6-2's ruled addition (G5a). ``club`` and
+    ``personKey`` are SP-P7's (§3.2/§3.3): the club is licensed by the C4
+    consent-copy update in ``enter.tsx`` ("name and club"), and the person
+    key is the player-page address — an opaque id, so the assertion below
+    checks it parses as a UUID rather than pinning a value.
     """
-    _add_entry(page["tid"], page["ms"], player_name="Bo Ferrar")
+    _add_entry(page["tid"], page["ms"], player_name="Bo Ferrar", club="Riverside BC")
     payload = _projection(client, page)
 
-    assert payload["entrants"] == [{"name": "Bo Ferrar", "eventCodes": ["MS"]}]
+    (row,) = payload["entrants"]
+    assert set(row) == {"personKey", "name", "club", "eventCodes"}
+    assert row["name"] == "Bo Ferrar"
+    assert row["club"] == "Riverside BC"
+    assert row["eventCodes"] == ["MS"]
+    uuid.UUID(row["personKey"])  # opaque, but well-formed
     # The projection reaches the player and stops. The account behind the
     # entry is one hop further out and is never selected.
     assert "@example.com" not in json.dumps(payload)
@@ -305,21 +317,100 @@ def test_withdrawn_and_rejected_entries_are_not_listed(client, page):
     assert names == ["Still Here"]
 
 
+def test_only_confirmed_entries_are_listed(client, page):
+    """SP-P7 §3.2, ruled at the Phase 0 STOP: the public list is the
+    processed-only model. A submission awaiting the operator's decision —
+    pending or waitlisted — never appears publicly; it is visible to its
+    own account alone (the /me half of this claim lives with that route).
+    """
+    _add_entry(page["tid"], page["ms"], player_name="Ada Waiting", state="pending")
+    _add_entry(page["tid"], page["ws"], player_name="Quinn Queued", state="waitlisted")
+    _add_entry(page["tid"], page["ms"], player_name="Bo Accepted", state="confirmed")
+
+    payload = _projection(client, page)
+    assert [row["name"] for row in payload["entrants"]] == ["Bo Accepted"]
+    # And the coupled invariant: the event counts count the same people the
+    # list names — the pending and waitlisted rows move neither number.
+    assert _event(payload, page["ms"])["entryCount"] == 1
+    assert _event(payload, page["ws"])["entryCount"] == 0
+
+
 def test_the_list_never_reveals_entry_state(client, page):
     """Entry is not acceptance. The list shows who entered, and a public
     'pending' next to a name is a judgment nobody made — at the JSON
-    boundary that is a *schema* claim (the row has exactly its two published
-    keys) and, as in the old file, an absence claim over the serialized
-    list."""
-    _add_entry(page["tid"], page["ms"], player_name="Ada Waiting", state="pending")
-    _add_entry(page["tid"], page["ms"], player_name="Bo Accepted", state="confirmed")
+    boundary that is a *schema* claim (the row has exactly its four
+    published keys) and, as in the old file, an absence claim over the
+    serialized list."""
+    _add_entry(page["tid"], page["ms"], player_name="Bo Accepted")
+    _add_entry(page["tid"], page["ws"], player_name="Cy Cleared")
 
     rows = _projection(client, page)["entrants"]
-    assert {row["name"] for row in rows} == {"Ada Waiting", "Bo Accepted"}
-    assert all(set(row) == {"name", "eventCodes"} for row in rows)
+    assert {row["name"] for row in rows} == {"Bo Accepted", "Cy Cleared"}
+    assert all(
+        set(row) == {"personKey", "name", "club", "eventCodes"} for row in rows
+    )
     serialized = json.dumps(rows).lower()
     for state in ("pending", "confirmed", "waitlisted"):
         assert state not in serialized
+
+
+# ---- the entrants publication gate (SP-P7 §4) ----------------------------
+
+
+def _set_entrants_published(page, value):
+    from database.models import EntryPage
+    from database.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        session.get(EntryPage, uuid.UUID(page["tid"])).entrants_published = value
+        session.commit()
+    finally:
+        session.close()
+
+
+def test_the_projection_states_the_publication_flags(client, page):
+    """The gated-vs-empty protocol is these three booleans and nothing
+    else — same 200, no envelope, so an unpublished state cannot be probed
+    apart from an unpopular one by status code."""
+    assert _projection(client, page)["publication"] == {
+        "entrants": True,
+        "draws": False,
+        "results": False,
+    }
+
+
+def test_an_unpublished_list_is_empty_even_when_entrants_exist(client, page):
+    _add_entry(page["tid"], page["ms"], player_name="Early Bird")
+    _set_entrants_published(page, False)
+
+    payload = _projection(client, page)
+    assert payload["publication"]["entrants"] is False
+    assert payload["entrants"] == []
+    # Gated at the query, not the renderer: the name is absent from the
+    # whole response, not present-but-unrendered.
+    assert "Early Bird" not in json.dumps(payload)
+
+
+def test_unpublishing_actually_stops_the_names_flowing(client, page):
+    """SP-P7 §7's verification trap, at the entrants level: publish, see
+    the name, unpublish through the real operator route, see it gone. The
+    off state is tested, not just the on state."""
+    _add_entry(page["tid"], page["ms"], player_name="Briefly Public")
+    assert [
+        row["name"] for row in _projection(client, page)["entrants"]
+    ] == ["Briefly Public"]
+
+    response = client.patch(
+        f"/tournaments/{page['tid']}/entry-page/publication",
+        json={"entrantsPublished": False},
+        headers={"X-ShuttleWorks-CSRF": "1"},
+    )
+    assert response.status_code == 200
+
+    payload = _projection(client, page)
+    assert payload["entrants"] == []
+    assert "Briefly Public" not in json.dumps(payload)
 
 
 def test_the_projection_carries_no_markup_at_all(client, page):

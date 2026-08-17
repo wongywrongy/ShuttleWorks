@@ -93,7 +93,10 @@ export function renderingSourceFiles(): string[] {
  * `Object`, not with `new Map(`/`[`/`{`, and frozen is the safe-to-share form.
  */
 export function moduleScopedMutableBindings(source: string): string[] {
-  return source.split('\n').filter((line) => {
+  // `\r?`: git's autocrlf checks sources out with CRLF on Windows, and a
+  // captured line ending in `\r` compares unequal to its expected literal
+  // while printing identically — a fresh worktree failed exactly so.
+  return source.split(/\r?\n/).filter((line) => {
     if (/^(export\s+)?(let|var)\s/.test(line)) return true;
 
     const constMatch = line.match(/^(export\s+)?const\s+\w+[^=]*=\s*(.+)$/);
@@ -176,7 +179,7 @@ export function credentialRelayLines(source: string): string[] {
   ];
 
   return stripComments(source)
-    .split('\n')
+    .split(/\r?\n/)
     .filter((line) => patterns.some((p) => p.test(line)))
     .map((line) => line.trim());
 }

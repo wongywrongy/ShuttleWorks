@@ -166,16 +166,19 @@ class EntrantRowDTO(BaseModel):
     row per person-per-event — is the 2026-08-10 duplication defect, which
     printed 42 rows for 23 people on the live page.
 
-    Two fields, and the second is the event dimension the Entrants tab
-    groups by (SP-P6-2 G5a). Contact data stays structurally absent rather
-    than fetched-and-then-hidden: the club sits one column away on
-    ``entry_players`` and is deliberately NOT here, because the
-    acknowledgment an entrant ticks promises publication of their name
-    (``entrant/app/routes/entry.form.tsx``) — a third field is only allowed
-    to appear here after the copy that consents to it does.
+    Contact data stays structurally absent rather than fetched-and-then-
+    hidden. The rule this docstring used to state — a field appears here
+    only after the copy that consents to it does — is unchanged; what
+    changed (SP-P7, ruling C4) is that the acknowledgment copy in
+    ``enter.tsx`` now consents to "name and club", which is what licensed
+    ``club``. ``personKey`` is the player-page address (SP-P7 §3.3): the
+    opaque person-in-tournament id, never the name — two entrants sharing
+    a name is routine at a club and must not collide into one page.
     """
 
+    personKey: str
     name: str
+    club: Optional[str] = None
     eventCodes: List[str] = []
 
 
@@ -184,11 +187,32 @@ class PageDTO(BaseModel):
     introText: Optional[str] = None
     regulationsText: Optional[str] = None
     regulationsVersion: int
+    # ISO instant of the last actual text change (SP-P7 §3.7's document
+    # row: "v3 · updated …"). None = never edited since the column existed;
+    # the row renders version-only.
+    regulationsUpdatedAt: Optional[str] = None
     paymentInstructions: Optional[str] = None
     # String keys: this mirrors a JSON column, and a JSON object has no
     # integer keys. Read through ``normalize_fee_schedule`` so the card
     # cannot quote a tier the pricing drops.
     feeSchedule: Dict[str, int] = {}
+
+
+class PublicationDTO(BaseModel):
+    """The TD's publication gates (SP-P7 §4), stated so the tier can tell
+    "gated" from "empty".
+
+    An unpublished entrant list arrives as an empty ``entrants`` array —
+    indistinguishable, alone, from a tournament nobody has entered. These
+    booleans are the distinction, and they are the *whole* gated-vs-empty
+    protocol: no error, no envelope, the same 200 either way, so an
+    unpublished state can never be probed apart from an unpopular one by
+    status code.
+    """
+
+    entrants: bool = False
+    draws: bool = False
+    results: bool = False
 
 
 class PolicyDTO(BaseModel):
@@ -230,6 +254,7 @@ class EntryPageProjection(BaseModel):
     venue: Optional[VenueDTO] = None
     page: PageDTO
     policy: PolicyDTO
+    publication: PublicationDTO
     events: List[EventDTO]
     entrants: List[EntrantRowDTO]
     viewer: ViewerDTO
@@ -300,6 +325,11 @@ def entry_page_projection(
             introText=page.intro_text,
             regulationsText=page.regulations_text,
             regulationsVersion=page.regulations_version,
+            regulationsUpdatedAt=(
+                _moment_iso(page.regulations_updated_at)
+                if page.regulations_updated_at is not None
+                else None
+            ),
             paymentInstructions=page.payment_instructions,
             feeSchedule={
                 str(count): cents
@@ -345,10 +375,27 @@ def entry_page_projection(
             )
             for ev in events
         ],
-        entrants=[
-            EntrantRowDTO(name=name, eventCodes=codes)
-            for name, codes in _entrants(repo, tournament.id)
-        ],
+        publication=PublicationDTO(
+            entrants=bool(page.entrants_published),
+            draws=bool(page.draws_published),
+            results=bool(page.results_published),
+        ),
+        # Gated at the QUERY, not the renderer (SP-P7 §4): an unpublished
+        # list is never fetched-and-then-hidden, so unpublishing actually
+        # stops the data flowing — the property the gate-matrix tests pin.
+        entrants=(
+            [
+                EntrantRowDTO(
+                    personKey=str(person_id),
+                    name=name,
+                    club=club,
+                    eventCodes=codes,
+                )
+                for person_id, name, club, codes in _entrants(repo, tournament.id)
+            ]
+            if page.entrants_published
+            else []
+        ),
         viewer=ViewerDTO(
             signedIn=entrant is not None,
             email=entrant.email if entrant is not None else None,
