@@ -321,9 +321,14 @@ export function BracketDrawsTab() {
               rowAttrs={(row) => ({ 'aria-label': `Draw ${row.ev.id}` })}
               renderRow={(row) => (
                 <>
+                  {/* Body ink, not accent. The code is an identifier, and in
+                      accent it read as the row's link — so each row offered
+                      two link-shaped things and only the trailing "Open draw"
+                      actually navigated (DRW-2). Accent stays for controls
+                      that go somewhere. */}
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[0])} break-words text-2sm font-semibold text-accent sw-num`}
+                    className={`${colClass(DRAW_COLUMNS[0])} break-words text-2sm font-semibold text-foreground sw-num`}
                   >
                     {row.ev.id}
                   </span>
@@ -410,7 +415,7 @@ export function BracketDrawsTab() {
                       disabled={!row.generated}
                       data-testid={`bracket-open-draw-${row.ev.id}`}
                       title={row.generated ? `Open the ${row.ev.id} draw` : 'Generate the draw first'}
-                      className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                      className="text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:opacity-40 disabled:no-underline"
                     >
                       Open draw →
                     </button>

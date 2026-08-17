@@ -21,10 +21,13 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), h
 export function PanZoomCanvas({
   children,
   roundLabels,
+  overlayTrailing,
 }: {
   children: ReactNode;
   /** When set, renders round-jump chips that pan to `[data-round="i"]`. */
   roundLabels?: string[];
+  /** Right end of the canvas toolbar strip — the draw's progress tally. */
+  overlayTrailing?: ReactNode;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -151,19 +154,30 @@ export function PanZoomCanvas({
         </div>
       </div>
 
-      {/* Round-jump chips — for large draws, jump straight to a round. */}
-      {roundLabels && roundLabels.length > 2 ? (
-        <div className="absolute left-2 top-2 flex flex-wrap gap-1 rounded-sm border border-border bg-card/90 p-1 shadow-sm backdrop-blur">
-          {roundLabels.map((label, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => focusRound(i)}
-              className="rounded-sm px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
-            >
-              {label}
-            </button>
-          ))}
+      {/* ONE toolbar strip over the canvas: round-jump chips at the left,
+          whatever the caller hangs at the right (the draw's progress tally).
+          The tally used to live in the page header bar while the chips
+          floated here, so two halves of the same toolbar sat in two
+          containers at two heights (DRAW-2). */}
+      {(roundLabels && roundLabels.length > 2) || overlayTrailing ? (
+        <div className="absolute inset-x-2 top-2 flex items-center justify-between gap-2 rounded-sm border border-border bg-card/90 px-1 py-1 shadow-sm backdrop-blur">
+          <div className="flex flex-wrap gap-1">
+            {roundLabels && roundLabels.length > 2
+              ? roundLabels.map((label, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => focusRound(i)}
+                    className="rounded-sm px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
+                  >
+                    {label}
+                  </button>
+                ))
+              : null}
+          </div>
+          {overlayTrailing ? (
+            <div className="flex shrink-0 items-center pr-1">{overlayTrailing}</div>
+          ) : null}
         </div>
       ) : null}
 

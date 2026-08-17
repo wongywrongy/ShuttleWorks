@@ -14,6 +14,7 @@ import { SourceChip } from "../../components/SourceChip";
 import { formatLabel, disciplineLabel } from "./bracketLabels";
 import { descriptorFor } from "./formatRegistry";
 import { BracketScheduleModal } from "./BracketScheduleModal";
+import { drawProgress } from "./drawProgress";
 import type { BracketLayoutMode } from "./DrawView";
 
 const LAYOUT_OPTIONS: readonly SegOption<BracketLayoutMode>[] = [
@@ -78,7 +79,7 @@ export function BracketViewHeader({
   const navigate = useNavigate();
   const [scheduling, setScheduling] = useState(false);
   const counts = useMemo(
-    () => buckets(data, view === "draw" ? eventId : null),
+    () => drawProgress(data, view === "draw" ? eventId : null),
     [data, view, eventId],
   );
 
@@ -165,7 +166,9 @@ export function BracketViewHeader({
         </>
       }
     >
-      <StatusBar items={statusTallyItems(counts)} />
+      {/* The draw view renders its tally inside the canvas toolbar strip
+          instead, beside the round-jump chips (DRAW-2). */}
+      {view === "draw" ? null : <StatusBar items={statusTallyItems(counts)} />}
       {view === "schedule" && <ExportMenu api={api} />}
       {(view === "schedule" || view === "live") && schedulableCount > 0 && (
         <button
@@ -215,31 +218,3 @@ function ExportMenu({ api }: { api: BracketApi }) {
   );
 }
 
-function buckets(data: TournamentDTO, eventId: string | null) {
-  const resultsById = new Set(data.results.map((r) => r.play_unit_id));
-  const assignmentByPu = new Map(
-    data.assignments.map((a) => [a.play_unit_id, a])
-  );
-  let done = 0;
-  let live = 0;
-  let ready = 0;
-  let pending = 0;
-  for (const pu of data.play_units) {
-    if (eventId && pu.event_id !== eventId) continue;
-    if (resultsById.has(pu.id)) {
-      done += 1;
-      continue;
-    }
-    const a = assignmentByPu.get(pu.id);
-    if (a?.started && !a.finished) {
-      live += 1;
-      continue;
-    }
-    if (a) {
-      ready += 1;
-      continue;
-    }
-    pending += 1;
-  }
-  return { done, live, ready, pending };
-}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card } from "@scheduler/design-system";
+import { Card, StatusBar } from "@scheduler/design-system";
 import { useBracketApi } from "../../api/bracketClient";
 import { useTournamentId } from "../../hooks/useTournamentId";
 import { useTournamentStore } from "../../store/tournamentStore";
@@ -15,9 +15,10 @@ import type {
 } from "../../api/bracketDto";
 import { useBracketResultQueue } from "../../hooks/useBracketResultQueue";
 import { INTERACTIVE_BASE } from "../../lib/utils";
-import { REASON_BADGE, WinnerDot } from "../../components/control-plane";
+import { REASON_BADGE, WinnerDot, statusTallyItems } from "../../components/control-plane";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
+import { drawProgress } from "./drawProgress";
 import { BracketScoreEntry } from "./BracketScoreEntry";
 import { BracketInlineNotice } from "./BracketInlineNotice";
 import { applyOptimisticResult } from "./optimisticResult";
@@ -286,7 +287,10 @@ function BracketView({
         </div>
       ) : null}
       <div className="min-h-0 flex-1">
-        <PanZoomCanvas roundLabels={roundLabels}>
+        <PanZoomCanvas
+          roundLabels={roundLabels}
+          overlayTrailing={<StatusBar items={statusTallyItems(drawProgress(data, event.id))} />}
+        >
           {/* Bracket canvas: one-sided (default) reads left-to-right with the
               Final as the rightmost column; mirrored fans two wings out from
               a centered Final. Either way each match is positioned absolutely
@@ -1008,7 +1012,10 @@ function BracketCell({
       variant="frame"
       className={`p-3 space-y-2${final ? " border-accent/40 ring-1 ring-accent/30 shadow-glow" : ""}`}
     >
-      <div className="flex justify-between text-3xs text-muted-foreground sw-num">
+      {/* One step darker than the muted tier: this caption is the ONLY
+          schedule information in the whole tree, and at muted-on-white it
+          was very nearly invisible (DRAW-3). */}
+      <div className="flex justify-between text-3xs text-foreground/70 sw-num">
         <span>{pu.id}</span>
         <span>
           {assignment
@@ -1120,7 +1127,12 @@ function Side({
         (selected
           ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
           : winning
-          ? "bg-status-live-solid border border-status-live-border text-status-live-ink font-medium"
+          // Subtle tint + a 3px left rule + weight, not the saturated solid
+          // fill this used to carry (DRAW-1). A won first-round match is the
+          // least operational thing in the console, and it was the loudest
+          // element in the app — a wall of solid green on a surface nobody
+          // watches during a live day.
+          ? "bg-status-live-bg border border-status-live-border border-l-[3px] border-l-status-live text-foreground font-semibold"
           : loser
           ? "bg-muted text-muted-foreground line-through"
           : bye
