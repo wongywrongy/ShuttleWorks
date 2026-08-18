@@ -75,12 +75,54 @@ store-shape, or state-machine changes.
   surface — '+ Add player' is impossible" and "finished without a
   recorded score still refuses the side editors". Reverted.
 
-## Gates
+## Recovery (found during close-out, not part of the directive)
 
-- Full `make check` + contrast + screenshot set: see closing entry below
-  (run after all commits).
+- **`MatchDetailPanel.test.tsx` was missing from the working tree** despite
+  living in history (last touched `7017c60`) — likely OneDrive. The INS-N1
+  Write silently created a rival file; caught because the closing vitest
+  count (1772) sat BELOW the 1773 baseline while ~11 tests had been added.
+  All 12 originals restored verbatim at `b132846` and pass UNMODIFIED
+  against the state-exclusive panel.
+- **Seven SP-CONSOLE-2 files were never committed** (they existed only
+  untracked on this machine, so `design/console-2` does not build from a
+  clean clone): `lib/stateWords.ts`, `bracket/drawProgress.ts`,
+  `publicDisplay/rotation.ts`, `publicUrlContract.test.ts`,
+  `rotation.test.ts`, `RegenerateMenu.test.tsx`, and the
+  `v6a1c5e8f3b4_backup_origin` alembic migration. Three of the seams were
+  independently recovered on `feat/p7-public-entrant` (`15bc839`,
+  byte-identical); all seven are now tracked on this branch.
+
+## Gates (2026-08-18 close)
+
+- `make check` **exit 0** (eslint + tsc -b + typecheck:entrant + vitest +
+  depcruise + ruff + pytest; the docs-freshness BEHIND report is advisory).
+- vitest **1784 passed / 0 failed** (baseline 1773; +11 net = new X6 /
+  INS-N1 / lifecycle tests minus nothing — the two rewritten baseline
+  tests are ratified above).
+- eslint **0 errors / 122 warnings** (baseline 118; the +4 are
+  react-refresh only-export warnings from `matchStatus.tsx` carrying both
+  the vocabulary constants and the `MatchStatus` component — forced
+  together by the Windows case-collision, see Directives table).
+- Contrast gate: **all pairs pass** both themes; the text variants use
+  only `text-muted-foreground`/`text-foreground`, which the gate already
+  checks against every surface in both themes — no new color pairs.
+- `npm run docs:build` green (console-naming.md edits link-checked).
+- pytest **1609 passed / 66 skipped** — the SP-CONSOLE-2 close profile
+  exactly (backend untouched by this program; the one backend file added
+  is the recovered, already-on-disk backup-origin migration).
 
 ## Screenshots
 
-- Captured to `docs/screenshots/console3-2026-08-18/` (gitignored) — see
-  closing entry.
+After-set: `docs/screenshots/console3-2026-08-18/` (gitignored) —
+a-01 hub (live row, chip suppressed) · a-02 hub+inspector · a-03 overview
+live header · a-04 /matches · a-05 finished meet panel · a-06 unfinished
+meet panel · a-07 /bracket-roster · a-08 /bracket-draws ·
+a-09 /bracket-matches · a-10 finished bracket panel · a-11 ws-settings
+(Lifecycle "Live" as text) · a-12 modules catalog · a-13 shell header in
+DRAFT (chip renders — second lifecycle state).
+Before-set: `docs/screenshots/report-2026-08-17-console2/` (SP-CONSOLE-2
+close captures of the same surfaces).
+**Deviation:** the archived-state header shot was not captured — archiving
+the owner's only live workspace was blocked by the session's permission
+gate (correctly); the second lifecycle state was captured from a
+throwaway draft workspace instead, created and deleted in-session.
