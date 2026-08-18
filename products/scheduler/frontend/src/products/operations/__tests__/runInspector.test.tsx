@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+// The Run write controls carry the viewer read-only vocabulary (audit A2)
+// since SP-CONSOLE-4 B4 — these tests exercise the editable path.
+vi.mock('../../../hooks/useCanEdit', () => ({
+  useCanEdit: () => true,
+  assertCanEdit: () => true,
+}));
+
 import { RunInspector } from '../run/RunInspector';
 import type { RunMatch } from '../runtime/runModel';
 

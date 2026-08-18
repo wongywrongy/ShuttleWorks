@@ -33,6 +33,7 @@ import {
   type SubmitResult,
 } from '../lib/commandQueue';
 import { useMatchStateStore } from '../store/matchStateStore';
+import { assertCanEdit } from './useCanEdit';
 import { useTournamentId } from './useTournamentId';
 import type { MatchStateDTO } from '../api/dto';
 
@@ -169,6 +170,15 @@ export function useCommandQueue() {
       matchId: string,
       payload: Record<string, unknown> = {},
     ): Promise<SubmitOutcome> => {
+      // A viewer's press must never reach the wire (audit A2) — the same
+      // seam backstop useLiveTracking's writes carry. Shaped like a
+      // permanent rejection so callers need no special case.
+      if (!assertCanEdit()) {
+        return {
+          commandId: '',
+          result: { kind: 'conflict', message: 'View-only access' },
+        };
+      }
       const commandId = uuidv4();
       const optimisticStatus = ACTION_TO_LEGACY_STATUS[action];
       // Resolve the canonical match version. Audit-pass fix: the

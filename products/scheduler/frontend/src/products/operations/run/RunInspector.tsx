@@ -25,6 +25,8 @@ import {
 } from '../runtime/runMachine';
 import type { RunMatch } from '../runtime/runModel';
 import { useConfirmClick } from '../../../hooks/useConfirmClick';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import { DetailPanel } from '../../../components/control-plane';
 import { SourceChip } from '../../../components/SourceChip';
@@ -82,6 +84,10 @@ export function RunInspector({
   onAction,
   hidePlayers,
 }: RunInspectorProps) {
+  // A viewer may not drive the live day (audit A2): every action button
+  // carries the `disabled` vocabulary — the command-queue seam refuses as
+  // the backstop for anything this misses.
+  const canEdit = useCanEdit();
   // Empty / unselected state
   if (!match || !role) {
     return (
@@ -107,7 +113,7 @@ export function RunInspector({
         </DetailPanel.Section>
       )}
 
-      {role === 'now' && <NowActions match={match} onAction={onAction} />}
+      {role === 'now' && <NowActions match={match} onAction={onAction} canEdit={canEdit} />}
 
       {role === 'next-later' && nowRef && (
         <DetailPanel.Section eyebrow="Actions" testId="run-inspector-actions">
@@ -124,6 +130,8 @@ export function RunInspector({
               type="button"
               data-testid="run-act-send"
               className={primaryBtn}
+              disabled={!canEdit}
+              title={canEdit ? undefined : READ_ONLY_MESSAGE}
               onClick={() => onAction('assign', { court: freeCourt })}
             >
               Send to C{freeCourt}
@@ -150,13 +158,14 @@ export function RunInspector({
  * DISTANCE — Postpone now sits in its own section rather than 10px away in the
  * same flex row, which is a misclick rather than a decision.
  */
-function RecordButton({ onRecord }: { onRecord: () => void }) {
+function RecordButton({ onRecord, disabled }: { onRecord: () => void; disabled?: boolean }) {
   const confirm = useConfirmClick(onRecord);
   return (
     <button
       type="button"
       data-testid="run-act-record"
       className={confirm.armed ? armedBtn : primaryBtn}
+      disabled={disabled}
       onClick={confirm.press}
       onBlur={confirm.reset}
       title={
@@ -243,9 +252,11 @@ function StatusSection({
 function NowActions({
   match,
   onAction,
+  canEdit,
 }: {
   match: RunMatch;
   onAction: RunInspectorProps['onAction'];
+  canEdit: boolean;
 }) {
   const showCall = can(match.status, 'call');
   const showStart = can(match.status, 'start');
@@ -266,6 +277,8 @@ function NowActions({
                 type="button"
                 data-testid="run-act-call"
                 className={primaryBtn}
+                disabled={!canEdit}
+                title={canEdit ? undefined : READ_ONLY_MESSAGE}
                 onClick={() => onAction('call')}
               >
                 Call
@@ -276,12 +289,14 @@ function NowActions({
                 type="button"
                 data-testid="run-act-start"
                 className={primaryBtn}
+                disabled={!canEdit}
+                title={canEdit ? undefined : READ_ONLY_MESSAGE}
                 onClick={() => onAction('start')}
               >
                 Start
               </button>
             )}
-            {showRecord && <RecordButton onRecord={() => onAction('record')} />}
+            {showRecord && <RecordButton onRecord={() => onAction('record')} disabled={!canEdit} />}
           </div>
         </DetailPanel.Section>
       )}
@@ -292,6 +307,8 @@ function NowActions({
             type="button"
             data-testid="run-act-postpone"
             className={actionBtn}
+            disabled={!canEdit}
+            title={canEdit ? undefined : READ_ONLY_MESSAGE}
             onClick={() => onAction('postpone')}
           >
             Postpone

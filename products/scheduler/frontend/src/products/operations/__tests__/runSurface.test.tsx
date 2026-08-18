@@ -23,6 +23,13 @@ const pressRecord = () => {
   fireEvent.click(screen.getByTestId('run-act-record'));
   fireEvent.click(screen.getByTestId('run-act-record'));
 };
+// The Run write controls carry the viewer read-only vocabulary (audit A2)
+// since SP-CONSOLE-4 B4 — these tests exercise the editable path.
+vi.mock('../../../hooks/useCanEdit', () => ({
+  useCanEdit: () => true,
+  assertCanEdit: () => true,
+}));
+
 import { RunSurface, computeAutoPull } from '../run/RunSurface';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { OpsBlock } from '../opsBlock';

@@ -186,11 +186,29 @@ test.describe('interaction smoke — real flows against real stores', () => {
     await page.waitForTimeout(2000);
     await drainHarness(page);
 
-    // Drive the undo affordances the audit found broken.
-    for (const label of ['Undo started match', 'Undo finish', 'Undo call']) {
-      const btn = page.locator(`button[aria-label="${label}"]:not([disabled])`).first();
-      if ((await btn.count()) === 0) continue;
-      await btn.click().catch(() => {});
+    // Drive the return-transitions on the unified Run surface (SP-CONSOLE-4):
+    // select each court card and press whatever legal backward step the
+    // inspector / meet rail offers (undo-start, postpone).
+    const cards = page.locator('[data-testid^="run-card-"]');
+    const cardCount = await cards.count();
+    for (let i = 0; i < cardCount; i++) {
+      await cards.nth(i).click().catch(() => {});
+      await page.waitForTimeout(300);
+      for (const testId of ['meet-run-undo-start', 'run-act-postpone']) {
+        const btn = page.locator(`[data-testid="${testId}"]:not([disabled])`).first();
+        if ((await btn.count()) === 0) continue;
+        await btn.click().catch(() => {});
+        await page.waitForTimeout(1200);
+        break; // the transition changed the lane — move to the next card
+      }
+    }
+    // Undo-finish is the canon two-click arm: both presses inside the window.
+    const undoFinish = page
+      .locator('[data-testid^="run-finished-undo-"]:not([disabled])')
+      .first();
+    if ((await undoFinish.count()) > 0) {
+      await undoFinish.click().catch(() => {});
+      await undoFinish.click().catch(() => {});
       await page.waitForTimeout(1200);
     }
 
@@ -272,11 +290,19 @@ test.describe('interaction smoke — real flows against real stores', () => {
     await expect(page.getByTestId('read-only-banner')).toBeVisible();
     await expect(page.getByTestId('read-only-banner')).toContainText(/view-only access/i);
 
-    const actions = page.locator('button[aria-label*="Call"], button[aria-label*="Start"]');
+    // Unified Run surface (SP-CONSOLE-4): the lifecycle buttons live in the
+    // inspector, mounted by selecting a court card. The seed puts matches on
+    // courts precisely so a card exists to select — a missing card means the
+    // fixture is wrong and the loop below would prove nothing.
+    const cards = page.locator('[data-testid^="run-card-"]');
+    expect(
+      await cards.count(),
+      'no court cards rendered — the viewer fixture is wrong',
+    ).toBeGreaterThan(0);
+    await cards.first().click();
+
+    const actions = page.locator('[data-testid^="run-act-"]');
     const n = await actions.count();
-    // The seed puts matches on courts precisely so these controls exist. If they
-    // don't, the loop below would assert nothing and the test would pass while
-    // proving nothing — the failure mode this whole suite exists to prevent.
     expect(n, 'no live-day action buttons rendered — the viewer fixture is wrong').toBeGreaterThan(
       0,
     );

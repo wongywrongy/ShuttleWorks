@@ -13,6 +13,8 @@ import { RUN_STATUS_LABEL } from '../runtime/runMachine';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 import { STATE_WORD } from '../../../lib/stateWords';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 
 // ── source label + square tint (M=meet azure, B=bracket violet) ───────────
 // One vocabulary for the engine, everywhere on this surface: the square shows
@@ -47,6 +49,8 @@ export interface RunQueueProps {
 
 // ── component ─────────────────────────────────────────────────────────────
 export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: RunQueueProps) {
+  // Viewer read-only vocabulary (audit A2) — send is a write.
+  const canEdit = useCanEdit();
   if (queue.length === 0) {
     return (
       <div className="flex items-center justify-center px-4 py-6 text-sm text-muted-foreground">
@@ -147,6 +151,8 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               <button
                 type="button"
                 data-testid={`queue-send-${match.key}`}
+                disabled={!canEdit}
+                title={canEdit ? undefined : READ_ONLY_MESSAGE}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSend(match.key);

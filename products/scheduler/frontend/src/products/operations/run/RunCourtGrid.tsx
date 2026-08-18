@@ -18,6 +18,8 @@ import type { OpsBlock } from '../opsBlock';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
 import { sideNameLines } from '../../../lib/names';
 import { STATE_WORD } from '../../../lib/stateWords';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 
 export interface RunCourtGridProps {
   lanes: CourtLane[];
@@ -100,6 +102,8 @@ export function RunCourtGrid({
   onAssignNext,
   hasEligible,
 }: RunCourtGridProps) {
+  // Viewer read-only vocabulary (audit A2) — assign is a write.
+  const canEdit = useCanEdit();
   const startSlotByKey = useMemo(() => {
     const map = new Map<string, number>();
     for (const b of blocks) {
@@ -181,7 +185,9 @@ export function RunCourtGrid({
                       type="button"
                       data-testid={`run-assign-next-${lane.court}`}
                       onClick={() => onAssignNext(lane.court)}
-                      className="mt-1.5 rounded-md border border-accent px-3 py-1 text-xs font-bold text-accent transition-colors duration-fast ease-brand hover:bg-accent-bg"
+                      disabled={!canEdit}
+                      title={canEdit ? undefined : READ_ONLY_MESSAGE}
+                      className="mt-1.5 rounded-md border border-accent px-3 py-1 text-xs font-bold text-accent transition-colors duration-fast ease-brand hover:bg-accent-bg disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Assign next
                     </button>
