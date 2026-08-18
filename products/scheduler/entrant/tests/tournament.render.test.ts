@@ -114,19 +114,39 @@ describe('the tab bar and its panels (Z6)', () => {
     expect(events).not.toContain('Bank transfer on the day.');
   });
 
-  it('renders Overview for an unknown or data-hidden ?tab', async () => {
+  it('renders Overview for an unknown or gate-hidden ?tab', async () => {
     const unknown = await render(PAGE, '/e/spring-open?tab=draws');
     expect(unknown).toContain('Key dates');
 
-    // Entrants hidden (empty list) → its tab neither renders nor answers.
-    const noEntrants = { ...PAGE, entrants: [] };
-    const hidden = await render(noEntrants, '/e/spring-open?tab=entrants');
+    // SP-P7 §4: the entrants tab is the PUBLICATION's, not the list
+    // length's — unpublished hides the tab and folds its ?tab to Overview,
+    // even when confirmed entrants exist behind the gate.
+    const unpublished = {
+      ...PAGE,
+      publication: { ...PAGE.publication, entrants: false },
+      entrants: [],
+    };
+    const hidden = await render(unpublished, '/e/spring-open?tab=entrants');
     expect(hidden).toContain('Key dates');
     expect(hidden).not.toContain('>Entrants<');
   });
 
+  it('a published-but-empty entrant list is a real tab with a plain answer', async () => {
+    const html = await render(
+      { ...PAGE, entrants: [] },
+      '/e/spring-open?tab=entrants',
+    );
+    expect(html).toContain('>Entrants<');
+    expect(html).toContain('No confirmed entries yet.');
+  });
+
   it('renders no tab bar at all below two tabs', async () => {
-    const html = await render({ ...PAGE, events: [], entrants: [] });
+    const html = await render({
+      ...PAGE,
+      events: [],
+      entrants: [],
+      publication: { ...PAGE.publication, entrants: false },
+    });
 
     expect(html).not.toContain('Tournament sections');
     expect(html).not.toContain('?tab=');
@@ -198,19 +218,33 @@ describe('the panels', () => {
 
     expect(html).toContain('7 entered');
     expect(html).not.toMatch(/7 of \d/);
-    expect(html).toContain('href="/e/spring-open?tab=entrants#event-MS"');
+    // The by-event anchors died with the by-event grouping (SP-P7 §3.2):
+    // "N entered" links to the alphabetical tab itself.
+    expect(html).toContain('href="/e/spring-open?tab=entrants"');
+    expect(html).not.toContain('#event-MS');
     expect(html).toContain('>Open<');
     expect(html).toContain('>Closed<');
   });
 
-  it('Entrants: grouped by event, one row per person per group (G5a)', async () => {
+  it('Entrants: alphabetical letter groups, one row per person (SP-P7 §3.2)', async () => {
     const html = await render(PAGE, '/e/spring-open?tab=entrants');
 
-    expect(html).toContain('id="event-MS"');
-    expect(html).toContain('id="event-WD"');
-    // Ada is in MS and WD — she appears once in each group.
-    expect(html.match(/Ada Lovelace/g)).toHaveLength(2);
-    expect(html.match(/Grace Hopper/g)).toHaveLength(1);
+    // One row per person now — Ada's two events ride HER row as codes.
+    expect(html.match(/Ada Lovelace/g)).toHaveLength(1);
+    expect(html).toContain('MS · WD');
+    // Letter headers, alphabetical: Ada under A, Grace under G, Katherine under K.
+    expect(html).toMatch(/>A<[\s\S]*Ada Lovelace[\s\S]*>G<[\s\S]*Grace Hopper[\s\S]*>K<[\s\S]*Katherine Johnson/);
+    // Names link to player pages, keyed by person — never by name.
+    expect(html).toContain(
+      'href="/e/spring-open/players/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"',
+    );
+    // Club beneath the name (C4), and the filter's data attributes + mount.
+    expect(html).toContain('Analytical BC');
+    expect(html).toContain('data-name="ada lovelace"');
+    expect(html).toContain('data-club="analytical bc"');
+    expect(html).toContain('id="entrants-filter-root"');
+    expect(html).toContain('src="/e/assets/entrants-filter.js"');
+    expect(html).toContain('3 entrants');
   });
 });
 

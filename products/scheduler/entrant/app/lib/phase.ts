@@ -188,11 +188,22 @@ export function ctaState(
  * function is total: `[overview, entrants]` is unreachable in practice but
  * still an answer.
  */
-export function visibleTabs(events: readonly unknown[], entrants: readonly unknown[]): Tab[] {
+export function visibleTabs(
+  events: readonly unknown[],
+  entrants: readonly unknown[],
+  publication?: { entrants: boolean },
+): Tab[] {
   const table: readonly [Tab, boolean][] = [
     ['overview', true],
     ['events', events.length > 0],
-    ['entrants', entrants.length > 0],
+    // SP-P7 §4: the entrants tab exists iff the TD PUBLISHED the list —
+    // including published-and-empty, which is a real state ("no confirmed
+    // entries yet"), not a placeholder. Unpublished hides the tab entirely
+    // (rule 4: a tab whose whole content would be "not yet" is a
+    // placeholder in disguise). The parameter is optional only for the
+    // pre-SP-P7 callers in old fixtures; absent falls back to the old
+    // data-driven rule.
+    ['entrants', publication ? publication.entrants : entrants.length > 0],
   ];
   return table.filter(([, visible]) => visible).map(([tab]) => tab);
 }

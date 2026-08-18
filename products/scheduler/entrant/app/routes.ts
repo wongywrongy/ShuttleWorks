@@ -106,6 +106,10 @@ export default [
   // the text lives here — routed, deep-linkable, multi-page-tolerant. A
   // sub-segment of `:slug`, same non-shadowing argument as `enter`.
   route(':slug/regulations', 'routes/regulations.tsx'),
+  // One person's tournament (SP-P7 §3.3), keyed by the opaque person id —
+  // never the name (R-P7c). Discoverability is the API's gate
+  // (`entrants_published`), not this route's.
+  route(':slug/players/:personKey', 'routes/player.tsx'),
   // The enter page again, at the URL a completed sign-in lands on (E3) — the
   // 303 from `POST /e/account/login` is the only thing that matters that
   // lands here, so the document can say the sign-in worked. NOT a capability:

@@ -75,7 +75,7 @@ export async function loader({
     throw err;
   }
 
-  const tabs = visibleTabs(page.events, page.entrants);
+  const tabs = visibleTabs(page.events, page.entrants, page.publication);
   const payload: TournamentLoaderData = {
     page,
     tabs,
@@ -220,8 +220,10 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
   ]
     .filter((part) => part !== '')
     .join(' · ');
+  // The by-event anchors died with the by-event grouping (SP-P7 §3.2): the
+  // list is alphabetical now, so an event's "N entered" links to the tab.
   const entrantsHref = tabs.includes('entrants')
-    ? (code: string) => `${tabHref(slug, 'entrants')}#event-${code}`
+    ? () => tabHref(slug, 'entrants')
     : null;
 
   return (
@@ -246,7 +248,7 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
                 <EventRow
                   key={event.id}
                   event={event}
-                  entrantsHref={entrantsHref === null ? null : entrantsHref(event.code)}
+                  entrantsHref={entrantsHref === null ? null : entrantsHref()}
                 />
               ))}
             </ul>
@@ -255,7 +257,13 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
         {active === 'entrants' ? (
           <>
             <h2 className="sr-only">Entrants</h2>
-            <EntrantsList events={page.events} entrants={page.entrants} />
+            {page.entrants.length > 0 ? (
+              <EntrantsList slug={slug} entrants={page.entrants} />
+            ) : (
+              // Published and empty is a real state, said plainly: the
+              // desk has confirmed nobody yet.
+              <p className="text-muted-foreground">No confirmed entries yet.</p>
+            )}
           </>
         ) : null}
       </main>

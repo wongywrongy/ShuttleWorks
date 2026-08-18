@@ -533,20 +533,12 @@ describe('EventRow', () => {
 
 // ---- EntrantsList ----------------------------------------------------------
 
-describe('EntrantsList', () => {
-  const events = [
-    event({ code: 'MS', discipline: "Men's Singles" }),
-    event({ id: '22222222-2222-4222-8222-222222222222', code: 'XD', discipline: 'Mixed Doubles' }),
-    event({ id: '33333333-3333-4333-8333-333333333333', code: 'WS', discipline: "Women's Singles" }),
-  ];
+describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
   const entrants = [
-    // personKey/club joined the wire row in SP-P7; the component itself
-    // still renders neither (the tab upgrade is a later phase), which the
-    // "names and nothing else" test below keeps honest until it does.
     {
       personKey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       name: 'Tom Barker',
-      club: null,
+      club: 'Riverside BC',
       eventCodes: ['MS', 'XD'],
     },
     {
@@ -555,31 +547,52 @@ describe('EntrantsList', () => {
       club: null,
       eventCodes: ['XD'],
     },
+    {
+      personKey: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      name: 'Tessa Ngo',
+      club: 'Northside SC',
+      eventCodes: ['WS'],
+    },
   ];
 
-  it('groups by event: a two-event player appears under both, one row each', () => {
-    const html = renderToStaticMarkup(h(EntrantsList, { events, entrants }));
-    expect(html.match(/Tom Barker/g)).toHaveLength(2);
-    expect(html.match(/Priya Radhakrishnan/g)).toHaveLength(1);
+  it('one row per person, sorted, under letter headers', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    expect(html.match(/Tom Barker/g)).toHaveLength(1);
+    // P before T; Ngo before Barker? No — sorted by NAME: Priya, Tessa, Tom.
+    expect(html).toMatch(/>P<[\s\S]*Priya[\s\S]*>T<[\s\S]*Tessa Ngo[\s\S]*Tom Barker/);
+    // One T header covers both T names.
+    expect(html.match(/>T</g)).toHaveLength(1);
   });
 
-  it('carries counts per group and the anchor ids EventRow links to', () => {
-    const html = renderToStaticMarkup(h(EntrantsList, { events, entrants }));
-    expect(html).toContain('id="event-MS"');
-    expect(html).toContain('id="event-XD"');
-    expect(html).toMatch(/Men(&#x27;|')s Singles[\s\S]*?1 entered/);
-    expect(html).toMatch(/Mixed Doubles[\s\S]*?2 entered/);
+  it('links each name to their player page by person key, never by name', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    expect(html).toContain(
+      'href="/e/spring-open/players/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"',
+    );
+    expect(html).not.toContain('/players/Tom');
   });
 
-  it('renders no group for an event nobody entered — absent, not empty', () => {
-    const html = renderToStaticMarkup(h(EntrantsList, { events, entrants }));
-    expect(html).not.toContain('id="event-WS"');
-    expect(html).not.toMatch(/Women(&#x27;|')s Singles/);
+  it('renders club beneath the name (C4) and the codes on the row', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    expect(html).toContain('Riverside BC');
+    expect(html).toContain('MS · XD');
+    // A clubless row simply has no club line — absent, not empty.
+    expect(html).not.toContain('null');
   });
 
-  it('renders names and nothing else — no club, no contact (G5b declined)', () => {
-    const html = renderToStaticMarkup(h(EntrantsList, { events, entrants }));
-    expect(html).not.toMatch(/club/i);
+  it('ships the filter substrate: data attributes, mount point, script', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    expect(html).toContain('data-name="tom barker"');
+    expect(html).toContain('data-club="riverside bc"');
+    expect(html).toContain('id="entrants-filter-root"');
+    expect(html).toContain('src="/e/assets/entrants-filter.js"');
+    expect(html).toContain('3 entrants');
+    // The no-matches line ships hidden; only the script reveals it.
+    expect(html).toMatch(/<p[^>]*data-no-matches[^>]*hidden/);
+  });
+
+  it('still carries no contact data — the strict projection, rendered', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
     expect(html).not.toContain('@');
   });
 });
