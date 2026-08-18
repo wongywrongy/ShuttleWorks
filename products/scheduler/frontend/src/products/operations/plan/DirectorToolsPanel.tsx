@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { Clock, Coffee, DoorOpen, X } from '@phosphor-icons/react';
 
 import { Modal } from '../../../components/common/Modal';
-import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
+import { ScheduleDiffView } from './ScheduleDiffView';
 import { useProposals } from '../../../hooks/useProposals';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';

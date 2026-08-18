@@ -12,7 +12,7 @@ import { ElapsedTimer } from '../../../components/common/ElapsedTimer';
 import { formatIsoClock, formatDuration } from '../../../lib/timeFormatters';
 import { buildGroupIndex, getPlayerSchoolAccent } from '../../../lib/schoolAccent';
 import { SchoolDot } from '../../../components/SchoolDot';
-import { ScoreEditor } from './ScoreEditor';
+import { ScoreEditor } from '../../operations/run/ScoreEditor';
 import { StatusPill } from '../../../components/StatusPill';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';

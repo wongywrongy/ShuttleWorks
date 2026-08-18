@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
 import { Select } from '@scheduler/design-system/components';
 import type { DisruptionType } from '../../../api/client';
 import { Modal } from '../../../components/common/Modal';
-import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
+import { ScheduleDiffView } from './ScheduleDiffView';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';
 import { useProposals } from '../../../hooks/useProposals';

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AlertsActivityPanel } from '../AlertsActivityPanel';
-import { AdvisoryBanner } from '../../../../components/status/AdvisoryBanner';
-import { useAlertStore } from '../../../../store/alertStore';
-import { useUiStore } from '../../../../store/uiStore';
-import type { Advisory } from '../../../../api/dto';
+import { AlertsActivityPanel } from '../run/AlertsActivityPanel';
+import { AdvisoryBanner } from '../../../components/status/AdvisoryBanner';
+import { useAlertStore } from '../../../store/alertStore';
+import { useUiStore } from '../../../store/uiStore';
+import type { Advisory } from '../../../api/dto';
 
 function adv(p: Partial<Advisory> & Pick<Advisory, 'id' | 'severity'>): Advisory {
   return {

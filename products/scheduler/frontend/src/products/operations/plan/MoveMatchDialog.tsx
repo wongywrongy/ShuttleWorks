@@ -27,7 +27,7 @@ import { Clock, ArrowRight } from '@phosphor-icons/react';
 
 import { Select } from '@scheduler/design-system/components';
 import { Modal } from '../../../components/common/Modal';
-import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
+import { ScheduleDiffView } from './ScheduleDiffView';
 import { useProposals } from '../../../hooks/useProposals';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';

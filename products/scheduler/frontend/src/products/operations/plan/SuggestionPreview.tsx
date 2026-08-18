@@ -6,7 +6,7 @@
  * Apply button stays visible at the top.
  */
 import type { TournamentConfig } from '../../../api/dto';
-import { ScheduleDiffView } from '../schedule/ScheduleDiffView';
+import { ScheduleDiffView } from './ScheduleDiffView';
 import { formatSlotTime } from '../../../lib/time';
 import { useProposalImpact } from './hooks/useProposalImpact';
 

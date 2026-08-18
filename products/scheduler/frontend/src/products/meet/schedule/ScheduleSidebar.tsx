@@ -20,10 +20,10 @@ import type {
   RosterGroupDTO,
   TournamentConfig,
 } from '../../../api/dto';
-import { SolverProgressLog } from '../schedule/live/SolverProgressLog';
-import { CandidatesPanel } from '../schedule/CandidatesPanel';
+import { SolverProgressLog } from '../../operations/plan/SolverProgressLog';
+import { CandidatesPanel } from '../../operations/plan/CandidatesPanel';
 import { MatchDetailsPanel } from '../control-center/MatchDetailsPanel';
-import { AlertsActivityPanel } from '../control-center/AlertsActivityPanel';
+import { AlertsActivityPanel } from '../../operations/run/AlertsActivityPanel';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import type { TrafficLightResult } from '../../../hooks/useTrafficLights';
