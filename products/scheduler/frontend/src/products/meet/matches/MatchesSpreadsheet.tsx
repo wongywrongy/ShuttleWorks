@@ -27,16 +27,14 @@ import {
   MEET_MATCH_CELL,
   MEET_MATCH_LIST_COLUMNS,
   MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+  MatchStatus,
   parseMatchStatusFilter,
   ScoreLane,
   setsWinner,
-  STATUS_LABEL,
-  STATUS_PILL_TONE,
   type BandedTableGroup,
   type MatchListStatus,
   type SetPair,
 } from '../../../components/control-plane';
-import { StatusPill } from '../../../components/StatusPill';
 import { formatPlayerName } from '../../../lib/names';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
@@ -413,17 +411,14 @@ const MatchRow = memo(function MatchRow({
         data-testid={`match-status-${match.id}`}
         className={`${MEET_MATCH_CELL.status} flex items-center justify-end`}
       >
-        {/* Chip ALWAYS, score beside it (X3). The score used to replace the
-            chip, so this column named a state on some rows and a number on
-            others and a done row was only identifiable by reading it. */}
-        <span className="flex items-center gap-2">
-          <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
-            {STATUS_LABEL[status]}
-          </StatusPill>
-          {laneSets ? (
-            <ScoreLane sets={laneSets} data-testid={`match-score-${match.id}`} />
-          ) : null}
-        </span>
+        {/* X6-D (supersedes X3): a finished row's score IS its status — no
+            DONE label beside it. Text states and lanes share this slot and
+            both right-align, so the column still scans as one column. */}
+        {laneSets ? (
+          <ScoreLane sets={laneSets} data-testid={`match-score-${match.id}`} />
+        ) : (
+          <MatchStatus status={status} />
+        )}
       </span>
       {/* Two-click arm: deleting a match used to take one hover-revealed click,
           with no confirm and no undo (audit F1). */}
