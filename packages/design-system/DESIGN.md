@@ -199,6 +199,17 @@ glance-at-distance operator surfaces — Live day court cards, Plan grid fills,
 the venue TV — keep their high-contrast fills (SP-CONSOLE-2 PLAN-1 rationale);
 X6 governs dense lists and panels only.
 
+**Result side blocks (SP-CONSOLE-3A RES-1).** Score is a per-side fact, so
+the finished panel's Result renders as TWO side blocks (`ResultSides` in
+`control-plane/MatchCard.tsx`, both engines): each block nests its player
+rows beside a rail carrying the side's identity ONCE (Meet school chip /
+Bracket event badge — never repeated per player row) and the side's score
+in a fixed-width tabular slot, vertically centered, that holds a games
+tally ("2") or set scores without layout change. Winner reads by
+**weight** — bolder score and names on the winning block; no dot, no fill
+(the `WinnerDot` stays a list/`MatchCard` cue). A hairline separates the
+blocks; the court · time caption sits below.
+
 ---
 
 ## 5. Typography quick rules

@@ -36,7 +36,7 @@ import type {
 } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { disciplineLabel, sideLabel } from './bracketLabels';
-import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
+import { badgeForEvent, badgesByPlayerId, type BadgeEntry } from './rosterEvents';
 import { EventBadge } from '../../components/control-plane/EventsControl';
 import {
   BracketAvailabilityEventsFields,
@@ -130,6 +130,26 @@ export function BracketMatchDetailPanel({
   // the side sections and leads with where/when it plays (MAT-5).
   const finished = status === 'done';
 
+  // Side-rail identity (RES-1): the event badge once per side — a bracket
+  // entrant's identity is the event it is seeded into (BMAT-3), and the
+  // seed is the side-differentiating half, per participant not per member.
+  const railBadge = (side: string[] | null, slot: PlayUnitDTO['slot_a']) => {
+    if (!event) return null;
+    const pid =
+      side && side.length > 0
+        ? side[0]
+        : slot.participant_id && slot.participant_id !== '__BYE__'
+          ? slot.participant_id
+          : null;
+    if (!pid) return null;
+    const entry = (event.participants ?? []).find(
+      (p) => p.id === pid || (p.members ?? []).includes(pid),
+    );
+    return (
+      <EventBadge code={badgeForEvent(event, data.events)} seed={entry?.seed} />
+    );
+  };
+
   return (
     <DetailPanel
       variant="docked"
@@ -159,6 +179,7 @@ export function BracketMatchDetailPanel({
                 side={pu.side_a}
                 slot={pu.slot_a}
                 emphasis={winner === 'A'}
+                showBadges={false}
                 {...sideProps}
               />
             }
@@ -167,9 +188,12 @@ export function BracketMatchDetailPanel({
                 side={pu.side_b}
                 slot={pu.slot_b}
                 emphasis={winner === 'B'}
+                showBadges={false}
                 {...sideProps}
               />
             }
+            railA={railBadge(pu.side_a, pu.slot_a)}
+            railB={railBadge(pu.side_b, pu.slot_b)}
             sets={validSets}
             winner={winner}
             reason={reason}
@@ -290,6 +314,10 @@ interface SidePlayersProps {
   onCommitEvent: CommitEventFn | null;
   /** Winner side (finished Result block) — names read bold. */
   emphasis?: boolean;
+  /** False inside the Result block (RES-1): the event badge renders ONCE
+   *  on the side rail, so collapsed member cards drop theirs — a member's
+   *  own entries stay inside the expanded row's Events block. */
+  showBadges?: boolean;
 }
 
 /* =========================================================================
@@ -311,6 +339,7 @@ function SidePlayers({
   onUpdate,
   onCommitEvent,
   emphasis = false,
+  showBadges = true,
 }: SidePlayersProps) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) =>
@@ -411,9 +440,11 @@ function SidePlayers({
                     a name and its identity, so the two panes read as two
                     products (BMAT-3). A bracket entrant's identity is the
                     event it is seeded into, not a club. */}
-                {(badgesById.get(id) ?? []).slice(0, 2).map((b) => (
-                  <EventBadge key={b.code} code={b.code} seed={b.seed} />
-                ))}
+                {showBadges
+                  ? (badgesById.get(id) ?? []).slice(0, 2).map((b) => (
+                      <EventBadge key={b.code} code={b.code} seed={b.seed} />
+                    ))
+                  : null}
               </button>
               {open ? (
                 <div className="flex flex-col gap-3 border-t border-border/60 px-2 py-2">

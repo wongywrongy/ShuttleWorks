@@ -32,7 +32,12 @@ import { Row } from '../../../platform/settings/SettingsControls';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import { slotToTime } from '../../../lib/time';
-import { buildGroupIndex, getPlayerSchoolAccent } from '../../../lib/schoolAccent';
+import { SchoolChip } from '../../../components/SchoolChip';
+import {
+  buildGroupIndex,
+  getPlayerSchoolAccent,
+  type SchoolAccent,
+} from '../../../lib/schoolAccent';
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { EVENT_LABEL, isDoublesRank } from '../roster/positionGrid/helpers';
 import { MatchSideSection, PlayerCard } from './MatchSideSection';
@@ -174,6 +179,20 @@ export function MatchDetailPanel({
                 groupsById={groupsById}
               />
             }
+            railA={
+              <SideSchoolChips
+                ids={match.sideA ?? []}
+                players={players}
+                groupsById={groupsById}
+              />
+            }
+            railB={
+              <SideSchoolChips
+                ids={match.sideB ?? []}
+                players={players}
+                groupsById={groupsById}
+              />
+            }
             sets={laneSets ?? []}
             winner={winner}
             meta={meta}
@@ -207,9 +226,46 @@ export function MatchDetailPanel({
 }
 
 /* =========================================================================
+ * SideSchoolChips — the side rail's identity (RES-1): the side's school
+ * chip ONCE, not per player row. A dual-meet side is one school; a custom
+ * match that mixes schools renders each distinct chip once.
+ * ========================================================================= */
+function SideSchoolChips({
+  ids,
+  players,
+  groupsById,
+}: {
+  ids: string[];
+  players: PlayerDTO[];
+  groupsById: Map<string, RosterGroupDTO>;
+}) {
+  const accents: SchoolAccent[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const accent = getPlayerSchoolAccent(
+      players.find((p) => p.id === id) ?? null,
+      groupsById,
+    );
+    if (accent.name && !seen.has(accent.name)) {
+      seen.add(accent.name);
+      accents.push(accent);
+    }
+  }
+  if (accents.length === 0) return null;
+  return (
+    <span className="flex items-center gap-1">
+      {accents.map((accent) => (
+        <SchoolChip key={accent.name} accent={accent} />
+      ))}
+    </span>
+  );
+}
+
+/* =========================================================================
  * FinishedSideRows — one side's players inside the Result block: the same
  * expandable PlayerCard the side editors use, minus removal (a played
- * match's roster is a record). `emphasis` bolds the winning side's names.
+ * match's roster is a record). `emphasis` bolds the winning side's names;
+ * the school chip is suppressed per row — the side rail carries it once.
  * ========================================================================= */
 function FinishedSideRows({
   side,
@@ -254,6 +310,7 @@ function FinishedSideRows({
             open={openIds.has(id)}
             onToggle={() => toggle(id)}
             emphasis={emphasis}
+            showChip={false}
           />
         );
       })}

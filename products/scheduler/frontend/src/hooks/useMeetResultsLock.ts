@@ -25,14 +25,16 @@ import type { MatchStateDTO } from '../api/dto';
 import { useMatchStateStore } from '../store/matchStateStore';
 
 /** Statuses that mean play has begun and results are at stake. `called` is
- *  deliberately absent — nothing is recorded yet at that point. */
-const IN_PLAY: ReadonlySet<MatchStateDTO['status']> = new Set([
+ *  deliberately absent — nothing is recorded yet at that point. Exported
+ *  as the ONE definition of "results at stake": the per-event assignment
+ *  guard (`useEventResultsGuard`) keys on the same set. */
+export const RESULTS_AT_STAKE: ReadonlySet<MatchStateDTO['status']> = new Set([
   'started',
   'finished',
 ]);
 
 export function useMeetResultsLock(): boolean {
   return useMatchStateStore((s) =>
-    Object.values(s.matchStates).some((m) => IN_PLAY.has(m.status)),
+    Object.values(s.matchStates).some((m) => RESULTS_AT_STAKE.has(m.status)),
   );
 }

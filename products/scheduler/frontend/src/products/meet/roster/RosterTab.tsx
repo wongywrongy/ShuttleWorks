@@ -52,10 +52,17 @@ import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { useCanEdit } from '../../../hooks/useCanEdit';
+import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
+import { useTournamentId } from '../../../hooks/useTournamentId';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 
 export function RosterTab() {
+  const tid = useTournamentId();
+  // Feeds the picker's results guard (PICK-4): the lightweight loader for
+  // "renders live state without the full useLiveTracking machinery" —
+  // without it the matchState store is empty and the guard fails open.
+  useMatchStateSync(tid);
   const groups = useTournamentStore((s) => s.groups);
   const players = useTournamentStore((s) => s.players);
   const config = useTournamentStore((s) => s.config);

@@ -154,52 +154,53 @@ function CardSide({
  * the right-aligned lane; the optional `meta` strip renders beneath a
  * hairline ("QF · MD · Court 4 · 10:30" — the caller composes the string).
  */
-/** One side of a ResultSides block: the caller's stack of interactive
- *  player rows, top-aligned against the winner-dot slot and this side's
- *  set-score columns so an expanded row grows DOWN without dragging the
- *  lane with it. */
+/** One side of a ResultSides block (RES-1): the caller's stack of
+ *  interactive player rows beside the side RAIL — the side's identity
+ *  chip (once per side, never per player row), the contingency badge,
+ *  and the side's score in the fixed-width tabular slot. The rail is
+ *  vertically centered against the block, and the slot holds a games
+ *  tally ("2") or set scores ("21 21") without layout change: both are
+ *  `SetPair[]`, one `SET_COL` column per pair. Winner reads by WEIGHT
+ *  (bolder score here, bolder names in the caller's rows) — no dot, no
+ *  fill; `WinnerDot` stays a list/card cue (MAT-3/BMAT-2 stand). */
 function ResultSideBlock({
   side,
   rows,
+  rail,
   won,
   sets,
   reason,
 }: {
   side: 'A' | 'B';
   rows: ReactNode;
+  /** Side-level identity — Meet school chip, Bracket event badge. */
+  rail?: ReactNode;
   won: boolean;
   sets: SetPair[];
   reason?: MatchReason | null;
 }) {
   return (
-    <div className="flex min-w-0 items-start gap-1.5" data-side={side}>
+    <div className="flex min-w-0 items-center gap-1.5 py-1.5" data-side={side}>
       <div className="min-w-0 flex-1">{rows}</div>
-      <span className="mt-2 w-3 shrink-0 text-center">
-        {won ? <WinnerDot /> : null}
-      </span>
+      {rail ? <span className="shrink-0">{rail}</span> : null}
       {reason ? (
-        <span className="mt-2 shrink-0 rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
           {REASON_BADGE[reason]}
         </span>
       ) : null}
       {sets.length > 0 ? (
-        <span className="mt-1.5 flex shrink-0 items-center text-2sm tabular-nums">
-          {sets.map((s, i) => {
-            const mine = side === 'A' ? s.sideA : s.sideB;
-            const theirs = side === 'A' ? s.sideB : s.sideA;
-            return (
-              <span
-                key={i}
-                className={[
-                  SET_COL,
-                  'inline-block',
-                  mine > theirs ? 'font-semibold text-foreground' : 'text-muted-foreground',
-                ].join(' ')}
-              >
-                {mine}
-              </span>
-            );
-          })}
+        <span
+          data-testid={`result-score-${side}`}
+          className={[
+            'flex shrink-0 items-center text-2sm tabular-nums',
+            won ? 'font-semibold text-foreground' : 'text-muted-foreground',
+          ].join(' ')}
+        >
+          {sets.map((s, i) => (
+            <span key={i} className={`${SET_COL} inline-block`}>
+              {side === 'A' ? s.sideA : s.sideB}
+            </span>
+          ))}
         </span>
       ) : null}
     </div>
@@ -208,15 +209,19 @@ function ResultSideBlock({
 
 /**
  * ResultSides — the FINISHED match's sole roster surface in the detail
- * panels (INS-N1): the same winner-dot + right-aligned set-column anatomy
- * as MatchCard, but each side hosts the caller's INTERACTIVE player rows
- * (per-player expand, identity chips) instead of a plain name stack —
- * finished matches no longer render SIDE A/SIDE B sections beside a
- * duplicate Result card. Winner reads by weight inside the caller's rows.
+ * panels (INS-N1), rendered as TWO SIDE BLOCKS (RES-1): score is a
+ * per-side fact, so each block owns a rail (identity chip once per side +
+ * the side's score, vertically centered) with the caller's INTERACTIVE
+ * player rows (per-player expand) nested inside. A hairline separates the
+ * blocks so they read as two units; the court · time caption stays below.
+ * Winner reads by weight — bolder score here, bolder names via the
+ * caller's rows — never a dot or a fill.
  */
 export function ResultSides({
   sideA,
   sideB,
+  railA,
+  railB,
   sets = [],
   winner = null,
   reasonSide = null,
@@ -226,6 +231,11 @@ export function ResultSides({
 }: {
   sideA: ReactNode;
   sideB: ReactNode;
+  /** Per-side identity for the rail — Meet school chip, Bracket event
+   *  badge (BMAT-3 anatomy). Per-player identity stays inside the
+   *  caller's EXPANDED rows, not repeated on every collapsed row. */
+  railA?: ReactNode;
+  railB?: ReactNode;
   sets?: SetPair[];
   winner?: 'A' | 'B' | null;
   reasonSide?: 'A' | 'B' | null;
@@ -236,24 +246,26 @@ export function ResultSides({
   const won = winner ?? setsWinner(sets);
   return (
     <div data-testid={testId} className="min-w-0">
-      <ResultSideBlock
-        side="A"
-        rows={sideA}
-        won={won === 'A'}
-        sets={sets}
-        reason={reasonSide === 'A' ? reason : null}
-      />
-      <div className="mt-1.5">
+      <div className="flex flex-col divide-y divide-border/60">
+        <ResultSideBlock
+          side="A"
+          rows={sideA}
+          rail={railA}
+          won={won === 'A'}
+          sets={sets}
+          reason={reasonSide === 'A' ? reason : null}
+        />
         <ResultSideBlock
           side="B"
           rows={sideB}
+          rail={railB}
           won={won === 'B'}
           sets={sets}
           reason={reasonSide === 'B' ? reason : null}
         />
       </div>
       {meta ? (
-        <div className="mt-2 border-t border-border pt-1 text-2xs text-muted-foreground">
+        <div className="mt-0.5 border-t border-border pt-1 text-2xs text-muted-foreground">
           {meta}
         </div>
       ) : null}

@@ -159,6 +159,7 @@ export function PlayerCard({
   onToggle,
   onRemove,
   emphasis = false,
+  showChip = true,
 }: {
   id: string;
   side: string;
@@ -169,6 +170,10 @@ export function PlayerCard({
   /** Absent = the card is read-only identity (finished match). */
   onRemove?: () => void;
   emphasis?: boolean;
+  /** False inside the Result block's side blocks (RES-1): the school chip
+   *  renders ONCE on the side rail, so the collapsed rows drop theirs and
+   *  the expanded body carries the player's identity instead. */
+  showChip?: boolean;
 }) {
   if (!player) {
     // Stale reference (player deleted from the roster) — surface it instead
@@ -215,7 +220,7 @@ export function PlayerCard({
           </span>
           {/* Short-code chip, not the full school name (G6/M2.6) — the
               full name stays one hover away in the chip's tooltip. */}
-          <SchoolChip accent={accent} />
+          {showChip ? <SchoolChip accent={accent} /> : null}
         </button>
         {onRemove ? (
           <ConfirmDeleteButton
@@ -228,6 +233,14 @@ export function PlayerCard({
       </div>
       {open ? (
         <div className="border-t border-border/60">
+          {!showChip && accent.name ? (
+            <DetailPanel.Section eyebrow="Identity">
+              <span className="flex items-center gap-1.5 text-xs text-foreground">
+                <SchoolChip accent={accent} />
+                {accent.name}
+              </span>
+            </DetailPanel.Section>
+          ) : null}
           <DetailPanel.Section eyebrow="Availability">
             <PlayerAvailabilityField player={player} />
           </DetailPanel.Section>
