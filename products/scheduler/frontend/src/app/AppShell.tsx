@@ -268,7 +268,7 @@ export function AppShell() {
               <WorkspaceShellSurface segment={activeTab} modules={modules} />
             </div>
           ) : pane.kind === 'outlet' ? (
-            <ModuleOutlet bothEnginesEnabled={bothEnginesEnabled} />
+            <ModuleOutlet engines={{ meet: meetEnabled, bracket: bracketEnabled }} />
           ) : (
             <ModuleUnavailablePanel
               label={pane.label}

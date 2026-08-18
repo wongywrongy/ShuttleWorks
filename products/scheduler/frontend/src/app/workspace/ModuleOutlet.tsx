@@ -31,26 +31,32 @@ const EntriesProduct = lazy(() =>
 );
 
 interface ModuleOutletProps {
-  /** True only when BOTH Meet and Bracket are enabled (resolved from the
-   *  real module catalog in `AppShell`). Drives the unified Operations
-   *  surface; defaults to false so a single-engine workspace — and any
-   *  caller without enablement state — keeps today's engine-specific
-   *  Operations views. */
-  bothEnginesEnabled?: boolean;
+  /** Which engines this workspace runs (resolved from the real module
+   *  catalog in `AppShell`). Every Operations segment routes to the unified
+   *  `OperationsProduct` since the SP-CONSOLE-4 B3 flip — this only decides
+   *  which engine's actions it renders. Defaults to both. */
+  engines?: { meet: boolean; bracket: boolean };
 }
 
-/** Mounts the module that owns the current active tab. When both engines
- *  are enabled and the active tab is an Operations segment, the unified
- *  cross-engine Operations surface takes over (one Courts + one Live view
- *  with mixed-source rows); otherwise the owning engine renders as before. */
-export function ModuleOutlet({ bothEnginesEnabled = false }: ModuleOutletProps) {
+/** The `VITE_LEGACY_OPS` escape hatch (SP-CONSOLE-4 B3): build with
+ *  `VITE_LEGACY_OPS=1` to restore the pre-flip routing, where a
+ *  single-engine workspace's Operations segments render the engine's own
+ *  legacy pages. Build-time (the `VITE_ERROR_HARNESS` precedent), default
+ *  off, deleted with the legacy pages at B4. */
+const legacyOps = () => import.meta.env.VITE_LEGACY_OPS === '1';
+
+/** Mounts the module that owns the current active tab. Operations segments
+ *  render the unified Operations surface (single- or cross-engine, per
+ *  `engines`); every other tab renders its owning module's product. */
+export function ModuleOutlet({ engines }: ModuleOutletProps) {
   const activeTab = useUiStore((s) => s.activeTab);
   const kind = useUiStore((s) => s.activeTournamentKind);
   const module = moduleForTab(activeTab, kind);
 
+  const bothEngines = !!engines?.meet && !!engines?.bracket;
   const child =
-    bothEnginesEnabled && isOperationsSegment(activeTab) ? (
-      <OperationsProduct />
+    isOperationsSegment(activeTab) && (bothEngines || !legacyOps()) ? (
+      <OperationsProduct engines={engines} />
     ) : module === 'bracket' ? (
       <BracketProduct />
     ) : module === 'display' ? (
