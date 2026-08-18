@@ -107,14 +107,14 @@ export function EventBadge({ code, seed }: { code: string; seed?: number | null 
   return (
     <span
       className="rounded-sm border border-accent/30 bg-accent/10 px-1 py-px text-3xs font-semibold text-accent sw-num"
-      // The parenthesised number was unexplained on every surface it appeared
-      // on — a reader could as easily have taken it for an entry count as for
-      // a seed (BRST-2). Nothing else on those surfaces defines it.
+      // `[n]` is the badminton draw-sheet seed convention (BRST-N1) — the
+      // old `(n)` parenthetical read as a count on owner review, and the
+      // BRST-2 tooltip alone wasn't enough to correct it.
       title={seed != null ? `${code} · seeded ${seed}` : code}
     >
       {code}
       {seed != null ? (
-        <span className="font-normal opacity-80"> ({seed})</span>
+        <span className="font-normal opacity-80"> [{seed}]</span>
       ) : null}
     </span>
   );

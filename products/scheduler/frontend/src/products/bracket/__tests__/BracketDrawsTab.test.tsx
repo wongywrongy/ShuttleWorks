@@ -181,18 +181,24 @@ describe('BracketDrawsTab — draw rows', () => {
     });
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
-    // Sentence-case in the DOM, uppercased by StatusCount's CSS — the strip
-    // reads DONE / LIVE / READY / PENDING on screen (X1: no second literal).
-    expect(within(row).getByText('Done').parentElement).toHaveTextContent(/Done\s*1/);
-    expect(within(row).getByText('Live').parentElement).toHaveTextContent(/Live\s*1/);
-    expect(within(row).getByText('Ready').parentElement).toHaveTextContent(/Ready\s*1/);
-    expect(within(row).getByText('Pending').parentElement).toHaveTextContent(/Pending\s*1/);
+    // DRW-N1: fraction + single-line segmented bar, never chips. The
+    // fraction is done/total; the exact breakdown lives on the tooltip.
+    const progress = within(row).getByTestId('draw-progress');
+    expect(progress).toHaveTextContent('1/4');
+    expect(progress).toHaveAttribute(
+      'title',
+      '1 done · 1 live · 1 ready · 1 pending',
+    );
+    // Painted segments in worked-through order: done, live, ready — the
+    // unpainted track is pending.
+    const bar = progress.querySelector('.rounded-full');
+    expect(bar?.children).toHaveLength(3);
   });
 
   it('shows a placeholder instead of the strip while the draw has no matches', () => {
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
-    expect(within(row).queryByText('Done')).not.toBeInTheDocument();
+    expect(within(row).queryByTestId('draw-progress')).not.toBeInTheDocument();
   });
 
   // D4 — PROGRESS was the row's flex-1 grower while Format was fixed-width,
@@ -209,7 +215,7 @@ describe('BracketDrawsTab — draw rows', () => {
     });
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
-    const cell = within(row).getByText('Done').closest('[role="cell"]');
+    const cell = within(row).getByTestId('draw-progress').closest('[role="cell"]');
     // w-48, not w-52: the row's seven columns overran their ~950px budget and
     // the flex-1 Format column absorbed it by collapsing to zero. Progress
     // gave back 16px as part of re-budgeting the row. The PROPERTY under test
@@ -258,13 +264,13 @@ describe('BracketDrawsTab — status + generate', () => {
     expect(screen.getByRole('button', { name: /Re-generate/i })).toBeInTheDocument();
   });
 
-  it('a started draw offers no generate-family action (the STARTED pill carries the state)', () => {
-    // Intentional change (2026-07-15 polish audit): the raw "— (locked)"
-    // action-cell text is gone — status lives in the pill, and the
-    // Configuration page's hard-lock ribbon explains the why.
+  it('a started draw offers no generate-family action, and its status cell is silent (DRW-N2)', () => {
+    // The STARTED pill rendered identically on every playing row — X6's
+    // never-varies clause. The Progress bar's live/done segments carry the
+    // state now; Draft/Generated still label their rows as text.
     mockBracketData = makeBracketData({ status: 'started' });
     renderDraws();
-    expect(screen.getByText(/started/i)).toBeInTheDocument();
+    expect(screen.queryByText(/started/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /Generate|Re-generate/i })).toBeNull();
     expect(screen.queryByText(/locked/i)).toBeNull();
   });

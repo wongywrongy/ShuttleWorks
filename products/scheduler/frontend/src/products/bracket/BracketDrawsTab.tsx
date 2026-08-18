@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, StatusBar, StatusPill } from '@scheduler/design-system';
+import { Button } from '@scheduler/design-system';
 import { useBracket } from '../../hooks/useBracket';
 import { useBracketApi } from '../../api/bracketClient';
 import { useTournamentId } from '../../hooks/useTournamentId';
@@ -30,7 +30,6 @@ import {
   EmptyState,
   colClass,
   dockMinContentWidth,
-  statusTallyItems,
   type BandedListColumn,
   type BandedTableGroup,
 } from '../../components/control-plane';
@@ -68,22 +67,20 @@ interface DrawRow {
   isSwiss: boolean;
   swissRounds?: number;
   roundComplete: boolean;
-  completed: boolean;
 }
 
 /** Column set for the draws table. The trailing unlabeled column hosts the
  *  per-row action buttons (Generate / Configure / Next round / Open). */
 // Fixed cells are `shrink-0` so a docked detail pane can never crush them
 // into overlapping their neighbors. Nothing here ellipsises: Format wraps
-// (the row grows) and yields entirely at priority 3; Progress is four
-// counters, not text.
+// (the row grows) and yields entirely at priority 3; Progress is a
+// fraction + segmented bar (DRW-N1) that cannot wrap by construction —
+// the four-chip tally it replaced line-wrapped at three digits.
 //
 // Progress is FIXED-WIDTH and Format is the grower (defect D4). The two were
-// the other way round, which put the four DONE/LIVE/READY/PEND counters —
-// ~184px of content that cannot reflow — in whatever the row had left over:
-// a 104px sliver colliding with the STATUS chip at 1280px, and a 904px
-// expanse at full width. `flex-wrap` is the backstop for three-digit tallies:
-// the row grows a line rather than clipping a number.
+// the other way round, which put the progress content — which cannot
+// reflow — in whatever the row had left over: a 104px sliver colliding
+// with the STATUS chip at 1280px, and a 904px expanse at full width.
 const DRAW_COLUMNS: BandedListColumn[] = [
   // THE ROW'S WIDTH BUDGET. At 1280 the content box is ~950px, and these seven
   // columns have to live inside it. Sized from what each actually holds, after
@@ -174,11 +171,6 @@ export function BracketDrawsTab() {
           isSwiss,
           swissRounds,
           roundComplete,
-          completed:
-            !!counts &&
-            counts.done > 0 &&
-            roundComplete &&
-            (!isSwiss || (swissRounds !== undefined && ev.rounds.length >= swissRounds)),
         };
       }),
     [events, countsByEvent],
@@ -364,13 +356,13 @@ export function BracketDrawsTab() {
                   </span>
                   <span role="cell" className={colClass(DRAW_COLUMNS[4])}>
                     {row.counts ? (
-                      <StatusBar className="flex-wrap" items={statusTallyItems(row.counts)} />
+                      <DrawProgressCell counts={row.counts} />
                     ) : (
                       <span className="text-xs text-muted-foreground">–</span>
                     )}
                   </span>
                   <span role="cell" className={`${colClass(DRAW_COLUMNS[5])} flex justify-end`}>
-                    <StatusPillFor status={row.status} completed={row.completed} />
+                    <DrawStatusCell status={row.status} />
                   </span>
                   <span
                     role="cell"
@@ -526,33 +518,67 @@ function drawCountsByEvent(data: BracketTournamentDTO): Map<string, DrawCounts> 
   return byEvent;
 }
 
-function StatusPillFor({
-  status,
-  completed = false,
-}: {
-  status: BracketEventStatus;
-  completed?: boolean;
-}) {
+/**
+ * DRW-N1: the Progress cell — `done/total` in tabular figures plus a thin
+ * single-line segmented bar (done · live · ready painted in that order;
+ * the unpainted track is pending). Never wraps by construction — the old
+ * four-chip tally line-wrapped at three digits. Exact breakdown lives on
+ * the title tooltip.
+ */
+function DrawProgressCell({ counts }: { counts: DrawCounts }) {
+  const total = counts.done + counts.live + counts.ready + counts.pending;
+  if (total === 0) return <span className="text-xs text-muted-foreground">–</span>;
+  const segments = [
+    { key: 'done', count: counts.done, cls: 'bg-status-success-fg' },
+    { key: 'live', count: counts.live, cls: 'bg-status-live-solid' },
+    { key: 'ready', count: counts.ready, cls: 'bg-status-started' },
+  ];
+  return (
+    <span
+      className="flex min-w-0 items-center gap-2"
+      title={`${counts.done} done · ${counts.live} live · ${counts.ready} ready · ${counts.pending} pending`}
+      data-testid="draw-progress"
+    >
+      <span className="shrink-0 text-xs text-foreground sw-num">
+        {counts.done}/{total}
+      </span>
+      <span className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-sunken">
+        {segments
+          .filter((s) => s.count > 0)
+          .map((s) => (
+            <span
+              key={s.key}
+              className={s.cls}
+              style={{ width: `${(s.count / total) * 100}%` }}
+            />
+          ))}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * DRW-N2 per the X6 ladder: Draft and Generated are pre-live default
+ * states → text, two weights. STARTED is silent — the Progress bar's
+ * live/done segments already say it — and so is the derived Completed:
+ * a full bar with an n/n fraction IS the status (X6-D logic). The
+ * column stays because the state set is genuinely distinct (Phase 0
+ * verified draft | generated | started + derived completion).
+ */
+function DrawStatusCell({ status }: { status: BracketEventStatus }) {
   if (status === 'draft') {
     return (
-      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
+      <span className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
         ○ Draft
       </span>
     );
   }
   if (status === 'generated') {
-    return <StatusPill tone="amber" dot>Generated</StatusPill>;
+    return (
+      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>Generated</span>
+    );
   }
-  // A fully-resolved draw is DONE — the backend event status stays 'started'
-  // (it has no terminal value), so completion is derived from the counters:
-  // every unit resolved, nothing live/ready/pending. Without this the card
-  // pulsed "Started" forever on a finished bracket.
-  if (completed) {
-    return <StatusPill tone="done">Completed</StatusPill>;
-  }
-  // Started = live (matches are being played) — the pulsing dot + own-hue
-  // glow is the handoff pill's live-signal treatment (sw-pulse).
-  return <StatusPill tone="green" dot pulse>Started</StatusPill>;
+  return null;
 }
 
 function ActionCell({

@@ -22,7 +22,6 @@ import {
   BandedTable,
   DetailDock,
   DetailPanel,
-  EventBadge,
   NAME_COL_MIN,
   OverflowMenu,
   colClass,
@@ -44,9 +43,11 @@ import { exportBracketRosterXlsx } from './exports/xlsxExports';
 /** Column set for the roster table — canonical px-5 banded rhythm. */
 const ROSTER_COLUMNS: BandedTableColumn[] = [
   // Player carries a person name, so it floors at NAME_COL_MIN rather than
-  // collapsing to zero. Events is badges, which wrap on their own.
+  // collapsing to zero. Events is text codes, which wrap on their own.
   { label: 'Player', className: `${NAME_COL_MIN} flex-1` },
-  { label: 'Events', className: 'min-w-0 flex-1' },
+  // The header carries the seed legend (BRST-N1): `[n]` is the badminton
+  // draw-sheet convention, and a tooltip alone already failed one reader.
+  { label: 'Events · [n] seed', className: 'min-w-0 flex-1' },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
@@ -230,9 +231,26 @@ function BracketRosterTabCore({
                 >
                   {p.name}
                 </span>
-                <span role="cell" className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                <span
+                  role="cell"
+                  className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
+                >
+                  {/* Text codes, not chips (BRST-N2, R-E Option A): a chip
+                      per entry on every row was decoration — the codes ARE
+                      the data. Seed follows its code as `[n]` (BRST-N1);
+                      the vertical "who's in X?" scan lives on the draw's
+                      own participant list, one click away on Draws. */}
                   {(badgesById.get(p.id) ?? []).map((b) => (
-                    <EventBadge key={b.code} code={b.code} seed={b.seed} />
+                    <span
+                      key={b.code}
+                      className="whitespace-nowrap font-medium text-foreground sw-num"
+                      title={b.seed != null ? `${b.code} · seeded ${b.seed}` : b.code}
+                    >
+                      {b.code}
+                      {b.seed != null ? (
+                        <span className="font-normal text-muted-foreground"> [{b.seed}]</span>
+                      ) : null}
+                    </span>
                   ))}
                   {/* Min rest lost its column (BRST-1). It held the session
                       default for every player — a column of identical 1s,
@@ -241,7 +259,7 @@ function BracketRosterTabCore({
                       DIFFERS from the default is worth a mark here. */}
                   {p.restSlots != null && p.restSlots !== defaultRestSlots ? (
                     <span
-                      className="rounded-sm border border-border px-1 py-px text-3xs text-muted-foreground sw-num"
+                      className="whitespace-nowrap text-3xs text-muted-foreground sw-num"
                       title={`Minimum rest between this player's matches: ${p.restSlots} slot${p.restSlots === 1 ? '' : 's'} (default is ${defaultRestSlots ?? 1})`}
                     >
                       rest {p.restSlots}
