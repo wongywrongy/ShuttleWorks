@@ -26,7 +26,7 @@
 import { Button } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { StatusPill } from '../../components/StatusPill';
-import { lifecycleBadge } from '../../platform/domain/lifecycle';
+import { lifecycleBadge, lifecycleChip } from '../../platform/domain/lifecycle';
 import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
 import { attentionReasons, moduleCountsOf, readinessOf } from './hubSignals';
 import { rowActionFor } from './nextAction';
@@ -112,11 +112,16 @@ export function WorkspaceInspector({
   // and would mislabel a ready event as "Needs setup").
   const ready = !!readiness && readiness.ready === readiness.total;
   const pillReady = ready && todos.length === 0;
-  const pill: { text: string; tone: 'green' | 'amber' | 'idle' | 'done' } =
-    lifecycleBadge(tournament.signals?.phase, tournament.status) ??
-    (pillReady
-      ? { text: 'Ready', tone: 'green' }
-      : { text: 'Needs setup', tone: 'amber' });
+  // LIVE is suppressed (R-D, Option A) — suppressed, not fallen through
+  // to the Ready/Needs-setup fallback, which only applies when the
+  // lifecycle itself says nothing.
+  const lifecycle = lifecycleBadge(tournament.signals?.phase, tournament.status);
+  const pill: { text: string; tone: 'green' | 'amber' | 'idle' | 'done' } | null =
+    lifecycle
+      ? lifecycleChip(tournament.signals?.phase, tournament.status)
+      : pillReady
+        ? { text: 'Ready', tone: 'green' }
+        : { text: 'Needs setup', tone: 'amber' };
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
   return (
@@ -152,7 +157,7 @@ export function WorkspaceInspector({
       <DetailPanel.Section
         eyebrow="This workspace"
         right={
-          tournament.signals ? (
+          tournament.signals && pill ? (
             <StatusPill tone={pill.tone} dot className="shrink-0">
               {pill.text}
             </StatusPill>
