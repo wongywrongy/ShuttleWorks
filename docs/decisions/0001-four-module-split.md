@@ -10,8 +10,8 @@ descriptor, and `entriesCommitted` is a fourth named `SeamEdge`. The two-tier sp
 enableable-versus-always-on distinction, and the test-enforced descriptor layer all survived the
 addition without change — which is the outcome this record was betting on. Entries adds one wrinkle
 the original set did not have: it is Tier-1 but **cloud-only** (`CLOUD_ONLY_MODULES`), so
-"user-enableable" is now conditioned on deployment mode. See [Entries](/modules/entries) and
-[Progress reports](/progress/2026-08-public-platform).
+"user-enableable" is now conditioned on deployment mode. See [Entries](/modules/entries) and the program ledger
+`docs/programs/ENTRIES_PROGRESS.md` (repo working record, outside this site).
 :::
 
 ## Context

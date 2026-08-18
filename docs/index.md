@@ -48,7 +48,7 @@ features:
 | Know why a choice was made | [Decisions (ADRs)](/decisions/) |
 | Look up a term | [Glossary](/glossary) |
 | See a day play out | [Operational scenarios](/architecture/operational-scenarios) |
-| See what has been built, and when | [Progress reports](/progress/) |
+| See what has been built, and when | Program ledgers in `docs/programs/` (repo working records, outside this site) |
 
 ::: tip This site is curated, not exhaustive
 The full design record — per-slice specs, dated change logs, audits, and the historical
