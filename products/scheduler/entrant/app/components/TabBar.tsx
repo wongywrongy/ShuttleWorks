@@ -14,6 +14,9 @@ const TAB_LABELS: Readonly<Record<Tab, string>> = Object.freeze({
   overview: 'Overview',
   events: 'Events',
   entrants: 'Entrants',
+  draws: 'Draws',
+  seeds: 'Seeded entries',
+  winners: 'Winners',
 });
 
 export function TabBar({
@@ -27,10 +30,15 @@ export function TabBar({
 }) {
   if (tabs.length < 2) return null;
   return (
-    <nav aria-label="Tournament sections" className="-mb-px">
+    // `overflow-x-auto`: six tabs at 380px scroll INSIDE the strip (R11 —
+    // the page itself never scrolls sideways). Scroll, not truncation:
+    // every label stays whole and reachable.
+    <nav aria-label="Tournament sections" className="-mb-px overflow-x-auto">
       <ul className="flex gap-6 text-sm">
         {tabs.map((tab) => (
-          <li key={tab}>
+          // `shrink-0`: a two-word label ("Seeded entries") must scroll as
+          // one unit, not fold to fit.
+          <li key={tab} className="shrink-0">
             <a
               href={hrefFor(tab)}
               aria-current={tab === active ? 'page' : undefined}

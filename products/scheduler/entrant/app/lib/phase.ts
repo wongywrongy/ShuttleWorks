@@ -21,7 +21,7 @@
  */
 import type { FormEcho } from './echo';
 
-export type Tab = 'overview' | 'events' | 'entrants';
+export type Tab = 'overview' | 'events' | 'entrants' | 'draws' | 'seeds' | 'winners';
 
 export type ChipState =
   | { kind: 'entriesOpen'; closesInDays: number | null }
@@ -191,19 +191,23 @@ export function ctaState(
 export function visibleTabs(
   events: readonly unknown[],
   entrants: readonly unknown[],
-  publication?: { entrants: boolean },
+  publication?: { entrants: boolean; draws: boolean; results: boolean },
 ): Tab[] {
   const table: readonly [Tab, boolean][] = [
     ['overview', true],
     ['events', events.length > 0],
-    // SP-P7 §4: the entrants tab exists iff the TD PUBLISHED the list —
+    // SP-P7 §4: each public tab exists iff the TD PUBLISHED its data —
     // including published-and-empty, which is a real state ("no confirmed
     // entries yet"), not a placeholder. Unpublished hides the tab entirely
     // (rule 4: a tab whose whole content would be "not yet" is a
-    // placeholder in disguise). The parameter is optional only for the
-    // pre-SP-P7 callers in old fixtures; absent falls back to the old
-    // data-driven rule.
+    // placeholder in disguise). Seeds ride the DRAWS flag (§3.5: seeds are
+    // draw facts); winners ride RESULTS. The parameter is optional only
+    // for the pre-SP-P7 callers in old fixtures; absent falls back to the
+    // old data-driven entrants rule with no result tabs at all.
     ['entrants', publication ? publication.entrants : entrants.length > 0],
+    ['draws', publication?.draws ?? false],
+    ['seeds', publication?.draws ?? false],
+    ['winners', publication?.results ?? false],
   ];
   return table.filter(([, visible]) => visible).map(([tab]) => tab);
 }

@@ -203,8 +203,45 @@ describe('visibleTabs (a tab exists only when its data does)', () => {
     [2, 0, ['overview', 'events']],
     [0, 3, ['overview', 'entrants']],
     [2, 3, ['overview', 'events', 'entrants']],
-  ])('%i events, %i entrants → %j', (events, entrants, expected) => {
+  ])('%i events, %i entrants → %j (no publication arg: legacy rule)', (events, entrants, expected) => {
     expect(visibleTabs(Array(events).fill({}), Array(entrants).fill({}))).toEqual(expected);
+  });
+
+  // SP-P7 §4: with a publication block, each public tab is the TD's flag,
+  // not the payload length — published-and-empty is a real tab, and
+  // unpublished hides one however much sits behind the gate.
+  it.each([
+    [
+      { entrants: false, draws: false, results: false },
+      ['overview', 'events'],
+    ],
+    [
+      { entrants: true, draws: false, results: false },
+      ['overview', 'events', 'entrants'],
+    ],
+    [
+      { entrants: true, draws: true, results: false },
+      ['overview', 'events', 'entrants', 'draws', 'seeds'],
+    ],
+    [
+      { entrants: true, draws: true, results: true },
+      ['overview', 'events', 'entrants', 'draws', 'seeds', 'winners'],
+    ],
+    [
+      // Independent flags render coherently: winners without draws is a
+      // legal (odd) combination and answers exactly what was published.
+      { entrants: false, draws: false, results: true },
+      ['overview', 'events', 'winners'],
+    ],
+  ])('publication %j → %j', (publication, expected) => {
+    expect(visibleTabs(Array(2).fill({}), [], publication)).toEqual(expected);
+  });
+
+  it('published entrants beats an empty list; unpublished beats a full one', () => {
+    const on = { entrants: true, draws: false, results: false };
+    const off = { entrants: false, draws: false, results: false };
+    expect(visibleTabs([], [], on)).toContain('entrants');
+    expect(visibleTabs([], Array(9).fill({}), off)).not.toContain('entrants');
   });
 });
 

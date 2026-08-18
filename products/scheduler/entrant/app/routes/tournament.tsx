@@ -27,6 +27,12 @@ import { SectionCard } from '../components/SectionCard';
 import { TabBar } from '../components/TabBar';
 import { TimelineCard } from '../components/TimelineCard';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
+import type {
+  DrawsIndexDTO,
+  SeedsDTO,
+  WinnersDTO,
+} from '../lib/draws.types';
+import { kindLabel } from '../lib/draws.types';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { dateOfIso, formatDateLong } from '../lib/format';
 import {
@@ -45,6 +51,11 @@ export interface TournamentLoaderData {
   active: Tab;
   /** SSR render instant, ms — `now` is a parameter everywhere below. */
   nowMs: number;
+  /** Present only when the matching tab is active — one extra public read
+   * per document, never a fan-out (SP-P7 §3.4–3.6). */
+  draws?: DrawsIndexDTO;
+  seeds?: SeedsDTO;
+  winners?: WinnersDTO;
 }
 
 /**
@@ -76,12 +87,21 @@ export async function loader({
   }
 
   const tabs = visibleTabs(page.events, page.entrants, page.publication);
+  const active = activeTab(new URL(request.url).searchParams.get('tab'), tabs);
   const payload: TournamentLoaderData = {
     page,
     tabs,
-    active: activeTab(new URL(request.url).searchParams.get('tab'), tabs),
+    active,
     nowMs: Date.now(),
   };
+  const base = `/e/api/page/${encodeURIComponent(slug)}`;
+  if (active === 'draws') {
+    payload.draws = await apiGet<DrawsIndexDTO>(`${base}/draws`);
+  } else if (active === 'seeds') {
+    payload.seeds = await apiGet<SeedsDTO>(`${base}/seeds`);
+  } else if (active === 'winners') {
+    payload.winners = await apiGet<WinnersDTO>(`${base}/winners`);
+  }
   return payload;
 }
 
@@ -208,6 +228,133 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
 
 // ---- The page ---------------------------------------------------------------
 
+// ---- The SP-P7 result panels (§3.4–3.6) ------------------------------------
+
+function DrawsPanel({ slug, draws }: { slug: string; draws: DrawsIndexDTO }) {
+  if (draws.draws.length === 0) {
+    return <p className="text-muted-foreground">No draws yet.</p>;
+  }
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {draws.draws.map((card) => (
+        <li key={card.drawKey}>
+          <a
+            href={`/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(card.drawKey)}`}
+            className="block rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-sm hover:border-rule-control"
+          >
+            <p className="font-display text-base font-bold tracking-tight text-foreground">
+              {card.discipline}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {[
+                card.eventCode,
+                kindLabel(card.kind),
+                `${card.size} ${card.size === 1 ? 'entry' : 'entries'}`,
+                card.hasConsolation ? 'with consolation' : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SeedsPanel({ seeds }: { seeds: SeedsDTO }) {
+  if (seeds.events.length === 0) {
+    return <p className="text-muted-foreground">No seeded entries yet.</p>;
+  }
+  return (
+    <div className="grid gap-6">
+      {seeds.events.map((event) => (
+        <section
+          key={event.eventCode}
+          className="rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm"
+        >
+          <h3 className="text-base font-semibold text-foreground">
+            {event.discipline}
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {event.eventCode}
+            </span>
+          </h3>
+          <ol className="mt-3 grid gap-2">
+            {event.seeds.map((line) => (
+              <li key={line.seed} className="flex items-baseline gap-3 text-sm">
+                <span className="w-8 shrink-0 tabular-nums font-semibold text-foreground">
+                  {`[${line.seed}]`}
+                </span>
+                <span className="min-w-0">
+                  <span className="text-foreground">{line.names.join(' / ')}</span>
+                  {line.club ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {line.club}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function honorLine(label: string, honor: { names: string[]; club: string | null } | null) {
+  if (honor === null) return null;
+  return (
+    <p key={label} className="text-sm text-foreground">
+      <span className="inline-block w-28 text-muted-foreground">{label}</span>
+      {honor.names.join(' / ')}
+      {honor.club ? (
+        <span className="ml-2 text-xs text-muted-foreground">{honor.club}</span>
+      ) : null}
+    </p>
+  );
+}
+
+function WinnersPanel({ winners }: { winners: WinnersDTO }) {
+  if (winners.events.length === 0) {
+    return <p className="text-muted-foreground">No results yet.</p>;
+  }
+  const decided = winners.events.filter((event) => event.decided).length;
+  return (
+    <div className="grid gap-4">
+      <p className="text-sm text-muted-foreground">
+        {`${decided} of ${winners.events.length} events decided`}
+      </p>
+      {winners.events.map((event) => (
+        <section
+          key={event.eventCode}
+          className="rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm"
+        >
+          <h3 className="text-base font-semibold text-foreground">
+            {event.discipline}
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {event.eventCode}
+            </span>
+          </h3>
+          <div className="mt-3 grid gap-1.5">
+            {event.decided ? (
+              <>
+                {honorLine('Winner', event.winner)}
+                {honorLine('Runner-up', event.runnerUp)}
+                {event.semifinalists.map((semi, index) =>
+                  honorLine(index === 0 ? 'Semifinalists' : '', semi),
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Not decided yet.</p>
+            )}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export default function Tournament({ loaderData }: Route.ComponentProps) {
   const { page, tabs, active, nowMs } = loaderData;
   const now = new Date(nowMs);
@@ -264,6 +411,24 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
               // desk has confirmed nobody yet.
               <p className="text-muted-foreground">No confirmed entries yet.</p>
             )}
+          </>
+        ) : null}
+        {active === 'draws' && loaderData.draws ? (
+          <>
+            <h2 className="sr-only">Draws</h2>
+            <DrawsPanel slug={slug} draws={loaderData.draws} />
+          </>
+        ) : null}
+        {active === 'seeds' && loaderData.seeds ? (
+          <>
+            <h2 className="sr-only">Seeded entries</h2>
+            <SeedsPanel seeds={loaderData.seeds} />
+          </>
+        ) : null}
+        {active === 'winners' && loaderData.winners ? (
+          <>
+            <h2 className="sr-only">Winners</h2>
+            <WinnersPanel winners={loaderData.winners} />
           </>
         ) : null}
       </main>

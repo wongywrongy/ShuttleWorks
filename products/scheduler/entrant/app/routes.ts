@@ -110,6 +110,10 @@ export default [
   // never the name (R-P7c). Discoverability is the API's gate
   // (`entrants_published`), not this route's.
   route(':slug/players/:personKey', 'routes/player.tsx'),
+  // One draw, fully navigable (SP-P7 §3.4). The Draws tab lists; this
+  // renders — RR standings + rounds, or the elimination columns. Gated
+  // upstream by `draws_published` (uniform 404).
+  route(':slug/draws/:drawKey', 'routes/draw.tsx'),
   // The enter page again, at the URL a completed sign-in lands on (E3) — the
   // 303 from `POST /e/account/login` is the only thing that matters that
   // lands here, so the document can say the sign-in worked. NOT a capability:
