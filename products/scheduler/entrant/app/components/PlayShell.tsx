@@ -71,11 +71,21 @@ export function PlayShell({
               Search
             </Button>
           </form>
+          {/* Both links are static affordances (R8-D: no server render can
+              know who is reading). "My entries" works signed out too — the
+              page itself redirects to sign-in with a return-to (SP-P7 §3.1),
+              so the header needs no identity to point at it. */}
+          <a
+            href="/e/me/entries"
+            className="ml-auto inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline sm:ml-0"
+          >
+            My entries
+          </a>
           <a
             href="/e/login"
             // `min-h-6` (24px): the tap target floor (WCAG 2.5.8) — text-sm's
             // own line-height is 20px, under it with no padding of its own.
-            className="ml-auto inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline sm:ml-0"
+            className="inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
           >
             {signInLabel}
           </a>

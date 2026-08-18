@@ -17,7 +17,6 @@ import { DateBadge } from '../app/components/DateBadge';
 import { EmptyState } from '../app/components/EmptyState';
 import { EntrantsList } from '../app/components/EntrantsList';
 import { EventRow } from '../app/components/EventRow';
-import { FeeTable } from '../app/components/FeeTable';
 import { FilterStrip } from '../app/components/FilterStrip';
 import { HeroHeader } from '../app/components/HeroHeader';
 import { PlayShell } from '../app/components/PlayShell';
@@ -473,33 +472,8 @@ describe('TimelineCard', () => {
   });
 });
 
-// ---- FeeTable --------------------------------------------------------------
-
-describe('FeeTable', () => {
-  it('renders the bundle tiers sorted, per-player framed', () => {
-    const html = renderToStaticMarkup(
-      h(FeeTable, { feeSchedule: { '2': 2400, '1': 1400 }, events: [event()] }),
-    );
-    expect(html.indexOf('1 event')).toBeLessThan(html.indexOf('2 events'));
-    expect(html).toContain('14.00');
-    expect(html).toContain('24.00');
-    expect(html).toContain('Per player');
-  });
-
-  it('falls back to per-event prices when no schedule exists', () => {
-    const html = renderToStaticMarkup(
-      h(FeeTable, { feeSchedule: {}, events: [event({ feeCents: 1500 })] }),
-    );
-    expect(html).toMatch(/Men(&#x27;|')s Singles/);
-    expect(html).toContain('15.00');
-  });
-
-  it('renders nothing at all when neither exists (rule 4)', () => {
-    expect(
-      renderToStaticMarkup(h(FeeTable, { feeSchedule: {}, events: [event({ feeCents: null })] })),
-    ).toBe('');
-  });
-});
+// FeeTable was deleted with SP-P7 §3.7: fees left the overview (its only
+// consumer) — pricing is quoted on the entry form and receipt only.
 
 // ---- EventRow --------------------------------------------------------------
 

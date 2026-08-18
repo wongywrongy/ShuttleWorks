@@ -214,6 +214,8 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
         "slug",
         "tournamentName",
         "orgName",
+        "entrantsPublished",
+        "resultsPublished",
         "date",
         "venueName",
         "status",
@@ -223,7 +225,14 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
     }
     assert all(
         set(line)
-        == {"eventCode", "discipline", "playerName", "state", "resultBadge"}
+        == {
+            "eventCode",
+            "discipline",
+            "playerName",
+            "personKey",
+            "state",
+            "resultBadge",
+        }
         for line in card["events"]
     )
     assert card["slug"] == "winter-cup"

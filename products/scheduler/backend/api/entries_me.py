@@ -55,6 +55,10 @@ class MyEntryLineDTO(BaseModel):
     eventCode: str
     discipline: str
     playerName: str
+    # The player-page address for "View my results" (§3.1) — the same
+    # person-in-tournament key the public tier uses. Own-data only: every
+    # line on this card is a player this account entered.
+    personKey: str
     state: str
     # "Winner" | "Runner-up" | "Semifinalist" — the §3.1 carve-out's one
     # publication-gated field: present only while the workspace has
@@ -66,6 +70,12 @@ class MyTournamentCardDTO(BaseModel):
     slug: Optional[str] = None
     tournamentName: Optional[str] = None
     orgName: Optional[str] = None
+    # The tournament's own public gates, echoed so the card can decide
+    # which of its links exist: "View my results" points at a player page
+    # that answers only while ``entrantsPublished`` (§4), and a link to a
+    # uniform 404 is worse than no link.
+    entrantsPublished: bool = False
+    resultsPublished: bool = False
     # The workspace's ISO date string, verbatim (the TournamentDTO.date
     # argument: no instant exists to project, so none is manufactured).
     date: Optional[str] = None
@@ -256,6 +266,7 @@ def my_entries(
                     eventCode=event.code if event else "?",
                     discipline=event.discipline if event else "",
                     playerName=entry.player_name or "",
+                    personKey=str(entry.entry_player_id or ""),
                     state=_entry_state(entry.state),
                     resultBadge=event_badges.get(f"entry-{entry.entry_player_id}"),
                 )
@@ -280,6 +291,12 @@ def my_entries(
                 slug=page.slug if page is not None else None,
                 tournamentName=tournament.name if tournament is not None else None,
                 orgName=org.name if org is not None else None,
+                entrantsPublished=bool(page.entrants_published)
+                if page is not None
+                else False,
+                resultsPublished=bool(page.results_published)
+                if page is not None
+                else False,
                 date=date_iso,
                 venueName=page.venue_name if page is not None else None,
                 status=_card_status([line.state for line in lines], date_iso, today_iso),

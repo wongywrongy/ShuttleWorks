@@ -20,7 +20,6 @@ import { isRouteErrorResponse, useRouteError } from 'react-router';
 
 import { EntrantsList } from '../components/EntrantsList';
 import { EventRow } from '../components/EventRow';
-import { FeeTable } from '../components/FeeTable';
 import { HeroHeader } from '../components/HeroHeader';
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
@@ -29,7 +28,7 @@ import { TabBar } from '../components/TabBar';
 import { TimelineCard } from '../components/TimelineCard';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
-import { formatDateLong } from '../lib/format';
+import { dateOfIso, formatDateLong } from '../lib/format';
 import {
   activeTab,
   chipState,
@@ -131,11 +130,12 @@ function tabHref(slug: string, tab: Tab): string {
 function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
   const slug = page.page.slug;
   const moments = timelineModel(page.events, page.tournament.date, now);
-  const feeTable = FeeTable({ feeSchedule: page.page.feeSchedule, events: page.events });
-  // Collapsed only when long — short text renders open and plain (Z10). The
-  // threshold is a display judgement made server-side, so it is testable.
   const regulations = page.page.regulationsText;
-  const longRegulations = (regulations?.length ?? 0) > 400;
+  // SP-P7 §3.7: fees left the overview entirely — pricing lives on the entry
+  // form and receipt only (Kyle's mockup-review ruling), and the payment
+  // prose renders inside the entry flow (`receipt.tsx`), not here. What
+  // remains is a pointer row saying where the quote happens.
+  const updatedIso = page.page.regulationsUpdatedAt;
 
   return (
     <div className="grid gap-6">
@@ -149,31 +149,49 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
           <TimelineCard moments={moments} now={now} eventsHref={tabHref(slug, 'events')} />
         ) : null}
 
-        {feeTable !== null || page.page.paymentInstructions ? (
-          <div className="grid gap-6">
-            {feeTable !== null ? <SectionCard title="Fees">{feeTable}</SectionCard> : null}
-            {page.page.paymentInstructions ? (
-              <SectionCard title="Payment">
-                <p className="whitespace-pre-line">{page.page.paymentInstructions}</p>
-              </SectionCard>
+        <div className="grid gap-6">
+          <SectionCard title="Fees & payment">
+            <p className="text-muted-foreground">
+              Pricing is quoted on the entry form before you submit.
+            </p>
+            {/* The link exists only while an event is open — a closed
+                tournament must carry no path into the entry form anywhere
+                on the page (the hero's own rule, held by its tests). */}
+            {page.events.some((event) => event.isOpen) ? (
+              <a
+                href={`/e/${encodeURIComponent(slug)}/enter`}
+                className="mt-2 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
+              >
+                Go to the entry form
+              </a>
             ) : null}
-          </div>
-        ) : null}
-
-        {regulations ? (
-          <SectionCard title={`Regulations · v${page.page.regulationsVersion}`}>
-            {longRegulations ? (
-              <details>
-                <summary className="cursor-pointer text-sm font-medium text-accent">
-                  Read the regulations
-                </summary>
-                <p className="mt-2 whitespace-pre-line">{regulations}</p>
-              </details>
-            ) : (
-              <p className="whitespace-pre-line">{regulations}</p>
-            )}
           </SectionCard>
-        ) : null}
+
+          {/* The regulations DOCUMENT ROW (§3.7): the text itself moved to a
+              routed, deep-linkable reader — multi-page rules do not belong
+              inline on an overview. */}
+          {regulations ? (
+            <SectionCard title="Documents">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground">Tournament regulations</p>
+                  <p className="text-xs text-muted-foreground">
+                    {`Version ${page.page.regulationsVersion}`}
+                    {dateOfIso(updatedIso)
+                      ? ` · updated ${formatDateLong(dateOfIso(updatedIso))}`
+                      : ''}
+                  </p>
+                </div>
+                <a
+                  href={`/e/${encodeURIComponent(slug)}/regulations`}
+                  className="shrink-0 text-sm font-medium text-accent underline-offset-4 hover:underline"
+                >
+                  View regulations
+                </a>
+              </div>
+            </SectionCard>
+          ) : null}
+        </div>
 
         {page.venue?.name || page.venue?.address ? (
           <SectionCard title="Venue">

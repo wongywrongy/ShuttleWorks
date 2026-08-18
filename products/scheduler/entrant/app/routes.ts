@@ -82,6 +82,11 @@ export default [
   // nothing — indistinguishable from a post that had quietly done nothing.
   route('login/failed', 'routes/login.tsx', { id: 'login-failed' }),
   route('login/signed-in', 'routes/login.tsx', { id: 'login-signed-in' }),
+  // `/e/me/entries` — the signed-in entrant's home (SP-P7 §3.1). Static, so
+  // it ranks above `:slug`, and `me` is in the backend's `_RESERVED_SLUGS`
+  // so no workspace can ever claim the segment. The document is an
+  // anonymous SSR shell; identity happens browser-side (see the route).
+  route('me/entries', 'routes/myEntries.tsx'),
   // There is deliberately NO logout page. Signing out is a POST to
   // `/e/account/logout` (FastAPI's, R8-A) and the form that makes it lives in
   // the footer of `routes/enter.tsx` — the page a signed-in entrant is on,
@@ -97,6 +102,10 @@ export default [
   // approved). `enter` is a sub-segment of `:slug`, so it shadows no
   // workspace slug and needs no backend reservation.
   route(':slug/enter', 'routes/enter.tsx'),
+  // The regulations reader (SP-P7 §3.7): the overview keeps a document row,
+  // the text lives here — routed, deep-linkable, multi-page-tolerant. A
+  // sub-segment of `:slug`, same non-shadowing argument as `enter`.
+  route(':slug/regulations', 'routes/regulations.tsx'),
   // The enter page again, at the URL a completed sign-in lands on (E3) — the
   // 303 from `POST /e/account/login` is the only thing that matters that
   // lands here, so the document can say the sign-in worked. NOT a capability:

@@ -152,7 +152,7 @@ describe('the tab bar and its panels (Z6)', () => {
 });
 
 describe('the panels', () => {
-  it('Overview: timeline with the current position, fees, payment, regulations, venue', async () => {
+  it('Overview: timeline, fees pointer, regulations document row, venue (SP-P7 §3.7)', async () => {
     const html = await render();
 
     expect(html).toContain('Key dates');
@@ -164,24 +164,33 @@ describe('the panels', () => {
     // The fixture's XD event closes earlier than MS/WD, so "Entries close"
     // is a per-event range, pointing at the Events tab.
     expect(html).toContain('Varies by event');
-    expect(html).toContain('2 events');
-    expect(html).toContain('25.00');
-    expect(html).toContain('Bank transfer on the day.');
-    // Short regulations render open and plain — no disclosure for one line.
-    expect(html).toContain('BWF laws apply.');
-    expect(html).not.toContain('<details');
-    expect(html).toContain('Regulations · v3');
     expect(html).toContain('4 Kingsway');
+
+    // FEES LEFT THE OVERVIEW (Kyle's mockup-review ruling): no price, no
+    // payment prose — a pointer row into the entry flow instead. The
+    // receipt keeps the payment instructions (`receipt.tsx`).
+    expect(html).not.toContain('25.00');
+    expect(html).not.toContain('Bank transfer on the day.');
+    expect(html).toContain('Pricing is quoted on the entry form before you submit.');
+    expect(html).toContain('href="/e/spring-open/enter"');
+
+    // Regulations became a DOCUMENT ROW: identity + version + updated date
+    // + a link to the routed reader — the text itself no longer inlines.
+    expect(html).toContain('Tournament regulations');
+    expect(html).toContain('Version 3');
+    expect(html).toContain('href="/e/spring-open/regulations"');
+    expect(html).not.toContain('BWF laws apply.');
+    expect(html).not.toContain('<details');
   });
 
-  it('collapses long regulations behind a native disclosure (Z10)', async () => {
+  it('renders no document row when the director wrote no regulations (rule 4)', async () => {
     const html = await render({
       ...PAGE,
-      page: { ...PAGE.page, regulationsText: 'All play is governed. '.repeat(30) },
+      page: { ...PAGE.page, regulationsText: null },
     });
 
-    expect(html).toContain('<details');
-    expect(html).toContain('Read the regulations');
+    expect(html).not.toContain('Tournament regulations');
+    expect(html).not.toContain('/regulations"');
   });
 
   it('Events: rows with counts ("N entered", G2 declined) linking into Entrants', async () => {

@@ -28,6 +28,14 @@ export function monthShort(index: number): string {
   return MONTHS[index] ?? '';
 }
 
+/** The date half of an ISO instant (`2026-08-12T10:00:00+00:00` →
+ * `2026-08-12`); null/other shapes → null. A regex, not a slice: the
+ * truncation guard is right that a bare `.slice(0, n)` on display data is
+ * the defect it hunts, and a match states what is actually wanted. */
+export function dateOfIso(iso: string | null): string | null {
+  return /^(\d{4}-\d{2}-\d{2})T/.exec(iso ?? '')?.[1] ?? null;
+}
+
 /** `2026-09-19` → `Saturday 19 September 2026`; null/unparseable → `''`. */
 export function formatDateLong(iso: string | null): string {
   const date = parseIsoDate(iso);
