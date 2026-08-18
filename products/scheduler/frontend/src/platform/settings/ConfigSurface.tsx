@@ -46,6 +46,8 @@ export function ConfigSurface({
             value={section}
             onChange={onSectionChange}
             ariaLabel="Configuration section"
+            // Toolbar, not a settings row.
+            fill={false}
           />
         ) : null}
         {actions}

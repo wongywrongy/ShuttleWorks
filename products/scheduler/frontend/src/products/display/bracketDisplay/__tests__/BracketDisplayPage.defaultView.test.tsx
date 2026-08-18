@@ -67,10 +67,13 @@ vi.mock('../useBracketDisplaySync', () => ({
   useBracketDisplaySync: () => ({ data: finished, freshness: 'live', syncError: null }),
 }));
 
-function renderBoard(path = '/display?id=t1') {
+/** `preview` by default: the view tabs this file asserts on are OPERATOR
+ *  chrome and the venue render drops them (TV-8). The default-view logic
+ *  under test is the same on both. */
+function renderBoard(path = '/display?id=t1', preview = true) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <BracketDisplayPage />
+      <BracketDisplayPage preview={preview} />
     </MemoryRouter>,
   );
 }
@@ -86,5 +89,12 @@ describe('BracketDisplayPage — default view', () => {
   it('still honours an explicit ?view=live', () => {
     renderBoard('/display?id=t1&view=live');
     expect(screen.getByTestId('bracket-live-empty')).toBeInTheDocument();
+  });
+
+  it('the venue render drops the view tabs but still picks the right view (TV-8)', () => {
+    renderBoard('/display?id=t1', false);
+    expect(screen.queryByTestId('bracket-view-results')).toBeNull();
+    // …and it is still SHOWING results, not falling through to a blank board.
+    expect(screen.getByTestId('champion-e1')).toHaveTextContent('Alice');
   });
 });

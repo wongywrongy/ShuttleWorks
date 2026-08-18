@@ -1,12 +1,15 @@
 import type { OpsBlock } from '../opsBlock';
 import type { BoardChip } from './boardPlacements';
-import { fromEngineStatus, deriveLate, can, type RunStatus } from './runMachine';
+import { fromEngineStatus, deriveTimeliness, can, type RunStatus, type Timeliness } from './runMachine';
 
 export interface RunMatch {
   key: string; id: string; source: 'meet' | 'bracket';
   label: string; colorKey?: string; sideA: string; sideB: string;
   court?: number; plannedSlot?: number; span: number;
-  status: RunStatus; late: boolean; eligible: boolean;
+  /** `late` stays the wide "past its planned start at all" flag the board and
+   *  the summary already read; `timeliness` is the tier a renderer needs to
+   *  tell DUE from LATE from OVERDUE. Both are derived together. */
+  status: RunStatus; late: boolean; timeliness: Timeliness; eligible: boolean;
 }
 
 const TBD = 'TBD';
@@ -32,11 +35,12 @@ export function toRunMatches(
       key: b.key, id: b.id, source: b.source, label: b.label, colorKey: b.colorKey,
       sideA: b.sideA, sideB: b.sideB, court: b.court ?? undefined, plannedSlot: b.slot,
       span: b.span ?? 1, status,
-      // `late` is NOT a per-match fact: it is a court's CURRENT (Now) match
+      // Lateness is NOT a per-match fact: it is a court's CURRENT (Now) match
       // running past its planned start, and only once the floor is running.
       // That is lane- and run-state-aware, so it is derived in deriveCourtLanes,
-      // never here. Base matches carry `late: false`.
+      // never here. Base matches are on time.
       late: false,
+      timeliness: 'ontime' as const,
       eligible,
     };
   });
@@ -86,14 +90,17 @@ export function deriveCourtLanes(
         || (a.plannedSlot ?? Infinity) - (b.plannedSlot ?? Infinity)
         || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
     const nowRaw = lane[0];
-    const now = nowRaw
-      ? {
-          ...nowRaw,
-          late:
-            running &&
-            deriveLate({ status: nowRaw.status, plannedSlot: nowRaw.plannedSlot, currentSlot }),
-        }
-      : undefined;
+    let now: RunMatch | undefined;
+    if (nowRaw) {
+      const timeliness: Timeliness = running
+        ? deriveTimeliness({
+            status: nowRaw.status,
+            plannedSlot: nowRaw.plannedSlot,
+            currentSlot,
+          })
+        : 'ontime';
+      now = { ...nowRaw, timeliness, late: timeliness !== 'ontime' };
+    }
     return { court, now, next: lane[1], later: lane[2], depth: lane.length };
   });
 }

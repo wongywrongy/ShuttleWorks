@@ -72,6 +72,87 @@ export function defaultColumns(
   return 4;
 }
 
+/* =========================================================================
+ * Auto layout (SP-CONSOLE-2 TV-6) — the board sizes itself to the room.
+ *
+ * A venue TV is read from across a hall, and the constraint that actually
+ * decides legibility is CARD AREA: the 1-inch-per-10-feet rule means a name
+ * has a floor below which the board is decoration. The old default picked
+ * columns from court count alone and never looked at the viewport, so a
+ * 20-court day on a 1080p screen produced 20 unreadable slivers and called
+ * it a layout.
+ *
+ * Auto derives columns from the viewport's aspect ratio and the number of
+ * cards it must place — cols ≈ sqrt(N · A / a), where A is the board's
+ * aspect and a the card's target aspect — then PAGINATES rather than
+ * shrinking past the floor. Twelve cards on a screen is the cap; a
+ * thirteenth court starts a second page that the rotation engine cycles to.
+ * ========================================================================= */
+
+/** Most cards the board will place on one page. Past this the min-card-area
+ *  floor is unreachable at any column count on a 1080p venue screen, so the
+ *  layout paginates instead of shrinking. */
+export const MAX_CARDS_PER_PAGE = 12;
+
+/** Target card aspect (w/h). Court cards are wider than tall: two stacked
+ *  side rows plus a band and a score lane. */
+const CARD_ASPECT = 1.6;
+
+export interface AutoLayout {
+  /** Columns for the page's grid. */
+  columns: 1 | 2 | 3 | 4;
+  /** How many pages the visible courts need. */
+  pages: number;
+  /** Cards on each page (the last may be shorter). */
+  perPage: number;
+}
+
+/**
+ * Columns + pagination for `courtCount` cards in a board of aspect
+ * `boardAspect` (width / height). `override` still wins for columns — the
+ * director's explicit `tvGridColumns` is a deliberate choice — but never
+ * defeats pagination, which exists to keep cards legible.
+ */
+export function autoLayout(
+  courtCount: number,
+  boardAspect: number,
+  override?: number | null,
+): AutoLayout {
+  const n = Math.max(0, Math.floor(courtCount));
+  if (n === 0) return { columns: 1, pages: 1, perPage: MAX_CARDS_PER_PAGE };
+
+  const pages = Math.max(1, Math.ceil(n / MAX_CARDS_PER_PAGE));
+  // Spread evenly rather than filling page 1 and stranding one card alone on
+  // page 2 — a page holding a single giant card reads as a bug.
+  const perPage = Math.ceil(n / pages);
+
+  const clamp = (v: number): 1 | 2 | 3 | 4 =>
+    Math.min(4, Math.max(1, Math.round(v))) as 1 | 2 | 3 | 4;
+
+  if (override != null) return { columns: clamp(override), pages, perPage };
+
+  const aspect = boardAspect > 0 ? boardAspect : 16 / 9;
+  return {
+    columns: clamp(Math.sqrt((perPage * aspect) / CARD_ASPECT)),
+    pages,
+    perPage,
+  };
+}
+
+/**
+ * Card area, in square units of the board, that `autoLayout` yields.
+ * The property the layout exists to protect: no arrangement may hand a card
+ * less than `MIN_CARD_AREA` of the board.
+ */
+export function cardAreaFraction(layout: AutoLayout): number {
+  const rows = Math.ceil(layout.perPage / layout.columns);
+  return 1 / (layout.columns * Math.max(1, rows));
+}
+
+/** A card must own at least this fraction of the board to stay readable at
+ *  venue distance. 12 cards in a 4×3 grid is exactly 1/12. */
+export const MIN_CARD_AREA = 1 / MAX_CARDS_PER_PAGE;
+
 /**
  * Read-only: which court ids currently carry an active (started or
  * called) match. Used ONLY to power the editor's "Court N (hidden) has a

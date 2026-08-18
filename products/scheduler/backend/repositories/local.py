@@ -1176,6 +1176,7 @@ class _LocalTournamentBackupRepo:
         tournament_id: uuid.UUID,
         snapshot: dict,
         filename: Optional[str] = None,
+        origin: str = "auto",
     ) -> TournamentBackup:
         fname = filename or _backup_filename(snapshot)
         size_bytes = len(json.dumps(snapshot, sort_keys=True).encode("utf-8"))
@@ -1184,15 +1185,58 @@ class _LocalTournamentBackupRepo:
             filename=fname,
             snapshot=snapshot,
             size_bytes=size_bytes,
+            origin=origin,
         )
         self.session.add(row)
         self.session.commit()
         self.session.refresh(row)
         return row
 
+    def delete(self, tournament_id: uuid.UUID, filename: str) -> bool:
+        row = self.get_by_filename(tournament_id, filename)
+        if row is None:
+            return False
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
     def rotate(self, tournament_id: uuid.UUID, keep: int) -> int:
-        all_backups = self.list_for_tournament(tournament_id)
-        to_delete = all_backups[keep:]
+        """Trim AUTOMATIC backups, keeping a window that spans the day.
+
+        A flat keep-N over every row produced the failure SP-CONSOLE-2 O-5
+        found in the wild: ten entries covering three minutes, because ten
+        routine state writes during setup are enough to fill it. The list was
+        bounded, which is what it was built for, and useless, because nothing
+        in it was old enough to be worth restoring.
+
+        Two rules fix that without unbounded growth:
+
+        * **Manual snapshots never rotate.** A director who pressed Create
+          backup asked for that state to be here later, and no number of
+          automatic writes should overrule them.
+        * **Beyond the newest ``keep``, automatic rows thin to one per hour.**
+          The recent ones stay dense, because a mistake is usually noticed
+          within a few writes; the older ones stay *present*, because a mistake
+          noticed at 4pm needs something from the morning.
+        """
+        def _hour(row) -> tuple:
+            c = row.created_at
+            return (c.year, c.month, c.day, c.hour)
+
+        rows = [r for r in self.list_for_tournament(tournament_id) if r.origin != "manual"]
+        keep_ids: set[uuid.UUID] = {r.id for r in rows[:keep]}
+        # Seeded from the keep window, not empty: without this the oldest hour
+        # already represented in the window earns a SECOND keeper the moment
+        # the list overflows, so a burst of writes inside one hour grows the
+        # list past `keep` instead of trimming to it.
+        seen_hours: set[tuple] = {_hour(r) for r in rows[:keep]}
+        for row in rows[keep:]:
+            bucket = _hour(row)
+            if bucket not in seen_hours:
+                seen_hours.add(bucket)
+                keep_ids.add(row.id)
+
+        to_delete = [r for r in rows if r.id not in keep_ids]
         for row in to_delete:
             self.session.delete(row)
         if to_delete:
@@ -1770,9 +1814,18 @@ class LocalRepository:
         backup = self.backups.create(
             tournament_id=tournament_id,
             snapshot=current.data,
+            origin="manual",
         )
         self.backups.rotate(tournament_id, keep=self.BACKUP_KEEP)
         return backup
+
+    def delete_tournament_backup(
+        self,
+        tournament_id: uuid.UUID,
+        filename: str,
+    ) -> bool:
+        """``DELETE /tournaments/{id}/state/backups/{filename}``."""
+        return self.backups.delete(tournament_id, filename)
 
     def restore_tournament_from_backup(
         self,

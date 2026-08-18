@@ -221,8 +221,17 @@ describe('OperationsProduct — the Plan header does not pair discard with commi
 
     // ...and they are not two chips in one 8px run: a rule closes the solve
     // group before the commit button.
-    expect(resolve.nextElementSibling).toBe(commit.previousElementSibling);
     expect(commit.previousElementSibling?.className).toMatch(/w-px/);
+    // Nothing ACTIONABLE sits between the solve button and that rule. The
+    // Re-plan explanation (PLAN-4) does, and prose is not a second button to
+    // fat-finger — which is what the adjacency check was really protecting.
+    let node = resolve.nextElementSibling;
+    while (node && !node.className.includes('w-px')) {
+      expect(node.querySelector('button')).toBeNull();
+      expect(node.tagName).not.toBe('BUTTON');
+      node = node.nextElementSibling;
+    }
+    expect(node).toBe(commit.previousElementSibling);
   });
 });
 

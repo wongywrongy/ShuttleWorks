@@ -213,14 +213,23 @@ export function PeopleAccessTab({
         )}
       </div>
 
-      <ul className="space-y-1.5">
-        {ROLE_LEGEND.map((r) => (
-          <li key={r.role} className="flex gap-2 text-xs">
-            <span className="w-16 shrink-0 font-medium text-foreground">{r.role}</span>
-            <span className="text-muted-foreground">{r.desc}</span>
-          </li>
-        ))}
-      </ul>
+      {/* Onboarding copy, not page furniture (WSM-2): after the first visit
+          the three definitions never change, and they were permanently
+          occupying the top of a page whose actual content is the member
+          list. Native disclosure — closed by default, one click away. */}
+      <details data-testid="role-legend" className="text-xs">
+        <summary className="cursor-pointer select-none text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground">
+          What the roles mean
+        </summary>
+        <ul className="mt-1.5 space-y-1.5 pl-1">
+          {ROLE_LEGEND.map((r) => (
+            <li key={r.role} className="flex gap-2 text-xs">
+              <span className="w-16 shrink-0 font-medium text-foreground">{r.role}</span>
+              <span className="text-muted-foreground">{r.desc}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-foreground">Members</h3>
@@ -331,15 +340,6 @@ export function PeopleAccessTab({
                 });
               }
 
-              // The reason a control is unavailable belongs next to the
-              // control, visibly. A hover tooltip is not enough: nobody
-              // hovers a thing they have no reason to believe is
-              // interactive, and the menu has to be opened to see it at
-              // all. Stable, knowable-in-advance reasons get inline text.
-              const blockedReason = [actions.remove, actions.leave, actions.changeRole].find(
-                (a) => a.shown && a.disabled,
-              )?.reason;
-
               return (
                 <li
                   key={m.userId}
@@ -360,15 +360,14 @@ export function PeopleAccessTab({
                           <span className="ml-1 text-2xs text-muted-foreground">(you)</span>
                         )}
                       </span>
+                      {/* No resting reason line (WSM-1). The last-owner rule
+                          used to sit as a standing third line on the owner's
+                          own card, a warning about an action nobody had
+                          taken. It now surfaces where the attempt happens:
+                          on the menu item itself (disabled, reason in its
+                          accessible name) and as the row error if the server
+                          refuses anyway. */}
                       <span className="text-2xs capitalize text-muted-foreground">{m.role}</span>
-                      {blockedReason && (
-                        <span
-                          data-testid={`member-reason-${m.userId}`}
-                          className="mt-0.5 text-2xs text-muted-foreground"
-                        >
-                          {blockedReason}
-                        </span>
-                      )}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">

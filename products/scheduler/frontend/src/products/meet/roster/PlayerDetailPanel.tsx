@@ -151,7 +151,7 @@ function PlayerDetailFields({
         eyebrow="Identity"
         right={rank ? <UnassignButton player={player} rank={rank} /> : undefined}
       >
-        <Row
+        <Row pane
           label="Player"
           control={
             <span className="text-sm text-foreground">
@@ -159,7 +159,7 @@ function PlayerDetailFields({
             </span>
           }
         />
-        <Row
+        <Row pane
           label="School"
           last
           control={
@@ -184,7 +184,7 @@ function PlayerDetailFields({
         }
       >
         <PlayerAvailabilityField player={player} />
-        <Row
+        <Row pane
           label="Min rest"
           last
           control={

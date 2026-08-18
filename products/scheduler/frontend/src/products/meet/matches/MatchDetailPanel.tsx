@@ -123,6 +123,34 @@ export function MatchDetailPanel({
     return out;
   }, [players, config?.rankCounts, code, prefix]);
 
+  // Read-only — Operations owns run-state; never interactive. A finished match
+  // with a recorded score renders the G6 card (scores + winner say "done");
+  // otherwise the pill. Built once and placed at the top or the bottom
+  // depending on which it is — see the placement note below.
+  const statusSection = status ? (
+    <DetailPanel.Section eyebrow={laneSets ? 'Result' : 'Status'}>
+      {laneSets ? (
+        <MatchCard
+          sideA={sideNames(match.sideA)}
+          sideB={sideNames(match.sideB)}
+          sets={laneSets}
+          winner={setsWinner(laneSets)}
+          meta={meta}
+          data-testid="match-result-card"
+        />
+      ) : (
+        <>
+          <span data-testid="match-status-pill" className="inline-flex w-fit">
+            <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
+              {STATUS_LABEL[status]}
+            </StatusPill>
+          </span>
+          {meta ? <p className="mt-1.5 text-2xs text-muted-foreground">{meta}</p> : null}
+        </>
+      )}
+    </DetailPanel.Section>
+  ) : null;
+
   return (
     <DetailPanel
       variant="docked"
@@ -133,8 +161,15 @@ export function MatchDetailPanel({
       onClose={onClose}
       testId="match-detail-panel"
     >
+      {/* An unfinished match leads with where and when it plays: that is the
+          operational fact, and it used to sit at the very bottom under the
+          sides, below a heading that said "Status" (MAT-5). A FINISHED match
+          leads with its sides and closes with the result, which is the order
+          you read it in. */}
+      {status && !laneSets ? statusSection : null}
+
       <DetailPanel.Section eyebrow="Event">
-        <Row
+        <Row pane
           label="Event"
           last
           control={
@@ -168,34 +203,7 @@ export function MatchDetailPanel({
         groups={groups}
       />
 
-      {status ? (
-        <DetailPanel.Section eyebrow={laneSets ? 'Result' : 'Status'}>
-          {/* Read-only — Operations owns run-state; never interactive. A
-              finished match with a recorded score renders the G6 card
-              (scores + winner dot say "done"); otherwise the pill. */}
-          {laneSets ? (
-            <MatchCard
-              sideA={sideNames(match.sideA)}
-              sideB={sideNames(match.sideB)}
-              sets={laneSets}
-              winner={setsWinner(laneSets)}
-              meta={meta}
-              data-testid="match-result-card"
-            />
-          ) : (
-            <>
-              <span data-testid="match-status-pill" className="inline-flex w-fit">
-                <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
-                  {STATUS_LABEL[status]}
-                </StatusPill>
-              </span>
-              {meta ? (
-                <p className="mt-1.5 text-2xs text-muted-foreground">{meta}</p>
-              ) : null}
-            </>
-          )}
-        </DetailPanel.Section>
-      ) : null}
+      {laneSets ? statusSection : null}
     </DetailPanel>
   );
 }

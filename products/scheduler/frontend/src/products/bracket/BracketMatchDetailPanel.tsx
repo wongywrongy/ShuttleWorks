@@ -39,6 +39,7 @@ import type {
 import type { BracketPlayerDTO } from '../../api/dto';
 import { disciplineLabel, sideLabel } from './bracketLabels';
 import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
+import { EventBadge } from '../../components/control-plane/EventsControl';
 import {
   BracketAvailabilityEventsFields,
   type CommitEventFn,
@@ -390,6 +391,15 @@ function SideSection({
                 <span className="min-w-0 flex-1 break-words text-sm text-foreground">
                   {name}
                 </span>
+                {/* Identity chip on the collapsed card, matching Meet's side
+                    section, where the same card carries a SchoolChip. This
+                    panel showed a bare name and a chevron while Meet's showed
+                    a name and its identity, so the two panes read as two
+                    products (BMAT-3). A bracket entrant's identity is the
+                    event it is seeded into, not a club. */}
+                {(badgesById.get(id) ?? []).slice(0, 2).map((b) => (
+                  <EventBadge key={b.code} code={b.code} seed={b.seed} />
+                ))}
               </button>
               {open ? (
                 <div className="flex flex-col gap-3 border-t border-border/60 px-2 py-2">

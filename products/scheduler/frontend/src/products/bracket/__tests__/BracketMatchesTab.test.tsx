@@ -202,6 +202,23 @@ describe('<BracketMatchesTab />', () => {
     }
   });
 
+  it('names the feeder on an unresolved side instead of printing TBD (BMAT-4)', () => {
+    const data = makeRichData();
+    // The MS final waits on the MS semi. Production draws always carry this
+    // link; the base fixture omits it, which is why the row above still
+    // reads TBD.
+    const finalPu = data.play_units.find((p) => p.id === 'pu-ms-3')!;
+    finalPu.slot_a = { participant_id: null, feeder_play_unit_id: 'pu-ms-1' };
+    renderWithRouter(<BracketMatchesTab data={data} />);
+
+    expect(screen.getByText(/^Winner of /)).toBeInTheDocument();
+    // The other side has no feeder, so it must NOT claim anything — a
+    // feeder-less empty slot reads as "Bye" in sideLabel, which would be a
+    // lie for a round the draw has not built yet.
+    expect(screen.getAllByText('TBD')).toHaveLength(3);
+    expect(screen.queryByText('Bye')).not.toBeInTheDocument();
+  });
+
   it('collapsing a band hides only that band\'s rows', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.click(screen.getByTestId('bracket-match-group-MS-1'));

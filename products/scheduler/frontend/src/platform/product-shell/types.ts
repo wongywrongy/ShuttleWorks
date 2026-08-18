@@ -25,6 +25,10 @@ export interface WorkspaceModule {
   label: string;
   status: ModuleStatus;
   note?: string;
+  /** Server-computed: this module owns operational data, so disabling it
+   *  would 409. The catalog disables the action and says why BEFORE the
+   *  click (WSMOD-2) instead of after. */
+  hasData?: boolean;
 }
 
 /** Identity of the open workspace, as the shell displays it. Fields are

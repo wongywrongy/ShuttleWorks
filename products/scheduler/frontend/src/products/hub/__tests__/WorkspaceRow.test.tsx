@@ -39,14 +39,24 @@ describe('WorkspaceRow', () => {
     expect(screen.getByRole('button', { name: 'View results' })).toBeInTheDocument();
   });
 
-  it('renders a Modules column with a solid glyph per enabled module', () => {
+  it('names what needs attention where the module glyphs used to sit (HUB-3)', () => {
     render(
       <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
     );
-    // fixture `t` has meet enabled → a solid "M" glyph.
-    const glyph = screen.getByTestId('row-module-meet');
-    expect(glyph).toHaveTextContent('M');
-    expect(glyph.className).not.toMatch(/border-dashed/);
+    // The fixture's first attention reason, verbatim — a dot can say THAT
+    // something is wrong and never WHAT.
+    const cell = screen.getByTestId('row-attention');
+    expect(cell).toHaveTextContent(t.signals!.attention[0].label);
+  });
+
+  it('leaves the attention cell empty when nothing is wrong', () => {
+    render(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, health: 'good', attention: [] } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('row-attention')).toBeEmptyDOMElement();
   });
 
   it('says "needs attention" for a workspace that does — the dot is aria-hidden', () => {
@@ -64,26 +74,7 @@ describe('WorkspaceRow', () => {
     expect(screen.queryByText('Needs attention')).toBeNull();
   });
 
-  // T4: the glyphs were `<span title>` — a letter with a tooltip is decoded
-  // for a mouse and for nobody else. Nothing else on the Hub explains M/B/D/E.
-  it('names each module glyph, so the letter is not the only cue', () => {
-    render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
-    expect(screen.getByRole('img', { name: 'Meet: enabled' })).toHaveTextContent('M');
-  });
 
-  it('shows a dashed kind-default glyph when nothing is enabled', () => {
-    const draft: TournamentSummaryDTO = {
-      ...t,
-      tournamentDate: null,
-      modules: [{ moduleId: 'meet', status: 'available', config: null }],
-    };
-    render(
-      <WorkspaceRow tournament={draft} group="undated" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
-    expect(screen.getByTestId('row-module-meet').className).toMatch(/border-dashed/);
-  });
 
   // SP-UI-1: the next action is the row's call to action, not a metadata
   // column. Pin the properties that make it read that way — the chevron is

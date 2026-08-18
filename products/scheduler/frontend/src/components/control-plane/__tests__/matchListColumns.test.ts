@@ -42,9 +42,10 @@ describe.each(LISTS)(
         // `bandedRowGeometry.test.ts` for the arithmetic behind 10rem.
         'min-w-[10rem] flex-[3]',
         'min-w-[10rem] flex-[3]',
-        // w-28: on DONE rows this cell is the SCORE LANE — three w-9 set
+        // w-44: this cell holds the status chip AND, on done rows, the
+        // score lane beside it (X3). Sized for a chip plus three w-9 set
         // pairs, right-aligned so sets align vertically down the list.
-        'w-28 shrink-0 text-right',
+        'w-44 shrink-0 text-right',
         'w-8 shrink-0',
       ]);
     });
@@ -61,7 +62,7 @@ describe.each(LISTS)(
         warnGutter: 'w-4 shrink-0',
         event: eventClass,
         side: 'min-w-[10rem] flex-[3]',
-        status: 'w-28 shrink-0 text-right hidden @2xl/table:block',
+        status: 'w-44 shrink-0 text-right hidden @2xl/table:block',
         actionGutter: 'w-8 shrink-0',
       });
     });

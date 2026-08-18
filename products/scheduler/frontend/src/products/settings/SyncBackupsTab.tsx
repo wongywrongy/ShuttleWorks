@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useAction } from '../../hooks/useAction';
 import { Button, Modal } from '@scheduler/design-system';
-import { EmptyState } from '../../components/control-plane';
+import { EmptyState, OverflowMenu } from '../../components/control-plane';
 import { useTournamentBackups } from '../../hooks/useTournamentBackups';
 
 /** Human-readable file size: B / KB / MB. */
@@ -37,9 +37,20 @@ function fmtTime(iso: string): string {
  *  hook — the single seam for backup actions — so a restore re-hydrates the live
  *  tournament store (no stale data) exactly like the operator BackupPanel. */
 export function SyncBackupsTab() {
-  const { entries, loading, error, busyAction, createBackup, restoreBackup } = useTournamentBackups();
+  const {
+    entries,
+    loading,
+    error,
+    busyAction,
+    createBackup,
+    restoreBackup,
+    deleteBackup,
+    downloadUrl,
+  } = useTournamentBackups();
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const restoring = busyAction === restoreTarget;
+  const deleting = busyAction === deleteTarget;
 
   // `busyAction` alone did NOT stop a double-press: it's React state, so it
   // doesn't apply until the next render and a second click in the same tick
@@ -55,6 +66,14 @@ export function SyncBackupsTab() {
       setRestoreTarget(null);
     }, [restoreTarget, restoreBackup]),
     { errorMessage: 'Could not restore the backup' },
+  );
+  const deleteAction = useAction(
+    useCallback(async () => {
+      if (!deleteTarget) return;
+      await deleteBackup(deleteTarget);
+      setDeleteTarget(null);
+    }, [deleteTarget, deleteBackup]),
+    { errorMessage: 'Could not delete the backup' },
   );
 
   // Group by calendar day so a grown list scans by "Today / Aug 12", not by
@@ -119,15 +138,24 @@ export function SyncBackupsTab() {
                     className="flex items-center justify-between gap-3 p-3"
                   >
                     <div className="min-w-0">
-                      {/* You restore FROM a moment, not from a filename: the
-                          human timestamp + size lead; the filename is the mono
-                          secondary for cross-referencing the directory. */}
+                      {/* You restore FROM a moment, not from a filename. The
+                          lead says what KIND of moment: Manual never rotates
+                          out, Auto ages on its own schedule — a row the
+                          operator cannot lose reads differently from one that
+                          will (WSB-3/4). The filename moved behind the row's
+                          overflow menu; it was scaffold on every row for a
+                          cross-reference that almost never happens. */}
                       <div className="text-sm tabular-nums text-foreground">
+                        <span
+                          className={
+                            b.origin === 'manual' ? 'font-semibold' : 'text-muted-foreground'
+                          }
+                        >
+                          {b.origin === 'manual' ? 'Manual' : 'Auto'}
+                        </span>
+                        <span className="text-muted-foreground"> · </span>
                         {fmtTime(b.modifiedAt)}
                         <span className="text-muted-foreground"> · {fmtBytes(b.sizeBytes)}</span>
-                      </div>
-                      <div className="break-words font-mono text-2xs text-muted-foreground">
-                        {b.filename}
                       </div>
                     </div>
                     {/* An ACTION, not text. `variant="ghost"` at the default size put
@@ -143,21 +171,79 @@ export function SyncBackupsTab() {
                         change since the snapshot.
                         The name is per-backup: ten controls all called "Restore" are
                         ten identical announcements to a screen reader. */}
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      className="text-destructive"
-                      aria-label={`Restore backup ${b.filename}`}
-                      onClick={() => setRestoreTarget(b.filename)}
-                    >
-                      Restore
-                    </Button>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {/* Neutral, not red (WSB-2): the red belonged to the
+                          consequence, and the consequence lives in the confirm
+                          below, which states it in full. Ten red buttons down
+                          a list read as ten standing alarms. */}
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        aria-label={`Restore backup ${b.filename}`}
+                        onClick={() => setRestoreTarget(b.filename)}
+                      >
+                        Restore
+                      </Button>
+                      <OverflowMenu
+                        label={`Backup ${b.filename}`}
+                        items={[
+                          {
+                            key: 'download',
+                            label: 'Download',
+                            testId: `backup-download-${b.filename}`,
+                            // Content-Disposition: attachment — the browser
+                            // downloads without leaving the page.
+                            onSelect: () => window.location.assign(downloadUrl(b.filename)),
+                          },
+                          {
+                            key: 'delete',
+                            label: 'Delete',
+                            destructive: true,
+                            separator: true,
+                            testId: `backup-delete-${b.filename}`,
+                            onSelect: () => setDeleteTarget(b.filename),
+                          },
+                        ]}
+                      />
+                    </span>
                   </li>
                 ))}
               </ul>
             </div>
           ))}
         </div>
+      )}
+
+      {deleteTarget && (
+        <Modal onClose={() => !deleting && setDeleteTarget(null)} titleId="delete-backup-heading">
+          <div className="p-6">
+            <h2 id="delete-backup-heading" className="text-base font-semibold text-foreground">
+              Delete the backup from{' '}
+              {(() => {
+                const d = entries.find((e) => e.filename === deleteTarget);
+                return d ? `${dayLabel(d.modifiedAt)}, ${fmtTime(d.modifiedAt)}` : deleteTarget;
+              })()}
+              ?
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The snapshot <span className="font-mono">{deleteTarget}</span> is
+              removed permanently. The workspace itself is not touched.
+            </p>
+            <div className="mt-6 flex justify-between">
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => void deleteAction.run()}
+                disabled={deleting || deleteAction.pending}
+                aria-busy={deleting || deleteAction.pending}
+              >
+                {deleting || deleteAction.pending ? 'Deleting…' : 'Delete backup'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {restoreTarget && (

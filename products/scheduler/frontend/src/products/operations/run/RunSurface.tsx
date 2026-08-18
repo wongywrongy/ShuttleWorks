@@ -141,6 +141,30 @@ export function RunSurface({
 
   // ── transient state ───────────────────────────────────────────────────────
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  // Deep-linked selection (OV-1): the Overview's and Hub inspector's
+  // "Up next" rows land here as /live?select={source}:{id}. Consumed once on
+  // mount and removed from the URL, so the selection behaves like a click
+  // afterwards (closable, replaceable) rather than a URL that keeps
+  // re-selecting. Read from window.location, not useSearchParams: this
+  // surface has no other Router dependency, and a one-shot read does not
+  // need to subscribe to navigation.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get('select');
+    if (!key) return;
+    // One-shot mount read — the canonical consume-a-param-on-mount pattern
+    // (same shape as useTournamentBackups' load-on-mount).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedKey(key);
+    params.delete('select');
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      window.location.pathname + (qs ? `?${qs}` : ''),
+    );
+  }, []);
   /** Bracket has no persisted "called" status — overlay it locally. */
   const [calledBracketIds, setCalledBracketIds] = useState<Set<string>>(new Set());
   /**
@@ -194,6 +218,13 @@ export function RunSurface({
   }, [baseMatches, optimisticAssigns]);
   // `late` is gated on the floor running (planFinalized) and applies to the Now
   // match only — deriveCourtLanes owns that rule.
+  // Which engines are actually on the floor — the band's done figure counts
+  // them all, so it says which ones (LIVE-3).
+  const sourceScope = useMemo(() => {
+    const present = new Set(matches.map((m) => m.source));
+    return (['meet', 'bracket'] as const).filter((s) => present.has(s)).join(' + ');
+  }, [matches]);
+
   const lanes = useMemo(
     () => deriveCourtLanes(matches, courtCount, { running: !!planFinalized, currentSlot }),
     [matches, courtCount, planFinalized, currentSlot],
@@ -415,7 +446,7 @@ export function RunSurface({
   return (
     <div data-testid="run-surface" className="relative flex h-full min-h-0 flex-col bg-card">
       {/* Summary band */}
-      <RunSummaryBand summary={summary} />
+      <RunSummaryBand summary={summary} scope={sourceScope} />
 
       {/* Rejected-command strip. Each banner is the store-subscribing
           ConflictBanner (its documented production shape), prefixed with the

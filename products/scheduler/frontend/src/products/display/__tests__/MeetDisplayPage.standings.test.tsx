@@ -88,36 +88,26 @@ describe('MeetDisplayPage — standings placement (task 9)', () => {
     expect(screen.queryByText(/team standings/i)).toBeNull();
   });
 
-  it('renders a persistent SIDE panel by default for small court counts (<=6)', () => {
-    useTournamentStore.setState({
-      config: configWith({ courtCount: 4 }),
-      schedule: MINIMAL_SCHEDULE,
-      standings: STANDING_ROWS,
-    });
-
-    renderBoard();
-
-    const panel = screen.getByTestId('standings-side-panel');
-    expect(panel).toBeInTheDocument();
-    expect(panel).toHaveTextContent('Northside');
-    expect(panel).toHaveTextContent('Eastview');
-    expect(screen.queryByTestId('standings-rotation-screen')).toBeNull();
+  it('has no persistent side panel at any court count — standings rotate (TV-5)', () => {
+    // The panel took roughly a third of the board's width away from the
+    // courts, permanently, to hold a table nobody reads continuously.
+    for (const cfg of [
+      { courtCount: 4 },
+      { courtCount: 10 },
+      { courtCount: 4, standingsMode: 'side' as const },
+    ]) {
+      useTournamentStore.setState({
+        config: configWith(cfg),
+        schedule: MINIMAL_SCHEDULE,
+        standings: STANDING_ROWS,
+      });
+      const { unmount } = renderBoard();
+      expect(screen.queryByTestId('standings-side-panel')).toBeNull();
+      unmount();
+    }
   });
 
-  it('honors an explicit "side" override at a large court count (>6)', () => {
-    useTournamentStore.setState({
-      config: configWith({ courtCount: 10, standingsMode: 'side' }),
-      schedule: MINIMAL_SCHEDULE,
-      standings: STANDING_ROWS,
-    });
-
-    renderBoard();
-
-    expect(screen.getByTestId('standings-side-panel')).toBeInTheDocument();
-    expect(screen.queryByTestId('standings-rotation-screen')).toBeNull();
-  });
-
-  it('defaults to a timed ROTATION for large court counts (>6), swapping content on the interval', () => {
+  it('rotates courts → standings → up next on the 20 / 10 / 10 cycle (TV-7)', () => {
     vi.useFakeTimers();
     useTournamentStore.setState({
       config: configWith({ courtCount: 10 }),
@@ -127,42 +117,40 @@ describe('MeetDisplayPage — standings placement (task 9)', () => {
 
     renderBoard();
 
-    // Initial render: normal courts view, no side panel, no rotation
-    // takeover yet.
-    expect(screen.queryByTestId('standings-side-panel')).toBeNull();
+    // Courts holds twice the base dwell: it is the slide the hall is reading.
+    expect(screen.queryByTestId('standings-rotation-screen')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(19_000);
+    });
     expect(screen.queryByTestId('standings-rotation-screen')).toBeNull();
 
-    // After one rotation interval, the content area flips to the
-    // full-bleed standings screen.
     act(() => {
-      vi.advanceTimersByTime(15_000);
+      vi.advanceTimersByTime(1_000);
     });
-    const rotationScreen = screen.getByTestId('standings-rotation-screen');
-    expect(rotationScreen).toHaveTextContent('Northside');
+    expect(screen.getByTestId('standings-rotation-screen')).toHaveTextContent('Northside');
 
-    // One more interval flips it back to the normal view.
+    // …then back to the courts, since this fixture's queue is empty so the
+    // up-next slide is dropped rather than shown blank.
     act(() => {
-      vi.advanceTimersByTime(15_000);
+      vi.advanceTimersByTime(10_000);
     });
     expect(screen.queryByTestId('standings-rotation-screen')).toBeNull();
   });
 
-  it('honors an explicit "rotate" override at a small court count (<=6)', () => {
+  it('does not rotate at all when only the courts slide has data', () => {
     vi.useFakeTimers();
     useTournamentStore.setState({
-      config: configWith({ courtCount: 4, standingsMode: 'rotate' }),
+      config: configWith({ courtCount: 4, standingsMode: 'off' }),
       schedule: MINIMAL_SCHEDULE,
       standings: STANDING_ROWS,
     });
 
     renderBoard();
-
-    expect(screen.queryByTestId('standings-side-panel')).toBeNull();
-
     act(() => {
-      vi.advanceTimersByTime(15_000);
+      vi.advanceTimersByTime(120_000);
     });
-    expect(screen.getByTestId('standings-rotation-screen')).toBeInTheDocument();
+    expect(screen.queryByTestId('standings-rotation-screen')).toBeNull();
+    expect(screen.queryByTestId('up-next-rotation-screen')).toBeNull();
   });
 
   it('a stale bookmarked ?view=standings URL (the pre-task-9 tab) falls back to Courts, not a blank screen', () => {
@@ -174,10 +162,9 @@ describe('MeetDisplayPage — standings placement (task 9)', () => {
 
     renderBoard('/display?view=standings');
 
-    // The content area must still render something real (the courts grid,
-    // with its SIDE panel alongside it at this court count) — not fall
-    // through every `view === '...'` branch and render nothing.
-    expect(screen.getByTestId('standings-side-panel')).toBeInTheDocument();
+    // The content area must still render something real (the courts grid) —
+    // not fall through every `view === '...'` branch and render nothing.
+    expect(screen.getAllByText(/Court 1/i).length).toBeGreaterThan(0);
   });
 
   it('no longer offers a manual "Standings" tab — placement is director-configured, not spectator-toggled', () => {

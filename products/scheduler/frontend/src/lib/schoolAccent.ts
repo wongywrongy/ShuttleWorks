@@ -14,15 +14,23 @@ import type { PlayerDTO, RosterGroupDTO } from '../api/dto';
 
 /** Saturated mid-tones that pair with both light and dark surfaces.
  *  Drawn from Tailwind's *-600 family so they read as data, not
- *  decoration. Order is fixed; the hash below indexes into it. */
+ *  decoration. Order is fixed; the hash below indexes into it.
+ *
+ *  NON-SEMANTIC HUES ONLY (SP-CONSOLE-2 MAT-4 / X5). The palette used to
+ *  carry emerald, amber, rose and orange, so a two-school meet could hand
+ *  its two clubs a red dot and an orange one — the exact pair the status
+ *  vocabulary uses for danger and CALLED, sitting a few pixels from real
+ *  status chips. Amber was literally `--status-called`'s value. Green,
+ *  amber and red are spoken for; school identity draws from the blue /
+ *  violet / cyan / slate range, plus pink, which no status token claims. */
 const PALETTE = [
   '#3B82F6', // blue
-  '#059669', // emerald
-  '#d97706', // amber
+  '#4F46E5', // indigo
   '#8B5CF6', // violet
-  '#0d9488', // teal
-  '#e11d48', // rose
-  '#ea580c', // orange
+  '#A21CAF', // fuchsia
+  '#DB2777', // pink
+  '#0891B2', // cyan
+  '#0D9488', // teal
   '#64748B', // slate
 ] as const;
 

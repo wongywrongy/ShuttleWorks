@@ -176,12 +176,35 @@ function LivePanel({ summary }: PanelProps) {
             />
           </div>
         ) : null}
+        {/* The live line (OV-4, the inspector's mirror): the triplet is
+            planning information; what LIVE is asked is "is anything
+            happening, and is a court free". Only while something is. */}
+        {m?.playing != null && m.playing > 0 ? (
+          <p
+            data-testid="overview-live-line"
+            className="mt-2 text-xs text-muted-foreground"
+          >
+            <span className="font-medium text-status-live">
+              {m.playing} on court
+            </span>
+            {m.courtsFree != null
+              ? ` · ${m.courtsFree} court${m.courtsFree === 1 ? '' : 's'} free`
+              : ''}
+          </p>
+        ) : null}
       </div>
       {/* "Open live day" lives in the page header (G3.1). */}
       {nextUp.length > 0 ? (
         <div>
-          <SectionLabel>Next up</SectionLabel>
-          <NextUpList items={nextUp} />
+          <SectionLabel>Up next</SectionLabel>
+          <NextUpList
+            items={nextUp}
+            linkFor={(n) =>
+              n.matchId && n.source
+                ? `/tournaments/${summary.id}/live?select=${n.source}:${n.matchId}`
+                : null
+            }
+          />
         </div>
       ) : null}
     </section>

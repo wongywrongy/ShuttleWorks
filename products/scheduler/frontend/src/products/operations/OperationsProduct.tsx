@@ -55,6 +55,10 @@ const commitBtn =
   `${schedBtnBase} bg-accent text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
 const solveBtn =
   `${schedBtnBase} border border-border-control bg-card text-foreground hover:bg-muted/40`;
+// The ON state of the plan-ready toggle: the Live-day header's lifecycle pill,
+// not a primary button. A finished state should not keep asking to be pressed.
+const finalizedPillBtn =
+  'inline-flex items-center rounded-full border border-status-done/30 bg-status-done/10 px-2.5 py-0.5 text-xs font-medium text-status-done transition-colors duration-fast ease-brand hover:bg-status-done/20';
 // Armed re-solve. Destructive tone, not the commit glow: the operator is one
 // press from throwing the plan away, and it must not look like the button
 // beside it that keeps the plan.
@@ -264,6 +268,20 @@ function OperationsBody() {
                     ? 'Re-plan day'
                     : 'Generate meet'}
             </button>
+            {/* The footer's sentence, said where it applies (PLAN-4). "A
+                schedule is in place; Re-plan day replaces it" is the best
+                copy on this surface and it lived at the bottom of the page,
+                far from the button it describes and from the moment the
+                operator decides. The footer keeps it too — that one is about
+                the solver's state, this one is about this button. */}
+            {schedule && !reSolve.armed && !generating ? (
+              <span
+                data-testid="ops-replan-note"
+                className="text-2xs text-muted-foreground"
+              >
+                A schedule is in place; Re-plan day replaces it.
+              </span>
+            ) : null}
             {schedulableCount > 0 ? (
               <button
                 type="button"
@@ -277,12 +295,19 @@ function OperationsBody() {
             {/* The rule closes the solve group: commit must not be one 8px
                 gap away from the action that throws the plan away. */}
             <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
+            {/* One lifecycle-chip family across Plan and Live day (PLAN-2):
+                once the plan IS ready, this stops looking like an action
+                waiting to be taken and wears the same pill the Live-day
+                header shows for the same state. It stays a toggle — pressing
+                it un-readies the plan — so it keeps its button semantics and
+                its hover. */}
             <button
               type="button"
-              className={commitBtn}
+              className={planFinalized ? finalizedPillBtn : commitBtn}
               onClick={() => void planFinalizeAction.run()}
               disabled={planFinalizeAction.pending}
               aria-busy={planFinalizeAction.pending}
+              title={planFinalized ? 'Press to un-ready the plan' : undefined}
               data-testid="ops-plan-finalize-toggle"
             >
               {planFinalized ? 'Plan ready ✓' : 'Mark plan ready'}

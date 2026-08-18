@@ -186,7 +186,7 @@ export function WorkflowPanel({
                   : 'bg-muted text-muted-foreground hover:bg-muted/40 hover:text-foreground'
               }`}
             >
-              Up Next ({upNextFiltered.length}
+              Up next ({upNextFiltered.length}
               {searchQuery ? `/${upNextSorted.length}` : ''})
             </button>
             <button

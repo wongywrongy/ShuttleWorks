@@ -9,7 +9,7 @@
  *
  * Sections:
  *   UP NEXT  — assigned to a court, not finished (sorted slot, court)
- *   WAITING  — sides known or pending, no court yet (schedule-next
+ *   PENDING  — sides known or not yet decided, no court yet (schedule-next
  *              in the header is the move that promotes these)
  *   FINISHED — result recorded
  *
@@ -23,6 +23,7 @@ import { useBracketApi } from '../../api/bracketClient';
 import { useUiStore } from '../../store/uiStore';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
+import { STATE_WORD } from '../../lib/stateWords';
 import { formatBracketSlot } from './formatBracketSlot';
 import { playUnitSideLabels } from './bracketLabels';
 import { WinnerButton } from './WinnerButton';
@@ -187,7 +188,7 @@ export function LiveMatchList({ data, onChange }: Props) {
   return (
     <ul className="divide-y divide-border/60 border-t border-border">
       {section('Up next', upNext.map((p) => p.id))}
-      {section('Waiting', waiting.map((p) => p.id))}
+      {section(STATE_WORD.pending, waiting.map((p) => p.id))}
       {section('Finished', finished.map((p) => p.id))}
     </ul>
   );

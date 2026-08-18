@@ -43,6 +43,7 @@ export {
 export {
   STATUS_LABEL,
   STATUS_PILL_TONE,
+  statusTallyItems,
   type BracketMatchStatus,
   type MatchListStatus,
 } from './matchStatus';

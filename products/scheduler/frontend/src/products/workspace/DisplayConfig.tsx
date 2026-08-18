@@ -74,31 +74,38 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
   };
 
   return (
-    <div className="max-w-3xl space-y-2 p-6">
+    <div className="mx-auto max-w-3xl space-y-2 p-6">
       <div className="pb-2">
         <h2 className="type-display text-2xl text-foreground">Display</h2>
       </div>
 
-      {/* A feed is on because its module is on — this section reports state,
-          it does not set it. The rows are labelled with the module name and
-          the control slot carries the state, so nothing here needs a
-          sentence explaining what "Meet" means. */}
+      {/* DC-2 asked for real toggles here. Deliberately NOT taken: a feed is
+          on because its MODULE is on, and a switch on this page would be a
+          second place to disable a module — with its own 409-when-it-has-data
+          handling, its own dependency rules, and two surfaces disagreeing the
+          first time one of them was stale. The complaint was that the chips
+          read as ambiguous between a control and a readout, so they read as a
+          readout now: plain state, and a link to the surface that owns it. */}
       <Section title="Feeds">
         {FEEDS.map((f, i) => (
           <Row
             key={f.id}
+            readOnly
             label={f.label}
             last={i === FEEDS.length - 1}
             control={
-              <span
-                className={[
-                  'rounded-sm px-1.5 py-0.5 text-2xs font-medium',
-                  isOn(f.id)
-                    ? 'bg-accent/10 text-accent'
-                    : 'border border-border text-muted-foreground',
-                ].join(' ')}
-              >
-                {isOn(f.id) ? 'On' : 'Off'}
+              <span className="inline-flex items-baseline gap-2">
+                <span className={isOn(f.id) ? 'text-foreground' : 'text-muted-foreground'}>
+                  {isOn(f.id) ? 'On' : 'Off'}
+                </span>
+                {i === 0 ? (
+                  <Link
+                    to={`/tournaments/${tid}/ws-modules`}
+                    className="text-xs font-medium text-accent hover:underline"
+                  >
+                    Modules →
+                  </Link>
+                ) : null}
               </span>
             }
           />

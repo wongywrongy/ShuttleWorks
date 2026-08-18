@@ -8,6 +8,7 @@ opens one by navigating to ``/tournaments/{id}/...``.
 """
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import List, Literal, Optional
@@ -125,6 +126,11 @@ class BackupEntryDTO(BaseModel):
     filename: str
     sizeBytes: int
     modifiedAt: str
+    #: ``auto`` (a state write snapshotted the prior payload) or ``manual``
+    #: (the director asked for it). Only ``auto`` rows rotate, so the list
+    #: has to say which is which — a row the operator cannot lose reads
+    #: differently from one that will age out on its own.
+    origin: str = "auto"
 
 
 class BackupListDTO(BaseModel):
@@ -268,6 +274,7 @@ def _backup_entry(row) -> BackupEntryDTO:
         filename=row.filename,
         sizeBytes=row.size_bytes,
         modifiedAt=row.created_at.isoformat(),
+        origin=row.origin,
     )
 
 
@@ -977,6 +984,69 @@ def create_tournament_backup(
         created=backup is not None,
         filename=backup.filename if backup else None,
     )
+
+
+@router.get(
+    "/{tournament_id}/state/backups/{filename}",
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
+def download_tournament_backup(
+    filename: str,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Hand the snapshot back as a file.
+
+    Viewer, matching ``GET /state``: a backup is a workspace state the caller
+    is already allowed to read, at an earlier moment. The value of this over
+    Restore is that it is not destructive — a director who wants to check what
+    a snapshot contains before replacing today's work has, until now, had only
+    the replacing option.
+    """
+    _resolve_tournament(tournament_id, repo)
+    row = repo.backups.get_by_filename(tournament_id, filename)
+    if row is None:
+        raise http_error(
+            404,
+            ErrorCode.BACKUP_NOT_FOUND,
+            f"backup not found: {filename}",
+        )
+    # The filename is server-generated (``_backup_filename``) and the row was
+    # looked up BY it, so it cannot carry a header-splitting payload; quoted
+    # anyway, because that reasoning stops holding the day the name changes.
+    return Response(
+        content=json.dumps(row.snapshot, sort_keys=True),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{row.filename}"'
+        },
+    )
+
+
+@router.delete(
+    "/{tournament_id}/state/backups/{filename}",
+    status_code=204,
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
+def delete_tournament_backup(
+    filename: str,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Owner, matching Restore: both are irreversible, in opposite directions.
+
+    Needed because manual snapshots no longer rotate — a list that only ever
+    grows needs a way to shrink, or the exemption that protects a director's
+    backup becomes the thing that clutters their list.
+    """
+    _resolve_tournament(tournament_id, repo)
+    if not repo.delete_tournament_backup(tournament_id, filename):
+        raise http_error(
+            404,
+            ErrorCode.BACKUP_NOT_FOUND,
+            f"backup not found: {filename}",
+        )
+    return Response(status_code=204)
 
 
 @router.post(

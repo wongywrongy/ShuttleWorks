@@ -5,6 +5,16 @@ import { isModuleEnableable } from '../../platform/domain/moduleModel';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
 import { catalogMeta } from './moduleCatalog';
 
+/** The catalog chip speaks the glossary's tri-state, not the wire's. The chip
+ *  used to print `module.status` straight through, so it read "enabled" and
+ *  "disabled" while every other surface and `console-naming.md` said On and
+ *  Off (WSMOD-1). */
+const MODULE_STATUS_WORD: Record<string, string> = {
+  enabled: 'On',
+  available: 'Available',
+  disabled: 'Off',
+};
+
 /** One row of the Modules catalog: name + status chip, capability description,
  *  a dependency note when relevant, and the enable/disable action (per the
  *  backend rules — 409s surface as toasts). */
@@ -46,7 +56,7 @@ export function ModuleCatalogRow({
           <span className="text-sm font-medium text-foreground">{meta?.name ?? module.label}</span>
           <span
             className={[
-              'rounded-sm px-1.5 py-0.5 text-2xs font-medium capitalize',
+              'rounded-sm px-1.5 py-0.5 text-2xs font-medium',
               module.status === 'enabled'
                 ? 'bg-accent/10 text-accent'
                 : module.status === 'available'
@@ -54,7 +64,7 @@ export function ModuleCatalogRow({
                   : 'border border-dashed border-border text-muted-foreground',
             ].join(' ')}
           >
-            {module.status.replaceAll('-', ' ')}
+            {MODULE_STATUS_WORD[module.status] ?? module.status}
           </span>
         </div>
         <p className="text-xs text-muted-foreground">{meta?.capability ?? module.note}</p>

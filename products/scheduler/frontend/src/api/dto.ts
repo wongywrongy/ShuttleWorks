@@ -67,7 +67,9 @@ export interface TournamentConfig {
   //   strip — one tall row per court (default; best 3-6 courts, 1080p).
   //   grid  — 2-column responsive grid (best 8-16 courts).
   //   list  — dense one-line rows (best 16+ courts, side display).
-  tvDisplayMode?: 'strip' | 'grid' | 'list';
+  /** 'strip' is retired but still accepted from stored blobs — the board
+   *  maps it to 'auto' on read (DC-1). New writes never send it. */
+  tvDisplayMode?: 'auto' | 'strip' | 'grid' | 'list';
   // Brand accent for the public display — hex (``#RRGGBB``). Drives
   // the LIVE border, the LIVE pill, and the progress bar. Defaults to
   // emerald (``#10b981``) when unset.
@@ -92,6 +94,11 @@ export interface TournamentConfig {
   courtOrder?: number[] | null;
   hiddenCourts?: number[] | null;
   standingsMode?: 'off' | 'side' | 'rotate' | null;
+  /** Board rotation (TV-7 / DC-3). `null` = every slide that has data.
+   *  'side' and 'rotate' on standingsMode are equivalent now — the side
+   *  panel is retired — and only 'off' still changes anything. */
+  tvRotationSlides?: ('courts' | 'standings' | 'upNext')[] | null;
+  tvRotationDwellSeconds?: number | null;
   // Optional event-column ordering and visibility for the Roster
   // position grid. Defaults to the canonical MD / WD / XD / WS / MS
   // sequence. Hidden columns are stored as ``false`` per rank.
@@ -590,6 +597,10 @@ export interface BackupEntryDTO {
   filename: string;
   sizeBytes: number;
   modifiedAt: string;
+  /** `auto` (a state write snapshotted the prior payload) or `manual` (the
+   *  director asked for it). Only auto rows rotate (WSB-3), so the list says
+   *  which is which. Optional for older payloads. */
+  origin?: 'auto' | 'manual';
 }
 
 export interface BackupListDTO {
@@ -626,6 +637,10 @@ export interface WorkspaceModuleDTO {
   moduleId: 'meet' | 'bracket' | 'display' | 'entries';
   status: 'enabled' | 'available' | 'disabled' | 'coming_soon';
   config: Record<string, unknown> | null;
+  /** Whether this module owns operational data (matches, draws). Disabling
+   *  such a module 409s, and the catalog says so BEFORE the click (WSMOD-2).
+   *  Server-computed; optional for older payloads. */
+  hasData?: boolean;
 }
 
 // ---- Entries (SP-E1-1) ------------------------------------------------
@@ -753,6 +768,12 @@ interface MatchMetricsDTO {
    *  results) — the Overview's live-progress readout. Optional for older
    *  payloads. */
   played?: number;
+  /** Matches on a court right now (started; called deliberately excluded —
+   *  its players are still walking). INS-4/OV-4. Optional for older payloads. */
+  playing?: number;
+  /** Courts with nothing playing on them. `null` when the workspace has no
+   *  court count to subtract from — an unknown is not zero. */
+  courtsFree?: number | null;
 }
 
 /** One upcoming match for the inspector's "Next up" list. `status` is
@@ -763,6 +784,12 @@ export interface NextMatchDTO {
   timeLabel: string | null;
   courtLabel: string | null;
   status: string;
+  /** Identity, so a "Up next" row can be a door rather than a readout (OV-1).
+   *  `source` matters as much as the id: Operations keys selection
+   *  `{source}:{id}` because meet and bracket records are non-merged
+   *  (ADR 0006). Optional for older payloads. */
+  matchId?: string | null;
+  source?: 'meet' | 'bracket' | null;
 }
 
 export interface WorkspaceSignalsDTO {

@@ -46,11 +46,26 @@ const SECTION_IDS = NAV.flatMap((g) => g.items.map((i) => i.id));
 
 /* ----------------------------- shared bits ----------------------------- */
 
-function PageHead({ title, subtitle }: { title: string; subtitle?: string }) {
+/** The page's title row, and the only place a form's primary action goes.
+ *  Save used to ride the first section's `action` slot, where it hung mid-page
+ *  beside a collapsible heading and read as saving that section rather than
+ *  the page, while the title row above it sat empty (ACC-1). */
+function PageHead({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+}) {
   return (
-    <div className="mb-5">
-      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-      {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
+    <div className="mb-5 flex items-start justify-between gap-4">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }
@@ -73,8 +88,16 @@ function ProfilePage() {
   const displayName = user?.displayName ?? '';
   const initials = (displayName || email).trim().charAt(0).toUpperCase() || 'L';
   return (
-    <div className="max-w-xl space-y-6 p-6">
-      <PageHead title="Profile" subtitle="Your name and how you appear across the app." />
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <PageHead
+        title="Profile"
+        subtitle="Your name and how you appear across the app."
+        action={
+          <Button size="sm" disabled={locked}>
+            Save changes
+          </Button>
+        }
+      />
 
       <div className="flex items-center gap-4">
         <span
@@ -91,15 +114,7 @@ function ProfilePage() {
         </div>
       </div>
 
-      <Section
-        title="Your details"
-        defaultOpen
-        action={
-          <Button size="sm" disabled={locked}>
-            Save changes
-          </Button>
-        }
-      >
+      <Section title="Your details" defaultOpen>
         <FieldRow
           label="Full name"
           defaultValue={displayName}
@@ -153,12 +168,10 @@ function SecurityPage() {
   }
 
   return (
-    <div className="max-w-xl space-y-6 p-6">
-      <PageHead title="Security" subtitle="Manage your password and account security." />
-
-      <Section
-        title="Change password"
-        defaultOpen
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <PageHead
+        title="Security"
+        subtitle="Manage your password and account security."
         action={
           <Button
             size="sm"
@@ -168,7 +181,9 @@ function SecurityPage() {
             {busy ? 'Updating…' : 'Update password'}
           </Button>
         }
-      >
+      />
+
+      <Section title="Change password" defaultOpen>
         <FieldRow
           label="Current password"
           type="password"
@@ -235,7 +250,7 @@ function SessionsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="max-w-xl flex-1 space-y-6 p-6">
+      <div className="mx-auto max-w-3xl flex-1 space-y-6 p-6">
         <PageHead title="Sessions" subtitle="Devices and browsers signed in to your account." />
 
         <div className="rounded-md border border-border p-4">
@@ -274,7 +289,7 @@ function SessionsPage() {
 
 function AppearancePage() {
   return (
-    <div className="max-w-2xl space-y-5 p-6">
+    <div className="mx-auto max-w-3xl space-y-5 p-6">
       <PageHead title="Appearance" subtitle="Theme and density for this browser." />
       <AppearanceSettings />
     </div>
@@ -292,7 +307,7 @@ export function GlobalSettingsPage() {
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
         <ShuttleWorksMark />
-        <span className="text-sm font-semibold text-foreground">Settings</span>
+        <span className="text-sm font-semibold text-foreground">Account</span>
       </header>
 
       <div className="flex min-h-0 flex-1">

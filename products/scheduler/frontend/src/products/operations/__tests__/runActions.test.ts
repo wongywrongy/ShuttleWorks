@@ -27,6 +27,7 @@ const m = (o: any) => {
     span: 1,
     status: o.status ?? 'scheduled',
     late: false,
+    timeliness: 'ontime' as const,
     eligible: o.eligible ?? false,
     court: o.court,
     plannedSlot: o.slot,

@@ -7,6 +7,7 @@ vi.mock('../../../hooks/useTournamentBackups', () => ({ useTournamentBackups: vi
 
 const createBackup = vi.fn();
 const restoreBackup = vi.fn();
+const deleteBackup = vi.fn();
 
 function setHook(over: Partial<ReturnType<typeof useTournamentBackups>> = {}) {
   vi.mocked(useTournamentBackups).mockReturnValue({
@@ -17,6 +18,8 @@ function setHook(over: Partial<ReturnType<typeof useTournamentBackups>> = {}) {
     refresh: vi.fn(),
     createBackup,
     restoreBackup,
+    deleteBackup,
+    downloadUrl: (f: string) => `/api/tournaments/t1/state/backups/${f}`,
     ...over,
   });
 }
@@ -24,6 +27,7 @@ function setHook(over: Partial<ReturnType<typeof useTournamentBackups>> = {}) {
 beforeEach(() => {
   createBackup.mockReset().mockResolvedValue(undefined);
   restoreBackup.mockReset().mockResolvedValue(undefined);
+  deleteBackup.mockReset().mockResolvedValue(undefined);
   setHook();
 });
 
@@ -84,5 +88,42 @@ describe('SyncBackupsTab', () => {
     setHook({ error: 'Restore failed' });
     render(<SyncBackupsTab />);
     expect(screen.getByRole('alert')).toHaveTextContent('Restore failed');
+  });
+});
+
+describe('SyncBackupsTab — WSB-2/3/4', () => {
+  it('leads each row with its origin; Manual reads as the keeper', () => {
+    setHook({
+      entries: [
+        { filename: 'a.json', sizeBytes: 1024, modifiedAt: '2026-06-01T01:00:00Z', origin: 'auto' },
+        { filename: 'm.json', sizeBytes: 1024, modifiedAt: '2026-06-01T02:00:00Z', origin: 'manual' },
+      ],
+    });
+    render(<SyncBackupsTab />);
+    expect(within(screen.getByTestId('backup-a.json')).getByText('Auto')).toBeInTheDocument();
+    expect(within(screen.getByTestId('backup-m.json')).getByText('Manual')).toBeInTheDocument();
+    // The filename is no longer a standing second line on every row.
+    expect(within(screen.getByTestId('backup-a.json')).queryByText('a.json')).toBeNull();
+  });
+
+  it('the Restore row button is neutral — the red moved into the confirm (WSB-2)', () => {
+    render(<SyncBackupsTab />);
+    const btn = screen.getByRole('button', { name: 'Restore backup b1.json' });
+    expect(btn.className).not.toMatch(/destructive/);
+  });
+
+  it('delete goes through the overflow and a named confirm', async () => {
+    render(<SyncBackupsTab />);
+    fireEvent.click(
+      within(screen.getByTestId('backup-b1.json')).getByRole('button', {
+        name: 'Backup b1.json',
+      }),
+    );
+    fireEvent.click(await screen.findByTestId('backup-delete-b1.json'));
+    // The consequence is stated before anything happens.
+    expect(screen.getByText(/removed permanently/i)).toBeInTheDocument();
+    expect(deleteBackup).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete backup' }));
+    await waitFor(() => expect(deleteBackup).toHaveBeenCalledWith('b1.json'));
   });
 });

@@ -36,7 +36,7 @@ import { NextUpList } from '../../components/control-plane/NextUpList';
 import { SetupChecklist } from '../../components/control-plane/SetupChecklist';
 import { buildChecklist } from '../../platform/domain/setupChecklist';
 
-/** One metric tile in the "This event" triplet. */
+/** One metric tile in the "This workspace" triplet. */
 function MetricTile({
   value,
   label,
@@ -135,17 +135,22 @@ export function WorkspaceInspector({
         >
           {action.label === 'Open workspace' ? 'Open workspace →' : action.label}
         </Button>
+        {/* Named, not a naked gear (INS-2). The console already shows two
+            gears at once — the rail's Account gear and the workspace header's
+            — so a third, unlabeled one sitting beside the primary action was
+            the same ambiguity a third time. The glyph carried no meaning the
+            word does not. */}
         <Button
           variant="outline"
-          aria-label="Workspace settings"
+          className="shrink-0"
           onClick={() => onSettings(tournament.id)}
         >
-          ⚙
+          Workspace settings
         </Button>
       </div>
 
       <DetailPanel.Section
-        eyebrow="This event"
+        eyebrow="This workspace"
         right={
           tournament.signals ? (
             <StatusPill tone={pill.tone} dot className="shrink-0">
@@ -184,6 +189,25 @@ export function WorkspaceInspector({
             </>
           )}
         </div>
+        {/* The live line (INS-4). played/remaining/total is planning
+            information; during LIVE the question this pane is being asked is
+            "is anything happening, and is a court free" — which the triplet
+            cannot answer. One quiet row, only while it is true. */}
+        {tournament.signals?.phase === 'live' &&
+        metrics?.playing != null &&
+        metrics.playing > 0 ? (
+          <p
+            data-testid="inspector-live-line"
+            className="mt-2 text-xs text-muted-foreground"
+          >
+            <span className="font-medium text-status-live">
+              {metrics.playing} on court
+            </span>
+            {metrics.courtsFree != null
+              ? ` · ${metrics.courtsFree} court${metrics.courtsFree === 1 ? '' : 's'} free`
+              : ''}
+          </p>
+        ) : null}
       </DetailPanel.Section>
 
       {steps.length > 0 ? (
@@ -246,8 +270,15 @@ export function WorkspaceInspector({
       </DetailPanel.Section>
 
       {(tournament.signals?.nextUp?.length ?? 0) > 0 ? (
-        <DetailPanel.Section eyebrow="Next up" testId="inspector-next-up">
-          <NextUpList items={tournament.signals?.nextUp ?? []} />
+        <DetailPanel.Section eyebrow="Up next" testId="inspector-next-up">
+          <NextUpList
+            items={tournament.signals?.nextUp ?? []}
+            linkFor={(n) =>
+              n.matchId && n.source
+                ? `/tournaments/${tournament.id}/live?select=${n.source}:${n.matchId}`
+                : null
+            }
+          />
         </DetailPanel.Section>
       ) : null}
     </DetailPanel>

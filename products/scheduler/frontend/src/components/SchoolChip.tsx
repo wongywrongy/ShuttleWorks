@@ -23,12 +23,16 @@ export function SchoolChip({
       title={accent.name}
       className={`inline-flex shrink-0 items-center gap-1 rounded-sm border border-border bg-muted/40 px-1 py-px text-3xs font-semibold text-muted-foreground ${className}`}
     >
-      {/* Bare dot, not <SchoolDot/> — the chip's own title already names the
-          school, and a second tooltip-bearing element inside it would
-          announce the name twice. */}
+      {/* Bare marker, not <SchoolDot/> — the chip's own title already names
+          the school, and a second tooltip-bearing element inside it would
+          announce the name twice.
+
+          A rounded SQUARE, not a circle: round dots mean match state
+          everywhere else in the console, so shape carries the distinction
+          even when a school's hue happens to sit near a status one. */}
       <span
         aria-hidden
-        className="inline-block h-2 w-2 shrink-0 rounded-full"
+        className="inline-block h-2 w-2 shrink-0 rounded-[2px]"
         style={{ backgroundColor: accent.color }}
       />
       {accent.abbrev}

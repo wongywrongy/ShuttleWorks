@@ -10,6 +10,7 @@ function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' |
     span: 1,
     status: 'scheduled',
     late: false,
+    timeliness: 'ontime' as const,
     eligible: true,
     ...p,
   };

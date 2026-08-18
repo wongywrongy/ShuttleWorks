@@ -1320,6 +1320,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/state/backups/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Tournament Backup
+         * @description Hand the snapshot back as a file.
+         *
+         *     Viewer, matching ``GET /state``: a backup is a workspace state the caller
+         *     is already allowed to read, at an earlier moment. The value of this over
+         *     Restore is that it is not destructive — a director who wants to check what
+         *     a snapshot contains before replacing today's work has, until now, had only
+         *     the replacing option.
+         */
+        get: operations["download_tournament_backup_tournaments__tournament_id__state_backups__filename__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Tournament Backup
+         * @description Owner, matching Restore: both are irreversible, in opposite directions.
+         *
+         *     Needed because manual snapshots no longer rotate — a list that only ever
+         *     grows needs a way to shrink, or the exemption that protects a director's
+         *     backup becomes the thing that clutters their list.
+         */
+        delete: operations["delete_tournament_backup_tournaments__tournament_id__state_backups__filename__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/state/restore/{filename}": {
         parameters: {
             query?: never;
@@ -2519,6 +2553,11 @@ export interface components {
             sizeBytes: number;
             /** Modifiedat */
             modifiedAt: string;
+            /**
+             * Origin
+             * @default auto
+             */
+            origin: string;
         };
         /** BackupListDTO */
         BackupListDTO: {
@@ -3824,8 +3863,17 @@ export interface components {
          *     ``played`` counts terminally-resolved matches (finished/retired on the
          *     meet side, recorded results on the bracket side) — the same play state
          *     the lifecycle phase reads, so the Overview's live-progress readout can
-         *     never disagree with ``phase``. Live called/started counts stay off this
-         *     DTO by design (Operations Run owns them).
+         *     never disagree with ``phase``.
+         *
+         *     ``playing`` / ``courtsFree`` REVERSE this DTO's original rule that live
+         *     counts belong to Operations alone (SP-CONSOLE-2 INS-4 / OV-4). The reason
+         *     the rule was right no longer holds and the reason to break it is concrete:
+         *     played/remaining/total is planning information, and during a live day the
+         *     question both the Hub inspector and the Overview are being asked is "is
+         *     anything happening, and is a court free" — which neither could answer,
+         *     because the Hub reads only these server-computed signals and has no other
+         *     route to match state. The data was already loaded here for ``played``;
+         *     withholding the count was a boundary, not a cost.
          */
         MatchMetricsDTO: {
             /**
@@ -3848,6 +3896,13 @@ export interface components {
              * @default 0
              */
             played: number;
+            /**
+             * Playing
+             * @default 0
+             */
+            playing: number;
+            /** Courtsfree */
+            courtsFree?: number | null;
         };
         /**
          * MatchMove
@@ -4011,6 +4066,10 @@ export interface components {
              * @default scheduled
              */
             status: string;
+            /** Matchid */
+            matchId?: string | null;
+            /** Source */
+            source?: ("meet" | "bracket") | null;
         };
         /** PageDTO */
         PageDTO: {
@@ -4746,7 +4805,7 @@ export interface components {
             /** Deuceenabled */
             deuceEnabled?: boolean | null;
             /** Tvdisplaymode */
-            tvDisplayMode?: ("strip" | "grid" | "list") | null;
+            tvDisplayMode?: ("auto" | "strip" | "grid" | "list") | null;
             /** Tvaccent */
             tvAccent?: string | null;
             /** Tvpreset */
@@ -4763,6 +4822,10 @@ export interface components {
             hiddenCourts?: number[] | null;
             /** Standingsmode */
             standingsMode?: ("off" | "side" | "rotate") | null;
+            /** Tvrotationslides */
+            tvRotationSlides?: ("courts" | "standings" | "upNext")[] | null;
+            /** Tvrotationdwellseconds */
+            tvRotationDwellSeconds?: number | null;
             /** Eventorder */
             eventOrder?: string[] | null;
             /** Eventvisible */
@@ -5136,6 +5199,11 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Hasdata
+             * @default false
+             */
+            hasData: boolean;
         };
         /**
          * WorkspaceModulePatchDTO
@@ -7165,6 +7233,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BackupCreatedDTO"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_tournament_backup_tournaments__tournament_id__state_backups__filename__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                filename: string;
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_tournament_backup_tournaments__tournament_id__state_backups__filename__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                filename: string;
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

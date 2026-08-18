@@ -99,6 +99,7 @@ function mkMatch(
     span: 1,
     status: 'scheduled',
     late: false,
+    timeliness: 'ontime' as const,
     eligible: true,
     ...overrides,
   };

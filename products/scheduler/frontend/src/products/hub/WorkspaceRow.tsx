@@ -19,75 +19,44 @@ import {
 } from '../../components/control-plane';
 import { StatusPill } from '../../components/StatusPill';
 import { lifecycleBadge } from '../../platform/domain/lifecycle';
-import { workspaceHealth } from './hubSignals';
+import { attentionReasons, workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
-import { moduleGlyphs, type ModuleGlyphId } from './moduleGlyphs';
 
-/* Color budget (2026-07): module identity is carried by the LETTER, not a
- * hue — the M/D/B rainbow was decoration. Enabled modules read as neutral
- * filled chips, available ones as dashed outlines.
+/** The row's Attention column.
  *
- * SP-UI-1: the fill was `bg-surface-chip text-text-secondary`, which sat so
- * close to the row background that M/B/D was unreadable without hovering for
- * the title — on a scanning surface that is a dead column. Raised to the
- * raised-surface step + full-strength text, on a hairline so the chip has an
- * edge of its own. Still achromatic, still compact. */
-const GLYPH_CLASS: Record<ModuleGlyphId, string> = {
-  meet: 'bg-surface-raised text-foreground border border-border',
-  display: 'bg-surface-raised text-foreground border border-border',
-  bracket: 'bg-surface-raised text-foreground border border-border',
-  entries: 'bg-surface-raised text-foreground border border-border',
-};
-
-/** Glyph → module name for the chip's title. Was a letter-keyed ternary whose
- *  final `: 'Bracket'` would have called the new E chip "Bracket"; keyed on the
- *  id, a missing module is now a type error instead of wrong hover text. */
-const GLYPH_TITLE: Record<ModuleGlyphId, string> = {
-  meet: 'Meet',
-  display: 'Display',
-  bracket: 'Bracket',
-  entries: 'Entries',
-};
-
-/** The row's Modules column — enabled modules as solid tinted glyphs, or a
- *  single dashed kind-default when nothing is enabled (see moduleGlyphs).
+ *  This slot used to hold module glyphs (M / B / D). Modules are static
+ *  configuration: the same three letters on every row of a season, repeating
+ *  what the inspector states in full, on the one surface whose job is to say
+ *  which workspace needs the director NOW (HUB-3).
  *
- *  Each glyph is `role="img"` with the module's name as its label. A `title`
- *  alone decodes M/B/D/E for a mouse and for nobody else: it is not focusable,
- *  a screen reader gets a bare letter, and a touch device has no hover. The
- *  label makes the letter a NAMED image everywhere; the title stays for the
- *  pointer tooltip. */
-function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
-  const glyphs = moduleGlyphs(tournament.modules ?? [], tournament.kind);
+ *  It carries the workspace's first attention reason instead. The row already
+ *  renders a HealthDot from the same signals, so a second glyph would have
+ *  been the same fact twice; a dot can say THAT something is wrong and never
+ *  WHAT, which is the half the operator is missing. Silent when nothing is
+ *  wrong — a calm list is the point.
+ */
+function AttentionCell({ tournament }: { tournament: TournamentSummaryDTO }) {
+  const reasons = attentionReasons(tournament);
+  const first = reasons[0];
   return (
     <span
-      data-testid="row-modules"
-      // T4 (390px, 2026-08-12): the row's own `@container/table` (below) lets
-      // this yield BEFORE the name does — same `hidden …:flex` mechanism as
-      // BandedTable's column priorities, just applied to a hand-rolled cell
-      // instead of a `columns` config. Priority 3 (yields soonest): this is
-      // decoration the inspector panel already repeats, never the row's only
-      // identifying fact.
-      className={['w-[108px] shrink-0 items-center gap-1', COL_PRIORITY_CLASS_FLEX[3]].join(' ')}
+      data-testid="row-attention"
+      // Priority 3 (yields soonest), as the modules cell was: the row's
+      // health dot survives the narrowest widths and still flags the row.
+      className={['w-[132px] shrink-0 items-center gap-1', COL_PRIORITY_CLASS_FLEX[3]].join(' ')}
     >
-      {glyphs.map((g) => (
+      {first ? (
         <span
-          key={g.id}
-          data-testid={`row-module-${g.id}`}
-          role="img"
-          aria-label={`${GLYPH_TITLE[g.id]}: ${g.enabled ? 'enabled' : 'available'}`}
-          title={`${GLYPH_TITLE[g.id]}: ${g.enabled ? 'enabled' : 'available'}`}
-          className={[
-            'inline-flex h-5 w-5 items-center justify-center rounded text-[11px] font-semibold',
-            g.enabled
-              ? GLYPH_CLASS[g.id]
-              : 'border border-dashed border-border text-muted-foreground',
-          ].join(' ')}
+          className="min-w-0 break-words text-xs text-status-warning"
+          title={reasons.map((r) => r.label).join(' · ')}
         >
-          {g.letter}
+          {first.label}
+          {reasons.length > 1 ? (
+            <span className="text-muted-foreground"> +{reasons.length - 1}</span>
+          ) : null}
         </span>
-      ))}
+      ) : null}
     </span>
   );
 }
@@ -168,7 +137,7 @@ export function WorkspaceRow({
   const attention = action.kind === 'set-date';
 
   const overflowItems: OverflowItem[] = [
-    { key: 'settings', label: 'Settings', onSelect: onSettings },
+    { key: 'settings', label: 'Workspace settings', onSelect: onSettings },
     ...(onDelete
       ? [{ key: 'delete', label: 'Delete', onSelect: onDelete, destructive: true, separator: true, testId: 'overflow-delete' } as OverflowItem]
       : []),
@@ -222,7 +191,7 @@ export function WorkspaceRow({
         ) : null}
       </span>
 
-      <ModulesCell tournament={tournament} />
+      <AttentionCell tournament={tournament} />
 
       {showDate ? <DateCell iso={tournament.tournamentDate} /> : null}
 
@@ -244,9 +213,13 @@ export function WorkspaceRow({
           'flex w-40 shrink-0 items-center justify-between gap-1 rounded-sm px-2 py-1 text-left text-xs',
           'transition-colors duration-fast ease-brand',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+          // Accent AT REST, not only on hover (HUB-1): in muted ink this
+          // read as one more metadata column, indistinguishable from the
+          // date cell beside it, and a hover state is not an affordance on
+          // a touch device or to an eye scanning the list.
           attention
             ? 'text-status-warning group-hover:bg-status-warning/10'
-            : 'text-muted-foreground group-hover:bg-accent/10 group-hover:text-accent',
+            : 'text-accent group-hover:bg-accent/10',
         ].join(' ')}
       >
         <span className="min-w-0 break-words">{action.label}</span>

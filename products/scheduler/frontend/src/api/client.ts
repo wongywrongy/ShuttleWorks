@@ -1121,6 +1121,20 @@ class ApiClient {
     return res.data;
   }
 
+  /** The download URL for one backup snapshot (served as a JSON attachment).
+   *  A URL, not a fetch: the browser's own download flow handles the
+   *  Content-Disposition, and cookies ride along same-origin. */
+  backupDownloadUrl(tid: string, filename: string): string {
+    return `${this.client.defaults.baseURL}/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`;
+  }
+
+  /** Delete one backup (owner; 404 for an unknown name). */
+  async deleteTournamentBackup(tid: string, filename: string): Promise<void> {
+    await this.client.delete(
+      `/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`,
+    );
+  }
+
   // ---- Match State Management ------------------------------------------
 
   /** Get all match states for the tournament. */

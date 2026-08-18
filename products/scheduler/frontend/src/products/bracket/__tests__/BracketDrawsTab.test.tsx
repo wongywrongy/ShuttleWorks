@@ -162,7 +162,7 @@ describe('BracketDrawsTab — draw rows', () => {
     expect(screen.getByText('No draws yet')).toBeInTheDocument();
   });
 
-  it('shows the DONE/LIVE/READY/PEND progress strip when the draw has matches', () => {
+  it('shows the DONE/LIVE/READY/PENDING progress strip when the draw has matches', () => {
     mockBracketData = makeBracketData({
       status: 'started',
       playUnits: [
@@ -181,16 +181,18 @@ describe('BracketDrawsTab — draw rows', () => {
     });
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
-    expect(within(row).getByText('DONE').parentElement).toHaveTextContent(/DONE\s*1/);
-    expect(within(row).getByText('LIVE').parentElement).toHaveTextContent(/LIVE\s*1/);
-    expect(within(row).getByText('READY').parentElement).toHaveTextContent(/READY\s*1/);
-    expect(within(row).getByText('PEND').parentElement).toHaveTextContent(/PEND\s*1/);
+    // Sentence-case in the DOM, uppercased by StatusCount's CSS — the strip
+    // reads DONE / LIVE / READY / PENDING on screen (X1: no second literal).
+    expect(within(row).getByText('Done').parentElement).toHaveTextContent(/Done\s*1/);
+    expect(within(row).getByText('Live').parentElement).toHaveTextContent(/Live\s*1/);
+    expect(within(row).getByText('Ready').parentElement).toHaveTextContent(/Ready\s*1/);
+    expect(within(row).getByText('Pending').parentElement).toHaveTextContent(/Pending\s*1/);
   });
 
   it('shows a placeholder instead of the strip while the draw has no matches', () => {
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
-    expect(within(row).queryByText('DONE')).not.toBeInTheDocument();
+    expect(within(row).queryByText('Done')).not.toBeInTheDocument();
   });
 
   // D4 — PROGRESS was the row's flex-1 grower while Format was fixed-width,
@@ -207,7 +209,7 @@ describe('BracketDrawsTab — draw rows', () => {
     });
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
-    const cell = within(row).getByText('DONE').closest('[role="cell"]');
+    const cell = within(row).getByText('Done').closest('[role="cell"]');
     // w-48, not w-52: the row's seven columns overran their ~950px budget and
     // the flex-1 Format column absorbed it by collapsing to zero. Progress
     // gave back 16px as part of re-budgeting the row. The PROPERTY under test

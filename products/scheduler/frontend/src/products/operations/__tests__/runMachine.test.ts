@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { transition, can, fromEngineStatus, RUN_STATUS_LABEL, deriveLate, deriveDriftSlots } from '../runtime/runMachine';
+import { transition, can, fromEngineStatus, RUN_STATUS_LABEL, deriveLate, deriveTimeliness, deriveDriftSlots } from '../runtime/runMachine';
 
 describe('runMachine', () => {
   it('walks the happy path call→start→record', () => {
@@ -30,7 +30,7 @@ describe('runMachine', () => {
   });
   it('labels use the canonical words', () => {
     expect(RUN_STATUS_LABEL).toMatchObject({
-      scheduled: 'Scheduled', called: 'Called', playing: 'Playing', done: 'Done',
+      scheduled: 'Scheduled', called: 'Called', playing: 'Live', done: 'Done',
     });
   });
 });
@@ -47,6 +47,31 @@ describe('deriveLate', () => {
     expect(deriveLate({ status: 'scheduled', plannedSlot: 5, currentSlot: 3 })).toBe(false);
     expect(deriveLate({ status: 'scheduled', plannedSlot: undefined, currentSlot: 3 })).toBe(false);
     expect(deriveLate({ status: 'scheduled', plannedSlot: 5, currentSlot: undefined })).toBe(false);
+  });
+});
+describe('deriveTimeliness', () => {
+  it('is DUE, not late, on the match own planned slot', () => {
+    // The bug this tier exists to kill: the board read "LATE +0" the instant
+    // a match slot began, because the old boolean was `current >= planned`.
+    expect(deriveTimeliness({ status: 'scheduled', plannedSlot: 4, currentSlot: 4 })).toBe('due');
+    expect(deriveTimeliness({ status: 'called', plannedSlot: 4, currentSlot: 4 })).toBe('due');
+  });
+  it('escalates by whole slots: 1 past is late, 2+ past is overdue', () => {
+    expect(deriveTimeliness({ status: 'scheduled', plannedSlot: 4, currentSlot: 5 })).toBe('late');
+    expect(deriveTimeliness({ status: 'scheduled', plannedSlot: 4, currentSlot: 6 })).toBe('overdue');
+    expect(deriveTimeliness({ status: 'called', plannedSlot: 0, currentSlot: 9 })).toBe('overdue');
+  });
+  it('is on time before the slot, once playing/done, or with no clock or plan', () => {
+    expect(deriveTimeliness({ status: 'scheduled', plannedSlot: 5, currentSlot: 3 })).toBe('ontime');
+    expect(deriveTimeliness({ status: 'playing', plannedSlot: 2, currentSlot: 9 })).toBe('ontime');
+    expect(deriveTimeliness({ status: 'done', plannedSlot: 2, currentSlot: 9 })).toBe('ontime');
+    expect(deriveTimeliness({ status: 'scheduled', plannedSlot: undefined, currentSlot: 3 })).toBe('ontime');
+    expect(deriveTimeliness({ status: 'scheduled', plannedSlot: 5, currentSlot: undefined })).toBe('ontime');
+  });
+  it('keeps deriveLate exactly as wide as it was — DUE still counts', () => {
+    // The summary band and the Plan chips read `late`; widening or narrowing
+    // it here would silently move a count nobody asked to move.
+    expect(deriveLate({ status: 'scheduled', plannedSlot: 4, currentSlot: 4 })).toBe(true);
   });
 });
 describe('deriveDriftSlots', () => {

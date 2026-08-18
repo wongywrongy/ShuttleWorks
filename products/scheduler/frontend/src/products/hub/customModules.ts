@@ -1,16 +1,23 @@
 /**
  * Custom-build module state for the `/new` route's Custom template.
  *
- * A per-module tri-state (enabled | available | off) maps to the create payload:
- *   enabled   → 'enabled'   (on immediately)
- *   available → 'available' (installable later from Settings)
- *   off       → 'disabled'  (present but off)
+ * A per-module ON/OFF choice maps to the create payload:
+ *   enabled → 'enabled'   (on immediately)
+ *   off     → 'available' (offered in the Modules catalog, not on yet)
+ *
+ * The form used to offer the catalog's full tri-state (On / Available / Off),
+ * but "Available" and "Off" are the same answer at creation time — neither
+ * module is on, and both are one click apart in Modules afterwards. Asking a
+ * director to distinguish them before the workspace exists was a question
+ * without a consequence, so `/new` asks On or Off and seeds everything
+ * not-On as available (SP-CONSOLE-2 R-B). The catalog keeps all three.
+ *
  * `kindForSeed` derives the legacy workspace `kind`: bracket-only → 'bracket',
  * everything else → 'meet'.
  */
 import type { WorkspaceModuleDTO } from '../../api/dto';
 
-export type ModuleState = 'enabled' | 'available' | 'off';
+export type ModuleState = 'enabled' | 'off';
 
 export interface CustomState {
   meet: ModuleState;
@@ -20,9 +27,10 @@ export interface CustomState {
 
 export const DEFAULT_CUSTOM: CustomState = { meet: 'enabled', bracket: 'off', display: 'off' };
 
-const toStatus = (s: ModuleState): WorkspaceModuleDTO['status'] => (s === 'off' ? 'disabled' : s);
+const toStatus = (s: ModuleState): WorkspaceModuleDTO['status'] =>
+  s === 'off' ? 'available' : 'enabled';
 
-/** A custom build's tri-state → the `modules[]` create seed (off → disabled).
+/** A custom build's On/Off → the `modules[]` create seed (off → available).
  *
  *  Deliberately does NOT include `entries`, and this is not an oversight to
  *  fix: the entries row is seeded SERVER-side and only under `AUTH_MODE=cloud`

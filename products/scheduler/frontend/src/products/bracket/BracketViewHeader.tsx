@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useBracketApi, type BracketApi } from "../../api/bracketClient";
 import type { TournamentDTO } from "../../api/bracketDto";
 import { Select, StatusBar } from "@scheduler/design-system";
+import { statusTallyItems } from "../../components/control-plane";
 import type { BracketView } from "../../lib/bracketTabs";
 import { useTournamentId } from "../../hooks/useTournamentId";
 import { INTERACTIVE_BASE } from "../../lib/utils";
@@ -13,6 +14,7 @@ import { SourceChip } from "../../components/SourceChip";
 import { formatLabel, disciplineLabel } from "./bracketLabels";
 import { descriptorFor } from "./formatRegistry";
 import { BracketScheduleModal } from "./BracketScheduleModal";
+import { drawProgress } from "./drawProgress";
 import type { BracketLayoutMode } from "./DrawView";
 
 const LAYOUT_OPTIONS: readonly SegOption<BracketLayoutMode>[] = [
@@ -40,10 +42,12 @@ interface Props {
   onDrawLayout?: (mode: BracketLayoutMode) => void;
 }
 
+// Sentence case: ActionsBar's eyebrow uppercases in CSS, so an uppercase
+// literal here is a second copy of a decision the stylesheet already made.
 const VIEW_LABEL: Record<Props["view"], string> = {
-  draw: "DRAW",
-  schedule: "SCHEDULE",
-  live: "LIVE",
+  draw: "Draw",
+  schedule: "Schedule",
+  live: "Live",
 };
 
 /**
@@ -75,7 +79,7 @@ export function BracketViewHeader({
   const navigate = useNavigate();
   const [scheduling, setScheduling] = useState(false);
   const counts = useMemo(
-    () => buckets(data, view === "draw" ? eventId : null),
+    () => drawProgress(data, view === "draw" ? eventId : null),
     [data, view, eventId],
   );
 
@@ -151,6 +155,8 @@ export function BracketViewHeader({
                   value={drawLayout}
                   onChange={onDrawLayout}
                   ariaLabel="Bracket layout"
+                  // Toolbar, not a settings row: sized by its own labels.
+                  fill={false}
                 />
               )}
             </>
@@ -160,15 +166,9 @@ export function BracketViewHeader({
         </>
       }
     >
-      <StatusBar
-        // Zero-count tokens are noise, not information (B2.1's mirror).
-        items={[
-          { tone: "done" as const, label: "DONE", count: counts.done },
-          { tone: "green" as const, label: "LIVE", count: counts.live },
-          { tone: "amber" as const, label: "READY", count: counts.ready },
-          { tone: "idle" as const, label: "PEND", count: counts.pending },
-        ].filter((i) => i.count > 0)}
-      />
+      {/* The draw view renders its tally inside the canvas toolbar strip
+          instead, beside the round-jump chips (DRAW-2). */}
+      {view === "draw" ? null : <StatusBar items={statusTallyItems(counts)} />}
       {view === "schedule" && <ExportMenu api={api} />}
       {(view === "schedule" || view === "live") && schedulableCount > 0 && (
         <button
@@ -218,31 +218,3 @@ function ExportMenu({ api }: { api: BracketApi }) {
   );
 }
 
-function buckets(data: TournamentDTO, eventId: string | null) {
-  const resultsById = new Set(data.results.map((r) => r.play_unit_id));
-  const assignmentByPu = new Map(
-    data.assignments.map((a) => [a.play_unit_id, a])
-  );
-  let done = 0;
-  let live = 0;
-  let ready = 0;
-  let pending = 0;
-  for (const pu of data.play_units) {
-    if (eventId && pu.event_id !== eventId) continue;
-    if (resultsById.has(pu.id)) {
-      done += 1;
-      continue;
-    }
-    const a = assignmentByPu.get(pu.id);
-    if (a?.started && !a.finished) {
-      live += 1;
-      continue;
-    }
-    if (a) {
-      ready += 1;
-      continue;
-    }
-    pending += 1;
-  }
-  return { done, live, ready, pending };
-}

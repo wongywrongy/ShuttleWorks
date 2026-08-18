@@ -48,7 +48,14 @@ export function DraggablePlayerChip({
             ? `High event load: ${eventCount} events`
             : `${eventCount} event${eventCount === 1 ? '' : 's'}`
         }
-        aria-label={heavy ? `High event load: ${eventCount} events` : undefined}
+        // Always labelled. Unlabelled, this rendered as a bare "2" beside a
+        // name — the tooltip decoded it for a mouse and for nobody else, and
+        // a screen reader got the digit alone (RST-2).
+        aria-label={
+          heavy
+            ? `High event load: ${eventCount} events`
+            : `${eventCount} event${eventCount === 1 ? '' : 's'}`
+        }
       >
         {eventCount}
       </span>

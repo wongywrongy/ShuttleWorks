@@ -12,7 +12,7 @@ import {
   type ThemePreference,
   type DensityPreference,
 } from '../../store/preferencesStore';
-import { Row, SectionHeader, Seg } from '../../platform/settings/SettingsControls';
+import { Row, Section, Seg } from '../../platform/settings/SettingsControls';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'light',  label: 'Light'  },
@@ -33,8 +33,10 @@ export function AppearanceSettings() {
 
   return (
     <div>
-      <SectionHeader>Per-device</SectionHeader>
-      <div className="relative grid grid-cols-1 md:grid-cols-2 md:gap-x-12 md:before:absolute md:before:inset-y-0 md:before:left-1/2 md:before:-translate-x-1/2 md:before:w-px md:before:bg-border/60">
+      {/* Single column, like every other config surface. The two-column split
+          with a centre rule was the last surface still running its own layout,
+          and it halved the width the shared control column needs. */}
+      <Section title="Per-device">
         <Row
           label="Theme"
           control={
@@ -47,6 +49,7 @@ export function AppearanceSettings() {
           }
         />
         <Row
+          last
           label="Density"
           control={
             <Seg
@@ -57,7 +60,7 @@ export function AppearanceSettings() {
             />
           }
         />
-      </div>
+      </Section>
       <p className="mt-3 text-xs text-muted-foreground">
         Saved per browser.
       </p>

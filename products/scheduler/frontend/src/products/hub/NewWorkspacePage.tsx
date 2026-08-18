@@ -26,7 +26,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
-import { Eyebrow } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
 import {
   FieldRow,
@@ -49,7 +48,6 @@ const MODULE_IDS: (keyof CustomState)[] = ['meet', 'bracket', 'display'];
 
 const MODULE_STATES: { value: ModuleState; label: string }[] = [
   { value: 'enabled', label: 'On' },
-  { value: 'available', label: 'Available' },
   { value: 'off', label: 'Off' },
 ];
 
@@ -125,8 +123,9 @@ export function NewWorkspacePage() {
       </header>
 
       <div className="sw-float-in mx-auto max-w-3xl space-y-2 px-6 py-10">
+        {/* No eyebrow: "CONTROL PLANE" named the product category, not this
+            page, and the H1 below already says where you are (NEW-1). */}
         <div className="space-y-1 pb-2">
-          <Eyebrow framed>CONTROL PLANE</Eyebrow>
           <h1 className="type-display text-2xl text-foreground">New workspace</h1>
         </div>
 
@@ -193,6 +192,14 @@ export function NewWorkspacePage() {
             }
           />
         </Section>
+        {/* Venue and schedule owns venue configuration; this form seeds the one
+            number that shapes everything downstream and names where the rest
+            lives (NEW-4 / WSV-2). It cannot link there — the workspace does not
+            exist yet — so it names the destination instead. */}
+        <p className="pt-1 text-xs text-muted-foreground">
+          Slot length and the day window default to 30 minutes and 9:00 AM to
+          6:00 PM. Change them in Venue and schedule once the workspace exists.
+        </p>
 
         <Section title="Details">
           <FieldRow

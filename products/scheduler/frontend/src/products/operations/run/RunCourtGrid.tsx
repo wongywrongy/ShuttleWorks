@@ -17,6 +17,7 @@ import { useMemo } from 'react';
 import type { OpsBlock } from '../opsBlock';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
 import { sideNameLines } from '../../../lib/names';
+import { STATE_WORD } from '../../../lib/stateWords';
 
 export interface RunCourtGridProps {
   lanes: CourtLane[];
@@ -36,19 +37,31 @@ export interface RunCourtGridProps {
   hasEligible?: boolean;
 }
 
-/** Header-band treatment per court condition. The solid live/called fills are
- *  the muted-solid chip system; late reuses the destructive pair. */
+/** Header-band treatment per court condition. The solid fills are the
+ *  muted-solid chip system; words come from the one vocabulary and are
+ *  uppercased by the band's own class, never by a second literal.
+ *
+ *  Timeliness preempts status because a court that is behind is the thing the
+ *  desk needs to see — but only from the LATE tier up. DUE (the match's own
+ *  slot has just arrived) is not an alarm, so it keeps the status band and
+ *  says so in the figure instead. That is the "LATE +0" fix: +0 was always
+ *  DUE wearing LATE's clothes. */
 function bandFor(now: RunMatch | undefined): {
   cls: string;
   word: string;
 } {
-  if (!now) return { cls: 'bg-surface-band text-muted-foreground', word: 'FREE' };
-  if (now.late) return { cls: 'bg-destructive text-destructive-foreground', word: 'LATE' };
+  if (!now) return { cls: 'bg-surface-band text-muted-foreground', word: STATE_WORD.free };
+  if (now.timeliness === 'overdue')
+    return { cls: 'bg-status-overdue-solid text-status-overdue-ink', word: STATE_WORD.overdue };
+  if (now.timeliness === 'late')
+    return { cls: 'bg-status-late-solid text-status-late-ink', word: STATE_WORD.late };
   if (now.status === 'playing')
-    return { cls: 'bg-status-live-solid text-status-live-ink', word: 'LIVE' };
+    return { cls: 'bg-status-live-solid text-status-live-ink', word: STATE_WORD.live };
   if (now.status === 'called')
-    return { cls: 'bg-status-called-solid text-status-called-ink', word: 'CALLED' };
-  return { cls: 'bg-surface-band text-muted-foreground', word: 'SCHEDULED' };
+    return { cls: 'bg-status-called-solid text-status-called-ink', word: STATE_WORD.called };
+  if (now.timeliness === 'due')
+    return { cls: 'bg-surface-band text-muted-foreground', word: STATE_WORD.due };
+  return { cls: 'bg-surface-band text-muted-foreground', word: STATE_WORD.scheduled };
 }
 
 /** One side of the card: each PLAYER on its own line, BWF-formatted
@@ -96,18 +109,31 @@ export function RunCourtGrid({
   }, [blocks]);
 
   /** Right-hand figure on the band, in the mock's dialect: "LIVE · 0:32"
-   *  (h:mm played), "LATE +6" (minutes past the planned start), or the
-   *  planned start time for a scheduled court. */
+   *  (h:mm played), "LATE +30" (minutes past the planned start), or the
+   *  planned start time for a court that is scheduled or merely due.
+   *
+   *  DUE deliberately shows its planned time rather than a `+0` — the whole
+   *  point of the tier is that nothing has slipped yet. */
   const bandFigure = (now: RunMatch | undefined): string | null => {
     if (!now) return null;
-    if (now.late && now.plannedSlot != null && slotMinutes != null) {
-      return `+${Math.max(0, Math.round((currentSlot - now.plannedSlot) * slotMinutes))}`;
+    const behind = now.timeliness === 'late' || now.timeliness === 'overdue';
+    if (behind && now.plannedSlot != null && slotMinutes != null) {
+      return `+${Math.round((currentSlot - now.plannedSlot) * slotMinutes)}`;
     }
     if (now.status === 'playing' && slotMinutes != null) {
       const started = startSlotByKey.get(now.key);
-      if (started != null) return hmm((currentSlot - started) * slotMinutes);
+      // Nothing until a slot has actually elapsed. Elapsed time is slot
+      // arithmetic, so a match started in the current slot reads 0:00 — and
+      // with the default 30-minute slot it reads 0:00 for up to half an hour,
+      // which looks like a stopped clock rather than a fresh match (LIVE-6).
+      // "Suppress for the first minute", as the brief put it, is not buildable
+      // on slot granularity; suppressing for the first SLOT is the same idea
+      // at the resolution the data actually has.
+      if (started != null && currentSlot > started) {
+        return hmm((currentSlot - started) * slotMinutes);
+      }
     }
-    if (now.status === 'scheduled' && !now.late && now.plannedSlot != null && formatSlot) {
+    if (!behind && now.status === 'scheduled' && now.plannedSlot != null && formatSlot) {
       return formatSlot(now.plannedSlot);
     }
     return null;
@@ -129,8 +155,12 @@ export function RunCourtGrid({
             <span>Court {lane.court}</span>
             <span className="sw-num">
               {band.word}
-              {/* Mock dialect: "LATE +6" runs on; "LIVE · 0:32" takes the dot. */}
-              {figure ? (now?.late ? ` ${figure}` : ` · ${figure}`) : ''}
+              {/* Mock dialect: "LATE +30" runs on; "LIVE · 0:32" takes the dot. */}
+              {figure
+                ? now?.timeliness === 'late' || now?.timeliness === 'overdue'
+                  ? ` ${figure}`
+                  : ` · ${figure}`
+                : ''}
             </span>
           </div>
         );

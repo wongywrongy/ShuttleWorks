@@ -143,7 +143,11 @@ export function DisplayPreview({ config }: { config: TournamentConfig | null }) 
 
   const now = new Date();
   const tvPreset = config.tvPreset ?? DEFAULT_PRESET_ID;
-  const tvDisplayMode: 'strip' | 'grid' | 'list' = config.tvDisplayMode ?? 'strip';
+  // Same read-time mapping the board applies (DC-1) so the preview cannot
+  // show a layout the real display will not.
+  const storedMode = config.tvDisplayMode ?? 'auto';
+  const tvDisplayMode: 'auto' | 'grid' | 'list' =
+    storedMode === 'strip' ? 'auto' : storedMode;
   const tvAccent = resolveTvAccent(config.tvAccent);
   const tvCardSize = config.tvCardSize ?? 'auto';
   const tvShowScores = config.tvShowScores !== false;

@@ -7,7 +7,7 @@
  * control belongs behind Setup → Tournament data, matching where the
  * meet keeps its data-ops (backup / import / reset live day).
  *
- * Wrapped in SettingsPrimitives.SectionHeader + Row so the visual
+ * Wrapped in SettingsPrimitives.Section + Row so the visual
  * rhythm matches meet's DataSettings.
  */
 import { useCallback, useState } from 'react';
@@ -17,7 +17,7 @@ import { useTournamentId } from '../../hooks/useTournamentId';
 import { useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import { useAction } from '../../hooks/useAction';
-import { Row, SectionHeader } from '../../platform/settings/SettingsControls';
+import { Row, Section } from '../../platform/settings/SettingsControls';
 
 const LINK_CLASSES =
   'inline-flex items-center rounded-sm border border-border bg-card px-3 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40';
@@ -45,7 +45,7 @@ export function BracketDataSection() {
 
   return (
     <div>
-      <SectionHeader>Export</SectionHeader>
+      <Section title="Export">
       <Row
         label="JSON snapshot"
         control={
@@ -71,7 +71,8 @@ export function BracketDataSection() {
         }
         last
       />
-      <SectionHeader>Danger zone</SectionHeader>
+      </Section>
+      <Section title="Danger zone">
       <Row
         label="Reset bracket"
         control={
@@ -85,6 +86,7 @@ export function BracketDataSection() {
         }
         last
       />
+      </Section>
 
       {confirming && (
         <Modal

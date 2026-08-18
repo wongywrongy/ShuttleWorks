@@ -110,14 +110,14 @@ export function modulesForWorkspace(kind: Kind): WorkspaceModule[] {
  *  (legacy data not yet migrated) is treated as `available` — nothing in the UI
  *  ever renders a "coming soon" state. */
 export function modulesFromDto(dtos: WorkspaceModuleDTO[]): WorkspaceModule[] {
-  const byId = new Map<ModuleId, ModuleStatus>();
+  const byId = new Map<ModuleId, { status: ModuleStatus; hasData: boolean }>();
   for (const d of dtos) {
     const status = (d.status === 'coming_soon' ? 'available' : d.status) as ModuleStatus;
-    byId.set(d.moduleId as ModuleId, status);
+    byId.set(d.moduleId as ModuleId, { status, hasData: d.hasData ?? false });
   }
   return MODULE_ORDER.filter((id) => byId.has(id)).map((id) => {
-    const s = byId.get(id)!;
-    return { id, label: MODULE_LABELS[id], status: s, note: moduleNote(id, s) };
+    const { status: s, hasData } = byId.get(id)!;
+    return { id, label: MODULE_LABELS[id], status: s, note: moduleNote(id, s), hasData };
   });
 }
 

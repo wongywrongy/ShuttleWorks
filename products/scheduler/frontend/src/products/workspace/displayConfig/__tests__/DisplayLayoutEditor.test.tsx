@@ -50,17 +50,30 @@ describe('<DisplayLayoutEditor />', () => {
     expect(screen.getByRole('radiogroup', { name: 'Grid columns' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Card size' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Show scores' })).toBeInTheDocument();
-    expect(screen.getByRole('radiogroup', { name: 'Standings mode' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Standings' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Slide dwell' })).toBeInTheDocument();
   });
 
   it('reflects the board fallback defaults when config fields are unset', () => {
     render(<DisplayLayoutEditor />);
-    expect(screen.getByRole('radio', { name: 'Strip' })).toHaveAttribute('aria-checked', 'true');
+    // Auto, not Strip: Strip is retired (DC-1). Scoped, because "Auto" is
+    // now a valid option in two groups on this page.
+    const modeGroup = screen.getByRole('radiogroup', { name: 'Display mode' });
+    expect(within(modeGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(modeGroup).queryByRole('radio', { name: 'Strip' })).toBeNull();
     expect(screen.getByRole('switch', { name: 'Show scores' })).toHaveAttribute('aria-checked', 'true');
     const gridGroup = screen.getByRole('radiogroup', { name: 'Grid columns' });
     expect(within(gridGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
-    const standingsGroup = screen.getByRole('radiogroup', { name: 'Standings mode' });
-    expect(within(standingsGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
+    // Side/Rotate are gone: rotation subsumes them, so the only question
+    // left about standings is whether they are on the board at all (DC-3).
+    const standingsGroup = screen.getByRole('radiogroup', { name: 'Standings' });
+    expect(within(standingsGroup).getByRole('radio', { name: 'On' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(standingsGroup).queryByRole('radio', { name: 'Side' })).toBeNull();
+    const dwellGroup = screen.getByRole('radiogroup', { name: 'Slide dwell' });
+    expect(within(dwellGroup).getByRole('radio', { name: '10s' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('writes tvDisplayMode to the store when changed', () => {
@@ -121,28 +134,58 @@ describe('<DisplayLayoutEditor />', () => {
     expect(last.tvShowScores).toBe(false);
   });
 
-  it('writes standingsMode to the store when changed', () => {
+  it('writes standingsMode off, and back to null for on', () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     render(<DisplayLayoutEditor />);
-    const standingsGroup = screen.getByRole('radiogroup', { name: 'Standings mode' });
-    fireEvent.click(within(standingsGroup).getByRole('radio', { name: 'Side' }));
-    const last = setConfig.mock.calls.at(-1)![0];
-    expect(last.standingsMode).toBe('side');
+    const standingsGroup = screen.getByRole('radiogroup', { name: 'Standings' });
+    fireEvent.click(within(standingsGroup).getByRole('radio', { name: 'Off' }));
+    expect(setConfig.mock.calls.at(-1)![0].standingsMode).toBe('off');
+
+    resetStore({ standingsMode: 'off' });
+    const setConfig2 = vi.spyOn(useTournamentStore.getState(), 'setConfig');
+    render(<DisplayLayoutEditor />);
+    const group2 = screen.getAllByRole('radiogroup', { name: 'Standings' }).at(-1)!;
+    fireEvent.click(within(group2).getByRole('radio', { name: 'On' }));
+    expect(setConfig2.mock.calls.at(-1)![0].standingsMode).toBeNull();
   });
 
-  it('writes standingsMode as null when Auto is chosen', () => {
+  it('shows a workspace still storing the retired "side" placement as On (DC-3)', () => {
     resetStore({ standingsMode: 'side' });
+    render(<DisplayLayoutEditor />);
+    const standingsGroup = screen.getByRole('radiogroup', { name: 'Standings' });
+    expect(within(standingsGroup).getByRole('radio', { name: 'On' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('writes the rotation dwell (DC-3)', () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     render(<DisplayLayoutEditor />);
-    const standingsGroup = screen.getByRole('radiogroup', { name: 'Standings mode' });
-    fireEvent.click(within(standingsGroup).getByRole('radio', { name: 'Auto' }));
-    const last = setConfig.mock.calls.at(-1)![0];
-    expect(last.standingsMode).toBeNull();
+    const dwellGroup = screen.getByRole('radiogroup', { name: 'Slide dwell' });
+    fireEvent.click(within(dwellGroup).getByRole('radio', { name: '20s' }));
+    expect(setConfig.mock.calls.at(-1)![0].tvRotationDwellSeconds).toBe(20);
+  });
+
+  it('shows a workspace still storing the retired "strip" as Auto (DC-1)', () => {
+    // Strip was the DEFAULT, so every workspace that never touched the
+    // setting has it stored. It maps on read; nothing is migrated.
+    resetStore({ tvDisplayMode: 'strip' });
+    render(<DisplayLayoutEditor />);
+    const modeGroup = screen.getByRole('radiogroup', { name: 'Display mode' });
+    expect(within(modeGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
   });
 
   it('resyncs displayed values when store config changes externally', () => {
     render(<DisplayLayoutEditor />);
-    expect(screen.getByRole('radio', { name: 'Strip' })).toHaveAttribute('aria-checked', 'true');
+    const modeGroup = screen.getByRole('radiogroup', { name: 'Display mode' });
+    expect(within(modeGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     act(() => {
       resetStore({ tvDisplayMode: 'list' });
     });

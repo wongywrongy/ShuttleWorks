@@ -24,10 +24,10 @@ import { LockRibbon } from '../../components/status/LockRibbon';
 import { LockedFieldset } from '../../platform/settings/ConfigSurface';
 import {
   Row,
-  SectionHeader,
-  NumberInput,
+  Section,
   NumberWithSuffix,
   TimeInput,
+  UnitSlot,
 } from '../../platform/settings/SettingsControls';
 
 const FALLBACK_CONFIG: TournamentConfig = {
@@ -78,7 +78,7 @@ export function VenueScheduleTab() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 p-6">
+    <div className="mx-auto max-w-3xl space-y-4 p-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Venue and schedule</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
@@ -136,14 +136,14 @@ export function VenueScheduleTab() {
       )}
 
       <LockedFieldset locked={resultsLocked}>
-        <section>
-          <SectionHeader>Venue</SectionHeader>
+        <Section title="Venue">
           <Row
             label="Courts"
             control={
-              <NumberInput
+              <NumberWithSuffix
                 value={config?.courtCount ?? 4}
                 onChange={(v) => set('courtCount', v)}
+                suffix="courts"
                 min={1}
                 max={32}
                 ariaLabel="Court count"
@@ -164,32 +164,39 @@ export function VenueScheduleTab() {
             }
             last
           />
-        </section>
+        </Section>
 
-        <section>
-          <SectionHeader>Day window</SectionHeader>
+        <Section title="Day window">
           <Row
             label="Start time"
             control={
-              <TimeInput
-                value={config?.dayStart ?? '09:00'}
-                onChange={(v) => set('dayStart', v)}
-                ariaLabel="Day start"
-              />
+              // Empty unit column: a time field reports a quantity too, so it
+              // ends where the Courts and Slot-duration boxes end.
+              <span className="inline-flex items-baseline gap-2">
+                <TimeInput
+                  value={config?.dayStart ?? '09:00'}
+                  onChange={(v) => set('dayStart', v)}
+                  ariaLabel="Day start"
+                />
+                <UnitSlot />
+              </span>
             }
           />
           <Row
             label="End time"
             control={
-              <TimeInput
-                value={config?.dayEnd ?? '18:00'}
-                onChange={(v) => set('dayEnd', v)}
-                ariaLabel="Day end"
-              />
+              <span className="inline-flex items-baseline gap-2">
+                <TimeInput
+                  value={config?.dayEnd ?? '18:00'}
+                  onChange={(v) => set('dayEnd', v)}
+                  ariaLabel="Day end"
+                />
+                <UnitSlot />
+              </span>
             }
             last
           />
-        </section>
+        </Section>
       </LockedFieldset>
     </div>
   );
