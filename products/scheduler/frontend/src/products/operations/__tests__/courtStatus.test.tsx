@@ -48,7 +48,15 @@ vi.mock('../../../hooks/useBracket', () => ({
 
 vi.mock('../../../store/uiStore', () => ({
   useUiStore: (selector: (s: unknown) => unknown) =>
-    selector({ activeTab: mockTab.value, pushToast: vi.fn(), setBracketSelectedMatchId: vi.fn() }),
+    selector({
+      activeTab: mockTab.value,
+      pushToast: vi.fn(),
+      setBracketSelectedMatchId: vi.fn(),
+      // The Plan toolbar carries the read-only gate since SP-CONSOLE-4 B1
+      // (the guard the unified Generate button had lost) — these tests
+      // exercise the editable path.
+      activeTournamentRole: 'owner',
+    }),
 }));
 
 vi.mock('../../../store/tournamentStore', () => ({
@@ -219,19 +227,25 @@ describe('OperationsProduct — the Plan header does not pair discard with commi
     expect(resolve.className).not.toMatch(/shadow-glow/);
     expect(commit.className).toMatch(/bg-accent/);
 
-    // ...and they are not two chips in one 8px run: a rule closes the solve
-    // group before the commit button.
+    // ...and they are not two chips in one 8px run: a rule still closes the
+    // run immediately before the commit button. The header now carries the
+    // solve | proposals | export groups between them (SP-CONSOLE-4 B1,
+    // ratified) — the protected property is unchanged: nothing between the
+    // discard action and commit wears the glow, and a rule separates commit
+    // from whatever precedes it.
     expect(commit.previousElementSibling?.className).toMatch(/w-px/);
-    // Nothing ACTIONABLE sits between the solve button and that rule. The
-    // Re-plan explanation (PLAN-4) does, and prose is not a second button to
-    // fat-finger — which is what the adjacency check was really protecting.
     let node = resolve.nextElementSibling;
-    while (node && !node.className.includes('w-px')) {
-      expect(node.querySelector('button')).toBeNull();
-      expect(node.tagName).not.toBe('BUTTON');
+    let sawRule = false;
+    while (node && node !== commit) {
+      if (node.className.includes('w-px')) sawRule = true;
+      if (node.tagName === 'BUTTON') {
+        expect(node.className).not.toMatch(/bg-accent/);
+        expect(node.className).not.toMatch(/shadow-glow/);
+      }
       node = node.nextElementSibling;
     }
-    expect(node).toBe(commit.previousElementSibling);
+    expect(node).toBe(commit);
+    expect(sawRule).toBe(true);
   });
 });
 

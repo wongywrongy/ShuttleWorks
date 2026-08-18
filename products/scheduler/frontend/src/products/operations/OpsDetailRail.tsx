@@ -41,6 +41,9 @@ interface Props {
   onAction: (block: OpsBlock, action: OperationalAction) => void;
   /** Live surfaces run matches (action buttons); Courts is read-only detail. */
   live: boolean;
+  /** Plan only, meet only: opens the move/postpone-with-preview dialog
+   *  (manual-edit proposal — SP-CONSOLE-4 B1). */
+  onRequestMove?: (matchId: string) => void;
 }
 
 function stateLabel(block: OpsBlock): string {
@@ -49,7 +52,7 @@ function stateLabel(block: OpsBlock): string {
   return block.court != null ? 'Scheduled' : 'Awaiting court';
 }
 
-export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: Props) {
+export function OpsDetailRail({ block, data, onBracketChange, onAction, live, onRequestMove }: Props) {
   if (!block) {
     return (
       <aside className="w-full p-4 text-sm text-muted-foreground">
@@ -135,6 +138,26 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live }: 
               </>
             )}
           </div>
+        </DetailPanel.Section>
+      ) : null}
+
+      {/* Plan-side move: the proposal path (preview + commit), not a bare
+          slot write — the migrated MoveMatchDialog names what shifts before
+          anything does. Meet only; bracket placement is the board's drag or
+          the Run assign path. */}
+      {!live && block.source === 'meet' && !block.done && onRequestMove ? (
+        <DetailPanel.Section eyebrow="Reschedule" testId="ops-rail-move">
+          <button
+            type="button"
+            className={actionBtn}
+            data-testid="ops-rail-move-btn"
+            onClick={() => onRequestMove(block.id)}
+          >
+            Move or postpone…
+          </button>
+          <p className="mt-2 text-2xs text-muted-foreground">
+            Previews what shifts before anything is committed.
+          </p>
         </DetailPanel.Section>
       ) : null}
     </aside>

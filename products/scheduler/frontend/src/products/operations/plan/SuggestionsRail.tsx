@@ -19,7 +19,9 @@ import { useSuggestionActions } from './hooks/useSuggestionActions';
 const VISIBLE_CAP = 3;
 
 export function SuggestionsRail() {
-  const suggestions = useUiStore((s) => s.suggestions);
+  // `?? []` — tests that replace the uiStore wholesale leave the slice
+  // undefined (same defensive line as AdvisoryBanner).
+  const suggestions = useUiStore((s) => s.suggestions) ?? [];
   const config = useTournamentStore((s) => s.config);
   const { apply, dismiss, applyingId } = useSuggestionActions();
 

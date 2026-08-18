@@ -76,7 +76,9 @@ interface AdvisoryBannerProps {
 }
 
 export function AdvisoryBanner({ readOnly = false, onReview, className = '' }: AdvisoryBannerProps) {
-  const advisories = useUiStore((s) => s.advisories);
+  // `?? []` — surfaces that replace the uiStore wholesale in tests (and any
+  // token-scoped mount without the poller) leave the slice undefined.
+  const advisories = useUiStore((s) => s.advisories) ?? [];
   const schedule = useTournamentStore((s) => s.schedule);
   const config = useTournamentStore((s) => s.config);
   const matchStates = useMatchStateStore((s) => s.matchStates);

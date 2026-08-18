@@ -1,15 +1,19 @@
 /**
- * OperationsProduct — the unified (both-engines) Operations surface.
+ * OperationsProduct — the unified Operations surface.
  *
- * Mounted by `ModuleOutlet` ONLY when both Meet and Bracket are enabled, for
- * an Operations segment (Courts / Live). A match is a match — meet and bracket
- * fold into one `OpsBlock` list that drives:
- *   - Courts (Plan): UnifiedOpsBoard (drag) + UnifiedOpsList + OpsDetailRail
- *     overlay. Scheduling actions (Generate / Schedule next round) live here.
+ * Mounted by `ModuleOutlet` for an Operations segment. A match is a match —
+ * meet and bracket fold into one `OpsBlock` list that drives:
+ *   - Plan: UnifiedOpsBoard (drag) + UnifiedOpsList + OpsDetailRail, under
+ *     the PlanToolbar (solve verbs, the proposal economy, exports, plan-ready)
+ *     with the advisory/stale/suggestions banners and solve telemetry
+ *     (SP-CONSOLE-4 B1 migrations).
  *   - Live (Run): RunSurface — the interactive run console. RunSurface owns
- *     its own selection, inspector, and seam-hook calls for the live branch.
+ *     its own selection, inspector, and seam-hook calls.
  *
- * Single-engine workspaces never reach here.
+ * Lifecycle (CMP-1, `lifecycleMatrix`): COMPLETE renders Plan in review
+ * mode (solver + proposal actions absent). `engines` says which engines
+ * this workspace runs — single-engine workspaces arrive here after the
+ * SP-CONSOLE-4 routing flip; actions render per engine.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../api/client';
@@ -21,15 +25,14 @@ import { useMatchStateStore } from '../../store/matchStateStore';
 import { useUiStore } from '../../store/uiStore';
 import { useCommandQueue } from '../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
-import { useSchedule } from '../../hooks/useSchedule';
-import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { useMatchStateSync } from '../../hooks/useMatchStateSync';
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS } from '../../lib/utils';
 import { slotToTime } from '../../lib/time';
 import { bracketOccupiedWindows } from '../../lib/bracketOccupancy';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { BracketScheduleModal } from '../bracket/BracketScheduleModal';
+import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from './opsBlock';
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
@@ -39,46 +42,36 @@ import { RunSurface } from './run/RunSurface';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 import { useAction } from '../../hooks/useAction';
+import { PlanToolbar } from './plan/PlanToolbar';
+import { PlanDialogHost } from './plan/PlanDialogHost';
+import { SolveTelemetryPanel } from './plan/SolveTelemetryPanel';
+import { ClosedCourtsStrip } from './plan/ClosedCourtsStrip';
+import { StaleBanner } from './plan/StaleBanner';
+import { SuggestionsRail } from './plan/SuggestionsRail';
+import { dialogForAdvisory, type PlanDialog } from './plan/planDialogs';
+import { opsPlanMode } from './lifecycleMatrix';
 
-// `min-h-7` + `py-1`, not `h-7`: a fixed 28px box squeezed to its min-content
-// width at 390px wrapped "Re-plan day" onto two lines — 38px of text in a
-// 28px box, spilling out over the header. The button now takes its content's
-// height, and `whitespace-nowrap` + the header's `flex-wrap` (below) give it
-// its content's width instead of a two-line label.
-const schedBtnBase =
-  `${INTERACTIVE_BASE} inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-sm px-2.5 py-1 text-xs ` +
-  `font-medium disabled:cursor-not-allowed disabled:opacity-50`;
-// "Re-plan day" DISCARDS the plan that "Plan ready ✓" commits, and the two
-// were the same size, the same accent fill, 8px apart. The glow marks intent;
-// only the action that COMMITS has it. Solve actions are quiet.
-const commitBtn =
-  `${schedBtnBase} bg-accent text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
-const solveBtn =
-  `${schedBtnBase} border border-border-control bg-card text-foreground hover:bg-muted/40`;
-// The ON state of the plan-ready toggle: the Live-day header's lifecycle pill,
-// not a primary button. A finished state should not keep asking to be pressed.
-const finalizedPillBtn =
-  'inline-flex items-center rounded-full border border-status-done/30 bg-status-done/10 px-2.5 py-0.5 text-xs font-medium text-status-done transition-colors duration-fast ease-brand hover:bg-status-done/20';
-// Armed re-solve. Destructive tone, not the commit glow: the operator is one
-// press from throwing the plan away, and it must not look like the button
-// beside it that keeps the plan.
-const solveArmedBtn =
-  `${schedBtnBase} border border-destructive bg-destructive/10 text-destructive`;
+export interface OperationsEngines {
+  meet: boolean;
+  bracket: boolean;
+}
 
-export function OperationsProduct() {
+export function OperationsProduct({ engines }: { engines?: OperationsEngines }) {
   const tid = useTournamentId();
   return (
     <BracketApiProvider key={tid} tournamentId={tid}>
-      <OperationsBody />
+      <OperationsBody engines={engines ?? { meet: true, bracket: true }} />
     </BracketApiProvider>
   );
 }
 
-function OperationsBody() {
+function OperationsBody({ engines }: { engines: OperationsEngines }) {
   const tid = useTournamentId();
   const activeTab = useUiStore((s) => s.activeTab);
   const pushToast = useUiStore((s) => s.pushToast);
+  const phase = useUiStore((s) => s.activeTournamentPhase);
   const isLive = isLiveSegment(activeTab);
+  const review = opsPlanMode(phase) === 'plan-review';
 
   // Keep meet match-states converged with the backend while ANY Operations
   // surface is open. Without this the store went stale here (nothing on this
@@ -104,23 +97,14 @@ function OperationsBody() {
   const bracketApi = useBracketApi();
   const bracketBlocks = useMemo(() => (data ? bracketToOpsBlocks(data) : []), [data]);
 
-  // ---- scheduling (Courts only) ----
-  const { generateSchedule, loading: generating } = useSchedule();
+  // ---- scheduling inputs (Plan only; the toolbar owns the solve calls) ----
   const currentSlot = useCurrentSlot();
   const [scheduling, setScheduling] = useState(false);
   // Cross-engine coordination: the courts the bracket already occupies, as
   // [court, fromSlot, toSlot] windows, so a meet re-solve schedules around
-  // them (no double-booking). The bracket side coordinates server-side.
-  // Passing the polled snapshot's windows here (rather than letting
-  // useSchedule fetch its own) keeps the solve in lockstep with what this
-  // surface is rendering.
-  const bracketWindows = useMemo<number[][]>(
-    () => bracketOccupiedWindows(data),
-    [data],
-  );
-  // Armed because a re-solve replaces a plan the operator may have adjusted
-  // by hand. Declared after bracketWindows: it closes over it.
-  const reSolve = useConfirmClick(() => void generateSchedule(bracketWindows));
+  // them (no double-booking). Passing the polled snapshot's windows keeps
+  // the solve in lockstep with what this surface renders.
+  const bracketWindows = useMemo<number[][]>(() => bracketOccupiedWindows(data), [data]);
   // Bracket play-units ready to schedule: both sides known, no court yet, no
   // result, all feeders resolved (mirrors the single-engine header count).
   const schedulableCount = useMemo(() => {
@@ -174,6 +158,9 @@ function OperationsBody() {
     { errorMessage: 'Could not update the plan-ready state' },
   );
 
+  // ---- Plan dialogs (SP-CONSOLE-4 B1): one state, three openers ----
+  const [planDialog, setPlanDialog] = useState<PlanDialog | null>(null);
+
   // ---- Courts-only selection (Live uses RunSurface's own selection) ----
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selectedBlock = useMemo(
@@ -189,8 +176,6 @@ function OperationsBody() {
   }, [selectedKey, setBracketSelectedMatchId]);
 
   // ---- write-back (Courts branch OpsDetailRail; RunSurface owns its own) ----
-  // These hooks serve the Courts (Plan) branch only — RunSurface mounts its own
-  // useCommandQueue + useBracketResultQueue for the Live (Run) branch.
   const { submit: meetSubmit } = useCommandQueue();
   const { submit: bracketSubmit } = useBracketResultQueue({
     onOptimistic: () => {},
@@ -227,7 +212,9 @@ function OperationsBody() {
   const title = isLive ? 'Live day' : 'Plan';
   const subtitle = isLive
     ? 'Run the floor: by court, then the queue'
-    : 'Plan the day: drag to reschedule, generate, schedule rounds';
+    : review
+      ? 'The day is complete — review how it ran'
+      : 'Plan the day: drag to reschedule, generate, schedule rounds';
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-card">
@@ -239,80 +226,18 @@ function OperationsBody() {
         {/* Plan is the planning surface: build / adjust the plan. Run runs
             what Plan produced — no scheduling actions there. */}
         {!isLive ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={reSolve.armed ? solveArmedBtn : solveBtn}
-              onClick={() => {
-                // Only a RE-solve arms. Solving for the first time destroys
-                // nothing, and arming it would teach the operator to click
-                // twice out of habit, which is how an arm stops meaning
-                // anything by the time it guards something.
-                if (schedule) reSolve.press();
-                else void generateSchedule(bracketWindows);
-              }}
-              onBlur={reSolve.reset}
-              disabled={generating}
-              data-testid="ops-generate-meet"
-              title={
-                schedule
-                  ? 'Re-plan the day: replaces the current plan'
-                  : 'Solve the meet and place its matches'
-              }
-            >
-              {generating
-                ? 'Generating…'
-                : reSolve.armed
-                  ? 'Press again to replace the plan'
-                  : schedule
-                    ? 'Re-plan day'
-                    : 'Generate meet'}
-            </button>
-            {/* The footer's sentence, said where it applies (PLAN-4). "A
-                schedule is in place; Re-plan day replaces it" is the best
-                copy on this surface and it lived at the bottom of the page,
-                far from the button it describes and from the moment the
-                operator decides. The footer keeps it too — that one is about
-                the solver's state, this one is about this button. */}
-            {schedule && !reSolve.armed && !generating ? (
-              <span
-                data-testid="ops-replan-note"
-                className="text-2xs text-muted-foreground"
-              >
-                A schedule is in place; Re-plan day replaces it.
-              </span>
-            ) : null}
-            {schedulableCount > 0 ? (
-              <button
-                type="button"
-                className={solveBtn}
-                onClick={() => setScheduling(true)}
-                data-testid="ops-schedule-next"
-              >
-                Schedule next round ({schedulableCount})
-              </button>
-            ) : null}
-            {/* The rule closes the solve group: commit must not be one 8px
-                gap away from the action that throws the plan away. */}
-            <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
-            {/* One lifecycle-chip family across Plan and Live day (PLAN-2):
-                once the plan IS ready, this stops looking like an action
-                waiting to be taken and wears the same pill the Live-day
-                header shows for the same state. It stays a toggle — pressing
-                it un-readies the plan — so it keeps its button semantics and
-                its hover. */}
-            <button
-              type="button"
-              className={planFinalized ? finalizedPillBtn : commitBtn}
-              onClick={() => void planFinalizeAction.run()}
-              disabled={planFinalizeAction.pending}
-              aria-busy={planFinalizeAction.pending}
-              title={planFinalized ? 'Press to un-ready the plan' : undefined}
-              data-testid="ops-plan-finalize-toggle"
-            >
-              {planFinalized ? 'Plan ready ✓' : 'Mark plan ready'}
-            </button>
-          </div>
+          <PlanToolbar
+            phase={phase}
+            meetEnabled={engines.meet}
+            bracketEnabled={engines.bracket}
+            bracketWindows={bracketWindows}
+            schedulableCount={schedulableCount}
+            onOpenScheduleNext={() => setScheduling(true)}
+            planFinalized={!!planFinalized}
+            planFinalizePending={planFinalizeAction.pending}
+            onTogglePlanFinalized={() => void planFinalizeAction.run()}
+            onOpenDialog={setPlanDialog}
+          />
         ) : (
           // Run: keep the readiness indicator (Plan → Run handoff) in the single
           // header — Run runs what Plan produced; the toggle itself lives on Plan.
@@ -332,6 +257,22 @@ function OperationsBody() {
           </div>
         )}
       </header>
+
+      {/* Plan-side banners (B1): the pending-decision advisory routes into the
+          same dialogs the toolbar opens; stale + suggestions self-hide. */}
+      {!isLive && engines.meet ? (
+        <>
+          <StaleBanner />
+          <AdvisoryBanner
+            readOnly={review}
+            onReview={(advisory) => {
+              const dialog = dialogForAdvisory(advisory);
+              if (dialog) setPlanDialog(dialog);
+            }}
+          />
+          {!review ? <SuggestionsRail /> : null}
+        </>
+      ) : null}
 
       {blocks.length === 0 ? (
         <div className="px-4 py-8 text-sm text-muted-foreground">
@@ -353,13 +294,15 @@ function OperationsBody() {
               slotMinutes={config?.intervalMinutes}
             />
           ) : (
-            // COURTS = planning surface. Drag board + the matches overview list
-            // + a docked detail rail. The rail is a real layout column
-            // (DetailDock) — the board reflows beside it; on narrow
-            // viewports the dock falls back to an overlay by itself, which
-            // replaces the hand-rolled overlay workaround that lived here.
+            // PLAN = planning surface. Closed-courts strip + drag board +
+            // solve telemetry + the searchable matches list + a docked detail
+            // rail (DetailDock reflows the board beside it; overlay fallback
+            // on narrow viewports).
             <div className="relative flex h-full min-h-0">
               <div className="h-full min-h-0 min-w-0 flex-1 overflow-auto">
+                {engines.meet ? (
+                  <ClosedCourtsStrip onOpenDirector={() => setPlanDialog({ kind: 'director' })} />
+                ) : null}
                 <UnifiedOpsBoard
                   blocks={blocks}
                   courtCount={courtCount}
@@ -370,14 +313,19 @@ function OperationsBody() {
                   onBracketData={setData}
                   formatSlot={formatSlot}
                 />
-                <UnifiedOpsList blocks={blocks} selectedKey={selectedKey} onSelect={setSelectedKey} />
+                {engines.meet ? <SolveTelemetryPanel /> : null}
+                <UnifiedOpsList
+                  blocks={blocks}
+                  selectedKey={selectedKey}
+                  onSelect={setSelectedKey}
+                  searchable
+                />
               </div>
 
               <DetailDock open={selectedBlock != null} width={320}>
                 {selectedBlock ? (
                   // Pane chrome: identity header, close, Esc, and dialog
                   // semantics when the dock demotes itself to an overlay.
-                  // Replaces a hand-rolled ✕ that only a mouse could find.
                   <DetailPanel
                     label="Match"
                     value={selectedBlock.label}
@@ -391,6 +339,9 @@ function OperationsBody() {
                       onBracketChange={setData}
                       onAction={onAction}
                       live={false}
+                      onRequestMove={
+                        review ? undefined : (matchId) => setPlanDialog({ kind: 'move', matchId })
+                      }
                     />
                   </DetailPanel>
                 ) : null}
@@ -406,6 +357,10 @@ function OperationsBody() {
           onClose={() => setScheduling(false)}
           onCommitted={refresh}
         />
+      ) : null}
+
+      {!isLive ? (
+        <PlanDialogHost dialog={planDialog} onClose={() => setPlanDialog(null)} />
       ) : null}
     </div>
   );
