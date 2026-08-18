@@ -16,6 +16,19 @@ export default defineConfig({
   // `@react-router/dev` hard-fails the dev server when the basename does not
   // start with `base`.
   base: '/e/',
+  // Dev-only mirror of nginx's prefix split (`frontend/nginx.conf`):
+  // `/e/api/` and `/e/account/` belong to FastAPI, and the browser talks to
+  // them DIRECTLY (form posts, the My Entries fetch) — in production via
+  // nginx, in dev via this proxy. Without it, every browser-side call on
+  // the dev origin 404s into the node router and the tier looks broken in
+  // exactly the ways production would not be. `VITE_API_PROXY_TARGET`
+  // overrides for a non-default backend port (the operator app's idiom).
+  server: {
+    proxy: {
+      '/e/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8600',
+      '/e/account': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8600',
+    },
+  },
   plugins: [reactRouter()],
   // The design system is published as raw .tsx source (its package.json
   // exports map points at ./components/index.ts), so the SSR bundler has to

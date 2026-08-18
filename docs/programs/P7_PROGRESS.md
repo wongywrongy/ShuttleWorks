@@ -17,10 +17,115 @@ Player-in-Tournament, revised Tournament page).
 |---|---|---|
 | 0 | Audit + STOP | **DONE 2026-08-17** — signed off by Kyle (C3 default-off/confirmed-only; C4 club + consent copy; MatchCard entrant-local; `/e/api` names; own branch) |
 | 1 | Publication model + projection API | **DONE 2026-08-18** — summary below; "full authority" granted, so the P1 STOP is a report, not a wait |
-| 2 | My Entries + tournament page revisions | not started |
-| 3 | Entrants + Player-in-Tournament | not started |
-| 4 | Draws, Seeds, Winners | not started |
-| 5 | QA pass (gate matrix, 380px, screenshots) | not started |
+| 2 | My Entries + tournament page revisions | **DONE 2026-08-18** (0a3b08e) |
+| 3 | Entrants + Player-in-Tournament | **DONE 2026-08-18** (cf4711a) |
+| 4 | Draws, Seeds, Winners | **DONE 2026-08-18** (ceeb667) |
+| 5 | QA pass (gate matrix, 380px, screenshots) | **DONE 2026-08-18** — browser pass below; screenshots in `docs/screenshots/sp-p7/` |
+
+**Mid-program:** `design/console-2` merged in (fc788e3) once that agent
+finished — one conflict + TWO recovered defects it left: the
+`v6a1c5e8f3b4` migration (backups `origin`) referenced by its tests and
+ledger but never committed (authored here, chained after `v6b2d6f9a4c5`),
+and three frontend files (`lib/stateWords.ts`, `bracket/drawProgress.ts`,
+`display/publicDisplay/rotation.ts`) imported by committed code but
+existing only untracked in the main checkout (recovered verbatim,
+15bc839).
+
+## The zero-JS constraint and the page-scoped-script pattern (P2, load-bearing)
+
+The tier ships no client JS (`root.tsx`: no `<Scripts/>`; the CSP has no
+inline allowance), so SP-P7's browser behaviour could not hydrate. The
+pattern that resolved it: **external same-origin ES modules from
+`public/assets/`** — `script-src 'self'` already permits them, no CSP
+surgery, the no-inline posture intact. Two exist: `my-entries.js` (the
+one credentialed read + DOM render, textContent-only, XSS negative
+control in its suite) and `entrants-filter.js` (progressive: the input
+exists only when JS runs). Both are tested by importing the shipped file
+(jsdom per-file), typed by sibling `.d.ts`, and scanned by the tailwind
+content glob.
+
+## Phase 2–4 — what shipped
+
+- **P2 (0a3b08e)**: `/e/me/entries` (SSR shell + script; signed-out →
+  `/e/login?next=…` through the existing `safeNext` twins; year groups,
+  lifecycle chips, symbol-less money — `formatCents` documents why the
+  mockups' `$` was dropped; badges + View-results links gated by the
+  card's echoed flags). §3.7: fees off the overview (pointer row whose
+  enter link respects the closed state; FeeTable deleted with its only
+  consumer), regulations document row + routed reader
+  `/e/{slug}/regulations`. Header gains a static My-entries link (R8-D).
+- **P3 (cf4711a)**: alphabetical letter-grouped Entrants tab (person-key
+  links, club under name, codes on the row, CSS columns, filter script);
+  `visibleTabs` now takes the publication block — the prompt's §3.2
+  self-contradiction resolved as: unpublished HIDES the tab (rule 4),
+  published-and-empty renders "No confirmed entries yet."; the by-event
+  anchors died with the by-event grouping. Player page
+  `/e/{slug}/players/{personKey}` + the entrant-local `MatchCard` (header
+  strip · sides · footer; data-driven chip slot carrying schedule-only in
+  v1).
+- **P4 (ceeb667)**: tab bar in the §3.7 order, scrolling inside its strip
+  at 380px; Draws tab cards → `/e/{slug}/draws/{drawKey}`; RR = adapted
+  standings table (Pos·Player·PL·W·L·GM·PTS·History pills) + round list;
+  elimination = round columns in the card's own horizontal scroll, seeds
+  `[n]`, byes muted, consolation as `?segment=` link-pills; Seeds and
+  Winners panels with the partial-state header. Nodes reuse MatchCard.
+
+## Phase 5 — QA (2026-08-18, real browser)
+
+Stack: worktree backend on :8601 (fresh DB — **both new migrations
+applied cleanly on a cold upgrade**), entrant dev server with the new
+dev-only `/e/api` + `/e/account` proxy in `vite.config.ts` (mirrors
+nginx's split; production untouched). Seeded: Riverside Autumn Open
+(10 confirmed people + 1 pending, 8-SE MS with 3 QFs decided, 4-RR WS
+fully decided, courts/slots assigned, everything published) + Spring
+Classic (played, decided, for the My Entries card).
+
+Verified in the browser (screenshots 01–17 in `docs/screenshots/sp-p7/`):
+overview with fees pointer + document row; regulations reader; entrants
+letter groups + live filter ("riverside" → exactly the 4 Riverside BC
+members, groups collapse); player page (record bar, Coming up above
+Played, resolved SF + scored QF); draws cards; elimination tree (seeds,
+scores, "Winner of QF 4", "Court to be assigned"); RR standings (Elif
+3-0 top, history pills); seeds; winners (1 of 2 decided); sign-in
+round-trip → My Entries (mixed card "Awaiting confirmation" with
+per-line chips, badges Winner/Runner-up, played card with View results +
+"Total 40.00", quoted card "Quoted 55.00 · pay at the desk"); pending
+person absent everywhere public. **380px**: page `scrollWidth ==
+clientWidth` on entrants and the draw page (the tree scrolls inside its
+container), sweeps of overview/entrants/draw/player/my-entries.
+
+**Live negative controls** (§7, beyond the automated ones): PATCH
+`resultsPublished:false` → every score gone AND the semifinals reverted
+to "Winner of QF n" placeholders (screenshot 16), player record `None`,
+zero decided matches; PATCH `entrantsPublished:false` → player page 404.
+Flags restored after.
+
+### Final gate results (2026-08-18)
+
+Backend pytest full suite **1648 passed / 66 skipped / 0 failed**;
+entrant vitest 644 / typecheck / lint / depcruise / build all green;
+operator vitest 1762 + tsc -b green (post-merge); docs:build green.
+
+## Deferred (the §10 enumeration)
+
+- Live-state chip wiring (the MatchCard slot is data-driven; Operations
+  state lands projection-side later).
+- Highlight-player on the tree (stretch, skipped).
+- Elimination connector LINES between columns (columns + round labels
+  shipped; lines are visual sugar the card language reads fine without).
+- Withdrawn/rejected write paths (E2 — render support shipped and tested).
+- "Account has newer contact details" TD hint (R-P7a).
+- Global profiles (R15 v1).
+- Compass/Monrad plate winners in the Winners tab (`_event_winner`
+  ponytail note); walkover annotation on public draw nodes.
+- Mixed-card status vocabulary gained `withdrawn` (recorded P1).
+- The mockups artifact `public-site-entrant-mockups.html` was not
+  reachable this session (not in repo/plans/artifacts) — anatomy built
+  from the prompt's binding contracts + the tier's design language; a
+  side-by-side against the real mockups is a cheap follow-up if Kyle
+  drops the file in.
+- `docs/architecture/entrant-tier.md` + `docs/modules/entries.md` should
+  gain the §3 surface routes… done in the entrant-tier page; keep fresh.
 
 ## Phase 1 — what shipped (commits 9e7df30 … 6f45095)
 
