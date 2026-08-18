@@ -265,7 +265,16 @@ export function useLiveTracking() {
           await apiClient.updateMatchState(tid, matchId, newState, version);
         // Authoritative server state — overwrite the optimistic apply
         // so timestamps the server stamped (e.g. actualStartTime) win.
-        setMatchState(matchId, serverState);
+        // LOCAL-ONLY fields ride along, same merge the polls use: the
+        // backend DTO doesn't carry postponed/playerConfirmations, so a
+        // verbatim apply silently reverted them the instant a write
+        // succeeded (found by the SP-CONSOLE-4 C4 smoke).
+        setMatchState(matchId, {
+          ...serverState,
+          postponed: serverState.postponed ?? newState.postponed,
+          playerConfirmations:
+            serverState.playerConfirmations ?? newState.playerConfirmations,
+        });
         // Cache the new canonical version so the next mutation skips
         // the cold-read roundtrip.
         useMatchStateStore.getState().setMatchVersion(matchId, newVersion);
@@ -427,7 +436,15 @@ export function useLiveTracking() {
       try {
         const { state: serverState, version: newVersion } =
           await apiClient.updateMatchState(tid, matchId, newState, version);
-        setMatchState(matchId, serverState);
+        // The confirmation being written IS a local-only field — a verbatim
+        // apply of the echo (which never carries playerConfirmations)
+        // un-checked the player the moment the write succeeded.
+        setMatchState(matchId, {
+          ...serverState,
+          postponed: serverState.postponed ?? newState.postponed,
+          playerConfirmations:
+            serverState.playerConfirmations ?? newState.playerConfirmations,
+        });
         useMatchStateStore.getState().setMatchVersion(matchId, newVersion);
       } catch (apiError) {
         console.error('Failed to sync player confirmation to backend:', apiError);
