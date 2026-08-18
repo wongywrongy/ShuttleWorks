@@ -175,7 +175,9 @@ In rough priority order:
 
 ## Reference artifacts
 
-- Screenshots: `./2026-05-15_screenshots/` (76 files, prefixed by step number 01–58).
+- Screenshots: `./2026-05-15_screenshots/` (76 files, prefixed by step number 01–58) —
+  **removed from the tree 2026-08-18** (SP-CONSOLE-4 A-phase cleanup, owner-ruled;
+  console-2's O-7 had deferred it). Retrieve from git history at any commit before the removal.
 - Tournament rows left in place to reproduce findings 1 (If-Match) and 2 (court-grid duplicate render). Delete when no longer needed.
   - Meet: `09fd8396-e836-4d33-bb97-68fbb27a0cc3` — "Audit Meet 2026"
   - Bracket: `7fa7210a-b8fb-4301-8b04-8c4c2fb9e43a` — "Audit Tournament 2026"

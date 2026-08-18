@@ -175,6 +175,98 @@ describe('EventPicker single select', () => {
   });
 });
 
+describe('EventPicker opt-in behaviors (SP-CONSOLE-3A)', () => {
+  it('defaults leave the other consumers untouched: no chips, no carets', () => {
+    render(
+      <EventPicker
+        options={options(12)}
+        ariaLabel="Participants"
+        multiple
+        value={['ev-0']}
+        onChange={() => {}}
+        testId="picker"
+      />,
+    );
+    expect(screen.queryByTestId('picker-chips')).toBeNull();
+    expect(screen.queryByTestId('picker-section-MS')).toBeNull();
+  });
+
+  it('selectedChips: pins removable chips above the list; a disabled option keeps its chip but loses the ×', () => {
+    const onChange = vi.fn();
+    render(
+      <EventPicker
+        options={[
+          { id: 'a', code: 'BS2', discipline: 'BS' },
+          { id: 'b', code: 'GD4', discipline: 'GD', disabled: true },
+        ]}
+        ariaLabel="Events"
+        multiple
+        value={['a', 'b']}
+        onChange={onChange}
+        selectedChips
+        testId="picker"
+      />,
+    );
+    const chips = screen.getByTestId('picker-chips');
+    expect(within(chips).getByText('BS2')).toBeInTheDocument();
+    expect(within(chips).getByText('GD4')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove GD4' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove BS2' }));
+    expect(onChange).toHaveBeenCalledWith(['b']);
+  });
+
+  it('collapsedGroups: sections rest closed except defaults, and a live search overrides the collapse', () => {
+    render(
+      <EventPicker
+        options={options(74)}
+        ariaLabel="Events"
+        multiple
+        value={[]}
+        onChange={() => {}}
+        collapsedGroups
+        defaultOpenGroups={['MD']}
+        testId="picker"
+      />,
+    );
+    // Only the held discipline's rows are on screen at rest.
+    expect(screen.queryByRole('checkbox', { name: /^MS1\b/ })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: /^MD1\b/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('picker-section-MS'));
+    expect(screen.getByRole('checkbox', { name: /^MS1\b/ })).toBeInTheDocument();
+
+    // A match must never hide behind a closed caret.
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'xd1 ' } });
+    expect(screen.getByRole('checkbox', { name: /^XD1\b/ })).toBeInTheDocument();
+  });
+
+  it('occupiedBy: names the occupant and joins the search haystack', () => {
+    render(
+      <EventPicker
+        options={[
+          ...options(12),
+          {
+            id: 'slot',
+            code: 'BS1',
+            discipline: 'BS',
+            occupiedBy: 'Aiden Nakamura',
+          },
+        ]}
+        ariaLabel="Events"
+        multiple
+        value={[]}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('Aiden Nakamura')).toBeInTheDocument();
+    // Finding which slots a player holds is the desk's real swap lookup.
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'nakamura' } });
+    expect(screen.getByRole('checkbox', { name: /^BS1/ })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /^MS1/ })).toBeNull();
+  });
+});
+
 describe('EventPicker multi select', () => {
   it('is a checkbox list that announces state and toggles both ways', () => {
     const onChange = vi.fn();

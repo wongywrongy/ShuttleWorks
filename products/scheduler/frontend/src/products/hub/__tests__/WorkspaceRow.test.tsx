@@ -90,16 +90,24 @@ describe('WorkspaceRow', () => {
     expect(cta).toHaveFocus();
   });
 
-  // Console-mock adoption (2026-08-13): the row states its lifecycle via the
-  // shared lifecycleBadge precedence; resting rows stay unbadged.
-  it('badges a live row, and leaves a resting row unbadged', () => {
+  // R-D (SP-CONSOLE-3, Option A): LIVE is suppressed — the HealthDot and
+  // next action already say it — while Complete still badges; resting
+  // rows stay unbadged as before.
+  it('badges a complete row, and suppresses the chip on live and resting rows', () => {
     const { rerender } = render(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, phase: 'complete' } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Complete');
+    rerender(
       <WorkspaceRow
         tournament={{ ...t, signals: { ...t.signals!, phase: 'live' } }}
         group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
       />,
     );
-    expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Live');
+    expect(screen.queryByTestId('row-lifecycle')).toBeNull();
     // NEGATIVE CONTROL: setup/ready rows carry no pill.
     rerender(
       <WorkspaceRow

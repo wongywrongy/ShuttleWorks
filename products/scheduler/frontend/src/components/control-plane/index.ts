@@ -43,12 +43,15 @@ export {
 export {
   STATUS_LABEL,
   STATUS_PILL_TONE,
+  STATUS_TREATMENT,
+  MatchStatus,
   statusTallyItems,
   type BracketMatchStatus,
   type MatchListStatus,
 } from './matchStatus';
 export {
   MatchCard,
+  ResultSides,
   ScoreLane,
   WinnerDot,
   setsWinner,

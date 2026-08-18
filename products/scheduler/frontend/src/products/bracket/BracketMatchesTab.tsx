@@ -25,15 +25,14 @@ import {
   BRACKET_MATCH_CELL,
   BRACKET_MATCH_LIST_COLUMNS,
   BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+  MatchStatus,
   OverflowMenu,
   parseMatchStatusFilter,
   ScoreLane,
   STATUS_LABEL,
-  STATUS_PILL_TONE,
   type BandedTableGroup,
   type BracketMatchStatus,
 } from '../../components/control-plane';
-import { StatusPill } from '../../components/StatusPill';
 import { formatSideName } from '../../lib/names';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
@@ -399,16 +398,14 @@ export function BracketMatchesTab({
                         data-testid={`bracket-match-status-${pu.id}`}
                         className={`${BRACKET_MATCH_CELL.status} flex items-center justify-end`}
                       >
-                        {/* Chip ALWAYS, score beside it (X3) — see the meet
-                            list for why the score no longer replaces it. */}
-                        <span className="flex items-center gap-2">
-                          <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
-                            {STATUS_LABEL[status]}
-                          </StatusPill>
-                          {sets.length > 0 || reason ? (
-                            <ScoreLane sets={sets} reason={reason} />
-                          ) : null}
-                        </span>
+                        {/* X6-D (supersedes X3): a finished row's score IS
+                            its status — no DONE label beside it. See the
+                            meet list. */}
+                        {sets.length > 0 || reason ? (
+                          <ScoreLane sets={sets} reason={reason} />
+                        ) : (
+                          <MatchStatus status={status} />
+                        )}
                       </span>
                       <span
                         role="cell"

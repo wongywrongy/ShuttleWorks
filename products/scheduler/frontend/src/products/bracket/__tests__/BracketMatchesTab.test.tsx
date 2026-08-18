@@ -178,17 +178,20 @@ describe('<BracketMatchesTab />', () => {
     expect(screen.getAllByText('LOPEZ Gia / SATO Hana').length).toBeGreaterThan(0);
   });
 
-  it('tones the status column per state as pills (Console direction)', () => {
+  it('renders the status column per the X6 ink budget — only LIVE chips', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    // The status cell is a StatusPill; assert its tinted-fill tone classes.
-    expect(screen.getByText('Done').className).toContain('bg-status-done-bg');
+    // LIVE is the one routine container; READY/PENDING are muted text.
     expect(screen.getByText('Live').className).toContain('bg-status-live-bg');
-    for (const el of screen.getAllByText('Ready')) {
-      expect(el.className).toContain('bg-status-started-bg');
+    for (const el of [
+      ...screen.getAllByText('Ready'),
+      ...screen.getAllByText('Pending'),
+    ]) {
+      expect(el.className).not.toContain('bg-status-');
+      expect(el.className).toContain('text-muted-foreground');
     }
-    for (const el of screen.getAllByText('Pending')) {
-      expect(el.className).toContain('bg-status-idle-bg');
-    }
+    // The done row has a result but no recorded sets, so it takes the text
+    // fallback — never a chip (X6-D: with sets it would render the lane).
+    expect(screen.getByText('Done').className).not.toContain('bg-status-');
   });
 
   it('renders unresolved sides as a muted-italic TBD placeholder (Meet placeholder grammar)', () => {

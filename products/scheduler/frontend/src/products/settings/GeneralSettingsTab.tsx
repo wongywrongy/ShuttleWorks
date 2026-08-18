@@ -96,9 +96,15 @@ export function GeneralSettingsTab({
           control={
             derived ? (
               <span data-testid="general-lifecycle">
-                <StatusPill tone={derived.tone} dot>
-                  {derived.text}
-                </StatusPill>
+                {/* LIVE drops its chip (R-D, Option A) but keeps its word —
+                    an empty labeled row would read as broken, not quiet. */}
+                {derived.text === 'Live' ? (
+                  <span className="text-sm text-muted-foreground">Live</span>
+                ) : (
+                  <StatusPill tone={derived.tone} dot>
+                    {derived.text}
+                  </StatusPill>
+                )}
               </span>
             ) : null
           }

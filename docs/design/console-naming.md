@@ -26,6 +26,9 @@ govern everything below:
 | Header status chip | **Silent when idle** — a quiet dot (aria-label "App status") that keeps the popover reachable; the label appears only when it says something ("Solving", "Degraded") | The bare "● Idle" chip was retired: a resting solver is not information the operator needs pushed at them. The Plan footer still says "Solver idle…" where solving is actually done. |
 | Workspace header gear | Labelled **"Workspace"** (glyph + text) | Disambiguates from the rail's account-settings gear — same icon, different scope, both visible at once. |
 | Lifecycle on Settings | **Display-only** (derived badge); the one explicit action is **Archive / Unarchive** in the danger zone | Retires the stored-status dropdown the app ignored. |
+| Status rendering in lists/panels | **X6 status ink budget** — only LIVE/CALLED/LATE/error states chip; READY/PENDING are ink-weight text; DONE is the right-aligned score itself, no label | SP-CONSOLE-3. Supersedes SP-CONSOLE-2 X3 (chip-plus-score). Ladder + exemptions in `packages/design-system/DESIGN.md` §4.1; renderer is `MatchStatus`. |
+| Lifecycle chip while LIVE | **Suppressed** on all five sites (shell header, hub row, hub inspector, overview header, workspace settings) | SP-CONSOLE-3 R-D, Option A: on a live day every surface already screams it. The settings Lifecycle row keeps the word "Live" as plain text so a labeled row never renders empty. `lifecycleChip` in `platform/domain/lifecycle.ts` carries the rule. |
+| Seed number | **`[n]` after the event code** (badminton draw-sheet convention), legended in the roster column header ("Events · [n] seed") | SP-CONSOLE-3 BRST-N1. Retires the `(n)` parenthetical, which read as a count; seeds are still never a separate column (SP-CONSOLE-REFINE G6/B1). |
 
 ## Match state vocabulary
 

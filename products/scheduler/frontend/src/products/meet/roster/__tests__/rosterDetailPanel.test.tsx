@@ -143,13 +143,18 @@ describe('roster detail pane — events (defect D8)', () => {
     const picker = screen.getByTestId('player-events-picker');
     // Grouped by the RAW event prefix, so an operator-defined code has a home.
     expect(within(picker).getByRole('group', { name: 'BS' })).toBeInTheDocument();
-    // MS is configured and nobody has entered it — the control to enter this
-    // player is present, rather than an empty body under a "Not entered" label.
+    // Sections rest collapsed except where the player holds an entry
+    // (SP-CONSOLE-3A PICK-2, ratified edit) — the D8 guarantee is one
+    // disclosure away, not gone: expanding MS offers the enter control
+    // rather than an empty body under a "Not entered" label.
+    fireEvent.click(screen.getByTestId('player-events-picker-section-MS'));
     expect(within(picker).getByRole('checkbox', { name: 'MS1' })).toBeEnabled();
   });
 
   it('enters and withdraws the player through the roster invariant', () => {
     renderPosition(['p1']);
+    // BS rests collapsed (p1 holds only MD1) — PICK-2 ratified edit.
+    fireEvent.click(screen.getByTestId('player-events-picker-section-BS'));
     fireEvent.click(screen.getByRole('checkbox', { name: 'BS2' }));
     expect(player('p1')?.ranks).toEqual(['MD1', 'BS2']);
     // MD1's option names its other holder, which is the context the old flat
