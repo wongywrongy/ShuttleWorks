@@ -60,6 +60,12 @@ ENTRANT_REACHABLE = (
     set(PUBLIC_BY_DESIGN)
     | OPS_TOKEN_GATED
     | {("GET", ME)}
+    # SP-P7 §3.1: the entrant's own record — the second route the entrant
+    # credential exists for. Like /e/account/me it declares
+    # ``get_current_entrant`` itself and reads nothing but the session's
+    # own account; an operator cookie on it is refused by the same
+    # two-seams construction this file exists to hold.
+    | {("GET", "/e/api/me/entries")}
     # SP-E1-2 Phase C: submit left PUBLIC_BY_DESIGN when it acquired the
     # session gate, so it has to be named here instead — a logged-in
     # entrant reaching the route their credential exists for is the

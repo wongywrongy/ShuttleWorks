@@ -68,7 +68,9 @@ SUPERSEDED: dict[str, tuple[str, str]] = {
     "test_the_page_shows_the_venue": (
         _PAGE, "test_the_projection_carries_the_venue"),
     "test_the_page_lists_entrant_names_and_events_only": (
-        _PAGE, "test_the_projection_lists_entrant_names_and_their_event_codes_only"),
+        # Renamed again by SP-P7 when personKey and club joined the row —
+        # the claim (whole row asserted exactly) is the same test, wider.
+        _PAGE, "test_the_projection_lists_entrant_rows_with_exactly_four_fields"),
     "test_an_opted_out_entrant_is_absent_but_a_listed_one_is_present": (
         _PAGE, "test_an_opted_out_entrant_is_absent_but_a_listed_one_is_present"),
     "test_withdrawn_and_rejected_entries_are_not_listed": (

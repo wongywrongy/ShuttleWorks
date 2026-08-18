@@ -249,7 +249,10 @@ def test_upgrade_removes_only_the_rows_foreign_key_check_reports(alembic_cfg):  
     before = _violations(url)
     assert {row[0] for row in before} == {"submissions", "entrant_sessions"}, before
 
-    command.upgrade(cfg, "head")
+    # To the purge revision ITSELF, not "head": this file tests the purge,
+    # and pinning "head == purge" made it fail the day any later migration
+    # landed (SP-P7's did) for a reason that has nothing to do with orphans.
+    command.upgrade(cfg, ORPHAN_PURGE_REVISION)
 
     assert _head_revision(url) == ORPHAN_PURGE_REVISION
     assert _violations(url) == []
