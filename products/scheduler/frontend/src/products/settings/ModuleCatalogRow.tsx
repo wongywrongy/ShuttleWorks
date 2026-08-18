@@ -15,7 +15,7 @@ const MODULE_STATUS_WORD: Record<string, string> = {
   disabled: 'Off',
 };
 
-/** One row of the Modules catalog: name + status chip, capability description,
+/** One row of the Modules catalog: name + status word, capability description,
  *  a dependency note when relevant, and the enable/disable action (per the
  *  backend rules — 409s surface as toasts). */
 export function ModuleCatalogRow({
@@ -52,16 +52,20 @@ export function ModuleCatalogRow({
       className="flex items-start justify-between gap-4 p-3"
     >
       <div className="min-w-0 space-y-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium text-foreground">{meta?.name ?? module.label}</span>
+          {/* Text, not a container (X6): module state is configuration, not
+              a time-sensitive signal — ink weight carries the tri-state.
+              On = accent semibold; Available = muted semibold; Off = muted
+              normal, one visible step quieter. */}
           <span
             className={[
-              'rounded-sm px-1.5 py-0.5 text-2xs font-medium',
+              'text-2xs uppercase tracking-[0.08em]',
               module.status === 'enabled'
-                ? 'bg-accent/10 text-accent'
+                ? 'font-semibold text-accent'
                 : module.status === 'available'
-                  ? 'border border-border text-muted-foreground'
-                  : 'border border-dashed border-border text-muted-foreground',
+                  ? 'font-semibold text-muted-foreground'
+                  : 'text-muted-foreground',
             ].join(' ')}
           >
             {MODULE_STATUS_WORD[module.status] ?? module.status}
