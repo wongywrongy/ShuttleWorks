@@ -7,7 +7,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BracketTab } from '../BracketTab';
 import { useUiStore } from '../../../store/uiStore';
@@ -132,18 +131,6 @@ describe('BracketTab — fresh tournament (data === null)', () => {
     expect(screen.queryByLabelText(/Rest between rounds/i)).not.toBeInTheDocument();
   });
 
-  it('shows the empty-state CTA on bracket-schedule tab', () => {
-    useUiStore.setState({ activeTab: 'bracket-schedule' });
-    renderBracketTab();
-    expect(screen.getByRole('heading', { name: 'No draws generated' })).toBeInTheDocument();
-  });
-
-  it('shows the empty-state CTA on bracket-live tab', () => {
-    useUiStore.setState({ activeTab: 'bracket-live' });
-    renderBracketTab();
-    expect(screen.getByRole('heading', { name: 'No draws generated' })).toBeInTheDocument();
-  });
-
   it('renders bracket load errors as inline alerts', () => {
     vi.mocked(useBracket).mockReturnValue({
       data: null,
@@ -189,114 +176,11 @@ function makePopulatedBracket(): BracketTournamentDTO {
   };
 }
 
-describe('BracketTab — selection survives the 2.5s poll (audit D1)', () => {
-  /** `useBracket` polls every 2.5s and replaces `data` with a NEW OBJECT each
-   *  time. A reset effect keyed on `[data]` therefore wiped the operator's
-   *  selection on every poll: clicking a chip on the Plan timeline appeared to
-   *  be a dead handler — the ring showed, then silently vanished. The effect
-   *  must compare CONTENT (is the selected unit still there?), not identity. */
-  it('keeps the selected play unit when a poll returns an equal-but-new object', async () => {
-    const user = userEvent.setup();
-    vi.mocked(useBracket).mockReturnValue({
-      data: makePopulatedBracket(),
-      setData: vi.fn(),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    });
-    useUiStore.setState({ activeTab: 'bracket-schedule' });
-    const { rerender } = renderBracketTab();
-
-    const chip = document.querySelector('[data-testid="bracket-block-pu1"]');
-    expect(chip).not.toBeNull();
-    await user.click(chip!);
-    expect(
-      document.querySelector('[data-testid="bracket-block-pu1"]')?.className,
-    ).toMatch(/ring-2/);
-
-    // The poll lands: same content, brand-new object reference.
-    vi.mocked(useBracket).mockReturnValue({
-      data: makePopulatedBracket(),
-      setData: vi.fn(),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    });
-    rerender(
-      <MemoryRouter initialEntries={['/tournaments/t1/bracket-schedule']}>
-        <Routes>
-          <Route path="/tournaments/:id/*" element={<BracketTab />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    // Selection must still be there.
-    expect(
-      document.querySelector('[data-testid="bracket-block-pu1"]')?.className,
-    ).toMatch(/ring-2/);
-  });
-
-  it('drops the selection when the selected play unit is gone (regenerate)', async () => {
-    const user = userEvent.setup();
-    vi.mocked(useBracket).mockReturnValue({
-      data: makePopulatedBracket(),
-      setData: vi.fn(),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    });
-    useUiStore.setState({ activeTab: 'bracket-schedule' });
-    const { rerender } = renderBracketTab();
-    await user.click(document.querySelector('[data-testid="bracket-block-pu1"]')!);
-
-    // A regenerate: the draw comes back with different play units.
-    const regenerated = makePopulatedBracket();
-    regenerated.play_units[0].id = 'pu-NEW';
-    regenerated.assignments[0].play_unit_id = 'pu-NEW';
-    vi.mocked(useBracket).mockReturnValue({
-      data: regenerated,
-      setData: vi.fn(),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    });
-    rerender(
-      <MemoryRouter initialEntries={['/tournaments/t1/bracket-schedule']}>
-        <Routes>
-          <Route path="/tournaments/:id/*" element={<BracketTab />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(
-      document.querySelector('[data-testid="bracket-block-pu-NEW"]')?.className,
-    ).not.toMatch(/ring-2/);
-  });
-});
-
-describe('BracketTab — Schedule chrome (data populated)', () => {
-  it('renders header + table + sidebar on bracket-schedule tab', () => {
-    // Override the default null-data mock for this test only.
-    vi.mocked(useBracket).mockReturnValue({
-      data: makePopulatedBracket(),
-      setData: vi.fn(),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    });
-    useUiStore.setState({ activeTab: 'bracket-schedule' });
-    renderBracketTab();
-
-    // Header: play-unit count summary.
-    expect(screen.getByText(/play unit.*scheduled across/i)).toBeInTheDocument();
-
-    // Table: the "X of Y scheduled" header strip.
-    expect(screen.getByText(/of 1 scheduled/i)).toBeInTheDocument();
-
-    // Sidebar: empty hint by default (nothing selected).
-    expect(screen.getByText(/click a match to see details/i)).toBeInTheDocument();
-  });
-});
+// The bracket schedule/live views (timeline, sidebar, live list) retired
+// onto the unified Operations Plan/Run surfaces at SP-CONSOLE-4 B4 — their
+// chrome, empty states, and the D1 selection-survives-poll behavior are
+// covered by the operations suites (selection there is key-based, so the
+// D1 identity-churn class cannot recur).
 
 describe('BracketTab — Setup chrome', () => {
   it('renders Configuration as one surface, with no section switcher', () => {

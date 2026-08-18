@@ -9,9 +9,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { PendingBadge } from '../../../../components/PendingBadge';
-import { ConflictBanner } from '../../../../components/ConflictBanner';
-import { useMatchStateStore } from '../../../../store/matchStateStore';
+import { PendingBadge } from '../PendingBadge';
+import { ConflictBanner } from '../ConflictBanner';
+import { useMatchStateStore } from '../../store/matchStateStore';
 
 beforeEach(() => {
   // Each test starts with a clean store so subscriber-style banners

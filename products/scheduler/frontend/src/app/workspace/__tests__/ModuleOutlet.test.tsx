@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { ModuleOutlet } from '../ModuleOutlet';
 import { useUiStore } from '../../../store/uiStore';
 
@@ -95,60 +92,4 @@ describe('ModuleOutlet', () => {
     expect(await screen.findByTestId('meet-product')).toBeInTheDocument();
   });
 
-  // --- VITE_LEGACY_OPS escape hatch (deleted at B4) ------------------------
-
-  it('legacy flag: a single-engine operations tab falls back to the engine product', async () => {
-    vi.stubEnv('VITE_LEGACY_OPS', '1');
-    try {
-      setTabAndKind('schedule', 'meet');
-      render(<ModuleOutlet engines={{ meet: true, bracket: false }} />);
-      expect(await screen.findByTestId('meet-product')).toBeInTheDocument();
-      expect(screen.queryByTestId('operations-product')).not.toBeInTheDocument();
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-
-  it('legacy flag: both engines still get the unified surface (pre-flip behavior)', async () => {
-    vi.stubEnv('VITE_LEGACY_OPS', '1');
-    try {
-      setTabAndKind('schedule', 'meet');
-      render(<ModuleOutlet engines={{ meet: true, bracket: true }} />);
-      expect(await screen.findByTestId('operations-product')).toBeInTheDocument();
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-});
-
-// --- VITE_LEGACY_OPS grep guard (SP-CONSOLE-4 B3) --------------------------
-// The flag dies with the legacy pages at B4, so it must stay a ONE-file
-// grep: routing decisions belong in ModuleOutlet only. A second usage site
-// would silently outlive the deletion sweep.
-describe('VITE_LEGACY_OPS stays confined to ModuleOutlet', () => {
-  const SRC = resolve(fileURLToPath(import.meta.url), '../../../..');
-
-  function walk(dir: string): string[] {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) return walk(full);
-      return /\.(ts|tsx)$/.test(entry.name) ? [full] : [];
-    });
-  }
-
-  it('no source file other than ModuleOutlet mentions the flag', () => {
-    const offenders = walk(SRC)
-      .filter((f) => readFileSync(f, 'utf8').includes('VITE_LEGACY_OPS'))
-      .map((f) => f.split('\\').join('/'))
-      .filter((f) => !f.endsWith('app/workspace/ModuleOutlet.tsx') && !f.includes('__tests__'));
-    expect(offenders).toEqual([]);
-  });
-
-  it('ModuleOutlet itself still carries the guarded fallback (guard has a subject)', () => {
-    const outlet = readFileSync(
-      resolve(SRC, 'app/workspace/ModuleOutlet.tsx'),
-      'utf8',
-    );
-    expect(outlet).toContain('VITE_LEGACY_OPS');
-  });
 });

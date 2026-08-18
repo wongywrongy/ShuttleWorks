@@ -33,11 +33,6 @@ import { BracketDrawsTab } from './BracketDrawsTab';
 import { BracketMatchesTab } from './BracketMatchesTab';
 import { BracketViewHeader } from './BracketViewHeader';
 import { DrawView, type BracketLayoutMode } from './DrawView';
-import { ScheduleView } from './ScheduleView';
-import { LiveView } from './LiveView';
-import { BracketScheduleHeader } from './BracketScheduleHeader';
-import { BracketMatchesTable } from './BracketMatchesTable';
-import { BracketScheduleSidebar } from './BracketScheduleSidebar';
 import { BracketEmptyState } from './BracketEmptyState';
 import { BracketInlineNotice } from './BracketInlineNotice';
 
@@ -123,28 +118,6 @@ function BracketTabBody() {
   const activeEventId =
     data?.events.find((e) => e.id === eventId)?.id ?? data?.events[0]?.id ?? '';
 
-  const [selectedPlayUnitId, setSelectedPlayUnitId] = useState<string | null>(null);
-
-  // Drop the selection when the selected play unit is GONE (regenerate, reset).
-  //
-  // This used to key on `[data]` and clear unconditionally, on the assumption
-  // that `data`'s reference only changes on a regenerate. It doesn't: `useBracket`
-  // POLLS every 2.5s and replaces `data` wholesale each time, so the effect wiped
-  // the operator's selection roughly twice a second-and-a-half. Clicking a chip on
-  // the Plan timeline looked like a dead handler — the ring appeared and then
-  // silently vanished (audit finding D1). Comparing CONTENT, not identity, keeps
-  // the selection across polls while still clearing it when the draw really changes.
-  // (The Schedule timeline aggregates chips from EVERY event, so a selection
-  // does not need clearing on an event switch — only when its unit is gone.)
-  useEffect(() => {
-    if (
-      selectedPlayUnitId &&
-      !data?.play_units.some((pu) => pu.id === selectedPlayUnitId)
-    ) {
-      setSelectedPlayUnitId(null);
-    }
-  }, [data, selectedPlayUnitId]);
-
   // First-load migration: if we have a legacy bracket with participants
   // but no bracketPlayers in store yet, extract them once.
   // The ``bracketRosterMigrated`` flag in the store keeps the EXTRACTION to
@@ -213,11 +186,7 @@ function BracketTabBody() {
 
   // Setup, Roster, and Events do NOT depend on bracket-events data.
   // Draw/Schedule/Live render the events' draws/Gantts; they need data.
-  const needsBracketData =
-    view === 'draw' ||
-    view === 'matches' ||
-    view === 'schedule' ||
-    view === 'live';
+  const needsBracketData = view === 'draw' || view === 'matches';
   if (needsBracketData && !data) {
     return (
       <div className="min-h-full bg-card">
@@ -244,13 +213,11 @@ function BracketTabBody() {
       {/* Setup / Roster / Events own their tab-local header strips —
           rendering the view header there produced a double-header
           stack the meet never shows. */}
-      {data && (view === 'draw' || view === 'schedule' || view === 'live') && (
+      {data && view === 'draw' && (
         <BracketViewHeader
-          view={view}
           data={data}
           eventId={activeEventId}
           onEventId={setEventId}
-          onRefresh={refresh}
           drawLayout={drawLayout}
           onDrawLayout={setDrawLayout}
         />
@@ -332,38 +299,6 @@ function BracketTabBody() {
               layoutMode={drawLayout}
             />
           </div>
-        )}
-        {view === 'schedule' && data && (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <BracketScheduleHeader data={data} />
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <div className="flex min-w-0 flex-1 flex-col">
-                <div className="shrink-0 overflow-x-auto px-4 py-3">
-                  <ScheduleView
-                    data={data}
-                    selectedId={selectedPlayUnitId}
-                    onSelect={setSelectedPlayUnitId}
-                  />
-                </div>
-                <BracketMatchesTable
-                  data={data}
-                  selectedId={selectedPlayUnitId}
-                  onSelect={setSelectedPlayUnitId}
-                />
-              </div>
-              <BracketScheduleSidebar
-                data={data}
-                selectedId={selectedPlayUnitId}
-              />
-            </div>
-          </div>
-        )}
-        {view === 'live' && data && (
-          <LiveView
-            data={data}
-            onChange={setData}
-            refresh={refresh}
-          />
         )}
       </div>
     </div>

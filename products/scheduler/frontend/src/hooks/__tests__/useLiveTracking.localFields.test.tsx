@@ -16,6 +16,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import { useLiveTracking } from '../useLiveTracking';
 import { useMatchStateStore } from '../../store/matchStateStore';
+import type { MatchStateDTO } from '../../api/dto';
 
 vi.mock('../../api/client', () => ({
   apiClient: {
@@ -44,8 +45,8 @@ const wrap =
 
 /** Server echo: the DTO shape the backend actually returns — status +
  *  stamps, NO playerConfirmations / postponed keys. */
-const serverEcho = (matchId: string, status: string) => ({
-  state: { matchId, status, score: null, notes: null },
+const serverEcho = (matchId: string, status: MatchStateDTO['status']) => ({
+  state: { matchId, status } as MatchStateDTO,
   version: 2,
 });
 

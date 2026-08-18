@@ -32,7 +32,7 @@ import { useCanEdit } from '../../../hooks/useCanEdit';
 import { useTournamentId } from '../../../hooks/useTournamentId';
 import { apiClient } from '../../../api/client';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
-import { exportScheduleXlsx } from '../../meet/exports/xlsxExports';
+import { exportScheduleXlsx } from '../exports/scheduleXlsx';
 import { PickerPopover } from '../../../components/control-plane';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import type { WorkspacePhase } from '../../../platform/domain/lifecycle';

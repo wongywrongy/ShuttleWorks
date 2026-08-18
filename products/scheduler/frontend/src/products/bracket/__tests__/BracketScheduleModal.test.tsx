@@ -2,18 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useUiStore } from '../../../store/uiStore';
-import { BracketViewHeader } from '../BracketViewHeader';
+import { BracketScheduleModal } from '../BracketScheduleModal';
 import type {
   BracketTournamentDTO,
   ScheduleNextOut,
 } from '../../../api/bracketDto';
 
-// The header opens BracketScheduleModal, which streams the solve via
-// useBracketApi().scheduleNextWithProgress() and commits a chosen
-// candidate via commitRound(). The strip it renders for the live view
-// (EventsFilterStrip) calls useBracket(). Mock both so no provider /
-// network is needed. ``streamResult`` is swapped per test to drive the
-// candidate-vs-no-result branches.
+// BracketScheduleModal streams the solve via
+// api.scheduleNextWithProgress() and commits a chosen candidate via
+// commitRound(). It used to be exercised through the retired bracket
+// live-view header (SP-CONSOLE-4 B4) — the modal is now hosted by the
+// Operations Plan toolbar, so this drives it directly. ``streamResult``
+// is swapped per test to drive the candidate-vs-no-result branches.
 let streamResult: ScheduleNextOut;
 const scheduleNextWithProgress = vi.fn(
   (callbacks: {
@@ -30,18 +30,9 @@ const scheduleNextWithProgress = vi.fn(
 );
 const commitRound = vi.fn(() => Promise.resolve(FIXTURE));
 
-vi.mock('../../../api/bracketClient', () => ({
-  useBracketApi: () => ({
-    scheduleNextWithProgress,
-    commitRound,
-    exportJsonUrl: () => '/j',
-    exportCsvUrl: () => '/c',
-    exportIcsUrl: () => '/i',
-  }),
-}));
-vi.mock('../../../hooks/useBracket', () => ({
-  useBracket: () => ({ data: FIXTURE }),
-}));
+// Structural stand-in for the BracketApi surface the modal touches.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const api = { scheduleNextWithProgress, commitRound } as any;
 
 // One ready-to-schedule play unit (sides set, no assignment, no result,
 // no deps) so the "Schedule next round" button renders.
@@ -67,20 +58,14 @@ const FIXTURE: BracketTournamentDTO = {
   assignments: [],
 };
 
-function renderHeader(onRefresh: () => Promise<void> = () => Promise.resolve()) {
+function renderModal(onCommitted: () => Promise<void> = () => Promise.resolve()) {
   return render(
-    <MemoryRouter initialEntries={['/tournaments/t-1/bracket-live']}>
+    <MemoryRouter initialEntries={['/tournaments/t-1/schedule']}>
       <Routes>
         <Route
           path="/tournaments/:id/*"
           element={
-            <BracketViewHeader
-              view="live"
-              data={FIXTURE}
-              eventId="MS"
-              onEventId={() => {}}
-              onRefresh={onRefresh}
-            />
+            <BracketScheduleModal api={api} onClose={() => {}} onCommitted={onCommitted} />
           }
         />
       </Routes>
@@ -88,7 +73,7 @@ function renderHeader(onRefresh: () => Promise<void> = () => Promise.resolve()) 
   );
 }
 
-describe('BracketViewHeader — streaming schedule-next', () => {
+describe('BracketScheduleModal — streaming schedule-next', () => {
   beforeEach(() => {
     useUiStore.setState({ toasts: [] });
     scheduleNextWithProgress.mockClear();
@@ -122,11 +107,10 @@ describe('BracketViewHeader — streaming schedule-next', () => {
       ],
     };
 
-    const onRefresh = vi.fn(() => Promise.resolve());
-    renderHeader(onRefresh);
-    fireEvent.click(screen.getByRole('button', { name: /Schedule next round/ }));
+    const onCommitted = vi.fn(() => Promise.resolve());
+    renderModal(onCommitted);
 
-    // The stream ran with the progress callbacks.
+    // The stream runs on mount, with the progress callbacks.
     await waitFor(() => expect(scheduleNextWithProgress).toHaveBeenCalled());
 
     // Candidates surface for selection.
@@ -142,7 +126,7 @@ describe('BracketViewHeader — streaming schedule-next', () => {
         ],
       }),
     );
-    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
     const toast = useUiStore.getState().toasts.at(-1)!;
     expect(toast.level).toBe('success');
     expect(toast.message).toMatch(/Scheduled 1 match/i);
@@ -158,8 +142,7 @@ describe('BracketViewHeader — streaming schedule-next', () => {
       candidates: [],
     };
 
-    renderHeader();
-    fireEvent.click(screen.getByRole('button', { name: /Schedule next round/ }));
+    renderModal();
 
     await waitFor(() => expect(useUiStore.getState().toasts.length).toBe(1));
     const toast = useUiStore.getState().toasts[0];

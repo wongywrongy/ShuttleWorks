@@ -38,24 +38,17 @@ interface ModuleOutletProps {
   engines?: { meet: boolean; bracket: boolean };
 }
 
-/** The `VITE_LEGACY_OPS` escape hatch (SP-CONSOLE-4 B3): build with
- *  `VITE_LEGACY_OPS=1` to restore the pre-flip routing, where a
- *  single-engine workspace's Operations segments render the engine's own
- *  legacy pages. Build-time (the `VITE_ERROR_HARNESS` precedent), default
- *  off, deleted with the legacy pages at B4. */
-const legacyOps = () => import.meta.env.VITE_LEGACY_OPS === '1';
-
 /** Mounts the module that owns the current active tab. Operations segments
  *  render the unified Operations surface (single- or cross-engine, per
- *  `engines`); every other tab renders its owning module's product. */
+ *  `engines`); every other tab renders its owning module's product. The
+ *  `VITE_LEGACY_OPS` fallback died with the legacy pages at SP-CONSOLE-4 B4. */
 export function ModuleOutlet({ engines }: ModuleOutletProps) {
   const activeTab = useUiStore((s) => s.activeTab);
   const kind = useUiStore((s) => s.activeTournamentKind);
   const module = moduleForTab(activeTab, kind);
 
-  const bothEngines = !!engines?.meet && !!engines?.bracket;
   const child =
-    isOperationsSegment(activeTab) && (bothEngines || !legacyOps()) ? (
+    isOperationsSegment(activeTab) ? (
       <OperationsProduct engines={engines} />
     ) : module === 'bracket' ? (
       <BracketProduct />

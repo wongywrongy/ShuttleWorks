@@ -11,12 +11,6 @@ const RosterTab = lazy(() =>
 const MatchesTab = lazy(() =>
   import('./matches/MatchesTab').then((m) => ({ default: m.MatchesTab })),
 );
-const SchedulePage = lazy(() =>
-  import('./SchedulePage').then((m) => ({ default: m.SchedulePage })),
-);
-const MatchControlCenterPage = lazy(() =>
-  import('./MatchControlCenterPage').then((m) => ({ default: m.MatchControlCenterPage })),
-);
 
 /** Meet product mode: the operator tab strip + the active meet tab. The `tv`
  *  tab is no longer here — it became the Display product mode. */
@@ -36,11 +30,12 @@ export function MeetProduct() {
               "schedule re-flow" keyframe besides. `key` still remounts so
               each tab starts fresh. */}
           <div key={activeTab} className="h-full">
+            {/* The 'schedule'/'live' Operations segments route to the unified
+                OperationsProduct since the SP-CONSOLE-4 B3 flip — the legacy
+                SchedulePage / MatchControlCenterPage were deleted at B4. */}
             {activeTab === 'setup' ? <TournamentSetupPage /> : null}
             {activeTab === 'roster' ? <RosterTab /> : null}
             {activeTab === 'matches' ? <MatchesTab /> : null}
-            {activeTab === 'schedule' ? <SchedulePage /> : null}
-            {activeTab === 'live' ? <MatchControlCenterPage /> : null}
           </div>
         </Suspense>
       </div>
