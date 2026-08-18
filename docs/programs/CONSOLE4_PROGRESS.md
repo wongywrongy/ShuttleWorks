@@ -133,11 +133,68 @@ No-op — no 3B work existed to rebase (see A0).
     suggestions store slices (wholesale-replaced stores in tests).
   - `OperationsProduct` gained `engines` prop (defaults both) for B3.
 
-- **Remaining**: C4 Run migrations (meet score entry via ScoreEditor +
-  `useLiveTracking.updateMatchStatus`; Finished section + undo-finish;
-  undo-start; check-in/substitute/remove; impact analysis; Alerts &
-  Activity rail CMP-4) · per-migration tests + PICK/B2 negative-control
-  demonstrations · B3 flip (ModuleOutlet engines routing + `VITE_LEGACY_OPS`
-  fallback + grep-guard test) · scripted meet-day smoke (B3 gate) · B4
-  deletion + vocabulary-fork ledger close + docs · full `make check` +
-  screenshots.
+### C4 + B3 + B4 record (2026-08-18)
+
+- **C4 Run migrations landed** (`c3c1cc1`): `useMeetRunOps` bridge
+  (useLiveTracking's versioned state route + roster edits + undo-start
+  restore + analyzeImpact — its mount also subsumed the old
+  `useMatchStateSync` mount in Operations: one loader);
+  `MeetMatchPanel` below the RunInspector (ScoreEditor quick+sets →
+  `updateMatchStatus('finished')` → record completion, undo-start,
+  check-in pills + All in, substitute picker, armed remove, impacted
+  list — the inspector's static Players section yields to it);
+  `RunFinished` section (score readout + armed undo-finish
+  finished→started clearing score/sets/end stamp; bracket rows
+  read-only); AlertsActivityPanel on Run with `collapseWhenEmpty`
+  (CMP-4 — operator toggle pins); alert Review routes to the
+  Plan-hosted dialogs (segment switch + `dialogForAdvisory`). 16 new
+  runMeet tests + 2 AlertsActivityPanel cases. The B1 em-dash strings
+  (pre-existing contract failure) repunctuated.
+- **Negative controls demonstrated**: B2 `opsPlanMode` flip →
+  lifecycleMatrix test 1 failed | 22 passed; undo-finish payload
+  sabotage → 1 failed (after HARDENING the test — vitest deep-equality
+  ignores undefined-valued keys, so the clearing contract is asserted
+  by key *presence*); check-in gate flip (`called`→`scheduled`) →
+  3 failed. All reverted; tree green.
+- **B3 flip** (`4a01eb4`): ModuleOutlet routes EVERY Operations segment
+  to `OperationsProduct` with an `engines` prop from AppShell's real
+  module catalog; `VITE_LEGACY_OPS=1` build flag restored pre-flip
+  routing during the window; grep-guard test pinned the flag to
+  ModuleOutlet.
+- **B3 gate — scripted meet-day smoke PASSED** (dev stack, cloud auth,
+  seeded 6-player/4-match meet workspace, Playwright): single-engine
+  meet workspace renders unified Plan (toolbar/board/list) and Run;
+  call → check-in (pill + All in) → start → score entry (21–15) →
+  Finished + armed undo-finish → undo-start → armed quick Record all
+  verified live; alerts trail logged each transition and auto-expanded
+  from the CMP-4 collapsed state; the called-not-started warning
+  condition cleared itself. **Found + fixed a pre-existing bug**
+  (`85c48ae`): the match-state WRITE success paths applied the server
+  echo verbatim, silently reverting the local-only
+  `playerConfirmations`/`postponed` fields the instant a write
+  round-tripped (the polls always preserved them) — check-in had never
+  stuck on any surface. Fixed at the seam with the polls' merge;
+  regression test + negative control.
+- **B4 deletion** (`58b0ac6`): meet SchedulePage +
+  MatchControlCenterPage + control-center/ + schedule/ + TimelineKey +
+  timelineEncoding deleted (MeetProduct = setup/roster/matches);
+  bracket ScheduleView/LiveView/LiveMatchList/BracketScheduleHeader/
+  BracketScheduleSidebar/BracketMatchesTable/EventsFilterStrip deleted
+  (BracketTab = setup/roster/draws/draw/matches; BracketViewHeader
+  draw-only); `VITE_LEGACY_OPS` + its tests removed;
+  `exportScheduleXlsx` moved to `operations/exports/scheduleXlsx`
+  (shared plumbing in `lib/xlsxExportShared`; the operations→meet
+  reverse edge is gone); schedule-next streaming coverage moved to a
+  direct BracketScheduleModal test; conflictUI test moved to
+  `components/__tests__` (it covers shared PendingBadge/ConflictBanner);
+  orphans useTrafficLights/ElapsedTimer/SchoolDot deleted. Depcruise
+  cross-product warnings 33 → 16.
+- **Vocabulary fork closed**: OpsDetailRail was the last operations
+  surface hand-rolling "In progress" — now reads `STATE_WORD`
+  ("Awaiting court" stays: positional fact, not a state word).
+- Screenshots: `.playwright-mcp/c4-smoke-plan.png`,
+  `c4-smoke-run-finished.png`, `c4-b4-run-final.png` (gitignored,
+  recapture recipe as in SP-CONSOLE-REFINE).
+- Gates at close: tsc green · eslint 0 errors · vitest 196 files /
+  1756 passed · depcruise 0 errors / 16 warnings · `make check` green
+  (one earlier run raced a mid-edit file; re-run on the settled tree).

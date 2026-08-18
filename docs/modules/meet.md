@@ -111,7 +111,7 @@ Two read-only feeds sit alongside the proposal flow:
 | **Backend routes** | `/tournaments/{id}/solve-jobs*` (submit / list / get / cancel — the async solve rail), `/schedule/validate`, `/schedule/warm-restart` (`/schedule` + `/schedule/stream` are `410 Gone`); and under `/tournaments/{id}/schedule/`: `advisories`, `proposals/*`, `suggestions/*`, `director-action` |
 | **`apiClient` methods** | `submitSolveJob`, `getSolveJob`, `listSolveJobs`, `cancelSolveJob`, `runSolveJob`, `validateMove`, `createWarmRestartProposal`, `createRepairProposal`, `createManualEditProposal`, `createDirectorActionProposal`, `commitProposal`, `cancelProposal`, `getProposal`, `getAdvisories`, `getSuggestions`, `applySuggestion`, `dismissSuggestion` |
 | **Store slices** | the editable document in `tournamentStore` (config, roster, matches, schedule, `scheduleVersion` + history); the review pipeline in `uiStore` (`activeProposal`, `advisories`, `suggestions`) |
-| **Frontend code** | `products/meet/` — `roster/`, `matches/`, `tournaments/` + `TournamentSetupPage` (Configuration), `schedule/` + `SchedulePage` (Plan), `MatchControlCenterPage` + `control-center/` (Run), `suggestions/`, `director/`, `setup/`, `exports/` |
+| **Frontend code** | `products/meet/` — `roster/`, `matches/`, `TournamentSetupPage` (Configuration), `exports/` (roster + matches XLSX). The Plan/Run surfaces are Operations-owned code since SP-CONSOLE-4 (`products/operations/`); the meet-resident `SchedulePage` / `MatchControlCenterPage` were deleted at its B4 |
 | **Backend services** | `adapters/badminton.py` (DTO ↔ engine boundary), `services/solve_jobs.py` + `solve_worker.py` + `solve_runner.py` + `solve_child.py` (the job rail), `services/suggestions_worker.py` (background re-optimisation), `services/schedule_impact.py` (impact scoring) |
 
 These owned facts are pinned by the `meetContract` descriptor in
@@ -139,13 +139,11 @@ input rather than subscribing to it.
 
 ## Where Meet physically lives
 
-The `schedule` / `live` segments that render the **Plan** and **Run** boards are Operations-owned by
-contract, but their *single-engine* rendering still resides inside `products/meet/`:
-`MeetProduct.tsx` maps the `schedule` tab to `SchedulePage` and the `live` tab to
-`MatchControlCenterPage`. When **both** Meet and Bracket are enabled, `ModuleOutlet` routes those
-segments to the unified `OperationsProduct` instead, so the meet-resident surfaces serve only the
-meet-only workspace. The first-class `products/operations/` home now exists — this meet-side residue
-is the remaining structural overlap, not a contradiction of it. See [Operations](/modules/operations).
+The `schedule` / `live` segments that render the **Plan** and **Run** boards are Operations-owned
+by contract *and by code*: since the SP-CONSOLE-4 flip, `ModuleOutlet` routes every Operations
+segment — single-engine or hybrid — to the unified `OperationsProduct`, and the meet-resident
+`SchedulePage` / `MatchControlCenterPage` residue was deleted. `MeetProduct.tsx` serves only
+Roster, Matches, and Configuration. See [Operations](/modules/operations).
 
 The solve input is still **self-contained**: each submit re-serialises the whole problem into the
 job's `input_snapshot`, so the worker never reads live tournament tables and a job re-run
