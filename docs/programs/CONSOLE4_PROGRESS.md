@@ -195,6 +195,16 @@ No-op — no 3B work existed to rebase (see A0).
 - Screenshots: `.playwright-mcp/c4-smoke-plan.png`,
   `c4-smoke-run-finished.png`, `c4-b4-run-final.png` (gitignored,
   recapture recipe as in SP-CONSOLE-REFINE).
+- **Viewer guard follow-through** (`b940c6d`): reviewing the CI
+  interaction-smoke against the flipped surface exposed that the unified
+  Run controls carried neither the legacy pages' `useCanEdit` disabling
+  nor a client-side seam refusal on the meet command path (A2 class).
+  `useCommandQueue.submit` now refuses for viewers; RunInspector /
+  RunCourtGrid / RunQueue write controls disable with
+  `READ_ONLY_MESSAGE`; the smoke's viewer + 409-drift tests target the
+  unified surface (run-card select → `run-act-*` disabled;
+  undo-start/postpone/armed undo-finish as the return transitions).
 - Gates at close: tsc green · eslint 0 errors · vitest 196 files /
-  1756 passed · depcruise 0 errors / 16 warnings · `make check` green
-  (one earlier run raced a mid-edit file; re-run on the settled tree).
+  1756 passed · pytest 1648 passed / 66 skipped · depcruise 0 errors /
+  16 warnings · `make check` green on the settled tree (the
+  docs-freshness BEHIND report is advisory as ever).
