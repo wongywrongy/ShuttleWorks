@@ -67,5 +67,77 @@ No-op — no 3B work existed to rebase (see A0).
 
 ## Phase B — Operations convergence
 
-*(Not started. Gated on Phase A merged + green, then the B0
-parity-audit STOP.)*
+### B0 rulings (2026-08-18, owner-ratified)
+
+- **Phase A confirmed** (pushed `82b469e..1e4d0b7`); Phase B open.
+- **Disposition table ratified as presented.** Migrate → Plan: disruption
+  repair (relabel at B1 after confirming flow shape), director tools,
+  warm restart, re-optimize (frozen-horizon — verified distinct from
+  Re-plan: pins started/finished as locked + freeze≥2 + bracket windows;
+  both live in Plan paired by lifecycle, restoring the lost live-day
+  guard), move/postpone-with-preview, advisory banner + dispatcher,
+  stale banner, meet XLSX + bracket JSON/CSV/ICS exports, solve
+  telemetry (progress log / candidates / infeasible / violations),
+  list search + filter chips (absorbs the bracket events-filter need),
+  closed-court affordance on the board, suggestions rail (CMP-4),
+  read-only + live-day guards on Generate. Migrate → Floor/Run: meet
+  score entry (quick + sets, reusing ScoreEditor), finished section +
+  undo-finish (via the existing per-match state route — no wire change),
+  undo-start (originalSlotId/CourtId already on the DTO), check-in /
+  substitute / remove player, shared-player impact analysis.
+  Retire-with-reason: court×time on Run (R-G: Floor = dispatch; the time
+  axis is one segment away on Plan), schedule-next on the live segment
+  (R-H tempo split), bracket chip-state legend (X6 vocabulary is uniform
+  + documented; a legend restates the design system), `?director=` deep
+  link (superseded by `?select=` + Plan-hosted tools), legacy progress-%
+  header (RunSummaryBand carries the facts in console vocabulary), the
+  events dim-strip widget (its need migrates as list filters).
+- **Alerts & Activity rail: migrate to Run, CMP-4** (collapsed when
+  empty).
+- **Fallback flag: `VITE_` env flag** (build-time, the
+  `VITE_ERROR_HARNESS` precedent) — `VITE_LEGACY_OPS`; default off;
+  deleted at B4.
+- Component ownership at B1: migrated dialogs/panels MOVE to
+  `products/operations/` (Operations owns operating the schedule); the
+  legacy pages import from the new home during the flag window (warn-tier
+  cross-product edges that die with the pages at B4).
+
+### B1–B4 progress (checkpoint 2026-08-18)
+
+- **Landed** (`c4e4370` groundwork+matrix, `4f668f7` Plan migrations; tsc
+  green, operations vitest 152/152):
+  - Component moves: Operations owns DisruptionDialog, DirectorToolsPanel,
+    WarmRestartDialog, MoveMatchDialog, StaleBanner, SuggestionsRail (+its
+    helpers + ScheduleDiffView), AlertsActivityPanel, ScoreEditor,
+    SolverProgressLog, CandidatesPanel — legacy pages import from the new
+    home (meet→operations warn-tier edges, die at B4). One reverse edge:
+    PlanToolbar imports `meet/exports/xlsxExports` (shared with the roster
+    export) — split `exportScheduleXlsx` into operations at B4.
+  - B2 core: `lifecycleMatrix.ts` + matrix test (negative-control
+    demonstration still owed at close).
+  - Plan (B1 items 1–13): PlanToolbar (Generate/Re-plan armed + live-day
+    hardened copy + read-only guard; "Re-optimize remaining" on LIVE;
+    "Report a problem" (relabelled repair); Director tools; "Re-plan, stay
+    close"; Export menu = meet XLSX + bracket JSON/CSV/ICS; plan-ready);
+    PlanDialogHost (fresh-mount prefills, cancel-on-close);
+    `dialogForAdvisory` dispatcher + AdvisoryBanner on Plan; StaleBanner;
+    SuggestionsRail; SolveTelemetryPanel (progress log / violations /
+    infeasible / candidates); UnifiedOpsList search + engine chips;
+    ClosedCourtsStrip (deviation, ledger-ruled: strip above the board
+    rather than an in-grid marker — same capability without forking the
+    shared board grid); OpsDetailRail "Move or postpone…" (manual-edit
+    proposal); COMPLETE renders plan-review (solver/proposal actions
+    absent). Ratified test edits: `courtStatus.test.tsx` (owner role for
+    the new read-only gate; adjacency walk keeps its protected property
+    across the grouped toolbar). Defensive `?? []` on the advisories +
+    suggestions store slices (wholesale-replaced stores in tests).
+  - `OperationsProduct` gained `engines` prop (defaults both) for B3.
+
+- **Remaining**: C4 Run migrations (meet score entry via ScoreEditor +
+  `useLiveTracking.updateMatchStatus`; Finished section + undo-finish;
+  undo-start; check-in/substitute/remove; impact analysis; Alerts &
+  Activity rail CMP-4) · per-migration tests + PICK/B2 negative-control
+  demonstrations · B3 flip (ModuleOutlet engines routing + `VITE_LEGACY_OPS`
+  fallback + grep-guard test) · scripted meet-day smoke (B3 gate) · B4
+  deletion + vocabulary-fork ledger close + docs · full `make check` +
+  screenshots.
