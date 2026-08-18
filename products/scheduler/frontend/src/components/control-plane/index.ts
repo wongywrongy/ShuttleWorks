@@ -51,6 +51,7 @@ export {
 } from './matchStatus';
 export {
   MatchCard,
+  ResultSides,
   ScoreLane,
   WinnerDot,
   setsWinner,

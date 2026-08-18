@@ -154,6 +154,113 @@ function CardSide({
  * the right-aligned lane; the optional `meta` strip renders beneath a
  * hairline ("QF · MD · Court 4 · 10:30" — the caller composes the string).
  */
+/** One side of a ResultSides block: the caller's stack of interactive
+ *  player rows, top-aligned against the winner-dot slot and this side's
+ *  set-score columns so an expanded row grows DOWN without dragging the
+ *  lane with it. */
+function ResultSideBlock({
+  side,
+  rows,
+  won,
+  sets,
+  reason,
+}: {
+  side: 'A' | 'B';
+  rows: ReactNode;
+  won: boolean;
+  sets: SetPair[];
+  reason?: MatchReason | null;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-1.5" data-side={side}>
+      <div className="min-w-0 flex-1">{rows}</div>
+      <span className="mt-2 w-3 shrink-0 text-center">
+        {won ? <WinnerDot /> : null}
+      </span>
+      {reason ? (
+        <span className="mt-2 shrink-0 rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {REASON_BADGE[reason]}
+        </span>
+      ) : null}
+      {sets.length > 0 ? (
+        <span className="mt-1.5 flex shrink-0 items-center text-2sm tabular-nums">
+          {sets.map((s, i) => {
+            const mine = side === 'A' ? s.sideA : s.sideB;
+            const theirs = side === 'A' ? s.sideB : s.sideA;
+            return (
+              <span
+                key={i}
+                className={[
+                  SET_COL,
+                  'inline-block',
+                  mine > theirs ? 'font-semibold text-foreground' : 'text-muted-foreground',
+                ].join(' ')}
+              >
+                {mine}
+              </span>
+            );
+          })}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * ResultSides — the FINISHED match's sole roster surface in the detail
+ * panels (INS-N1): the same winner-dot + right-aligned set-column anatomy
+ * as MatchCard, but each side hosts the caller's INTERACTIVE player rows
+ * (per-player expand, identity chips) instead of a plain name stack —
+ * finished matches no longer render SIDE A/SIDE B sections beside a
+ * duplicate Result card. Winner reads by weight inside the caller's rows.
+ */
+export function ResultSides({
+  sideA,
+  sideB,
+  sets = [],
+  winner = null,
+  reasonSide = null,
+  reason = null,
+  meta,
+  'data-testid': testId,
+}: {
+  sideA: ReactNode;
+  sideB: ReactNode;
+  sets?: SetPair[];
+  winner?: 'A' | 'B' | null;
+  reasonSide?: 'A' | 'B' | null;
+  reason?: MatchReason | null;
+  meta?: ReactNode;
+  'data-testid'?: string;
+}) {
+  const won = winner ?? setsWinner(sets);
+  return (
+    <div data-testid={testId} className="min-w-0">
+      <ResultSideBlock
+        side="A"
+        rows={sideA}
+        won={won === 'A'}
+        sets={sets}
+        reason={reasonSide === 'A' ? reason : null}
+      />
+      <div className="mt-1.5">
+        <ResultSideBlock
+          side="B"
+          rows={sideB}
+          won={won === 'B'}
+          sets={sets}
+          reason={reasonSide === 'B' ? reason : null}
+        />
+      </div>
+      {meta ? (
+        <div className="mt-2 border-t border-border pt-1 text-2xs text-muted-foreground">
+          {meta}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function MatchCard({
   sideA,
   sideB,

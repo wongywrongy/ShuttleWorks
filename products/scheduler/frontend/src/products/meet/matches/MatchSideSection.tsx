@@ -146,7 +146,11 @@ export function MatchSideSection({
   );
 }
 
-function PlayerCard({
+/** One expandable player card. Exported since INS-N1: a FINISHED match's
+ *  Result block renders these same cards (no `onRemove` — the roster of a
+ *  played match is a record, not an editor; `emphasis` bolds the winning
+ *  side's names). */
+export function PlayerCard({
   id,
   side,
   player,
@@ -154,6 +158,7 @@ function PlayerCard({
   open,
   onToggle,
   onRemove,
+  emphasis = false,
 }: {
   id: string;
   side: string;
@@ -161,7 +166,9 @@ function PlayerCard({
   accent: SchoolAccent;
   open: boolean;
   onToggle: () => void;
-  onRemove: () => void;
+  /** Absent = the card is read-only identity (finished match). */
+  onRemove?: () => void;
+  emphasis?: boolean;
 }) {
   if (!player) {
     // Stale reference (player deleted from the roster) — surface it instead
@@ -170,11 +177,13 @@ function PlayerCard({
       <div className="group flex items-center gap-2 rounded-sm border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
         <span className="min-w-0 flex-1 break-words italic">{id}</span>
         <span className="shrink-0 text-2xs">Not on roster</span>
-        <ConfirmDeleteButton
-          label={`${id} from ${side}`}
-          onConfirm={onRemove}
-          testId={`side-remove-${id}`}
-        />
+        {onRemove ? (
+          <ConfirmDeleteButton
+            label={`${id} from ${side}`}
+            onConfirm={onRemove}
+            testId={`side-remove-${id}`}
+          />
+        ) : null}
       </div>
     );
   }
@@ -196,19 +205,26 @@ function PlayerCard({
               open ? 'rotate-90' : '',
             ].join(' ')}
           />
-          <span className="min-w-0 flex-1 break-words text-sm text-foreground">
+          <span
+            className={[
+              'min-w-0 flex-1 break-words text-sm text-foreground',
+              emphasis ? 'font-semibold' : '',
+            ].join(' ')}
+          >
             {player.name || '(unnamed)'}
           </span>
           {/* Short-code chip, not the full school name (G6/M2.6) — the
               full name stays one hover away in the chip's tooltip. */}
           <SchoolChip accent={accent} />
         </button>
-        <ConfirmDeleteButton
-          label={`${player.name || 'player'} from ${side}`}
-          onConfirm={onRemove}
-          className="mr-1"
-          testId={`side-remove-${id}`}
-        />
+        {onRemove ? (
+          <ConfirmDeleteButton
+            label={`${player.name || 'player'} from ${side}`}
+            onConfirm={onRemove}
+            className="mr-1"
+            testId={`side-remove-${id}`}
+          />
+        ) : null}
       </div>
       {open ? (
         <div className="border-t border-border/60">

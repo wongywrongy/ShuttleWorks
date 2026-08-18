@@ -21,23 +21,21 @@ import { useMemo, useRef, useState } from 'react';
 import {
   DetailPanel,
   EventPicker,
-  MatchCard,
+  MatchStatus,
   PickerPopover,
+  ResultSides,
   setsWinner,
-  STATUS_LABEL,
-  STATUS_PILL_TONE,
   type EventPickerOption,
   type MatchListStatus,
 } from '../../../components/control-plane';
-import { StatusPill } from '../../../components/StatusPill';
 import { Row } from '../../../platform/settings/SettingsControls';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
-import { formatPlayerName } from '../../../lib/names';
 import { slotToTime } from '../../../lib/time';
-import type { MatchDTO } from '../../../api/dto';
+import { buildGroupIndex, getPlayerSchoolAccent } from '../../../lib/schoolAccent';
+import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { EVENT_LABEL, isDoublesRank } from '../roster/positionGrid/helpers';
-import { MatchSideSection } from './MatchSideSection';
+import { MatchSideSection, PlayerCard } from './MatchSideSection';
 
 /** Side capacity derived from the event rank. Singles = 1, doubles = 2,
  *  unknown rank = 2 (let the operator fill it; validation flags oversize). */
@@ -77,20 +75,7 @@ export function MatchDetailPanel({
   const meta = assignment
     ? `Court ${assignment.courtId}${config ? ` · ${slotToTime(assignment.slotId, config)}` : ''}`
     : null;
-  const sideNames = (ids: string[] | undefined) => {
-    const named = (ids ?? [])
-      .map((id) => players.find((p) => p.id === id)?.name)
-      .filter((n): n is string => !!n);
-    return named.length === 0 ? (
-      <span className="italic text-muted-foreground">No players</span>
-    ) : (
-      named.map((n, i) => (
-        <span key={i} className="block">
-          {formatPlayerName(n)}
-        </span>
-      ))
-    );
-  };
+  const groupsById = useMemo(() => buildGroupIndex(groups), [groups]);
 
   const code = match.eventRank?.trim() ?? '';
   const prefix = code.match(/^[A-Z]+/)?.[0] ?? '';
@@ -123,33 +108,14 @@ export function MatchDetailPanel({
     return out;
   }, [players, config?.rankCounts, code, prefix]);
 
-  // Read-only — Operations owns run-state; never interactive. A finished match
-  // with a recorded score renders the G6 card (scores + winner say "done");
-  // otherwise the pill. Built once and placed at the top or the bottom
-  // depending on which it is — see the placement note below.
-  const statusSection = status ? (
-    <DetailPanel.Section eyebrow={laneSets ? 'Result' : 'Status'}>
-      {laneSets ? (
-        <MatchCard
-          sideA={sideNames(match.sideA)}
-          sideB={sideNames(match.sideB)}
-          sets={laneSets}
-          winner={setsWinner(laneSets)}
-          meta={meta}
-          data-testid="match-result-card"
-        />
-      ) : (
-        <>
-          <span data-testid="match-status-pill" className="inline-flex w-fit">
-            <StatusPill tone={STATUS_PILL_TONE[status]} dot={status === 'live'}>
-              {STATUS_LABEL[status]}
-            </StatusPill>
-          </span>
-          {meta ? <p className="mt-1.5 text-2xs text-muted-foreground">{meta}</p> : null}
-        </>
-      )}
-    </DetailPanel.Section>
-  ) : null;
+  // State-exclusive blocks (INS-N1): a FINISHED match renders the Result
+  // block as its SOLE roster surface — the same interactive player cards
+  // the side sections host, winner by weight, score right-aligned — and
+  // the SIDE A/SIDE B editors (with "+ Add player") do not render at all.
+  // An UNFINISHED match keeps the side editors and leads with where/when
+  // it plays (MAT-5); no Result card.
+  const finished = status === 'done';
+  const winner = setsWinner(laneSets);
 
   return (
     <DetailPanel
@@ -161,12 +127,15 @@ export function MatchDetailPanel({
       onClose={onClose}
       testId="match-detail-panel"
     >
-      {/* An unfinished match leads with where and when it plays: that is the
-          operational fact, and it used to sit at the very bottom under the
-          sides, below a heading that said "Status" (MAT-5). A FINISHED match
-          leads with its sides and closes with the result, which is the order
-          you read it in. */}
-      {status && !laneSets ? statusSection : null}
+      {status && !finished ? (
+        <DetailPanel.Section eyebrow="Status">
+          {/* Read-only — Operations owns run-state; never interactive. */}
+          <span data-testid="match-status-pill" className="inline-flex w-fit">
+            <MatchStatus status={status} />
+          </span>
+          {meta ? <p className="mt-1.5 text-2xs text-muted-foreground">{meta}</p> : null}
+        </DetailPanel.Section>
+      ) : null}
 
       <DetailPanel.Section eyebrow="Event">
         <Row pane
@@ -184,27 +153,111 @@ export function MatchDetailPanel({
         />
       </DetailPanel.Section>
 
-      <MatchSideSection
-        label="Side A"
-        ids={match.sideA ?? []}
-        onChange={(ids) => updateMatch(match.id, { sideA: ids })}
-        capacity={capacity}
-        eventRank={match.eventRank}
-        players={players}
-        groups={groups}
-      />
-      <MatchSideSection
-        label="Side B"
-        ids={match.sideB ?? []}
-        onChange={(ids) => updateMatch(match.id, { sideB: ids })}
-        capacity={capacity}
-        eventRank={match.eventRank}
-        players={players}
-        groups={groups}
-      />
-
-      {laneSets ? statusSection : null}
+      {finished ? (
+        <DetailPanel.Section eyebrow="Result">
+          <ResultSides
+            sideA={
+              <FinishedSideRows
+                side="Side A"
+                ids={match.sideA ?? []}
+                emphasis={winner === 'A'}
+                players={players}
+                groupsById={groupsById}
+              />
+            }
+            sideB={
+              <FinishedSideRows
+                side="Side B"
+                ids={match.sideB ?? []}
+                emphasis={winner === 'B'}
+                players={players}
+                groupsById={groupsById}
+              />
+            }
+            sets={laneSets ?? []}
+            winner={winner}
+            meta={meta}
+            data-testid="match-result-card"
+          />
+        </DetailPanel.Section>
+      ) : (
+        <>
+          <MatchSideSection
+            label="Side A"
+            ids={match.sideA ?? []}
+            onChange={(ids) => updateMatch(match.id, { sideA: ids })}
+            capacity={capacity}
+            eventRank={match.eventRank}
+            players={players}
+            groups={groups}
+          />
+          <MatchSideSection
+            label="Side B"
+            ids={match.sideB ?? []}
+            onChange={(ids) => updateMatch(match.id, { sideB: ids })}
+            capacity={capacity}
+            eventRank={match.eventRank}
+            players={players}
+            groups={groups}
+          />
+        </>
+      )}
     </DetailPanel>
+  );
+}
+
+/* =========================================================================
+ * FinishedSideRows — one side's players inside the Result block: the same
+ * expandable PlayerCard the side editors use, minus removal (a played
+ * match's roster is a record). `emphasis` bolds the winning side's names.
+ * ========================================================================= */
+function FinishedSideRows({
+  side,
+  ids,
+  emphasis,
+  players,
+  groupsById,
+}: {
+  side: string;
+  ids: string[];
+  emphasis: boolean;
+  players: PlayerDTO[];
+  groupsById: Map<string, RosterGroupDTO>;
+}) {
+  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
+  const toggle = (id: string) =>
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  if (ids.length === 0) {
+    return (
+      <p className="rounded-sm border border-dashed border-border px-3 py-2 text-xs italic text-muted-foreground">
+        No players
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      {ids.map((id) => {
+        const player = players.find((p) => p.id === id) ?? null;
+        return (
+          <PlayerCard
+            key={id}
+            id={id}
+            side={side}
+            player={player}
+            accent={getPlayerSchoolAccent(player, groupsById)}
+            open={openIds.has(id)}
+            onToggle={() => toggle(id)}
+            emphasis={emphasis}
+          />
+        );
+      })}
+    </div>
   );
 }
 
