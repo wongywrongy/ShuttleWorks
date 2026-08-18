@@ -21,6 +21,7 @@
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { MatchDetailPanel } from '../bracket/MatchDetailPanel';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
+import { STATE_WORD } from '../../lib/stateWords';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
 import { SourceChip } from '../../components/SourceChip';
@@ -46,10 +47,14 @@ interface Props {
   onRequestMove?: (matchId: string) => void;
 }
 
+// One vocabulary (STATE_WORD, SP-CONSOLE-2 X1): this was the last surface
+// still saying "In progress" for what everything else calls Live — the
+// vocabulary fork closed with the legacy pages at SP-CONSOLE-4 B4.
 function stateLabel(block: OpsBlock): string {
-  if (block.done) return 'Done';
-  if (block.started) return 'In progress';
-  return block.court != null ? 'Scheduled' : 'Awaiting court';
+  if (block.done) return STATE_WORD.done;
+  if (block.started) return STATE_WORD.live;
+  // "Awaiting court" is a positional fact (no court yet), not a state word.
+  return block.court != null ? STATE_WORD.scheduled : 'Awaiting court';
 }
 
 export function OpsDetailRail({ block, data, onBracketChange, onAction, live, onRequestMove }: Props) {
