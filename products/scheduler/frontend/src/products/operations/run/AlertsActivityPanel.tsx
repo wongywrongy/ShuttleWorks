@@ -22,6 +22,10 @@ interface AlertsActivityPanelProps {
    *  panel when Match Details is open (so a long trail can't squeeze
    *  Details to a sliver) and lets it fill when Details is collapsed. */
   className?: string;
+  /** CMP-4: start collapsed to the header row while there is nothing to
+   *  show; auto-expands when the first entry arrives (until the operator
+   *  has toggled it themselves, which then wins). */
+  collapseWhenEmpty?: boolean;
 }
 
 function relativeTime(ts: string, nowMs: number): string {
@@ -88,10 +92,16 @@ function EntryRow({
   );
 }
 
-export function AlertsActivityPanel({ onReview, className = '' }: AlertsActivityPanelProps) {
+export function AlertsActivityPanel({
+  onReview,
+  className = '',
+  collapseWhenEmpty = false,
+}: AlertsActivityPanelProps) {
   const conditions = useAlertStore((s) => s.conditions);
   const activity = useAlertStore((s) => s.activity);
-  const [collapsed, setCollapsed] = useState(false);
+  // `null` = the operator hasn't toggled yet, so the empty-state default may
+  // apply; an explicit toggle pins the choice.
+  const [collapsedChoice, setCollapsedChoice] = useState<boolean | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   // One shared interval refreshes every row's relative time.
@@ -102,12 +112,13 @@ export function AlertsActivityPanel({ onReview, className = '' }: AlertsActivity
 
   const entries = sortPanel([...Object.values(conditions), ...activity]);
   const warningCount = Object.values(conditions).filter((e) => e.severity === 'warning').length;
+  const collapsed = collapsedChoice ?? (collapseWhenEmpty && entries.length === 0);
 
   return (
     <div className={`flex min-h-0 flex-col border-b border-border ${className}`}>
       <button
         type="button"
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => setCollapsedChoice(!collapsed)}
         aria-expanded={!collapsed}
         className="flex flex-shrink-0 items-center justify-between gap-2 px-4 py-2 text-left hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >

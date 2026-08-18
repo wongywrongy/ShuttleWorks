@@ -66,6 +66,9 @@ export interface RunInspectorProps {
   formatSlot?: (slot: number) => string;
   /** Action dispatcher. */
   onAction: (kind: RunActionKind, opts?: { winnerSide?: 'A' | 'B'; court?: number }) => void;
+  /** Suppress the static Players section — set when a richer panel below
+   *  (the meet rail) renders the interactive player rows instead. */
+  hidePlayers?: boolean;
 }
 
 // ── root ──────────────────────────────────────────────────────────────────
@@ -77,6 +80,7 @@ export function RunInspector({
   currentSlot,
   formatSlot,
   onAction,
+  hidePlayers,
 }: RunInspectorProps) {
   // Empty / unselected state
   if (!match || !role) {
@@ -93,13 +97,15 @@ export function RunInspector({
     <aside data-testid="run-inspector" className="w-full">
       <StatusSection match={match} currentSlot={currentSlot} formatSlot={formatSlot} />
 
-      <DetailPanel.Section eyebrow="Players" testId="run-inspector-players">
-        <div className="space-y-1">
-          <div className="text-sm text-foreground">{match.sideA}</div>
-          <div className={`${EYEBROW_CLASS} text-muted-foreground`}>vs</div>
-          <div className="text-sm text-foreground">{match.sideB}</div>
-        </div>
-      </DetailPanel.Section>
+      {!hidePlayers && (
+        <DetailPanel.Section eyebrow="Players" testId="run-inspector-players">
+          <div className="space-y-1">
+            <div className="text-sm text-foreground">{match.sideA}</div>
+            <div className={`${EYEBROW_CLASS} text-muted-foreground`}>vs</div>
+            <div className="text-sm text-foreground">{match.sideB}</div>
+          </div>
+        </DetailPanel.Section>
+      )}
 
       {role === 'now' && <NowActions match={match} onAction={onAction} />}
 

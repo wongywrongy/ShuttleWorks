@@ -37,6 +37,11 @@ import { RunSummaryBand } from './RunSummaryBand';
 import { RunCourtGrid } from './RunCourtGrid';
 import { RunQueue } from './RunQueue';
 import { RunInspector } from './RunInspector';
+import { RunFinished } from './RunFinished';
+import { MeetMatchPanel } from './MeetMatchPanel';
+import { AlertsActivityPanel } from './AlertsActivityPanel';
+import type { MeetRunOps } from './useMeetRunOps';
+import type { Advisory } from '../../../api/dto';
 import { MatchDetailPanel } from '../../bracket/MatchDetailPanel';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 
@@ -57,6 +62,13 @@ export interface RunSurfaceProps {
   /** Minutes per slot (config.intervalMinutes) — enables the playing-chip
    *  elapsed stamp on the live board. */
   slotMinutes?: number;
+  /** Meet-engine seams beyond the OpsBlock model (score entry, undo-finish,
+   *  undo-start, check-in/roster edits, impact) — SP-CONSOLE-4 C4. Absent on
+   *  bracket-only workspaces; every meet affordance then stays hidden. */
+  meetOps?: MeetRunOps;
+  /** Routes an alert's suggested action to the Plan-hosted dialogs
+   *  (advisory economy lives on Plan since B1). */
+  onAdvisoryReview?: (advisory: Advisory) => void;
 }
 
 // ── pure auto-pull helper (exported so tests can verify without hooks) ────
@@ -112,6 +124,8 @@ export function RunSurface({
   planFinalized,
   formatSlot,
   slotMinutes,
+  meetOps,
+  onAdvisoryReview,
 }: RunSurfaceProps) {
   // ── seam hooks: owns the seam hooks for the Run (live) surface ───────────
   const pushToast = useUiStore((s) => s.pushToast);
@@ -377,11 +391,35 @@ export function RunSurface({
   const showBracketPanel =
     selectedMatch?.source === 'bracket' && selectedMatch.status === 'playing' && bracketData != null;
 
+  /**
+   * The meet rail (C4): score entry, undo-start, check-in/roster edits and
+   * the impact list — everything the generic inspector cannot carry. Done
+   * matches are handled by the Finished section's row controls instead.
+   */
+  const showMeetPanel =
+    meetOps != null &&
+    selectedMatch?.source === 'meet' &&
+    selectedMatch.status !== 'done' &&
+    meetOps.matches.some((m) => m.id === selectedMatch.id);
+
   /** For a queued match: the first court with no Now match. */
   const freeCourt = useMemo((): number | undefined => {
     if (selectedRole !== 'queued') return undefined;
     return lanes.find((l) => l.now == null)?.court;
   }, [selectedRole, lanes]);
+
+  // ── record completion (shared by inspector record + meet score save) ──────
+  // Auto-pull the queue head onto the emptied court, then deselect — the
+  // recorded match leaves the lane, so the remaining selection would resolve
+  // to a stale role. Deterministic and synchronous; never a useEffect.
+  const completeRecord = useCallback(
+    (recordedKey: string) => {
+      const pull = computeAutoPull(recordedKey, matches, lanes, queue, currentSlot ?? 0);
+      if (pull) fireAssign(pull.head, pull.court, pull.slot);
+      setSelectedKey(null);
+    },
+    [matches, lanes, queue, currentSlot, fireAssign],
+  );
 
   // ── action handler ────────────────────────────────────────────────────────
   const handleAction = useCallback(
@@ -405,18 +443,9 @@ export function RunSurface({
         // Issue the record action first.
         void runAction(selectedMatch, 'record', { winnerSide: opts?.winnerSide }, seams);
 
-        // Auto-pull: deterministic, synchronous, no useEffect.
-        // computeAutoPull returns exactly what to assign — or null. It reads the
-        // overlaid `queue`/`lanes`, so a match already assigned in-flight is
-        // skipped (no double-pull) and an in-flight court reads occupied.
-        const pull = computeAutoPull(selectedMatch.key, matches, lanes, queue, currentSlot ?? 0);
-        if (pull) {
-          fireAssign(pull.head, pull.court, pull.slot);
-        }
-
-        // Deselect after recording: the recorded match leaves the lane and the
-        // remaining selectedKey would resolve to a stale 'next-later' role.
-        setSelectedKey(null);
+        // Auto-pull (reads the overlaid `queue`/`lanes`, so a match already
+        // assigned in-flight is skipped) + deselect.
+        completeRecord(selectedMatch.key);
         return;
       }
 
@@ -430,7 +459,7 @@ export function RunSurface({
 
       void runAction(selectedMatch, kind, undefined, seams);
     },
-    [selectedMatch, seams, matches, lanes, queue, currentSlot, freeCourt, fireAssign],
+    [selectedMatch, seams, matches, currentSlot, freeCourt, fireAssign, completeRecord],
   );
 
   // Assign-from-queue is owned by the inspector's "Send to court" affordance
@@ -447,6 +476,17 @@ export function RunSurface({
     <div data-testid="run-surface" className="relative flex h-full min-h-0 flex-col bg-card">
       {/* Summary band */}
       <RunSummaryBand summary={summary} scope={sourceScope} />
+
+      {/* Alerts & Activity (C4, CMP-4): warning conditions + the activity
+          trail, collapsed to its header row while empty. Review routes the
+          suggested action to the Plan-hosted dialogs. */}
+      {meetOps ? (
+        <AlertsActivityPanel
+          collapseWhenEmpty
+          onReview={onAdvisoryReview}
+          className="max-h-48 shrink-0"
+        />
+      ) : null}
 
       {/* Rejected-command strip. Each banner is the store-subscribing
           ConflictBanner (its documented production shape), prefixed with the
@@ -505,6 +545,9 @@ export function RunSurface({
               onSend={sendFromQueue}
             />
           </div>
+
+          {/* Finished — recorded matches with the meet undo-finish (C4). */}
+          <RunFinished matches={matches} meetOps={meetOps} />
         </div>
 
         {/* Inspector column — a real DetailDock, same as the Plan branch's rail
@@ -539,7 +582,21 @@ export function RunSurface({
                 currentSlot={currentSlot}
                 formatSlot={formatSlot}
                 onAction={handleAction}
+                // The meet rail below renders the INTERACTIVE player rows
+                // (check-in / sub / remove) — suppress the inspector's static
+                // name list so the dock says each name once.
+                hidePlayers={showMeetPanel}
               />
+              {showMeetPanel && selectedMatch ? (
+                <div data-testid="run-meet-panel" className="border-t border-border">
+                  <MeetMatchPanel
+                    match={selectedMatch}
+                    ops={meetOps!}
+                    onFinished={() => completeRecord(selectedMatch.key)}
+                    onSelectKey={setSelectedKey}
+                  />
+                </div>
+              ) : null}
               {/* Plain wrapper: it neutralises the panel's own `h-full` so the
                   two rails stack in this one scroll column. */}
               {showBracketPanel && bracketData ? (

@@ -133,7 +133,7 @@ export function PlanToolbar({
                     ? READ_ONLY_MESSAGE
                     : schedule
                       ? liveDay
-                        ? 'Re-plan the day: matches have already run — this replaces the rest of the plan'
+                        ? 'Re-plan the day: matches have already run, so this replaces the rest of the plan'
                         : 'Re-plan the day: replaces the current plan'
                       : 'Solve the meet and place its matches'
                 }
@@ -142,7 +142,7 @@ export function PlanToolbar({
                   ? 'Generating…'
                   : reSolve.armed
                     ? liveDay
-                      ? 'Press again — matches have started'
+                      ? 'Press again: matches have started'
                       : 'Press again to replace the plan'
                     : schedule
                       ? 'Re-plan day'

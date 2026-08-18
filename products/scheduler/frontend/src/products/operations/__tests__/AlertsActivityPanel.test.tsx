@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { AlertsActivityPanel } from '../run/AlertsActivityPanel';
 import { AdvisoryBanner } from '../../../components/status/AdvisoryBanner';
 import { useAlertStore } from '../../../store/alertStore';
@@ -47,6 +47,22 @@ describe('AlertsActivityPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /alerts and activity/i }));
     expect(screen.queryByText('w summary')).not.toBeInTheDocument(); // list hidden
     expect(screen.getByText('1')).toBeInTheDocument(); // count still shown
+  });
+
+  // CMP-4 (SP-CONSOLE-4 C4): the Run mount starts collapsed while empty and
+  // auto-expands when the first entry arrives; an operator toggle wins.
+  it('collapseWhenEmpty: header-only while empty, auto-expands on the first entry', () => {
+    render(<AlertsActivityPanel collapseWhenEmpty />);
+    expect(screen.queryByText(/no alerts or activity yet/i)).not.toBeInTheDocument();
+
+    act(() => useAlertStore.getState().syncAdvisories([adv({ id: 'w', severity: 'warn' })]));
+    expect(screen.getByText('w summary')).toBeInTheDocument();
+  });
+
+  it('collapseWhenEmpty: an explicit expand pins the panel open even while empty', () => {
+    render(<AlertsActivityPanel collapseWhenEmpty />);
+    fireEvent.click(screen.getByRole('button', { name: /alerts and activity/i }));
+    expect(screen.getByText(/no alerts or activity yet/i)).toBeInTheDocument();
   });
 });
 

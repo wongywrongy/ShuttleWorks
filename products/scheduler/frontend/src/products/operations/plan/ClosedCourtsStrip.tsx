@@ -37,7 +37,7 @@ export function ClosedCourtsStrip({ onOpenDirector }: { onOpenDirector: () => vo
           type="button"
           className={chip}
           onClick={onOpenDirector}
-          title="Closed all day — reopen in Director tools"
+          title="Closed all day. Reopen in Director tools"
         >
           C{court} · all day
         </button>
@@ -48,7 +48,7 @@ export function ClosedCourtsStrip({ onOpenDirector }: { onOpenDirector: () => vo
           type="button"
           className={chip}
           onClick={onOpenDirector}
-          title="Closed for a window — manage in Director tools"
+          title="Closed for a window. Manage in Director tools"
         >
           C{closure.courtId} · {closure.fromTime ?? 'start'}–{closure.toTime ?? 'end'}
         </button>

@@ -29,7 +29,7 @@ export function PlanDialogHost({
 }) {
   const { cancel } = useProposals();
   const close = () => {
-    void cancel(); // best-effort — clears any in-flight proposal preview
+    void cancel(); // best-effort: clears any in-flight proposal preview
     onClose();
   };
 

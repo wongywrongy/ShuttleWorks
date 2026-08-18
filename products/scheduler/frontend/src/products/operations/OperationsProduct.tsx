@@ -26,11 +26,12 @@ import { useUiStore } from '../../store/uiStore';
 import { useCommandQueue } from '../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
-import { useMatchStateSync } from '../../hooks/useMatchStateSync';
+import { useActivityLog } from '../../hooks/useActivityLog';
 import { EYEBROW_CLASS } from '../../lib/utils';
 import { slotToTime } from '../../lib/time';
 import { bracketOccupiedWindows } from '../../lib/bracketOccupancy';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
+import type { Advisory } from '../../api/dto';
 import { BracketScheduleModal } from '../bracket/BracketScheduleModal';
 import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from './opsBlock';
@@ -39,6 +40,7 @@ import { UnifiedOpsList } from './UnifiedOpsList';
 import { OpsDetailRail } from './OpsDetailRail';
 import { DetailDock, DetailPanel } from '../../components/control-plane';
 import { RunSurface } from './run/RunSurface';
+import { useMeetRunOps } from './run/useMeetRunOps';
 import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 import { useAction } from '../../hooks/useAction';
@@ -73,12 +75,17 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   const isLive = isLiveSegment(activeTab);
   const review = opsPlanMode(phase) === 'plan-review';
 
-  // Keep meet match-states converged with the backend while ANY Operations
-  // surface is open. Without this the store went stale here (nothing on this
-  // surface loaded it), so the board painted 'scheduled' over playing matches
-  // and the inspector offered state-machine-illegal actions → user-visible
-  // "Cannot transition …" 409s.
-  useMatchStateSync(tid);
+  // Meet live-day seams for the Run surface (C4) — mounting useMeetRunOps
+  // ALSO keeps the meet match-states converged with the backend while any
+  // Operations surface is open (useLiveTracking's load + 5s poll subsumed
+  // the old useMatchStateSync mount; one loader, not two). Without that
+  // convergence the board painted 'scheduled' over playing matches and the
+  // inspector offered state-machine-illegal actions → "Cannot transition" 409s.
+  const meetOps = useMeetRunOps();
+  // Feed the Alerts & Activity trail from match-state transitions, from
+  // whichever Operations surface is open (a Plan-side repair's state changes
+  // show up in Run's trail too).
+  useActivityLog();
 
   // ---- Meet blocks (global stores) ----
   const config = useTournamentStore((s) => s.config);
@@ -161,6 +168,20 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   // ---- Plan dialogs (SP-CONSOLE-4 B1): one state, three openers ----
   const [planDialog, setPlanDialog] = useState<PlanDialog | null>(null);
 
+  // Run-side alert Review (C4): the advisory economy's dialogs live on Plan,
+  // so reviewing from Run switches to the Plan segment and opens the one the
+  // suggested action names.
+  const setActiveTab = useUiStore((s) => s.setActiveTab);
+  const onRunAdvisoryReview = useCallback(
+    (advisory: Advisory) => {
+      const dialog = dialogForAdvisory(advisory);
+      if (!dialog) return;
+      setActiveTab('schedule');
+      setPlanDialog(dialog);
+    },
+    [setActiveTab],
+  );
+
   // ---- Courts-only selection (Live uses RunSurface's own selection) ----
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selectedBlock = useMemo(
@@ -213,7 +234,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   const subtitle = isLive
     ? 'Run the floor: by court, then the queue'
     : review
-      ? 'The day is complete — review how it ran'
+      ? 'The day is complete: review how it ran'
       : 'Plan the day: drag to reschedule, generate, schedule rounds';
 
   return (
@@ -292,6 +313,8 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
               planFinalized={planFinalized}
               formatSlot={formatSlot}
               slotMinutes={config?.intervalMinutes}
+              meetOps={engines.meet ? meetOps : undefined}
+              onAdvisoryReview={engines.meet ? onRunAdvisoryReview : undefined}
             />
           ) : (
             // PLAN = planning surface. Closed-courts strip + drag board +

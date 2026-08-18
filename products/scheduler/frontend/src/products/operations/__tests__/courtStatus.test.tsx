@@ -51,6 +51,7 @@ vi.mock('../../../store/uiStore', () => ({
     selector({
       activeTab: mockTab.value,
       pushToast: vi.fn(),
+      setActiveTab: vi.fn(),
       setBracketSelectedMatchId: vi.fn(),
       // The Plan toolbar carries the read-only gate since SP-CONSOLE-4 B1
       // (the guard the unified Generate button had lost) — these tests
@@ -79,6 +80,27 @@ vi.mock('../../../store/matchStateStore', () => ({
 
 vi.mock('../../../hooks/useCommandQueue', () => ({
   useCommandQueue: () => ({ submit: vi.fn() }),
+}));
+
+// The meet Run seams bridge (C4) mounts useLiveTracking (router +
+// polling) — stub the whole bridge; its internals have their own tests.
+vi.mock('../run/useMeetRunOps', () => ({
+  useMeetRunOps: () => ({
+    matches: [],
+    matchStates: {},
+    players: [],
+    config: null,
+    updateMatchStatus: vi.fn().mockResolvedValue(undefined),
+    confirmPlayer: vi.fn().mockResolvedValue(undefined),
+    substitutePlayer: vi.fn(),
+    removePlayer: vi.fn(),
+    undoStart: vi.fn(),
+    analyzeImpact: () => null,
+  }),
+}));
+
+vi.mock('../../../hooks/useActivityLog', () => ({
+  useActivityLog: () => {},
 }));
 
 vi.mock('../../../hooks/useBracketResultQueue', () => ({
