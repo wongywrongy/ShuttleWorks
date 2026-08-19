@@ -1,0 +1,16 @@
+/* Scheduler frontend — top-level CSS.
+ *
+ * Design tokens, typography, density, animation keyframes, and texture
+ * utilities all live in @scheduler/design-system. This file is now just
+ * a thin shell that wires the design system + Tailwind directives.
+ *
+ * If you find yourself adding rules here, ask first: does it belong in
+ * the design system instead? See packages/design-system/DESIGN.md.
+ */
+@import '@scheduler/design-system/tokens.css';
+@import '@scheduler/design-system/globals.css';
+@import './modules/display/publicDisplay/displayPresets.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

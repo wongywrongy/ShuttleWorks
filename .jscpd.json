@@ -3,6 +3,6 @@
   "reporters": ["console"],
   "gitignore": true,
   "pattern": "**/*.{ts,tsx,py}",
-  "path": ["products/scheduler/frontend/src", "products/scheduler/backend"],
+  "path": ["apps/console/src", "apps/api"],
   "ignore": ["**/__tests__/**", "**/tests/**", "**/*.generated.ts", "**/node_modules/**", "**/.venv/**", "**/alembic/**"]
 }

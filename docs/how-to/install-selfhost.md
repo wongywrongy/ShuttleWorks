@@ -50,10 +50,10 @@ aimed at the homelab, should not be able to reach the product's database.
 
 ## 2. Secrets
 
-Three files, never committed (`products/scheduler/secrets/` is gitignored):
+Three files, never committed (`secrets/` is gitignored):
 
 ```bash
-cd /opt/ShuttleWorks/products/scheduler
+cd /opt/ShuttleWorks
 mkdir -p secrets
 openssl rand -base64 32 | tr -d '\n' > secrets/postgres_password
 printf 'postgresql://scheduler:%s@postgres:5432/scheduler' "$(cat secrets/postgres_password)" \
@@ -400,7 +400,7 @@ echo 'TRUSTED_PROXY_IPS=10.201.0.0/24' >> .env   # must match `networks:` in the
 Both a bare address and a CIDR block are accepted.
 
 ::: warning The third place is inside the frontend image
-`products/scheduler/frontend/nginx.conf` carries `set_real_ip_from
+`apps/console/nginx.conf` carries `set_real_ip_from
 10.201.0.0/24`, which is how nginx decides whether to believe
 `CF-Connecting-IP` for **its own** rate-limit zones (`sw_auth`, `sw_entries`,
 `sw_display`) and what it then forwards to the API. It is baked into the
@@ -452,8 +452,8 @@ anything. This is a ten-second check that pre-empts the most confusing
 first-boot failure on this page:
 
 ```bash
-cd /opt/ShuttleWorks/products/scheduler
-docker compose -f docker-compose.selfhost.yml run --rm --no-deps \
+cd /opt/ShuttleWorks
+docker compose -f infra/compose/docker-compose.selfhost.yml run --rm --no-deps \
   --entrypoint sh api -c 'cat /run/secrets/database_url >/dev/null && echo "secrets readable by uid $(id -u)"'
 ```
 
@@ -464,14 +464,14 @@ error naming `DATABASE_URL`, which sends you looking at the wrong thing
 entirely.
 
 ```bash
-docker compose -f docker-compose.selfhost.yml up -d --build
+docker compose -f infra/compose/docker-compose.selfhost.yml up -d --build
 ```
 
 The API applies Alembic migrations in its startup lifespan — it is the only
 process that ever does. Watch for `alembic_upgrade_head_complete`, then:
 
 ```bash
-docker compose -f docker-compose.selfhost.yml exec api \
+docker compose -f infra/compose/docker-compose.selfhost.yml exec api \
   python -c "import urllib.request,json; t=open('/run/secrets/ops_token').read().strip(); \
 req=urllib.request.Request('http://localhost:8000/health/ready', headers={'X-ShuttleWorks-Ops-Token': t}); \
 print(json.load(urllib.request.urlopen(req)))"
@@ -500,9 +500,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/ShuttleWorks/products/scheduler
-ExecStart=/usr/bin/docker compose -f docker-compose.selfhost.yml up -d
-ExecStop=/usr/bin/docker compose -f docker-compose.selfhost.yml down
+WorkingDirectory=/opt/ShuttleWorks
+ExecStart=/usr/bin/docker compose -f infra/compose/docker-compose.selfhost.yml up -d
+ExecStop=/usr/bin/docker compose -f infra/compose/docker-compose.selfhost.yml down
 TimeoutStartSec=0
 
 [Install]
@@ -538,14 +538,14 @@ Postgres is the source of truth. Two dumps, not one:
 #!/usr/bin/env bash
 # /opt/ShuttleWorks/backup.sh
 set -euo pipefail
-cd /opt/ShuttleWorks/products/scheduler
+cd /opt/ShuttleWorks
 OUT=/opt/ShuttleWorks/backups/$(date +%F)
 mkdir -p "$OUT"
 
-docker compose -f docker-compose.selfhost.yml exec -T postgres \
+docker compose -f infra/compose/docker-compose.selfhost.yml exec -T postgres \
   pg_dump -U scheduler -d scheduler | gzip > "$OUT/scheduler.sql.gz"
 
-docker compose -f docker-compose.selfhost.yml exec -T postgres \
+docker compose -f infra/compose/docker-compose.selfhost.yml exec -T postgres \
   pg_dumpall -U scheduler --globals-only | gzip > "$OUT/globals.sql.gz"
 ```
 
@@ -568,8 +568,8 @@ A backup you have never restored is a hypothesis.
 # /opt/ShuttleWorks/restore-drill.sh  — restores into a THROWAWAY database
 set -euo pipefail
 SRC=${1:?usage: restore-drill.sh /path/to/backup-dir}
-cd /opt/ShuttleWorks/products/scheduler
-C="docker compose -f docker-compose.selfhost.yml exec -T postgres"
+cd /opt/ShuttleWorks
+C="docker compose -f infra/compose/docker-compose.selfhost.yml exec -T postgres"
 
 $C psql -U scheduler -d postgres -c 'DROP DATABASE IF EXISTS drill;'
 $C psql -U scheduler -d postgres -c 'CREATE DATABASE drill;'

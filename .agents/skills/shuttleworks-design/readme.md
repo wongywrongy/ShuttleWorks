@@ -2,7 +2,7 @@
 
 The design language for **ShuttleWorks** — a modular control-plane for running badminton tournaments. One workspace hosts pluggable **modules** (Meet, Bracket, Operations, Display) that share courts, rosters, and a common shell. This system captures the language we converged on: a dense, dark-first **command-plane** (Linear/Bloomberg lineage) warmed with rounded corners and gentle elevation, led by a luminous **blue glow**.
 
-> **Sources.** Derived from the ShuttleWorks codebase (`github.com/wongywrongy/ShuttleWorks`, `products/scheduler/frontend`) and an iterative redesign from the prior brutalist "Swiss Industrial Print / Signal Orange" system. The interactive redesign prototypes live at project root: `ShuttleWorks - Final Direction.dc.html` (dark) and `…Light.dc.html` (light).
+> **Sources.** Derived from the ShuttleWorks codebase (`github.com/wongywrongy/ShuttleWorks`, `apps/console`) and an iterative redesign from the prior brutalist "Swiss Industrial Print / Signal Orange" system. The interactive redesign prototypes live at project root: `ShuttleWorks - Final Direction.dc.html` (dark) and `…Light.dc.html` (light).
 
 ---
 

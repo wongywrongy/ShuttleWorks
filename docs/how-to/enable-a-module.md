@@ -44,7 +44,7 @@ it, you don't set it.
 | **Display dependency** | Enabling `display` requires ≥1 enabled operational module (`display_dependency_satisfied`). |
 | **No-data-loss disable** | A module with persisted data (meet→matches, bracket→bracket_events) cannot be disabled. |
 | **Last operational** | The last enabled operational module (`OPERATIONAL_MODULES = meet, bracket`) cannot be disabled. |
-| **Cloud-only** | A module in `CLOUD_ONLY_MODULES` (today: `entries`) cannot be enabled in local mode — `MODULE_REQUIRES_CLOUD`. It is not seeded there either, and an inherited row is filtered at read time. See [Entries](/modules/entries). |
+| **Cloud-only** | A module in `CLOUD_ONLY_MODULES` (today: `entries`) cannot be enabled in local mode — `MODULE_REQUIRES_CLOUD`. It is not seeded there either, and an inherited row is filtered at read time. See [Entries](/reference/modules/entries). |
 
 ## From the frontend
 
@@ -56,6 +56,6 @@ catalog fails safe to single-engine.
 
 ## See also
 
-- [Workspace model](/architecture/workspace-model) · [How to add a module](/how-to/add-a-module)
-- [ADR 0002 — Workspace as control plane](/decisions/0002-workspace-as-control-plane)
-- [ADR 0005 — coming_soon elimination](/decisions/0005-coming-soon-elimination)
+- [Workspace model](/explanation/architecture/workspace-model) · [How to add a module](/how-to/add-a-module)
+- [ADR 0002 — Workspace as control plane](/explanation/decisions/0002-workspace-as-control-plane)
+- [ADR 0005 — coming_soon elimination](/explanation/decisions/0005-coming-soon-elimination)

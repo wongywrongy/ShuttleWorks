@@ -24,7 +24,7 @@ If you are an LLM agent writing code in this monorepo, treat this file as a hard
 > binding** — those rules were never about the brutalist direction.
 >
 > A full rewrite of this file against the current tokens is logged in
-> `docs/audits/debt-log.md`.
+> `docs/reference/debt-log.md`.
 
 ---
 
@@ -32,7 +32,7 @@ If you are an LLM agent writing code in this monorepo, treat this file as a hard
 
 `@scheduler/design-system` is the single source of design truth for both products:
 
-- `products/scheduler/frontend`
+- `apps/console`
 - `products/tournament/frontend`
 
 It exports:
@@ -273,7 +273,7 @@ Forbidden animations are listed in BRAND.md §5. The list is exhaustive — don'
 
 ## 9. Don't put product code in this package
 
-`@scheduler/design-system` is product-agnostic. If you find yourself importing `../products/scheduler/...` from this package, stop. The dependency arrow goes one way: products → design-system, never the reverse.
+`@scheduler/design-system` is product-agnostic. If you find yourself importing `../../apps/...` from this package, stop. The dependency arrow goes one way: apps → design-system, never the reverse.
 
 If a thing is used by both products, it lives here. If it's used by one, it lives in that product. Don't pre-emptively generalize; extract on the second use, not the first.
 

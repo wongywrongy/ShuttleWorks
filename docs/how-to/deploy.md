@@ -72,10 +72,10 @@ aimed at the homelab, must not be able to reach the product's database.
 
 ## 3. Secrets
 
-Three files, never committed (`products/scheduler/secrets/` is gitignored):
+Three files, never committed (`secrets/` is gitignored):
 
 ```bash
-cd /opt/ShuttleWorks/products/scheduler
+cd /opt/ShuttleWorks
 mkdir -p secrets
 openssl rand -base64 32 | tr -d '\n' > secrets/postgres_password
 printf 'postgresql://scheduler:%s@postgres:5432/scheduler' "$(cat secrets/postgres_password)" \
@@ -169,10 +169,10 @@ Two checks that cost ten seconds and each pre-empt a confusing failure.
 
 ```bash
 # a) Every compose file still parses with your .env in place.
-docker compose -f docker-compose.selfhost.yml config >/dev/null && echo "compose OK"
+docker compose -f infra/compose/docker-compose.selfhost.yml config >/dev/null && echo "compose OK"
 
 # b) The secrets are readable INSIDE the container, as UID 1001.
-docker compose -f docker-compose.selfhost.yml run --rm --no-deps \
+docker compose -f infra/compose/docker-compose.selfhost.yml run --rm --no-deps \
   --entrypoint sh api -c 'cat /run/secrets/database_url >/dev/null && echo "secrets readable by uid $(id -u)"'
 ```
 
@@ -181,15 +181,15 @@ If (b) errors, go back to step 3 — it is the `chmod`, not your `.env`.
 ## 8. First run
 
 ```bash
-docker compose -f docker-compose.selfhost.yml up -d --build
+docker compose -f infra/compose/docker-compose.selfhost.yml up -d --build
 ```
 
 The API applies Alembic migrations in its startup lifespan — it is the only
 process that ever does. Watch for `alembic_upgrade_head_complete`, then:
 
 ```bash
-export OPS=$(cat /opt/ShuttleWorks/products/scheduler/secrets/ops_token)
-docker compose -f docker-compose.selfhost.yml exec api \
+export OPS=$(cat /opt/ShuttleWorks/secrets/ops_token)
+docker compose -f infra/compose/docker-compose.selfhost.yml exec api \
   python -c "import urllib.request,json,os; t=open('/run/secrets/ops_token').read().strip(); \
 req=urllib.request.Request('http://localhost:8000/health/ready', headers={'X-ShuttleWorks-Ops-Token': t}); \
 print(json.load(urllib.request.urlopen(req)))"
@@ -241,7 +241,7 @@ frontend image:
 echo 'TRUSTED_PROXY_IPS=10.201.0.0/24' >> .env   # must match `networks:` in the compose file
 ```
 
-`products/scheduler/frontend/nginx.conf` carries `set_real_ip_from
+`apps/console/nginx.conf` carries `set_real_ip_from
 10.201.0.0/24`, which is how nginx decides whether to believe `CF-Connecting-IP`
 for its own rate-limit zones and what it forwards to the API. It is baked into
 the image, so a changed subnet needs an edit there and a rebuild, or nginx keys
@@ -292,9 +292,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/ShuttleWorks/products/scheduler
-ExecStart=/usr/bin/docker compose -f docker-compose.selfhost.yml up -d
-ExecStop=/usr/bin/docker compose -f docker-compose.selfhost.yml down
+WorkingDirectory=/opt/ShuttleWorks
+ExecStart=/usr/bin/docker compose -f infra/compose/docker-compose.selfhost.yml up -d
+ExecStop=/usr/bin/docker compose -f infra/compose/docker-compose.selfhost.yml down
 TimeoutStartSec=0
 
 [Install]
@@ -323,14 +323,14 @@ Postgres is the source of truth. **Two dumps, not one:**
 #!/usr/bin/env bash
 # /opt/ShuttleWorks/backup.sh
 set -euo pipefail
-cd /opt/ShuttleWorks/products/scheduler
+cd /opt/ShuttleWorks
 OUT=/opt/ShuttleWorks/backups/$(date +%F)
 mkdir -p "$OUT"
 
-docker compose -f docker-compose.selfhost.yml exec -T postgres \
+docker compose -f infra/compose/docker-compose.selfhost.yml exec -T postgres \
   pg_dump -U scheduler -d scheduler | gzip > "$OUT/scheduler.sql.gz"
 
-docker compose -f docker-compose.selfhost.yml exec -T postgres \
+docker compose -f infra/compose/docker-compose.selfhost.yml exec -T postgres \
   pg_dumpall -U scheduler --globals-only | gzip > "$OUT/globals.sql.gz"
 ```
 

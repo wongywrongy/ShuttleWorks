@@ -7,7 +7,7 @@ points to the "build your own product on the engine" starter story.
 
 ## What a template actually is
 
-A workspace is a [control plane](/architecture/workspace-model): a name, a legacy
+A workspace is a [control plane](/explanation/architecture/workspace-model): a name, a legacy
 `kind`, and a first-class set of **module rows** (`meet`, `bracket`, `display`),
 each in one lifecycle status. A template is just a **named, explicit module seed**
 plus a display title — nothing more. Picking one on `/new` pre-fills the
@@ -15,9 +15,9 @@ plus a display title — nothing more. Picking one on `/new` pre-fills the
 name, are what the rest of the app reads.
 
 The presets live in one file —
-`products/scheduler/frontend/src/products/hub/newWorkspaceTemplates.ts` — and the
+`apps/console/src/modules/hub/newWorkspaceTemplates.ts` — and the
 `/new` surface that renders them is
-`products/scheduler/frontend/src/products/hub/NewWorkspacePage.tsx`.
+`apps/console/src/modules/hub/NewWorkspacePage.tsx`.
 
 ```ts
 // newWorkspaceTemplates.ts — the shape every preset carries
@@ -34,7 +34,7 @@ The module statuses a seed can carry are the control-plane lifecycle vocabulary
 (`backend/database/models.py`): `enabled` (active now), `available` (installable
 later, off for now), `disabled` (present but off). `coming_soon` is retired —
 every module is fully built, and seeding it is rejected (see
-[ADR 0005](/decisions/0005-coming-soon-elimination)).
+[ADR 0005](/explanation/decisions/0005-coming-soon-elimination)).
 
 ## The four presets
 
@@ -53,7 +53,7 @@ A few things the table makes precise:
   below.
 - **Hybrid is a real two-engine workspace**, not a label: both operational modules
   are `enabled`, so both appear in the sidebar and both can feed
-  [Operations](/modules/operations) and the [display](/modules/display).
+  [Operations](/reference/modules/operations) and the [display](/reference/modules/display).
 - **Blank enables nothing.** Both operators are `available` and display is
   `disabled`, so there is no enabled module to land on — the builder routes Blank
   to the Modules admin instead of a module home (see [Landing](#after-create-where-you-land)).
@@ -185,9 +185,9 @@ CP-SAT core — that is a code change, not a template:
 
 ## See also
 
-- [Workspace model](/architecture/workspace-model) — what a workspace and its modules are
+- [Workspace model](/explanation/architecture/workspace-model) — what a workspace and its modules are
 - [How to enable a module](/how-to/enable-a-module) · [How to add a module](/how-to/add-a-module)
 - [How to build on the engine](/how-to/build-on-the-engine)
-- [Meet](/modules/meet) · [Bracket](/modules/bracket) · [Display](/modules/display)
-- [ADR 0002 — Workspace as control plane](/decisions/0002-workspace-as-control-plane)
-- [ADR 0005 — Coming-soon elimination](/decisions/0005-coming-soon-elimination)
+- [Meet](/reference/modules/meet) · [Bracket](/reference/modules/bracket) · [Display](/reference/modules/display)
+- [ADR 0002 — Workspace as control plane](/explanation/decisions/0002-workspace-as-control-plane)
+- [ADR 0005 — Coming-soon elimination](/explanation/decisions/0005-coming-soon-elimination)

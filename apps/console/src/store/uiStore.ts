@@ -1,0 +1,394 @@
+/**
+ * Ephemeral UI state — never serialised.
+ *
+ * Solver HUD, toast queue, drag-in-flight pins, validation snapshots,
+ * generation progress, solver logs, proposal review state, advisories,
+ * suggestions, and the unlock-modal handshake live here. Hydration on
+ * mount does not restore any of these; a refresh always lands the
+ * operator on a clean ephemeral slate.
+ */
+import { create } from 'zustand';
+import type {
+  Advisory,
+  Proposal,
+  ScheduleAssignment,
+  SolverProgressEvent,
+  Suggestion,
+  TournamentRole,
+} from '../api/dto';
+
+export type AppTab =
+  | 'setup'
+  | 'roster'
+  | 'matches'
+  | 'schedule'
+  | 'live'
+  | 'bracket'
+  | 'tv'
+  | 'bracket-setup'
+  | 'bracket-roster'
+  | 'bracket-events'
+  | 'bracket-draws'
+  | 'bracket-draw'
+  | 'bracket-matches'
+  | 'bracket-schedule'
+  | 'bracket-live'
+  // The Entries desk (SP-E1-1). Kind-agnostic — an entries workspace is a
+  // meet or a bracket, and the desk is the same either way.
+  | 'entries'
+  // Workspace-shell segments (left-sidebar IA): the readiness landing,
+  // the Display configuration page, and the in-workspace admin sections
+  // (the former standalone /settings tabs, re-homed under WORKSPACE).
+  | 'overview'
+  | 'display-config'
+  | 'ws-venue'
+  | 'ws-members'
+  | 'ws-sharing'
+  | 'ws-modules'
+  | 'ws-sync'
+  | 'ws-settings';
+
+// 'queued' = the solve job is waiting for a worker (SP-CLOUD-1 async rail);
+// the remaining phases cover the solve itself.
+export type SolverPhase = 'queued' | 'presolve' | 'search' | 'proving' | null;
+
+interface SolverHudState {
+  phase: SolverPhase;
+  numMatches?: number;
+  numIntervals?: number;
+  numNoOverlap?: number;
+  numVariables?: number;
+  solutionCount: number;
+  objective?: number;
+  bestBound?: number;
+  gapPercent?: number;
+  elapsedMs: number;
+}
+
+interface PendingPin {
+  matchId: string;
+  slotId: number;
+  courtId: number;
+}
+
+interface ValidationSnapshot {
+  matchId: string;
+  slotId: number;
+  courtId: number;
+  feasible: boolean;
+  conflicts: Array<{
+    type: string;
+    description: string;
+    matchId?: string;
+    otherMatchId?: string;
+    playerId?: string;
+    courtId?: number;
+    slotId?: number;
+  }>;
+}
+
+type ToastLevel = 'info' | 'success' | 'warn' | 'error';
+
+interface Toast {
+  id: string;
+  level: ToastLevel;
+  message: string;
+  detail?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  durationMs?: number | null;
+}
+
+export interface SolverLogEntry {
+  id: number;
+  message: string;
+  timestamp: number;
+  type: 'info' | 'solution' | 'violation' | 'stats' | 'progress';
+}
+
+interface ScheduleGenerationStats {
+  elapsed: number;
+  solutionCount?: number;
+  objectiveScore?: number;
+  bestBound?: number;
+  assignments: ScheduleAssignment[];
+}
+
+interface UnlockModalState {
+  open: boolean;
+  actionDescription?: string;
+  /** Extra disclosure line for the cross-module case: set when the
+   *  triggering 409's `schedules` payload names more than just the
+   *  current module (e.g. confirming a meet-worded unlock also clears
+   *  a committed bracket schedule). Omitted when there is nothing extra
+   *  to disclose. */
+  crossModuleNote?: string;
+  resolve: (confirmed: boolean) => void;
+}
+
+const DEFAULT_SOLVER_HUD: SolverHudState = {
+  phase: null,
+  solutionCount: 0,
+  elapsedMs: 0,
+};
+
+interface UiState {
+  // Shell
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
+
+  // URL-derived tournament id. Set by ``TournamentPage`` on mount; read
+  // by ``forceSaveNow`` and other module-level helpers that don't have
+  // direct access to React Router params. NOT persisted — refreshing
+  // the page re-derives it from the URL.
+  activeTournamentId: string | null;
+  setActiveTournamentId: (id: string | null) => void;
+
+  // Active tournament's kind (meet | bracket). Fetched on mount by
+  // ``useTournamentKind`` via the summary endpoint; ``null`` while
+  // loading or when the request fails (the AppShell falls back to
+  // meet-style chrome in that case). The TabBar reads this to filter
+  // out meet-only tabs on a bracket-kind tournament and vice versa.
+  activeTournamentKind: 'meet' | 'bracket' | null;
+  setActiveTournamentKind: (kind: 'meet' | 'bracket' | null) => void;
+
+  // Active tournament's lifecycle status (draft | active | archived).
+  // Fetched alongside ``kind`` by ``useTournamentKind`` from the summary
+  // endpoint; ``null`` while loading or on failure. The Workspace Shell
+  // reads this to show a status badge.
+  activeTournamentStatus: 'draft' | 'active' | 'archived' | null;
+  setActiveTournamentStatus: (
+    status: 'draft' | 'active' | 'archived' | null,
+  ) => void;
+
+  // The caller's role on the active workspace, from the same summary row as
+  // ``kind``/``status``. Read through ``platform/domain/permissions.canEdit``
+  // — never compared inline — so the write gate has exactly one definition.
+  // ``null`` while loading or on failure, which ``canEdit`` treats as read-only
+  // (fail closed: a viewer must never get a live control, audit finding A2).
+  activeTournamentRole: TournamentRole | null;
+  setActiveTournamentRole: (role: TournamentRole | null) => void;
+
+  // Active tournament's derived lifecycle phase (setup → ready → live →
+  // complete) from ``signals.phase`` — real play state, unlike the
+  // operator-managed ``status`` above. The Workspace Shell prefers this
+  // for its badge so a mid-day/finished tournament never reads "draft".
+  activeTournamentPhase: 'setup' | 'ready' | 'live' | 'complete' | null;
+  setActiveTournamentPhase: (
+    phase: 'setup' | 'ready' | 'live' | 'complete' | null,
+  ) => void;
+
+  // Whether the active bracket-kind tournament has a generated draw.
+  // Written by ``BracketTab`` from ``useBracket().data``; ``null`` when
+  // no bracket surface is mounted (meet kind / dashboard). ``TabBar``
+  // reads this to disable the Draw/Schedule/Live tabs until a draw
+  // exists — ``TabBar`` lives outside ``BracketApiProvider`` so it
+  // can't call ``useBracket`` itself.
+  bracketDataReady: boolean | null;
+  setBracketDataReady: (ready: boolean | null) => void;
+
+  // Solver HUD
+  solverHud: SolverHudState;
+  setSolverHud: (patch: Partial<SolverHudState>) => void;
+  resetSolverHud: () => void;
+
+  // Drag pin (optimistic)
+  pendingPin: PendingPin | null;
+  setPendingPin: (pin: PendingPin | null) => void;
+
+  // Validate-during-drag
+  lastValidation: ValidationSnapshot | null;
+  setLastValidation: (v: ValidationSnapshot | null) => void;
+
+  // Server-persist status for the tournament snapshot.
+  persistStatus: 'idle' | 'dirty' | 'saving' | 'error';
+  lastSavedAt: string | null;
+  lastSaveError: string | null;
+  setPersistStatus: (status: 'idle' | 'dirty' | 'saving' | 'error') => void;
+  setLastSavedAt: (iso: string | null) => void;
+  setLastSaveError: (msg: string | null) => void;
+
+  // Toasts
+  toasts: Toast[];
+  pushToast: (toast: Omit<Toast, 'id'>) => string;
+  dismissToast: (id: string) => void;
+  clearToasts: () => void;
+
+  // Schedule-generation lifecycle (persists across tab switches, not to localStorage)
+  scheduleStats: ScheduleGenerationStats | null;
+  setScheduleStats: (stats: ScheduleGenerationStats | null) => void;
+  isGenerating: boolean;
+  generationProgress: SolverProgressEvent | null;
+  generationError: string | null;
+  setIsGenerating: (generating: boolean) => void;
+  setGenerationProgress: (progress: SolverProgressEvent | null) => void;
+  setGenerationError: (error: string | null) => void;
+
+  // Solver logs (last 50, in-memory only)
+  solverLogs: SolverLogEntry[];
+  addSolverLog: (message: string, type: SolverLogEntry['type']) => void;
+  clearSolverLogs: () => void;
+
+  // Two-phase commit pipeline (ephemeral review state).
+  activeProposal: Proposal | null;
+  setActiveProposal: (proposal: Proposal | null) => void;
+  advisories: Advisory[];
+  setAdvisories: (advisories: Advisory[]) => void;
+  suggestions: Suggestion[];
+  setSuggestions: (suggestions: Suggestion[]) => void;
+
+  // Unlock-confirm modal handshake.
+  unlockModalState: UnlockModalState | null;
+  setUnlockModalState: (state: UnlockModalState | null) => void;
+
+  // Bracket Live tab — selected match id for MatchDetailPanel.
+  bracketSelectedMatchId: string | null;
+  setBracketSelectedMatchId: (id: string | null) => void;
+
+  // Bracket Schedule + Live filter strip — per-event enabled flag.
+  // Empty map (default) means every event is on.  Only entries
+  // explicitly set to ``false`` are dimmed.
+  bracketScheduleEventFilter: Record<string, boolean>;
+  setBracketScheduleEventFilter: (filter: Record<string, boolean>) => void;
+
+  // Hard reset — called by the `useClearAllData` hook so the three
+  // stores reset together when the operator wipes the tournament.
+  reset: () => void;
+}
+
+const INITIAL: Pick<
+  UiState,
+  | 'activeTab'
+  | 'activeTournamentId'
+  | 'activeTournamentKind'
+  | 'activeTournamentStatus'
+  | 'activeTournamentRole'
+  | 'activeTournamentPhase'
+  | 'bracketDataReady'
+  | 'solverHud'
+  | 'pendingPin'
+  | 'lastValidation'
+  | 'persistStatus'
+  | 'lastSavedAt'
+  | 'lastSaveError'
+  | 'toasts'
+  | 'scheduleStats'
+  | 'isGenerating'
+  | 'generationProgress'
+  | 'generationError'
+  | 'solverLogs'
+  | 'activeProposal'
+  | 'advisories'
+  | 'suggestions'
+  | 'unlockModalState'
+  | 'bracketSelectedMatchId'
+  | 'bracketScheduleEventFilter'
+> = {
+  activeTab: 'setup',
+  activeTournamentId: null,
+  activeTournamentKind: null,
+  activeTournamentStatus: null,
+  activeTournamentRole: null,
+  activeTournamentPhase: null,
+  bracketDataReady: null,
+  solverHud: DEFAULT_SOLVER_HUD,
+  pendingPin: null,
+  lastValidation: null,
+  persistStatus: 'idle',
+  lastSavedAt: null,
+  lastSaveError: null,
+  toasts: [],
+  scheduleStats: null,
+  isGenerating: false,
+  generationProgress: null,
+  generationError: null,
+  solverLogs: [],
+  activeProposal: null,
+  advisories: [],
+  suggestions: [],
+  unlockModalState: null,
+  bracketSelectedMatchId: null,
+  bracketScheduleEventFilter: {},
+};
+
+export const useUiStore = create<UiState>((set, get) => ({
+  ...INITIAL,
+
+  setActiveTab: (activeTab) => set({ activeTab }),
+  setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
+  setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
+  setActiveTournamentStatus: (activeTournamentStatus) => set({ activeTournamentStatus }),
+  setActiveTournamentRole: (activeTournamentRole) => set({ activeTournamentRole }),
+  setActiveTournamentPhase: (activeTournamentPhase) => set({ activeTournamentPhase }),
+  setBracketDataReady: (bracketDataReady) => set({ bracketDataReady }),
+
+  setSolverHud: (patch) =>
+    set((state) => ({ solverHud: { ...state.solverHud, ...patch } })),
+  resetSolverHud: () => set({ solverHud: DEFAULT_SOLVER_HUD }),
+
+  setPendingPin: (pendingPin) => set({ pendingPin }),
+  setLastValidation: (lastValidation) => set({ lastValidation }),
+
+  setPersistStatus: (persistStatus) => set({ persistStatus }),
+  setLastSavedAt: (lastSavedAt) => set({ lastSavedAt }),
+  setLastSaveError: (lastSaveError) => set({ lastSaveError }),
+
+  pushToast: (toast) => {
+    // Dedupe: a toast with the same level + message refreshes the existing
+    // entry (latest detail wins) instead of stacking a duplicate — repeated
+    // failures of one action (e.g. clicking Generate against a full day
+    // plan) produce ONE toast, not a pile (docs/reference/debt-log.md:
+    // "Error toasts stack without auto-dismiss").
+    const existing = get().toasts.find(
+      (t) => t.level === toast.level && t.message === toast.message,
+    );
+    if (existing) {
+      set((state) => ({
+        toasts: state.toasts.map((t) =>
+          t.id === existing.id ? { ...existing, ...toast, id: existing.id } : t,
+        ),
+      }));
+      return existing.id;
+    }
+    const id =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const entry: Toast = {
+      id,
+      durationMs: toast.level === 'error' ? null : 5_000,
+      ...toast,
+    };
+    set((state) => ({ toasts: [...state.toasts, entry] }));
+    return id;
+  },
+  dismissToast: (id) =>
+    set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+  clearToasts: () => set({ toasts: [] }),
+
+  setScheduleStats: (scheduleStats) => set({ scheduleStats }),
+  setIsGenerating: (isGenerating) => set({ isGenerating }),
+  setGenerationProgress: (generationProgress) => set({ generationProgress }),
+  setGenerationError: (generationError) => set({ generationError }),
+
+  addSolverLog: (message, type) =>
+    set((state) => {
+      const newId =
+        state.solverLogs.length > 0
+          ? Math.max(...state.solverLogs.map((l) => l.id)) + 1
+          : 1;
+      const newLog: SolverLogEntry = { id: newId, message, timestamp: Date.now(), type };
+      return { solverLogs: [...state.solverLogs.slice(-49), newLog] };
+    }),
+  clearSolverLogs: () => set({ solverLogs: [] }),
+
+  setActiveProposal: (activeProposal) => set({ activeProposal }),
+  setAdvisories: (advisories) => set({ advisories }),
+  setSuggestions: (suggestions) => set({ suggestions }),
+  setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
+
+  setBracketSelectedMatchId: (bracketSelectedMatchId) => set({ bracketSelectedMatchId }),
+  setBracketScheduleEventFilter: (bracketScheduleEventFilter) => set({ bracketScheduleEventFilter }),
+
+  reset: () => set({ ...INITIAL }),
+}));

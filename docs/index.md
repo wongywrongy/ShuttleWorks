@@ -38,16 +38,16 @@ features:
 
 | If you want to… | Read |
 | --- | --- |
-| Understand the product and its vocabulary | [What ShuttleWorks is](/getting-started/what-is-shuttleworks) |
-| Run it on your machine | [Running locally](/getting-started/running-locally) |
-| Know where code lives | [Repo layout](/getting-started/repo-layout) |
-| See the module shape | [System overview](/architecture/system-overview) |
-| Trace how data moves | [Data flow](/architecture/data-flow) |
-| Understand a coupling seam | [Module contracts](/contracts/) |
-| Find an endpoint | [API reference](/api/) |
-| Know why a choice was made | [Decisions (ADRs)](/decisions/) |
-| Look up a term | [Glossary](/glossary) |
-| See a day play out | [Operational scenarios](/architecture/operational-scenarios) |
+| Understand the product and its vocabulary | [What ShuttleWorks is](/explanation/what-is-shuttleworks) |
+| Run it on your machine | [Running locally](/how-to/running-locally) |
+| Know where code lives | [Repo layout](/reference/repo-layout) |
+| See the module shape | [System overview](/explanation/architecture/system-overview) |
+| Trace how data moves | [Data flow](/explanation/architecture/data-flow) |
+| Understand a coupling seam | [Module contracts](/reference/contracts/) |
+| Find an endpoint | [API reference](/reference/api/) |
+| Know why a choice was made | [Decisions (ADRs)](/explanation/decisions/) |
+| Look up a term | [Glossary](/reference/glossary) |
+| See a day play out | [Operational scenarios](/explanation/architecture/operational-scenarios) |
 | See what has been built, and when | Program ledgers in `docs/programs/` (repo working records, outside this site) |
 
 ::: tip This site is curated, not exhaustive

@@ -10,10 +10,10 @@ seams. Every other "add a …" guide ([a surface](/how-to/add-a-surface),
 subset of the steps below.
 
 ::: info Requirements
-- You can run the app locally ([Quickstart](/getting-started/quickstart)) and
-  the frontend test suite (`cd products/scheduler/frontend && npx vitest run`).
-- You've read [System overview](/architecture/system-overview) for the
-  four-module model and [Module contracts](/contracts/) for what a contract is.
+- You can run the app locally ([Quickstart](/tutorials/quickstart)) and
+  the frontend test suite (`cd apps/console && npx vitest run`).
+- You've read [System overview](/explanation/architecture/system-overview) for the
+  four-module model and [Module contracts](/reference/contracts/) for what a contract is.
 - You have a module **id** in mind. This guide adds a fictional `scoreboard`
   module; substitute your own throughout.
 :::
@@ -29,14 +29,14 @@ in dependency order.
 
 A module also shares one anatomy — **intake → engine → emit** (roster/config in,
 the solve/run in the middle, matches/results out). Mirror an existing product
-folder (`products/meet/`, `products/bracket/`) when you lay yours out.
+folder (`modules/meet/`, `modules/bracket/`) when you lay yours out.
 
 ## 1 · Add the module id
 
 `ModuleId` is the compile-time union every other surface keys off. Add yours.
 
 ```ts
-// products/scheduler/frontend/src/platform/product-shell/types.ts
+// apps/console/src/platform/product-shell/types.ts
 export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries' | 'scoreboard';
 ```
 
@@ -53,7 +53,7 @@ The backend is the source of truth for which modules a workspace has. Add the id
 to `MODULE_IDS` and decide its lazy-seed default in `derive_modules`.
 
 ```python
-# products/scheduler/backend/database/models.py
+# apps/api/database/models.py
 MODULE_IDS = ("meet", "bracket", "display", "scoreboard")   # ~line 619
 # OPERATIONAL_MODULES stays ("meet", "bracket") unless your module is an engine.
 ```
@@ -70,7 +70,7 @@ Every sidebar destination is an `AppTab` literal. Add one per surface your modul
 owns (intake / engine / emit).
 
 ```ts
-// products/scheduler/frontend/src/store/uiStore.ts  (the AppTab union, ~line 19)
+// apps/console/src/store/uiStore.ts  (the AppTab union, ~line 19)
 export type AppTab =
   | /* …existing… */
   | 'scoreboard-setup'    // intake  (Configuration)
@@ -103,7 +103,7 @@ The section `id` **must equal** the `ModuleId` — the contract test asserts it.
 ## 5 · Build the product component
 
 Add `products/scoreboard/ScoreboardProduct.tsx`. It reads `activeTab` and renders
-the surface that owns it — copy the shape of `products/meet/MeetProduct.tsx`. Keep
+the surface that owns it — copy the shape of `modules/meet/MeetProduct.tsx`. Keep
 intake/engine/emit in their own subfolders so the anatomy stays legible.
 
 ## 6 · Mount it and register it in the dock
@@ -170,7 +170,7 @@ new `apiClient` methods in the contract's `ownedEndpoints` (step 7).
 ## Verify
 
 ```bash
-cd products/scheduler/frontend
+cd apps/console
 npx vitest run src/platform/contracts        # the contract test must pass
 npx tsc -b                                    # the AppTab/ModuleId unions must type-check
 ```
@@ -184,5 +184,5 @@ honest member of the architecture. Enable it on a workspace via
 
 - [How to add a surface](/how-to/add-a-surface) — a single new segment on an existing module
 - [How to wire a seam](/how-to/wire-a-seam) — a typed cross-module edge
-- [Module contracts](/contracts/) · [System overview](/architecture/system-overview)
-- [ADR 0001 — Four-module split](/decisions/0001-four-module-split)
+- [Module contracts](/reference/contracts/) · [System overview](/explanation/architecture/system-overview)
+- [ADR 0001 — Four-module split](/explanation/decisions/0001-four-module-split)

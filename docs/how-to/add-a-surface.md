@@ -17,7 +17,7 @@ registration.
 ## 1 · Add the segment to `AppTab`
 
 ```ts
-// products/scheduler/frontend/src/store/uiStore.ts  (the AppTab union, ~line 19)
+// apps/console/src/store/uiStore.ts  (the AppTab union, ~line 19)
 export type AppTab =
   | /* …existing… */
   | 'standings';   // a new Meet emit surface
@@ -41,7 +41,7 @@ items: [
 ## 3 · Render it in the product
 
 The product component switches on `activeTab` and renders the surface that owns
-it. Add the branch (see `products/meet/MeetProduct.tsx` for the pattern).
+it. Add the branch (see `modules/meet/MeetProduct.tsx` for the pattern).
 
 ## 4 · Update the contract
 
@@ -65,12 +65,12 @@ them. Add an internal surface to `AppTab` only; route to it from its parent.
 ## Verify
 
 ```bash
-cd products/scheduler/frontend
+cd apps/console
 npx vitest run src/platform/contracts   # ownedSegments must match the nav
 npx tsc -b
 ```
 
 ## See also
 
-- [How to add a module](/how-to/add-a-module) · [Module contracts](/contracts/)
-- [System overview](/architecture/system-overview)
+- [How to add a module](/how-to/add-a-module) · [Module contracts](/reference/contracts/)
+- [System overview](/explanation/architecture/system-overview)

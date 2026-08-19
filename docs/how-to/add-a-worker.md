@@ -46,8 +46,8 @@ GRANT SELECT, UPDATE, DELETE ON TABLE solve_jobs TO sw_worker;
 ```
 
 ```bash
-cd /opt/ShuttleWorks/products/scheduler
-docker compose -f docker-compose.selfhost.yml exec -T postgres \
+cd /opt/ShuttleWorks
+docker compose -f infra/compose/docker-compose.selfhost.yml exec -T postgres \
   psql -U scheduler -d scheduler <<'SQL'
 CREATE ROLE sw_worker LOGIN PASSWORD 'CHANGE-ME';
 GRANT CONNECT ON DATABASE scheduler TO sw_worker;
@@ -78,7 +78,7 @@ SQL
 Verify the denial rather than assuming it:
 
 ```bash
-docker compose -f docker-compose.selfhost.yml exec -T postgres \
+docker compose -f infra/compose/docker-compose.selfhost.yml exec -T postgres \
   psql "postgresql://sw_worker:CHANGE-ME@localhost:5432/scheduler" \
   -c "SELECT count(*) FROM users;"
 # ERROR:  permission denied for table users     ← this is the pass condition
@@ -95,7 +95,6 @@ See [the backup section](/how-to/install-selfhost#backup-and-restore).
 ```bash
 sudo mkdir -p /opt/ShuttleWorks && sudo chown "$USER" /opt/ShuttleWorks
 cd /opt/ShuttleWorks && git clone <repo> .
-cd products/scheduler
 cp .env.worker.example .env
 chmod 600 .env
 ```
@@ -127,8 +126,8 @@ credentials end up on machines with no business holding them.
 ## 4. Start it
 
 ```bash
-docker compose -f docker-compose.worker.yml up -d --build
-docker compose -f docker-compose.worker.yml logs -f
+docker compose -f infra/compose/docker-compose.worker.yml up -d --build
+docker compose -f infra/compose/docker-compose.worker.yml logs -f
 ```
 
 Expect:
@@ -200,7 +199,7 @@ Reconnect with `docker network connect bridge shuttleworks-worker-worker-1`.
 ## Removing a worker
 
 ```bash
-docker compose -f docker-compose.worker.yml down
+docker compose -f infra/compose/docker-compose.worker.yml down
 ```
 
 Any job it held is reaped after the lease expires and re-run elsewhere. Then

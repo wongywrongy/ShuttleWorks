@@ -21,10 +21,10 @@ jobs:
       matrix:
         include:
           - name: backend
-            dockerfile: products/scheduler/backend/Dockerfile
+            dockerfile: apps/api/Dockerfile
             context: .
           - name: frontend
-            dockerfile: products/scheduler/frontend/Dockerfile
+            dockerfile: apps/console/Dockerfile
             # Context = repo root: the Dockerfile copies the workspace
             # root package.json/lockfile + packages/design-system from
             # the repo root, so a narrowed context can't satisfy it.
@@ -33,7 +33,7 @@ jobs:
             # The public entrant SSR tier. docker-compose.release.yml
             # references ghcr.io/<owner>/scheduler-entrant, so it has to
             # be published here or that stack cannot be pulled.
-            dockerfile: products/scheduler/entrant/Dockerfile
+            dockerfile: apps/entrant/Dockerfile
             context: .
     steps:
       - uses: actions/checkout@v4

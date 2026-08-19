@@ -1,0 +1,171 @@
+# Production compose file — pulls pre-built images from GHCR instead of
+# building locally. Users with pre-built images ready (after the first
+# ``docker compose -f docker-compose.release.yml pull``) can start the
+# app in seconds on any machine that has Docker installed.
+#
+# The ``OWNER`` env var lets a fork publish to a different GHCR namespace
+# without editing this file. Defaults to ``misogyu`` (the upstream repo).
+#
+# ``name`` is stated rather than inferred. This file carried no project name,
+# so Compose derived one from the containing directory - which was
+# ``products/scheduler``, giving ``scheduler``. SP-REORG-1 moved the file to
+# ``infra/compose``, and an inferred name would silently have become
+# ``compose``: every container renamed, and any volume addressed by project
+# name orphaned, with nothing in the diff naming the change. A stack's
+# identity should not be a function of where its file happens to sit.
+name: ${COMPOSE_PROJECT_NAME:-shuttleworks-release}
+
+services:
+  backend:
+    image: ghcr.io/${OWNER:-misogyu}/scheduler-backend:${TAG:-latest}
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=info
+      # DATA_DIR is the current name. BACKEND_DATA_DIR still works as a
+      # legacy alias in app/config.py, but no shipped file should be the
+      # reason that alias stays alive.
+      - DATA_DIR=/app/data
+      # MUST be absolute and inside the bind-mounted data dir. Without
+      # it the app falls back to the default ``sqlite:///./local.db``,
+      # which is CWD-relative — i.e. ``/app/local.db``, on the
+      # ``read_only: true`` rootfs below. That is a silent data-loss
+      # trap: every tournament lives in a database that cannot be
+      # written to, or (if the rootfs were ever made writable) one that
+      # vanishes on the next ``docker compose up``. Four slashes is not
+      # a typo — ``sqlite:///`` + the absolute path ``/app/data/...``.
+      - DATABASE_URL=sqlite:////app/data/local.db
+      # ───────────────────────────────────────────────────────────────
+      # The address this API sees as its IMMEDIATE PEER, which is the
+      # `frontend` nginx container:
+      #
+      #   client → frontend:8080 (nginx) → /api/, /e/api/, /e/account/
+      #                                  → backend:8000
+      #
+      # Without it `trusted_proxy_ips` is empty, CF-Connecting-IP is
+      # ignored, and every request through nginx presents nginx's own
+      # address — so `entrant_signup_key(ip)`, `entrant_ip_key(ip)` and
+      # `entries_key(ip)` are ONE budget shared by the whole internet:
+      # one bot exhausts the entrant signup allowance for every real
+      # entrant. It fails that way silently, which is why the network
+      # below is pinned and `entrant/tests/deployStacks.test.ts` checks
+      # this value against it.
+      #
+      # ONE ADDRESS, not the subnet, and unlike the usual advice that is
+      # deliberate here: this service publishes 8000:8000, so it is
+      # reachable from the host directly, and host traffic arrives SNAT'd
+      # from the network GATEWAY (10.202.0.1). A subnet-wide trust list
+      # would therefore trust anything that can reach that port, turning
+      # a collapsed throttle into a throttle BYPASS. The address is safe
+      # to name because compose pins it (`ipv4_address` on `frontend`) —
+      # it is not the drifting container IP `app/client_ip.py` warns
+      # about, which is one Docker assigns.
+      - TRUSTED_PROXY_IPS=10.202.0.10
+    volumes:
+      - ../../data:/app/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys,json; r=urllib.request.urlopen('http://localhost:8000/health/deep', timeout=5); sys.exit(0 if json.load(r).get('status')=='healthy' else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+
+  # The public entrant site. In this stack because this stack has a
+  # `frontend`: nginx is what implements the `/e/` prefix split (ruling
+  # R8-A), and without it nothing can route to node.
+  #
+  # Pre-built like its siblings — `.github/workflows/publish-release.yml`
+  # publishes `scheduler-entrant` from the same matrix that publishes the
+  # other two. An image reference nobody builds is a stack that cannot be
+  # pulled, which is the failure this file has hit before.
+  entrant:
+    image: ghcr.io/${OWNER:-misogyu}/scheduler-entrant:${TAG:-latest}
+    # No `ports:` — reachable only through nginx, which strips the operator
+    # cookie on the way in.
+    environment:
+      # `apiBaseUrl()` throws when unset; the container serves nothing
+      # without it. Internal compose-network address, never public.
+      - API_BASE_URL=http://backend:8000
+      # Matches the backend, which sets no override here and so defaults to
+      # false: this stack serves plain HTTP on port 80. Both cookie issuers
+      # read this one variable name — see
+      # `entrant/tests/deployStacks.test.ts`.
+      - SESSION_COOKIE_SECURE=false
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  frontend:
+    image: ghcr.io/${OWNER:-misogyu}/scheduler-frontend:${TAG:-latest}
+    ports:
+      - "80:8080"
+    networks:
+      # A FIXED address, because the backend has to name it: this is the
+      # peer every proxied request presents, and `TRUSTED_PROXY_IPS` above
+      # is what decides whether the API believes the client address this
+      # container vouches for. Docker otherwise assigns from the pool and
+      # reassigns on --force-recreate, and a trust list that stops matching
+      # fails open in silence.
+      default:
+        ipv4_address: 10.202.0.10
+    depends_on:
+      backend:
+        condition: service_healthy
+      # STARTED, not healthy. nginx resolves the literal
+      # `proxy_pass http://entrant:3000;` at CONFIG LOAD and exits
+      # `[emerg] host not found in upstream` with no address for the name, so
+      # the dependency is required — but a running container is all compose's
+      # DNS needs. `service_healthy` put the whole origin (operator SPA and
+      # `/api/` included) behind the health of the PUBLIC entrant tier, so a
+      # sick entrant took the console down with it.
+      entrant:
+        condition: service_started
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+
+networks:
+  # Pinned so `TRUSTED_PROXY_IPS` on the backend can name a STABLE address.
+  # Unpinned, this stack lands wherever Docker's default pool puts it
+  # (172.16.0.0/12), which varies per host and shifts when networks are
+  # recreated — leaving the trust list wrong on day one or wrong later, and
+  # both fail open into one global throttle bucket.
+  #
+  # 10.202.0.0/24 sits outside Docker's default pool, so it will not collide
+  # with an auto-assigned network, and outside the 10.201.0.0/24 the self-host
+  # stack uses — which matters: `frontend/nginx.conf` trusts CF-Connecting-IP
+  # from 10.201.0.0/24, so an overlap would let this stack's gateway (the peer
+  # for everything arriving on the published port) spoof its own rate-limit
+  # bucket. Change this and the two addresses above together; they are one
+  # setting in three places, and `entrant/tests/deployStacks.test.ts` fails if
+  # they stop agreeing.
+  default:
+    ipam:
+      config:
+        - subnet: 10.202.0.0/24

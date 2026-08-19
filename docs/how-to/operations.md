@@ -21,7 +21,7 @@ live job ids, queue depth, the deployed schema revision — so they require
 profile **requires**. Every command on this page therefore sends it:
 
 ```bash
-export OPS=$(cat /opt/ShuttleWorks/products/scheduler/secrets/ops_token)
+export OPS=$(cat /opt/ShuttleWorks/secrets/ops_token)
 curl -s -H "X-ShuttleWorks-Ops-Token: $OPS" http://localhost:8000/health/ready
 ```
 
@@ -89,10 +89,10 @@ appears.
 ## Upgrades
 
 ```bash
-cd /opt/ShuttleWorks/products/scheduler
+cd /opt/ShuttleWorks
 ./backup.sh                                   # always first
 git pull
-docker compose -f docker-compose.selfhost.yml up -d --build
+docker compose -f infra/compose/docker-compose.selfhost.yml up -d --build
 ```
 
 ::: danger `--build` is not optional
@@ -127,7 +127,7 @@ Application rollback is a redeploy of the previous tag:
 
 ```bash
 git checkout <previous-tag>
-docker compose -f docker-compose.selfhost.yml up -d --build
+docker compose -f infra/compose/docker-compose.selfhost.yml up -d --build
 ```
 
 ::: warning Schema rollback is not a supported path
@@ -143,12 +143,12 @@ Which is why `./backup.sh` runs *before* `git pull`, every time.
 ## Logs
 
 ```bash
-cd /opt/ShuttleWorks/products/scheduler
-docker compose -f docker-compose.selfhost.yml logs -f api
-docker compose -f docker-compose.selfhost.yml logs -f postgres
-docker compose -f docker-compose.selfhost.yml logs -f cloudflared
+cd /opt/ShuttleWorks
+docker compose -f infra/compose/docker-compose.selfhost.yml logs -f api
+docker compose -f infra/compose/docker-compose.selfhost.yml logs -f postgres
+docker compose -f infra/compose/docker-compose.selfhost.yml logs -f cloudflared
 # on the worker host:
-docker compose -f docker-compose.worker.yml logs -f
+docker compose -f infra/compose/docker-compose.worker.yml logs -f
 ```
 
 Logger names worth grepping: `scheduler.solve_worker` (claims, completions,

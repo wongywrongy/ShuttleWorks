@@ -65,25 +65,33 @@ export default defineConfig({
 
   // Legacy/scratch trees: kept on disk, excluded from the site. These are the
   // design record and historical logs — not part of the curated IA.
+  // ---------------------------------------------------------------------
+  // THE ACCEPTANCE TEST (SP-REORG-1 Phase 5)
+  //
+  // Every page on this site names a Diataxis quadrant by the directory it
+  // lives in: tutorials/ how-to/ reference/ explanation/. Anything that
+  // cannot name one is history, and history/ is excluded from the site
+  // rather than curated into it.
+  //
+  // That is the whole rule. A page that does not fit a quadrant is not a
+  // page that needs a fifth quadrant; it is a dated record, and dated
+  // records are read in the repository, not browsed on a site.
+  // ---------------------------------------------------------------------
   srcExclude: [
-    'architectural-roadmap.md',
-    'tech-stack.md',
-    'audits/**',
-    'changes/**',
-    'deploy/**',
-    'superpowers/**',
-    // Program ledgers + their working notes, moved here from the repo root on
-    // 2026-08-06. Same genre as `audits/` and `changes/`: dated working records
-    // read at session start, not curated pages. Root now holds only files a
-    // tool or convention reads by path (README, CLAUDE, CONTRIBUTING,
-    // SECURITY, CODE_HEALTH, LICENSE).
-    'programs/**',
-    'architecture/workspace-suite/**',
-    // Superseded drafts kept as record. Each one duplicates a LIVE page
-    // (`architecture/entrant-tier.md`, `modules/entries.md`); rendering both
-    // would put two competing versions of the same subject on the site with
-    // nothing linking to the stale one.
+    // The single history home: program ledgers, audits, dated change logs,
+    // the superpowers design record, the progress board, the retired
+    // roadmap and tech-stack pages, and the two product records SP-REORG-1
+    // relocated. All kept on disk; none of it is curated IA.
+    'history/**',
+    // Ownership maps and import boundaries: working notes against a tree,
+    // not reader documentation.
+    'explanation/architecture/workspace-suite/**',
+    // Superseded drafts kept as record. Each duplicates a LIVE page, and
+    // rendering both would put two competing versions of one subject on the
+    // site with nothing linking to the stale one.
     '**/*.superseded-draft-*.md',
+    // Meta-material: templates and recipes are inputs to the product, not
+    // pages about it. Kept at the top level deliberately.
     'README.md',
   ],
 
@@ -96,34 +104,35 @@ export default defineConfig({
   },
 
   themeConfig: {
+    // Four quadrants, in the order a reader meets them: learn, do, look up,
+    // understand. Nothing else is a top-level destination. Architecture,
+    // Modules, Contracts and API used to be four separate nav entries for
+    // what are two quadrants, which asked the reader to know our filing
+    // system before they could find anything.
+    // Four quadrants, in the order a reader meets them: learn, do, look up,
+    // understand. Nothing else is a top-level destination. Architecture,
+    // Modules, Contracts and API used to be four separate nav entries for
+    // what are two quadrants, which asked the reader to know our filing
+    // system before they could find anything.
     nav: [
-      { text: 'Getting started', link: '/getting-started/what-is-shuttleworks' },
-      { text: 'Guides', link: '/how-to/' },
-      { text: 'Tutorials', link: '/tutorials/build-a-module' },
-      { text: 'Architecture', link: '/architecture/system-overview' },
-      { text: 'Modules', link: '/modules/meet' },
-      { text: 'Contracts', link: '/contracts/' },
-      { text: 'API', link: '/api/' },
-      { text: 'Decisions', link: '/decisions/' },
-      { text: 'Progress', link: '/progress/' },
-      { text: 'Glossary', link: '/glossary' },
+      { text: 'Tutorials', link: '/tutorials/quickstart' },
+      { text: 'How-to', link: '/how-to/' },
+      { text: 'Reference', link: '/reference/modules/meet' },
+      { text: 'Explanation', link: '/explanation/what-is-shuttleworks' },
+      { text: 'Glossary', link: '/reference/glossary' },
     ],
 
     sidebar: [
       {
-        text: 'Getting started',
+        text: 'Tutorials - learning by doing',
         collapsed: false,
         items: [
-          { text: 'Quickstart', link: '/getting-started/quickstart' },
-          { text: 'What ShuttleWorks is', link: '/getting-started/what-is-shuttleworks' },
-          { text: 'User flow', link: '/getting-started/user-flow' },
-          { text: 'Running locally', link: '/getting-started/running-locally' },
-          { text: 'Repo layout', link: '/getting-started/repo-layout' },
-          { text: 'Code intelligence (codanna)', link: '/getting-started/code-intelligence' },
+          { text: 'Quickstart', link: '/tutorials/quickstart' },
+          { text: 'Build a module', link: '/tutorials/build-a-module' },
         ],
       },
       {
-        text: 'Extending (how-to)',
+        text: 'How-to - extending',
         collapsed: false,
         items: [
           { text: 'Overview', link: '/how-to/' },
@@ -137,9 +146,11 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Deploying & operating',
+        text: 'How-to - running and deploying',
         collapsed: false,
         items: [
+          { text: 'Running locally', link: '/how-to/running-locally' },
+          { text: 'Code intelligence (codanna)', link: '/how-to/code-intelligence' },
           { text: 'Deploy: start to finish', link: '/how-to/deploy' },
           { text: 'Install: local (offline)', link: '/how-to/install-local' },
           { text: 'Install: self-hosted', link: '/how-to/install-selfhost' },
@@ -148,114 +159,86 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Tutorials',
+        text: 'Reference - modules',
         collapsed: false,
         items: [
-          { text: 'Build a module', link: '/tutorials/build-a-module' },
+          { text: 'Meet', link: '/reference/modules/meet' },
+          { text: 'Bracket', link: '/reference/modules/bracket' },
+          { text: 'Operations', link: '/reference/modules/operations' },
+          { text: 'Display', link: '/reference/modules/display' },
+          { text: 'Entries', link: '/reference/modules/entries' },
+          { text: 'Settings', link: '/reference/modules/settings' },
         ],
       },
       {
-        text: 'Architecture',
+        text: 'Reference - contracts and API',
         collapsed: false,
         items: [
-          { text: 'System overview', link: '/architecture/system-overview' },
-          { text: 'Workspace model', link: '/architecture/workspace-model' },
-          { text: 'Entrant tier (the public site)', link: '/architecture/entrant-tier' },
-          { text: 'Data flow', link: '/architecture/data-flow' },
-          { text: 'State management', link: '/architecture/state-management' },
-          { text: 'Backend structure', link: '/architecture/backend-structure' },
-          { text: 'Scheduling unification', link: '/architecture/scheduling-unification' },
-          { text: 'Unified configuration', link: '/architecture/unified-configuration' },
-          { text: 'Bracket schedule streaming', link: '/architecture/bracket-schedule-streaming' },
-          { text: 'Bracket result queue', link: '/architecture/bracket-result-queue' },
-          { text: 'Unified operations view', link: '/architecture/unified-operations-view' },
-          { text: 'Operational scenarios', link: '/architecture/operational-scenarios' },
-          { text: 'Bracket draw canvas', link: '/architecture/bracket-draw-canvas' },
-          { text: 'Draw formats', link: '/architecture/draw-formats' },
-          { text: 'Quality attributes', link: '/architecture/quality-attributes' },
-          { text: 'Console naming', link: '/design/console-naming' },
+          { text: 'What a module contract is', link: '/reference/contracts/' },
+          { text: 'Meet to Operations (Seam A)', link: '/reference/contracts/meet-operations' },
+          { text: 'Bracket to Operations (Seam B)', link: '/reference/contracts/bracket-operations' },
+          { text: 'Operations to Display (Seam D)', link: '/reference/contracts/operations-display' },
+          { text: 'API: overview and route ownership', link: '/reference/api/' },
+          { text: 'API: signals', link: '/reference/api/signals' },
         ],
       },
       {
-        text: 'Modules',
+        text: 'Reference - the repository',
         collapsed: false,
         items: [
-          { text: 'Meet', link: '/modules/meet' },
-          { text: 'Bracket', link: '/modules/bracket' },
-          { text: 'Operations', link: '/modules/operations' },
-          { text: 'Display', link: '/modules/display' },
-          { text: 'Entries', link: '/modules/entries' },
-          { text: 'Settings', link: '/modules/settings' },
-        ],
-      },
-      {
-        text: 'Module contracts',
-        collapsed: false,
-        items: [
-          { text: 'What a module contract is', link: '/contracts/' },
-          { text: 'Meet → Operations (Seam A)', link: '/contracts/meet-operations' },
-          { text: 'Bracket → Operations (Seam B)', link: '/contracts/bracket-operations' },
-          { text: 'Operations → Display (Seam D)', link: '/contracts/operations-display' },
-        ],
-      },
-      {
-        text: 'API reference',
-        collapsed: false,
-        items: [
-          { text: 'Overview & route ownership', link: '/api/' },
-          { text: 'Signals API', link: '/api/signals' },
-        ],
-      },
-      {
-        text: 'Progress',
-        collapsed: false,
-        items: [
-          { text: 'Programs board', link: '/progress/' },
-          { text: 'The public platform (SP-PROGRAM-1)', link: '/progress/2026-08-public-platform' },
-        ],
-      },
-      {
-        text: 'Reference',
-        collapsed: false,
-        items: [
-          { text: 'Glossary', link: '/glossary' },
-        ],
-      },
-      {
-        text: 'Examples',
-        collapsed: false,
-        items: [
+          { text: 'Repo layout', link: '/reference/repo-layout' },
+          { text: 'Glossary', link: '/reference/glossary' },
+          { text: 'Debt log', link: '/reference/debt-log' },
           { text: 'Recipes', link: '/examples/' },
-        ],
-      },
-      {
-        text: 'Templates',
-        collapsed: false,
-        items: [
           { text: 'Workspace templates', link: '/templates/' },
         ],
       },
       {
-        text: 'Decisions',
+        text: 'Explanation - the system',
         collapsed: false,
         items: [
-          { text: 'ADR log', link: '/decisions/' },
-          { text: '0001 · Four-module split', link: '/decisions/0001-four-module-split' },
-          { text: '0002 · Workspace as control plane', link: '/decisions/0002-workspace-as-control-plane' },
-          { text: '0003 · SQLite as primary persistence', link: '/decisions/0003-sqlite-as-primary-persistence' },
-          { text: '0004 · OR-Tools CP-SAT engine', link: '/decisions/0004-ortools-cpsat-engine' },
-          { text: '0005 · coming_soon elimination', link: '/decisions/0005-coming-soon-elimination' },
-          { text: '0006 · Unified scheduling core', link: '/decisions/0006-unified-scheduling-core' },
-          { text: '0007 · Bracket result command queue', link: '/decisions/0007-bracket-result-command-queue' },
-          { text: '0008 · Shared scoring fields', link: '/decisions/0008-shared-scoring-fields' },
-          { text: '0009 · Universal match contract', link: '/decisions/0009-universal-match-contract' },
-          { text: '0010 · Nav model in platform', link: '/decisions/0010-nav-model-in-platform' },
-          { text: '0011 · Cross-product boundary policy', link: '/decisions/0011-cross-product-boundary-policy' },
-          { text: '0012 · Remove the Supabase mirror', link: '/decisions/0012-remove-the-supabase-mirror' },
+          { text: 'What ShuttleWorks is', link: '/explanation/what-is-shuttleworks' },
+          { text: 'User flow', link: '/explanation/user-flow' },
+          { text: 'System overview', link: '/explanation/architecture/system-overview' },
+          { text: 'Workspace model', link: '/explanation/architecture/workspace-model' },
+          { text: 'Entrant tier (the public site)', link: '/explanation/architecture/entrant-tier' },
+          { text: 'Data flow', link: '/explanation/architecture/data-flow' },
+          { text: 'State management', link: '/explanation/architecture/state-management' },
+          { text: 'Backend structure', link: '/explanation/architecture/backend-structure' },
+          { text: 'Scheduling unification', link: '/explanation/architecture/scheduling-unification' },
+          { text: 'Unified configuration', link: '/explanation/architecture/unified-configuration' },
+          { text: 'Bracket schedule streaming', link: '/explanation/architecture/bracket-schedule-streaming' },
+          { text: 'Bracket result queue', link: '/explanation/architecture/bracket-result-queue' },
+          { text: 'Unified operations view', link: '/explanation/architecture/unified-operations-view' },
+          { text: 'Operational scenarios', link: '/explanation/architecture/operational-scenarios' },
+          { text: 'Bracket draw canvas', link: '/explanation/architecture/bracket-draw-canvas' },
+          { text: 'Draw formats', link: '/explanation/architecture/draw-formats' },
+          { text: 'Quality attributes', link: '/explanation/architecture/quality-attributes' },
+          { text: 'Console naming', link: '/explanation/console-naming' },
+        ],
+      },
+      {
+        text: 'Explanation - decisions (ADRs)',
+        collapsed: true,
+        items: [
+          { text: 'ADR log', link: '/explanation/decisions/' },
+          { text: '0001 - Four-module split', link: '/explanation/decisions/0001-four-module-split' },
+          { text: '0002 - Workspace as control plane', link: '/explanation/decisions/0002-workspace-as-control-plane' },
+          { text: '0003 - SQLite as primary persistence', link: '/explanation/decisions/0003-sqlite-as-primary-persistence' },
+          { text: '0004 - OR-Tools CP-SAT engine', link: '/explanation/decisions/0004-ortools-cpsat-engine' },
+          { text: '0005 - coming_soon elimination', link: '/explanation/decisions/0005-coming-soon-elimination' },
+          { text: '0006 - Unified scheduling core', link: '/explanation/decisions/0006-unified-scheduling-core' },
+          { text: '0007 - Bracket result command queue', link: '/explanation/decisions/0007-bracket-result-command-queue' },
+          { text: '0008 - Shared scoring fields', link: '/explanation/decisions/0008-shared-scoring-fields' },
+          { text: '0009 - Universal match contract', link: '/explanation/decisions/0009-universal-match-contract' },
+          { text: '0010 - Nav model in platform', link: '/explanation/decisions/0010-nav-model-in-platform' },
+          { text: '0011 - Cross-product boundary policy', link: '/explanation/decisions/0011-cross-product-boundary-policy' },
+          { text: '0012 - Remove the Supabase mirror', link: '/explanation/decisions/0012-remove-the-supabase-mirror' },
+          { text: '0013 - Shared-UI promotion policy', link: '/explanation/decisions/0013-shared-ui-promotion-policy' },
+          { text: '0014 - Workspace vs tournament vocabulary', link: '/explanation/decisions/0014-workspace-vs-tournament-vocabulary' },
         ],
       },
     ],
-
     search: { provider: 'local' },
 
     socialLinks: [

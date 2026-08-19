@@ -1,0 +1,36 @@
+/* Entrant tier — top-level CSS.
+ *
+ * Design tokens, typography, density, animation keyframes and texture
+ * utilities all live in @scheduler/design-system; this file is the thin
+ * shell that wires the design system + Tailwind directives, exactly as
+ * apps/console/src/index.css does.
+ *
+ * If you find yourself adding rules here, ask first: does it belong in
+ * the design system instead? See packages/design-system/DESIGN.md.
+ */
+@import '@scheduler/design-system/tokens.css';
+@import '@scheduler/design-system/globals.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2026-08-11 design audit, finding #8 (optional, zero page-weight cost: CSS
+ * is not counted toward the HTML+JS page-weight gate — scripts/measure-page-
+ * weight.mjs — so this costs nothing against the 4 KB budget). This tier does
+ * a full-page navigation for everything a JS app would do in place;
+ * `@view-transition` gives same-origin crossfades between them at zero
+ * JavaScript. Chromium-supported today, silently ignored elsewhere — no
+ * feature-detection needed. The spec does not disable this automatically
+ * under reduced motion, so that override is explicit here. */
+@view-transition {
+  navigation: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

@@ -74,7 +74,7 @@ white/near-white base, subtle gray sunken wells, raised = white + hairline + sma
 |---|---|
 | TV Display presets (`displayPresets.css/.ts`) + `tvAccent` user hex + `StandingsView` podium | A separate, deliberate theming axis for venue TVs; user-configurable accent is data, not style |
 | `schoolAccent.ts` 8-hex palette + `SchoolDot` | Categorical school-identity palette (data-driven, deterministic per school) |
-| `eventColors.ts` / `positionGrid/helpers.ts` discipline hues | Categorical data palettes on dense boards; **known debt:** the two maps disagree per discipline (logged in docs/audits/debt-log.md) |
+| `eventColors.ts` / `positionGrid/helpers.ts` discipline hues | Categorical data palettes on dense boards; **known debt:** the two maps disagree per discipline (logged in docs/reference/debt-log.md) |
 | `MatchChip` `bg-white/20` selected wash | Hue-free translucent lightener over *solid* status fills |
 | Shadow `hsl(var(--gray-13) / α)` values | Shadows key off the ink primitive by design |
 | `globals.css` white-alpha sheen/scanlines | Theme-blind texture effects |

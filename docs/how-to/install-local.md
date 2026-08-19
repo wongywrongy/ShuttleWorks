@@ -36,7 +36,7 @@ reserved range, prefix `BACKEND_HOST_PORT=8600`.
 `make stop` shuts it down. `make scheduler-dev` runs Vite on `:5173` with HMR
 instead.
 
-That is the whole installation. Defaults in `products/scheduler/backend/app/config.py`
+That is the whole installation. Defaults in `apps/api/app/config.py`
 already describe local mode — `ENVIRONMENT=local`, `AUTH_MODE=local`,
 `EMBEDDED_WORKER=true`, `EMAIL_BACKEND=console` — so no `.env` is needed.
 
@@ -70,16 +70,16 @@ disk dies, both go with it.
 
 This is the same bargain every desktop application offers, and the remedy is the
 same: **copy the data directory somewhere else.** With the Docker stack that is
-`products/scheduler/data/`; running from source it is wherever `DATA_DIR` points.
+`data/`; running from source it is wherever `DATA_DIR` points.
 
 ```bash
 # Before an event, and after it.
-cp -r products/scheduler/data ~/backups/shuttleworks-$(date +%F)
+cp -r data ~/backups/shuttleworks-$(date +%F)
 ```
 
 A copy on a USB stick or a cloud drive is sufficient. There is no in-product
 off-site replication, and adding one has been considered and rejected — see
-[ADR 0012](/decisions/0012-remove-the-supabase-mirror), which removed the last
+[ADR 0012](/explanation/decisions/0012-remove-the-supabase-mirror), which removed the last
 attempt at it (a one-way push with no restore path that was never once
 configured). Off-site durability for a single operator on their own machine is
 that operator's responsibility, and stating so plainly is more useful than

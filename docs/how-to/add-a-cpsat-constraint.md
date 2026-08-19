@@ -3,9 +3,9 @@
 **Goal:** teach the scheduling engine a new rule — a hard requirement or a soft
 penalty — as a self-contained plugin, then expose its knobs to the product.
 
-All scheduling lives in `scheduler_core/` — pure Python, no HTTP. Constraints are
+All scheduling lives in `packages/scheduler-core/scheduler_core/` — pure Python, no HTTP. Constraints are
 plugins under `engine/constraints/`, one file per rule. This is the recipe from
-`scheduler_core/README.md`.
+`packages/scheduler-core/scheduler_core/README.md`.
 
 ::: info Hard vs soft
 A **hard** constraint forbids a solution (e.g. `court_capacity` — no two matches
@@ -16,7 +16,7 @@ aggregated in `engine/constraints/objective.py`.
 
 ## 1 · Write the plugin
 
-Drop a new file `scheduler_core/engine/constraints/<name>.py` exporting a class
+Drop a new file `packages/scheduler-core/scheduler_core/engine/constraints/<name>.py` exporting a class
 that implements the `Constraint` protocol (declared in
 `engine/constraints/__init__.py`) — an `apply(model, vars, params)` method and a
 `name` attribute:
@@ -61,22 +61,22 @@ also flow through `services/solve_jobs.default_solve_params` if jobs should carr
 
 ## 5 · Test it
 
-Add a unit test under `products/scheduler/tests/` that builds a minimal instance
+Add a unit test under `tests/backend/` that builds a minimal instance
 and asserts the new behaviour:
 
 ```bash
-cd products/scheduler && .venv/Scripts/python.exe -m pytest -q
+.venv/Scripts/python.exe -m pytest -q
 ```
 
 ::: tip Repair and warm-restart inherit your constraint
 Because `solve_repair` and `solve_warm_start` reuse the same plugin list, a new
 constraint automatically applies to live re-solves — but verify it composes with
 `stay_close` (the move-penalty plugin those paths add). See
-`scheduler_core/README.md` → "Repair vs. warm-restart".
+`packages/scheduler-core/scheduler_core/README.md` → "Repair vs. warm-restart".
 :::
 
 ## See also
 
 - [How to build a product on the engine](/how-to/build-on-the-engine)
-- [ADR 0004 — OR-Tools CP-SAT engine](/decisions/0004-ortools-cpsat-engine)
-- [ADR 0006 — Unified scheduling core](/decisions/0006-unified-scheduling-core)
+- [ADR 0004 — OR-Tools CP-SAT engine](/explanation/decisions/0004-ortools-cpsat-engine)
+- [ADR 0006 — Unified scheduling core](/explanation/decisions/0006-unified-scheduling-core)

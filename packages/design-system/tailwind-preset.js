@@ -2,7 +2,7 @@
  * @scheduler/design-system — Tailwind preset.
  *
  * Implements BRAND.md (this directory) as a Tailwind theme extension. Both
- * products (`products/scheduler/frontend`, `products/tournament/frontend`)
+ * products (`apps/console`, `products/tournament/frontend`)
  * consume this preset; they own only their `content` globs and any
  * product-specific extensions.
  *

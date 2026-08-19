@@ -65,7 +65,6 @@ To move the deployment:
 cd /opt/ShuttleWorks
 git fetch --all --tags
 git checkout v0.2.0          # or: git checkout main && git pull --ff-only
-cd products/scheduler
 docker compose -f docker-compose.selfhost.yml up -d --build
 ```
 

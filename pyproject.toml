@@ -1,0 +1,36 @@
+[tool.pytest.ini_options]
+# Pytest rootdir marker. This file used to live in products/scheduler/ and
+# pinned the rootdir there; SP-REORG-1 dissolved that directory, so the
+# rootdir is now the repository root and the canonical invocation is a bare
+# `pytest` from anywhere in the tree.
+#
+# `testpaths` is what keeps that bare invocation honest: without it pytest
+# would walk the whole repo, and the simulator (which owns its own rootdir
+# via simulator/pytest.ini, deliberately) would be collected twice under two
+# different configurations.
+testpaths = ["tests"]
+# Async tests are opt-in via explicit ``@pytest.mark.asyncio`` markers
+# (see test_suggestions_worker.py, test_proposal_pipeline_integration.py).
+asyncio_mode = "strict"
+markers = [
+    # Tests that spawn real interpreters (seconds, not milliseconds).
+    # Registered so an unknown-mark warning never masks a real one.
+    "slow: spawns subprocesses; deselect with -m 'not slow'",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["alembic", ".venv", "archive", "**/migrations"]
+
+[tool.ruff.lint]
+# Gate on F (pyflakes: undefined names, unused imports/vars/redefinitions) —
+# high signal, low noise. The broader set ["E","I","B","UP"] is a deferred
+# one-time cleanup (~1400 mostly-stylistic findings; note B008 false-positives
+# on FastAPI Depends()). To run it later:
+#   ruff check $(PY_SOURCES) --select I,UP --fix && ruff format $(PY_SOURCES)
+# where PY_SOURCES is the list the root Makefile defines.
+select = ["F"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # package re-exports are not "unused"

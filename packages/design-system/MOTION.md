@@ -1,6 +1,6 @@
 # MOTION — Motion Design Language
 
-**Enforced by:** `products/scheduler/frontend/src/platform/contracts/__tests__/motionContract.test.ts` — the token aliasing (§3), the forbidden curve (§4), the 300ms chrome cap (§10.8), the hard cuts (§2/§6) and reduced-motion coverage (§8) are asserted against the shipped CSS and call sites. This document used to assert things about the code that the code had stopped doing; that is what the test is for.
+**Enforced by:** `apps/console/src/platform/contracts/__tests__/motionContract.test.ts` — the token aliasing (§3), the forbidden curve (§4), the 300ms chrome cap (§10.8), the hard cuts (§2/§6) and reduced-motion coverage (§8) are asserted against the shipped CSS and call sites. This document used to assert things about the code that the code had stopped doing; that is what the test is for.
 
 **Status:** Locked direction. Authoritative for every surface in the scheduler. Companion to `DESIGN_COLOR.md` + `tokens.css` (visual language) and `DESIGN.md` (component-architecture rulebook). `BRAND.md` is superseded — where this file cites it for the visual direction, read `DESIGN_COLOR.md` instead.
 

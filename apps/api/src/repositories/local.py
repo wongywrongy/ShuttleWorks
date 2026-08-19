@@ -1,0 +1,2228 @@
+"""Sync SQLAlchemy implementation of the repository protocols.
+
+One ``LocalRepository`` per request, opened on demand by FastAPI via
+the ``get_repository`` dependency. Each repository call commits on
+success so route handlers don't manage transactions explicitly — this
+mirrors the previous ``PersistenceService`` contract where every method
+was a self-contained atomic unit. Multi-statement transactions (Step 2's
+proposal commit, for example) can still call ``self.session.flush()`` /
+``self.session.commit()`` directly when needed.
+
+The split into ``_LocalTournamentRepo`` / ``_LocalMatchStateRepo`` /
+``_LocalTournamentBackupRepo`` mirrors the protocols in ``base.py``.
+``LocalRepository.tournaments`` / ``.match_states`` / ``.backups`` are
+the public entry points.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import re
+import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from typing import Iterable, Iterator, Optional
+
+import sys as _sys
+
+
+def _conflict_error_class():
+    """Resolve ``ConflictError`` against the current ``sys.modules``.
+
+    The test suite contains module-level ``del sys.modules['app']`` /
+    ``del sys.modules['app.*']`` lines (sprinkled across many
+    ``test_*.py`` files for legacy reasons). They run during pytest
+    collection and can wipe ``core.exceptions`` before the
+    ``purge_backend_modules`` exemption takes effect. The result is
+    multiple ``ConflictError`` classes alive simultaneously, one
+    cached in ``repositories.local`` and another in test modules that
+    imported after a later wipe. ``pytest.raises(ConflictError)``
+    fails on class-identity in that case.
+
+    Looking up the class through ``sys.modules`` at raise-time gives
+    us whichever class is *currently* canonical — the same one the
+    test resolves via ``from core.exceptions import ConflictError`` at
+    its own collection time, assuming the test module collected after
+    all the wipes (which the alphabetical ``tests/unit/...`` collection
+    order guarantees in this suite).
+    """
+    mod = _sys.modules.get("core.exceptions")
+    if mod is None:
+        from core import exceptions as mod  # noqa: F811
+    return mod.ConflictError
+
+from fastapi import Request
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.orm import Session
+
+from core.config import cloud_modules_enabled
+from core.time_utils import now_iso
+from db.models import (
+    CLOUD_ONLY_MODULES,
+    BracketEvent,
+    BracketMatch,
+    BracketParticipant,
+    BracketResult,
+    Command,
+    InviteLink,
+    Match,
+    MatchState,
+    MatchStatus,
+    Tournament,
+    TournamentBackup,
+    TournamentMember,
+    WorkspaceModule,
+    derive_modules,
+)
+from db.session import SessionLocal
+
+log = logging.getLogger("scheduler.repositories")
+
+# Matches the on-disk shape of the legacy backup files so any UI that
+# parses the filename keeps working.
+_FILENAME_SLUG = re.compile(r"[^a-zA-Z0-9-]+")
+CURRENT_TOURNAMENT_SCHEMA_VERSION = 2
+
+
+def _slugify(value: str) -> str:
+    return _FILENAME_SLUG.sub("-", value.strip().lower()).strip("-") or "tournament"
+
+
+def _backup_filename(payload: dict) -> str:
+    """Reproduce the legacy filename shape ``tournament-<slug>-<ts>.json``.
+
+    The frontend's backup-list UI renders this string verbatim, so we
+    can't drop the ``.json`` suffix even though nothing on disk is JSON
+    anymore.
+    """
+    name = None
+    cfg = payload.get("config") if isinstance(payload, dict) else None
+    if isinstance(cfg, dict):
+        name = cfg.get("tournamentName")
+    slug = _slugify(name or "tournament")
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S-%f")
+    return f"tournament-{slug}-{ts}.json"
+
+
+_TOURNAMENT_NAME_FROM_PAYLOAD_KEYS = ("config", "tournamentName")
+_ALLOWED_UPDATE_FIELDS = frozenset({"name", "status", "tournament_date"})
+
+
+def _extract_name(payload: dict) -> Optional[str]:
+    cfg = payload.get("config") if isinstance(payload.get("config"), dict) else None
+    return cfg.get("tournamentName") if cfg else None
+
+
+def _extract_date(payload: dict) -> Optional[str]:
+    cfg = payload.get("config") if isinstance(payload.get("config"), dict) else None
+    return cfg.get("tournamentDate") if cfg else None
+
+
+def _stamp_payload(payload: dict) -> dict:
+    """Apply server-stamped metadata + strip the legacy SHA field."""
+    stamped = {
+        **payload,
+        "updatedAt": now_iso(),
+        "version": CURRENT_TOURNAMENT_SCHEMA_VERSION,
+    }
+    stamped.pop("_integrity", None)
+    return stamped
+
+
+class _LocalTournamentRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    # ---- Multi-tournament queries (Step 2+) ----------------------------
+
+    def list_all(self) -> list[Tournament]:
+        """Newest-first list."""
+        return list(
+            self.session.scalars(
+                select(Tournament).order_by(
+                    Tournament.created_at.desc(), Tournament.id.desc()
+                )
+            )
+        )
+
+    def get_by_id(self, tournament_id: uuid.UUID) -> Optional[Tournament]:
+        return self.session.get(Tournament, tournament_id)
+
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        kind: str = "meet",
+        tournament_date: Optional[str] = None,
+        owner_id: Optional[uuid.UUID] = None,
+        owner_email: Optional[str] = None,
+        org_id: Optional[uuid.UUID] = None,
+    ) -> Tournament:
+        row = Tournament(
+            owner_id=owner_id,
+            owner_email=owner_email,
+            org_id=org_id,
+            name=name,
+            kind=kind,
+            tournament_date=tournament_date,
+            data={},
+            schema_version=CURRENT_TOURNAMENT_SCHEMA_VERSION,
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def update(
+        self,
+        tournament_id: uuid.UUID,
+        fields: dict,
+    ) -> Optional[Tournament]:
+        row = self.get_by_id(tournament_id)
+        if row is None:
+            return None
+        for key, value in fields.items():
+            if key in _ALLOWED_UPDATE_FIELDS:
+                setattr(row, key, value)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def delete(self, tournament_id: uuid.UUID) -> bool:
+        row = self.get_by_id(tournament_id)
+        if row is None:
+            return False
+        # CASCADE wipes match_states + tournament_backups via the FK
+        # ondelete='CASCADE' declared on those models.
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
+    def upsert_data(
+        self,
+        tournament_id: uuid.UUID,
+        payload: dict,
+        *,
+        expected_version: Optional[int] = None,
+    ) -> Tournament:
+        """Replace the ``data`` blob on an explicit tournament.
+
+        ``expected_version`` makes the write a genuine compare-and-swap: the
+        version is re-read and compared immediately before the mutation, so
+        two requests that both passed an earlier API-layer check cannot both
+        commit. Omitted by writers with no caller-supplied token (bracket
+        persistence, plan-finalized, restore), which keep last-write-wins.
+        """
+        row = self.get_by_id(tournament_id)
+        if row is None:
+            raise KeyError(tournament_id)
+        if expected_version is not None and (row.state_version or 0) != expected_version:
+            # Reuses the repository layer's existing optimistic-concurrency
+            # signal rather than inventing a second one — _LocalMatchRepo has
+            # raised ConflictError from ``expected_version`` since the
+            # match-state work, and one mechanism beats two that drift apart.
+            raise _conflict_error_class()(
+                match_id=str(tournament_id),
+                current_version=row.state_version or 0,
+                seen_version=expected_version,
+                message=(
+                    f"tournament {tournament_id} state_version moved from "
+                    f"{expected_version} to {row.state_version or 0} while "
+                    "this write was in flight"
+                ),
+            )
+        stamped = _stamp_payload(payload)
+        row.data = stamped
+        # Keep the denormalised columns in sync when the payload's config
+        # carries them. The DELETE side is gated by Step 6's status pill.
+        new_name = _extract_name(stamped)
+        if new_name is not None:
+            row.name = new_name
+        new_date = _extract_date(stamped)
+        if new_date is not None:
+            row.tournament_date = new_date
+        row.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
+        # Every committed blob write advances the optimistic-concurrency
+        # counter (SP-CLOUD-4). This is the only method that assigns
+        # ``row.data``, so bumping here cannot be forgotten by a future writer
+        # the way a per-endpoint bump could.
+        #
+        # It is NOT reached only through ``commit_tournament_state``. Direct
+        # callers today: ``bracket/brackets.py`` (session metadata, clear),
+        # ``workspaces/tournaments.py::set_plan_finalized``, and
+        # ``restore_tournament_from_backup`` below. An earlier version of this
+        # comment claimed a single caller path, and that false premise is
+        # exactly why three of those shipped without returning the new token.
+        # Any response that rewrites the blob must feed the new value back to
+        # the client, or the client's next save spuriously conflicts.
+        row.state_version = (row.state_version or 0) + 1
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+
+class _LocalMatchRepo:
+    """Per-match operational state — status, version, court, time_slot.
+
+    The ``matches`` table is the source of truth that the
+    architecture-adjustment arc's state machine + solver-locking +
+    sync layers key off. Every write increments ``version`` by 1.
+    Passing ``expected_version`` to ``upsert`` / ``set_status``
+    enables optimistic-concurrency checks at the repository layer
+    (raises ``ConflictError`` on mismatch); the HTTP ``If-Match``
+    wrapper that surfaces this to clients lands in Step D.
+    """
+
+    _MUTABLE_FIELDS = frozenset({"court_id", "time_slot", "status"})
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get(
+        self,
+        tournament_id: uuid.UUID,
+        match_id: str,
+    ) -> Optional[Match]:
+        return self.session.get(Match, (tournament_id, match_id))
+
+    def list_for_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[Match]:
+        return list(
+            self.session.scalars(
+                select(Match)
+                .where(Match.tournament_id == tournament_id)
+                .order_by(Match.id.asc())
+            )
+        )
+
+    def statuses_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, str]]:
+        """``{tournament_id: {match_id: status}}`` for every match row NOT in
+        the default ``scheduled`` state — one grouped query. Feeds the
+        workspace-signal lifecycle derivation (live / complete) without a
+        per-row lookup (same batching contract as ``count_by_tournament``)."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(Match.tournament_id, Match.id, Match.status).where(
+                Match.tournament_id.in_(tournament_ids),
+                Match.status != MatchStatus.SCHEDULED.value,
+            )
+        ).all()
+        out: dict[uuid.UUID, dict[str, str]] = {}
+        for tid, mid, status in rows:
+            out.setdefault(tid, {})[mid] = status
+        return out
+
+    def get_by_statuses(
+        self,
+        tournament_id: uuid.UUID,
+        statuses: "Iterable[str]",
+    ) -> list[Match]:
+        status_values = [
+            s.value if isinstance(s, MatchStatus) else s for s in statuses
+        ]
+        if not status_values:
+            return []
+        return list(
+            self.session.scalars(
+                select(Match)
+                .where(
+                    Match.tournament_id == tournament_id,
+                    Match.status.in_(status_values),
+                )
+                .order_by(Match.id.asc())
+            )
+        )
+
+    def upsert(
+        self,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        fields: dict,
+        *,
+        expected_version: Optional[int] = None,
+    ) -> Match:
+        row = self.get(tournament_id, match_id)
+        if row is None:
+            if expected_version is not None and expected_version != 0:
+                raise _conflict_error_class()(
+                    match_id=match_id,
+                    current_version=0,
+                    seen_version=expected_version,
+                    message=(
+                        f"Match {match_id} does not exist yet "
+                        f"(expected version {expected_version})."
+                    ),
+                )
+            row = Match(tournament_id=tournament_id, id=match_id, version=1)
+            self.session.add(row)
+            new_row = True
+        else:
+            new_row = False
+            if (
+                expected_version is not None
+                and expected_version != row.version
+            ):
+                raise _conflict_error_class()(
+                    match_id=match_id,
+                    current_version=row.version,
+                    seen_version=expected_version,
+                    message=(
+                        f"Match {match_id} was updated since you last "
+                        f"loaded it (current version {row.version}, "
+                        f"you sent {expected_version})."
+                    ),
+                )
+
+        normalised = self._normalise_status(fields)
+        for key, value in normalised.items():
+            if key in self._MUTABLE_FIELDS:
+                setattr(row, key, value)
+
+        if not new_row:
+            row.version = row.version + 1
+
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def set_status(
+        self,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        status: "str | MatchStatus",
+        *,
+        expected_version: Optional[int] = None,
+    ) -> Match:
+        return self.upsert(
+            tournament_id,
+            match_id,
+            {"status": status},
+            expected_version=expected_version,
+        )
+
+    def bulk_project_from_schedule(
+        self,
+        tournament_id: uuid.UUID,
+        matches: list[dict],
+        assignments: list[dict],
+    ) -> int:
+        """Project JSONB matches + schedule assignments into SQL rows.
+
+        Insert rows for newly-introduced match ids; update court_id +
+        time_slot on existing rows without resetting status or version;
+        delete rows whose match id is no longer in ``matches``.
+        ``version`` increments by 1 only on rows whose court_id or
+        time_slot actually changes — pure projection re-runs against
+        an unchanged schedule are no-ops.
+        """
+        match_ids_in_payload: set[str] = set()
+        court_slot_by_id: dict[str, tuple[Optional[int], Optional[int]]] = {}
+        if isinstance(assignments, list):
+            for assignment in assignments:
+                if not isinstance(assignment, dict):
+                    continue
+                mid = assignment.get("matchId")
+                if not mid:
+                    continue
+                court_slot_by_id[mid] = (
+                    assignment.get("courtId"),
+                    assignment.get("slotId"),
+                )
+
+        ordered_ids: list[str] = []
+        if isinstance(matches, list):
+            for match in matches:
+                if not isinstance(match, dict):
+                    continue
+                mid = match.get("id")
+                if not mid or mid in match_ids_in_payload:
+                    continue
+                match_ids_in_payload.add(mid)
+                ordered_ids.append(mid)
+
+        existing = {
+            row.id: row
+            for row in self.session.scalars(
+                select(Match).where(Match.tournament_id == tournament_id)
+            )
+        }
+
+        touched = 0
+        for mid in ordered_ids:
+            court_id, time_slot = court_slot_by_id.get(mid, (None, None))
+            row = existing.get(mid)
+            if row is None:
+                row = Match(
+                    tournament_id=tournament_id,
+                    id=mid,
+                    court_id=court_id,
+                    time_slot=time_slot,
+                    status=MatchStatus.SCHEDULED.value,
+                    version=1,
+                )
+                self.session.add(row)
+                touched += 1
+                continue
+            if row.court_id != court_id or row.time_slot != time_slot:
+                row.court_id = court_id
+                row.time_slot = time_slot
+                row.version = row.version + 1
+                touched += 1
+
+        # Drop rows whose match id is no longer present in the payload.
+        for mid, row in existing.items():
+            if mid not in match_ids_in_payload:
+                self.session.delete(row)
+                touched += 1
+
+        if touched:
+            self.session.commit()
+        return touched
+
+    @staticmethod
+    def _normalise_status(fields: dict) -> dict:
+        """Coerce ``MatchStatus`` enum members in ``status`` to string values."""
+        if "status" not in fields:
+            return fields
+        status = fields["status"]
+        if isinstance(status, MatchStatus):
+            return {**fields, "status": status.value}
+        return fields
+
+
+class _LocalBracketRepo:
+    """Persistence for the tournament-product bracket schema.
+
+    Backs the ``bracket_events`` / ``bracket_participants`` /
+    ``bracket_matches`` / ``bracket_results`` tables introduced by the
+    T-A migration. PR 1 of the backend-merge arc lands the
+    persistence layer only — no routes consume it yet. PR 2 retires
+    ``products/tournament/backend/state.py``'s in-memory container and
+    wires the existing tournament routes through these methods.
+
+    Method shapes mirror ``_LocalMatchRepo`` where the parallels are
+    natural (composite-key ``get``, ``list_for_*``, ``upsert``-with-
+    optimistic-concurrency). The bracket-specific surface adds
+    ``bulk_create_participants`` + ``bulk_create_matches`` (the
+    tournament product builds entire brackets in one shot from
+    ``tournament.formats.generate_single_elimination`` /
+    ``generate_round_robin``) and ``record_result`` (one row per
+    recorded outcome, no per-result version semantics — the row is
+    the result).
+
+    Every write path commits its own transaction, so a returned row is
+    always persisted. Operator browsers and the public TV display read
+    bracket changes by polling the API (the Display module's projection
+    routes); there is no push channel.
+    """
+
+    _MUTABLE_MATCH_FIELDS = frozenset(
+        {"slot_a", "slot_b", "side_a", "side_b", "kind", "meta"}
+    )
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    # ---- Events --------------------------------------------------------
+
+    def get_event(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> Optional[BracketEvent]:
+        return self.session.get(BracketEvent, (tournament_id, event_id))
+
+    def list_events(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[BracketEvent]:
+        return list(
+            self.session.scalars(
+                select(BracketEvent)
+                .where(BracketEvent.tournament_id == tournament_id)
+                .order_by(BracketEvent.id.asc())
+            )
+        )
+
+    def create_event(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        *,
+        discipline: str,
+        format: str,
+        duration_slots: int,
+        bracket_size: Optional[int] = None,
+        seeded_count: int = 0,
+        rr_rounds: Optional[int] = None,
+        config: Optional[dict] = None,
+        status: str = "draft",
+    ) -> BracketEvent:
+        row = BracketEvent(
+            tournament_id=tournament_id,
+            id=event_id,
+            discipline=discipline,
+            format=format,
+            duration_slots=duration_slots,
+            bracket_size=bracket_size,
+            seeded_count=seeded_count,
+            rr_rounds=rr_rounds,
+            config=config or {},
+            status=status,
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def update_event_config(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        *,
+        format: Optional[str] = None,
+        bracket_size: Optional[int] = None,
+        seeded_count: Optional[int] = None,
+        rr_rounds: Optional[int] = None,
+        duration_slots: Optional[int] = None,
+        config: Optional[dict] = None,
+    ) -> Optional[BracketEvent]:
+        """Patch a DRAFT event's configuration in place.
+
+        Participants and matches are untouched — this is the config-only
+        sibling of the upsert route (which wipes participants). Only the
+        provided (non-None) fields change. Returns None if the event does
+        not exist. Callers gate on status.
+        """
+        row = self.get_event(tournament_id, event_id)
+        if row is None:
+            return None
+        if format is not None:
+            row.format = format
+        if bracket_size is not None:
+            row.bracket_size = bracket_size
+        if seeded_count is not None:
+            row.seeded_count = seeded_count
+        if rr_rounds is not None:
+            row.rr_rounds = rr_rounds
+        if duration_slots is not None:
+            row.duration_slots = duration_slots
+        if config is not None:
+            row.config = dict(config)
+        row.version = row.version + 1
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def set_event_status(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        status: str,
+    ) -> Optional[BracketEvent]:
+        """Update the status column of a bracket event.
+
+        Returns None if the event does not exist.
+        """
+        row = self.get_event(tournament_id, event_id)
+        if row is None:
+            return None
+        row.status = status
+        row.version = row.version + 1
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def delete_event(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> bool:
+        row = self.get_event(tournament_id, event_id)
+        if row is None:
+            return False
+        # CASCADE wipes participants + matches + results via FK.
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
+    # ---- Participants --------------------------------------------------
+
+    def list_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> list[BracketParticipant]:
+        return list(
+            self.session.scalars(
+                select(BracketParticipant)
+                .where(
+                    BracketParticipant.tournament_id == tournament_id,
+                    BracketParticipant.bracket_event_id == event_id,
+                )
+                .order_by(BracketParticipant.id.asc())
+            )
+        )
+
+    def bulk_create_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        participants: list[dict],
+    ) -> int:
+        """Insert participants for an event in one transaction.
+
+        Each ``participants`` entry: ``id``, ``name``, ``type``,
+        optional ``member_ids``, ``seed``, ``meta``. Returns the
+        number of rows inserted.
+        """
+        return self._insert_participants(tournament_id, event_id, participants)
+
+    def add_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        participants: list[dict],
+    ) -> int:
+        """Insert participants **without disturbing the existing list**.
+
+        Same input shape and defaults as ``bulk_create_participants`` — one
+        participant vocabulary, not two. The difference is the calling
+        contract, not the row shape.
+
+        Every participant write before this one arrived through
+        ``upsert_event``, which deletes the event and recreates it from the
+        payload: correct for the roster editor, which owns the whole list,
+        and wrong for the Entries commit seam, which adds one entrant at a
+        time to a list it did not author. Seam A's invariant is "never
+        mutates or deletes an existing roster player", and there was no
+        method that could honour it.
+
+        Deliberately **unguarded on event status.** Whether a generated or
+        started draw may take a late entrant is a policy question, and the
+        answer (no — the seam skips and reports rather than mutating a live
+        draw) belongs with the policy in ``entries/entries.py``, not
+        hard-coded into a persistence primitive that a future promote /
+        late-entry flow may need with different rules.
+        """
+        return self._insert_participants(tournament_id, event_id, participants)
+
+    def _insert_participants(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        participants: list[dict],
+    ) -> int:
+        """Shared row construction for both participant writers.
+
+        The two public methods differ only in their calling contract (own
+        the list vs. add to it), so the dict → row mapping lives once. A
+        second copy would drift the moment either grows a field.
+        """
+        if not participants:
+            return 0
+        rows = [
+            BracketParticipant(
+                tournament_id=tournament_id,
+                bracket_event_id=event_id,
+                id=p["id"],
+                name=p["name"],
+                type=p["type"],
+                member_ids=p.get("member_ids") or [],
+                seed=p.get("seed"),
+                meta=p.get("meta") or {},
+            )
+            for p in participants
+        ]
+        self.session.add_all(rows)
+        self.session.commit()
+        return len(rows)
+
+    # ---- Matches -------------------------------------------------------
+
+    def get_match(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        match_id: str,
+    ) -> Optional[BracketMatch]:
+        return self.session.get(
+            BracketMatch, (tournament_id, event_id, match_id)
+        )
+
+    def list_matches(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> list[BracketMatch]:
+        return list(
+            self.session.scalars(
+                select(BracketMatch)
+                .where(
+                    BracketMatch.tournament_id == tournament_id,
+                    BracketMatch.bracket_event_id == event_id,
+                )
+                .order_by(
+                    BracketMatch.round_index.asc(),
+                    BracketMatch.match_index.asc(),
+                )
+            )
+        )
+
+    def bulk_create_matches(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        matches: list[dict],
+    ) -> int:
+        """Insert the generated match tree for an event in one transaction.
+
+        Each ``matches`` entry mirrors the BracketMatch column shape:
+        ``id``, ``round_index``, ``match_index``, ``slot_a``,
+        ``slot_b``, ``expected_duration_slots``, plus optional
+        ``kind``, ``side_a``, ``side_b``, ``dependencies``,
+        ``duration_variance_slots``, ``child_unit_ids``, ``meta``.
+        Returns the number of rows inserted.
+        """
+        if not matches:
+            return 0
+        rows = [
+            BracketMatch(
+                tournament_id=tournament_id,
+                bracket_event_id=event_id,
+                id=m["id"],
+                round_index=m["round_index"],
+                match_index=m["match_index"],
+                kind=m.get("kind", "MATCH"),
+                slot_a=m["slot_a"],
+                slot_b=m["slot_b"],
+                side_a=m.get("side_a") or [],
+                side_b=m.get("side_b") or [],
+                dependencies=m.get("dependencies") or [],
+                expected_duration_slots=m["expected_duration_slots"],
+                duration_variance_slots=m.get("duration_variance_slots", 0),
+                child_unit_ids=m.get("child_unit_ids") or [],
+                meta=m.get("meta") or {},
+            )
+            for m in matches
+        ]
+        self.session.add_all(rows)
+        self.session.commit()
+        return len(rows)
+
+    def update_match(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        match_id: str,
+        fields: dict,
+        *,
+        expected_version: Optional[int] = None,
+    ) -> BracketMatch:
+        """Mutate selected fields on a bracket match.
+
+        Used by advancement to resolve a downstream slot once the
+        upstream winner is known. Mirrors ``_LocalMatchRepo.upsert``
+        semantics: ``expected_version`` enables optimistic concurrency,
+        and ``version`` increments by 1 on a successful write.
+        """
+        row = self.get_match(tournament_id, event_id, match_id)
+        if row is None:
+            raise KeyError((tournament_id, event_id, match_id))
+        if expected_version is not None and expected_version != row.version:
+            raise _conflict_error_class()(
+                match_id=match_id,
+                current_version=row.version,
+                seen_version=expected_version,
+                message=(
+                    f"Bracket match {event_id}/{match_id} was updated "
+                    f"since you last loaded it (current version "
+                    f"{row.version}, you sent {expected_version})."
+                ),
+            )
+        for key, value in fields.items():
+            if key in self._MUTABLE_MATCH_FIELDS:
+                setattr(row, key, value)
+        row.version = row.version + 1
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    # ---- Results -------------------------------------------------------
+
+    def get_result(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        match_id: str,
+    ) -> Optional[BracketResult]:
+        return self.session.get(
+            BracketResult, (tournament_id, event_id, match_id)
+        )
+
+    def list_results(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+    ) -> list[BracketResult]:
+        return list(
+            self.session.scalars(
+                select(BracketResult)
+                .where(
+                    BracketResult.tournament_id == tournament_id,
+                    BracketResult.bracket_event_id == event_id,
+                )
+                .order_by(BracketResult.bracket_match_id.asc())
+            )
+        )
+
+    def count_events_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: bracket_event_count}`` — one grouped query."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketEvent.tournament_id, func.count())
+            .where(BracketEvent.tournament_id.in_(tournament_ids))
+            .group_by(BracketEvent.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
+    def count_matches_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: bracket_match_count}`` — one grouped query."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketMatch.tournament_id, func.count())
+            .where(BracketMatch.tournament_id.in_(tournament_ids))
+            .group_by(BracketMatch.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
+    def count_results_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: bracket_result_count}`` — one grouped query."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketResult.tournament_id, func.count())
+            .where(BracketResult.tournament_id.in_(tournament_ids))
+            .group_by(BracketResult.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
+    def player_ids_referenced_by_generated(
+        self, tournament_id: uuid.UUID
+    ) -> set[str]:
+        """Roster player ids that a GENERATED (non-draft) draw references.
+
+        Union of participant ids and their ``member_ids`` across every
+        non-draft event. Feeds the Phase-0a ROSTER_LOCKED guard: deleting a
+        bracket roster player who is placed in a generated draw silently
+        invalidates the draw's placements, so the state PUT 409s instead.
+        """
+        rows = self.session.execute(
+            select(BracketParticipant.id, BracketParticipant.member_ids)
+            .join(
+                BracketEvent,
+                (BracketEvent.tournament_id == BracketParticipant.tournament_id)
+                & (BracketEvent.id == BracketParticipant.bracket_event_id),
+            )
+            .where(
+                BracketParticipant.tournament_id == tournament_id,
+                BracketEvent.status != "draft",
+            )
+        ).all()
+        out: set[str] = set()
+        for pid, member_ids in rows:
+            out.add(pid)
+            for mid in member_ids or []:
+                out.add(mid)
+        return out
+
+    def resolved_unit_ids_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, set[str]]:
+        """``{tournament_id: {play_unit_id with a recorded result}}`` — one
+        grouped query. Feeds the workspace-signal "next up" filter: results
+        recorded straight from the draw board (record-winner / walkover)
+        never touch the assignment's ``actual_end_slot``, so result
+        membership — not the match-action clock — is what says a unit is
+        no longer upcoming."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketResult.tournament_id, BracketResult.bracket_match_id)
+            .where(BracketResult.tournament_id.in_(tournament_ids))
+        ).all()
+        out: dict[uuid.UUID, set[str]] = {}
+        for tid, unit_id in rows:
+            out.setdefault(tid, set()).add(unit_id)
+        return out
+
+    def swiss_pending_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, bool]:
+        """``{tournament_id: True}`` when any generated Swiss event still has
+        rounds left to append. Two grouped queries.
+
+        Swiss is progressive: rounds are generated one at a time via
+        ``rounds/next``, so in the inter-round lull every existing match has
+        a result and raw result/match counts read "complete". The persisted
+        event ``config`` carries the resolved ``swiss_rounds`` (the generate
+        path stores the normalized config); generated rounds are counted as
+        distinct ``round_index`` values on the event's match rows. A Swiss
+        event whose config is missing ``swiss_rounds`` (shouldn't happen for
+        generated draws) is treated as pending — conservatively never
+        "complete" rather than falsely complete.
+        """
+        if not tournament_ids:
+            return {}
+        swiss_events = self.session.execute(
+            select(BracketEvent.tournament_id, BracketEvent.id, BracketEvent.config)
+            .where(
+                BracketEvent.tournament_id.in_(tournament_ids),
+                BracketEvent.format == "swiss",
+                BracketEvent.status != "draft",
+            )
+        ).all()
+        if not swiss_events:
+            return {}
+        rounds_generated = self.session.execute(
+            select(
+                BracketMatch.tournament_id,
+                BracketMatch.bracket_event_id,
+                func.count(func.distinct(BracketMatch.round_index)),
+            )
+            .where(BracketMatch.tournament_id.in_({tid for tid, _, _ in swiss_events}))
+            .group_by(BracketMatch.tournament_id, BracketMatch.bracket_event_id)
+        ).all()
+        generated = {(tid, eid): int(c) for tid, eid, c in rounds_generated}
+        out: dict[uuid.UUID, bool] = {}
+        for tid, eid, config in swiss_events:
+            total = (config or {}).get("swiss_rounds")
+            have = generated.get((tid, eid), 0)
+            pending = not isinstance(total, int) or have < total
+            if pending:
+                out[tid] = True
+        return out
+
+    def record_result(
+        self,
+        tournament_id: uuid.UUID,
+        event_id: str,
+        match_id: str,
+        *,
+        winner_side: str,
+        score: Optional[dict] = None,
+        finished_at_slot: Optional[int] = None,
+        walkover: bool = False,
+        reason: Optional[str] = None,
+    ) -> BracketResult:
+        """Insert (or replace) the result row for a bracket match.
+
+        A result is one-to-one with a match; re-recording overwrites
+        the prior row. The advancement code in PR 2 will own
+        re-record semantics — for now the repo just performs the
+        idempotent insert/update.
+        """
+        existing = self.get_result(tournament_id, event_id, match_id)
+        if existing is None:
+            row = BracketResult(
+                tournament_id=tournament_id,
+                bracket_event_id=event_id,
+                bracket_match_id=match_id,
+                winner_side=winner_side,
+                score=score,
+                finished_at_slot=finished_at_slot,
+                walkover=walkover,
+                reason=reason,
+            )
+            self.session.add(row)
+        else:
+            existing.winner_side = winner_side
+            existing.score = score
+            existing.finished_at_slot = finished_at_slot
+            existing.walkover = walkover
+            existing.reason = reason
+            row = existing
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+
+class _LocalMatchStateRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def list_for_tournament(self, tournament_id: uuid.UUID) -> list[MatchState]:
+        return list(
+            self.session.scalars(
+                select(MatchState)
+                .where(MatchState.tournament_id == tournament_id)
+                .order_by(MatchState.match_id.asc())
+            )
+        )
+
+    def get(self, tournament_id: uuid.UUID, match_id: str) -> Optional[MatchState]:
+        return self.session.get(MatchState, (tournament_id, match_id))
+
+    def upsert(
+        self,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        fields: dict,
+    ) -> MatchState:
+        row = self.get(tournament_id, match_id)
+        if row is None:
+            row = MatchState(tournament_id=tournament_id, match_id=match_id)
+            self.session.add(row)
+        # Apply known fields; ignore unknown ones to be forgiving toward
+        # the old ``extra="allow"`` MatchStateDTO shape (clients may send
+        # extra keys we don't care about).
+        for key, value in fields.items():
+            if hasattr(row, key) and key not in ("tournament_id", "match_id"):
+                setattr(row, key, value)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def delete(self, tournament_id: uuid.UUID, match_id: str) -> bool:
+        row = self.get(tournament_id, match_id)
+        if row is None:
+            return False
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
+    def reset_all(self, tournament_id: uuid.UUID) -> int:
+        result = self.session.execute(
+            delete(MatchState).where(MatchState.tournament_id == tournament_id)
+        )
+        self.session.commit()
+        return result.rowcount or 0
+
+    def bulk_upsert(
+        self,
+        tournament_id: uuid.UUID,
+        updates: dict[str, dict],
+    ) -> int:
+        if not updates:
+            return 0
+        for match_id, fields in updates.items():
+            row = self.get(tournament_id, match_id)
+            if row is None:
+                row = MatchState(tournament_id=tournament_id, match_id=match_id)
+                self.session.add(row)
+            for key, value in fields.items():
+                if hasattr(row, key) and key not in ("tournament_id", "match_id"):
+                    setattr(row, key, value)
+        self.session.commit()
+        return len(updates)
+
+    def count_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: match_state_count}`` — one grouped query. Used as
+        the meet 'results entered' signal."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(MatchState.tournament_id, func.count())
+            .where(MatchState.tournament_id.in_(tournament_ids))
+            .group_by(MatchState.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
+
+class _LocalTournamentBackupRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def list_for_tournament(self, tournament_id: uuid.UUID) -> list[TournamentBackup]:
+        return list(
+            self.session.scalars(
+                select(TournamentBackup)
+                .where(TournamentBackup.tournament_id == tournament_id)
+                .order_by(
+                    TournamentBackup.created_at.desc(), TournamentBackup.id.desc()
+                )
+            )
+        )
+
+    def get_by_filename(
+        self,
+        tournament_id: uuid.UUID,
+        filename: str,
+    ) -> Optional[TournamentBackup]:
+        return self.session.scalar(
+            select(TournamentBackup).where(
+                TournamentBackup.tournament_id == tournament_id,
+                TournamentBackup.filename == filename,
+            )
+        )
+
+    def create(
+        self,
+        tournament_id: uuid.UUID,
+        snapshot: dict,
+        filename: Optional[str] = None,
+        origin: str = "auto",
+    ) -> TournamentBackup:
+        fname = filename or _backup_filename(snapshot)
+        size_bytes = len(json.dumps(snapshot, sort_keys=True).encode("utf-8"))
+        row = TournamentBackup(
+            tournament_id=tournament_id,
+            filename=fname,
+            snapshot=snapshot,
+            size_bytes=size_bytes,
+            origin=origin,
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def delete(self, tournament_id: uuid.UUID, filename: str) -> bool:
+        row = self.get_by_filename(tournament_id, filename)
+        if row is None:
+            return False
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
+    def rotate(self, tournament_id: uuid.UUID, keep: int) -> int:
+        """Trim AUTOMATIC backups, keeping a window that spans the day.
+
+        A flat keep-N over every row produced the failure SP-CONSOLE-2 O-5
+        found in the wild: ten entries covering three minutes, because ten
+        routine state writes during setup are enough to fill it. The list was
+        bounded, which is what it was built for, and useless, because nothing
+        in it was old enough to be worth restoring.
+
+        Two rules fix that without unbounded growth:
+
+        * **Manual snapshots never rotate.** A director who pressed Create
+          backup asked for that state to be here later, and no number of
+          automatic writes should overrule them.
+        * **Beyond the newest ``keep``, automatic rows thin to one per hour.**
+          The recent ones stay dense, because a mistake is usually noticed
+          within a few writes; the older ones stay *present*, because a mistake
+          noticed at 4pm needs something from the morning.
+        """
+        def _hour(row) -> tuple:
+            c = row.created_at
+            return (c.year, c.month, c.day, c.hour)
+
+        rows = [r for r in self.list_for_tournament(tournament_id) if r.origin != "manual"]
+        keep_ids: set[uuid.UUID] = {r.id for r in rows[:keep]}
+        # Seeded from the keep window, not empty: without this the oldest hour
+        # already represented in the window earns a SECOND keeper the moment
+        # the list overflows, so a burst of writes inside one hour grows the
+        # list past `keep` instead of trimming to it.
+        seen_hours: set[tuple] = {_hour(r) for r in rows[:keep]}
+        for row in rows[keep:]:
+            bucket = _hour(row)
+            if bucket not in seen_hours:
+                seen_hours.add(bucket)
+                keep_ids.add(row.id)
+
+        to_delete = [r for r in rows if r.id not in keep_ids]
+        for row in to_delete:
+            self.session.delete(row)
+        if to_delete:
+            self.session.commit()
+        return len(to_delete)
+
+
+class _LocalMemberRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get_role(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> Optional[str]:
+        row = self.session.get(TournamentMember, (tournament_id, user_id))
+        return row.role if row is not None else None
+
+    def add_member(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+    ) -> TournamentMember:
+        existing = self.session.get(TournamentMember, (tournament_id, user_id))
+        if existing is not None:
+            existing.role = role
+            self.session.commit()
+            self.session.refresh(existing)
+            return existing
+        row = TournamentMember(
+            tournament_id=tournament_id,
+            user_id=user_id,
+            role=role,
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def set_role(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+    ) -> Optional[TournamentMember]:
+        row = self.session.get(TournamentMember, (tournament_id, user_id))
+        if row is None:
+            return None
+        row.role = role
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def remove_member(
+        self,
+        tournament_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> bool:
+        row = self.session.get(TournamentMember, (tournament_id, user_id))
+        if row is None:
+            return False
+        self.session.delete(row)
+        self.session.commit()
+        return True
+
+    def list_for_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[TournamentMember]:
+        return list(
+            self.session.scalars(
+                select(TournamentMember)
+                .where(TournamentMember.tournament_id == tournament_id)
+                .order_by(TournamentMember.joined_at.asc())
+            )
+        )
+
+    def list_tournament_ids_for_user(
+        self,
+        user_id: uuid.UUID,
+    ) -> list[uuid.UUID]:
+        return list(
+            self.session.scalars(
+                select(TournamentMember.tournament_id)
+                .where(TournamentMember.user_id == user_id)
+            )
+        )
+
+    def list_roles_for_user(self, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
+        """``{tournament_id: role}`` for every tournament the user belongs to,
+        in one query — replaces an N+1 ``get_role`` loop on the list path."""
+        rows = self.session.execute(
+            select(TournamentMember.tournament_id, TournamentMember.role)
+            .where(TournamentMember.user_id == user_id)
+        ).all()
+        return {tid: role for tid, role in rows}
+
+    def count_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: member_count}`` for the given ids, one grouped
+        query. Omits ids with zero members; returns ``{}`` for empty input."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(TournamentMember.tournament_id, func.count())
+            .where(TournamentMember.tournament_id.in_(tournament_ids))
+            .group_by(TournamentMember.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
+
+class _LocalInviteLinkRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create(
+        self,
+        tournament_id: uuid.UUID,
+        role: str,
+        created_by: uuid.UUID,
+        email: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
+    ) -> InviteLink:
+        row = InviteLink(
+            tournament_id=tournament_id,
+            role=role,
+            created_by=created_by,
+            email=email,
+            expires_at=expires_at,
+        )
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def list_for_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[InviteLink]:
+        return list(
+            self.session.scalars(
+                select(InviteLink)
+                .where(InviteLink.tournament_id == tournament_id)
+                .order_by(InviteLink.created_at.desc())
+            )
+        )
+
+    def get(self, token: uuid.UUID) -> Optional[InviteLink]:
+        return self.session.get(InviteLink, token)
+
+    def revoke(self, token: uuid.UUID) -> bool:
+        row = self.session.get(InviteLink, token)
+        if row is None:
+            return False
+        if row.revoked_at is None:
+            row.revoked_at = datetime.now(timezone.utc)
+            self.session.commit()
+        return True
+
+    def count_active_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """``{tournament_id: active_invite_count}`` — one grouped query.
+        Active = not revoked AND not expired (matches the frontend
+        ``inviteStatus``)."""
+        if not tournament_ids:
+            return {}
+        now = datetime.now(timezone.utc)
+        rows = self.session.execute(
+            select(InviteLink.tournament_id, func.count())
+            .where(
+                InviteLink.tournament_id.in_(tournament_ids),
+                InviteLink.revoked_at.is_(None),
+                or_(InviteLink.expires_at.is_(None), InviteLink.expires_at > now),
+            )
+            .group_by(InviteLink.tournament_id)
+        ).all()
+        return {tid: int(c) for tid, c in rows}
+
+
+class _LocalCommandRepo:
+    """Audit-trail accessors for the ``commands`` table.
+
+    Reads only — writes happen inside ``LocalRepository.process_command``
+    so the idempotency / version / transition checks and the match
+    update all land in one transaction. Splitting the writes into
+    their own method would let a caller forget to commit them
+    together with the match update.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get(self, command_id: uuid.UUID) -> Optional[Command]:
+        return self.session.get(Command, command_id)
+
+
+def _ensure_utc_aware(dt: datetime) -> datetime:
+    """SQLite drops tz info on round-trip even with ``DateTime(timezone=True)``.
+    Coerce naive datetimes to UTC-aware so comparisons don't TypeError."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def is_invite_valid(invite: InviteLink, *, now: Optional[datetime] = None) -> bool:
+    """Pure check: an invite is valid iff it's neither revoked nor expired.
+
+    Exported so route handlers and tests share the same definition.
+    """
+    if invite.revoked_at is not None:
+        return False
+    if invite.expires_at is not None:
+        cutoff = now or datetime.now(timezone.utc)
+        if _ensure_utc_aware(invite.expires_at) < _ensure_utc_aware(cutoff):
+            return False
+    return True
+
+
+class _LocalModuleRepo:
+    """Per-workspace module persistence (workspace-modules sub-project #1).
+
+    ``ensure_modules`` is the lazy derive-and-persist seam: every read /
+    mutate path calls it, so a fresh ``create_all`` DB (tests), a
+    freshly-created tournament, and an existing prod row all converge on
+    the derived set without depending on the Alembic backfill.
+
+    This class is also where the deployment mode enters the module system
+    (spec Q1 / ruling R6). ``CLOUD_ONLY_MODULES`` rows are seeded only in
+    cloud mode and filtered out of **both** read queries in local mode —
+    the batched ``ensure_modules_for`` reads ``WorkspaceModule`` directly
+    and does not inherit ``_rows_for``'s filter, so applying it to only one
+    of the two leaks the module onto the Hub list.
+
+    Rows are **filtered, never deleted**. An inherited row (a database
+    restored from a cloud backup, or copied onto a laptop) stays in the
+    table untouched, so moving that database back to a cloud deployment
+    restores the module with its status and config intact. Filtering is a
+    projection, not a migration.
+
+    The seed is **lazy on read** (spec Q1 R2), and "lazy" has to mean more
+    than "on the first read ever". A workspace that already existed when a
+    cloud-only module shipped — or one created while the deployment ran in
+    local mode — carries rows, so the zero-rows seed branch never fires for
+    it again and it would stay permanently without the module. So cloud
+    mode also **backfills the missing ``CLOUD_ONLY_MODULES`` rows onto a
+    workspace that already has rows**, with the status ``derive_modules``
+    gives them. Scoped to the cloud-only set on purpose: this reconciles
+    the one thing the *deployment mode* changes under a workspace, and is
+    not a general module reconciler that would quietly resurrect a module
+    an operator or a migration had removed.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def list_for_tournament(self, tournament: Tournament) -> list[WorkspaceModule]:
+        """Module rows for a workspace. NOTE: not a pure read — delegates to
+        ``ensure_modules``, which INSERTs + commits the derived set on first
+        access (write-on-read). The list path uses ``ensure_modules_for`` to
+        batch this."""
+        return self.ensure_modules(tournament)
+
+    def ensure_modules(self, tournament: Tournament) -> list[WorkspaceModule]:
+        """Return the workspace's module rows, seeding them when missing.
+
+        If the tournament has zero module rows, insert the derived set
+        (from ``derive_modules(tournament.kind)``), flush, and return it;
+        otherwise backfill any missing cloud-only rows (cloud mode only —
+        see the class docstring) and return. Idempotent — a second call
+        never duplicates rows. Ordered by ``module_id`` for stable output.
+        """
+        existing = self._rows_for(tournament.id)
+        if existing:
+            missing = self._missing_cloud_only(tournament, existing)
+            if not missing:
+                return existing
+            self._add_module_rows(tournament, missing)
+            self.session.flush()
+            self.session.commit()
+            return self._rows_for(tournament.id)
+        derived = derive_modules(
+            getattr(tournament, "kind", None),
+            include_cloud_only=cloud_modules_enabled(),
+        )
+        self._add_module_rows(tournament, derived)
+        self.session.flush()
+        self.session.commit()
+        return self._rows_for(tournament.id)
+
+    def _add_module_rows(
+        self, tournament: Tournament, statuses: dict[str, str]
+    ) -> None:
+        for module_id, status in statuses.items():
+            self.session.add(
+                WorkspaceModule(
+                    tournament_id=tournament.id,
+                    module_id=module_id,
+                    status=status,
+                    config=None,
+                )
+            )
+
+    def _missing_cloud_only(
+        self, tournament: Tournament, present_rows: list[WorkspaceModule]
+    ) -> dict[str, str]:
+        """``{module_id: status}`` for the cloud-only rows this workspace
+        lacks — empty in local mode, and empty in cloud mode once backfilled.
+
+        Safe to call with rows read through the mode filter: in local mode
+        the answer is unconditionally empty, so the filtered read cannot be
+        mistaken for "the row is missing" and trigger a duplicate insert.
+        """
+        if not cloud_modules_enabled():
+            return {}
+        present = {row.module_id for row in present_rows}
+        derived = derive_modules(
+            getattr(tournament, "kind", None), include_cloud_only=True
+        )
+        return {
+            module_id: derived[module_id]
+            for module_id in CLOUD_ONLY_MODULES
+            if module_id in derived and module_id not in present
+        }
+
+    def ensure_modules_for(
+        self, tournaments: list[Tournament]
+    ) -> dict[uuid.UUID, list[WorkspaceModule]]:
+        """Batched ``ensure_modules`` for the list path: one query reads every
+        tournament's rows; only the (rare) tournaments with no rows yet are
+        seeded individually. Avoids an N+1 read per row. Returns
+        ``{tournament_id: rows}`` (rows ordered by module_id)."""
+        if not tournaments:
+            return {}
+        ids = [t.id for t in tournaments]
+        by_tid: dict[uuid.UUID, list[WorkspaceModule]] = {tid: [] for tid in ids}
+        stmt = select(WorkspaceModule).where(WorkspaceModule.tournament_id.in_(ids))
+        # The second of the two filtered queries. This one reads
+        # WorkspaceModule directly rather than going through _rows_for, so
+        # it needs its own copy of the mode filter — missing it here is the
+        # obvious bug, and it leaks the module onto the Hub list only.
+        if not cloud_modules_enabled():
+            stmt = stmt.where(WorkspaceModule.module_id.notin_(CLOUD_ONLY_MODULES))
+        rows = self.session.scalars(
+            stmt.order_by(WorkspaceModule.module_id.asc())
+        )
+        for m in rows:
+            by_tid.setdefault(m.tournament_id, []).append(m)
+        # Seed any tournament that has no rows yet (legacy / never-accessed).
+        for t in tournaments:
+            if not by_tid.get(t.id):
+                by_tid[t.id] = self.ensure_modules(t)
+        # …and backfill the cloud-only rows onto the ones that DO have rows,
+        # so the Hub list agrees with the workspace it links to. Costs
+        # nothing in the steady state: ``_missing_cloud_only`` is a pure
+        # set difference over rows already in hand, and the extra reads
+        # happen only for the workspaces actually backfilled — once each,
+        # ever. Doing it here rather than delegating to ``ensure_modules``
+        # keeps the batch at one commit instead of one per workspace.
+        pending = [t for t in tournaments if self._missing_cloud_only(t, by_tid[t.id])]
+        if pending:
+            for t in pending:
+                self._add_module_rows(t, self._missing_cloud_only(t, by_tid[t.id]))
+            self.session.flush()
+            self.session.commit()
+            for t in pending:
+                by_tid[t.id] = self._rows_for(t.id)
+        return by_tid
+
+    def _rows_for(self, tournament_id: uuid.UUID) -> list[WorkspaceModule]:
+        """Both branches of ``ensure_modules`` return through here, so this
+        is one of the two places the mode filter lives (the other is the
+        batched select above)."""
+        stmt = select(WorkspaceModule).where(
+            WorkspaceModule.tournament_id == tournament_id
+        )
+        if not cloud_modules_enabled():
+            stmt = stmt.where(WorkspaceModule.module_id.notin_(CLOUD_ONLY_MODULES))
+        return list(
+            self.session.scalars(stmt.order_by(WorkspaceModule.module_id.asc()))
+        )
+
+    def get(
+        self, tournament_id: uuid.UUID, module_id: str
+    ) -> Optional[WorkspaceModule]:
+        return self.session.scalars(
+            select(WorkspaceModule).where(
+                WorkspaceModule.tournament_id == tournament_id,
+                WorkspaceModule.module_id == module_id,
+            )
+        ).one_or_none()
+
+    def update(
+        self,
+        tournament_id: uuid.UUID,
+        module_id: str,
+        fields: dict,
+    ) -> Optional[WorkspaceModule]:
+        """Apply ``status`` / ``config`` updates to a module row.
+
+        Deliberately *unguarded* — the dependency / no-data-loss rules
+        live in the PATCH route. This is the raw write the route calls
+        after its checks pass (and the seam tests use to stage otherwise
+        unreachable states). Only ``status`` and ``config`` are writable;
+        other keys are ignored. Returns ``None`` if no row matches.
+        """
+        row = self.get(tournament_id, module_id)
+        if row is None:
+            return None
+        if "status" in fields:
+            row.status = fields["status"]
+        if "config" in fields:
+            row.config = fields["config"]
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def seed_modules(
+        self,
+        tournament: Tournament,
+        rows: list[dict],
+    ) -> list[WorkspaceModule]:
+        """Persist an explicit, normalized module seed for a new workspace.
+
+        ``rows`` are the output of ``normalize_module_seed`` —
+        ``{"module_id", "status", "config"}`` covering all three modules.
+        Inserts one row per module and commits; because rows now exist,
+        a later ``ensure_modules`` is a no-op. Intended for create-time
+        seeding of a workspace that has no module rows yet; if rows already
+        exist this would violate the unique ``(tournament_id, module_id)``
+        constraint, so callers must seed before any module read.
+        """
+        for row in rows:
+            self.session.add(
+                WorkspaceModule(
+                    tournament_id=tournament.id,
+                    module_id=row["module_id"],
+                    status=row["status"],
+                    config=row.get("config"),
+                )
+            )
+        self.session.flush()
+        self.session.commit()
+        return self._rows_for(tournament.id)
+
+    def count_matches(self, tournament_id: uuid.UUID) -> int:
+        """Number of operational ``matches`` rows (meet data-loss guard)."""
+        return int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(Match)
+                .where(Match.tournament_id == tournament_id)
+            )
+            or 0
+        )
+
+    def count_bracket_events(self, tournament_id: uuid.UUID) -> int:
+        """Number of ``bracket_events`` rows (bracket data-loss guard)."""
+        return int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(BracketEvent)
+                .where(BracketEvent.tournament_id == tournament_id)
+            )
+            or 0
+        )
+
+
+class LocalRepository:
+    """Façade: holds the session and exposes the sub-repositories."""
+
+    BACKUP_KEEP = 10  # mirrors the legacy on-disk rotation count
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+        self.tournaments = _LocalTournamentRepo(session)
+        self.matches = _LocalMatchRepo(session)
+        self.brackets = _LocalBracketRepo(session)
+        self.match_states = _LocalMatchStateRepo(session)
+        self.commands = _LocalCommandRepo(session)
+        self.backups = _LocalTournamentBackupRepo(session)
+        self.members = _LocalMemberRepo(session)
+        self.invite_links = _LocalInviteLinkRepo(session)
+        self.modules = _LocalModuleRepo(session)
+
+    # ---- High-level orchestration (id-explicit, Step 2+) ----------------
+
+    def commit_tournament_state(
+        self,
+        tournament_id: uuid.UUID,
+        payload: dict,
+        *,
+        clear_bracket_assignments: bool = False,
+        expected_version: Optional[int] = None,
+    ) -> Tournament:
+        """Snapshot the prior state into a backup, then write the new one.
+
+        The first ``PUT`` after the tournament was created (when
+        ``data == {}``) skips the backup — there's nothing meaningful to
+        snapshot. Subsequent writes back up the prior payload, rotate to
+        ``BACKUP_KEEP`` entries, then upsert.
+
+        After the upsert, the per-match SQL projection runs so the
+        ``matches`` table stays in sync with the canonical
+        ``tournaments.data`` blob. New matches get rows; deleted
+        matches lose theirs; existing rows have their ``court_id`` and
+        ``time_slot`` refreshed from the schedule. The projection
+        preserves ``status`` and ``version`` on existing rows so a
+        schedule commit doesn't undo a ``called`` / ``playing`` state
+        the operator put there.
+        """
+        prior = self.tournaments.get_by_id(tournament_id)
+        if prior is None:
+            raise KeyError(tournament_id)
+        if prior.data:  # non-empty payload — worth a snapshot
+            self.backups.create(
+                tournament_id=tournament_id,
+                snapshot=prior.data,
+                filename=_backup_filename(prior.data),
+            )
+            self.backups.rotate(tournament_id, keep=self.BACKUP_KEEP)
+        # Preserve server-managed keys that the meet-side frontend payload
+        # never includes. Without this merge, a PUT /state from the meet
+        # UI would silently erase bracket scheduling state because
+        # TournamentStateDTO has no ``bracket_session`` field.
+        merged = dict(payload)
+        if prior.data:
+            for key in ("bracket_session",):
+                if key in prior.data and key not in merged:
+                    merged[key] = prior.data[key]
+        if clear_bracket_assignments and isinstance(merged.get("bracket_session"), dict):
+            session = dict(merged["bracket_session"])
+            session.pop("assignments", None)
+            merged["bracket_session"] = session
+        result = self.tournaments.upsert_data(
+            tournament_id, merged, expected_version=expected_version
+        )
+        self._project_matches_from_payload(tournament_id, payload)
+        return result
+
+    def _project_matches_from_payload(
+        self,
+        tournament_id: uuid.UUID,
+        payload: dict,
+    ) -> None:
+        """Run ``matches.bulk_project_from_schedule`` from the payload shape."""
+        if not isinstance(payload, dict):
+            return
+        matches = payload.get("matches") or []
+        schedule = payload.get("schedule") or {}
+        assignments = (
+            schedule.get("assignments") if isinstance(schedule, dict) else None
+        ) or []
+        if not isinstance(matches, list):
+            matches = []
+        if not isinstance(assignments, list):
+            assignments = []
+        self.matches.bulk_project_from_schedule(
+            tournament_id, matches, assignments
+        )
+
+    def snapshot_tournament(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> Optional[TournamentBackup]:
+        """``POST /tournaments/{id}/state/backup`` — manual snapshot."""
+        current = self.tournaments.get_by_id(tournament_id)
+        if current is None:
+            return None
+        if not current.data:
+            return None
+        backup = self.backups.create(
+            tournament_id=tournament_id,
+            snapshot=current.data,
+            origin="manual",
+        )
+        self.backups.rotate(tournament_id, keep=self.BACKUP_KEEP)
+        return backup
+
+    def delete_tournament_backup(
+        self,
+        tournament_id: uuid.UUID,
+        filename: str,
+    ) -> bool:
+        """``DELETE /tournaments/{id}/state/backups/{filename}``."""
+        return self.backups.delete(tournament_id, filename)
+
+    def restore_tournament_from_backup(
+        self,
+        tournament_id: uuid.UUID,
+        filename: str,
+    ) -> Tournament:
+        """Replace ``data`` for a tournament with a stored backup.
+
+        Raises ``FileNotFoundError`` when either the tournament or the
+        filename is missing — callers map both to HTTP 404. The
+        matches-table projection re-runs against the restored payload
+        so the per-match SQL rows match the new ``data`` blob.
+        """
+        current = self.tournaments.get_by_id(tournament_id)
+        if current is None:
+            raise FileNotFoundError(filename)
+        backup = self.backups.get_by_filename(tournament_id, filename)
+        if backup is None:
+            raise FileNotFoundError(filename)
+        result = self.tournaments.upsert_data(tournament_id, backup.snapshot)
+        self._project_matches_from_payload(tournament_id, backup.snapshot)
+        return result
+
+    def process_command(
+        self,
+        *,
+        tournament_id: uuid.UUID,
+        command_id: uuid.UUID,
+        match_id: str,
+        action: str,
+        target_status: MatchStatus,
+        payload: Optional[dict],
+        seen_version: int,
+        submitted_by: uuid.UUID,
+    ) -> ProcessedCommand:
+        """Process one operator command atomically.
+
+        Runs the prompt's five-step pipeline inside a single
+        transaction. The three call paths each commit at most once:
+
+        - **Idempotent replay** (existing row, ``applied_at`` set):
+          read-only; no commit; returns ``ProcessedCommand(is_replay=True)``.
+        - **Duplicate rejection** (existing row, ``rejected_at`` set):
+          read-only; no commit; raises ``ConflictError`` with the
+          original ``rejection_reason``.
+        - **Fresh apply / fresh rejection:** one ``self.session.commit()``
+          at the end, either persisting (match update + applied
+          command row) or (rejected command row alone).
+
+        Concurrency note: ``session.get(Match, ...)`` then
+        ``match.version += 1`` is a check-then-write race. Fine for
+        SQLite local-first single-worker, which is the target
+        deployment for the operator-cockpit cutover. Postgres /
+        multi-worker would need ``SELECT ... FOR UPDATE`` or a
+        conditional ``UPDATE ... WHERE version = :seen``; flagged for
+        Step H follow-up if the deployment topology ever widens.
+        """
+        from operations.match_state import assert_valid_transition
+
+        ce_cls = _conflict_error_class()
+
+        # Step 1 & 2 — idempotency / duplicate rejection check.
+        existing = self.session.get(Command, command_id)
+        if existing is not None:
+            if existing.applied_at is not None:
+                # Step 1: replay of an already-applied command.
+                match = self.session.get(Match, (tournament_id, match_id))
+                if match is None:
+                    # Match row deleted between original apply and
+                    # replay — unusual but possible after schedule
+                    # regeneration. Surface a normal 409 conflict; the
+                    # operator can re-sync.
+                    raise ce_cls(
+                        match_id=match_id,
+                        message=(
+                            f"Match {match_id} no longer exists; "
+                            "the schedule may have been regenerated."
+                        ),
+                    )
+                return ProcessedCommand(
+                    match=match, command=existing, is_replay=True
+                )
+            if existing.rejected_at is not None:
+                # Step 2: replay of a previously-rejected command.
+                raise ce_cls(
+                    match_id=match_id,
+                    message=(
+                        existing.rejection_reason
+                        or "Command was previously rejected."
+                    ),
+                )
+            # Row exists with neither applied_at nor rejected_at — the
+            # processor crashed mid-flight on a prior call. Treat as a
+            # transient retry-friendly state and fall through to
+            # re-evaluate; the writes below will fail-loud on the PK
+            # collision if we try to insert another row, so we update
+            # the existing one in place via the apply / reject branches.
+            command_row = existing
+        else:
+            command_row = None
+
+        # Step 3 — version check.
+        match = self.session.get(Match, (tournament_id, match_id))
+        if match is None:
+            # No match row to act against — reject the command. The
+            # PK collision case above doesn't apply because we already
+            # checked existing; this is a fresh insert.
+            self._stamp_rejection(
+                command_row,
+                command_id=command_id,
+                tournament_id=tournament_id,
+                match_id=match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+                reason="match_not_found",
+            )
+            self.session.commit()
+            raise ce_cls(
+                match_id=match_id,
+                message=f"Match {match_id} not found in tournament {tournament_id}.",
+            )
+
+        if match.version != seen_version:
+            self._stamp_rejection(
+                command_row,
+                command_id=command_id,
+                tournament_id=tournament_id,
+                match_id=match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+                reason="stale_version",
+            )
+            self.session.commit()
+            raise ce_cls(
+                match_id=match_id,
+                current_version=match.version,
+                seen_version=seen_version,
+                message=(
+                    "Match was updated since you last loaded it. "
+                    "Reload and retry."
+                ),
+            )
+
+        # Precondition guards for assign_court (checked before the transition
+        # guard and mutation below so rejection short-circuits cleanly).
+        #
+        # Guard 1: assign_court is only valid on a currently-scheduled match.
+        # Without this, CALLED→SCHEDULED is a valid 'uncall' edge so
+        # assert_valid_transition would let it through and silently demote
+        # the match while setting court+slot — an unintended implicit uncall.
+        #
+        # Guard 2: both court_id and time_slot must be supplied in the payload.
+        # Without this, a caller omitting one key silently retains the old
+        # value (partial assign). The frontend always sends both; this guard
+        # hardens the API contract.
+        if action == "assign_court":
+            if match.status != MatchStatus.SCHEDULED.value:
+                reason = "assign_court is only valid on scheduled matches"
+                self._stamp_rejection(
+                    command_row,
+                    command_id=command_id,
+                    tournament_id=tournament_id,
+                    match_id=match_id,
+                    action=action,
+                    payload=payload,
+                    submitted_by=submitted_by,
+                    reason=reason,
+                )
+                self.session.commit()
+                raise ce_cls(
+                    match_id=match_id,
+                    current_status=match.status,
+                    attempted_status=MatchStatus.SCHEDULED.value,
+                    message=reason,
+                )
+            _p = payload or {}
+            if "court_id" not in _p or "time_slot" not in _p:
+                reason = "assign_court requires both court_id and time_slot in payload"
+                self._stamp_rejection(
+                    command_row,
+                    command_id=command_id,
+                    tournament_id=tournament_id,
+                    match_id=match_id,
+                    action=action,
+                    payload=payload,
+                    submitted_by=submitted_by,
+                    reason=reason,
+                )
+                self.session.commit()
+                raise ce_cls(match_id=match_id, message=reason)
+
+        # Step 4 — transition guard. Raises ConflictError on illegal
+        # transitions; we catch, stamp the rejection, commit, re-raise.
+        #
+        # ASSIGN_COURT and POSTPONE_MATCH both target SCHEDULED; when the
+        # match is already SCHEDULED this is a SCHEDULED→SCHEDULED
+        # self-transition that ``assert_valid_transition`` rejects (same-state
+        # moves are not in VALID_TRANSITIONS by design — see the docstring in
+        # operations/match_state.py).  We short-circuit for exactly these two
+        # actions so they can act as pure side-effect commands without
+        # changing the status machine's strictness for the other five actions.
+        # postpone from playing/called still reaches assert_valid_transition
+        # because target != current; PLAYING→SCHEDULED is a valid edge.
+        _SELF_NOOP_ACTIONS = {"assign_court", "postpone_match"}
+        current_status_enum = MatchStatus(match.status) if isinstance(match.status, str) else match.status
+        if not (action in _SELF_NOOP_ACTIONS and current_status_enum == target_status):
+            try:
+                assert_valid_transition(match_id, match.status, target_status)
+            except ce_cls as exc:
+                self._stamp_rejection(
+                    command_row,
+                    command_id=command_id,
+                    tournament_id=tournament_id,
+                    match_id=match_id,
+                    action=action,
+                    payload=payload,
+                    submitted_by=submitted_by,
+                    reason=exc.message,
+                )
+                self.session.commit()
+                raise
+
+        # Step 5 — apply. Update match status + version; insert/finalise
+        # the applied command row; commit once.
+        match.status = target_status.value
+
+        # Court/slot side-effects for non-solver live-ops commands.
+        # Applied BEFORE flush so the sync service serialises the new values.
+        if action == "assign_court":
+            _p = payload or {}
+            # Both keys are guaranteed present by the precondition guard above.
+            match.court_id = _p["court_id"]
+            match.time_slot = _p["time_slot"]
+        elif action == "postpone_match":
+            match.court_id = None
+            match.time_slot = None
+
+        match.version = match.version + 1
+
+        # Mirror the transition into the legacy ``match_states`` row — the
+        # live Run surface polls GET /match-states, and the PUT/DELETE
+        # routes there dual-write in the other direction. Without this
+        # write a command-applied call/start is invisible after reload:
+        # the board re-reads ``scheduled`` while the transition guard
+        # holds the canonical status, so the retried command 409s
+        # forever. Same transaction, same single commit below.
+        # ``retired`` has no legacy spelling; the floor reads it as
+        # ``finished`` (the match is over either way).
+        _canonical_to_legacy = {
+            MatchStatus.SCHEDULED: "scheduled",
+            MatchStatus.CALLED: "called",
+            MatchStatus.PLAYING: "started",
+            MatchStatus.FINISHED: "finished",
+            MatchStatus.RETIRED: "finished",
+        }
+        state_row = self.session.get(MatchState, (tournament_id, match_id))
+        if state_row is None:
+            state_row = MatchState(tournament_id=tournament_id, match_id=match_id)
+            self.session.add(state_row)
+        state_row.status = _canonical_to_legacy[target_status]
+        _stamp = now_iso()
+        if target_status == MatchStatus.CALLED:
+            state_row.called_at = _stamp
+        elif target_status == MatchStatus.PLAYING:
+            state_row.actual_start_time = state_row.actual_start_time or _stamp
+        elif target_status in (MatchStatus.FINISHED, MatchStatus.RETIRED):
+            state_row.actual_end_time = state_row.actual_end_time or _stamp
+        else:
+            # uncall / postpone / assign land back on ``scheduled`` —
+            # clear live timing so the match re-enters the queue clean.
+            state_row.called_at = None
+            state_row.actual_start_time = None
+            state_row.actual_end_time = None
+
+        if command_row is None:
+            command_row = Command(
+                id=command_id,
+                tournament_id=tournament_id,
+                match_id=match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+            )
+            self.session.add(command_row)
+        else:
+            # Pre-existing row from a crashed prior call — re-stamp.
+            command_row.action = action
+            command_row.payload = payload
+            command_row.submitted_by = submitted_by
+        command_row.applied_at = datetime.now(timezone.utc)
+        command_row.rejected_at = None
+        command_row.rejection_reason = None
+
+        self.session.commit()
+        self.session.refresh(match)
+        self.session.refresh(command_row)
+        return ProcessedCommand(
+            match=match, command=command_row, is_replay=False
+        )
+
+    def _stamp_rejection(
+        self,
+        command_row: Optional[Command],
+        *,
+        command_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        action: str,
+        payload: Optional[dict],
+        submitted_by: uuid.UUID,
+        reason: str,
+    ) -> Command:
+        """Populate fields on a rejection command row (insert or update)."""
+        if command_row is None:
+            command_row = Command(
+                id=command_id,
+                tournament_id=tournament_id,
+                match_id=match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+            )
+            self.session.add(command_row)
+        else:
+            command_row.action = action
+            command_row.payload = payload
+            command_row.submitted_by = submitted_by
+        command_row.applied_at = None
+        command_row.rejected_at = datetime.now(timezone.utc)
+        command_row.rejection_reason = reason
+        return command_row
+
+    def close(self) -> None:
+        self.session.close()
+
+
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass
+class ProcessedCommand:
+    """Return value of ``LocalRepository.process_command``.
+
+    Carries the current match row and the corresponding command row.
+    ``is_replay`` is True when the call short-circuited on a prior
+    applied command (idempotency hit), False on a fresh apply.
+    Rejection paths raise ``ConflictError`` rather than returning a
+    ``ProcessedCommand``.
+    """
+
+    match: Match
+    command: Command
+    is_replay: bool
+
+
+@contextmanager
+def open_repository() -> Iterator[LocalRepository]:
+    """Open a fresh session + repository outside of a request scope.
+
+    Used by background workers (``solve_rail.suggestions_worker``) that
+    have no ``Request`` to hang the session lifetime off of. The session
+    is closed on exit; do not hold references to ORM rows past the
+    block — read them into DTOs first.
+    """
+    session = SessionLocal()
+    try:
+        yield LocalRepository(session)
+    finally:
+        session.close()
+
+
+def get_repository(request: Request) -> LocalRepository:
+    """FastAPI dependency — opens a session, yields a repository, closes
+    the session when the request ends.
+
+    Unlike a typical generator dependency we don't use ``yield`` here:
+    FastAPI calls plain-callable dependencies once per request and
+    expects the returned object back. Per-request cleanup runs in a
+    ``http`` middleware in ``core.main`` that calls ``repo.close()``;
+    keeping it explicit avoids the generator/lifetime gotchas SQLAlchemy
+    has when a sync session is yielded across a sync threadpool boundary.
+
+    The previous ``PersistenceService`` / ``get_persistence`` pair has
+    been removed; this dependency is the sole entry point for
+    HTTP-scoped persistence access.
+    """
+    # SessionLocal is module-level so changes to ``settings.database_url``
+    # after import don't take effect. Tests work around this by purging
+    # cached backend modules before re-importing — same pattern the
+    # existing conftest already uses.
+    session = SessionLocal()
+    repo = LocalRepository(session)
+    # Stash on request state so a middleware can close it after the
+    # response is returned. If routes only ever return through normal
+    # paths (no streaming), this works regardless of whether the handler
+    # is sync or async.
+    request.state.repository = repo
+    return repo
