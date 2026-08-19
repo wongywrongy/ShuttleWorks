@@ -96,10 +96,40 @@ machine that authored it and would have failed on a clean clone.
 
 ### Evidence
 
-- **OpenAPI is byte-identical to the Phase 0 baseline** (`sha256 249beb24…`).
-  This is the strongest single proof the API surface did not move.
-- `git log --follow` verified through the renames.
-- All six compose files parse, with six *distinct* project names.
+| Check | Phase 0 baseline | After Phase 1 |
+| --- | --- | --- |
+| eslint | 0 errors, 115 warnings | **0 errors, 115 warnings** |
+| vitest (console) | 196 files / 1756 tests | **196 / 1756** |
+| vitest (entrant) | 35 files / 644 tests | **35 / 644** |
+| depcruise (console) | 0 errors, 16 warnings | **0 errors, 16 warnings** |
+| depcruise (entrant) | 0 violations | **0 violations** |
+| ruff | pass | **pass** |
+| pytest | 1648 passed, 66 skipped | **1648 passed, 66 skipped** |
+| `docker compose config` | six parse | **six parse, six distinct names** |
+| `docs:build` | pass | **pass** |
+| OpenAPI | `sha256 249beb24…4767836f` | **byte-identical** |
+
+Nothing grew, nothing shrank. The OpenAPI byte-identity is the strongest single
+proof the API surface did not move.
+
+**Remote CI green on all five jobs** (`dev/reorg-1`, run 32214593045) — including
+`interaction-smoke`, which the program names as the canary for path breakage
+because it builds the console, boots the API and drives the real UI.
+
+**Full Docker stack booted and verified.** All four images build (`Successfully
+built scheduler-core` from the nested distribution); containers come up as
+`shuttleworks-local-*`; `/health` returns healthy; the SPA serves its bundle;
+`/api/*` and `/e/*` both route correctly through the relocated
+`infra/nginx/console.conf`; the docs container serves through
+`infra/nginx/docs.conf`. Inside the container, the relocated `data/local.db`
+mounts live with its real content (13 tournaments, 10 orgs) and
+`services/config_lock` resolves `/packages/shared-contract/` with all 15 keys.
+
+Ports :80 and :8000 are occupied on this machine, so the boot used the
+documented `FRONTEND_HOST_PORT=8090 BACKEND_HOST_PORT=8600` overrides.
+
+- `git log --follow` verified through the renames on seven files, including the
+  two-step `frontend/nginx.conf` → `infra/nginx/console.conf` (19 commits kept).
 - The `package-lock.json` diff is **19 lines, every one a path**, zero version changes.
 
 ### The five silent-breakage traps this phase defused
