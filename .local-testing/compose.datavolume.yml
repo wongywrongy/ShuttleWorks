@@ -1,0 +1,12 @@
+# UNTRACKED local override — moves the SQLite database off the OneDrive bind
+# mount and onto a Docker named volume. SQLite WAL needs a shared-memory
+# (-shm) mapping, which the Docker Desktop bind mount over OneDrive cannot
+# provide: every NEW pooled connection fails with "unable to open database
+# file", so only the startup connections work and concurrent DB-backed
+# requests 500 instantly. Proven by probing the same file on both filesystems.
+services:
+  backend:
+    volumes:
+      - swdata:/app/data
+volumes:
+  swdata:
