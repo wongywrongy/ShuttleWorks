@@ -53,3 +53,46 @@ def test_pinned_is_byte_identical_to_an_unset_policy():
     assert [(a.match_id, a.slot_id, a.court_id) for a in baseline.assignments] == [
         (a.match_id, a.slot_id, a.court_id) for a in explicit.assignments
     ]
+
+
+def test_dto_adapter_carries_the_policy_and_coerces_json_string_keys():
+    """The workspace config blob is JSON, so courtOverrides keys arrive as
+    strings; Pydantic's Dict[int, ...] coerces them and the adapter passes
+    ints through to the engine — both engines share this seam (CP6)."""
+    from core.schemas import TournamentConfig
+    from shared.sport.badminton import schedule_config_from_dto
+
+    dto = TournamentConfig.model_validate(
+        {
+            "intervalMinutes": 30,
+            "dayStart": "09:00",
+            "dayEnd": "18:00",
+            "courtCount": 4,
+            "defaultRestMinutes": 30,
+            "freezeHorizonSlots": 0,
+            "courtPolicy": "queue",
+            "courtOverrides": {"1": "pinned"},
+        }
+    )
+    cfg = schedule_config_from_dto(dto)
+    assert cfg.court_policy == "queue"
+    assert cfg.court_overrides == {1: "pinned"}
+
+
+def test_dto_adapter_defaults_to_pinned_when_the_blob_predates_the_policy():
+    from core.schemas import TournamentConfig
+    from shared.sport.badminton import schedule_config_from_dto
+
+    dto = TournamentConfig.model_validate(
+        {
+            "intervalMinutes": 30,
+            "dayStart": "09:00",
+            "dayEnd": "18:00",
+            "courtCount": 4,
+            "defaultRestMinutes": 30,
+            "freezeHorizonSlots": 0,
+        }
+    )
+    cfg = schedule_config_from_dto(dto)
+    assert cfg.court_policy == "pinned"
+    assert cfg.court_overrides == {}

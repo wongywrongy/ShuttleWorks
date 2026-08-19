@@ -64,7 +64,12 @@ def extract_solution(
         prev_slot = None
         prev_court = None
         if prev and match_id not in locked_matches:
-            if prev.slot_id != slot or prev.court_id != court:
+            # A pooled match's court is colouring, not a promise — a re-solve
+            # that recoloured it did not "move" anything the desk was told.
+            # Only a TIME change counts (SP-COURT-1 Phase 4: the spurious
+            # `(moved)` tag was a symptom of exactly this category error).
+            court_changed = match_id not in coloured and prev.court_id != court
+            if prev.slot_id != slot or court_changed:
                 moved = True
                 moved_count += 1
                 prev_slot = prev.slot_id

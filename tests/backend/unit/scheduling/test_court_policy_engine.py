@@ -189,3 +189,32 @@ def test_a_LOCKED_match_keeps_its_exact_court_in_queue_mode():
     for a in result.assignments:
         if a.match_id != "m0":
             assert a.court_id != 1
+
+
+def test_a_recoloured_pooled_match_is_not_MOVED():
+    """The spurious `(moved)` tag, killed at the root (SP-COURT-1 Phase 4).
+
+    A pooled match's court is colouring, not a promise — a re-solve that
+    keeps its TIME but recolours its court did not move anything the desk
+    was told. Feed the previous assignments back with every court shifted:
+    the times re-solve identically (disruption penalty + same instance), so
+    every `moved` flag would come from the court diff alone."""
+    first = schedule(_big_request())
+    assert first.effective_policy == "queue"
+
+    rerun = _big_request()
+    rerun.previous_assignments = [
+        PreviousAssignment(
+            match_id=a.match_id,
+            slot_id=a.slot_id,
+            # a court the colouring cannot possibly agree with everywhere
+            court_id=(a.court_id % 3) + 1,
+        )
+        for a in first.assignments
+    ]
+    second = schedule(rerun)
+    same_slot = {a.match_id: a.slot_id for a in second.assignments} == {
+        a.match_id: a.slot_id for a in first.assignments
+    }
+    assert same_slot, "precondition: times must re-solve identically"
+    assert second.moved_count == 0

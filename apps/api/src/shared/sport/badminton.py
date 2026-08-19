@@ -175,6 +175,10 @@ def schedule_config_from_dto(config: TournamentConfig) -> ScheduleConfig:
                 c for c in (config.closedCourts or []) if 1 <= c <= config.courtCount
             ],
             closed_court_windows=_build_closed_court_windows(config, total_slots),
+            # SP-COURT-1 (ADR 0015): the workspace's court policy. Keys of
+            # courtOverrides arrive as ints from Pydantic (Dict[int, ...]).
+            court_policy=config.courtPolicy or "pinned",
+            court_overrides=dict(config.courtOverrides or {}),
         )
     )
 
@@ -413,6 +417,7 @@ def result_to_dto(result) -> ScheduleDTO:
         infeasibleReasons=result.infeasible_reasons,
         status=status,
         solverSeed=result.solver_seed,
+        effectivePolicy=result.effective_policy,
         candidates=candidates,
         activeCandidateIndex=0 if candidates else None,
     )

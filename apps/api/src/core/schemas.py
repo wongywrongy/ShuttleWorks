@@ -193,6 +193,17 @@ class TournamentConfig(StrictModel):
     # are persisted by committing a court_closed disruption proposal,
     # and reopened via the director "Reopen court" action.
     #
+    # Court policy (SP-COURT-1, ADR 0015). "pinned" (default) = the solver
+    # promises a specific court per match; "queue" = the solver pools the
+    # courts and solves for time only, courts assigned by colouring.
+    # ``courtOverrides`` maps 1-indexed court ids to "pinned" | "pool" —
+    # exceptions to the policy, so a show court stays court-tied inside a
+    # queue-mode venue. ``onDeckCount`` is the Run desk's CP5 lookahead.
+    courtPolicy: Optional[Literal["pinned", "queue"]] = None
+    courtOverrides: Optional[Dict[int, Literal["pinned", "pool"]]] = Field(
+        None, max_length=MAX_COURTS
+    )
+    onDeckCount: Optional[int] = Field(None, ge=1, le=5)
     # ``closedCourts`` is the legacy "closed all day" shape; new
     # closures with explicit time bounds go in ``courtClosures``. The
     # solver merges both — every entry in ``closedCourts`` is treated
@@ -387,6 +398,10 @@ class ScheduleDTO(StrictModel):
     # The seed the solver actually used. Pair with ``deterministic`` to
     # reproduce a schedule byte-for-byte from the same input.
     solverSeed: Optional[int] = Field(None, ge=0, le=MAX_SEED)
+    # What the engine actually did (SP-COURT-1 CP8-v1): a queue-mode solve
+    # with closed-court windows falls back to "pinned" and says so here.
+    # Optional so pre-policy stored schedules keep round-tripping.
+    effectivePolicy: Optional[Literal["pinned", "queue"]] = None
     # Top-N near-optimal alternatives. ``assignments`` above always
     # equals ``candidates[activeCandidateIndex].assignments`` when the
     # pool is non-empty; older clients ignore both fields.

@@ -469,7 +469,7 @@ export interface paths {
          *
          *     Enforces the state-machine transition guard against the canonical
          *     ``matches.status`` before writing. A ``ConflictError`` bubbles up
-         *     to the FastAPI handler in ``app.main`` and surfaces as HTTP 409.
+         *     to the FastAPI handler in ``core.main`` and surfaces as HTTP 409.
          *     The legacy ``match_states`` table and the new ``matches`` row are
          *     updated together so neither side drifts. The response carries
          *     ``ETag: "<new_version>"`` so the client has the value to send
@@ -598,7 +598,7 @@ export interface paths {
          *     target ``MatchStatus`` and delegates the five-step pipeline
          *     (idempotency / duplicate-rejection / version / transition guard /
          *     apply) to ``repo.process_command``. Rejections raise
-         *     ``ConflictError`` (mapped to 409 by ``app.main``); applies and
+         *     ``ConflictError`` (mapped to 409 by ``core.main``); applies and
          *     idempotent replays return 200 with the current match state.
          */
         post: operations["submit_command_tournaments__tournament_id__commands_post"];
@@ -623,7 +623,7 @@ export interface paths {
          *     fresh — the frontend polls this route every 2.5 s and refetches on
          *     every bracket-surface re-entry, so an unconditional rebuild on every
          *     request is the last measured tab-latency hot path. See
-         *     ``services/bracket/response_cache.py`` for the staleness bound and
+         *     ``bracket/response_cache.py`` for the staleness bound and
          *     the fail-safety property.
          */
         get: operations["get_bracket_tournaments__tournament_id__bracket_get"];
@@ -1261,7 +1261,7 @@ export interface paths {
          *     or direct API client):
          *
          *     - **CONFIG_LOCKED (409):** ANY scheduling-relevant config key (see
-         *       ``services.config_lock.changed_scheduling_fields`` — fail-closed:
+         *       ``workspaces.config_lock.changed_scheduling_fields`` — fail-closed:
          *       everything except the shared non-scheduling-keys exemption list)
          *       may not change in a blob that RETAINS a committed schedule — those
          *       are the fields the engine solved against, and changing them under
@@ -1676,7 +1676,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Entry Page
+         * @description The stored page, for surfaces that read before they write.
+         *
+         *     The PUT above returns the same DTO but only to its own caller; the
+         *     Sharing tab's publication card (SP-P7 §4) needs current state without
+         *     performing a whole-page write to learn it. F-E1-2-D1 recorded that no
+         *     operator UI could configure the page at all — this is the read half of
+         *     ending that.
+         */
+        get: operations["get_entry_page_tournaments__tournament_id__entry_page_get"];
         /**
          * Upsert Entry Page
          * @description Create or replace this workspace's entry page.
@@ -1705,6 +1715,33 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entry-page/publication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Entry Page Publication
+         * @description Flip publication gates (SP-P7 §4) — and nothing else.
+         *
+         *     A deliberate sliver of the page rather than a second whole-state PUT:
+         *     the card sends only the toggles it changed, so publication can never
+         *     race the desk's page edits into a lost update. Idempotent and
+         *     reversible by construction — each flag is a plain column write, and
+         *     unpublishing is the same write with ``False``; the *public* tier's
+         *     off-state behaviour is pinned by its own gate-matrix tests, not here.
+         */
+        patch: operations["patch_entry_page_publication_tournaments__tournament_id__entry_page_publication_patch"];
         trace?: never;
     };
     "/tournaments/{tournament_id}/entry-events": {
@@ -1850,7 +1887,7 @@ export interface paths {
          * @description R14's "Update events and total", as a route the RR7 form can call.
          *
          *     **Session-gated (ruling R8-C)**, matching the incumbent's filter branch
-         *     (``api/entries_public.py``'s ``action=filter``) rather than becoming a
+         *     (``entries/entries_public.py``'s ``action=filter``) rather than becoming a
          *     public fee oracle: it reads a director's price list against a
          *     caller-chosen basket, which is the shape of a scraper.
          *
@@ -1892,7 +1929,7 @@ export interface paths {
         /**
          * Submit Entry Json
          * @description Record one submission. **The order of the guards is the contract**,
-         *     and it is ``api/entries_public.submit_entry``'s verbatim.
+         *     and it is ``entries/entries_public.submit_entry``'s verbatim.
          *
          *     1. the entrant session (the dependency above — no bootstrap fallback);
          *     2. slug -> page -> tournament, or the uniform 404;
@@ -1923,6 +1960,133 @@ export interface paths {
          *     which FastAPI's form binding cannot express.
          */
         post: operations["submit_entry_json_e_api_submit__slug__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/me/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Entries
+         * @description Every tournament this account has submitted to, newest first.
+         *
+         *     Batched throughout — one query per table, whatever the account's
+         *     history (the N+1 precedent this codebase has already paid for once).
+         *     The entries query rides ``Entry``'s ``lazy="joined"`` player
+         *     relationship, so the player names arrive on the same round-trip.
+         */
+        get: operations["my_entries_e_api_me_entries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/page/{slug}/draws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Draws Index */
+        get: operations["draws_index_e_api_page__slug__draws_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/page/{slug}/draws/{draw_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Draw Detail */
+        get: operations["draw_detail_e_api_page__slug__draws__draw_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/page/{slug}/seeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Seeds
+         * @description Seeds are draw facts (§3.5) — gated by ``draws_published``.
+         */
+        get: operations["seeds_e_api_page__slug__seeds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/page/{slug}/winners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Winners
+         * @description Winner and runner-up per event as results complete (§3.6) — result
+         *     data, so gated by ``results_published``. Partial state is fine: an
+         *     undecided event reports ``decided: false``.
+         */
+        get: operations["winners_e_api_page__slug__winners_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/page/{slug}/players/{person_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Player Page
+         * @description One person's tournament: events, matches, record.
+         *
+         *     Discoverability rides ``entrants_published`` (§4) — with the list
+         *     unpublished, a person page answers the uniform 404 like everything
+         *     else unpublished. The person must hold a CONFIRMED entry: pending
+         *     submissions never appear publicly (§3.2), on their page-of-one no less
+         *     than on the list.
+         */
+        get: operations["player_page_e_api_page__slug__players__person_key__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1988,7 +2152,7 @@ export interface paths {
          *     One failure answer for every cause (unknown address, no password set,
          *     wrong password), with the Argon2 cost paid on the miss as well, so
          *     neither the body nor the timing tells a caller which it was. The
-         *     uniformity is ``services/entrants.authenticate``'s, not this route's —
+         *     uniformity is ``identity/entrants.authenticate``'s, not this route's —
          *     it returns an account or ``None`` and offers no way to ask why.
          *
          *     **Two shapes for that one answer, by ``Accept``.** A JSON caller keeps
@@ -2670,7 +2834,7 @@ export interface components {
          *     ``availability`` holds POSITIVE (allowed) HH:mm windows — empty
          *     means available all day. ``restSlots`` overrides the session's
          *     ``defaultRestSlots`` for this player. Both feed the CP-SAT solve
-         *     path via ``services.bracket.player_constraints`` (SP-D7 S2).
+         *     path via ``bracket.player_constraints`` (SP-D7 S2).
          */
         BracketPlayerDTO: {
             /** Id */
@@ -3027,6 +3191,54 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** DrawCardDTO */
+        DrawCardDTO: {
+            /** Drawkey */
+            drawKey: string;
+            /** Eventcode */
+            eventCode: string;
+            /** Discipline */
+            discipline: string;
+            /** Kind */
+            kind: string;
+            /** Size */
+            size: number;
+            /** Hasconsolation */
+            hasConsolation: boolean;
+        };
+        /** DrawDetailDTO */
+        DrawDetailDTO: {
+            /** Drawkey */
+            drawKey: string;
+            /** Eventcode */
+            eventCode: string;
+            /** Discipline */
+            discipline: string;
+            /** Kind */
+            kind: string;
+            /** Size */
+            size: number;
+            /** Resultspublished */
+            resultsPublished: boolean;
+            /** Teams */
+            teams: components["schemas"]["TeamDTO"][];
+            /** Segments */
+            segments: components["schemas"]["SegmentDTO"][];
+            /** Standings */
+            standings?: components["schemas"]["StandingRowDTO"][] | null;
+        };
+        /** DrawsIndexDTO */
+        DrawsIndexDTO: {
+            /** Published */
+            published: boolean;
+            /** Resultspublished */
+            resultsPublished: boolean;
+            /**
+             * Draws
+             * @default []
+             */
+            draws: components["schemas"]["DrawCardDTO"][];
+        };
         /**
          * EntrantConfigDTO
          * @description The two values the entrant app cannot compute for itself.
@@ -3038,7 +3250,7 @@ export interface components {
          *     is secret, or that would become interesting in aggregate, belongs
          *     here — and the negative control in
          *     ``tests/test_entries_json_routes.py`` exists because the secret key
-         *     sits one line away from the sitekey in ``app/config.py`` with a
+         *     sits one line away from the sitekey in ``core/config.py`` with a
          *     near-identical name.
          */
         EntrantConfigDTO: {
@@ -3075,17 +3287,22 @@ export interface components {
          *     row per person-per-event — is the 2026-08-10 duplication defect, which
          *     printed 42 rows for 23 people on the live page.
          *
-         *     Two fields, and the second is the event dimension the Entrants tab
-         *     groups by (SP-P6-2 G5a). Contact data stays structurally absent rather
-         *     than fetched-and-then-hidden: the club sits one column away on
-         *     ``entry_players`` and is deliberately NOT here, because the
-         *     acknowledgment an entrant ticks promises publication of their name
-         *     (``entrant/app/routes/entry.form.tsx``) — a third field is only allowed
-         *     to appear here after the copy that consents to it does.
+         *     Contact data stays structurally absent rather than fetched-and-then-
+         *     hidden. The rule this docstring used to state — a field appears here
+         *     only after the copy that consents to it does — is unchanged; what
+         *     changed (SP-P7, ruling C4) is that the acknowledgment copy in
+         *     ``enter.tsx`` now consents to "name and club", which is what licensed
+         *     ``club``. ``personKey`` is the player-page address (SP-P7 §3.3): the
+         *     opaque person-in-tournament id, never the name — two entrants sharing
+         *     a name is routine at a club and must not collide into one page.
          */
         EntrantRowDTO: {
+            /** Personkey */
+            personKey: string;
             /** Name */
             name: string;
+            /** Club */
+            club?: string | null;
             /**
              * Eventcodes
              * @default []
@@ -3240,6 +3457,8 @@ export interface components {
             waiverRequired: boolean;
             /** Regulationsversion */
             regulationsVersion: number;
+            /** Regulationsupdatedat */
+            regulationsUpdatedAt?: string | null;
             /** Feeschedule */
             feeSchedule?: {
                 [key: string]: unknown;
@@ -3261,6 +3480,21 @@ export interface components {
             venueName?: string | null;
             /** Venueaddress */
             venueAddress?: string | null;
+            /**
+             * Entrantspublished
+             * @default false
+             */
+            entrantsPublished: boolean;
+            /**
+             * Drawspublished
+             * @default false
+             */
+            drawsPublished: boolean;
+            /**
+             * Resultspublished
+             * @default false
+             */
+            resultsPublished: boolean;
         };
         /** EntryPageListItemDTO */
         EntryPageListItemDTO: {
@@ -3278,11 +3512,31 @@ export interface components {
             venue?: components["schemas"]["VenueDTO"] | null;
             page: components["schemas"]["PageDTO"];
             policy: components["schemas"]["PolicyDTO"];
+            publication: components["schemas"]["PublicationDTO"];
             /** Events */
             events: components["schemas"]["EventDTO"][];
             /** Entrants */
             entrants: components["schemas"]["EntrantRowDTO"][];
             viewer: components["schemas"]["ViewerDTO"];
+        };
+        /**
+         * EntryPagePublicationPatchDTO
+         * @description PATCH body for the publication card (SP-P7 §4).
+         *
+         *     Every field optional and independent — patch semantics: only the flags
+         *     the card actually toggled travel, so two operators flipping different
+         *     switches near-simultaneously cannot clobber each other through a
+         *     whole-state PUT. Strict, so a typoed flag name is a 422 rather than a
+         *     silently ignored no-op that leaves the operator believing they
+         *     published.
+         */
+        EntryPagePublicationPatchDTO: {
+            /** Entrantspublished */
+            entrantsPublished?: boolean | null;
+            /** Drawspublished */
+            drawsPublished?: boolean | null;
+            /** Resultspublished */
+            resultsPublished?: boolean | null;
         };
         /**
          * EntryPageUpsertDTO
@@ -3571,6 +3825,13 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HonorDTO */
+        HonorDTO: {
+            /** Names */
+            names: string[];
+            /** Club */
+            club?: string | null;
         };
         /**
          * Impact
@@ -3924,6 +4185,20 @@ export interface components {
             /** Eventrank */
             eventRank?: string | null;
         };
+        /** MatchNodeDTO */
+        MatchNodeDTO: {
+            /** Nodekey */
+            nodeKey: string;
+            /** Position */
+            position: number;
+            /** Sides */
+            sides: components["schemas"]["SideDTO"][];
+            result?: components["schemas"]["NodeResultDTO"] | null;
+            /** Scheduledtime */
+            scheduledTime?: string | null;
+            /** Court */
+            court?: number | null;
+        };
         /** MatchScore */
         MatchScore: {
             /** Sidea */
@@ -3962,10 +4237,10 @@ export interface components {
          * @description One group's school-vs-school pool record.
          *
          *     Computed fresh on every ``GET /tournaments/{id}/state`` by
-         *     ``services.meet.standings.compute_meet_standings`` from the
+         *     ``meet.standings.compute_meet_standings`` from the
          *     already-loaded ``matches``/``groups``/``players`` plus a
          *     ``match_states`` read — never persisted, so this is NOT written back
-         *     on PUT (see ``api/tournaments.py`` — the route excludes it from the
+         *     on PUT (see ``workspaces/tournaments.py`` — the route excludes it from the
          *     blob it commits). Empty when the Meet module isn't enabled for the
          *     workspace or there's no finished, scored pool play yet.
          */
@@ -4041,6 +4316,63 @@ export interface components {
              */
             comingSoon: number;
         };
+        /** MyEntriesDTO */
+        MyEntriesDTO: {
+            /** Tournaments */
+            tournaments: components["schemas"]["MyTournamentCardDTO"][];
+        };
+        /**
+         * MyEntryLineDTO
+         * @description One event line on a card. ``state`` is the entrant-facing vocabulary
+         *     (``_entry_state``), not the raw desk state — the desk's ``pending`` vs
+         *     ``waitlisted`` distinction is an operator's queue, not a promise made to
+         *     the entrant.
+         */
+        MyEntryLineDTO: {
+            /** Eventcode */
+            eventCode: string;
+            /** Discipline */
+            discipline: string;
+            /** Playername */
+            playerName: string;
+            /** Personkey */
+            personKey: string;
+            /** State */
+            state: string;
+            /** Resultbadge */
+            resultBadge?: string | null;
+        };
+        /** MyTournamentCardDTO */
+        MyTournamentCardDTO: {
+            /** Slug */
+            slug?: string | null;
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Orgname */
+            orgName?: string | null;
+            /**
+             * Entrantspublished
+             * @default false
+             */
+            entrantsPublished: boolean;
+            /**
+             * Resultspublished
+             * @default false
+             */
+            resultsPublished: boolean;
+            /** Date */
+            date?: string | null;
+            /** Venuename */
+            venueName?: string | null;
+            /** Status */
+            status: string;
+            /** Feetotalcents */
+            feeTotalCents?: number | null;
+            /** Submittedat */
+            submittedAt: string;
+            /** Events */
+            events: components["schemas"]["MyEntryLineDTO"][];
+        };
         /** NamedDTO */
         NamedDTO: {
             /** Name */
@@ -4071,6 +4403,21 @@ export interface components {
             /** Source */
             source?: ("meet" | "bracket") | null;
         };
+        /**
+         * NodeResultDTO
+         * @description Present only when ``results_published`` — its absence IS the gate.
+         */
+        NodeResultDTO: {
+            /** Winnerside */
+            winnerSide?: string | null;
+            /** Score */
+            score?: number[][] | null;
+            /**
+             * Walkover
+             * @default false
+             */
+            walkover: boolean;
+        };
         /** PageDTO */
         PageDTO: {
             /** Slug */
@@ -4081,6 +4428,8 @@ export interface components {
             regulationsText?: string | null;
             /** Regulationsversion */
             regulationsVersion: number;
+            /** Regulationsupdatedat */
+            regulationsUpdatedAt?: string | null;
             /** Paymentinstructions */
             paymentInstructions?: string | null;
             /**
@@ -4176,6 +4525,13 @@ export interface components {
             /** Remarks */
             remarks?: string | null;
         };
+        /** PlayerEventDTO */
+        PlayerEventDTO: {
+            /** Code */
+            code: string;
+            /** Discipline */
+            discipline: string;
+        };
         /**
          * PlayerImpact
          * @description Aggregate of how a single player's day changes.
@@ -4189,6 +4545,61 @@ export interface components {
             matchCount: number;
             /** Earliestslotdelta */
             earliestSlotDelta: number;
+        };
+        /** PlayerMatchDTO */
+        PlayerMatchDTO: {
+            /** Eventcode */
+            eventCode: string;
+            /** Roundlabel */
+            roundLabel?: string | null;
+            /** Sides */
+            sides: components["schemas"]["PlayerMatchSideDTO"][];
+            /** Score */
+            score?: number[][] | null;
+            /**
+             * Decided
+             * @default false
+             */
+            decided: boolean;
+            /** Scheduledtime */
+            scheduledTime?: string | null;
+            /** Court */
+            court?: number | null;
+        };
+        /** PlayerMatchSideDTO */
+        PlayerMatchSideDTO: {
+            /** Names */
+            names: string[];
+            /** Placeholder */
+            placeholder?: string | null;
+            /**
+             * Winner
+             * @default false
+             */
+            winner: boolean;
+        };
+        /** PlayerPageDTO */
+        PlayerPageDTO: {
+            /** Personkey */
+            personKey: string;
+            /** Name */
+            name: string;
+            /** Club */
+            club?: string | null;
+            /** Events */
+            events: components["schemas"]["PlayerEventDTO"][];
+            record?: components["schemas"]["PlayerRecordDTO"] | null;
+            /** Matches */
+            matches: components["schemas"]["PlayerMatchDTO"][];
+        };
+        /** PlayerRecordDTO */
+        PlayerRecordDTO: {
+            /** Played */
+            played: number;
+            /** Wins */
+            wins: number;
+            /** Losses */
+            losses: number;
         };
         /** PolicyDTO */
         PolicyDTO: {
@@ -4276,6 +4687,35 @@ export interface components {
             slotId: number;
             /** Courtid */
             courtId: number;
+        };
+        /**
+         * PublicationDTO
+         * @description The TD's publication gates (SP-P7 §4), stated so the tier can tell
+         *     "gated" from "empty".
+         *
+         *     An unpublished entrant list arrives as an empty ``entrants`` array —
+         *     indistinguishable, alone, from a tournament nobody has entered. These
+         *     booleans are the distinction, and they are the *whole* gated-vs-empty
+         *     protocol: no error, no envelope, the same 200 either way, so an
+         *     unpublished state can never be probed apart from an unpopular one by
+         *     status code.
+         */
+        PublicationDTO: {
+            /**
+             * Entrants
+             * @default false
+             */
+            entrants: boolean;
+            /**
+             * Draws
+             * @default false
+             */
+            draws: boolean;
+            /**
+             * Results
+             * @default false
+             */
+            results: boolean;
         };
         /**
          * QuoteResponse
@@ -4416,6 +4856,13 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** RoundDTO */
+        RoundDTO: {
+            /** Label */
+            label: string;
+            /** Matches */
+            matches: components["schemas"]["MatchNodeDTO"][];
+        };
         /** ScheduleAssignment */
         ScheduleAssignment: {
             /** Matchid */
@@ -4468,6 +4915,8 @@ export interface components {
             status: components["schemas"]["SolverStatus"];
             /** Solverseed */
             solverSeed?: number | null;
+            /** Effectivepolicy */
+            effectivePolicy?: ("pinned" | "queue") | null;
             /** Candidates */
             candidates?: components["schemas"]["ScheduleCandidate"][];
             /** Activecandidateindex */
@@ -4526,6 +4975,43 @@ export interface components {
             /** Matchcount */
             matchCount: number;
         };
+        /** SeedLineDTO */
+        SeedLineDTO: {
+            /** Seed */
+            seed: number;
+            /** Names */
+            names: string[];
+            /** Club */
+            club?: string | null;
+        };
+        /** SeedsDTO */
+        SeedsDTO: {
+            /** Published */
+            published: boolean;
+            /**
+             * Events
+             * @default []
+             */
+            events: components["schemas"]["SeedsEventDTO"][];
+        };
+        /** SeedsEventDTO */
+        SeedsEventDTO: {
+            /** Eventcode */
+            eventCode: string;
+            /** Discipline */
+            discipline: string;
+            /** Seeds */
+            seeds: components["schemas"]["SeedLineDTO"][];
+        };
+        /** SegmentDTO */
+        SegmentDTO: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Rounds */
+            rounds: components["schemas"]["RoundDTO"][];
+        };
         /**
          * SegmentOut
          * @description One named sub-bracket of a multi-segment draw (DE/Monrad/compass).
@@ -4546,6 +5032,18 @@ export interface components {
             rounds: string[][];
             /** Positions */
             positions?: number[] | null;
+        };
+        /** SideDTO */
+        SideDTO: {
+            /** Participantkey */
+            participantKey?: string | null;
+            /** Placeholder */
+            placeholder?: string | null;
+            /**
+             * Bye
+             * @default false
+             */
+            bye: boolean;
         };
         /** SignupResponse */
         SignupResponse: {
@@ -4642,10 +5140,36 @@ export interface components {
          * @enum {string}
          */
         SolverStatus: "optimal" | "feasible" | "infeasible" | "unknown";
+        /** StandingRowDTO */
+        StandingRowDTO: {
+            /** Position */
+            position: number;
+            /** Participantkey */
+            participantKey: string;
+            /** Played */
+            played: number;
+            /** Wins */
+            wins: number;
+            /** Losses */
+            losses: number;
+            /** Gameswon */
+            gamesWon: number;
+            /** Gameslost */
+            gamesLost: number;
+            /** Pointswon */
+            pointsWon: number;
+            /** Pointslost */
+            pointsLost: number;
+            /**
+             * History
+             * @default []
+             */
+            history: string[];
+        };
         /**
          * StandingRowOut
          * @description One participant's line in a computed standings table (mirrors
-         *     ``services.bracket.standings.StandingRow`` — the BWF chain: wins →
+         *     ``bracket.standings.StandingRow`` — the BWF chain: wins →
          *     games ratio → points ratio → head-to-head → id).
          */
         StandingRowOut: {
@@ -4718,6 +5242,21 @@ export interface components {
             createdAt?: string;
             /** Expiresat */
             expiresAt: string;
+        };
+        /**
+         * TeamDTO
+         * @description One participant of a draw — the lookup table match nodes reference,
+         *     so a pair's names travel once, not once per round they survive.
+         */
+        TeamDTO: {
+            /** Participantkey */
+            participantKey: string;
+            /** Names */
+            names: string[];
+            /** Club */
+            club?: string | null;
+            /** Seed */
+            seed?: number | null;
         };
         /** TournamentConfig */
         TournamentConfig: {
@@ -4840,6 +5379,14 @@ export interface components {
             solverTimeLimitSeconds?: number | null;
             /** Candidatepoolsize */
             candidatePoolSize?: number | null;
+            /** Courtpolicy */
+            courtPolicy?: ("pinned" | "queue") | null;
+            /** Courtoverrides */
+            courtOverrides?: {
+                [key: string]: "pinned" | "pool";
+            } | null;
+            /** Ondeckcount */
+            onDeckCount?: number | null;
             /** Closedcourts */
             closedCourts?: number[];
             /** Courtclosures */
@@ -5141,7 +5688,7 @@ export interface components {
          *     sites and has been deleted. Ruling R8-D made the claim true instead:
          *     the node loader mints the nonce on the SSR document response and
          *     renders its digest (``app/lib/formCsrf.server.ts``), which
-         *     ``require_form_csrf`` below and ``app.form_csrf.form_csrf_proves``
+         *     ``require_form_csrf`` below and ``core.form_csrf.form_csrf_proves``
          *     already accepted as a second candidate secret.
          */
         ViewerDTO: {
@@ -5179,6 +5726,32 @@ export interface components {
             nowIso?: string | null;
             /** Timebudgetsec */
             timeBudgetSec?: number | null;
+        };
+        /** WinnersDTO */
+        WinnersDTO: {
+            /** Published */
+            published: boolean;
+            /**
+             * Events
+             * @default []
+             */
+            events: components["schemas"]["WinnersEventDTO"][];
+        };
+        /** WinnersEventDTO */
+        WinnersEventDTO: {
+            /** Eventcode */
+            eventCode: string;
+            /** Discipline */
+            discipline: string;
+            /** Decided */
+            decided: boolean;
+            winner?: components["schemas"]["HonorDTO"] | null;
+            runnerUp?: components["schemas"]["HonorDTO"] | null;
+            /**
+             * Semifinalists
+             * @default []
+             */
+            semifinalists: components["schemas"]["HonorDTO"][];
         };
         /**
          * WorkspaceModuleDTO
@@ -7766,6 +8339,37 @@ export interface operations {
             };
         };
     };
+    get_entry_page_tournaments__tournament_id__entry_page_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryPageDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upsert_entry_page_tournaments__tournament_id__entry_page_put: {
         parameters: {
             query?: never;
@@ -7778,6 +8382,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["EntryPageUpsertDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryPageDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_entry_page_publication_tournaments__tournament_id__entry_page_publication_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntryPagePublicationPatchDTO"];
             };
         };
         responses: {
@@ -7958,6 +8597,183 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_entries_e_api_me_entries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEntriesDTO"];
+                };
+            };
+        };
+    };
+    draws_index_e_api_page__slug__draws_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawsIndexDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draw_detail_e_api_page__slug__draws__draw_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                draw_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawDetailDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    seeds_e_api_page__slug__seeds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeedsDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    winners_e_api_page__slug__winners_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WinnersDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    player_page_e_api_page__slug__players__person_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                person_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerPageDTO"];
                 };
             };
             /** @description Validation Error */
