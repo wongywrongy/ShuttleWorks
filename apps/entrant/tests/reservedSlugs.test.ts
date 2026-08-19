@@ -2,7 +2,7 @@
  * The backend's reserved-slug set must cover every static top-level segment
  * node claims ahead of its `:slug` catch-all.
  *
- * `apps/api/api/entries.py`'s `_RESERVED_SLUGS` refuses a slug that node's
+ * `apps/api/src/entries/entries_routes.py`'s `_RESERVED_SLUGS` refuses a slug that node's
  * route table would shadow: React Router ranks every static route above
  * `:slug`, so a workspace called "login" would answer with the login page
  * forever, and its printed URL would be dead. The set was hand-written and
@@ -43,7 +43,7 @@ function shadowingSegments(entries: RouteConfigEntry[]): string[] {
 /** `_RESERVED_SLUGS = frozenset({...})`, parsed out of the backend source. */
 function backendReservedSlugs(): string[] {
   const source = readFileSync(
-    new URL('../../../apps/api/api/entries.py', import.meta.url),
+    new URL('../../../apps/api/src/entries/entries_routes.py', import.meta.url),
     'utf8',
   );
   const match = source.match(/_RESERVED_SLUGS\s*=\s*frozenset\(\{([^}]*)\}\)/);
@@ -52,7 +52,7 @@ function backendReservedSlugs(): string[] {
   // module all make this regex miss — and a "no matches, nothing to check"
   // reading would leave this file green forever while asserting nothing. Zero
   // matches is a finding, not a pass.
-  expect(match, '_RESERVED_SLUGS not found in apps/api/api/entries.py').not.toBeNull();
+  expect(match, '_RESERVED_SLUGS not found in apps/api/src/entries/entries_routes.py').not.toBeNull();
 
   return [...match![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
 }

@@ -61,7 +61,7 @@ describe('renderSitemapXml', () => {
 
   it('escapes both interpolation points, so no input can break the document', () => {
     // Neither value is trusted here. `slug` is held to `[a-z0-9-]` by
-    // `_SLUG_RE` in `apps/api/api/entries.py` — a REMOTE invariant this
+    // `_SLUG_RE` in `apps/api/src/entries/entries_routes.py` — a REMOTE invariant this
     // module never asserts, and whose own comment invites widening.
     // `baseUrl` is held by nothing at all: it is `new URL(request.url).origin`,
     // i.e. the Host header, where `&`, `'` and `"` are legal as far as
