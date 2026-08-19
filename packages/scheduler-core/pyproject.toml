@@ -13,7 +13,12 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = [".."]
+# `.` because this file now sits in the DISTRIBUTION directory
+# (`packages/scheduler-core/`) with the importable package nested beneath
+# it, rather than inside the package looking up at its own parent. The
+# distribution is kebab-case to match its sibling `design-system`; the
+# import name stays `scheduler_core` and no import in the repo changes.
+where = ["."]
 include = ["scheduler_core*"]
 exclude = ["scheduler_core.tests*", "scheduler_core.benchmarks*"]
 
