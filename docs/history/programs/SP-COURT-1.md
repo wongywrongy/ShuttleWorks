@@ -4,7 +4,7 @@
 **Status:** PLANNED — Phase 0 ruling owed by the owner before any code moves.
 **Created:** 2026-08-19 (research session; nothing in the tree was changed for this program).
 **Owning module:** Operations (Tier-2). The engine serves the policy; it does not own it.
-**Companion documents:** `docs/reference/debt-log.md` (D1, D4), `docs/explanation/architecture/data-flow.md`, `CODE_HEALTH.md`.
+**Companion documents:** `docs/reference/debt-log.md` (D1, D4, **D20**), `docs/explanation/architecture/data-flow.md`, `CODE_HEALTH.md`.
 
 ---
 
@@ -37,6 +37,8 @@ Verified in the tree:
 So the desk already works a queue. What the solver produces is a **court-pinned timetable** — match *M* on court 3 at 10:40 — and the first long match makes that fiction permanent for the rest of the day.
 
 **The program is therefore not "add a queue mode". It is "let the plan tell the truth about how the day is actually run."**
+
+Queue mode is also the upstream feed for live ETA forecasting — a queue solve plus actual durations is exactly the re-forecast input — but ETA is a hard non-goal here.
 
 ### Consequence already visible in the debt log
 
@@ -96,6 +98,8 @@ Audited across `packages/scheduler-core/scheduler_core/engine/constraints/`:
 
 Anything in the left column forces `pinned` for the matches it touches, or must be excluded from the queue pool.
 
+**Correction (SP-COURT-1-REVISE, 2026-08-19): `closed_court_windows` is not a constraint plugin.** It is applied inline in `packages/scheduler-core/scheduler_core/engine/cpsat_backend.py:487-527`, *before* the plugin walk at `:530-537`, by reifying before/after BoolVars against `svars.is_on_court[(match_id, cid)]`. This sharpens Phase 2's problem rather than softening it: queue mode removes the per-court optional intervals, so `is_on_court` no longer exists and that block **silently becomes a no-op** instead of failing loudly. That is the D1 double-booking arriving by a second route, and it is the reason CP8 exists.
+
 ---
 
 ## 4. Sequencing constraint (hard)
@@ -108,44 +112,74 @@ Note also the third D1 site found on 2026-08-19: `OperationsProduct.tsx:114` pas
 
 ## 5. Open rulings — Phase 0 **[USER SIGN-OFF]**
 
+CP-prefixed rulings are local to this program. R-prefixed rulings are the global standing rulings and are never referenced by bare number here.
+
 Nothing below may be decided by an implementing session.
 
-- **R1 — Shape.** Two modes plus a per-court override (recommended), or three top-level modes? Recommendation: two + override, because "everything queues except Court 1" is the common real case, and a third mode is the hybrid with a worse name.
-- **R2 — Default.** `pinned` (no behaviour change until asked) — recommended — or `queue` (matches how the day is actually run)?
-- **R3 — Scope of the policy.** Per workspace, per meet/draw, or per session solve?
-- **R4 — Plan board in queue mode.** Ordered call list with a court-count feasibility band (recommended), or keep a grid drawn from post-hoc colouring? A grid drawn from a queue solve is a fiction the day contradicts within one match.
-- **R5 — Lookahead.** How many matches of "on deck" does the desk publish (research says next 2–3, called ~10 min early), and does Display show it?
-- **R6 — Bracket interaction.** Does queue mode apply to bracket draws, meet only, or both? Bracket advancement already pre-resolves matches, so the queue is well-defined for both — but the Operations→Bracket advancement edge is deliberately **unwired** (contract-pinned), and this must not become the reason to wire it.
-- **R7 — ADR.** A `court_policy` decision record is owed (next number: **0015**). Not written yet, deliberately: the decision is R1–R3, and an ADR that records an undecided decision is worse than none. `docs/explanation/decisions/index.md` must be updated in the same commit (the docs build gates internal links).
+- **CP1 — Shape.** Two modes plus a per-court override (recommended), or three top-level modes? Recommendation: two + override, because "everything queues except Court 1" is the common real case, and a third mode is the hybrid with a worse name.
+- **CP2 — Default.** `pinned` (no behaviour change until asked) — recommended — or `queue` (matches how the day is actually run)?
+- **CP3 — Scope of the policy.** Per workspace, per meet/draw, or per session solve?
+- **CP4 — Plan board in queue mode.** Ordered call list with a court-count feasibility band (recommended), or keep a grid drawn from post-hoc colouring? A grid drawn from a queue solve is a fiction the day contradicts within one match.
+- **CP5 — Lookahead.** How many matches of "on deck" does the desk publish (research says next 2–3, called ~10 min early), and does Display show it?
+- **CP6 — Bracket interaction.** Does queue mode apply to bracket draws, meet only, or both? Bracket advancement already pre-resolves matches, so the queue is well-defined for both — but the Operations→Bracket advancement edge is deliberately **unwired** (contract-pinned), and this must not become the reason to wire it.
+- **CP7 — ADR.** A `court_policy` decision record is owed (next number: **0015**). Not written yet, deliberately: the decision is CP1–CP3, and an ADR that records an undecided decision is worse than none. `docs/explanation/decisions/index.md` must be updated in the same commit (the docs build gates internal links).
+- **CP8 — Closed-window semantics + order-on-the-wire.** (a) Phase 2 closed-window handling: v1 fallback-to-pinned or v2 capacity dummies — see Phase 2 for the full trade-off; recommendation v1. (b) Queue order on the wire: explicit `queue_position` field (requires SP-P7 allow-list additions if it ever reaches public serializers) or derived-from-start-times with the derivation rule documented in the wire contract docs; recommendation derived, revisit when the public call list ships.
 
 ---
 
 ## 6. Phases
 
 ### Phase 0 — Ruling **[USER SIGN-OFF]**
-Owner answers R1–R7. Write ADR 0015 recording the decision and its consequences. Update `decisions/index.md`.
+Owner answers CP1–CP8. Write ADR 0015 recording the decision and its consequences. Update `decisions/index.md`.
 **Gate:** `npm run docs:build`. **STOP.**
 
 ### Phase 1 — `court_policy` on the config
-Add `court_policy: "pinned" | "queue"` to `ScheduleConfig` (`packages/scheduler-core/scheduler_core/domain/models.py`), defaulting to the R2 answer. Prior art for a string-enum mode on this exact dataclass: `compact_schedule_mode` (`"minimize_makespan" | "no_gaps" | "finish_by_time"`).
+Add `court_policy: "pinned" | "queue"` to `ScheduleConfig` (`packages/scheduler-core/scheduler_core/domain/models.py`), defaulting to the CP2 answer. Prior art for a string-enum mode on this exact dataclass: `compact_schedule_mode` (`"minimize_makespan" | "no_gaps" | "finish_by_time"`).
 Plumb through `build_schedule_config` in `apps/api/src/shared/scheduling/params.py` — the single place scheduling params become a config. No engine behaviour change yet; `pinned` must be byte-identical to today.
 **Gate:** full pytest; `lint-imports`; a test asserting `pinned` produces the identical model to pre-change. **STOP.**
 
 ### Phase 2 — Engine honours the policy
-*(Entry condition: D1 closed.)*
-In `queue` mode, skip the per-court optional intervals in `variables.py` and replace `court_capacity`'s per-court `AddNoOverlap` with one `AddCumulative`. Add a deterministic left-edge colouring step in `extraction.py` so the emitted assignments still carry a `court_id` — the wire contract does not change.
-Force `pinned` (or exclude from the pool) whenever `locks_and_pins`, `court_change_penalty`, or `closed_court_windows` are live for the matches concerned.
-**Tests:** equal-objective property test across both encodings; a **negative control** proving the colouring step fails when overlap exceeds court count (CODE_HEALTH 3b — this is a safety property).
+*(Entry conditions: D1 closed **and** CP8 ruled.)*
+
+In `queue` mode, skip the per-court optional intervals in `engine/variables.py` and replace `court_capacity`'s per-court `AddNoOverlap` with a single `AddCumulative(capacity=court_count)`. Add a deterministic left-edge colouring step in `engine/extraction.py` so emitted assignments still carry `court_id` — the wire contract does not change shape.
+
+**Closed-court windows (CP8 decides between exactly these two):**
+- **v1 — fallback (recommended for this phase):** if the solve's `ScheduleConfig.closed_court_windows` is non-empty, the engine silently solves in `pinned` mode regardless of `court_policy`, and the emitted result records `effective_policy: "pinned"` so the UI can say why. Simple, correct, honest; hybrid arrives in Phase 5.
+- **v2 — capacity-consuming dummies:** for each window closing *k* courts over `[t0, t1)`, add *k* fixed dummy intervals of demand 1 to the cumulative. The colouring step must then colour around the specific closed physical courts, not just any *k* courts — this materially complicates colouring and its negative control. Choose v2 only if a real fixture needs queue mode concurrent with bracket occupancy before Phase 5.
+
+**Lock/pin interaction:** any match touched by `locks_and_pins` keeps its explicit per-court interval and is excluded from the cumulative pool (a pinned match is a promise — queue mode must not relocate it). `court_change_penalty` is meaningless for pool matches in queue mode and must be a no-op for them, asserted by test.
+
+**Queue-order determinism (new contract):** the emitted match order in queue mode is part of the product's behaviour. Order is defined as: ascending solved start time, then ascending stable tiebreaker (NOT the random-UUID `id` alone — use the same tiebreaker the colouring step uses, documented in one place and imported by both). Whether order rides the wire as an explicit `queue_position` field or is documented as derived-from-start-times is CP8's second half; either way the rule lives in exactly one function.
+
+**Tests:**
+- Equal-objective property test: both encodings, same instances, equal makespan.
+- **Negative control (CODE_HEALTH 3b):** the colouring step must be shown to fail when max overlap exceeds court count — remove the capacity constraint in the test fixture and assert colouring raises.
+- **Order-determinism test:** two solves of the same instance emit the identical queue order; a solve of a permuted-input instance emits the same order (input-order independence).
+- Under v1: a fixture with closed windows asserts `effective_policy == "pinned"` and byte-identical model to today's. Under v2: a fixture asserts no assignment lands on a closed physical court during its window — with its own negative control.
+
 **Gate:** full pytest; determinism contract (`simulator/`) unchanged; `make check`. **STOP.**
 
 ### Phase 3 — Plan board renders the policy *(largest UI piece)*
-Per R4. In queue mode the Plan board shows an ordered call list plus a feasibility band, not a court×time grid. `boardPlacements.ts` (`buildPlanChips`) is the seam; it already separates Plan from Run rendering.
+Per CP4. In queue mode the Plan board shows an ordered call list plus a feasibility band, not a court×time grid. `boardPlacements.ts` (`buildPlanChips`) is the seam; it already separates Plan from Run rendering. Phase 3 is operator-console only; see Non-goals for the public tier.
 **Gate:** vitest; depcruise (no new cross-module edges); interaction-smoke. **STOP.**
 
+### Phase 4a — Run-time eligibility audit and hardening *(entry condition for Phase 4)*
+
+Queue mode moves rest and player-conflict guarantees from solve time to run time: `nextEligible` and `computeAutoPull` become the enforcement point. This phase establishes whether they are fit to carry that.
+
+- Audit `runtime/runModel.ts` (`nextEligible`) and `run/RunSurface.tsx` (`computeAutoPull`) for: player-busy checks (no player of the candidate match currently on any court) and rest-window enforcement between a player's consecutive matches. *(The SP-COURT-1-REVISE audit of 2026-08-19 found: **neither check exists, anywhere on the run path — and the gap is live today, not queue-mode-only.** `deriveQueue` (`apps/console/src/modules/operations/runtime/runModel.ts:117-122`) filters on `m.court == null` — a MATCH on a court is excluded, a PLAYER on a court is not. `nextEligible` (same file, :128-130) is `queue.find((m) => m.eligible && can(m.status, 'assign'))`, and `eligible` (:30-33) means "both sides known" / "feeders resolved" — an identity predicate, not an availability one. `computeAutoPull` (`apps/console/src/modules/operations/run/RunSurface.tsx:91-114`) does no filtering of its own: it checks the recorded match has a court and `lane.depth === 1`, then trusts `nextEligible` wholesale. The backend does not backstop it — `assign_court` (`apps/api/src/repositories/local.py:1986-2020`) guards only status-is-SCHEDULED and payload completeness. Meanwhile the solver DOES guarantee both properties, at PLANNED times: `engine/constraints/player_no_overlap.py` and `engine/constraints/rest.py:40` (`rest_is_hard` defaults True). Auto-pull assigns at `slotForAssign(...)`, not the planned time, so those guarantees are already void for every auto-pulled match: a player mid-rally on court 1 whose next match has both sides known sits in the queue, is `eligible`, and is auto-pulled onto court 3 the moment court 3 clears. Filed as **D20** in `docs/reference/debt-log.md`.)*
+- If checks are missing: implement player-busy as a hard filter in `nextEligible` (a match whose player is mid-rally is not eligible, full stop) and rest as a **soft flag surfaced to the desk** — software flags, humans decide. The desk may override a rest flag; it may not override player-busy.
+- If this pulls the deferred Participant rest/grace-timer work forward, record it in the ledger as a scope decision for the owner — do not build the Participant record inside this program.
+- **Negative control:** a test that removes the player-busy filter and asserts the eligibility test fails.
+
+**Gate:** vitest; interaction-smoke. **STOP.**
+
 ### Phase 4 — Run surface + honest drift signals
-`deriveQueue` sorts by solved order rather than `plannedSlot` in queue mode (`runtime/runModel.ts`). Re-check the spurious `(moved)` tag as a consequence of the mode mismatch. Publish the R5 lookahead.
-`computeAutoPull` should need little or no change — confirm by test, do not assume.
-**Gate:** vitest; interaction-smoke; a viewer-role check (writes must still not leave the browser). **STOP.**
+*(Entry condition: Phase 4a complete.)*
+
+`deriveQueue` sorts by the solved queue order (the single documented rule from Phase 2) rather than `plannedSlot` in queue mode. Re-check the spurious `(moved)` tag as a consequence of the mode mismatch — it should disappear or become truthful, not be suppressed. Publish the CP5 lookahead (research: next 2–3, called ~10 min early). `computeAutoPull` changes only if Phase 4a found it deficient — confirmed by test either way.
+
+**Gate:** vitest; interaction-smoke; viewer-role check (no write path reachable for `viewer`). **STOP.**
 
 ### Phase 5 — Per-court override (the hybrid)
 Mark each court `pinned` (show court, streamed, rostered, hour-rented) or `pool`. Pinned courts keep explicit intervals; the pool uses cumulative with capacity = pool size. This is the shape real events need and where the research says the value is.
@@ -163,11 +197,21 @@ Mark each court `pinned` (show court, streamed, rostered, hour-rented) or `pool`
 
 ---
 
+## 7a. Non-goals
+
+- **Public call-list projection is out of scope for this program.** Public surfaces continue to render the coloured per-court timetable, which queue mode still emits (colouring guarantees `court_id`). Publishing an on-deck call list to entrants/Display is a follow-up program: it requires new fields, therefore new SP-P7 serializer allow-lists with key-set assertion tests, and a CP5-style ruling on how much lookahead is public. Nothing in Phases 1–5 may add fields to a public serializer.
+- The two serializers this rule binds, confirmed 2026-08-19: **`apps/api/src/entries/entries_site.py`** — public draw cards carry `court` (`:152`, `:248`) and `scheduledTime`, populated at `:603-606` from `assignment.court_id` / `_slot_time(...)`; and **`apps/api/src/display/display.py`** — `_MEET_PROJECTION_FIELDS` (`:161-168`) carries the whole `schedule` blob, plus `/{token}/bracket` (`:215`). `entries_public.py` and `entries_me.py` carry no court/time fields and must keep carrying none.
+- Note for CP8(b): `ScheduleAssignment` is a `StrictModel` (`apps/api/src/core/schemas.py:306-310`, console twin `apps/console/src/api/dto.ts:185-190`), so a `queuePosition` field is a two-sided contract change plus a `make generate-api` reconcile — not an additive field.
+- **ETA / live re-forecasting** (see §1) is a hard non-goal. Queue mode is its upstream feed; building the forecaster is a separate program.
+
+---
+
 ## 8. Evidence appendix (verified 2026-08-19)
 
 - Operations already queues: `run/RunQueue.tsx`, `runtime/runModel.ts` (`deriveQueue`, `nextEligible`), `run/RunSurface.tsx` (`computeAutoPull`), `runtime/runActions.ts` (`assign_court`).
 - Engine is current and already modern: OR-Tools 9.15.6755; `engine/variables.py` docstring records the earlier migration off the `O(matches × slots × courts)` boolean matrix to interval + optional-interval-per-court.
-- Benchmark and colouring verification: run ad hoc in the research session; **the scripts were deleted and are not in the tree.** Re-create from the tables in §3 if the numbers need re-confirming.
+- Benchmark and colouring verification: **`packages/scheduler-core/benchmarks/bench_court_encoding.py`** (committed 2026-08-19 by SP-COURT-1-REVISE). Parameterized `(matches, courts)`, builds both encodings with identical player-conflict constraints and the same makespan objective, runs greedy left-edge colouring on B's solution and **validates** it (≤ C courts, zero overlaps), prints the §3 table. Deliberately **not** wired into pytest or CI — `testpaths = ["tests"]` and the filename does not match `python_files`, so it is doubly out of collection. Run it: `.venv/Scripts/python.exe packages/scheduler-core/benchmarks/bench_court_encoding.py [matches courts]`.
+  - **Its instance generator is not the one the 2026-08-19 research session used** (those scripts were deleted). It reproduces §3's *shape* — B roughly an order of magnitude faster, makespan equal, colouring valid — but not §3's absolute A-times or speedup factors, which are instance-dependent. See the ledger for the 150/8 re-run.
 - Mode-enum prior art: `ScheduleConfig.compact_schedule_mode`.
 
 ---
@@ -181,4 +225,30 @@ Append one entry per session: phase, tasks + commits, gates run and results, dev
 - **Done:** domain research (sources in §2); engine benchmark A vs B at five sizes (§3); left-edge colouring verified valid at five sizes; constraint audit for court-identity dependence; Operations audit establishing that FCFS-any-court already ships.
 - **Code changed:** **none for this program.** Benchmark scripts were removed after use.
 - **Deviations:** the program was initially framed as a CP-SAT encoding change. The owner corrected it to an Operations concern; the code audit confirmed the owner — `computeAutoPull` already implements the queue. This document reflects the corrected framing.
-- **Next task:** Phase 0 — owner answers R1–R7, then ADR 0015.
+- **Next task:** Phase 0 — owner answers CP1–CP8, then ADR 0015.
+
+### 2026-08-19 — SP-COURT-1-REVISE
+
+- **Phase:** still pre-0. Documentation revision only; **no product code was changed.**
+- **The six changes:**
+  1. **Local rulings renumbered R1–R7 → CP1–CP7**, plus a note under §5 fencing the prefix. The collision was wider than reported: the global standing rulings in `docs/history/programs/SP-PROGRAM-1.md:44-105` run **R1–R14** (not R7–R15), so the old local numbering collided along its entire length. *R15 does not exist in the tree* — it is cited by two SP-P6-2 briefs and flagged as a phantom at `docs/history/superpowers/specs/2026-08-11-sp-p6-2-public-ia-design.md:65-69`.
+  2. **Phase 2 replaced.** Closed-window semantics are now a decidable choice (v1 fallback-to-pinned, recommended, vs v2 capacity dummies); lock/pin interaction spelled out; the vague "matches concerned" language is gone; a **queue-order determinism contract** added with its own test requirement.
+  3. **CP8 added** — closed-window semantics (a) and order-on-the-wire (b). Phase 2's entry condition now requires it.
+  4. **Phase 4a inserted** (run-time eligibility audit + hardening) as Phase 4's entry condition, with the A1 finding embedded verbatim; Phase 4 rewritten to depend on it.
+  5. **Non-goals section (§7a) added** — public call-list projection is out of scope, naming the two real serializers that carry court/time.
+  6. **Benchmark script committed** at `packages/scheduler-core/benchmarks/bench_court_encoding.py`; §8 cites it instead of "re-create from the tables."
+  - Plus two corrections the audit forced: **§3's constraint-audit claim** (`closed_court_windows` is *not* a plugin — it is inline in `cpsat_backend.py:487-527`, which is why queue mode would silently no-op it), and the **§1 ETA motivation line**.
+- **The A1 finding, verbatim:** *neither a player-busy check nor a rest-window check exists anywhere on the run path — and the gap is live today, not queue-mode-only.* `deriveQueue` (`runModel.ts:117-122`) filters `m.court == null`: a MATCH on a court is excluded, a PLAYER on a court is not. `nextEligible` (`:128-130`) is `queue.find((m) => m.eligible && can(m.status, 'assign'))`; `eligible` (`:30-33`) means "both sides known" / "feeders resolved", an identity predicate. `computeAutoPull` (`RunSurface.tsx:91-114`) does no filtering of its own — recorded-match-has-a-court and `lane.depth === 1`, then it trusts `nextEligible` wholesale. The backend does not backstop it (`local.py:1986-2020`: status + payload only). The solver *does* guarantee both properties (`player_no_overlap.py`, `rest.py:40` — `rest_is_hard` defaults True) but only at PLANNED times, and auto-pull assigns at `slotForAssign(...)`. Net: a player mid-rally on court 1 whose next match has both sides known is auto-pulled onto court 3 the moment it clears.
+- **Finding raised:** **D20** in `docs/reference/debt-log.md` (owner asked for the debt log rather than an F-number; F-* is a legacy id from `01-findings.md`, D-numbers are the live convention). Recorded, **not fixed** — this was a documentation-revision session.
+- **D1 re-verified: still OPEN.** Its own cited path is stale pre-reorg (`products/scheduler/frontend/...`); live path is `apps/console/src/hooks/useSchedule.ts:83`. §4's two citations both still hold.
+- **Gates:** `ruff check packages/scheduler-core/benchmarks/` clean. `npm run docs:build` **not applicable** — `docs/.vitepress/config.*:80-85` `srcExclude`s `history/**`, so this document is not in the built site. No product code touched, so no product gate applies.
+- **Benchmark re-run, 150/8** (`.venv` python, OR-Tools 9.15.6755 confirmed installed; pinned at `apps/api/requirements.txt:10`, floor `>=9.8.0` in `packages/scheduler-core/pyproject.toml:7`):
+
+  ```
+  | Matches / courts | A explicit-court | B cumulative | Speedup | Makespan | Colouring |
+  | 150 / 8          | 1.734 s          | 0.040 s      | 43x     | equal    | OK, 8/8 courts, 0.05 ms |
+  |   model size     | 2780 constraints, 2701 vars | 223 constraints, 301 vars |
+  ```
+
+  **Shape reproduces; magnitude does not.** §3 records 0.239 s / 0.044 s / 5× at this point. The research session's generator was deleted, so this script's synthetic instances are not the same instances — B is an order of magnitude faster with an equal makespan and a valid colouring, which is the claim Phase 2 rests on, but the speedup *factor* is instance-dependent and §3's absolute A-times are not reproducible from this script. Recorded rather than reconciled: silently overwriting §3 with these numbers would fake a continuity that does not exist.
+- **Next task:** unchanged — Phase 0, owner answers **CP1–CP8**, then ADR 0015. Plus the new open item: rule on **D20** (and whether it waits for Phase 4a).
