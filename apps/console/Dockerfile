@@ -51,6 +51,8 @@ COPY apps/console ./apps/console
 # Build args — baked into the static bundle at build time.
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG VITE_ERROR_HARNESS=
+ENV VITE_ERROR_HARNESS=$VITE_ERROR_HARNESS
 
 # Build via the workspace runner so paths resolve correctly.
 RUN npm run -w apps/console build
