@@ -132,6 +132,7 @@ vi.mock('../opsBlock', () => ({
       slot: 0,
       sideA: 'Alice',
       sideB: 'Bob',
+      playerIds: [],
       done: false,
       started: false,
     },

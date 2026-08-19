@@ -109,6 +109,7 @@ function mkMatch(
     late: false,
     timeliness: 'ontime' as const,
     eligible: true,
+    playerIds: [],
     ...overrides,
   };
 }

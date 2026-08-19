@@ -26,6 +26,8 @@ import {
   deriveCourtLanes,
   deriveQueue,
   nextEligible,
+  busyPlayers,
+  isPlayerBusy,
   deriveSummary,
   type CourtLane,
   type RunMatch,
@@ -103,7 +105,7 @@ export function computeAutoPull(
   // the court empties after this record (depth 1 → 0).
   if (!lane || lane.depth !== 1) return null;
 
-  const head = nextEligible(queue);
+  const head = nextEligible(queue, busyPlayers(matches));
   if (!head) return null;
 
   return {
@@ -244,6 +246,14 @@ export function RunSurface({
     [matches, courtCount, planFinalized, currentSlot],
   );
   const queue = useMemo(() => deriveQueue(matches), [matches]);
+  // D20: who is physically on a court right now. The solver guarantees a
+  // player is never double-booked at PLANNED times, but every assign here
+  // happens at a different time, so this is the only guard that holds.
+  const busy = useMemo(() => busyPlayers(matches), [matches]);
+  const busyKeys = useMemo(
+    () => new Set(queue.filter((m) => isPlayerBusy(m, busy)).map((m) => m.key)),
+    [queue, busy],
+  );
   // Bracket "called" is Operations-local (no persisted status), overlaid onto
   // `matches` by toRunMatches — but the BOARD renders from raw blocks, so
   // without this overlay a called bracket chip would stay painted 'scheduled'
@@ -522,9 +532,9 @@ export function RunSurface({
             formatSlot={formatSlot}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}
-            hasEligible={nextEligible(queue) != null}
+            hasEligible={nextEligible(queue, busy) != null}
             onAssignNext={(court) => {
-              const head = nextEligible(queue);
+              const head = nextEligible(queue, busy);
               if (!head) return;
               fireAssign(head, court, slotForAssign(court, matches, currentSlot ?? 0));
             }}
@@ -542,6 +552,7 @@ export function RunSurface({
               selectedKey={selectedKey}
               onSelect={setSelectedKey}
               lateKeys={lateKeys}
+              busyKeys={busyKeys}
               onSend={sendFromQueue}
             />
           </div>

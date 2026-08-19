@@ -10,6 +10,9 @@ export interface RunMatch {
    *  the summary already read; `timeliness` is the tier a renderer needs to
    *  tell DUE from LATE from OVERDUE. Both are derived together. */
   status: RunStatus; late: boolean; timeliness: Timeliness; eligible: boolean;
+  /** Everyone physically on court for this match (see `Match.playerIds`).
+   *  Empty when identity is unknown; never undefined. */
+  playerIds: string[];
 }
 
 const TBD = 'TBD';
@@ -33,7 +36,8 @@ export function toRunMatches(
         : (eligibleBracketIds?.has(b.id) ?? false);
     return {
       key: b.key, id: b.id, source: b.source, label: b.label, colorKey: b.colorKey,
-      sideA: b.sideA, sideB: b.sideB, court: b.court ?? undefined, plannedSlot: b.slot,
+      sideA: b.sideA, sideB: b.sideB, playerIds: b.playerIds,
+      court: b.court ?? undefined, plannedSlot: b.slot,
       span: b.span ?? 1, status,
       // Lateness is NOT a per-match fact: it is a court's CURRENT (Now) match
       // running past its planned start, and only once the floor is running.
@@ -121,12 +125,49 @@ export function deriveQueue(matches: RunMatch[]): RunMatch[] {
       || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
-/** The assignable head — first eligible+assignable match in queue order.
- *  Skips waiting (TBD-vs-TBD / unresolved-feeder) matches AND non-assignable
+/**
+ * Everyone currently occupying a court: any match that holds a court and is
+ * not finished. That is exactly the complement of `deriveQueue`'s filter, so
+ * a person cannot be both queued and busy through the same match.
+ *
+ * `called` counts as busy — you cannot call one player to two courts — and so
+ * does a court-assigned `scheduled` match, because `assign_court` sets the
+ * court while the status stays scheduled.
+ */
+export function busyPlayers(matches: RunMatch[]): ReadonlySet<string> {
+  const busy = new Set<string>();
+  for (const m of matches) {
+    if (m.court != null && m.status !== 'done') {
+      for (const p of m.playerIds) busy.add(p);
+    }
+  }
+  return busy;
+}
+
+/** True when any player of this match is already on a court. A match with no
+ *  known identities is never busy: we refuse on evidence, not on ignorance. */
+export function isPlayerBusy(m: RunMatch, busy: ReadonlySet<string>): boolean {
+  return m.playerIds.some((p) => busy.has(p));
+}
+
+/** The assignable head — first eligible+assignable match in queue order whose
+ *  players are all off court.
+ *
+ *  Skips waiting (TBD-vs-TBD / unresolved-feeder) matches, non-assignable
  *  statuses (e.g. `called`) so auto-pull and "Assign next" never strand a court
- *  on a match that cannot accept an assign action. */
-export function nextEligible(queue: RunMatch[]): RunMatch | undefined {
-  return queue.find((m) => m.eligible && can(m.status, 'assign'));
+ *  on a match that cannot accept an assign action, AND matches whose player is
+ *  mid-rally elsewhere.
+ *
+ *  `busy` is REQUIRED, not optional: the solver's player-no-overlap guarantee
+ *  holds at PLANNED times only, and auto-pull assigns at a different time, so
+ *  this is the only thing standing between a player and two simultaneous
+ *  matches (debt D20). An optional parameter would let a new call site fail
+ *  open silently. Build it with `busyPlayers(matches)`. */
+export function nextEligible(
+  queue: RunMatch[],
+  busy: ReadonlySet<string>,
+): RunMatch | undefined {
+  return queue.find((m) => m.eligible && can(m.status, 'assign') && !isPlayerBusy(m, busy));
 }
 
 export interface RunSummary { done: number; total: number; playing: number; courtsFree: number; late: number; }

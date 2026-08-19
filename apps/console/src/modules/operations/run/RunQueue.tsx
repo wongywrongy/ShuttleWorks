@@ -42,13 +42,16 @@ export interface RunQueueProps {
   /** Keys of queue rows past their planned slot (floor running) — paints a
    *  right-aligned LATE badge in the board's run-late voice. */
   lateKeys?: ReadonlySet<string>;
+  /** Keys of queue rows held because a player is already on a court (D20).
+   *  Distinct from `!eligible`, which means a side is undecided. */
+  busyKeys?: ReadonlySet<string>;
   /** Quick "↵ send" affordance on eligible scheduled rows — sends the row's
    *  match to the first free court without opening the inspector. */
   onSend?: (key: string) => void;
 }
 
 // ── component ─────────────────────────────────────────────────────────────
-export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: RunQueueProps) {
+export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, onSend }: RunQueueProps) {
   // Viewer read-only vocabulary (audit A2) — send is a write.
   const canEdit = useCanEdit();
   if (queue.length === 0) {
@@ -132,7 +135,15 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
                 affordance used to be the only marker, so a row blocked on an
                 earlier result and a row already called to a court both read as
                 a plain, unexplained absence. */}
-            {!match.eligible ? (
+            {busyKeys?.has(match.key) ? (
+              <span
+                data-testid={`queue-busy-${match.key}`}
+                title="A player in this match is on another court"
+                className={`flex-shrink-0 ${EYEBROW_CLASS} text-ink-faint`}
+              >
+                {STATE_WORD.onCourt}
+              </span>
+            ) : !match.eligible ? (
               <span
                 data-testid={`queue-blocked-${match.key}`}
                 title={PENDING_REASON[match.source]}

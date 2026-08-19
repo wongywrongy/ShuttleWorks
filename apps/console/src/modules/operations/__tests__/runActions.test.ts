@@ -29,6 +29,7 @@ const m = (o: any) => {
     late: false,
     timeliness: 'ontime' as const,
     eligible: o.eligible ?? false,
+    playerIds: [],
     court: o.court,
     plannedSlot: o.slot,
   };

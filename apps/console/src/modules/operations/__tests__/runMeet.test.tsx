@@ -57,6 +57,7 @@ function mkRunMatch(
     late: false,
     timeliness: 'ontime',
     eligible: true,
+    playerIds: [],
     ...overrides,
   };
 }

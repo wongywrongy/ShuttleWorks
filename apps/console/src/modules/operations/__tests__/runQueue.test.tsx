@@ -12,6 +12,7 @@ function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' |
     late: false,
     timeliness: 'ontime' as const,
     eligible: true,
+    playerIds: [],
     ...p,
   };
 }

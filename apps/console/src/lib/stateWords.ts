@@ -30,7 +30,8 @@ export type StateWord =
   | 'done'
   | 'scheduled'
   | 'free'
-  | 'closed';
+  | 'closed'
+  | 'onCourt';
 
 export const STATE_WORD: Record<StateWord, string> = {
   live: 'Live',
@@ -46,4 +47,8 @@ export const STATE_WORD: Record<StateWord, string> = {
   scheduled: 'Scheduled',
   free: 'Free',
   closed: 'Closed',
+  // A queued match whose player is mid-rally on another court. Not a status
+  // of the match but a fact about its people, and the desk reads it in the
+  // same column as the others, so it lives in the same vocabulary.
+  onCourt: 'On court',
 };

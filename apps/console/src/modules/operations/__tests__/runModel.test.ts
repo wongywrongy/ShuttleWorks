@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { toRunMatches, deriveCourtLanes, deriveQueue, nextEligible, deriveSummary } from '../runtime/runModel';
+import { toRunMatches, deriveCourtLanes, deriveQueue, nextEligible, busyPlayers, deriveSummary } from '../runtime/runModel';
 import { buildLiveChips } from '../runtime/boardPlacements';
 import type { OpsBlock } from '../opsBlock';
 
 const blk = (o: Partial<OpsBlock> & { id: string }): OpsBlock => ({
   source: 'meet', key: `meet:${o.id}`, label: o.id, span: 1,
-  status: 'scheduled', sideA: 'A', sideB: 'B', done: false, started: false,
+  status: 'scheduled', sideA: 'A', sideB: 'B', playerIds: [], done: false, started: false,
   ...o,
 } as OpsBlock);
 
@@ -110,7 +110,7 @@ describe('runModel', () => {
     );
     const q = deriveQueue(ms);
     expect(q.map((m) => m.id)).toEqual(['feeder', 'ready']); // both shown, slot order
-    expect(nextEligible(q)?.id).toBe('ready');               // ineligible feeder skipped
+    expect(nextEligible(q, new Set())?.id).toBe('ready');    // ineligible feeder skipped
   });
   it('nextEligible skips eligible-but-called matches; requires scheduled (assignable) status', () => {
     // bracket match: eligible (in eligibleBracketIds) but status='called' (in calledBracketIds)
@@ -128,9 +128,9 @@ describe('runModel', () => {
     expect(calledM?.eligible).toBe(true);
     expect(calledM?.status).toBe('called');
     // nextEligible must skip the called match and return the scheduled one
-    expect(nextEligible(q)?.id).toBe('ready');
+    expect(nextEligible(q, new Set())?.id).toBe('ready');
     // with only the called match in queue: no assignable head
-    expect(nextEligible([calledM!])).toBeUndefined();
+    expect(nextEligible([calledM!], new Set())).toBeUndefined();
   });
   it('meet match is eligible when both sides are known', () => {
     const [m] = toRunMatches([blk({ id: 'm', sideA: 'A', sideB: 'B' })], {});
@@ -158,5 +158,42 @@ describe('runModel', () => {
     expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 9, false)).late).toBe(0);
     // Running but before the planned slot → not yet late.
     expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 0, true)).late).toBe(0);
+  });
+});
+
+describe('player-busy (D20)', () => {
+  const onCourt = blk({ id: 'live', court: 1, slot: 0, status: 'started', playerIds: ['p1'] });
+  const queued = blk({ id: 'q', slot: 1, status: 'scheduled', playerIds: ['p1', 'p9'] });
+  const free = blk({ id: 'f', slot: 2, status: 'scheduled', playerIds: ['p7'] });
+
+  it('busyPlayers collects everyone on a court, and nobody who is done', () => {
+    const ms = toRunMatches([onCourt, queued], {});
+    expect(busyPlayers(ms)).toEqual(new Set(['p1']));
+
+    const finished = toRunMatches(
+      [blk({ id: 'd', court: 1, status: 'finished', playerIds: ['p2'] })], {},
+    );
+    expect(busyPlayers(finished)).toEqual(new Set());
+  });
+
+  it('nextEligible SKIPS a match whose player is already on a court', () => {
+    const ms = toRunMatches([onCourt, queued, free], {});
+    const head = nextEligible(deriveQueue(ms), busyPlayers(ms));
+    // `queued` is earlier in queue order AND eligible AND assignable — the only
+    // reason to skip it is that p1 is mid-rally on court 1.
+    expect(head?.id).toBe('f');
+  });
+
+  it('NEGATIVE CONTROL: with an empty busy set the same queue returns the busy match', () => {
+    // Proves the assertion above is caused by the filter and not by the
+    // ordering. If this ever passes with `busyPlayers(ms)` substituted in,
+    // the filter is dead code.
+    const ms = toRunMatches([onCourt, queued, free], {});
+    expect(nextEligible(deriveQueue(ms), new Set())?.id).toBe('q');
+  });
+
+  it('a match with no known players is never blocked by the filter', () => {
+    const ms = toRunMatches([onCourt, blk({ id: 'tbd', slot: 1, playerIds: [] })], {});
+    expect(nextEligible(deriveQueue(ms), busyPlayers(ms))?.id).toBe('tbd');
   });
 });
