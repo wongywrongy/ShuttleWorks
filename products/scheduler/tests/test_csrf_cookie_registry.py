@@ -37,14 +37,40 @@ from tests._helpers import isolate_test_database
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 GOOD_PW = "a perfectly fine passphrase"
 
-_API_DIR = Path(__file__).resolve().parents[1] / "backend" / "api"
+_BACKEND = Path(__file__).resolve().parents[1] / "backend"
+
+# **Every directory where a cookie can be set, not every directory where one
+# happened to be set when this guard was written.** The scan covered ``api/``
+# alone until SP-PROGRAM-1 Phase 6 put a real ``set_cookie`` in
+# ``app/form_csrf.py``, where the glob never looked. (Ruling R8-D has since
+# moved that mint to the SSR tier and deleted the function, so ``app/`` is
+# clean again — the widened scan stays, because the lesson was about the
+# unasked question, not about the one file that raised it.) That
+# is the same failure mode as the one-hard-wired-cookie-name defect this whole
+# file exists about: not a wrong answer, an unasked question. A cookie set from
+# a directory outside this list is invisible to the gate, so adding a layer
+# that sets cookies means adding it here.
+_SCANNED_DIRS = (_BACKEND / "api", _BACKEND / "app")
 
 # Cookies that are deliberately NOT credentials — a locale or theme
-# preference, say. Empty today, and an addition here is a claim that the
-# cookie cannot authenticate anything. Kept as an explicit escape hatch so
-# a future non-session cookie is a reviewed edit rather than a reason to
-# weaken the assertion below.
-_NON_SESSION_COOKIES: set[str] = set()
+# preference, say. An addition here is a claim that the cookie cannot
+# authenticate anything. Kept as an explicit escape hatch so a future
+# non-session cookie is a reviewed edit rather than a reason to weaken the
+# assertion below.
+#
+# ``sw_play_csrf`` (SP-PROGRAM-1 Phase 6, R8-B) is the pre-session
+# double-submit nonce minted by the SSR tier (R8-D,
+# ``entrant/app/lib/formCsrf.server.ts``) and verified against
+# ``app/form_csrf.py::PLAY_CSRF_COOKIE``. It
+# is a random value handed to an *anonymous* visitor so that a login or
+# signup form has something unreadable to derive a token from; it names no
+# principal and grants no access. Registering it would be actively wrong,
+# not merely redundant: the registry is the CSRF middleware's trigger for
+# "this write is cookie-authenticated", so it would make the middleware
+# demand a header from callers who have not signed in.
+# ``tests/unit/test_form_csrf.py::test_the_nonce_cookie_authenticates_nothing``
+# pins that exclusion from the other side.
+_NON_SESSION_COOKIES: set[str] = {"sw_play_csrf"}
 
 
 @pytest.fixture
@@ -148,34 +174,64 @@ def test_a_non_session_cookie_still_does_not_trigger_the_check(client):
 # ---- 2. The registry guard --------------------------------------------
 
 
-def _cookie_key_expressions() -> list[tuple[str, int, ast.AST]]:
-    """Every ``key=`` argument of every ``*.set_cookie(...)`` in ``api/``."""
-    found: list[tuple[str, int, ast.AST]] = []
-    for path in sorted(_API_DIR.glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            func = node.func
-            if not isinstance(func, ast.Attribute) or func.attr != "set_cookie":
-                continue
-            key = next(
-                (kw.value for kw in node.keywords if kw.arg == "key"),
-                node.args[0] if node.args else None,
-            )
-            assert key is not None, f"{path.name}:{node.lineno} set_cookie with no key"
-            found.append((path.name, node.lineno, key))
+def _module_constants(tree: ast.Module) -> dict[str, str]:
+    """The module's top-level ``NAME = "literal"`` bindings.
+
+    ``app/form_csrf.py`` sets its cookie as ``key=PLAY_CSRF_COOKIE`` — a
+    named constant, because the middleware and the pages read the same name
+    and a literal repeated three times is how they drift apart. The guard
+    resolves that from the module's own source rather than importing it, so
+    a cookie name is still checkable without the scan having to execute the
+    code it is auditing.
+    """
+    constants: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        value = node.value
+        if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name):
+                constants[target.id] = value.value
+    return constants
+
+
+def _cookie_key_expressions() -> list[tuple[str, int, ast.AST, dict[str, str]]]:
+    """Every ``key=`` argument of every ``*.set_cookie(...)`` under the
+    scanned directories, with the constants of the file it was found in."""
+    found: list[tuple[str, int, ast.AST, dict[str, str]]] = []
+    for directory in _SCANNED_DIRS:
+        for path in sorted(directory.glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            constants = _module_constants(tree)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if not isinstance(func, ast.Attribute) or func.attr != "set_cookie":
+                    continue
+                key = next(
+                    (kw.value for kw in node.keywords if kw.arg == "key"),
+                    node.args[0] if node.args else None,
+                )
+                assert key is not None, (
+                    f"{path.name}:{node.lineno} set_cookie with no key"
+                )
+                label = f"{path.parent.name}/{path.name}"
+                found.append((label, node.lineno, key, constants))
     return found
 
 
-def _resolve(expr: ast.AST) -> str:
+def _resolve(expr: ast.AST, constants: dict[str, str] | None = None) -> str:
     """The cookie name an expression denotes, as a string.
 
-    Handles the two shapes the codebase uses: a literal, and an attribute
-    read off ``settings``. Anything else is refused loudly rather than
-    guessed at — a computed cookie name is a thing this guard genuinely
-    cannot check, and silently skipping it would make the guard a
-    decoration.
+    Handles the three shapes the codebase uses: a literal, an attribute read
+    off ``settings``, and a module-level string constant of the file the call
+    was found in. Anything else is refused loudly rather than guessed at — a
+    computed cookie name is a thing this guard genuinely cannot check, and
+    silently skipping it would make the guard a decoration.
     """
     from app.config import settings
 
@@ -187,9 +243,12 @@ def _resolve(expr: ast.AST) -> str:
         and expr.value.id == "settings"
     ):
         return getattr(settings, expr.attr)
+    if isinstance(expr, ast.Name) and expr.id in (constants or {}):
+        return (constants or {})[expr.id]
     raise AssertionError(
-        "set_cookie(key=…) must be a literal or a settings attribute so the "
-        f"registry guard can check it; got {ast.dump(expr)}"
+        "set_cookie(key=…) must be a literal, a settings attribute or a "
+        "module-level string constant so the registry guard can check it; got "
+        f"{ast.dump(expr)}"
     )
 
 
@@ -203,17 +262,50 @@ def test_every_api_set_cookie_names_a_registered_session_cookie(client):
     assert calls, "found no set_cookie calls at all — the scan is broken"
 
     strays = [
-        f"{name}:{line} sets {_resolve(expr)!r}"
-        for name, line, expr in calls
-        if _resolve(expr) not in registry
+        f"{name}:{line} sets {_resolve(expr, constants)!r}"
+        for name, line, expr, constants in calls
+        if _resolve(expr, constants) not in registry
     ]
 
     assert not strays, (
-        "These cookies are set by the API but are not in "
+        "These cookies are set by the backend but are not in "
         "settings.session_cookie_names, so the CSRF middleware will not "
         "treat writes carrying them as cookie-authenticated:\n  "
         + "\n  ".join(strays)
     )
+
+
+def test_the_scan_reaches_every_directory_that_sets_a_cookie(client):
+    """**The control on the scan's own reach**, which is the part that
+    silently rots. A guard that globs one directory answers "no strays" just
+    as confidently about a directory it never opened, and Phase 6 put a real
+    ``set_cookie`` in ``app/`` — so pin that both layers are actually seen.
+
+    Named by file rather than counted, because a count passes for the wrong
+    reason the moment a call moves between the two directories.
+
+    **``app/`` currently has no ``set_cookie`` at all, and this test is
+    honestly weaker for it.** Ruling R8-D moved the one ``set_cookie`` in
+    ``app/`` to the SSR tier and deleted the dead function that held it, so
+    there is no live call site outside ``api/`` left to point at. The
+    previous version of this test papered over that by asserting
+    ``_BACKEND / "app" in _SCANNED_DIRS`` — a module constant compared to
+    itself, three lines below its own definition, reddened by no mutation
+    except editing that constant in this same file. A green tautology reads
+    as coverage the scan does not have, which is the failure this whole file
+    exists to argue against, so it is gone rather than kept for the colour.
+
+    What remains is real: the two ``api/`` files below are live call sites,
+    and if the scan stops reaching them this fails. What is NOT covered, and
+    is written down instead of quietly accepted: a cookie set from ``app/``
+    or from some third directory is caught only by whoever remembers to add
+    that directory to ``_SCANNED_DIRS``. Restoring real reach means a real
+    ``set_cookie`` outside ``api/`` to name here.
+    """
+    seen = {name for name, _line, _expr, _constants in _cookie_key_expressions()}
+
+    assert "api/auth.py" in seen
+    assert "api/entrants.py" in seen
 
 
 def test_the_registry_names_both_principals(client):
@@ -222,54 +314,121 @@ def test_the_registry_names_both_principals(client):
     assert settings.session_cookie_names == ("sw_session", "sw_play_session")
 
 
-# ---- 3. The one exemption, and the proof that it is the only one ------
+def test_the_pre_session_nonce_is_carved_out_and_not_registered(client):
+    """The carve-out, stated as an assertion rather than as a comment.
+
+    Three claims, and all three matter: present in ``_NON_SESSION_COOKIES``
+    (so the structural gate above passes it on purpose rather than by not
+    looking), absent from ``session_cookie_names`` (so nothing ever reads it
+    as a credential), and present in ``csrf_relevant_cookie_names`` (so the
+    exclusion is a carve-out and not a hole — the pre-session login post is
+    still measured by the CSRF check).
+    """
+    from app.config import settings
+
+    assert "sw_play_csrf" in _NON_SESSION_COOKIES
+    assert "sw_play_csrf" not in settings.session_cookie_names
+    assert "sw_play_csrf" in settings.csrf_relevant_cookie_names
+
+
+# ---- 3. Zero exemptions, and the two channels that replaced the one ----
 #
-# SP-E1-2 Phase C carved a single route out of the header check:
-# ``POST /e/{slug}/submit``. The reason is structural rather than
-# convenient — it is a native HTML form post on a page with
-# ``script-src 'none'``, and a form cannot attach a custom header, which is
-# the same property this whole defense rests on seen from the other side.
-# That route proves CSRF its own way (a double-submit token derived from
-# the session cookie), so the exemption is from *this check*, not from CSRF.
+# SP-E1-2 Phase C carved a single route out of the header check: ``POST
+# /e/{slug}/submit``, because it was a native HTML form post on a page with
+# ``script-src 'none'`` and a form cannot attach a custom header — the same
+# property this whole defense rests on, seen from the other side.
+# SP-PROGRAM-1 Phase 6 **deleted the exemption rather than narrowing or
+# renaming it** (ruling R8-B). The route it named ceases to exist, and the
+# proof it substituted — a double-submit token derived from a cookie the
+# attacker's page can make the browser send but never read — was promoted
+# out of the route into a second enumerated channel the middleware checks
+# itself (``app/form_csrf.form_csrf_proves``).
 #
-# An exemption is exactly the kind of thing that grows, so it is pinned in
-# three directions: the pattern is anchored, the route answers 403 without
-# its own token, and every other cookie-carrying write is still refused.
+# The difference is the whole point. A path-based exemption is a list that
+# grows, and every entry on it is a route the middleware does not look at.
+# Two enumerated channels are a rule: every cookie-carrying write proves
+# itself, by header or by token, and there is no third answer.
+#
+# So the assertion inverts from "the exemption matches one route shape" to
+# "there are no path-based exemptions at all", derived from the source —
+# because a regex that is deleted and later re-added under another name
+# would pass any behavioural test written against today's routes.
 
 
-def test_the_form_csrf_exemption_matches_exactly_one_route_shape(client):
-    from app.main import _FORM_CSRF_ROUTES
+def test_the_app_declares_zero_path_based_csrf_exemptions():
+    """**The inverted control.** Derived from ``app/main.py``'s source:
+    the CSRF middleware may not skip a write because of its path.
 
-    assert _FORM_CSRF_ROUTES.match("/e/spring-open/submit")
-    # Anchored at both ends: a prefix match here would exempt anything an
-    # attacker could hang off the same path.
-    assert not _FORM_CSRF_ROUTES.match("/e/spring-open/submit/extra")
-    assert not _FORM_CSRF_ROUTES.match("/e/spring-open/submitx")
-    assert not _FORM_CSRF_ROUTES.match("/x/e/spring-open/submit")
-    assert not _FORM_CSRF_ROUTES.match("/e/a/b/submit")
-    assert not _FORM_CSRF_ROUTES.match("/tournaments/x/entries/commit")
+    Break it to prove it is not vacuous: re-add
+    ``_SOMETHING = re.compile(r"^/e/[^/]+/submit$")`` at module scope in
+    ``app/main.py`` and this fails by line.
+    """
+    import ast
+    import inspect
+
+    from app import main as app_main
+
+    source = inspect.getsource(app_main)
+    tree = ast.parse(source)
+
+    # Any module-level name bound to a compiled pattern is a path list by
+    # construction — there is no other reason for one to live here.
+    patterns = [
+        f"line {node.lineno}: {node.targets[0].id}"
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute)
+        and node.value.func.attr == "compile"
+    ]
+    assert not patterns, (
+        "app/main.py declares path patterns next to the CSRF middleware. "
+        "Phase 6 deleted the last path-based exemption; a write proves "
+        "itself by header or by cookie-derived token, never by URL:\n  "
+        + "\n  ".join(patterns)
+    )
+    assert "_FORM_CSRF_ROUTES" not in source
 
 
-def test_the_exempt_route_still_refuses_a_write_with_no_proof_at_all(client):
-    """The exemption is not a hole: the route substitutes its own check.
+def test_a_cookie_carrying_write_with_no_proof_at_all_is_still_refused(client):
+    """The behavioural half, on the route that replaced the exempt one.
 
     A cookie-carrying POST with neither the header nor the form token is
-    refused — by the route rather than by the middleware, which is the
-    whole claim.
+    refused. It is now the *middleware* that refuses it rather than the
+    route, which is what deleting the exemption bought.
     """
     from app.config import settings
 
     client.cookies.clear()
     client.cookies.set(settings.entrant_session_cookie_name, "an-entrant-token")
 
-    r = client.post("/e/some-slug/submit", data={"playerName": "Alice"})
+    r = client.post("/e/api/submit/some-slug", data={"playerName": "Alice"})
 
     assert r.status_code in (401, 403, 404)
-    assert r.status_code != 201
+    assert r.status_code != 303
+
+
+def test_the_retired_html_routes_are_gone(client):
+    """The cut-over, asserted where route registration is actually visible.
+
+    Newer FastAPI keeps each ``include_router`` as a nested
+    ``_IncludedRouter`` rather than flattening onto ``app.routes``, so the
+    OpenAPI document is the assertion surface (CLAUDE.md, known hazards).
+    """
+    from app.main import app
+
+    paths = app.openapi()["paths"]
+    assert "/e/{slug}" not in paths
+    assert "/e/{slug}/submit" not in paths
+    # Negative control: the surface that replaced them is registered.
+    assert "get" in paths["/e/api/page/{slug}"]
+    assert "post" in paths["/e/api/submit/{slug}"]
 
 
 def test_every_other_cookie_carrying_write_is_still_covered(client):
-    """Negative control for the exemption: one route, not a category."""
+    """Negative control: a write with no proof at all is refused wherever it
+    lands, not only on the entrant surface."""
     from app.config import settings
 
     client.cookies.clear()

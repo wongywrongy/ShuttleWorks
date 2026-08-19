@@ -88,6 +88,33 @@ describe('EntriesDesk — the list', () => {
     ).toBeInTheDocument();
   });
 
+  // Design audit T7 / WCAG 1.3.1: the desk is a data-dense reading view, and
+  // built from bare div/span it gave a screen reader a flat run of text with
+  // no programmatic link between an entrant and their state.
+  it('exposes the desk as a table — an entrant and their state are one row', async () => {
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
+      entry({ id: 'e-1', playerName: 'Alice Chen', eventCode: 'MS', state: 'pending' }),
+    ]);
+
+    render(<EntriesDesk tid="t-1" />);
+    const r = await screen.findByTestId('entry-row-e-1');
+
+    expect(screen.getByRole('table')).toContainElement(r);
+    expect(r).toHaveAttribute('role', 'row');
+    const cells = within(r).getAllByRole('cell');
+    expect(cells).toHaveLength(6);
+    expect(cells[0]).toHaveTextContent('Alice Chen');
+    expect(cells[2]).toHaveTextContent('Pending');
+    expect(screen.getAllByRole('columnheader').map((c) => c.textContent)).toEqual([
+      'Entrant',
+      'Event',
+      'State',
+      'Attention',
+      'Remarks',
+      '',
+    ]);
+  });
+
   it('shows the submitting address on the act — the operator surface, not the public one', async () => {
     // The public entrant list is a strict projection (names + events only).
     // The desk is the opposite: the operator is the person who has to email
@@ -194,6 +221,59 @@ describe('EntriesDesk — the list', () => {
     render(<EntriesDesk tid="t-1" />);
 
     expect(await screen.findByText(/no entries yet/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * A failed read is not an empty desk (2026-08-10 full-scale browser pass).
+ *
+ * `GET /tournaments/{id}/entries` 500'd and the desk rendered
+ * "0 submitted · No entries yet" — on a workspace with 54 real submissions.
+ * The organiser was told nobody had entered their tournament. A dropped
+ * request is normal in the deployment this product is built for (a laptop
+ * sleeping, sports-hall wifi, a restart mid-event), so the count of entries
+ * has to be *unknown* when the read fails, never zero.
+ */
+describe('EntriesDesk — a failed read is not an empty desk', () => {
+  it('says the list did not load, and never claims zero entries', async () => {
+    vi.spyOn(apiClient, 'listEntries').mockRejectedValue(
+      Object.assign(new Error('Internal Server Error'), { status: 500 }),
+    );
+
+    render(<EntriesDesk tid="t-1" />);
+
+    expect(await screen.findByTestId('entries-load-error')).toBeInTheDocument();
+    // The two lies this replaces, verbatim from the browser pass.
+    expect(screen.queryByText(/no entries yet/i)).toBeNull();
+    expect(screen.queryByText(/0 submitted/i)).toBeNull();
+  });
+
+  it('re-reads from the failure state, and stops claiming failure once it lands', async () => {
+    const list = vi
+      .spyOn(apiClient, 'listEntries')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([entry({ id: 'e-1' })]);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entries-load-error');
+
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    expect(await screen.findByTestId('entry-row-e-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('entries-load-error')).toBeNull();
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('NEGATIVE CONTROL: a genuine zero still reads as a genuine zero', async () => {
+    // Without this, "always show the failure banner" would pass the two tests
+    // above and destroy the empty state the desk is supposed to have.
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([]);
+
+    render(<EntriesDesk tid="t-1" />);
+
+    expect(await screen.findByText(/no entries yet/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('entries-load-error')).toBeNull();
+    expect(screen.getByText(/0 submitted/i)).toBeInTheDocument();
   });
 });
 

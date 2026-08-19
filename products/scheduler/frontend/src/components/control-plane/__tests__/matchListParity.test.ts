@@ -11,16 +11,25 @@ import { describe, expect, it } from 'vitest';
 const SRC = resolve(__dirname, '../../..');
 const read = (rel: string) => readFileSync(resolve(SRC, rel), 'utf8');
 
+/** Each surface takes its own instance of the shared column spec — the two
+ *  lists differ only in the width of the event column, which each derives
+ *  from its own label vocabulary (`matchListColumns.ts`). The instances still
+ *  come from the shared module: neither surface may build its own. */
 const SURFACES = [
-  'products/meet/matches/MatchesSpreadsheet.tsx',
-  'products/bracket/BracketMatchesTab.tsx',
+  { rel: 'products/meet/matches/MatchesSpreadsheet.tsx', prefix: 'MEET_' },
+  { rel: 'products/bracket/BracketMatchesTab.tsx', prefix: 'BRACKET_' },
 ];
 
-/** The shared names a surface must take from control-plane, never define. */
-const SHARED_NAMES = ['MATCH_LIST_COLUMNS', 'MATCH_CELL', 'STATUS_LABEL', 'STATUS_CLASS'];
+/** The shared names a surface must take from control-plane, never define.
+ *  The first two are per-list, so they arrive under the surface's prefix.
+ *  Since X6 the status cell renders through the one `MatchStatus`
+ *  component (text vs chip per state class) instead of a local
+ *  StatusPill + STATUS_LABEL pairing. */
+const PREFIXED_NAMES = ['MATCH_LIST_COLUMNS', 'MATCH_CELL'];
+const SHARED_NAMES = ['MatchStatus'];
 
 describe('match-list parity', () => {
-  for (const rel of SURFACES) {
+  for (const { rel, prefix } of SURFACES) {
     it(`${rel} imports the shared column spec and status vocabulary`, () => {
       const src = read(rel);
       // Each shared name must arrive through a control-plane import — a bare
@@ -32,6 +41,9 @@ describe('match-list parity', () => {
       ]
         .map((m) => m[1])
         .join(',');
+      for (const name of PREFIXED_NAMES) {
+        expect(controlPlaneImports).toContain(`${prefix}${name}`);
+      }
       for (const name of SHARED_NAMES) {
         expect(controlPlaneImports).toContain(name);
       }
@@ -39,10 +51,10 @@ describe('match-list parity', () => {
 
     it(`${rel} defines no rival copy of the shared names`, () => {
       const src = read(rel);
-      // Redefining a shared name locally — under its own name or the old one —
-      // is exactly the drift this guard exists to stop.
+      // Redefining a shared name locally — under its own name, a prefixed one
+      // or the old one — is exactly the drift this guard exists to stop.
       expect(src).not.toMatch(
-        /(?:const|let|var|function|enum)\s+(?:MATCH_LIST_COLUMNS|MATCH_COLUMNS|MATCH_CELL|STATUS_LABEL|STATUS_CLASS)\b/,
+        /(?:const|let|var|function|enum)\s+(?:(?:MEET_|BRACKET_)?MATCH_LIST_COLUMNS|MATCH_COLUMNS|(?:MEET_|BRACKET_)?MATCH_CELL|STATUS_LABEL|STATUS_CLASS|STATUS_PILL_TONE|MatchStatus)\b/,
       );
       expect(src).not.toMatch(/from '\.\/matchStatus'/);
     });

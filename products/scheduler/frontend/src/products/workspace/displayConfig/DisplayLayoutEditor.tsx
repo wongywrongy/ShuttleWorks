@@ -30,7 +30,7 @@
  * intentional preview-fidelity gap, not a bug.
  *
  * ---- Court order + hide (task 7) ------------------------------------
- * Below the tv* rows, a "Court order & visibility" list drives
+ * Below the tv* rows, a "Court order and visibility" list drives
  * `courtOrder`/`hiddenCourts` — the same two config fields
  * `MeetDisplayPage`/`CourtsView` apply to the real board (see
  * `publicDisplay/courtLayout.ts`). Drag-reorder + hide toggle mirror the
@@ -78,6 +78,7 @@ import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
 import { Row, Seg, Section, Toggle } from '../../../platform/settings/SettingsControls';
 import { orderCourts, courtsWithActiveMatch, reorderIds } from '../../display/publicDisplay/courtLayout';
+import { DEFAULT_DWELL_SECONDS } from '../../display/publicDisplay/rotation';
 
 // Same required-field shape as BracketEngineSection's FALLBACK_CONFIG — the
 // TournamentConfig fields with no `?` in the DTO.
@@ -91,8 +92,12 @@ const FALLBACK_CONFIG: TournamentConfig = {
   freezeHorizonSlots: 0,
 };
 
+// Strip is gone (DC-1): a single tall column showed three or four courts on
+// a venue screen and scrolled the rest out of sight, which a passive display
+// cannot do. Auto replaces it as the default and sizes the grid to the board
+// (courtLayout.ts#autoLayout); Grid keeps the director's own column count.
 const DISPLAY_MODE_OPTIONS = [
-  { value: 'strip' as const, label: 'Strip' },
+  { value: 'auto' as const, label: 'Auto' },
   { value: 'grid' as const, label: 'Grid' },
   { value: 'list' as const, label: 'List' },
 ];
@@ -114,11 +119,22 @@ const CARD_SIZE_OPTIONS = [
 ];
 
 // 'auto' is the "Auto" sentinel for standingsMode's `null`.
+// Side and Rotate are gone (DC-3): rotation subsumes them. Side was a
+// persistent panel that took roughly a third of the board's width from the
+// courts (TV-5), and Rotate is what every board does now — so the only
+// question left about standings is whether they are on the board at all.
 const STANDINGS_MODE_OPTIONS = [
-  { value: 'auto' as const, label: 'Auto' },
+  { value: 'auto' as const, label: 'On' },
   { value: 'off' as const, label: 'Off' },
-  { value: 'side' as const, label: 'Side' },
-  { value: 'rotate' as const, label: 'Rotate' },
+];
+
+/** Dwell choices, in seconds, for a glance slide. Courts holds twice this
+ *  (rotation.ts) because it is the slide the hall is reading. */
+const DWELL_OPTIONS = [
+  { value: 5, label: '5s' },
+  { value: 10, label: '10s' },
+  { value: 20, label: '20s' },
+  { value: 30, label: '30s' },
 ];
 
 /** One draggable row in the court-order list. Mirrors GridHeader's
@@ -162,7 +178,7 @@ function CourtOrderRow({
             'inline-flex cursor-grab touch-none items-center gap-2 text-sm font-medium active:cursor-grabbing',
             hidden ? 'text-muted-foreground' : 'text-foreground',
           ].join(' ')}
-          title={`Court ${courtId} — drag to reorder`}
+          title={`Court ${courtId}: drag to reorder`}
         >
           Court {courtId}
           {isNew && (
@@ -191,7 +207,7 @@ function CourtOrderRow({
       {hidden && hasLiveMatch && (
         <div className="mt-1 flex items-center justify-between gap-2 rounded-sm bg-accent/10 px-2 py-1 text-2xs text-accent">
           <span>
-            Court {courtId} (hidden) has a live match — show it?
+            Court {courtId} (hidden) has a live match. Show it?
           </span>
           <button
             type="button"
@@ -225,11 +241,16 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
   // Mirror MeetDisplayPage's own defaulting (MeetDisplayPage.tsx:264-276) so
   // the editor's "current value" always matches what the board is actually
   // showing.
-  const tvDisplayMode = config?.tvDisplayMode ?? 'strip';
+  // Stored `strip` shows as Auto — the mode it maps to on the board.
+  const storedDisplayMode = config?.tvDisplayMode ?? 'auto';
+  const tvDisplayMode = storedDisplayMode === 'strip' ? 'auto' : storedDisplayMode;
   const tvGridColumns = config?.tvGridColumns ?? 0;
   const tvCardSize = config?.tvCardSize ?? 'auto';
   const tvShowScores = config?.tvShowScores !== false;
-  const standingsMode = config?.standingsMode ?? 'auto';
+  // 'side' and 'rotate' both mean "on the board" now (DC-3).
+  const storedStandings = config?.standingsMode ?? null;
+  const standingsMode: 'auto' | 'off' = storedStandings === 'off' ? 'off' : 'auto';
+  const dwellSeconds = config?.tvRotationDwellSeconds ?? DEFAULT_DWELL_SECONDS;
 
   // ---- Court order + hide ---------------------------------------------
   const courtCount = config?.courtCount ?? FALLBACK_CONFIG.courtCount;
@@ -345,33 +366,48 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
         }
       />
       <Row
-        label="Standings mode"
+        label="Standings"
         control={
           <Seg
             options={STANDINGS_MODE_OPTIONS}
             value={standingsMode}
             onChange={(v) => update({ standingsMode: v === 'auto' ? null : v })}
-            ariaLabel="Standings mode"
+            ariaLabel="Standings"
           />
         }
+      />
+      {/* The board cycles courts → standings → up next; a slide with no data
+          is skipped rather than shown blank, so this only sets the ceiling.
+          Courts always holds twice the dwell — it is what people are reading,
+          the rest are glances (DC-3 / TV-7). */}
+      <Row
+        label="Slide dwell"
         last
+        control={
+          <Seg
+            options={DWELL_OPTIONS}
+            value={dwellSeconds}
+            onChange={(v) => update({ tvRotationDwellSeconds: v })}
+            ariaLabel="Slide dwell"
+          />
+        }
       />
     </Section>
 
     {/* The section title names what these rows are; the drag affordance is
         carried by the grab cursor and the row's own title attribute. The
         one fact the title can't carry — that hiding is board-only and
-        Operations keeps scheduling the court — rides on the hide control's
-        own label instead of a paragraph over the whole group. */}
+        Operations keeps scheduling the court — is the single helper line
+        under the list (D2.2). */}
     <Section
-      title="Court order & visibility"
+      title="Court order and visibility"
       action={
         isCustomized ? (
           <button
             type="button"
             onClick={resetCourtLayout}
-            aria-label="Reset court order & visibility"
-            title="Reset court order & visibility"
+            aria-label="Reset court order and visibility"
+            title="Reset court order and visibility"
             className="inline-flex items-center gap-1 rounded p-1 text-2xs text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground"
           >
             <ArrowCounterClockwise aria-hidden className="h-3.5 w-3.5" />
@@ -394,6 +430,9 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
           ))}
         </SortableContext>
       </DndContext>
+      <p className="pb-3 pt-2 text-2xs text-muted-foreground">
+        Hiding a court affects this board only. Operations are untouched.
+      </p>
     </Section>
     </>
   );

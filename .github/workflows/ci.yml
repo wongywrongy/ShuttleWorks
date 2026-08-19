@@ -43,6 +43,62 @@ jobs:
       - name: Unused files and exports (knip, report-only)
         run: npm run knip || true
 
+  entrant:
+    name: Entrant (lint + types + tests + boundaries)
+    runs-on: ubuntu-latest
+    # Mirrors the frontend job step for step. Separate rather than folded in,
+    # because a failure here should name the entrant tier: it is a different
+    # runtime (node SSR, not a static SPA) with a different trust boundary
+    # (see products/scheduler/entrant/.dependency-cruiser.cjs).
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install workspaces
+        run: npm ci
+      - name: Lint
+        run: npm run lint:entrant
+      # `react-router typegen && tsc`. The frontend gets its type gate for free
+      # inside `build`; this tier's build does typegen too, but running the gate
+      # on its own makes a type error report as a type error.
+      - name: Typecheck
+        run: npm run typecheck:entrant
+      - name: Request-level tests
+        run: npm --prefix products/scheduler/entrant run test:run
+      - name: Architecture boundaries (dependency-cruiser)
+        run: npm run depcruise:entrant
+      # Not a packaging step — a boundary gate. React Router refuses to build
+      # when a *.server module is reachable from a CLIENT export of a route
+      # ("Server-only module referenced by client"), which is the export-level
+      # half of the rule dependency-cruiser can only state at module level.
+      # Task 15 narrowed the depcruise rule off app/routes/ because a loader
+      # can only live in a route module; this is what took its place, and it
+      # is stronger. Verified by probe: adding `export const PROBE = apiGet` to
+      # app/routes/entry.tsx fails this build and nothing else.
+      - name: Server-only boundary (react-router build)
+        run: npm --prefix products/scheduler/entrant run build
+
+      # Spec §7's no-JS posture, held to a number: the entry page's real
+      # server-rendered HTML plus every script that HTML references, gzipped,
+      # rendered through the production build this job just produced above
+      # (not asserted against a guess). Budget is 4 KB gzipped with 10% CI
+      # slack (4.4 KB enforced ceiling) against a measured 2.5 KB, ALL OF IT
+      # HTML — this tier ships no client JS at all (`app/root.tsx` renders no
+      # `<Scripts/>`; the CSP blocked its inline output in every deployed
+      # stack anyway). That replaces ruling R8-F's 123 KB, which budgeted for
+      # a React Router hydration floor no browser ever downloaded. See
+      # docs/audits/debt-log.md for the record.
+      - name: Page-weight budget (entry page, HTML + referenced scripts gzipped)
+        run: node products/scheduler/entrant/scripts/measure-page-weight.mjs
+
+      # Report-only for the same reason the frontend job gives above: knip's
+      # verdict is a hypothesis, and a gate that fails on a false positive
+      # trains people to delete load-bearing code.
+      - name: Unused files and exports (knip, report-only)
+        run: npm run knip:entrant || true
+
   backend:
     name: Backend (ruff + pytest)
     runs-on: ubuntu-latest
@@ -109,7 +165,13 @@ jobs:
           POSTGRES_BIND_ADDR: 127.0.0.1
           PUBLIC_HOSTNAME: example.test
           CLOUDFLARE_TUNNEL_TOKEN: dummy-tunnel-token
-          TRUSTED_PROXY_IPS: 172.20.0.9
+          # TRUSTED_PROXY_IPS is deliberately NOT here. It is not a `${VAR:?}`
+          # variable — it has a compose default that is the correct value —
+          # and setting it overrode that default with an address from a subnet
+          # no stack uses, which is the exact shape of the bug this job would
+          # like to be able to see (`.env.selfhost.example` shipped the same
+          # dead value). `config -q` only parses, so nothing here checks the
+          # semantics; `entrant/tests/deployStacks.test.ts` does.
           SMTP_HOST: smtp.example.test
           SW_WORKER_PASSWORD: dummy-password
           PRIMARY_TAILNET_HOST: 100.64.0.1

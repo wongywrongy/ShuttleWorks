@@ -1,7 +1,7 @@
 /**
  * RunSurface — the Operations Run keystone.
  *
- * Composes RunSummaryBand + RunLiveBoard + RunQueue + RunInspector and owns:
+ * Composes RunSummaryBand + RunCourtGrid + RunQueue + RunInspector and owns:
  *   - All seam hooks (meet command queue, bracket API, bracket result queue).
  *   - Selection state (`selectedKey`) and role resolution.
  *   - Transient `calledBracketIds` (bracket has no persisted "called" status).
@@ -11,11 +11,14 @@
  *
  * Task 16 will wire `OperationsProduct` to pass blocks/bracketData/etc down.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBracketApi } from '../../../api/bracketClient';
 import { useCommandQueue } from '../../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../../hooks/useBracketResultQueue';
 import { useUiStore } from '../../../store/uiStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
+import { DetailDock, DetailPanel } from '../../../components/control-plane';
+import { ConflictBanner } from '../../../components/ConflictBanner';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import type { OpsBlock } from '../opsBlock';
 import {
@@ -31,9 +34,16 @@ import { buildLiveChips } from '../runtime/boardPlacements';
 import { runAction, slotForAssign, type RunSeams } from '../runtime/runActions';
 import type { RunActionKind } from '../runtime/runMachine';
 import { RunSummaryBand } from './RunSummaryBand';
-import { RunLiveBoard } from './RunLiveBoard';
+import { RunCourtGrid } from './RunCourtGrid';
 import { RunQueue } from './RunQueue';
 import { RunInspector } from './RunInspector';
+import { RunFinished } from './RunFinished';
+import { MeetMatchPanel } from './MeetMatchPanel';
+import { AlertsActivityPanel } from './AlertsActivityPanel';
+import type { MeetRunOps } from './useMeetRunOps';
+import type { Advisory } from '../../../api/dto';
+import { MatchDetailPanel } from '../../bracket/MatchDetailPanel';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 
 // ── prop contract ─────────────────────────────────────────────────────────
 
@@ -52,6 +62,13 @@ export interface RunSurfaceProps {
   /** Minutes per slot (config.intervalMinutes) — enables the playing-chip
    *  elapsed stamp on the live board. */
   slotMinutes?: number;
+  /** Meet-engine seams beyond the OpsBlock model (score entry, undo-finish,
+   *  undo-start, check-in/roster edits, impact) — SP-CONSOLE-4 C4. Absent on
+   *  bracket-only workspaces; every meet affordance then stays hidden. */
+  meetOps?: MeetRunOps;
+  /** Routes an alert's suggested action to the Plan-hosted dialogs
+   *  (advisory economy lives on Plan since B1). */
+  onAdvisoryReview?: (advisory: Advisory) => void;
 }
 
 // ── pure auto-pull helper (exported so tests can verify without hooks) ────
@@ -107,6 +124,8 @@ export function RunSurface({
   planFinalized,
   formatSlot,
   slotMinutes,
+  meetOps,
+  onAdvisoryReview,
 }: RunSurfaceProps) {
   // ── seam hooks: owns the seam hooks for the Run (live) surface ───────────
   const pushToast = useUiStore((s) => s.pushToast);
@@ -124,8 +143,42 @@ export function RunSurface({
       }),
   });
 
+  /**
+   * Server-rejected commands. `useCommandQueue.submit` already records every
+   * 409 here (stale_version → someone else moved first; conflict → the
+   * transition was refused) — nothing rendered them, so a lost race was
+   * silent on the busiest surface in the product. The strip lives at surface
+   * level rather than in the inspector because `record` deselects the match,
+   * so an inspector-scoped banner would unmount before its own conflict landed.
+   */
+  const conflicts = useMatchStateStore((s) => s.recentConflictsByMatchId);
+
   // ── transient state ───────────────────────────────────────────────────────
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  // Deep-linked selection (OV-1): the Overview's and Hub inspector's
+  // "Up next" rows land here as /live?select={source}:{id}. Consumed once on
+  // mount and removed from the URL, so the selection behaves like a click
+  // afterwards (closable, replaceable) rather than a URL that keeps
+  // re-selecting. Read from window.location, not useSearchParams: this
+  // surface has no other Router dependency, and a one-shot read does not
+  // need to subscribe to navigation.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get('select');
+    if (!key) return;
+    // One-shot mount read — the canonical consume-a-param-on-mount pattern
+    // (same shape as useTournamentBackups' load-on-mount).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedKey(key);
+    params.delete('select');
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      window.location.pathname + (qs ? `?${qs}` : ''),
+    );
+  }, []);
   /** Bracket has no persisted "called" status — overlay it locally. */
   const [calledBracketIds, setCalledBracketIds] = useState<Set<string>>(new Set());
   /**
@@ -179,6 +232,13 @@ export function RunSurface({
   }, [baseMatches, optimisticAssigns]);
   // `late` is gated on the floor running (planFinalized) and applies to the Now
   // match only — deriveCourtLanes owns that rule.
+  // Which engines are actually on the floor — the band's done figure counts
+  // them all, so it says which ones (LIVE-3).
+  const sourceScope = useMemo(() => {
+    const present = new Set(matches.map((m) => m.source));
+    return (['meet', 'bracket'] as const).filter((s) => present.has(s)).join(' + ');
+  }, [matches]);
+
   const lanes = useMemo(
     () => deriveCourtLanes(matches, courtCount, { running: !!planFinalized, currentSlot }),
     [matches, courtCount, planFinalized, currentSlot],
@@ -196,15 +256,21 @@ export function RunSurface({
         : b,
     );
   }, [blocks, calledBracketIds]);
-  // Re-build the live chips here purely to count `late` for the summary band so
-  // it equals what RunLiveBoard renders (band == board). We can't lift the chips
-  // out of RunLiveBoard — its prop contract is KEEP-unchanged — so this pure,
-  // cheap re-derive from the SAME `liveBlocks`/`currentSlot` is deliberate.
+  // Live chips are re-derived purely to count `late` for the summary band.
+  // The band's late = every court-assigned scheduled/called chip past its
+  // planned slot — which the operator now sees split across the court grid
+  // (LATE bands) and the queue (LATE badges); the total still matches.
   const liveChips = useMemo(
     () => buildLiveChips(liveBlocks, currentSlot ?? 0, !!planFinalized),
     [liveBlocks, currentSlot, planFinalized],
   );
   const summary = useMemo(() => deriveSummary(matches, lanes, liveChips), [matches, lanes, liveChips]);
+
+  const conflictIds = useMemo(() => Object.keys(conflicts), [conflicts]);
+  const labelForMatchId = useCallback(
+    (matchId: string) => matches.find((m) => m.id === matchId)?.label ?? matchId,
+    [matches],
+  );
 
   // ── seams object (stable per deps) ────────────────────────────────────────
   const seams: RunSeams = useMemo(
@@ -304,11 +370,56 @@ export function RunSurface({
     return { code: lane.now.label, court: lane.court };
   }, [selectedRole, selectedMatch, lanes]);
 
+  /**
+   * MatchDetailPanel reads its subject from `uiStore.bracketSelectedMatchId`,
+   * so Run has to publish its selection there — exactly as the Plan branch
+   * does in OperationsProduct.
+   */
+  const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
+  useEffect(() => {
+    setBracketSelectedMatchId(
+      selectedMatch?.source === 'bracket' ? selectedMatch.id : null,
+    );
+  }, [selectedMatch, setBracketSelectedMatchId]);
+
+  /**
+   * The rich bracket rail, mounted only once the match is actually PLAYING.
+   * That is precisely the window where it adds something the run inspector
+   * cannot: Undo start, set-by-set scores, and the armed winner buttons. Before
+   * `start` it would only duplicate the inspector's own Start button.
+   */
+  const showBracketPanel =
+    selectedMatch?.source === 'bracket' && selectedMatch.status === 'playing' && bracketData != null;
+
+  /**
+   * The meet rail (C4): score entry, undo-start, check-in/roster edits and
+   * the impact list — everything the generic inspector cannot carry. Done
+   * matches are handled by the Finished section's row controls instead.
+   */
+  const showMeetPanel =
+    meetOps != null &&
+    selectedMatch?.source === 'meet' &&
+    selectedMatch.status !== 'done' &&
+    meetOps.matches.some((m) => m.id === selectedMatch.id);
+
   /** For a queued match: the first court with no Now match. */
   const freeCourt = useMemo((): number | undefined => {
     if (selectedRole !== 'queued') return undefined;
     return lanes.find((l) => l.now == null)?.court;
   }, [selectedRole, lanes]);
+
+  // ── record completion (shared by inspector record + meet score save) ──────
+  // Auto-pull the queue head onto the emptied court, then deselect — the
+  // recorded match leaves the lane, so the remaining selection would resolve
+  // to a stale role. Deterministic and synchronous; never a useEffect.
+  const completeRecord = useCallback(
+    (recordedKey: string) => {
+      const pull = computeAutoPull(recordedKey, matches, lanes, queue, currentSlot ?? 0);
+      if (pull) fireAssign(pull.head, pull.court, pull.slot);
+      setSelectedKey(null);
+    },
+    [matches, lanes, queue, currentSlot, fireAssign],
+  );
 
   // ── action handler ────────────────────────────────────────────────────────
   const handleAction = useCallback(
@@ -332,18 +443,9 @@ export function RunSurface({
         // Issue the record action first.
         void runAction(selectedMatch, 'record', { winnerSide: opts?.winnerSide }, seams);
 
-        // Auto-pull: deterministic, synchronous, no useEffect.
-        // computeAutoPull returns exactly what to assign — or null. It reads the
-        // overlaid `queue`/`lanes`, so a match already assigned in-flight is
-        // skipped (no double-pull) and an in-flight court reads occupied.
-        const pull = computeAutoPull(selectedMatch.key, matches, lanes, queue, currentSlot ?? 0);
-        if (pull) {
-          fireAssign(pull.head, pull.court, pull.slot);
-        }
-
-        // Deselect after recording: the recorded match leaves the lane and the
-        // remaining selectedKey would resolve to a stale 'next-later' role.
-        setSelectedKey(null);
+        // Auto-pull (reads the overlaid `queue`/`lanes`, so a match already
+        // assigned in-flight is skipped) + deselect.
+        completeRecord(selectedMatch.key);
         return;
       }
 
@@ -357,7 +459,7 @@ export function RunSurface({
 
       void runAction(selectedMatch, kind, undefined, seams);
     },
-    [selectedMatch, seams, matches, lanes, queue, currentSlot, freeCourt, fireAssign],
+    [selectedMatch, seams, matches, currentSlot, freeCourt, fireAssign, completeRecord],
   );
 
   // Assign-from-queue is owned by the inspector's "Send to court" affordance
@@ -373,24 +475,59 @@ export function RunSurface({
   return (
     <div data-testid="run-surface" className="relative flex h-full min-h-0 flex-col bg-card">
       {/* Summary band */}
-      <RunSummaryBand summary={summary} />
+      <RunSummaryBand summary={summary} scope={sourceScope} />
+
+      {/* Alerts & Activity (C4, CMP-4): warning conditions + the activity
+          trail, collapsed to its header row while empty. Review routes the
+          suggested action to the Plan-hosted dialogs. */}
+      {meetOps ? (
+        <AlertsActivityPanel
+          collapseWhenEmpty
+          onReview={onAdvisoryReview}
+          className="max-h-48 shrink-0"
+        />
+      ) : null}
+
+      {/* Rejected-command strip. Each banner is the store-subscribing
+          ConflictBanner (its documented production shape), prefixed with the
+          match code so a six-court desk can tell WHICH write bounced. */}
+      {conflictIds.length > 0 && (
+        <div data-testid="run-conflicts" className="shrink-0 space-y-1 px-4 pt-2">
+          {conflictIds.map((matchId) => (
+            <div key={matchId} className="flex items-center gap-2">
+              <span className={`shrink-0 ${EYEBROW_CLASS} text-muted-foreground`}>
+                {labelForMatchId(matchId)}
+              </span>
+              <ConflictBanner matchId={matchId} className="mt-0 min-w-0 flex-1" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Content area — board+queue beside a PERSISTENT inspector. The inspector
           is always mounted (showing its "Select a match…" empty state) so the
           surface reads as interactive and operators see where actions live,
           instead of a board that looks read-only until you happen to click. */}
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col overflow-auto">
-          {/* Board — the live court×time hero (GanttTimeline + MatchChip) */}
-          <RunLiveBoard
+          {/* Board — the per-court "now" card grid (Console direction). The
+              whole-day court×time picture lives on Plan; this states each
+              court's CURRENT condition. Derives from the same `lanes` model
+              as the queue/inspector, so the three can never disagree. */}
+          <RunCourtGrid
+            lanes={lanes}
             blocks={liveBlocks}
-            courtCount={courtCount}
             currentSlot={currentSlot}
-            running={!!planFinalized}
-            formatSlot={formatSlot}
             slotMinutes={slotMinutes}
+            formatSlot={formatSlot}
             selectedKey={selectedKey}
             onSelect={setSelectedKey}
+            hasEligible={nextEligible(queue) != null}
+            onAssignNext={(court) => {
+              const head = nextEligible(queue);
+              if (!head) return;
+              fireAssign(head, court, slotForAssign(court, matches, currentSlot ?? 0));
+            }}
           />
 
           {/* Queue — below the board. No border-t here: the board's own
@@ -408,31 +545,72 @@ export function RunSurface({
               onSend={sendFromQueue}
             />
           </div>
+
+          {/* Finished — recorded matches with the meet undo-finish (C4). */}
+          <RunFinished matches={matches} meetOps={meetOps} />
         </div>
 
-        {/* Persistent inspector column. RunInspector renders its own empty state
-            when nothing is selected; the close button only appears on selection. */}
-        <div className="relative flex flex-shrink-0">
+        {/* Inspector column — a real DetailDock, same as the Plan branch's rail
+            (OperationsProduct). The dock owns the geometry: it reflows the
+            board+queue beside it when there is room and falls back to a
+            right-edge overlay when there isn't, instead of the hand-rolled
+            288px rail that squeezed the live column to nothing at tablet
+            width. */}
+        <DetailDock
+          open={selectedMatch != null}
+          width={288}
+          testId="run-detail-dock"
+        >
           {selectedMatch ? (
-            <button
-              type="button"
-              onClick={() => setSelectedKey(null)}
-              aria-label="Close inspector"
-              className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            // The dock's pane chrome is `DetailPanel`: the `[MATCH] code`
+            // identity header, the close button, Esc, and — when the dock ran
+            // out of room and demoted itself to an overlay — dialog semantics
+            // and outside-click dismissal. This used to be a bare div with a
+            // hand-rolled ✕ that only a mouse could find.
+            <DetailPanel
+              label="Match"
+              value={selectedMatch.label}
+              mono
+              onClose={() => setSelectedKey(null)}
+              testId="run-detail-panel"
             >
-              ✕
-            </button>
+              <RunInspector
+                match={selectedMatch}
+                role={selectedRole}
+                nowRef={nowRef}
+                freeCourt={freeCourt}
+                currentSlot={currentSlot}
+                formatSlot={formatSlot}
+                onAction={handleAction}
+                // The meet rail below renders the INTERACTIVE player rows
+                // (check-in / sub / remove) — suppress the inspector's static
+                // name list so the dock says each name once.
+                hidePlayers={showMeetPanel}
+              />
+              {showMeetPanel && selectedMatch ? (
+                <div data-testid="run-meet-panel" className="border-t border-border">
+                  <MeetMatchPanel
+                    match={selectedMatch}
+                    ops={meetOps!}
+                    onFinished={() => completeRecord(selectedMatch.key)}
+                    onSelectKey={setSelectedKey}
+                  />
+                </div>
+              ) : null}
+              {/* Plain wrapper: it neutralises the panel's own `h-full` so the
+                  two rails stack in this one scroll column. */}
+              {showBracketPanel && bracketData ? (
+                <div data-testid="run-bracket-panel" className="border-t border-border">
+                  {/* RunInspector above already shows the two side names +
+                      "vs" (it is always mounted) — hideIdentity so this
+                      panel adds only what it alone carries: undo-start, set
+                      scores, the armed winner buttons. */}
+                  <MatchDetailPanel data={bracketData} onChange={onBracketData} hideIdentity />
+                </div>
+              ) : null}
+            </DetailPanel>
           ) : null}
-          <RunInspector
-            match={selectedMatch}
-            role={selectedRole}
-            nowRef={nowRef}
-            freeCourt={freeCourt}
-            currentSlot={currentSlot}
-            formatSlot={formatSlot}
-            onAction={handleAction}
-          />
-        </div>
+        </DetailDock>
       </div>
     </div>
   );

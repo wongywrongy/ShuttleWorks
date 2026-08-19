@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "app/root.tsx",
+    "app/routes.ts",
+    "app/routes/**/*.tsx",
+    "app/entry.server.tsx",
+    "react-router.config.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "tests/**/*.test.ts"
+  ],
+  "project": ["app/**/*.{ts,tsx}"],
+  "ignoreDependencies": ["@phosphor-icons/react", "autoprefixer", "postcss", "tailwindcss"]
+}

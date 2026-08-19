@@ -33,9 +33,9 @@ Hub  ──lists──▶  Workspace  ──enables──▶  Modules
 You create a workspace from a template (Meet Day / Bracket Tournament / Hybrid / Blank) or a
 custom module mix, then switch between enabled modules with the **module dock**.
 
-## The four-module model
+## The module model
 
-The architecture is described in terms of **four modules**, split across two tiers:
+The architecture is described in terms of **five modules**, split across two tiers:
 
 | Module | Tier | User-enableable? | What it is |
 | --- | --- | --- | --- |
@@ -43,11 +43,12 @@ The architecture is described in terms of **four modules**, split across two tie
 | **Bracket** | 1 (user) | ✅ Yes | The draw engine — seeding, single-elimination + round-robin draws, advancement, JSON/CSV/ICS import-export. |
 | **Operations** | 2 (architectural) | ❌ No | The **live-ops layer** — court layout + live match status (call / start / finish / score) for whichever engine is running. Not something you "enable". |
 | **Display** | 1 (user) | ✅ Yes | The read-only public TV output — live matches, draw, results — for the enabled engine. No auth. |
+| **Entries** | 1 (user) | ✅ Yes, **cloud only** | Online entry — the public entry page, the operator's entry desk, and the commit that turns confirmed entries into roster players. See [Entries](/modules/entries). |
 
 ::: info Why Operations is "Tier-2"
-The three **user-facing** modules — Meet, Bracket, Display — are the ones that appear in the
-module catalog and have a row in the `workspace_modules` table (the `ModuleId` union is
-`'meet' | 'bracket' | 'display'`). **Operations is an *architectural* module**: it owns real
+The four **user-facing** modules — Meet, Bracket, Display, Entries — are the ones that appear in
+the module catalog and have a row in the `workspace_modules` table (the `ModuleId` union is
+`'meet' | 'bracket' | 'display' | 'entries'`). **Operations is an *architectural* module**: it owns real
 nav, routes, and a store slice, but it is always-on and has no enable flag. In code this is the
 `ArchModuleId = ModuleId | 'operations'` distinction in
 `frontend/src/platform/contracts/moduleContract.ts`. See the
@@ -55,8 +56,14 @@ nav, routes, and a store slice, but it is always-on and has no enable flag. In c
 :::
 
 There is also a per-workspace **Settings** surface (Overview, Modules, People & Access, Sharing,
-Sync & Backups, Venue & schedule). It is the workspace's admin chrome, not a `ModuleId` — see
+Sync and backups, Venue and schedule). It is the workspace's admin chrome, not a `ModuleId` — see
 the [Settings page](/modules/settings).
+
+::: tip The public site is a tier, not a module
+Everything above is the **operator console**. The public face of a tournament — where a player
+finds it and enters it — is a second, separately-served app under `/e/` with zero client
+JavaScript. See [the entrant tier](/architecture/entrant-tier).
+:::
 
 ## Who uses it, and how
 

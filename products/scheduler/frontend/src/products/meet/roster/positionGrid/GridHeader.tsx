@@ -16,7 +16,7 @@ import type { CSSProperties } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { EyeSlash, ArrowCounterClockwise } from '@phosphor-icons/react';
-import { EVENT_LABEL, EVENT_ORDER, isDoubles } from './helpers';
+import { EVENT_LABEL, isDoubles } from './helpers';
 import { usePositionGridColumns } from './usePositionGridColumns';
 
 export interface GridEvent {
@@ -51,7 +51,7 @@ function SortableHeaderCell({
         {...attributes}
         {...listeners}
         className="inline-flex cursor-grab touch-none items-baseline gap-2 active:cursor-grabbing"
-        title={label?.full ? `${label.full} — drag to reorder` : 'Drag to reorder'}
+        title={label?.full ? `${label.full}: drag to reorder` : 'Drag to reorder'}
       >
         {ev.prefix}
         <span className="text-3xs font-medium text-muted-foreground">
@@ -72,11 +72,10 @@ function SortableHeaderCell({
 }
 
 export function GridHeader({ events }: { events: GridEvent[] }) {
-  const { allConfiguredEvents, toggleVisible, resetColumns, eventVisible } =
+  const { allConfiguredEvents, defaultOrder, toggleVisible, resetColumns, eventVisible } =
     usePositionGridColumns();
   const hidden = allConfiguredEvents.filter((p) => eventVisible?.[p] === false);
-  const canonical = EVENT_ORDER.filter((p) => allConfiguredEvents.includes(p));
-  const reordered = JSON.stringify(allConfiguredEvents) !== JSON.stringify(canonical);
+  const reordered = JSON.stringify(allConfiguredEvents) !== JSON.stringify(defaultOrder);
   const customized = hidden.length > 0 || reordered;
 
   return (
@@ -84,6 +83,9 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
       <tr>
         <th className="w-9 border-b border-r border-border bg-muted/40 px-1 py-1.5 align-top text-center text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div className="flex flex-col items-center gap-1">
+            {/* The one deliberate ordinal in the console: this column is the
+                position/rank number players are assigned TO, not a row count
+                (SP-CONSOLE-REFINE no-ordinal rule, documented exception). */}
             <span>#</span>
             {hidden.map((p) => (
               <button

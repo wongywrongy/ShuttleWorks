@@ -156,10 +156,13 @@ def test_the_page_reaches_the_public_slug_route(client, workspace):
     tid = workspace
     _put_page(client, tid, regulationsText="Play fair.")
 
-    r = client.get("/e/spring-open")
+    # Read at the seam that still exists: Phase 6 retired the HTML page, so
+    # the public address is served by the RR7 tier and the thing this route
+    # feeds is the projection that tier loads.
+    r = client.get("/e/api/page/spring-open")
     assert r.status_code == 200, r.text
-    assert "Entries Config" in r.text
-    assert "Play fair." in r.text
+    assert r.json()["tournament"]["name"] == "Entries Config"
+    assert r.json()["page"]["regulationsText"] == "Play fair."
 
 
 # ---- the entry page: the Q11.4 version bump ----------------------------
@@ -225,6 +228,43 @@ def test_a_well_formed_slug_is_accepted(client, workspace):
     """Negative control for the parametrized refusals: the conservative
     alphabet still admits an ordinary slug."""
     assert _put_page(client, workspace, slug="spring-open-2026").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "slug",
+    [
+        "api",  # ruling R8-A: nginx prefix-routes /e/api/ to this backend
+        "account",  # same ruling, /e/account/
+        "health",  # node's static /e/health route ranks above :slug
+        "signup",  # node's static /e/signup route
+        "login",  # node's static /e/login route
+    ],
+)
+def test_a_reserved_slug_is_refused(client, workspace, slug):
+    """Each of these is well-formed by ``_SLUG_RE`` alone — the alphabet
+    check would let it through. It has to be refused anyway: node's
+    `app/routes.ts` ranks these paths (or, for `api`/`account`, nginx's
+    prefix match) above the entrant app's `:slug` catch-all, so a page at
+    one of these addresses would be unreachable behind a route that always
+    wins the match first."""
+    r = _put_page(client, workspace, slug=slug)
+    assert r.status_code == 400, r.text
+    assert _page_row(workspace) is None
+
+
+def test_a_reserved_slug_does_not_touch_an_existing_page(client, workspace):
+    """The same refuse-before-write guarantee the malformed-slug case gets:
+    an operator who fat-fingers a rename into a reserved word must not lose
+    the page they already had."""
+    tid = workspace
+    assert _put_page(client, tid, slug="spring-open", introText="All welcome.").status_code == 200
+
+    r = _put_page(client, tid, slug="api", introText="Changed.")
+    assert r.status_code == 400, r.text
+
+    row = _page_row(tid)
+    assert row.slug == "spring-open"
+    assert row.intro_text == "All welcome."
 
 
 def test_a_slug_another_workspace_holds_is_a_specific_409(
@@ -310,10 +350,13 @@ def test_a_page_configured_here_prices_and_renders_publicly(client, workspace):
         venueName="Riverside Sports Hall",
     )
 
-    body = client.get("/e/spring-open").text
-    assert "40.00" in body and "55.00" in body
-    assert "Cash at check-in." in body
-    assert "Riverside Sports Hall" in body
+    payload = client.get("/e/api/page/spring-open").json()
+    # Cents, not formatted currency: the money is formatted by whatever
+    # renders it, and after Phase 6 that is the RR7 tier. What this route
+    # owes is the numbers the director authored, unrounded and unrenamed.
+    assert payload["page"]["feeSchedule"] == {"1": 4000, "2": 5500}
+    assert payload["page"]["paymentInstructions"] == "Cash at check-in."
+    assert payload["venue"]["name"] == "Riverside Sports Hall"
 
 
 def test_omitting_the_new_fields_clears_them_like_every_other_field(

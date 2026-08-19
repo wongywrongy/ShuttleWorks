@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card } from "@scheduler/design-system";
+import { Card, StatusBar } from "@scheduler/design-system";
 import { useBracketApi } from "../../api/bracketClient";
 import { useTournamentId } from "../../hooks/useTournamentId";
 import { useTournamentStore } from "../../store/tournamentStore";
@@ -15,8 +15,10 @@ import type {
 } from "../../api/bracketDto";
 import { useBracketResultQueue } from "../../hooks/useBracketResultQueue";
 import { INTERACTIVE_BASE } from "../../lib/utils";
+import { REASON_BADGE, WinnerDot, statusTallyItems } from "../../components/control-plane";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
+import { drawProgress } from "./drawProgress";
 import { BracketScoreEntry } from "./BracketScoreEntry";
 import { BracketInlineNotice } from "./BracketInlineNotice";
 import { applyOptimisticResult } from "./optimisticResult";
@@ -180,7 +182,7 @@ function BracketView({
       const participants = [];
       for (let p = 0; p < size; p++) {
         const id = occ[p];
-        if (!id) continue; // bye — omitted; the backend re-inserts it
+        if (!id) continue; // bye: omitted; the backend re-inserts it
         const part = participantById[id];
         participants.push({
           id,
@@ -285,7 +287,10 @@ function BracketView({
         </div>
       ) : null}
       <div className="min-h-0 flex-1">
-        <PanZoomCanvas roundLabels={roundLabels}>
+        <PanZoomCanvas
+          roundLabels={roundLabels}
+          overlayTrailing={<StatusBar items={statusTallyItems(drawProgress(data, event.id))} />}
+        >
           {/* Bracket canvas: one-sided (default) reads left-to-right with the
               Final as the rightmost column; mirrored fans two wings out from
               a centered Final. Either way each match is positioned absolutely
@@ -370,7 +375,13 @@ function BracketView({
 //     subtree).
 
 const BRACKET_CARD_WIDTH = 256; // matches the old w-64 card.
-const BRACKET_CARD_HEIGHT = 88; // fixed so feeder midpoints are deterministic.
+// 160, was 88: a doubles PAIR ("Hugo Marchetti-Silva / Tao Ming Zhu") wraps
+// each side to two 13px lines, and at 88 the card's content overlapped the
+// card below. The fixed height exists for deterministic feeder midpoints, so
+// it must budget the worst case its own data produces: p-3 (24) + header
+// (14) + two 2-line sides (52 each) + the space-y-2 gaps (16) ≈ 158. The
+// canvas auto-fit absorbs the extra height; truncation and overlap may not.
+const BRACKET_CARD_HEIGHT = 160;
 const BRACKET_COL_GAP = 56;
 const BRACKET_ROW_GAP = 28;
 const BRACKET_LABEL_HEIGHT = 28; // room for the round label above the cards.
@@ -584,20 +595,39 @@ export function computeMirroredBracketLayout(rounds: string[][]): BracketLayout 
 }
 
 // ── Segmented bracket geometry (DE / Monrad / compass) ──────────────────
-// Multi-segment formats stack one one-sided bracket block per segment
+// Multi-segment formats render one one-sided bracket block per segment
 // inside the same pan/zoom canvas: a header band above each block, a gap
-// between blocks. Every block runs the SAME one-sided layout, so column i
-// shares its x position across segments (constant x-pitch) and the
-// round-jump chips can address `data-round="i"` globally.
+// between blocks, flowed into rows (see `computeSegmentedLayout`). Every
+// block runs the SAME one-sided layout, so column i shares its x pitch —
+// the round-jump chips address the first `data-round="i"`, which is the
+// main draw's, since blocks stay in `segment.order`.
 
 export const SEGMENT_HEADER_HEIGHT = 40; // header band above each block.
-// Vertical gap between segment blocks. Generous because BracketCell can
+// Gap between segment blocks, both axes. Generous because BracketCell can
 // exceed the nominal card height (the "Enter score" strip on recordable
-// matches) — the next segment's header must clear it.
+// matches) — the next segment's header must clear it — and because a
+// horizontal gap narrower than BRACKET_COL_GAP would read as another round.
 export const SEGMENT_GAP = 88;
+
+/**
+ * Bounding-box aspect (w/h) the row flow packs toward. `PanZoomCanvas.fit()`
+ * zooms by one uniform `min(w-ratio, h-ratio)`, so the box that fits biggest
+ * is the one shaped like the pane; the draw pane measures ~1400×800 at a
+ * desktop workspace width.
+ */
+const SEGMENT_PANE_ASPECT = 1.6;
+
+/**
+ * Below this many segments the column stack already fits acceptably
+ * (single-elim = 1, double-elim = 3) and the shared x-pitch is a real
+ * cross-segment cue (W → L drop-ins, → GF), so the flow is left alone.
+ */
+const SEGMENT_ROW_FLOW_MIN = 4;
 
 export interface SegmentedBracketBlock {
   segment: SegmentDTO;
+  /** Left edge of the block within the canvas, in pixels. */
+  xOffset: number;
   /** Top of the block's header band within the canvas, in pixels. */
   yOffset: number;
   layout: BracketLayout;
@@ -610,27 +640,92 @@ export interface SegmentedBracketLayout {
   blocks: SegmentedBracketBlock[];
 }
 
+interface MeasuredSegment {
+  segment: SegmentDTO;
+  layout: BracketLayout;
+  width: number;
+  height: number;
+}
+
+/**
+ * Shelf-pack the measured segments into rows no wider than `budget`, in
+ * order — a block that doesn't fit starts a new row, rows are top-aligned
+ * and as tall as their tallest block. A budget of the widest block always
+ * yields one block per row (any pair exceeds it), i.e. the classic column
+ * stack.
+ */
+function flowSegmentsIntoRows(
+  measured: MeasuredSegment[],
+  budget: number,
+): SegmentedBracketLayout {
+  const blocks: SegmentedBracketBlock[] = [];
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+  let contentWidth = 0;
+  for (const m of measured) {
+    if (blocks.length > 0) {
+      if (x + SEGMENT_GAP + m.width > budget) {
+        y += rowHeight + SEGMENT_GAP;
+        x = 0;
+        rowHeight = 0;
+      } else {
+        x += SEGMENT_GAP;
+      }
+    }
+    blocks.push({ segment: m.segment, xOffset: x, yOffset: y, layout: m.layout });
+    x += m.width;
+    rowHeight = Math.max(rowHeight, m.height);
+    contentWidth = Math.max(contentWidth, x);
+  }
+  return { contentWidth, contentHeight: y + rowHeight, blocks };
+}
+
 /**
  * Pure geometry for the segmented canvas: one one-sided bracket layout per
- * segment (sorted by `order`), stacked vertically — each block owns a
- * SEGMENT_HEADER_HEIGHT band, blocks are SEGMENT_GAP apart, and the canvas
- * is as wide as the widest block.
+ * segment (sorted by `order`), flowed into rows sized to their own width.
+ *
+ * The column stack this replaced sized the canvas to the WIDEST segment, so
+ * on an 8-segment compass/Monrad draw seven blocks averaged 44% of the box —
+ * half of it dead space *before* zoom — and the resulting 1:3 portrait box
+ * then fit at 24%. Rows collapse both wastes: the box tends toward the pane's
+ * own aspect, so `fit()` zooms it far larger.
+ *
+ * The packing is a step function of the row budget, so the budget is chosen
+ * by sweeping it from "one block per row" up to "everything on one row" and
+ * keeping the box a pane-shaped viewport would zoom biggest.
  */
 export function computeSegmentedLayout(
   segments: SegmentDTO[],
 ): SegmentedBracketLayout {
-  const sorted = [...segments].sort((a, b) => a.order - b.order);
-  const blocks: SegmentedBracketBlock[] = [];
-  let y = 0;
-  let contentWidth = 0;
-  for (const segment of sorted) {
-    if (blocks.length > 0) y += SEGMENT_GAP;
-    const layout = computeOneSidedBracketLayout(segment.rounds);
-    blocks.push({ segment, yOffset: y, layout });
-    y += SEGMENT_HEADER_HEIGHT + layout.contentHeight;
-    contentWidth = Math.max(contentWidth, layout.contentWidth);
+  const measured: MeasuredSegment[] = [...segments]
+    .sort((a, b) => a.order - b.order)
+    .map((segment) => {
+      const layout = computeOneSidedBracketLayout(segment.rounds);
+      return {
+        segment,
+        layout,
+        width: layout.contentWidth,
+        height: SEGMENT_HEADER_HEIGHT + layout.contentHeight,
+      };
+    });
+  if (measured.length === 0) {
+    return { contentWidth: 0, contentHeight: 0, blocks: [] };
   }
-  return { contentWidth, contentHeight: y, blocks };
+
+  const widest = Math.max(...measured.map((m) => m.width));
+  let best = flowSegmentsIntoRows(measured, widest);
+  if (measured.length >= SEGMENT_ROW_FLOW_MIN) {
+    // ponytail: brute-force sweep — segment counts are single digits, so a
+    // ~4n-candidate scan is free. Revisit only if a format ever ships dozens.
+    const scale = (l: SegmentedBracketLayout) =>
+      Math.min(SEGMENT_PANE_ASPECT / l.contentWidth, 1 / l.contentHeight);
+    for (let k = 1.25; k <= measured.length; k += 0.25) {
+      const candidate = flowSegmentsIntoRows(measured, widest * k);
+      if (scale(candidate) > scale(best)) best = candidate;
+    }
+  }
+  return best;
 }
 
 /**
@@ -770,8 +865,9 @@ function SegmentedBracketView({
                       carries the accent (it is the draw's hero segment). */}
                   <div
                     data-testid={`segment-header-${seg.id}`}
-                    className="absolute left-0 flex items-baseline gap-2"
+                    className="absolute flex items-baseline gap-2"
                     style={{
+                      left: `${block.xOffset}px`,
                       top: `${block.yOffset}px`,
                       height: `${SEGMENT_HEADER_HEIGHT}px`,
                     }}
@@ -798,7 +894,7 @@ function SegmentedBracketView({
                         data-round={col.roundIndex}
                         className="absolute"
                         style={{
-                          left: `${col.left}px`,
+                          left: `${block.xOffset + col.left}px`,
                           top: `${block.yOffset + SEGMENT_HEADER_HEIGHT}px`,
                           width: `${BRACKET_CARD_WIDTH}px`,
                         }}
@@ -885,52 +981,56 @@ function BracketCell({
   const winner = result?.winner_side;
   const aName = labelFor(pu.side_a, pu.slot_a, nameById);
   const bName = labelFor(pu.side_b, pu.slot_b, nameById);
+  // Stacked members for RESOLVED pair sides (owner ruling, P4 review): the
+  // card gives each player their own line, so the " / " join is noise there.
+  // A doubles side is ONE participant whose NAME carries the join — split it
+  // too. Feeder/bye placeholders and the score-entry labels keep the string.
+  const membersOf = (ids: string[] | null) =>
+    ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
+  const aMembers = membersOf(pu.side_a);
+  const bMembers = membersOf(pu.side_b);
   const canRecord = !!pu.side_a && !!pu.side_b && !result && !seeding;
   const posA = pu.match_index * 2;
   const posB = posA + 1;
   const setsMode = scoringFormat === "badminton";
   const [scoring, setScoring] = useState(false);
-  // Winner-perspective set score ("21-18 21-15"); "w/o" for a walkover.
   // The score blob is opaque server-side (RecordResultIn.score: dict), so a
   // non-frontend writer (import, sync restore, API client) can hand us any
   // shape — guard every level and fall back to winner-only rather than
   // rendering "undefined-undefined" or throwing on `.map` of a non-array.
+  // Each side renders ITS OWN set values in the fixed column lane (G6), so
+  // set numbers align vertically across every card on the canvas.
   const validSets = Array.isArray(result?.score?.sets)
     ? result.score.sets.filter(
         (s): s is BracketSetScore =>
           !!s && typeof s.sideA === "number" && typeof s.sideB === "number",
       )
     : [];
-  const score = result
-    ? result.walkover
-      ? "w/o"
-      : validSets.length > 0
-        ? validSets
-            .map((s) =>
-              winner === "A" ? `${s.sideA}-${s.sideB}` : `${s.sideB}-${s.sideA}`,
-            )
-            .join(" ")
-        : undefined
-    : undefined;
 
   return (
     <Card
       variant="frame"
       className={`p-3 space-y-2${final ? " border-accent/40 ring-1 ring-accent/30 shadow-glow" : ""}`}
     >
-      <div className="flex justify-between text-3xs text-muted-foreground sw-num">
+      {/* One step darker than the muted tier: this caption is the ONLY
+          schedule information in the whole tree, and at muted-on-white it
+          was very nearly invisible (DRAW-3). */}
+      <div className="flex justify-between text-3xs text-foreground/70 sw-num">
         <span>{pu.id}</span>
         <span>
           {assignment
             ? `slot ${assignment.slot_id} · court ${assignment.court_id}`
-            : "—"}
+            : "–"}
         </span>
       </div>
       <Side
+        side="A"
         label={aName}
+        members={aMembers}
         winning={winner === "A"}
         loser={result && winner === "B"}
-        score={winner === "A" ? score : undefined}
+        sets={validSets}
+        walkover={result?.walkover ?? false}
         bye={pu.side_a === null}
         seeding={seeding}
         selected={seeding && selectedPos === posA}
@@ -940,10 +1040,13 @@ function BracketCell({
         onWin={canRecord && !setsMode ? () => onResult("A") : undefined}
       />
       <Side
+        side="B"
         label={bName}
+        members={bMembers}
         winning={winner === "B"}
         loser={result && winner === "A"}
-        score={winner === "B" ? score : undefined}
+        sets={validSets}
+        walkover={result?.walkover ?? false}
         bye={pu.side_b === null}
         seeding={seeding}
         selected={seeding && selectedPos === posB}
@@ -977,22 +1080,32 @@ function BracketCell({
 }
 
 function Side({
+  side,
   label,
+  members = null,
   winning,
   loser,
   bye,
-  score,
+  sets = [],
+  walkover = false,
   seeding = false,
   selected = false,
   onSlotClick,
   onWin,
 }: {
+  side: "A" | "B";
   label: string;
+  /** Resolved member names — rendered one per line, WITHOUT the " / " join
+   *  (the line break already separates the pair). Null for feeder/bye
+   *  placeholders, which render `label` as one string. */
+  members?: string[] | null;
   winning?: boolean;
   loser?: boolean;
   bye?: boolean;
-  /** Winner-perspective score, shown on the winning side only. */
-  score?: string;
+  /** Recorded sets — each side renders its OWN values in the fixed w-9
+   *  column lane (G6), so sets align vertically across the canvas. */
+  sets?: BracketSetScore[];
+  walkover?: boolean;
   seeding?: boolean;
   selected?: boolean;
   onSlotClick?: () => void;
@@ -1000,17 +1113,26 @@ function Side({
 }) {
   const onClick = seeding ? onSlotClick : onWin;
   const disabled = seeding ? !!bye : !onWin || bye;
+  const decided = winning || loser;
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       className={
-        "w-full flex items-center justify-between rounded-sm px-2 py-1.5 text-sm " +
+        // A posted result recolours this row (winner tint, loser strike-out).
+        // It is an occasional action, so it fades at the 200ms standard band
+        // (MOTION.md §4) instead of snapping.
+        "w-full flex items-center justify-between gap-1.5 rounded-sm px-2 py-1.5 text-2sm transition-colors duration-standard ease-brand " +
         (selected
           ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
           : winning
-          ? "bg-status-live-solid border border-status-live-border text-status-live-ink font-medium"
+          // Subtle tint + a 3px left rule + weight, not the saturated solid
+          // fill this used to carry (DRAW-1). A won first-round match is the
+          // least operational thing in the console, and it was the loudest
+          // element in the app — a wall of solid green on a surface nobody
+          // watches during a live day.
+          ? "bg-status-live-bg border border-status-live-border border-l-[3px] border-l-status-live text-foreground font-semibold"
           : loser
           ? "bg-muted text-muted-foreground line-through"
           : bye
@@ -1020,11 +1142,44 @@ function Side({
           : "bg-bg-elev border border-border hover:bg-accent")
       }
     >
-      <span className="truncate">{label}</span>
+      {/* A draw slot IS the participant's name — ellipsising it cut exactly
+          the surname that tells two entrants apart. It wraps; the card grows
+          into the 28px row gap rather than hiding characters. */}
+      <span className="min-w-0 flex-1 break-words text-left">
+        {members && members.length > 0
+          ? members.map((n, i) => (
+              <span key={i} className="block">
+                {n}
+              </span>
+            ))
+          : label}
+      </span>
       {seeding && !bye ? (
         <span className="text-3xs text-muted-foreground">⇄</span>
-      ) : winning && score ? (
-        <span className="text-2xs font-semibold sw-num">{score}</span>
+      ) : decided ? (
+        <span className="flex shrink-0 items-center gap-1">
+          {winning && walkover && sets.length === 0 ? (
+            <span className="rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {REASON_BADGE.walkover}
+            </span>
+          ) : null}
+          {winning ? <WinnerDot /> : <span className="w-1.5" aria-hidden />}
+          {/* w-6, not the lane's w-9: a side shows its OWN value (1-2
+              digits), and the narrower column keeps the name from wrapping
+              into the fixed-height card below. */}
+          {sets.map((s, i) => (
+            <span
+              key={i}
+              className={`w-6 text-right text-2xs sw-num ${
+                (side === "A" ? s.sideA > s.sideB : s.sideB > s.sideA)
+                  ? "font-semibold"
+                  : "opacity-70"
+              }`}
+            >
+              {side === "A" ? s.sideA : s.sideB}
+            </span>
+          ))}
+        </span>
       ) : onWin && !bye ? (
         <span className="text-3xs text-muted-foreground">↵ wins</span>
       ) : null}
@@ -1159,7 +1314,14 @@ function RoundRobinView({
 }
 
 /** Standings side panel shared by the 'grid' and 'swiss' renderers:
- *  a right-hand rail on xl+ screens, stacked below the rounds on smaller. */
+ *  a right-hand rail on xl+ screens, stacked below the rounds on smaller.
+ *
+ *  The rail width is the standings row's own floor, not a round number:
+ *  28rem = the 404px `dockMinContentWidth(STANDINGS COLUMNS)` (Pos 28 +
+ *  NAME_COL_MIN 160 + W–L 36 + Games 44 + Points 48, four `gap-3` rhythms
+ *  and the `px-5` inset) plus the card's border and this `p-4`. At the old
+ *  `w-96` the Player cell measured ~106px, so a participant name wrapped to
+ *  two or three lines while the numbers had room to spare. */
 function StandingsAside({
   rows,
   nameById,
@@ -1168,7 +1330,7 @@ function StandingsAside({
   nameById: Record<string, string>;
 }) {
   return (
-    <aside className="max-h-[45%] shrink-0 overflow-auto border-t border-border p-4 xl:max-h-none xl:w-96 xl:border-l xl:border-t-0">
+    <aside className="max-h-[45%] shrink-0 overflow-auto border-t border-border p-4 xl:max-h-none xl:w-[28rem] xl:border-l xl:border-t-0">
       <StandingsTable rows={rows} nameById={nameById} />
     </aside>
   );

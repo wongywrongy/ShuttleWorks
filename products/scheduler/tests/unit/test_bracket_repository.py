@@ -630,10 +630,10 @@ def test_deleting_tournament_cascades_brackets(repo, tournament_id):
     )
     repo.brackets.record_result(tournament_id, "MS", "M1", winner_side="A")
 
-    # SQLite needs PRAGMA foreign_keys=ON for cascading deletes to fire.
-    # Tests rely on Base.metadata.create_all + the StaticPool fixture
-    # which doesn't enable the pragma — verify the ORM cascade path
-    # instead (mapped relationship cascade="all, delete-orphan").
+    # Bracket rows are reachable two ways: the mapped relationship cascade
+    # ("all, delete-orphan") and the FK's own ON DELETE CASCADE. Only the
+    # first used to fire here — ``database.session`` now sets PRAGMA
+    # foreign_keys=ON for every SQLite connection, so both do.
     repo.tournaments.delete(tournament_id)
 
     assert repo.brackets.list_events(tournament_id) == []

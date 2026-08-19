@@ -50,6 +50,52 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  # Entrant tier - the PUBLIC entry site (React Router 7 SSR on node).
+  #
+  # Present in this stack because this stack has a `frontend`: nginx is the
+  # only thing that can route `/e/` to node and `/e/api/`+`/e/account/` to
+  # FastAPI (ruling R8-A), so a stack with no nginx has nothing to put in
+  # front of this service.
+  entrant:
+    build:
+      # Context = repo root (matches backend/frontend) so `npm ci` sees the
+      # root lockfile and the shared packages/design-system tree.
+      context: ../..
+      dockerfile: products/scheduler/entrant/Dockerfile
+    # No `ports:` — deliberately unreachable except through nginx. A
+    # published port would be a second door into the entrant tier that
+    # bypasses the Cookie allowlist in nginx.conf, which is the control that
+    # keeps the operator's session out of this process.
+    environment:
+      # `apiBaseUrl()` (app/lib/apiFetch.server.ts) THROWS when this is
+      # unset — deliberately, a loud failure rather than a silent default —
+      # so without it this container serves 500s and nothing else. Internal
+      # only: this is the compose-network address of the API, never a public
+      # URL, and node's fetches are server-side.
+      - API_BASE_URL=http://backend:8000
+      # ONE knob for two processes. The backend issues `sw_play_session` and
+      # node issues the `sw_play_csrf` nonce; both read this variable name,
+      # and if they disagree one cookie gets `Secure` and the other does not
+      # on the same origin. This stack is plain HTTP on localhost, so
+      # `false` — the same value the backend defaults to here.
+      # `entrant/tests/deployStacks.test.ts` holds the two in step.
+      - SESSION_COOKIE_SECURE=false
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
   # Frontend - React app served by nginx (non-root, listens on 8080; we
   # remap to host port 80 so the user still visits http://localhost).
   frontend:
@@ -67,6 +113,20 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      # STARTED, not healthy — and the dependency is required, not cosmetic.
+      # `proxy_pass http://entrant:3000;` is a LITERAL upstream, so nginx
+      # resolves the name at CONFIG LOAD and exits `[emerg] host not found in
+      # upstream` when it has no address. What it needs is compose's embedded
+      # DNS answering, which a merely-running container already provides.
+      #
+      # It must NOT be `service_healthy`. nginx is the only thing serving the
+      # operator SPA and the `/api/` proxy, so waiting on the health of the
+      # PUBLIC entrant tier put the whole origin — console included — behind
+      # it: an entrant that never reports healthy took the console down with
+      # it. Before the `/e/` split the console had no dependency on this
+      # service at all, and it must not acquire one now.
+      entrant:
+        condition: service_started
     restart: unless-stopped
     read_only: true
     tmpfs:

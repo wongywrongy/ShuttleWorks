@@ -22,7 +22,7 @@
  *      explicit props, no store coupling. Used by tests + any future
  *      surface that wants its own conflict-state plumbing.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { X as XIcon } from '@phosphor-icons/react';
 import { useMatchStateStore, type ConflictRecord } from '../store/matchStateStore';
 
@@ -77,12 +77,16 @@ function SubscribedConflictBanner({
 }) {
   const record = useMatchStateStore((s) => s.recentConflictsByMatchId[matchId]);
   const dismissConflict = useMatchStateStore((s) => s.dismissConflict);
+  // Stable identity: BannerView's auto-dismiss effect depends on it, and the
+  // Run surface re-renders on every ~2.5s poll — an inline closure restarted
+  // the 4s timer faster than it could ever fire.
+  const onDismiss = useCallback(() => dismissConflict(matchId), [dismissConflict, matchId]);
   if (!record) return null;
   return (
     <BannerView
       flavour={record.flavour}
       message={record.message}
-      onDismiss={() => dismissConflict(matchId)}
+      onDismiss={onDismiss}
       autoDismissMs={STALE_VERSION_AUTO_DISMISS_MS}
       className={className}
     />
@@ -131,7 +135,9 @@ function BannerView({
         `text-2xs leading-tight ${variantClasses} ${className}`
       }
     >
-      <span className="truncate">{text}</span>
+      {/* A conflict message names WHAT collided — an ellipsis on it is the
+          one thing the operator needed. It wraps; the banner grows. */}
+      <span className="min-w-0 break-words">{text}</span>
       {!isStale && (
         <button
           type="button"

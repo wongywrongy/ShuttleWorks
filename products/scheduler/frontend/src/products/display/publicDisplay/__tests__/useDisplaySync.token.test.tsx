@@ -85,6 +85,32 @@ describe('useDisplaySync — token mode', () => {
     expect(displaySpy).not.toHaveBeenCalled();
   });
 
+  it('a 404 on the token is TERMINAL: stops polling and says so', async () => {
+    const displaySpy = vi
+      .spyOn(apiClient, 'getDisplayState')
+      .mockRejectedValue(Object.assign(new Error('Tournament not found'), { status: 404 }));
+
+    const { result } = renderHook(() => useDisplaySync(new Date()), {
+      wrapper: wrap('/display?token=bad-token'),
+    });
+
+    // An invalid capability token never becomes valid — the board must stop
+    // polling AND say so, instead of sitting on "Waiting to connect…" forever.
+    await waitFor(() => expect(result.current.terminal).toBe(true));
+    expect(displaySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('a transient failure is NOT terminal — a live board survives blips', async () => {
+    vi.spyOn(apiClient, 'getDisplayState').mockRejectedValue(
+      Object.assign(new Error('Bad gateway'), { status: 502 }),
+    );
+    const { result } = renderHook(() => useDisplaySync(new Date()), {
+      wrapper: wrap('/display?token=tok-abc'),
+    });
+    await waitFor(() => expect(result.current.syncError).toBe('Bad gateway'));
+    expect(result.current.terminal).toBe(false);
+  });
+
   it('neither token nor id: surfaces the missing-param error, no calls', async () => {
     const displaySpy = vi.spyOn(apiClient, 'getDisplayState');
     const stateSpy = vi.spyOn(apiClient, 'getTournamentState');

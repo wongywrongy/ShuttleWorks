@@ -143,18 +143,67 @@ export function parseMatchStartMs(value: string | null | undefined): number | nu
   return null;
 }
 
-export function msToSlot(ms: number, config: TournamentConfig): number {
+/** Slot index of an instant, UNCLAMPED — negative before the day start,
+ *  past `calculateTotalSlots` after the day end. The signed value is what
+ *  makes "this timestamp isn't from this day" detectable. */
+function slotOfMs(ms: number, config: TournamentConfig): number {
   const d = new Date(ms);
   const minutesOfDay = d.getHours() * 60 + d.getMinutes();
   const start = timeToMinutes(config.dayStart);
   let effective = minutesOfDay;
   if (isOvernightSchedule(config) && effective < start) effective += MIN_PER_DAY;
-  return Math.max(0, Math.floor((effective - start) / config.intervalMinutes));
+  return Math.floor((effective - start) / config.intervalMinutes);
+}
+
+export function msToSlot(ms: number, config: TournamentConfig): number {
+  return Math.max(0, slotOfMs(ms, config));
+}
+
+/**
+ * The most a real day drifts from its plan. Four hours behind is a bad day;
+ * past that the plan has been re-solved, not merely missed.
+ * Doubles as the ceiling on a derived span — nothing plays for four hours.
+ */
+const ACTUAL_DRIFT_LIMIT_MINUTES = 240;
+
+/**
+ * Is this actual timestamp a believable position for THIS match?
+ *
+ * Asking "does the slot land inside the configured day (plus grace)?" cannot
+ * answer that: `slotOfMs` reads time-of-day only, so an actual from another
+ * day derives an ordinary-looking slot. The seeded demo proved it — a day of
+ * 08:00-20:00 whose 73 actuals were all stamped 20:34, i.e. 34 min past day
+ * end, comfortably inside an 8-slot grace, and every block was positioned at
+ * slot 25: a 72px clump off the right of the axis, on a chart that read empty.
+ *
+ * Positioning is only meaningful RELATIVE TO THE PLAN, so that is what is
+ * measured. A match planned 19:30 that started 20:34 drifted 64 min — late.
+ * Matches planned across a whole day that all "started" 20:34 drifted 7.5 to
+ * 12.5 hours — a clock artifact. Same instant, separated by their plans.
+ *
+ * The trade this cannot make: one match, planned near the actual, is
+ * ambiguous by construction — the data cannot say whether it truly ran late
+ * or merely happens to sit near a stale stamp. It keeps its actual position,
+ * which is the answer that is right when the day is real.
+ */
+function isNearPlan(
+  actualSlot: number,
+  planSlotId: number,
+  config: TournamentConfig,
+): boolean {
+  return (
+    Math.abs(actualSlot - planSlotId) * config.intervalMinutes <= ACTUAL_DRIFT_LIMIT_MINUTES
+  );
 }
 
 /**
  * Where a match should render on the Gantt: paper slot until called/started,
- * actual play head once a timestamp exists. Falls back safely on missing data.
+ * actual play head once a BELIEVABLE timestamp exists (see `isNearPlan` —
+ * believable means near the plan, not merely inside the day). Falls back
+ * safely on missing data.
+ *
+ * The plan slot is the honest fallback; `hasStaleActualTiming` lets the
+ * surface say so rather than pass plan off as actual.
  */
 export function getRenderSlot(
   assignment: { slotId: number; durationSlots: number },
@@ -167,21 +216,53 @@ export function getRenderSlot(
     const startMs = parseMatchStartMs(matchState.actualStartTime);
     const endMs = parseMatchStartMs(matchState.actualEndTime);
     if (startMs !== null && endMs !== null && endMs >= startMs) {
-      const startSlot = msToSlot(startMs, config);
-      const minutes = (endMs - startMs) / 60_000;
-      const duration = Math.max(1, Math.round(minutes / config.intervalMinutes));
-      return { slotId: startSlot, durationSlots: duration };
+      const startSlot = slotOfMs(startMs, config);
+      if (isNearPlan(startSlot, assignment.slotId, config)) {
+        // Real elapsed minutes, not a time-of-day difference: a believable
+        // start with an end from a later day (Finish pressed the next
+        // morning) is a real start and a dirty span — keep the start, plan
+        // the duration, rather than throw both away.
+        const minutes = (endMs - startMs) / 60_000;
+        return {
+          slotId: Math.max(0, startSlot),
+          durationSlots:
+            minutes <= ACTUAL_DRIFT_LIMIT_MINUTES
+              ? Math.max(1, Math.round(minutes / config.intervalMinutes))
+              : assignment.durationSlots,
+        };
+      }
     }
   }
 
   if (status === 'started' && matchState?.actualStartTime) {
     const startMs = parseMatchStartMs(matchState.actualStartTime);
     if (startMs !== null) {
-      return { slotId: msToSlot(startMs, config), durationSlots: assignment.durationSlots };
+      const startSlot = slotOfMs(startMs, config);
+      if (isNearPlan(startSlot, assignment.slotId, config)) {
+        return { slotId: Math.max(0, startSlot), durationSlots: assignment.durationSlots };
+      }
     }
   }
 
   return { slotId: assignment.slotId, durationSlots: assignment.durationSlots };
+}
+
+/**
+ * True when a match carries an actual start timestamp that `getRenderSlot`
+ * REFUSED — it is nowhere near the plan, so the surface is drawing the match
+ * at its planned time, not where it really played. Same predicate as the
+ * fallback, so the caption cannot go missing on data that falls back.
+ */
+export function hasStaleActualTiming(
+  assignment: { slotId: number },
+  matchState: MatchStateDTO | undefined | null,
+  config: TournamentConfig,
+): boolean {
+  const status = matchState?.status;
+  if (status !== 'started' && status !== 'finished') return false;
+  const startMs = parseMatchStartMs(matchState?.actualStartTime);
+  if (startMs === null) return false;
+  return !isNearPlan(slotOfMs(startMs, config), assignment.slotId, config);
 }
 
 // Token-driven; hues match the board vocabulary (called=amber, playing=green,

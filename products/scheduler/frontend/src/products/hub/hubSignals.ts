@@ -7,12 +7,25 @@ import type { AttentionReasonDTO, TournamentSummaryDTO } from '../../api/dto';
 
 export type WorkspaceHealth = 'good' | 'attention' | 'draft' | 'archived';
 
-/** Health badge value — prefers `signals.health`, else derives from status. */
+/** Health badge value — the row dot's tone.
+ *
+ *  Harmonised with `needsAttention` (2026-08-11 design audit, T4). The two
+ *  functions used to disagree: the Hub's "Needs attention 3" counted a
+ *  workspace whose row dot stayed grey, because BOTH this function and the
+ *  backend that feeds it resolve `status === 'draft'` before they ever look
+ *  at the attention reasons (`api/workspace_signals.py`: `elif status ==
+ *  "draft"` sits above `elif attention`). A count and a filter that nothing
+ *  in the list corroborates is a count you have to take on faith.
+ *
+ *  So attention now outranks draft, and only `archived` outranks attention —
+ *  the same precedence `hubFacets` and `platform/domain/lifecycle` already
+ *  apply, and for the same reason (an archived event keeps its old signals
+ *  forever and must not sit among the live ones). */
 export function workspaceHealth(t: TournamentSummaryDTO): WorkspaceHealth {
-  if (t.signals) return t.signals.health;
   if (t.status === 'archived') return 'archived';
-  if (t.status === 'draft') return 'draft';
-  return 'good';
+  if (needsAttention(t)) return 'attention';
+  if (t.signals) return t.signals.health;
+  return t.status === 'draft' ? 'draft' : 'good';
 }
 
 /** Coded attention reasons; empty when none / no signals. */

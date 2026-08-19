@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Path, Query
@@ -51,6 +51,7 @@ from app.schemas import (
     EntryEventCreateDTO,
     EntryEventDTO,
     EntryPageDTO,
+    EntryPagePublicationPatchDTO,
     EntryPageUpsertDTO,
 )
 from database.models import Entry, EntryEvent, EntryPage
@@ -75,6 +76,16 @@ _CONFIRMABLE_FROM = "pending"
 # accident. Conservative on purpose — widening an accepted alphabet later
 # is additive, narrowing it breaks every printed poster.
 _SLUG_RE = re.compile(r"^[a-z0-9-]{3,60}$")
+
+# Path segments the entrant app (`products/scheduler/entrant`) claims ahead
+# of its `:slug` catch-all, plus the two prefixes ruling R8-A hands to this
+# backend by nginx longest-prefix match (`/e/api/`, `/e/account/`). A slug
+# equal to any of these would be unreachable: node's `app/routes.ts` ranks
+# every static route above `:slug`, and a request for the backend prefixes
+# never reaches node at all. (`sitemap.xml` and `robots.txt` are two more
+# static routes node owns, but the `.` in each already fails `_SLUG_RE`
+# above, so they cannot collide and are not listed here.)
+_RESERVED_SLUGS = frozenset({"api", "account", "health", "signup", "login", "me"})
 
 
 def _event_codes(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
@@ -388,6 +399,14 @@ def upsert_entry_page(
             f"hyphens: {body.slug!r}",
         )
 
+    if slug in _RESERVED_SLUGS:
+        raise http_error(
+            400,
+            ErrorCode.INVALID_INPUT,
+            f"the slug {slug!r} is reserved for entrant-app routing and "
+            "cannot be used",
+        )
+
     # Slugs are globally unique — the slug alone resolves the public page,
     # with no workspace in the URL. Checked explicitly so the answer names
     # the field; the IntegrityError below is the race's backstop, not the
@@ -412,6 +431,10 @@ def upsert_entry_page(
         repo.session.add(row)
     elif (row.regulations_text or "") != (body.regulationsText or ""):
         row.regulations_version = (row.regulations_version or 1) + 1
+        # The public document row's "updated" date (SP-P7 §3.7) — stamped
+        # under the same actually-changed condition as the version, so the
+        # two can never disagree about whether an edit happened.
+        row.regulations_updated_at = datetime.now(timezone.utc)
 
     row.slug = slug
     row.is_open = body.isOpen
@@ -438,6 +461,75 @@ def upsert_entry_page(
             ErrorCode.ENTRY_PAGE_SLUG_TAKEN,
             f"the slug {slug!r} is already in use",
         )
+    repo.session.refresh(row)
+    return EntryPageDTO.from_row(row)
+
+
+def _page_or_404(repo: LocalRepository, tournament_id: uuid.UUID) -> EntryPage:
+    """The workspace's page, or the honest operator-facing 404.
+
+    Honest because the desk sits behind the tenancy seam (the
+    ``ENTRY_NOT_FOUND`` argument): a member asking about a page that was
+    never created should be told exactly that, not shown the public tier's
+    uniform answer.
+    """
+    row = repo.session.get(EntryPage, tournament_id)
+    if row is None:
+        raise http_error(
+            404,
+            ErrorCode.ENTRY_PAGE_NOT_FOUND,
+            "this workspace has no entry page yet",
+        )
+    return row
+
+
+@router.get(
+    "/{tournament_id}/entry-page",
+    response_model=EntryPageDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def get_entry_page(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """The stored page, for surfaces that read before they write.
+
+    The PUT above returns the same DTO but only to its own caller; the
+    Sharing tab's publication card (SP-P7 §4) needs current state without
+    performing a whole-page write to learn it. F-E1-2-D1 recorded that no
+    operator UI could configure the page at all — this is the read half of
+    ending that.
+    """
+    return EntryPageDTO.from_row(_page_or_404(repo, tournament_id))
+
+
+@router.patch(
+    "/{tournament_id}/entry-page/publication",
+    response_model=EntryPageDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def patch_entry_page_publication(
+    body: EntryPagePublicationPatchDTO,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Flip publication gates (SP-P7 §4) — and nothing else.
+
+    A deliberate sliver of the page rather than a second whole-state PUT:
+    the card sends only the toggles it changed, so publication can never
+    race the desk's page edits into a lost update. Idempotent and
+    reversible by construction — each flag is a plain column write, and
+    unpublishing is the same write with ``False``; the *public* tier's
+    off-state behaviour is pinned by its own gate-matrix tests, not here.
+    """
+    row = _page_or_404(repo, tournament_id)
+    if body.entrantsPublished is not None:
+        row.entrants_published = body.entrantsPublished
+    if body.drawsPublished is not None:
+        row.draws_published = body.drawsPublished
+    if body.resultsPublished is not None:
+        row.results_published = body.resultsPublished
+    repo.session.commit()
     repo.session.refresh(row)
     return EntryPageDTO.from_row(row)
 

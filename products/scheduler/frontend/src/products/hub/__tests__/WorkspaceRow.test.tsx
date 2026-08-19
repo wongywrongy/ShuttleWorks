@@ -39,27 +39,42 @@ describe('WorkspaceRow', () => {
     expect(screen.getByRole('button', { name: 'View results' })).toBeInTheDocument();
   });
 
-  it('renders a Modules column with a solid glyph per enabled module', () => {
+  it('names what needs attention where the module glyphs used to sit (HUB-3)', () => {
     render(
       <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
     );
-    // fixture `t` has meet enabled → a solid "M" glyph.
-    const glyph = screen.getByTestId('row-module-meet');
-    expect(glyph).toHaveTextContent('M');
-    expect(glyph.className).not.toMatch(/border-dashed/);
+    // The fixture's first attention reason, verbatim — a dot can say THAT
+    // something is wrong and never WHAT.
+    const cell = screen.getByTestId('row-attention');
+    expect(cell).toHaveTextContent(t.signals!.attention[0].label);
   });
 
-  it('shows a dashed kind-default glyph when nothing is enabled', () => {
-    const draft: TournamentSummaryDTO = {
-      ...t,
-      tournamentDate: null,
-      modules: [{ moduleId: 'meet', status: 'available', config: null }],
-    };
+  it('leaves the attention cell empty when nothing is wrong', () => {
     render(
-      <WorkspaceRow tournament={draft} group="undated" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, health: 'good', attention: [] } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
     );
-    expect(screen.getByTestId('row-module-meet').className).toMatch(/border-dashed/);
+    expect(screen.getByTestId('row-attention')).toBeEmptyDOMElement();
   });
+
+  it('says "needs attention" for a workspace that does — the dot is aria-hidden', () => {
+    const { rerender } = render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+    );
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    // NEGATIVE CONTROL: a healthy row stays quiet.
+    rerender(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, health: 'good', attention: [] } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.queryByText('Needs attention')).toBeNull();
+  });
+
+
 
   // SP-UI-1: the next action is the row's call to action, not a metadata
   // column. Pin the properties that make it read that way — the chevron is
@@ -75,6 +90,44 @@ describe('WorkspaceRow', () => {
     expect(cta).toHaveFocus();
   });
 
+  // R-D (SP-CONSOLE-3, Option A): LIVE is suppressed — the HealthDot and
+  // next action already say it — while Complete still badges; resting
+  // rows stay unbadged as before.
+  it('badges a complete row, and suppresses the chip on live and resting rows', () => {
+    const { rerender } = render(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, phase: 'complete' } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Complete');
+    rerender(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, phase: 'live' } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.queryByTestId('row-lifecycle')).toBeNull();
+    // NEGATIVE CONTROL: setup/ready rows carry no pill.
+    rerender(
+      <WorkspaceRow
+        tournament={{ ...t, signals: { ...t.signals!, phase: 'ready' } }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.queryByTestId('row-lifecycle')).toBeNull();
+  });
+
+  it('an archived workspace never badges Live (shared precedence)', () => {
+    render(
+      <WorkspaceRow
+        tournament={{ ...t, status: 'archived', signals: { ...t.signals!, phase: 'live' } }}
+        group="past" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Archived');
+  });
+
   it('name leads the row — the date is trailing metadata, not the first cell', () => {
     const { container } = render(
       <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
@@ -84,6 +137,22 @@ describe('WorkspaceRow', () => {
     expect(row.firstElementChild).toHaveTextContent('Spring');
     const text = row.textContent ?? '';
     expect(text.indexOf('Spring')).toBeLessThan(text.indexOf('Jul 1'));
+  });
+
+  // 2026-08-11 design audit, T4: the menu was revealed only by
+  // `group-hover:opacity-100`. `:hover` never fires on a touch device, so on
+  // a tablet the row's only route to Settings and Delete did not exist — at
+  // any width. jsdom applies no stylesheet, so the rest state is asserted on
+  // the class that carries it; what is being pinned is that the resting
+  // opacity is not zero.
+  it('the overflow menu is visible at rest, not only on hover', () => {
+    render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} onDelete={noop} />,
+    );
+    const trigger = screen.getByRole('button', { name: /more actions/i });
+    const wrapper = trigger.closest('span[class]')!;
+    expect(wrapper.className).not.toMatch(/\bopacity-0\b/);
+    expect(wrapper.className).toMatch(/\bopacity-\d+\b/);
   });
 
   it('Delete lives in the overflow menu, not inline', () => {

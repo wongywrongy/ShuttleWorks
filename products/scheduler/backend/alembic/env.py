@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, event, pool
 
 from alembic import context
 
@@ -27,7 +27,20 @@ from database.session import normalize_database_url  # noqa: E402
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # ``disable_existing_loggers=False`` is load-bearing, not tidiness.
+    # ``fileConfig`` defaults it to True, which disables every logger that
+    # already exists and is not named in the ini. The app runs migrations
+    # from its own lifespan (``app.main._run_migrations``), by which point
+    # uvicorn has already created ``uvicorn``, ``uvicorn.error`` and
+    # ``uvicorn.access`` — so the default silently switched the server's
+    # entire log off a few hundred milliseconds into startup. The effect
+    # was total and invisible: no access log line, and no traceback for
+    # any unhandled exception (uvicorn logs those on ``uvicorn.error``),
+    # so 500s were served with a bare ``Internal Server Error`` body and
+    # nothing at all in ``docker logs``. It hid a live availability defect
+    # for as long as it existed. Guarded by
+    # ``tests/unit/test_logging_survives_migrations.py``.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Override sqlalchemy.url from settings — keeps the canonical source of
 # truth in one place. The ini file's placeholder is left blank.
@@ -57,6 +70,28 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+
+    if connectable.dialect.name == "sqlite":
+        # ``database.session`` turns ``PRAGMA foreign_keys`` ON for every
+        # SQLite connection so the models' ON DELETE CASCADE actually fires.
+        # Migrations must opt back OUT: batch mode rebuilds a table by
+        # DROPping the original, and with enforcement on SQLite runs an
+        # implicit DELETE FROM before that DROP, firing every child CASCADE.
+        # MEASURED: upgrading a populated pre-orgs database through
+        # n7e1f5a9b3c4 (which batch-alters ``tournaments``) deleted every
+        # matches / match_states / tournament_backups / tournament_members
+        # row. Enforcement is connection-scoped, so this affects migrations
+        # only — the application's own connections keep it on.
+        #
+        # It must go through the ``connect`` event, not
+        # ``connection.exec_driver_sql``: SQLAlchemy 2.0 autobegins on the
+        # first execute, the pragma is silently ignored inside a transaction,
+        # and the leftover outer transaction rolls the entire migration back
+        # when the connection closes. That failure is invisible — Alembic
+        # still logs every "Running upgrade" line.
+        @event.listens_for(connectable, "connect")
+        def _fk_off_for_migrations(dbapi_connection, _connection_record):  # noqa: ANN001
+            dbapi_connection.execute("PRAGMA foreign_keys=OFF")
 
     with connectable.connect() as connection:
         context.configure(

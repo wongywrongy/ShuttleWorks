@@ -162,7 +162,7 @@ describe('BracketDrawsTab — draw rows', () => {
     expect(screen.getByText('No draws yet')).toBeInTheDocument();
   });
 
-  it('shows the DONE/LIVE/READY/PEND progress strip when the draw has matches', () => {
+  it('shows the DONE/LIVE/READY/PENDING progress strip when the draw has matches', () => {
     mockBracketData = makeBracketData({
       status: 'started',
       playUnits: [
@@ -181,16 +181,55 @@ describe('BracketDrawsTab — draw rows', () => {
     });
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
-    expect(within(row).getByText('DONE').parentElement).toHaveTextContent(/DONE\s*1/);
-    expect(within(row).getByText('LIVE').parentElement).toHaveTextContent(/LIVE\s*1/);
-    expect(within(row).getByText('READY').parentElement).toHaveTextContent(/READY\s*1/);
-    expect(within(row).getByText('PEND').parentElement).toHaveTextContent(/PEND\s*1/);
+    // DRW-N1: fraction + single-line segmented bar, never chips. The
+    // fraction is done/total; the exact breakdown lives on the tooltip.
+    const progress = within(row).getByTestId('draw-progress');
+    expect(progress).toHaveTextContent('1/4');
+    expect(progress).toHaveAttribute(
+      'title',
+      '1 done · 1 live · 1 ready · 1 pending',
+    );
+    // Painted segments in worked-through order: done, live, ready — the
+    // unpainted track is pending.
+    const bar = progress.querySelector('.rounded-full');
+    expect(bar?.children).toHaveLength(3);
   });
 
   it('shows a placeholder instead of the strip while the draw has no matches', () => {
     renderDraws();
     const row = screen.getByTestId('bracket-draw-row-MS');
-    expect(within(row).queryByText('DONE')).not.toBeInTheDocument();
+    expect(within(row).queryByTestId('draw-progress')).not.toBeInTheDocument();
+  });
+
+  // D4 — PROGRESS was the row's flex-1 grower while Format was fixed-width,
+  // so the four counters (~184px of content that cannot reflow) got whatever
+  // was left: 104px at 1280 (colliding with the STATUS chip) and 904px at
+  // full width. The counters now own a fixed column; Format grows and wraps.
+  it('gives the progress counters a fixed column, not the row leftovers', () => {
+    mockBracketData = makeBracketData({
+      status: 'started',
+      playUnits: [makePlayUnit('pu-1')],
+      results: [
+        { play_unit_id: 'pu-1', winner_side: 'A', walkover: false, finished_at_slot: null },
+      ],
+    });
+    renderDraws();
+    const row = screen.getByTestId('bracket-draw-row-MS');
+    const cell = within(row).getByTestId('draw-progress').closest('[role="cell"]');
+    // w-48, not w-52: the row's seven columns overran their ~950px budget and
+    // the flex-1 Format column absorbed it by collapsing to zero. Progress
+    // gave back 16px as part of re-budgeting the row. The PROPERTY under test
+    // is unchanged - a fixed column rather than the leftovers - and
+    // `bracketDrawsColumns.test.ts` now holds the total.
+    expect(cell?.className).toContain('w-48');
+    expect(cell?.className).not.toContain('flex-1');
+    // Clipping a tally is the same crime as ellipsising a name.
+    expect(cell?.className).not.toContain('overflow-hidden');
+    // The header cell derives from the same column spec, so the two cannot
+    // drift on a future priority change.
+    expect(
+      screen.getByRole('columnheader', { name: 'Progress' }).className,
+    ).toContain('w-48');
   });
 });
 
@@ -225,13 +264,13 @@ describe('BracketDrawsTab — status + generate', () => {
     expect(screen.getByRole('button', { name: /Re-generate/i })).toBeInTheDocument();
   });
 
-  it('a started draw offers no generate-family action (the STARTED pill carries the state)', () => {
-    // Intentional change (2026-07-15 polish audit): the raw "— (locked)"
-    // action-cell text is gone — status lives in the pill, and the
-    // Configuration page's hard-lock ribbon explains the why.
+  it('a started draw offers no generate-family action, and its status cell is silent (DRW-N2)', () => {
+    // The STARTED pill rendered identically on every playing row — X6's
+    // never-varies clause. The Progress bar's live/done segments carry the
+    // state now; Draft/Generated still label their rows as text.
     mockBracketData = makeBracketData({ status: 'started' });
     renderDraws();
-    expect(screen.getByText(/started/i)).toBeInTheDocument();
+    expect(screen.queryByText(/started/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /Generate|Re-generate/i })).toBeNull();
     expect(screen.queryByText(/locked/i)).toBeNull();
   });
@@ -269,7 +308,7 @@ describe('BracketDrawsTab — draw detail panel', () => {
     const checkboxes = within(panel).getAllByRole('checkbox');
     fireEvent.click(checkboxes[0]);
     fireEvent.click(checkboxes[1]);
-    fireEvent.click(within(panel).getByRole('button', { name: /^Commit$/i }));
+    fireEvent.click(within(panel).getByRole('button', { name: /^Save participants$/i }));
     await vi.waitFor(() =>
       expect(mockEventUpsert).toHaveBeenCalledWith(
         'MS',
@@ -323,6 +362,75 @@ describe('BracketDrawsTab — create in a layer', () => {
     fireEvent.click(screen.getByTestId('bracket-new-draw'));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('button', { name: /Create draw/i })).toBeDisabled();
+  });
+});
+
+// The Discipline box was bare free text defaulting to the literal string
+// "MS", while Meet's equivalent field is regex-validated, uppercased and
+// length-capped. It now runs on Meet's own `validateEventCode`.
+describe('BracketDrawsTab — draw identity validation', () => {
+  function openNewDraw() {
+    renderDraws();
+    fireEvent.click(screen.getByTestId('bracket-new-draw'));
+    return screen.getByRole('dialog');
+  }
+
+  it('uppercases both the draw ID and the discipline', async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw();
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), {
+      target: { value: ' ws ' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Discipline/i), {
+      target: { value: 'wd' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith(
+        'WS',
+        expect.objectContaining({ discipline: 'WD' }),
+      ),
+    );
+  });
+
+  it('refuses a discipline carrying digits or spaces', () => {
+    const dialog = openNewDraw();
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), {
+      target: { value: 'WS' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Discipline/i), {
+      target: { value: 'W S1' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/letters only/i);
+    expect(mockEventUpsert).not.toHaveBeenCalled();
+  });
+
+  // An upsert onto an existing id REPLACES that draw, participants and all.
+  it('refuses a draw ID that already exists', () => {
+    const dialog = openNewDraw();
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), {
+      target: { value: 'ms' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/already a draw/i);
+    expect(mockEventUpsert).not.toHaveBeenCalled();
+  });
+
+  // Dedupe belongs to the ID, never the discipline: MS1 and MS2 are both MS.
+  it('lets a second draw share an existing discipline', async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw();
+    fireEvent.change(within(dialog).getByPlaceholderText('MS'), {
+      target: { value: 'MS2' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create draw/i }));
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith(
+        'MS2',
+        expect.objectContaining({ discipline: 'MS' }),
+      ),
+    );
   });
 });
 

@@ -14,7 +14,6 @@ Steps:
 from __future__ import annotations
 
 from ..actors import BracketDirector, Director
-from ..client import SimClient
 from ..context import RunContext
 from ..invariants import Violation
 from ..rng import command_uuid
@@ -102,7 +101,7 @@ class Chaos:
 
             # -- 6. interleaved directors racing one match
             m4 = mids[3]
-            second = SimClient(client.base_url, stats=ctx.client.stats)
+            second = client.clone()
             try:
                 Director.call_to_court(client, ctx, m4)          # director 1 acts
                 stale_v = ctx.versions[m4] - 1                   # director 2 saw the old world

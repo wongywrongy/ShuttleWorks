@@ -28,7 +28,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
-import { useAdvisories } from '../../hooks/useAdvisories';
 import { formatSlotTime } from '../../lib/time';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
@@ -36,13 +35,19 @@ import { STALE_CAPTION } from './publicDisplay/freshness';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
+import { BoardSwitch } from './publicDisplay/BoardSwitch';
 import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
+import {
+  DEFAULT_DWELL_SECONDS,
+  rotationSlides,
+  slideAt,
+} from './publicDisplay/rotation';
 import { CourtsView } from './publicDisplay/CourtsView';
 import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
-import { orderCourts, visibleCourts, defaultColumns } from './publicDisplay/courtLayout';
+import { orderCourts, visibleCourts, defaultColumns, autoLayout } from './publicDisplay/courtLayout';
 import { standingsPlacement } from './publicDisplay/standingsLayout';
 import {
   resolveTvAccent,
@@ -52,16 +57,23 @@ import {
 } from './publicDisplay/tvSizing';
 
 // How often the ROTATE placement (Task 9) swaps the main content area
-// between the current view (courts/schedule) and a full-bleed standings
-// screen. Symmetric — same dwell time on each side — since the brief
-// doesn't call for asymmetric timing and a single interval is simplest
-// to reason about (and to fake-timer test) than a ping-pong of two
-// different durations.
-const ROTATION_INTERVAL_MS = 15_000;
+
+/** How long the NOW CALLING strip holds before the board moves on. */
+const NOW_CALLING_DWELL_MS = 8_000;
 
 type ViewMode = 'courts' | 'schedule';
 
-export function MeetDisplayPage() {
+/** `hybrid` — this workspace also runs a Bracket. Adds the board switch and,
+ *  crucially, SCOPES the progress footer: `finishedCount / totalCount` counts
+ *  meet assignments only, so on a hybrid workspace an unqualified
+ *  "12 / 24 matches complete · 50%" is an authoritative-looking claim about a
+ *  tournament half of which it cannot see. Meet and Bracket match records are
+ *  non-merged by design (ADR 0006) — there is no cross-engine denominator to
+ *  state, so the honest fix is to name the half being counted. */
+export function MeetDisplayPage({
+  hybrid = false,
+  preview = false,
+}: { hybrid?: boolean; preview?: boolean } = {}) {
   const [searchParams] = useSearchParams();
   // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
   // task 9 (`?view=standings` was a real, documented param) must still
@@ -82,12 +94,13 @@ export function MeetDisplayPage() {
   // embed respectively. Empty for bracket-kind/Meet-disabled workspaces.
   const standings = useTournamentStore((state) => state.standings);
 
-  // Display projects, never operates (see CLAUDE.md's module model) —
-  // the public board must not surface an operator-facing advisory, so
-  // no banner is rendered below. This call is left in place unchanged
-  // (out of scope for this removal); it is effectively inert here —
-  // see docs/audits/debt-log.md for why it's dead weight either way.
-  useAdvisories();
+  // No `useAdvisories()` here, deliberately. Display projects, never
+  // operates (CLAUDE.md's module model), so the public board renders no
+  // operator-facing advisory — and the hook was dead weight on both routes
+  // that mount this page: on standalone `/display?id=` it reads its
+  // tournament id from a route PATH param only, so the id is null and its
+  // effect returns before firing; in the embedded TV-preview tab `AppShell`
+  // already mounts it globally, so the call was a duplicate 15s poll.
 
   // 1 Hz tick drives both the wall clock and the elapsed timer on active matches.
   useEffect(() => {
@@ -96,7 +109,9 @@ export function MeetDisplayPage() {
   }, []);
 
   // Read-only polling + freshness derivation. See ./publicDisplay/useDisplaySync.ts.
-  const { freshness } = useDisplaySync(now);
+  // `linkDead` = the link itself can never work (invalid/revoked token, deleted
+  // workspace); polling has already stopped.
+  const { freshness, terminal: linkDead } = useDisplaySync(now);
 
   // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
@@ -122,26 +137,13 @@ export function MeetDisplayPage() {
     config?.courtCount ?? 0,
     config?.standingsMode,
   );
-  const showStandingsSidePanel = hasStandings && resolvedStandingsPlacement === 'side';
-  const rotateStandings = hasStandings && resolvedStandingsPlacement === 'rotate';
+  // The persistent SIDE panel is retired (TV-5): it took roughly a third of
+  // the board's width away from the courts, which are what the hall is
+  // actually looking at, to hold a table nobody reads continuously. Standings
+  // are a rotation slide now. `standingsMode: 'off'` still means off — that
+  // is a director saying "not on my board", not a placement preference.
+  const standingsEnabled = hasStandings && resolvedStandingsPlacement !== 'off';
 
-  // Timed rotation: alternate the main content area between the current
-  // view (courts/schedule) and a full-bleed standings screen. Only ticks
-  // while rotation is actually active; flips back to "showing the normal
-  // view" the instant rotation stops (mode change, standings disappear,
-  // Meet gets disabled), so switching away never leaves the board stuck
-  // mid-rotation on a screen that's no longer supposed to exist.
-  const [rotationShowingStandings, setRotationShowingStandings] = useState(false);
-  useEffect(() => {
-    if (!rotateStandings) {
-      setRotationShowingStandings(false);
-      return;
-    }
-    const t = window.setInterval(() => {
-      setRotationShowingStandings((prev) => !prev);
-    }, ROTATION_INTERVAL_MS);
-    return () => window.clearInterval(t);
-  }, [rotateStandings]);
 
   // Indexing helpers we'll reuse below. O(1) by-matchId lookups so the
   // courts / standings derivations don't re-scan the full matchesByStatus
@@ -168,7 +170,7 @@ export function MeetDisplayPage() {
   // never gets a manufactured "now". Everything else on a court is ordered
   // by its planned slot into `next`/`later`. This is deliberately a
   // board-local helper (publicDisplay/courtLanes.ts), NOT shared with
-  // Operations' positional `deriveCourtLanes` — see that file's doc
+  // Operations' always-occupied `deriveCourtLanes` — see that file's doc
   // comment and task-8-report.md for why forcing a shared extraction
   // would risk the shipped Run surface for a divergent `now` rule.
   const laneItems = useMemo((): LaneItem[] => {
@@ -216,10 +218,11 @@ export function MeetDisplayPage() {
       match: (typeof matches)[number] | null;
       state: (typeof matchStates)[string] | null;
       status: 'active' | 'called' | 'empty';
-      // When ``status === 'empty'``, the Next/Later lane preview for this
-      // court (if any). Used by the public TV to render relative
-      // "Next"/"Later" labels (de-emphasized planned clock) instead of an
-      // inert "Available" placeholder.
+      // The Next/Later lane preview for this court (if any). On an EMPTY
+      // court it replaces an inert "Available" placeholder with relative
+      // "Next"/"Later" labels; on an occupied one the card shows just the
+      // next line, which is the question a spectator watching that court
+      // actually has (TV-3).
       nextMatch?: (typeof matches)[number] | null;
       nextStartTime?: string;
       laterMatch?: (typeof matches)[number] | null;
@@ -228,6 +231,16 @@ export function MeetDisplayPage() {
     const courts: Row[] = [];
 
     for (let courtId = 1; courtId <= config.courtCount; courtId++) {
+      // Derived for EVERY court, not only free ones (TV-3).
+      const upNextId = previewByCourt.next.get(courtId) ?? null;
+      const upNextAssignment = upNextId ? assignmentByMatchId.get(upNextId) : undefined;
+      const upNext = {
+        nextMatch: upNextId ? matchMap.get(upNextId) || null : null,
+        nextStartTime: upNextAssignment
+          ? formatSlotTime(upNextAssignment.slotId, config)
+          : undefined,
+      };
+
       const activeId = matchesByCourt.active.get(courtId);
       if (activeId) {
         courts.push({
@@ -235,6 +248,7 @@ export function MeetDisplayPage() {
           match: matchMap.get(activeId) || null,
           state: matchStates[activeId] || null,
           status: 'active',
+          ...upNext,
         });
         continue;
       }
@@ -245,11 +259,12 @@ export function MeetDisplayPage() {
           match: matchMap.get(calledId) || null,
           state: matchStates[calledId] || null,
           status: 'called',
+          ...upNext,
         });
         continue;
       }
-      const nextId = previewByCourt.next.get(courtId) ?? null;
-      const nextAssignment = nextId ? assignmentByMatchId.get(nextId) : undefined;
+      const nextId = upNextId;
+      const nextAssignment = upNextAssignment;
       const laterId = previewByCourt.later.get(courtId) ?? null;
       const laterAssignment = laterId ? assignmentByMatchId.get(laterId) : undefined;
       courts.push({
@@ -291,6 +306,55 @@ export function MeetDisplayPage() {
     }));
   }, [matchesByStatus.scheduled, matchMap, schedule]);
 
+  // NOW CALLING dwell (TV-4). Keyed on the called match's identity, so a
+  // second call while the first is still showing replaces it rather than
+  // queueing — the floor moved on, and so should the board.
+  const calledEntry = useMemo(() => {
+    for (const row of displayedCourtRows) {
+      if (row.status === 'called' && row.match) {
+        return {
+          key: row.match.id,
+          code: row.match.eventRank || `M${row.match.matchNumber || '?'}`,
+          courtId: row.courtId,
+        };
+      }
+    }
+    return null;
+  }, [displayedCourtRows]);
+  const [callingKey, setCallingKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!calledEntry) return;
+    setCallingKey(calledEntry.key);
+    const t = window.setTimeout(() => setCallingKey(null), NOW_CALLING_DWELL_MS);
+    return () => window.clearTimeout(t);
+  }, [calledEntry?.key]);
+  const nowCalling = calledEntry && callingKey === calledEntry.key ? calledEntry : null;
+
+  // Timed rotation (TV-7). The slide is derived from ELAPSED time rather than
+  // counted off timer ticks, so a re-render never skips a slide and a board
+  // left running for a week cannot drift. One 1s tick drives it; `rotation.ts`
+  // owns what the sequence is.
+  const dwellSeconds = config?.tvRotationDwellSeconds ?? DEFAULT_DWELL_SECONDS;
+  const slides = useMemo(
+    () =>
+      rotationSlides(
+        { standings: standingsEnabled, upNext: upcomingMatches.length > 0 },
+        config?.tvRotationSlides,
+      ),
+    [standingsEnabled, upcomingMatches.length, config?.tvRotationSlides],
+  );
+  const [rotationSeconds, setRotationSeconds] = useState(0);
+  useEffect(() => {
+    if (slides.length < 2) {
+      setRotationSeconds(0);
+      return;
+    }
+    const t = window.setInterval(() => setRotationSeconds((n) => n + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [slides.length]);
+  // The operator preview and the manual tab picker both pin a view; rotation
+  // only drives the board when the operator has not chosen one.
+  const activeSlide = slides.length < 2 ? 'courts' : slideAt(slides, rotationSeconds, dwellSeconds);
   // ===== Rendering =====================================================
 
   // ── Preset resolution ─────────────────────────────────────────
@@ -304,7 +368,7 @@ export function MeetDisplayPage() {
   // screens can pick a light preset while the operator stays dark.
   const tvPreset = config?.tvPreset ?? DEFAULT_PRESET_ID;
 
-  if (!schedule || !config) {
+  if (!schedule || !config || linkDead) {
     return (
       <div
         ref={rootRef}
@@ -312,15 +376,27 @@ export function MeetDisplayPage() {
         className="min-h-[100dvh] bg-background text-foreground flex items-center justify-center"
       >
         <div className="absolute right-4 top-4 flex items-center gap-3">
-          <LiveStatusPill status={freshness} />
+          {/* A freshness pill on a dead link promises a recovery that can never
+              come; the board is not "Delayed", it is finished. */}
+          {linkDead ? null : <LiveStatusPill status={freshness} />}
           <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
         </div>
-        <div className="text-center">
-          <div className="text-6xl font-bold tracking-tight">Tournament Display</div>
-          <div className="mt-3 text-2xl text-muted-foreground">
-            {freshness === 'live' ? 'No schedule generated yet' : 'Waiting to connect…'}
+        {linkDead ? (
+          <div className="text-center" data-testid="display-link-invalid">
+            <div className="text-6xl font-bold tracking-tight">Display link not valid</div>
+            <div className="mt-3 text-2xl text-muted-foreground">
+              This link has been turned off or never existed. Ask the tournament
+              desk for a new one.
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-center">
+            <div className="text-6xl font-bold tracking-tight">Tournament Display</div>
+            <div className="mt-3 text-2xl text-muted-foreground">
+              {freshness === 'live' ? 'No schedule generated yet' : 'Waiting to connect…'}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -332,11 +408,13 @@ export function MeetDisplayPage() {
   // TV view tabs: rounded 1px-border chip in sentence-case sans, active
   // = accent (azure) border + tinted bg + accent text. Readable across a
   // gym without the mono-uppercase shouting.
-  const tabClass = (mode: ViewMode) =>
+  // Takes the active flag rather than the view id, so the hybrid board switch
+  // (which is never one of this board's views) wears the same chrome.
+  const tabClass = (active: boolean) =>
     [
       INTERACTIVE_BASE,
       'rounded border px-4 py-2 text-base font-semibold',
-      view === mode
+      active
         ? 'border-accent bg-accent/15 text-accent'
         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
     ].join(' ');
@@ -346,7 +424,13 @@ export function MeetDisplayPage() {
   // venue's setup stays consistent across reloads. The picker UI lives
   // in the Public-display settings card (admin TV tab) — never on the
   // standalone /display window.
-  const tvDisplayMode: 'strip' | 'grid' | 'list' = config.tvDisplayMode ?? 'strip';
+  // Strip is retired (DC-1): a single tall column showed three or four
+  // courts on a venue screen and scrolled the rest off, which is the one
+  // thing a passive display cannot do. Stored `strip` maps to `auto` on
+  // read, so no workspace needs migrating and a rollback still renders.
+  const storedMode = config.tvDisplayMode ?? 'auto';
+  const tvDisplayMode: 'auto' | 'grid' | 'list' =
+    storedMode === 'strip' ? 'auto' : storedMode;
 
   // ---- TV sizing + accent knobs (per-tournament) -----------------------
   // Shared with DisplayPreview — see publicDisplay/tvSizing.ts for the
@@ -358,11 +442,19 @@ export function MeetDisplayPage() {
   const cardHeightPx = resolveCardHeightPx(tvCardSize, isFullscreen);
   const { courtNumSize, eventCodeSize, playerSize, cardPadX } = resolveCardSizeClasses(cardHeightPx);
 
-  // Grid columns — director override wins; otherwise a responsive
-  // default derived from how many courts are actually visible (see
-  // courtLayout.ts#defaultColumns). Hidden courts never count toward
-  // the column math since they're never on screen.
-  const resolvedColumns = defaultColumns(displayedCourtRows.length, config.tvGridColumns ?? null);
+  // Columns — director override wins; otherwise derived. In `auto` the
+  // derivation reads the BOARD's shape as well as the court count
+  // (courtLayout.ts#autoLayout), because what decides legibility across a
+  // hall is card area, not how many courts happen to exist. Hidden courts
+  // never count: they are never on screen.
+  const boardAspect =
+    typeof window === 'undefined' || window.innerHeight === 0
+      ? 16 / 9
+      : window.innerWidth / window.innerHeight;
+  const resolvedColumns =
+    tvDisplayMode === 'auto'
+      ? autoLayout(displayedCourtRows.length, boardAspect, config.tvGridColumns ?? null).columns
+      : defaultColumns(displayedCourtRows.length, config.tvGridColumns ?? null);
   const gridColsClass = resolveGridColsClass(resolvedColumns);
 
   // Built once and reused verbatim whether or not the SIDE standings panel
@@ -413,11 +505,11 @@ export function MeetDisplayPage() {
       {/* ---------- Header ------------------------------------------------ */}
       <div className="sticky top-0 z-hud border-b border-border bg-background/90 px-6 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-baseline gap-4">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
             {/* Tournament name when set, else a generic "Live ops" label
                 so the header still anchors the page when the operator
                 hasn't named their tournament. */}
-            <div className="truncate text-3xl font-bold tracking-tight">
+            <div className="min-w-0 break-words text-3xl font-bold tracking-tight">
               {config.tournamentName?.trim() || 'Tournament status'}
             </div>
             {formatTournamentDate(config.tournamentDate) && (
@@ -427,40 +519,84 @@ export function MeetDisplayPage() {
             )}
             <LiveStatusPill status={freshness} />
           </div>
+          {/* Venue render keeps the clock and nothing else (TV-8): nobody is
+              standing at the TV to press a tab or a fullscreen button, and
+              the board already rotates through what those tabs showed. */}
           <div className="flex items-center gap-3">
             <div className="flex gap-2">
-              <button type="button" onClick={() => setView('courts')} className={tabClass('courts')}>
-                Courts
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('schedule')}
-                className={tabClass('schedule')}
-              >
-                Schedule
-              </button>
+              {preview ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setView('courts')}
+                    className={tabClass(view === 'courts')}
+                  >
+                    Courts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView('schedule')}
+                    className={tabClass(view === 'schedule')}
+                  >
+                    Schedule
+                  </button>
+                </>
+              ) : null}
+              {/* The board switch SURVIVES the venue render: on a hybrid
+                  workspace it is the only route to the other engine's board,
+                  and dropping it would make half the event invisible to the
+                  hall. The view tabs go, because rotation already shows what
+                  they showed. */}
+              {hybrid ? <BoardSwitch to="bracket" className={tabClass(false)} /> : null}
             </div>
             <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
-            <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+            {preview ? (
+              <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+            ) : null}
           </div>
         </div>
       </div>
+
+      {/* NOW CALLING (TV-4). A called match is the one moment the board has
+          to interrupt for: two players are being asked to walk to a court,
+          and a court card two rows down in a twelve-card grid does not carry
+          that. The strip appears when a match ENTERS called and dwells for a
+          fixed few seconds, then leaves — it is an announcement, not a
+          status, and a permanent banner would be ignored by the third time
+          anyone saw it. */}
+      {nowCalling ? (
+        <div
+          data-testid="now-calling-banner"
+          className="motion-enter flex items-center justify-center gap-4 bg-status-called-solid px-6 py-3 text-status-called-ink"
+        >
+          <span className="text-xl font-extrabold uppercase tracking-[0.12em]">
+            Now calling
+          </span>
+          <span className="sw-num text-3xl font-black">
+            {nowCalling.code} → Court {nowCalling.courtId}
+          </span>
+        </div>
+      ) : null}
 
       {/* View swap area. `key` + `motion-enter` so changing tabs (or the
           ROTATE placement taking over the screen) materializes the new
           content via the brand recipe rather than snapping in — visible
           from across a gym. */}
       <div
-        key={rotateStandings && rotationShowingStandings ? 'standings-rotation' : view}
+        key={view === 'courts' ? `slide-${activeSlide}` : view}
         className="motion-enter px-6 pb-28 pt-6"
       >
-        {rotateStandings && rotationShowingStandings ? (
-          // ROTATE placement (task 9): periodically takes over the whole
-          // content area instead of a permanent side panel — for larger
-          // venues where a persistent panel would crowd an already-busy
-          // court grid. See ./publicDisplay/standingsLayout.ts.
+        {view === 'courts' && activeSlide === 'standings' ? (
           <div data-testid="standings-rotation-screen">
             <StandingsView standings={standings} />
+          </div>
+        ) : view === 'courts' && activeSlide === 'upNext' ? (
+          <div data-testid="up-next-rotation-screen">
+            <ScheduleView
+              upcomingMatches={upcomingMatches}
+              config={config}
+              playerNames={playerNames}
+            />
           </div>
         ) : (
           <>
@@ -472,24 +608,7 @@ export function MeetDisplayPage() {
                   </div>
                 )}
                 <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
-                  {showStandingsSidePanel ? (
-                    // SIDE placement (task 9): a persistent panel next to
-                    // the court grid — shrinks the space available to it,
-                    // it never resizes the grid's own column math (that
-                    // stays viewport-keyed via defaultColumns/CourtsView's
-                    // responsive classes, unrelated to this panel's width).
-                    <div className="flex flex-col gap-6 xl:flex-row">
-                      <div className="min-w-0 flex-1">{courtsViewNode}</div>
-                      <div
-                        className="w-full flex-none xl:w-96"
-                        data-testid="standings-side-panel"
-                      >
-                        <StandingsView standings={standings} />
-                      </div>
-                    </div>
-                  ) : (
-                    courtsViewNode
-                  )}
+                  {courtsViewNode}
                 </div>
               </>
             )}
@@ -509,24 +628,27 @@ export function MeetDisplayPage() {
       <div className="sticky inset-x-0 bottom-0 border-t border-border bg-background/90 px-6 py-3 backdrop-blur">
         <div className="flex items-center justify-between text-base">
           <div className="text-muted-foreground">
-            {finishedCount} / {totalCount} matches complete · {progressPct}%
+            {finishedCount} / {totalCount} {hybrid ? 'meet matches' : 'matches'} complete ·{' '}
+            {progressPct}%
           </div>
-          <div className="flex items-center gap-5">
-            <span
-              className="inline-flex items-center gap-2"
-              style={{ color: tvAccent }}
-            >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: tvAccent }}
-              />
-              {matchesByStatus.started.length} active
-            </span>
-            <span className="inline-flex items-center gap-2 text-status-called">
-              <span className="h-2 w-2 rounded-full bg-status-called sw-pulse" />
-              {matchesByStatus.called.length} called
-            </span>
-          </div>
+          {/* Operator diagnostics, not spectator information: "2 active · 2
+              called" restates what the court cards already show, in numbers,
+              to an audience that is looking at the cards (TV-8). Progress
+              stays — that is the one thing the grid cannot say. */}
+          {preview ? (
+            <div className="flex items-center gap-5">
+              {/* Same token as the card LIVE band (one status, one hue — D1.3);
+                  the arbitrary tvAccent hex is brand chrome, not a status. */}
+              <span className="inline-flex items-center gap-2 text-status-live">
+                <span className="h-2 w-2 rounded-full bg-status-live" />
+                {matchesByStatus.started.length} active
+              </span>
+              <span className="inline-flex items-center gap-2 text-status-called">
+                <span className="h-2 w-2 rounded-full bg-status-called sw-pulse" />
+                {matchesByStatus.called.length} called
+              </span>
+            </div>
+          ) : null}
         </div>
         {/* Track stays full-width; the fill animates via transform: scaleX
             so we never trip a layout reflow on the parent grid each tick. */}

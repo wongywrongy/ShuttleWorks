@@ -49,6 +49,8 @@ Routes are grouped by the **architectural module** that owns them. The full endp
 | `/tournaments/{id}/match-states*` | **Operations** | live match status + optimistic-concurrency (`ETag` / `If-Match`) |
 | `/tournaments/{id}/commands` | **Operations** | idempotent operator command queue |
 | `/display/{token}/*`, `/tournaments/{id}/display-token*` | **Display** | public capability-token projection + owner mint/rotate |
+| `/tournaments/{id}/entry-page*`, `…/entry-events*`, `…/entries*` | **Entries** | the operator's entry-page config + entries desk (session-guarded) |
+| `/e/api/*`, `/e/account/*` | **Entries** | the **public entrant surface** — slug-keyed page projection, fee quote, submit, and entrant accounts (`sw_play_session`, never `users`). The *pages* are a separate React Router 7 service; these are the JSON it reads and the writes the browser posts directly (SP-PROGRAM-1 Phase 6, ruling R8-A) |
 | `/tournaments`, `/tournaments/{id}`, `…/state`, `…/state/backups`, `…/members`, `…/invites` | **Control plane** | workspace CRUD + shared state + collaboration |
 | `/tournaments/{id}/modules`, `…/modules/{moduleId}` | **Control plane** | the `workspace_modules` API |
 | `/invites/*` | **Control plane** | public + authenticated invite endpoints |
@@ -56,8 +58,12 @@ Routes are grouped by the **architectural module** that owns them. The full endp
 
 Every router is registered in `app/main.py` with an auth dependency, **except** `invites`
 (its public `GET /invites/{token}` lookup declares per-endpoint auth), `auth` (login while
-logged out), the public display projection router, and `solve-jobs` (carries its own auth +
-per-route role deps).
+logged out), the public display projection router, `solve-jobs` (carries its own auth +
+per-route role deps), and the two entrant routers (`/e/api/*`, `/e/account/*` — public by
+design for the same reason `auth` is: an entrant with no account must be able to get one).
+Each public endpoint is enumerated with a written reason in `tests/test_auth_surface.py`'s
+`PUBLIC_BY_DESIGN`, and a route that answers an anonymous caller without appearing there fails
+that test.
 
 ### Auth & tenancy (SP-CLOUD-2)
 

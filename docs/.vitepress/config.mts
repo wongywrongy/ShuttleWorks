@@ -37,7 +37,7 @@ const STAMP = gitStamp()
 export default defineConfig({
   title: 'ShuttleWorks',
   description:
-    'Architecture, module contracts, and data flow for ShuttleWorks — a CP-SAT tournament scheduling control plane (Meet · Bracket · Operations · Display).',
+    'Architecture, module contracts, and data flow for ShuttleWorks — a CP-SAT tournament scheduling control plane (Entries · Meet · Bracket · Operations · Display) with a zero-JavaScript public entrant tier.',
   lang: 'en-US',
 
   srcDir: '.',
@@ -79,6 +79,11 @@ export default defineConfig({
     // SECURITY, CODE_HEALTH, LICENSE).
     'programs/**',
     'architecture/workspace-suite/**',
+    // Superseded drafts kept as record. Each one duplicates a LIVE page
+    // (`architecture/entrant-tier.md`, `modules/entries.md`); rendering both
+    // would put two competing versions of the same subject on the site with
+    // nothing linking to the stale one.
+    '**/*.superseded-draft-*.md',
     'README.md',
   ],
 
@@ -100,6 +105,7 @@ export default defineConfig({
       { text: 'Contracts', link: '/contracts/' },
       { text: 'API', link: '/api/' },
       { text: 'Decisions', link: '/decisions/' },
+      { text: 'Progress', link: '/progress/' },
       { text: 'Glossary', link: '/glossary' },
     ],
 
@@ -154,6 +160,7 @@ export default defineConfig({
         items: [
           { text: 'System overview', link: '/architecture/system-overview' },
           { text: 'Workspace model', link: '/architecture/workspace-model' },
+          { text: 'Entrant tier (the public site)', link: '/architecture/entrant-tier' },
           { text: 'Data flow', link: '/architecture/data-flow' },
           { text: 'State management', link: '/architecture/state-management' },
           { text: 'Backend structure', link: '/architecture/backend-structure' },
@@ -166,6 +173,7 @@ export default defineConfig({
           { text: 'Bracket draw canvas', link: '/architecture/bracket-draw-canvas' },
           { text: 'Draw formats', link: '/architecture/draw-formats' },
           { text: 'Quality attributes', link: '/architecture/quality-attributes' },
+          { text: 'Console naming', link: '/design/console-naming' },
         ],
       },
       {
@@ -176,6 +184,7 @@ export default defineConfig({
           { text: 'Bracket', link: '/modules/bracket' },
           { text: 'Operations', link: '/modules/operations' },
           { text: 'Display', link: '/modules/display' },
+          { text: 'Entries', link: '/modules/entries' },
           { text: 'Settings', link: '/modules/settings' },
         ],
       },
@@ -195,6 +204,14 @@ export default defineConfig({
         items: [
           { text: 'Overview & route ownership', link: '/api/' },
           { text: 'Signals API', link: '/api/signals' },
+        ],
+      },
+      {
+        text: 'Progress',
+        collapsed: false,
+        items: [
+          { text: 'Programs board', link: '/progress/' },
+          { text: 'The public platform (SP-PROGRAM-1)', link: '/progress/2026-08-public-platform' },
         ],
       },
       {
@@ -234,6 +251,7 @@ export default defineConfig({
           { text: '0009 · Universal match contract', link: '/decisions/0009-universal-match-contract' },
           { text: '0010 · Nav model in platform', link: '/decisions/0010-nav-model-in-platform' },
           { text: '0011 · Cross-product boundary policy', link: '/decisions/0011-cross-product-boundary-policy' },
+          { text: '0012 · Remove the Supabase mirror', link: '/decisions/0012-remove-the-supabase-mirror' },
         ],
       },
     ],

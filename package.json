@@ -5,25 +5,33 @@
   "description": "Scheduler product (meet + bracket draws) + shared design-system. The legacy two-product layout was unified in the backend-merge arc (PRs 1-3).",
   "workspaces": [
     "packages/*",
-    "products/scheduler/frontend"
+    "products/scheduler/frontend",
+    "products/scheduler/entrant"
   ],
   "overrides": {
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3"
   },
   "scripts": {
-    "dev:scheduler": "npm run -w products/scheduler/frontend dev",
+    "dev:scheduler": "npm run -w products/scheduler/frontend dev --",
+    "dev:entrant": "npm run -w products/scheduler/entrant dev --",
     "build:scheduler": "npm run -w products/scheduler/frontend build",
-    "build:all": "npm run build:scheduler",
+    "build:entrant": "npm run -w products/scheduler/entrant build",
+    "build:all": "npm run build:scheduler && npm run build:entrant",
     "lint:scheduler": "npm run -w products/scheduler/frontend lint",
+    "lint:entrant": "npm run -w products/scheduler/entrant lint",
+    "typecheck:entrant": "npm run -w products/scheduler/entrant typecheck",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "docs:freshness": "node scripts/docs-freshness.mjs",
     "depcruise": "npm --prefix products/scheduler/frontend run depcruise",
+    "depcruise:entrant": "npm --prefix products/scheduler/entrant run depcruise",
     "jscpd": "jscpd",
     "knip": "npm --prefix products/scheduler/frontend run knip",
+    "knip:entrant": "npm --prefix products/scheduler/entrant run knip",
     "test:scheduler": "npm --prefix products/scheduler/frontend run test:run",
+    "test:entrant": "npm --prefix products/scheduler/entrant run test:run",
     "test:cov": "npm --prefix products/scheduler/frontend run test:cov"
   },
   "devDependencies": {

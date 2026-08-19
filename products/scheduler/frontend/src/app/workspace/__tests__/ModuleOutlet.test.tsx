@@ -30,7 +30,9 @@ describe('ModuleOutlet', () => {
   // Products are lazy()-loaded behind Suspense (PERF_FINDINGS FIX A), so
   // the mounted product appears asynchronously — assert with findByTestId.
   it('renders MeetProduct for a meet operator tab', async () => {
-    setTabAndKind('schedule', 'meet');
+    // A non-Operations meet tab: since the B3 flip, 'schedule'/'live' route
+    // to the unified Operations surface (covered below).
+    setTabAndKind('roster', 'meet');
     render(<ModuleOutlet />);
     expect(await screen.findByTestId('meet-product')).toBeInTheDocument();
   });
@@ -59,31 +61,35 @@ describe('ModuleOutlet', () => {
     expect(screen.queryByTestId('bracket-product')).not.toBeInTheDocument();
   });
 
-  // --- Unified Operations (both engines enabled) ---------------------------
+  // --- Unified Operations (SP-CONSOLE-4 B3 flip) ---------------------------
+  // Every Operations segment routes to OperationsProduct regardless of how
+  // many engines the workspace runs; `engines` only shapes its actions.
 
-  it('single-engine: an operations tab still renders the engine product', async () => {
-    // Default (bothEnginesEnabled omitted/false) must keep today's behavior.
+  it('single-engine meet: an operations tab renders the unified OperationsProduct', async () => {
     setTabAndKind('schedule', 'meet');
-    render(<ModuleOutlet />);
-    expect(await screen.findByTestId('meet-product')).toBeInTheDocument();
-  });
-
-  it('both engines: an operations tab renders the unified OperationsProduct', async () => {
-    setTabAndKind('schedule', 'meet');
-    render(<ModuleOutlet bothEnginesEnabled />);
+    render(<ModuleOutlet engines={{ meet: true, bracket: false }} />);
     expect(await screen.findByTestId('operations-product')).toBeInTheDocument();
     expect(screen.queryByTestId('meet-product')).not.toBeInTheDocument();
   });
 
-  it('both engines: the bracket operations tab also renders the unified surface', async () => {
+  it('single-engine bracket: the bracket operations tab renders the unified surface', async () => {
     setTabAndKind('bracket-live', 'bracket');
-    render(<ModuleOutlet bothEnginesEnabled />);
+    render(<ModuleOutlet engines={{ meet: false, bracket: true }} />);
     expect(await screen.findByTestId('operations-product')).toBeInTheDocument();
+    expect(screen.queryByTestId('bracket-product')).not.toBeInTheDocument();
   });
 
-  it('both engines: a non-operations tab still renders its own engine', async () => {
+  it('both engines: an operations tab renders the unified OperationsProduct', async () => {
+    setTabAndKind('schedule', 'meet');
+    render(<ModuleOutlet engines={{ meet: true, bracket: true }} />);
+    expect(await screen.findByTestId('operations-product')).toBeInTheDocument();
+    expect(screen.queryByTestId('meet-product')).not.toBeInTheDocument();
+  });
+
+  it('a non-operations tab still renders its own engine', async () => {
     setTabAndKind('roster', 'meet');
-    render(<ModuleOutlet bothEnginesEnabled />);
+    render(<ModuleOutlet engines={{ meet: true, bracket: true }} />);
     expect(await screen.findByTestId('meet-product')).toBeInTheDocument();
   });
+
 });

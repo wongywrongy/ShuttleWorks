@@ -15,6 +15,12 @@
  *   - syncError: most-recent error message (null when healthy). Kept for
  *                callers that want it for their own debug purposes; the
  *                board itself never renders it (see LiveStatusPill).
+ *   - terminal:  this link can never work — an invalid/revoked capability
+ *                token or a deleted workspace (shared definition:
+ *                lib/pollPolicy). Polling has stopped and the board must say
+ *                so rather than sit on "Waiting to connect…" forever. A
+ *                transient failure is NOT terminal; a live board must ride
+ *                those out.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
@@ -31,6 +37,7 @@ const TOURNAMENT_POLL_MS = 10_000;
 export interface UseDisplaySyncResult {
   freshness: FreshnessState;
   syncError: string | null;
+  terminal: boolean;
 }
 
 export function useDisplaySync(now: Date): UseDisplaySyncResult {
@@ -45,6 +52,11 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
   const tid = searchParams.get('id') ?? params.id ?? null;
   const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  // Keyed by the source that failed terminally, not a bare flag, so pointing
+  // the board at a different token/workspace gets a fresh verdict.
+  const [terminalFor, setTerminalFor] = useState<string | null>(null);
+  const source = token ?? tid;
+  const terminal = source != null && terminalFor === source;
 
   useEffect(() => {
     if (!token && !tid) {
@@ -78,11 +90,12 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
       } catch (err) {
         if (cancelled) return;
         if (isTerminalPollError(err)) {
-          // Workspace deleted / access revoked — stop polling; the
-          // freshness derivation ages the board to Delayed/Out of date
-          // naturally, which is the right spectator-calm answer.
+          // Invalid/revoked link, or the workspace is gone — stop polling and
+          // TELL the caller. Ageing the board into Delayed/Out of date would
+          // promise a recovery that can never arrive.
           cancelled = true;
           window.clearInterval(t);
+          setTerminalFor(source);
         }
         // Leave the last-known-good state on screen and let the
         // freshness derivation flip Delayed / Out of date based on
@@ -98,7 +111,7 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, [tid, token]);
+  }, [tid, token, source]);
 
   // Derive freshness from the last SUCCESSFUL sync (not the most-recent
   // attempt) — that way a single flaky request doesn't flash "Out of
@@ -112,5 +125,5 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
     return deriveFreshness(age, TOURNAMENT_POLL_MS);
   }, [lastSyncMs, now, syncError]);
 
-  return { freshness, syncError };
+  return { freshness, syncError, terminal };
 }

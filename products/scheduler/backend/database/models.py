@@ -316,6 +316,14 @@ class TournamentBackup(Base):
     filename: Mapped[str] = mapped_column(String(260), nullable=False)
     snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    # ``auto`` (a state write snapshotting the prior payload) or ``manual``
+    # (the director pressed Create backup). Retention rotates ``auto`` rows
+    # and never touches ``manual`` ones: ten routine writes during setup used
+    # to be enough to evict the snapshot a director took deliberately that
+    # morning, which is the one entry the feature exists for.
+    origin: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="auto", default="auto"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -1214,12 +1222,15 @@ class Submission(Base):
     fee total — or have to be reconstructed later by grouping on a
     timestamp.
 
-    ``uq_submissions_tournament_idempotency_key`` is ruling D4 carried up a
-    level intact: **tenant-scoped**, unlike the solve rail's global index.
+    ``uq_submissions_tournament_account_idempotency_key`` is ruling D4
+    carried up a level and then narrowed to the principal (Phase 6 §4):
+    **tenant- and account-scoped**, unlike the solve rail's global index.
     The submit route is reachable by anyone holding a public slug, so
     resolving a client-supplied key globally would let an outsider probe
-    another tenant's keyspace and learn that some other workspace used the
-    same key. NULL keys stay exempt on both dialects.
+    another tenant's keyspace; resolving it tenant-wide would let one
+    entrant's guessed key collide with — and, through the replay lookup,
+    read back — another entrant's submission. NULL keys stay exempt on
+    both dialects.
     """
 
     __tablename__ = "submissions"
@@ -1269,10 +1280,17 @@ class Submission(Base):
     account = relationship("EntrantAccount", lazy="joined")
 
     __table_args__ = (
-        # Ruling D4, one level up. NULLs compare distinct on both dialects.
+        # Ruling D4, one level up, narrowed to the principal (Phase 6 §4).
+        # It must match ``services.submissions.find_by_idempotency_key``
+        # column for column: that function is what the IntegrityError
+        # recovery re-reads with, and an index wider than the lookup turns
+        # a foreign entrant's key collision into an unhandled 500 instead
+        # of a fresh submission. NULLs compare distinct on both dialects,
+        # so a NULL key is still exempt (``account_id`` is NOT NULL).
         Index(
-            "uq_submissions_tournament_idempotency_key",
+            "uq_submissions_tournament_account_idempotency_key",
             "tournament_id",
+            "account_id",
             "idempotency_key",
             unique=True,
         ),
@@ -1597,6 +1615,30 @@ class EntryPage(Base):
     )
     regulations_version: Mapped[int] = mapped_column(
         Integer, default=1, nullable=False
+    )
+    # When the regulations text last actually changed (set alongside the
+    # version bump, same actually-changed condition). ``updated_at`` cannot
+    # serve the public document row — it bumps on any field. NULL = never
+    # edited since the column existed; the row renders version-only.
+    regulations_updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # ---- publication gates (SP-P7 §4) ----------------------------------
+    # TD-controlled, default OFF, independent — the public tier reads them
+    # and renders any combination coherently. Same home argument as the
+    # venue columns below: public-page configuration, outside the blob, so
+    # a toggle can never 409 against CONFIG_LOCKED. My-entries is NOT gated
+    # by these (an entrant always sees their own), except per-event result
+    # badges, which respect ``results_published``.
+    entrants_published: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    draws_published: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    results_published: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
     )
 
     # ---- money & payment (R14) ----------------------------------------

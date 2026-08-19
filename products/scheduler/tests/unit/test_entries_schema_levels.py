@@ -364,7 +364,7 @@ def test_no_natural_key_is_unique_at_any_level(session):
     here is a natural key that acquired uniqueness by accident.
     """
     authorised = {
-        "uq_submissions_tournament_idempotency_key",
+        "uq_submissions_tournament_account_idempotency_key",
         "uq_entry_pages_slug",
     }
     found = {
@@ -382,11 +382,40 @@ def test_no_natural_key_is_unique_at_any_level(session):
     assert found <= authorised, f"unauthorised uniqueness: {sorted(found - authorised)}"
 
 
-def test_the_submission_idempotency_index_is_unique_and_tenant_scoped(session):
-    """D4 survives the move up a level (spec Q5 amendment)."""
-    ix = _index("submissions", "uq_submissions_tournament_idempotency_key")
+def test_the_submission_idempotency_index_is_unique_and_account_scoped(session):
+    """D4 survives the move up a level (spec Q5 amendment) and is narrowed
+    to the principal by Phase 6 §4.
+
+    Supersedes ``test_the_submission_idempotency_index_is_unique_and_tenant_scoped``:
+    the tenant-only shape let a guessed key collide with another entrant's
+    row, which the service's ``IntegrityError`` recovery path could not
+    resolve (it re-reads with the *caller's* account and re-raises on a
+    miss). Narrower than D4, never wider — the cross-tenant probe D4
+    forbids stays impossible.
+    """
+    ix = _index("submissions", "uq_submissions_tournament_account_idempotency_key")
     assert ix.unique
-    assert [c.name for c in ix.columns] == ["tournament_id", "idempotency_key"]
+    assert [c.name for c in ix.columns] == [
+        "tournament_id",
+        "account_id",
+        "idempotency_key",
+    ]
+
+
+def test_the_same_key_under_another_account_in_one_tenant_is_accepted(session):
+    """The other direction, in the database rather than the service: one
+    workspace, one key string, two accounts, two rows."""
+    tid = _tournament(session)
+    mine = _account(session)
+    theirs = _account(session, email="coach@example.com")
+    session.add(Submission(tournament_id=tid, account_id=mine.id, idempotency_key="k"))
+    session.commit()
+    session.add(
+        Submission(tournament_id=tid, account_id=theirs.id, idempotency_key="k")
+    )
+    session.commit()
+
+    assert len(list(session.scalars(sa.select(Submission)))) == 2
 
 
 def test_the_database_enforces_that_uniqueness_within_one_tenant(session):
@@ -442,6 +471,47 @@ def test_entry_data_cascades_from_the_workspace(session):
         fk
         for fk in Base.metadata.tables["entrant_accounts"].foreign_keys
     ], "an account must not be workspace-scoped — it outlives the tournament"
+
+
+def test_deleting_the_workspace_actually_removes_the_entry_rows(session):
+    """The declaration above is inert unless the connection enforces it.
+
+    SQLite defaults ``PRAGMA foreign_keys`` to OFF per connection, so every
+    ``ondelete="CASCADE"`` here was a no-op on the director's laptop while
+    working normally on cloud Postgres. The orphan that outlived its
+    workspace kept ``entry_pages.slug`` — a globally unique index — taken
+    forever, so the address could never be reused.
+    """
+    from database.models import Tournament
+
+    tid = _tournament(session)
+    account = _account(session)
+    event = EntryEvent(tournament_id=tid, code="MS", discipline="singles")
+    player = EntryPlayer(
+        tournament_id=tid, account_id=account.id, full_name="Ada L", gender="F"
+    )
+    session.add_all([event, player, EntryPage(tournament_id=tid, slug="spring-open")])
+    session.commit()
+    session.add(
+        Entry(
+            tournament_id=tid, entry_event_id=event.id, entry_player_id=player.id
+        )
+    )
+    session.commit()
+
+    # The real path: repositories.local.TournamentRepository.delete. Nothing
+    # in the entries family is an ORM relationship on Tournament, so this
+    # leans entirely on the database's own cascade.
+    session.delete(session.get(Tournament, tid))
+    session.commit()
+
+    for model in (EntryPage, Entry, EntryEvent, EntryPlayer):
+        assert session.scalars(sa.select(model)).all() == [], model.__tablename__
+
+    # …and the slug is free again.
+    second = _tournament(session, name="Autumn Open")
+    session.add(EntryPage(tournament_id=second, slug="spring-open"))
+    session.commit()
 
 
 def test_a_submission_belongs_to_an_account(session):

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, packBlockLanes } from '../opsBlock';
+import { buildLiveChips } from '../runtime/boardPlacements';
 import type { OpsBlock } from '../opsBlock';
 import type { MatchDTO, ScheduleDTO, MatchStateDTO, TournamentConfig } from '../../../api/dto';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
@@ -175,5 +176,91 @@ describe('packBlockLanes', () => {
   it('ignores unassigned (no court/slot) blocks', () => {
     const lanes = packBlockLanes([ob({ source: 'bracket', id: 'wait' })]);
     expect(lanes.get('bracket:wait')).toEqual({ laneIndex: 0, laneCount: 1 });
+  });
+});
+
+/**
+ * The invariant a court cannot break: one court plays ONE match at a time.
+ *
+ * This is asserted end to end (adapter -> live chips) rather than on
+ * `actualStartSlot` alone, because the defect it guards was only visible at
+ * the end of that chain. `msToSlot` reads time-of-day only, so a batch of
+ * timestamps written at one instant — a seeding run, a clock skew, a restored
+ * backup — derives ONE slot for every match that carries them. Live chips
+ * anchor at that slot and are deliberately exempt from court pushback (they
+ * are facts, and facts do not move), so the board rendered a dozen
+ * simultaneous games on a single court and stated it with total confidence.
+ *
+ * The seeded demo is exactly this shape: 73 actual starts inside a 20-second
+ * window, which is why the numbers below are a batch at one instant rather
+ * than a comfortable pair either side of a threshold.
+ */
+describe('a court never renders two matches at once', () => {
+  const oneCourt = (ids: string[]) =>
+    ids.map((id) => ({ id, sideA: ['p1'], sideB: ['p2'], eventRank: 'MS1' })) as any;
+
+  // Three matches planned across the morning on court 1: 08:00, 09:00, 10:00.
+  const schedule = {
+    assignments: [
+      { matchId: 'a', slotId: 0, courtId: 1, durationSlots: 1 },
+      { matchId: 'b', slotId: 2, courtId: 1, durationSlots: 1 },
+      { matchId: 'c', slotId: 4, courtId: 1, durationSlots: 1 },
+    ],
+  } as any;
+
+  /** Every chip interval on a court, as [start, end) pairs. */
+  function overlapsOn(chips: { placement: { courtIndex: number; startSlot: number; span: number } }[]) {
+    const clashes: string[] = [];
+    const byCourt = new Map<number, { start: number; end: number }[]>();
+    for (const c of chips) {
+      const list = byCourt.get(c.placement.courtIndex) ?? [];
+      list.push({ start: c.placement.startSlot, end: c.placement.startSlot + c.placement.span });
+      byCourt.set(c.placement.courtIndex, list);
+    }
+    for (const [court, list] of byCourt) {
+      const sorted = [...list].sort((x, y) => x.start - y.start);
+      for (let i = 1; i < sorted.length; i += 1) {
+        if (sorted[i].start < sorted[i - 1].end) {
+          clashes.push(`court ${court}: [${sorted[i - 1].start},${sorted[i - 1].end}) vs [${sorted[i].start},${sorted[i].end})`);
+        }
+      }
+    }
+    return clashes;
+  }
+
+  it('refuses a batch of same-instant stamps and falls back to the plan', () => {
+    // All three "finished" at local 19:34 — 570 to 690 minutes from their
+    // plans, well past the 240-minute drift ceiling. Local time so the
+    // resolution is TZ-independent, matching this file's other timing tests.
+    const at = (h: number, m: number) => new Date(2026, 0, 1, h, m).toISOString();
+    const states = Object.fromEntries(
+      ['a', 'b', 'c'].map((id) => [
+        id,
+        { matchId: id, status: 'finished', actualStartTime: at(19, 34), actualEndTime: at(19, 35) },
+      ]),
+    ) as any;
+
+    const blocks = meetToOpsBlocks(oneCourt(['a', 'b', 'c']), schedule, states, {}, cfg);
+    expect(blocks.map((b) => b.actualStartSlot)).toEqual([undefined, undefined, undefined]);
+
+    const chips = buildLiveChips(blocks, 24, true);
+    expect(overlapsOn(chips)).toEqual([]);
+    // ...and back at the plan, which is where the truth actually is.
+    expect(chips.map((c) => c.placement.startSlot)).toEqual([0, 2, 4]);
+  });
+
+  it('still believes a genuinely late match, so the live board keeps its point', () => {
+    // Negative control. Without this, "ignore every actual" would pass the
+    // test above while destroying the surface the fix exists to serve.
+    const at = (h: number, m: number) => new Date(2026, 0, 1, h, m).toISOString();
+    const states = {
+      b: { matchId: 'b', status: 'finished', actualStartTime: at(10, 30), actualEndTime: at(11, 0) },
+    } as any;
+
+    const blocks = meetToOpsBlocks(oneCourt(['b']), schedule, states, {}, cfg);
+    // Planned slot 2 (09:00), actually started 10:30 = slot 5. 90 minutes
+    // late, inside the ceiling: a bad morning, not a clock artifact.
+    expect(blocks[0].actualStartSlot).toBe(5);
+    expect(buildLiveChips(blocks, 12, true)[0].placement.startSlot).toBe(5);
   });
 });

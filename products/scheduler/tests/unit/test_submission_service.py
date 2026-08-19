@@ -35,6 +35,7 @@ from services.submissions import (
     PlayerInput,
     create_submission,
     entries_for,
+    find_for_account,
     looks_duplicate,
 )
 
@@ -86,17 +87,24 @@ def world(session):
     return {"tid": t.id, "page": page, "account": account, "events": events}
 
 
-def _create(session, world, players, *, key=None, total=5500, basis=None):
+def _create(session, world, players, *, key=None, total=5500, basis=None, account=None):
     return create_submission(
         session,
         tournament_id=world["tid"],
         page=world["page"],
-        account_id=world["account"].id,
+        account_id=(account or world["account"]).id,
         players=players,
         fee_total_cents=total,
         fee_basis=basis if basis is not None else {"basis": "schedule", "players": []},
         idempotency_key=key,
     )
+
+
+def _other_account(session, email="coach@example.com"):
+    row = EntrantAccount(email=email, password_hash="x")
+    session.add(row)
+    session.commit()
+    return row
 
 
 # ---- one act -------------------------------------------------------------
@@ -319,9 +327,9 @@ def test_a_lost_race_on_the_unique_index_returns_the_winner_not_a_conflict(
     real = service.find_by_idempotency_key
     calls = {"n": 0}
 
-    def blind_first(sess, tid, key):
+    def blind_first(sess, tid, key, account_id):
         calls["n"] += 1
-        return None if calls["n"] == 1 else real(sess, tid, key)
+        return None if calls["n"] == 1 else real(sess, tid, key, account_id)
 
     monkeypatch.setattr(service, "find_by_idempotency_key", blind_first)
 
@@ -361,6 +369,131 @@ def test_the_key_is_scoped_to_the_workspace(session, world):
     )
     assert result.replayed is False
     assert result.submission.tournament_id == world["tid"]
+
+
+def test_a_key_minted_by_another_account_does_not_resolve(session, world):
+    """D4 narrowed to the principal (SP-PROGRAM-1 Phase 6 §4).
+
+    Tenant scope alone was enough only while no real key ever arrived: a
+    native HTML form cannot send a header, so ``idempotency_key`` was NULL
+    for every real entrant and this branch was unreachable. Phase 6 mints
+    the key in the loader and carries it as a hidden field, which makes a
+    *guessed* key resolve — and a resolved key hands the guesser the other
+    entrant's submission, i.e. their receipt.
+
+    The answer is a fresh act, not a 409: this route speaks 403, 429 and a
+    rendered 400 and nothing else, and a conflict status would tell the
+    guesser that the key exists — the same disclosure D4 narrowed the
+    index to prevent, one scope down.
+    """
+    mine = _create(
+        session,
+        world,
+        [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])],
+        key="key-1",
+    )
+    stranger = _other_account(session)
+
+    theirs = _create(
+        session,
+        world,
+        [PlayerInput("Bo Ito", "M", events=[world["events"]["MS"]])],
+        key="key-1",
+        account=stranger,
+    )
+
+    assert theirs.replayed is False
+    assert theirs.submission.id != mine.submission.id
+    assert theirs.submission.account_id == stranger.id
+    assert {e.id for e in theirs.entries}.isdisjoint({e.id for e in mine.entries})
+    assert len(list(session.scalars(sa.select(Submission)))) == 2
+
+
+def test_the_same_account_replaying_its_own_key_still_gets_its_act_back(session, world):
+    """Non-vacuity for the test above: the narrowing must not have simply
+    turned replay off. Same account, same key — still one act."""
+    first = _create(
+        session,
+        world,
+        [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])],
+        key="key-1",
+    )
+    second = _create(
+        session,
+        world,
+        [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])],
+        key="key-1",
+    )
+    assert second.replayed is True
+    assert second.submission.id == first.submission.id
+    assert len(list(session.scalars(sa.select(Submission)))) == 1
+
+
+# ---- reading one act back by id (the receipt door) -----------------------
+#
+# The 303 the persist path answers with names a submission id, so the
+# disclosure this module closes has a second mouth: whoever writes the
+# receipt loader (Phase 6 Tasks 14-18) will fetch a submission *by id*. The
+# authorisation therefore lives here, in the only read that returns one act
+# by id, rather than in the route that has not been written yet — a loader
+# that goes through ``find_for_account`` cannot forget the predicate,
+# because there is no argument-less way through.
+
+
+def test_a_foreign_account_cannot_fetch_a_submission_by_id(session, world):
+    """The receipt door. The id travels in a redirect ``Location`` and in
+    the browser's address bar; it is a handle, never a capability."""
+    mine = _create(
+        session,
+        world,
+        [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])],
+    )
+    stranger = _other_account(session)
+
+    assert (
+        find_for_account(session, world["tid"], mine.submission.id, stranger.id) is None
+    )
+
+
+def test_the_owning_account_does_fetch_its_own_act_whole(session, world):
+    """Non-vacuity for the test above: a lookup that always returned None
+    would satisfy it and break every receipt."""
+    mine = _create(
+        session,
+        world,
+        [
+            PlayerInput(
+                "Alice Chen",
+                "F",
+                events=[world["events"]["WS"], world["events"]["XD"]],
+            )
+        ],
+    )
+
+    found = find_for_account(
+        session, world["tid"], mine.submission.id, world["account"].id
+    )
+    assert found is not None
+    assert found.submission.id == mine.submission.id
+    assert {e.id for e in found.entries} == {e.id for e in mine.entries}
+    assert found.replayed is True
+
+
+def test_the_by_id_read_is_scoped_to_the_workspace_too(session, world):
+    """The tenant half of D4 is not dropped by adding the account half."""
+    mine = _create(
+        session,
+        world,
+        [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])],
+    )
+    other = Tournament(name="Autumn", status="draft", schema_version=1, data={})
+    session.add(other)
+    session.commit()
+
+    assert (
+        find_for_account(session, other.id, mine.submission.id, world["account"].id)
+        is None
+    )
 
 
 # ---- the flags -----------------------------------------------------------

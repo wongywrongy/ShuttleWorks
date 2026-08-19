@@ -17,8 +17,8 @@
  * ``useSuggestions``, etc.) read the same id via ``useParams`` /
  * ``useTournamentId`` — no prop drilling required.
  */
-import { useEffect, useLayoutEffect } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useEffect, useLayoutEffect, type ReactNode } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '../app/AppShell';
 import { useTournamentKind } from '../hooks/useTournamentKind';
 import { useUiStore, type AppTab } from '../store/uiStore';
@@ -52,11 +52,18 @@ export function TournamentPage() {
   const params = useParams<{ id?: string }>();
   const location = useLocation();
   const tid = params.id ?? null;
+  // The trailing segment IS the surface key. `pop()` on the bare
+  // /tournaments/{id} URL returns the id itself — that's "no segment", not a
+  // bad one, and keeps rendering the workspace.
+  const segment = location.pathname.split('/').filter(Boolean).pop() ?? '';
+  const unknownSegment =
+    segment !== tid && !_TAB_SEGMENTS.has(segment as AppTab);
 
   // Load the tournament's kind so the AppShell + TabBar can render
   // meet-style or bracket-style chrome. The hook is a no-op when tid
-  // is null and clears the store on unmount.
-  useTournamentKind(tid);
+  // is null and clears the store on unmount. It also reports the uniform
+  // 404 — see the not-found branch below.
+  const workspaceNotFound = useTournamentKind(tid);
 
   useEffect(() => {
     useUiStore.getState().setActiveTournamentId(tid);
@@ -74,8 +81,9 @@ export function TournamentPage() {
   // optimistic guess if the URL lies (e.g. someone hand-edits the
   // URL to ``/bracket`` on a meet-kind tournament).
   useLayoutEffect(() => {
-    if (!tid) return;
-    const segment = location.pathname.split('/').filter(Boolean).pop();
+    // An unrecognised segment renders not-found below; it must not leave a
+    // stale tab (or a guessed kind) behind it.
+    if (!tid || unknownSegment) return;
     if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
       // Segment IS the tab id, 1:1. No translation.
       useUiStore.getState().setActiveTab(segment as AppTab);
@@ -90,7 +98,7 @@ export function TournamentPage() {
         : 'meet';
       useUiStore.getState().setActiveTournamentKind(optimisticKind);
     }
-  }, [tid, location.pathname]);
+  }, [tid, segment, unknownSegment]);
 
   // No kind-based snap: a tab whose module isn't enterable for this workspace
   // is preserved so the AppShell guard can show the unavailable panel (rather
@@ -106,5 +114,63 @@ export function TournamentPage() {
     );
   }
 
+  // A workspace we cannot see is a not-found, not a blank one. The API answers
+  // ONE uniform 404 whether it never existed or simply isn't ours — that is
+  // the tenancy guarantee working, and it must not read as a bug. Before this,
+  // the 404 was only logged and the SPA fell through to client defaults: an
+  // "Untitled" workspace, a module sidebar, and a Configuration form with a
+  // Save button on it (2026-08-10 full-scale browser pass). Same shape as the
+  // public tier's dead display link, which has always got this right.
+  //
+  // Checked BEFORE the segment guard so a bad segment on an inaccessible
+  // workspace reports the bigger truth.
+  if (workspaceNotFound) {
+    return (
+      <NotFound title="Workspace not found">
+        <p className="text-sm text-muted-foreground">
+          This workspace has been deleted, or it isn&rsquo;t shared with your
+          account. Ask whoever runs it for an invite.
+        </p>
+        <Link to="/" replace className="text-sm text-accent underline underline-offset-2">
+          Go to your workspaces
+        </Link>
+      </NotFound>
+    );
+  }
+
+  // A segment nothing owns is a not-found, not a silent fallback. Without this
+  // the URL simply left `activeTab` at its default and the shell rendered the
+  // Meet Configuration page under any nonsense path (2026-08-10 browser pass).
+  if (unknownSegment) {
+    return (
+      <NotFound title="Page not found">
+        <p className="text-sm text-muted-foreground">
+          This workspace has no <span className="sw-num">{segment}</span> page.
+        </p>
+        <Link
+          to={`/tournaments/${tid}/overview`}
+          replace
+          className="text-sm text-accent underline underline-offset-2"
+        >
+          Go to the workspace overview
+        </Link>
+      </NotFound>
+    );
+  }
+
   return <AppShell />;
+}
+
+/** The one honest dead-end in the workspace route: a heading, what happened,
+ *  and a way out. Shared by both cases so they cannot drift apart. */
+function NotFound({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div
+      data-testid="workspace-not-found"
+      className="min-h-screen flex flex-col items-center justify-center gap-2 p-6 text-center"
+    >
+      <div className="text-sm font-semibold text-foreground">{title}</div>
+      {children}
+    </div>
+  );
 }

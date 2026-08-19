@@ -2,7 +2,7 @@
  * Safety-net characterization tests for timeFormatters.ts.
  *
  * Covers every exported function:
- *   - formatIsoClock  — null/undefined/empty sentinel, valid ISO, TZ=America/Los_Angeles pin
+ *   - formatIsoClock  - null/undefined/empty sentinel (en dash), valid ISO, TZ=America/Los_Angeles pin
  *   - formatDuration  — boundary math: 0m, sub-hour, exact-hour, multi-hour
  *   - formatElapsed   — null paths, sub-minute, sub-hour, ≥1h, ≥24h; uses fake timers
  *
@@ -15,29 +15,29 @@ import { formatIsoClock, formatDuration, formatElapsed } from '../timeFormatters
 // ── formatIsoClock ────────────────────────────────────────────────────────────
 
 describe('formatIsoClock', () => {
-  it('returns em-dash sentinel for null', () => {
-    expect(formatIsoClock(null)).toBe('—');
+  it('returns en-dash sentinel for null', () => {
+    expect(formatIsoClock(null)).toBe('–');
   });
 
-  it('returns em-dash sentinel for undefined', () => {
-    expect(formatIsoClock(undefined)).toBe('—');
+  it('returns en-dash sentinel for undefined', () => {
+    expect(formatIsoClock(undefined)).toBe('–');
   });
 
-  it('returns em-dash sentinel for empty string', () => {
-    expect(formatIsoClock('')).toBe('—');
+  it('returns en-dash sentinel for empty string', () => {
+    expect(formatIsoClock('')).toBe('–');
   });
 
-  it('returns em-dash sentinel for an unparseable string', () => {
-    expect(formatIsoClock('not-a-date')).toBe('—');
+  it('returns en-dash sentinel for an unparseable string', () => {
+    expect(formatIsoClock('not-a-date')).toBe('–');
   });
 
-  it('returns em-dash sentinel for a plausible-but-invalid ISO string', () => {
-    expect(formatIsoClock('2024-13-99T99:99:99Z')).toBe('—');
+  it('returns en-dash sentinel for a plausible-but-invalid ISO string', () => {
+    expect(formatIsoClock('2024-13-99T99:99:99Z')).toBe('–');
   });
 
   it('returns a non-sentinel string for a valid ISO timestamp', () => {
     const result = formatIsoClock('2024-06-15T18:00:00.000Z');
-    expect(result).not.toBe('—');
+    expect(result).not.toBe('–');
     expect(result).not.toContain('Invalid');
     // toLocaleTimeString output always contains a colon between h and mm
     expect(result).toMatch(/:/);
@@ -48,14 +48,14 @@ describe('formatIsoClock', () => {
     // Under UTC the hour portion would be 20 (or 8 PM).
     // With TZ=America/Los_Angeles the output must contain "12:00".
     const result = formatIsoClock('2024-01-15T20:00:00.000Z');
-    expect(result).not.toBe('—');
+    expect(result).not.toBe('–');
     expect(result).toMatch(/12[: ]00/); // "12:00" or "12 00" per locale narrow-space
   });
 
   it('correctly formats a PM hour in LA (UTC-7 during DST)', () => {
     // 2024-07-15T22:30:00Z = 3:30 PM PDT (UTC-7)
     const result = formatIsoClock('2024-07-15T22:30:00.000Z');
-    expect(result).not.toBe('—');
+    expect(result).not.toBe('–');
     expect(result).toMatch(/3[: ]30|15[: ]30/); // either 12h or 24h locale
   });
 });
@@ -228,21 +228,31 @@ describe('formatElapsed', () => {
     expect(formatElapsed('2024-01-15T10:00:00.000Z')).toBe('1:01:01');
   });
 
-  // ---- Xd Hh format (≥ 24 h) ----------------------------------------------
+  // ---- ≥ 24 h is stale data, not an elapsed time (design audit T6) --------
+  //
+  // No badminton match runs for a day. A ≥24 h "elapsed" means the start
+  // timestamp is stale — a past tournament left with matches still marked
+  // playing, a restored backup — and the caller omits the chip on a null.
+  // Rendering "1d 2h" beside a pulsing LIVE badge on a public spectator board
+  // states a fact that is not true.
 
-  it('returns Xd Hh for exactly 2 days elapsed', () => {
+  it('returns null for exactly 2 days elapsed', () => {
     vi.setSystemTime(new Date('2024-01-17T10:00:00.000Z'));
-    expect(formatElapsed('2024-01-15T10:00:00.000Z')).toBe('2d 0h');
+    expect(formatElapsed('2024-01-15T10:00:00.000Z')).toBeNull();
   });
 
-  it('returns Xd Hh with correct remaining hours for 1d 5h 30m', () => {
-    // 1 day + 5.5 hours = 1d 5h (truncated, not rounded)
+  it('returns null for 1d 5h 30m', () => {
     vi.setSystemTime(new Date('2024-01-16T15:30:00.000Z'));
-    expect(formatElapsed('2024-01-15T10:00:00.000Z')).toBe('1d 5h');
+    expect(formatElapsed('2024-01-15T10:00:00.000Z')).toBeNull();
   });
 
-  it('returns 1d 0h at the exact 24-hour boundary', () => {
+  it('returns null at the exact 24-hour boundary', () => {
     vi.setSystemTime(new Date('2024-01-16T10:00:00.000Z'));
-    expect(formatElapsed('2024-01-15T10:00:00.000Z')).toBe('1d 0h');
+    expect(formatElapsed('2024-01-15T10:00:00.000Z')).toBeNull();
+  });
+
+  it('still formats the last second before the boundary', () => {
+    vi.setSystemTime(new Date('2024-01-16T09:59:59.000Z'));
+    expect(formatElapsed('2024-01-15T10:00:00.000Z')).toBe('23:59:59');
   });
 });

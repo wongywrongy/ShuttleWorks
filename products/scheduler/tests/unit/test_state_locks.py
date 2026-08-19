@@ -125,6 +125,36 @@ def test_closed_courts_change_under_schedule_locks(client, tid):
     assert body2["schedule"] is None
 
 
+def test_roundtripped_sparse_config_does_not_false_lock(client, tid):
+    """Regression (real-browser demo pass, 2026-08-10): opening any Bracket
+    page raised the destructive "Discard committed schedule?" modal.
+
+    ``POST /tournaments`` seeds a SPARSE config (8 keys). ``GET .../state``
+    projects it through ``TournamentConfig``, so the client holds — and
+    autosaves back — the defaults-filled shape. The lock compared that dump
+    against the RAW stored blob and called all 13 defaulted-but-absent
+    scheduling keys "changed", 409ing an unmodified round trip. Both sides
+    must be read through the same projection.
+    """
+    _create_generated_event(client, tid)  # commits bracket_session assignments
+    state = client.get(f"/tournaments/{tid}/state").json()
+    resp = client.put(f"/tournaments/{tid}/state", json=state)
+    assert resp.status_code == 200, resp.text
+
+
+def test_roundtripped_sparse_config_still_locks_a_real_change(client, tid):
+    """Negative control for the above: normalizing both sides must not
+    defang the guard — a genuine scheduling-field edit under a committed
+    bracket schedule still has to be refused."""
+    _create_generated_event(client, tid)
+    state = client.get(f"/tournaments/{tid}/state").json()
+    state["config"]["courtCount"] = 7
+    resp = client.put(f"/tournaments/{tid}/state", json=state)
+    assert resp.status_code == 409, resp.text
+    assert "CONFIG_LOCKED" in str(resp.json())
+    assert "courtCount" in str(resp.json())
+
+
 def test_config_change_without_schedule_passes(client, tid):
     blob = _scheduled_blob()
     blob["schedule"] = None

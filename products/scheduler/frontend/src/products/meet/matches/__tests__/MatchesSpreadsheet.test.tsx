@@ -2,8 +2,8 @@
  * Render coverage for MatchesSpreadsheet — the Meet match list, the
  * keystone of the shared banded-list grammar (Bracket Matches mirrors
  * it). Rich fixture: 10 matches across 3 disciplines including doubles
- * (comma-separated pair + per-name school suffix) and an empty side
- * (the muted-italic "＋ add player" placeholder).
+ * (comma-separated pair, names only) and an empty side (the
+ * muted-italic "＋ add player" placeholder).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -118,25 +118,74 @@ describe('<MatchesSpreadsheet />', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('renders doubles sides as comma-separated names, school shown once per side', () => {
+  // Design audit T7 / WCAG 1.3.1: cell count === column count, and the one
+  // remaining control (the armed delete) still announces as a control from
+  // inside its `display: contents` cell.
+  it('exposes a match row as six cells (no ordinal — G6), the delete control intact', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m5');
+    expect(row).toHaveAttribute('role', 'row');
+    expect(screen.getByRole('table')).toContainElement(row);
+    expect(within(row).getAllByRole('cell')).toHaveLength(
+      screen.getAllByRole('columnheader').length,
+    );
+    expect(screen.getAllByRole('columnheader')).toHaveLength(6);
+    expect(
+      within(row).getByRole('button', { name: /Remove match MS1|Remove match WD1/ }),
+    ).toBeInTheDocument();
+  });
+
+  /* Console-IA §0/§1: the row WAS the editor — a live Select, a text input,
+   * four player buttons and five delete buttons per match, each stopping
+   * propagation specifically so the row click could not open the pane. */
+  it('carries no editors: the armed delete is the only control in a row', () => {
+    renderSheet();
+    const row = screen.getByTestId('match-row-m5');
+    expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(row).queryByRole('textbox')).not.toBeInTheDocument();
+    // Four player names and no `✕ remove player` beside any of them.
+    expect(within(row).queryByLabelText(/^Remove (Aiko|Ben|Eva|Finn)$/)).toBeNull();
+    expect(within(row).getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('renders doubles sides as slash-joined BWF names, with no school', () => {
+    renderSheet();
+    const row = screen.getByTestId('match-row-m5');
+    // Console direction (2026-08-13): rows read "SURNAME Given".
     expect(row.textContent).toContain('Aiko');
     expect(row.textContent).toContain('Ben');
     expect(row.textContent).toContain('Eva');
     expect(row.textContent).toContain('Finn');
-    // Same-school partners share ONE school suffix (after the last name)
-    // instead of repeating it per player.
-    expect(within(row).getAllByText('Alpha High')).toHaveLength(1);
-    expect(within(row).getAllByText('Beta Prep')).toHaveLength(1);
-    // Comma separator between pair members, one per doubles side.
-    expect(within(row).getAllByText(',')).toHaveLength(2);
+    // Owner ruling 2026-08-12: "the side A and side B name for every row is
+    // too much. we dont need to list it. waste of space." The school used to
+    // print after the last name of each side (the `uniformSchool` rule, which
+    // existed only to de-duplicate it across a doubles pair); a dual meet has
+    // two schools, so it was the same two strings on every row. It is one
+    // click away in the detail pane instead — asserted below.
+    expect(within(row).queryByText('Alpha High')).toBeNull();
+    expect(within(row).queryByText('Beta Prep')).toBeNull();
+    // Slash separator between pair members, one per doubles side (the
+    // draw-sheet convention the Console mock uses).
+    expect(within(row).getAllByText('/')).toHaveLength(2);
   });
 
-  it('renders an empty side as the muted-italic "＋ add player" placeholder', () => {
+  it('keeps the school reachable on the player card in the detail pane', () => {
+    // The ruling removed the school from the ROW, not from the product. The
+    // pane is where the rest of the player record already lives.
+    renderSheet();
+    fireEvent.click(screen.getByTestId('match-row-m5'));
+    const panel = screen.getByTestId('match-detail-panel');
+    // One card per player, each carrying its own school chip — the code
+    // in text, the full name in the chip's tooltip (G6/M2.6).
+    expect(within(panel).getAllByTitle('Alpha High').length).toBeGreaterThanOrEqual(2);
+    expect(within(panel).getAllByTitle('Beta Prep').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('renders an empty side as a muted-italic reading, not an add control', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m10');
-    const placeholder = within(row).getByText('＋ add player');
+    const placeholder = within(row).getByText('No players');
+    expect(placeholder.tagName).toBe('SPAN');
     expect(placeholder.className).toContain('italic');
     expect(placeholder.className).toContain('text-muted-foreground');
     expect(placeholder.className).toContain('text-xs');
@@ -160,23 +209,20 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m1'));
     const panel = screen.getByTestId('match-detail-panel');
-    expect(within(panel).getByText('Match')).toBeInTheDocument();
-    expect(within(panel).getByText('MS1')).toBeInTheDocument();
-    expect(within(panel).getByText("Men's Singles")).toBeInTheDocument();
+    const header = within(panel).getByText('Match').closest('header')!;
+    expect(within(header).getByText('MS1')).toBeInTheDocument();
+    expect(within(header).getByText("Men's Singles")).toBeInTheDocument();
     expect(screen.getByTestId('match-row-m1')).toHaveAttribute(
       'data-selected',
       'true',
     );
   });
 
-  it('does NOT open the panel from clicks inside the inline editors', () => {
+  it('opens the panel from a click on a player name too (no editor to swallow it)', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m1');
-    // Event select trigger.
-    fireEvent.click(within(row).getByLabelText('Event'));
-    // A player-name button inside the side cell.
     fireEvent.click(within(row).getByText('Aiko'));
-    expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('match-detail-panel')).toBeInTheDocument();
   });
 
   it('opens the panel from a click on a side cell\'s EMPTY space (no dead zone)', () => {

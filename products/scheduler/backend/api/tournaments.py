@@ -8,12 +8,13 @@ opens one by navigating to ``/tournaments/{id}/...``.
 """
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.dependencies import (
     AuthUser,
@@ -24,7 +25,13 @@ from app.config import cloud_modules_enabled
 from app.error_codes import ErrorCode, http_error
 from app.exceptions import ConflictError
 from app.limits import Code, Identifier, StrictModel
-from app.schemas import MeetStandingRowDTO, TournamentStateDTO, WorkspaceModuleDTO, state_dto_from_document
+from app.schemas import (
+    MeetStandingRowDTO,
+    TournamentConfig,
+    TournamentStateDTO,
+    WorkspaceModuleDTO,
+    state_dto_from_document,
+)
 from database.models import (
     CLOUD_ONLY_MODULES,
     Tournament,
@@ -119,6 +126,11 @@ class BackupEntryDTO(BaseModel):
     filename: str
     sizeBytes: int
     modifiedAt: str
+    #: ``auto`` (a state write snapshotted the prior payload) or ``manual``
+    #: (the director asked for it). Only ``auto`` rows rotate, so the list
+    #: has to say which is which — a row the operator cannot lose reads
+    #: differently from one that will age out on its own.
+    origin: str = "auto"
 
 
 class BackupListDTO(BaseModel):
@@ -262,6 +274,7 @@ def _backup_entry(row) -> BackupEntryDTO:
         filename=row.filename,
         sizeBytes=row.size_bytes,
         modifiedAt=row.created_at.isoformat(),
+        origin=row.origin,
     )
 
 
@@ -781,8 +794,29 @@ def put_tournament_state(
         if isinstance(incoming_schedule, dict)
         else None
     )
-    prior_cfg = prior.get("config") if isinstance(prior.get("config"), dict) else None
     incoming_cfg = incoming.get("config") if isinstance(incoming.get("config"), dict) else None
+    # Both sides of the lock comparison must be read through the SAME
+    # projection. ``incoming`` is a DTO dump, so every field the client did
+    # not set still arrives carrying its ``TournamentConfig`` default. The
+    # STORED blob can be sparse — ``POST /tournaments`` seeds 8 keys — so
+    # comparing the dump against the raw blob reported all 13
+    # defaulted-but-absent scheduling keys as user edits, and 409'd an
+    # unmodified round trip on every workspace that had never completed a
+    # full state PUT. Found by a real-browser pass: 6 of 8 demo workspaces
+    # raised the destructive "Discard committed schedule?" modal on Bracket
+    # page load, because the GET the client hydrates from already applies
+    # this very projection.
+    #
+    # Fail-closed on an unparseable stored config: fall back to the raw
+    # blob (the old comparison), which over-reports changes rather than
+    # under-reporting them. Never let the lock's own normalization 500 a
+    # write that would otherwise be refused cleanly.
+    prior_cfg = prior.get("config") if isinstance(prior.get("config"), dict) else None
+    if prior_cfg is not None:
+        try:
+            prior_cfg = TournamentConfig.model_validate(prior_cfg).model_dump()
+        except ValidationError:
+            log.warning("stored config for %s does not validate; comparing raw", tournament_id)
 
     bracket_session = prior.get("bracket_session")
     bracket_assignments = (
@@ -952,6 +986,69 @@ def create_tournament_backup(
     )
 
 
+@router.get(
+    "/{tournament_id}/state/backups/{filename}",
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
+def download_tournament_backup(
+    filename: str,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Hand the snapshot back as a file.
+
+    Viewer, matching ``GET /state``: a backup is a workspace state the caller
+    is already allowed to read, at an earlier moment. The value of this over
+    Restore is that it is not destructive — a director who wants to check what
+    a snapshot contains before replacing today's work has, until now, had only
+    the replacing option.
+    """
+    _resolve_tournament(tournament_id, repo)
+    row = repo.backups.get_by_filename(tournament_id, filename)
+    if row is None:
+        raise http_error(
+            404,
+            ErrorCode.BACKUP_NOT_FOUND,
+            f"backup not found: {filename}",
+        )
+    # The filename is server-generated (``_backup_filename``) and the row was
+    # looked up BY it, so it cannot carry a header-splitting payload; quoted
+    # anyway, because that reasoning stops holding the day the name changes.
+    return Response(
+        content=json.dumps(row.snapshot, sort_keys=True),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{row.filename}"'
+        },
+    )
+
+
+@router.delete(
+    "/{tournament_id}/state/backups/{filename}",
+    status_code=204,
+    dependencies=[Depends(require_tournament_access("owner"))],
+)
+def delete_tournament_backup(
+    filename: str,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Owner, matching Restore: both are irreversible, in opposite directions.
+
+    Needed because manual snapshots no longer rotate — a list that only ever
+    grows needs a way to shrink, or the exemption that protects a director's
+    backup becomes the thing that clutters their list.
+    """
+    _resolve_tournament(tournament_id, repo)
+    if not repo.delete_tournament_backup(tournament_id, filename):
+        raise http_error(
+            404,
+            ErrorCode.BACKUP_NOT_FOUND,
+            f"backup not found: {filename}",
+        )
+    return Response(status_code=204)
+
+
 @router.post(
     "/{tournament_id}/state/restore/{filename}",
     dependencies=[Depends(require_tournament_access("owner"))],
@@ -980,7 +1077,7 @@ def restore_tournament_backup(
         raise http_error(
             500,
             ErrorCode.BACKUP_RESTORE_FAILED,
-            "restore failed — see server logs",
+            "restore failed (see server logs)",
         )
     return get_tournament_state(
         tournament_id=tournament_id, repo=repo, response=response

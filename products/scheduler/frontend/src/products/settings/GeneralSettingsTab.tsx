@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@scheduler/design-system';
-import { Select } from '@scheduler/design-system/components';
 import { FieldRow, Row, Section } from '../../platform/settings/SettingsControls';
+import { StatusPill } from '../../components/StatusPill';
+import { lifecycleBadge } from '../../platform/domain/lifecycle';
+import { resolvePhase, PHASE_LABEL } from '../../platform/domain/overviewPhase';
 import { apiClient } from '../../api/client';
-import type { TournamentStatus, TournamentSummaryDTO } from '../../api/dto';
+import type { TournamentSummaryDTO } from '../../api/dto';
 
-const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
-] as const;
-
-
-/** General workspace settings: name, date, lifecycle status. Persists via
- *  `updateTournament`. */
+/** General workspace settings: name and date. Persists via `updateTournament`.
+ *
+ *  Lifecycle is DISPLAY-ONLY here (SP-CONSOLE-REFINE A6.1): the app derives
+ *  it from match state (`lifecycleBadge`), and the stored-status dropdown this
+ *  pane used to carry was a control the rest of the app ignored — exposing it
+ *  invited the operator to "set" a state that nothing obeyed. The one explicit
+ *  lifecycle action is Archive / Unarchive in the danger zone below. */
 export function GeneralSettingsTab({
   tid,
   summary,
@@ -25,14 +25,12 @@ export function GeneralSettingsTab({
 }) {
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
-  const [status, setStatus] = useState<TournamentStatus>('draft');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (summary) {
       setName(summary.name ?? '');
       setDate(summary.tournamentDate ?? '');
-      setStatus(summary.status);
     }
   }, [summary]);
 
@@ -42,7 +40,6 @@ export function GeneralSettingsTab({
       await apiClient.updateTournament(tid, {
         name: name.trim() || null,
         tournamentDate: date || null,
-        status,
       });
       onSaved();
     } finally {
@@ -50,8 +47,33 @@ export function GeneralSettingsTab({
     }
   }
 
+  // The SAME derivation the shell header and the Hub run — imported, not
+  // re-implemented, so a fourth precedence order can't creep in.
+  const derived = summary
+    ? (lifecycleBadge(summary.signals?.phase, summary.status) ?? {
+        text: PHASE_LABEL[resolvePhase(summary)],
+        tone: 'idle' as const,
+      })
+    : null;
+
   return (
-    <div className="max-w-3xl p-6">
+    <div className="mx-auto max-w-3xl p-6">
+      {/* H1 echoes the nav label verbatim (G1); the workspace name already
+          lives in the header chrome, so it is not repeated here.
+
+          Save sits on the page-header row, not in the first section's action
+          slot. In the slot it hung mid-page beside a collapsible heading while
+          the row above it sat empty, and it looked like it saved that one
+          section rather than the page (ACC-1). This is also where every other
+          primary action on every other surface lives. */}
+      <div className="flex items-center justify-between gap-4 pb-4">
+        <h2 className="text-base font-semibold tracking-tight text-foreground">
+          Workspace settings
+        </h2>
+        <Button size="sm" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
       <Section title="Workspace details" defaultOpen>
         {/* Free text takes a FieldRow; a fixed-option control takes a Row.
             This pane used to hand-roll both as stacked <label> blocks. */}
@@ -69,25 +91,28 @@ export function GeneralSettingsTab({
           aria-label="Workspace date"
         />
         <Row
-          label="Status"
+          label="Lifecycle"
           last
           control={
-            <Select
-              value={status}
-              onValueChange={(v) => setStatus(v as TournamentStatus)}
-              options={STATUS_OPTIONS}
-              ariaLabel="Workspace status"
-              size="sm"
-              triggerStyle={{ width: '180px' }}
-            />
+            derived ? (
+              <span data-testid="general-lifecycle">
+                {/* LIVE drops its chip (R-D, Option A) but keeps its word —
+                    an empty labeled row would read as broken, not quiet. */}
+                {derived.text === 'Live' ? (
+                  <span className="text-sm text-muted-foreground">Live</span>
+                ) : (
+                  <StatusPill tone={derived.tone} dot>
+                    {derived.text}
+                  </StatusPill>
+                )}
+              </span>
+            ) : null
           }
         />
       </Section>
-      <div className="pt-5">
-        <Button onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save changes'}
-        </Button>
-      </div>
+      <p className="pt-2 text-xs text-muted-foreground">
+        Lifecycle is derived from match state. To retire the workspace, use Archive below.
+      </p>
     </div>
   );
 }

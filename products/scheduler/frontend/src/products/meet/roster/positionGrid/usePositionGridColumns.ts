@@ -1,26 +1,28 @@
 /**
  * Column ordering + visibility for the position grid — both
- * per-tournament settings on `config`. Falls back to the canonical
- * MD/WD/XD/WS/MS sequence when `config.eventOrder` is unset, and shows
- * every configured event when `config.eventVisible` is unset.
+ * per-tournament settings on `config`. Falls back to `defaultEventOrder`
+ * (canonical disciplines first, then the meet's own events) when
+ * `config.eventOrder` is unset, and shows every configured event when
+ * `config.eventVisible` is unset.
  *
  * Plain derivations only — the React Compiler auto-memoizes. Do NOT
  * wrap these in `useMemo` with optional-chained deps; that was blocking
  * whole-component compilation.
  */
 import { useTournamentStore } from '../../../../store/tournamentStore';
-import { EVENT_ORDER } from './helpers';
+import { defaultEventOrder } from './helpers';
 
 export function usePositionGridColumns() {
   const config = useTournamentStore((s) => s.config);
   const setConfig = useTournamentStore((s) => s.setConfig);
 
   const _counts = config?.rankCounts ?? {};
-  const _orderedEvents = (config?.eventOrder?.length ? config.eventOrder : EVENT_ORDER).filter(
-    (ev) => (_counts[ev] ?? 0) > 0,
-  );
-  for (const ev of EVENT_ORDER) {
-    if ((_counts[ev] ?? 0) > 0 && !_orderedEvents.includes(ev)) _orderedEvents.push(ev);
+  const _defaultOrder = defaultEventOrder(_counts);
+  const _orderedEvents = (
+    config?.eventOrder?.length ? config.eventOrder : _defaultOrder
+  ).filter((ev) => _defaultOrder.includes(ev));
+  for (const ev of _defaultOrder) {
+    if (!_orderedEvents.includes(ev)) _orderedEvents.push(ev);
   }
   const allConfiguredEvents = _orderedEvents;
   const _visible = config?.eventVisible;
@@ -59,6 +61,8 @@ export function usePositionGridColumns() {
   return {
     events,
     allConfiguredEvents,
+    /** Column order with no operator override — what `resetColumns` restores. */
+    defaultOrder: _defaultOrder,
     eventVisible: config?.eventVisible,
     moveColumn,
     reorderColumns,

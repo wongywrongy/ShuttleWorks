@@ -204,6 +204,30 @@ def test_bracket_next_up_none_time_when_no_start_time():
     assert sig.nextUp[0].courtLabel == "Court 2"
 
 
+def test_meet_played_counts_terminal_in_blob_matches_only():
+    # played = finished/retired only; called is on court, not played, and an
+    # orphaned match_states row (match gone from the blob) must not count.
+    data = {
+        "matches": [{"id": "m1"}, {"id": "m2"}, {"id": "m3"}],
+        "schedule": {"assignments": []},
+    }
+    counts = RowCounts(match_status_by_id={
+        "m1": "finished", "m2": "retired", "m3": "called", "ghost": "finished",
+    })
+    sig = build_signals(_row(data=data), _meet_mods(), counts)
+    assert sig.matches.played == 2
+
+
+def test_bracket_played_counts_resolved_units():
+    counts = RowCounts(
+        bracket_matches=8,
+        bracket_results=3,
+        bracket_resolved_ids={"pu1", "pu2", "pu3"},
+    )
+    sig = build_signals(_row(kind="bracket"), _bracket_mods(), counts)
+    assert sig.matches.played == 3
+
+
 def test_undated_workspace_has_empty_next_up():
     sig = build_signals(_row(kind="meet", status="draft", data={"matches": []}),
                         [_mod("meet", "enabled")], RowCounts())
@@ -261,3 +285,68 @@ def test_phase_bracket_swiss_pending_blocks_complete():
     assert build_signals(row, mods, lull).phase == "live"
     done = RowCounts(bracket_matches=24, bracket_results=24, swiss_pending=False)
     assert build_signals(row, mods, done).phase == "complete"
+
+
+# ---- Live counts (SP-CONSOLE-2 INS-4 / OV-4) ---------------------------
+
+
+def _live_data():
+    """Four courts; two matches started on courts 1 and 3, one called."""
+    return {
+        "config": {"courtCount": 4, "dayStart": "09:00", "dayEnd": "17:00"},
+        "matches": [{"id": "m1"}, {"id": "m2"}, {"id": "m3"}, {"id": "m4"}],
+        "schedule": {
+            "assignments": [
+                {"matchId": "m1", "slotId": 0, "courtId": 1},
+                {"matchId": "m2", "slotId": 0, "courtId": 3},
+                {"matchId": "m3", "slotId": 1, "courtId": 2},
+                {"matchId": "m4", "slotId": 2, "courtId": 4},
+            ]
+        },
+    }
+
+
+def test_playing_and_courts_free_during_a_live_day():
+    mods = [_mod("meet", "enabled")]
+    sig = build_signals(
+        _row(status="active", data=_live_data()),
+        mods,
+        RowCounts(
+            match_states=3,
+            match_status_by_id={"m1": "started", "m2": "started", "m3": "called"},
+        ),
+    )
+    assert sig.matches.playing == 2
+    # Two of four courts are occupied. The CALLED match does not hold a court:
+    # its players are still walking to it.
+    assert sig.matches.courtsFree == 2
+
+
+def test_courts_free_is_none_rather_than_zero_when_no_court_count_is_set():
+    """An unknown is not zero — "0 courts free" would be a lie about a
+    workspace that simply has not said how many courts it has."""
+    data = _live_data()
+    data["config"].pop("courtCount")
+    sig = build_signals(
+        _row(status="active", data=data),
+        [_mod("meet", "enabled")],
+        RowCounts(match_states=1, match_status_by_id={"m1": "started"}),
+    )
+    assert sig.matches.playing == 1
+    assert sig.matches.courtsFree is None
+
+
+def test_next_up_rows_carry_identity_so_they_can_be_opened():
+    """OV-1: the Overview and the Hub inspector both list these and neither
+    could open one. `source` matters as much as the id — Operations keys its
+    selection `{source}:{id}` because the two engines' records are
+    non-merged."""
+    sig = build_signals(
+        _row(status="active", data=_live_data()),
+        [_mod("meet", "enabled")],
+        RowCounts(),
+    )
+    assert sig.nextUp, "fixture should produce upcoming matches"
+    first = sig.nextUp[0]
+    assert first.matchId in {"m1", "m2", "m3", "m4"}
+    assert first.source == "meet"

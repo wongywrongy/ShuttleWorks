@@ -26,15 +26,41 @@ const TONE_TEXT: Record<PillTone, string> = {
   done:   'text-status-done',
 };
 
+/** Tint behind each token. Every pair here is a `-fg` on its own `-bg`, which
+ *  is what the contrast gate already checks — no new unchecked combination. */
+const TONE_BG: Record<PillTone, string> = {
+  green:  'bg-status-live-bg',
+  yellow: 'bg-status-warning-bg',
+  red:    'bg-status-blocked-bg',
+  blue:   'bg-status-started-bg',
+  amber:  'bg-status-called-bg',
+  idle:   'bg-status-idle-bg',
+  done:   'bg-status-done-bg',
+};
+
 export interface StatusCountItem {
   tone: PillTone;
   label: string;
   count: number;
 }
 
+/**
+ * One tally token, as a discrete tinted chip.
+ *
+ * It used to be bare colored text on the page background, so a four-token
+ * strip ("DONE 8 LIVE 1 READY 4 PENDING 3") ran together as one dense string
+ * and the only thing separating adjacent tokens was their hue — which is no
+ * separation at all for the two neutral tones, or for anyone who cannot tell
+ * them apart (SP-CONSOLE-2 DRW-1). The tint makes each token an object.
+ */
 export function StatusCount({ tone, label, count }: StatusCountItem) {
   return (
-    <span className="inline-flex items-baseline gap-1">
+    <span
+      className={cn(
+        'inline-flex items-baseline gap-1 rounded-sm px-1.5 py-px',
+        TONE_BG[tone]
+      )}
+    >
       <span
         className={cn(
           'text-2xs font-semibold uppercase tracking-[0.08em]',
@@ -43,7 +69,7 @@ export function StatusCount({ tone, label, count }: StatusCountItem) {
       >
         {label}
       </span>
-      <span className="sw-num text-xs text-ink">{count}</span>
+      <span className={cn('sw-num text-xs', TONE_TEXT[tone])}>{count}</span>
     </span>
   );
 }

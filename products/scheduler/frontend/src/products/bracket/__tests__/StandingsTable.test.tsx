@@ -1,6 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { StandingsTable } from '../StandingsTable';
+import { STANDINGS_COLUMNS } from '../standingsColumns';
+import {
+  bandedRowLines,
+  dockMinContentWidth,
+} from '../../../components/control-plane';
 import type { StandingRowDTO } from '../../../api/bracketDto';
 
 function row(
@@ -75,5 +82,32 @@ describe('StandingsTable', () => {
     expect(second.querySelector('span')!.className).not.toContain('text-accent');
     // Unmapped participant ids render as-is rather than blank.
     expect(second).toHaveTextContent('unknown-id');
+  });
+});
+
+/* The Player column carries `Participant.name` — a player OR a team, so a long
+ * organisation name is in-vocabulary. It is a name column like any other, and
+ * that has two consequences a later edit could break silently. */
+describe('StandingsTable geometry', () => {
+  it('reserves two lines, because it carries a name that wraps', () => {
+    expect(bandedRowLines(STANDINGS_COLUMNS)).toBe(2);
+  });
+
+  it('fits inside the rail DrawView gives it', () => {
+    // The Player floor (NAME_COL_MIN) makes this table's minimum content
+    // width 404px. The rail is `xl:w-[28rem]` with `p-4` and the card's 1px
+    // borders; at the previous `w-96` the row overflowed the card by ~52px
+    // and `overflow-hidden` clipped the Points column.
+    const src = readFileSync(
+      resolve(__dirname, '../DrawView.tsx'),
+      'utf8',
+    );
+    const rail = /xl:w-\[(\d+(?:\.\d+)?)rem\]/.exec(src);
+    expect(rail, 'StandingsAside declares no rem rail width').not.toBeNull();
+    const RAIL_PADDING_PX = 32; // aside `p-4`, both sides
+    const CARD_BORDER_PX = 2; // the standings card's 1px border, both sides
+    expect(Number(rail![1]) * 16).toBeGreaterThanOrEqual(
+      dockMinContentWidth(STANDINGS_COLUMNS) + RAIL_PADDING_PX + CARD_BORDER_PX,
+    );
   });
 });

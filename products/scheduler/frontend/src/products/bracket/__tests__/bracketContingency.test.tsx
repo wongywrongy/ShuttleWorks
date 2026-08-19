@@ -16,6 +16,7 @@ import {
   BracketMatchDetailPanel,
   type ContingencyReason,
 } from '../BracketMatchDetailPanel';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 import type { BracketTournamentDTO, PlayUnitDTO } from '../../../api/bracketDto';
 import type { BracketMatchStatus } from '../../../components/control-plane';
 
@@ -116,6 +117,36 @@ describe('bracket contingency actions', () => {
     render(panelWith({ status: 'ready', onRecordContingency: vi.fn() }));
     expect(screen.queryByTestId('contingency-advance-A')).toBeNull();
     expect(screen.queryByTestId('contingency-advance-B')).toBeNull();
+  });
+
+  // B1 — the three kinds sit ~8px apart in one row. A stray click on any of
+  // them must be recoverable: picking a kind only reveals the armed advance
+  // buttons, it never writes a result. (The audit read this row as three
+  // buttons that each record; pinning it here so it can never become that.)
+  it('records NOTHING when a contingency kind is clicked', () => {
+    const onRecord = vi.fn();
+    render(panelWith({ status: 'ready', onRecordContingency: onRecord }));
+    for (const kind of ['walkover', 'retired', 'forfeit'] as const) {
+      fireEvent.click(screen.getByTestId(`contingency-${kind}`));
+      expect(onRecord).not.toHaveBeenCalled();
+    }
+    // Even the armed second stage needs two presses of the SAME button.
+    fireEvent.click(screen.getByTestId('contingency-advance-A'));
+    expect(onRecord).not.toHaveBeenCalled();
+  });
+
+  // D2 — the kind buttons carried
+  //   'rounded-sm border px-2 py-0.5 ${EYEBROW_CLASS}'
+  // in SINGLE quotes inside a join(' '), so the literal characters
+  // "${EYEBROW_CLASS}" shipped as a className and the row rendered with none
+  // of its intended typography.
+  it('interpolates the eyebrow class instead of shipping the literal', () => {
+    render(panelWith({ status: 'ready', onRecordContingency: vi.fn() }));
+    const button = screen.getByTestId('contingency-walkover');
+    expect(button.className).not.toContain('${');
+    for (const cls of EYEBROW_CLASS.split(' ')) {
+      expect(button).toHaveClass(cls);
+    }
   });
 
   it('switching kind resets any armed side', () => {

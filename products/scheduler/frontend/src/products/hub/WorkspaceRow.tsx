@@ -10,59 +10,53 @@
  * menu that reveals on hover/focus — never inline on the row surface.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
-import { HealthDot, OverflowMenu, type OverflowItem } from '../../components/control-plane';
-import { workspaceHealth } from './hubSignals';
+import {
+  HealthDot,
+  OverflowMenu,
+  COL_PRIORITY_CLASS,
+  COL_PRIORITY_CLASS_FLEX,
+  type OverflowItem,
+} from '../../components/control-plane';
+import { StatusPill } from '../../components/StatusPill';
+import { lifecycleChip } from '../../platform/domain/lifecycle';
+import { attentionReasons, workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
-import { moduleGlyphs, type ModuleGlyphId } from './moduleGlyphs';
 
-/* Color budget (2026-07): module identity is carried by the LETTER, not a
- * hue — the M/D/B rainbow was decoration. Enabled modules read as neutral
- * filled chips, available ones as dashed outlines.
+/** The row's Attention column.
  *
- * SP-UI-1: the fill was `bg-surface-chip text-text-secondary`, which sat so
- * close to the row background that M/B/D was unreadable without hovering for
- * the title — on a scanning surface that is a dead column. Raised to the
- * raised-surface step + full-strength text, on a hairline so the chip has an
- * edge of its own. Still achromatic, still compact. */
-const GLYPH_CLASS: Record<ModuleGlyphId, string> = {
-  meet: 'bg-surface-raised text-foreground border border-border',
-  display: 'bg-surface-raised text-foreground border border-border',
-  bracket: 'bg-surface-raised text-foreground border border-border',
-  entries: 'bg-surface-raised text-foreground border border-border',
-};
-
-/** Glyph → module name for the chip's title. Was a letter-keyed ternary whose
- *  final `: 'Bracket'` would have called the new E chip "Bracket"; keyed on the
- *  id, a missing module is now a type error instead of wrong hover text. */
-const GLYPH_TITLE: Record<ModuleGlyphId, string> = {
-  meet: 'Meet',
-  display: 'Display',
-  bracket: 'Bracket',
-  entries: 'Entries',
-};
-
-/** The row's Modules column — enabled modules as solid tinted glyphs, or a
- *  single dashed kind-default when nothing is enabled (see moduleGlyphs). */
-function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
-  const glyphs = moduleGlyphs(tournament.modules ?? [], tournament.kind);
+ *  This slot used to hold module glyphs (M / B / D). Modules are static
+ *  configuration: the same three letters on every row of a season, repeating
+ *  what the inspector states in full, on the one surface whose job is to say
+ *  which workspace needs the director NOW (HUB-3).
+ *
+ *  It carries the workspace's first attention reason instead. The row already
+ *  renders a HealthDot from the same signals, so a second glyph would have
+ *  been the same fact twice; a dot can say THAT something is wrong and never
+ *  WHAT, which is the half the operator is missing. Silent when nothing is
+ *  wrong — a calm list is the point.
+ */
+function AttentionCell({ tournament }: { tournament: TournamentSummaryDTO }) {
+  const reasons = attentionReasons(tournament);
+  const first = reasons[0];
   return (
-    <span data-testid="row-modules" className="flex w-[108px] shrink-0 items-center gap-1">
-      {glyphs.map((g) => (
+    <span
+      data-testid="row-attention"
+      // Priority 3 (yields soonest), as the modules cell was: the row's
+      // health dot survives the narrowest widths and still flags the row.
+      className={['w-[132px] shrink-0 items-center gap-1', COL_PRIORITY_CLASS_FLEX[3]].join(' ')}
+    >
+      {first ? (
         <span
-          key={g.id}
-          data-testid={`row-module-${g.id}`}
-          title={`${GLYPH_TITLE[g.id]} — ${g.enabled ? 'enabled' : 'available'}`}
-          className={[
-            'inline-flex h-5 w-5 items-center justify-center rounded text-[11px] font-semibold',
-            g.enabled
-              ? GLYPH_CLASS[g.id]
-              : 'border border-dashed border-border text-muted-foreground',
-          ].join(' ')}
+          className="min-w-0 break-words text-xs text-status-warning"
+          title={reasons.map((r) => r.label).join(' · ')}
         >
-          {g.letter}
+          {first.label}
+          {reasons.length > 1 ? (
+            <span className="text-muted-foreground"> +{reasons.length - 1}</span>
+          ) : null}
         </span>
-      ))}
+      ) : null}
     </span>
   );
 }
@@ -78,8 +72,10 @@ function ModulesCell({ tournament }: { tournament: TournamentSummaryDTO }) {
  *  for the absence of a fact nobody asked for. The width is kept so the dated
  *  rows still align. */
 function DateCell({ iso }: { iso: string | null }) {
+  // Priority 2: yields after Modules but before the name, same `@container/
+  // table` on the row (T4, 390px, 2026-08-12).
   if (!iso) {
-    return <span aria-hidden className="w-16 shrink-0" />;
+    return <span aria-hidden className={['w-16 shrink-0', COL_PRIORITY_CLASS[2]].join(' ')} />;
   }
   const d = eventDate(iso);
   const valid = !Number.isNaN(d.getTime());
@@ -92,7 +88,12 @@ function DateCell({ iso }: { iso: string | null }) {
       })
     : iso.slice(0, 10);
   return (
-    <span className="w-16 shrink-0 text-right text-2xs sw-num text-muted-foreground">
+    <span
+      className={[
+        'w-16 shrink-0 text-right text-2xs sw-num text-muted-foreground',
+        COL_PRIORITY_CLASS[2],
+      ].join(' ')}
+    >
       {label}
     </span>
   );
@@ -106,7 +107,7 @@ interface RowProps {
   showDate?: boolean;
   selected: boolean;
   onSelect: () => void;
-  onOpen: () => void;
+  onOpen: (segment?: string) => void;
   onSetDate: () => void;
   onSettings: () => void;
   onDelete?: () => void;
@@ -125,15 +126,21 @@ export function WorkspaceRow({
 }: RowProps) {
   const health = workspaceHealth(tournament);
   const action = rowActionFor(tournament, group);
+  // Console-mock adoption (2026-08-13): the row states its lifecycle where
+  // the operator scans, not just in the inspector. Shared precedence
+  // (Archived > Live > Complete); resting setup/ready rows stay unbadged —
+  // the facet strip and next action already say it — and LIVE is
+  // suppressed since R-D (the HealthDot and next action already say it).
+  const badge = lifecycleChip(tournament.signals?.phase, tournament.status);
   const receded = group === 'past';
   // "Set date" (and any reason-coded setup step) is the attention-y next
   // action — it warms to amber; Open/View results stay quiet.
   const attention = action.kind === 'set-date';
 
   const overflowItems: OverflowItem[] = [
-    { key: 'settings', label: 'Settings', onSelect: onSettings },
+    { key: 'settings', label: 'Workspace settings', onSelect: onSettings },
     ...(onDelete
-      ? [{ key: 'delete', label: 'Delete', onSelect: onDelete, destructive: true, testId: 'overflow-delete' } as OverflowItem]
+      ? [{ key: 'delete', label: 'Delete', onSelect: onDelete, destructive: true, separator: true, testId: 'overflow-delete' } as OverflowItem]
       : []),
   ];
 
@@ -144,7 +151,17 @@ export function WorkspaceRow({
     <div
       onClick={onSelect}
       className={[
-        'group flex min-h-[40px] cursor-pointer items-center gap-3 px-4 py-2 text-sm',
+        // `@container/table`: the row is its own sizing context for the
+        // Modules/Date priority-hide below — T4 found this row's NAME
+        // resolving to 0px at 390 (`min-w-0 flex-1` against fixed-width
+        // siblings with nothing yielding). Same mechanism as BandedTable's
+        // `@container/table` columns, scoped to one row instead of a table.
+        // `flex-wrap`: wrapping the NAME is only half a fix — at 390px the
+        // fixed-width siblings (w-40 action + Modules + Date + overflow) left
+        // the name column ~63px, so `break-words` broke it MID-WORD
+        // ("Invitatio/nal"). The columns now wrap to a second line instead of
+        // strangling the name; see the `min-w-[12rem]` floor below.
+        'group flex min-h-[40px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-2sm @container/table',
         'transition-colors duration-fast ease-brand',
         receded ? 'opacity-80 hover:opacity-100' : '',
         selected
@@ -154,14 +171,28 @@ export function WorkspaceRow({
     >
       {/* NAME leads — the row's anchor, and the only thing on it at full
           weight. Everything to its right is metadata or an affordance. */}
-      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+      <span className="flex min-w-[12rem] flex-1 items-center gap-2.5">
         <HealthDot health={health} />
-        <span className="truncate text-sm font-semibold text-foreground">
+        {/* The dot is `aria-hidden` (it has a title, which AT ignores on a
+            span), so the one state worth interrupting a scan for gets words. */}
+        {health === 'attention' ? <span className="sr-only">Needs attention</span> : null}
+        {/* Wraps, never ellipsises: the name is the row's only identifying
+            fact, and the row's `flex-wrap` + the 12rem floor above give it the
+            width to wrap at WORD boundaries — wrapping is necessary, not
+            sufficient; the box still has to have room. */}
+        <span className="min-w-0 break-words text-2sm font-semibold text-foreground">
           {tournament.name || 'Untitled'}
         </span>
+        {badge ? (
+          <span data-testid="row-lifecycle" className="shrink-0">
+            <StatusPill tone={badge.tone} dot={badge.tone === 'green'}>
+              {badge.text}
+            </StatusPill>
+          </span>
+        ) : null}
       </span>
 
-      <ModulesCell tournament={tournament} />
+      <AttentionCell tournament={tournament} />
 
       {showDate ? <DateCell iso={tournament.tournamentDate} /> : null}
 
@@ -177,18 +208,22 @@ export function WorkspaceRow({
         onClick={(e) => {
           e.stopPropagation();
           if (action.kind === 'set-date') onSetDate();
-          else onOpen();
+          else onOpen(action.segment);
         }}
         className={[
           'flex w-40 shrink-0 items-center justify-between gap-1 rounded-sm px-2 py-1 text-left text-xs',
           'transition-colors duration-fast ease-brand',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+          // Accent AT REST, not only on hover (HUB-1): in muted ink this
+          // read as one more metadata column, indistinguishable from the
+          // date cell beside it, and a hover state is not an affordance on
+          // a touch device or to an eye scanning the list.
           attention
             ? 'text-status-warning group-hover:bg-status-warning/10'
-            : 'text-muted-foreground group-hover:bg-accent/10 group-hover:text-accent',
+            : 'text-accent group-hover:bg-accent/10',
         ].join(' ')}
       >
-        <span className="truncate">{action.label}</span>
+        <span className="min-w-0 break-words">{action.label}</span>
         <span
           aria-hidden
           className="shrink-0 opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100"
@@ -197,7 +232,12 @@ export function WorkspaceRow({
         </span>
       </button>
 
-      <span className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      {/* Quiet at rest, not absent. `opacity-0` + `group-hover` made the only
+          route to Settings and Delete a hover — and `:hover` never fires on a
+          touch device, so on the tablet the owner runs this menu was
+          unreachable at every width. Keyboard always reached it (opacity
+          doesn't leave the tab order); touch had nothing. */}
+      <span className="opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <OverflowMenu items={overflowItems} />
       </span>
     </div>

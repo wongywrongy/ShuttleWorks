@@ -10,6 +10,8 @@
  *
  * Events badges derive from `events[].participants` (works pre-generate)
  * — see rosterEvents.ts. Row delete lives in a per-row overflow menu.
+ * The panel body is `BracketPlayerDetailFields` (IDENTITY / AVAILABILITY /
+ * EVENTS / NOTES sections).
  */
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { Download, MagnifyingGlass } from '@phosphor-icons/react';
@@ -20,8 +22,10 @@ import {
   BandedTable,
   DetailDock,
   DetailPanel,
-  EventBadge,
+  NAME_COL_MIN,
   OverflowMenu,
+  colClass,
+  dockMinContentWidth,
   type BandedTableColumn,
   type OverflowItem,
 } from '../../components/control-plane';
@@ -31,22 +35,24 @@ import { lockedPlayerIds, ROSTER_LOCKED_REASON } from './lockedPlayers';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { playerSlug } from '../../lib/playerSlug';
-import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
-import {
-  BracketAvailabilityEventsFields,
-  FIELD_INPUT_CLASSES,
-  FIELD_LABEL_CLASSES,
-  type CommitEventFn,
-} from './BracketPlayerFields';
+import { badgesByPlayerId } from './rosterEvents';
+import { FIELD_INPUT_CLASSES, type CommitEventFn } from './BracketPlayerFields';
+import { BracketPlayerDetailFields } from './BracketPlayerDetailFields';
 import { exportBracketRosterXlsx } from './exports/xlsxExports';
 
 /** Column set for the roster table — canonical px-5 banded rhythm. */
 const ROSTER_COLUMNS: BandedTableColumn[] = [
-  { label: 'Player', className: 'min-w-0 flex-1' },
-  { label: 'Events', className: 'min-w-0 flex-1' },
-  { label: 'Min rest', subLabel: 'slots', className: 'w-16 shrink-0 text-right', priority: 2 },
+  // Player carries a person name, so it floors at NAME_COL_MIN rather than
+  // collapsing to zero. Events is text codes, which wrap on their own.
+  { label: 'Player', className: `${NAME_COL_MIN} flex-1` },
+  // The header carries the seed legend (BRST-N1): `[n]` is the badminton
+  // draw-sheet convention, and a tooltip alone already failed one reader.
+  { label: 'Events · [n] seed', className: 'min-w-0 flex-1' },
   { label: '', className: 'w-8 shrink-0' },
 ];
+
+/** Content floor for the roster dock, derived from ROSTER_COLUMNS. */
+const ROSTER_DOCK_MIN_CONTENT_WIDTH = dockMinContentWidth(ROSTER_COLUMNS);
 
 export function BracketRosterTab() {
   // Use context presence check to determine if we're inside a provider.
@@ -87,6 +93,13 @@ function BracketRosterTabCore({
   const addPlayer = useTournamentStore((s) => s.addBracketPlayer);
   const updatePlayer = useTournamentStore((s) => s.updateBracketPlayer);
   const deletePlayer = useTournamentStore((s) => s.deleteBracketPlayer);
+  const config = useTournamentStore((s) => s.config);
+  // The session default a blank per-player override falls back to — the same
+  // derivation the solver-side checker runs (constraintChecker.ts).
+  const defaultRestSlots =
+    config && config.intervalMinutes > 0
+      ? Math.ceil(config.defaultRestMinutes / config.intervalMinutes)
+      : null;
 
   // Derived view: player id → sorted badge codes, from each event's own
   // participants (draft draws included — no play_units dependency).
@@ -212,18 +225,50 @@ function BracketRosterTabCore({
             rowTestId={(p) => `roster-row-${p.id}`}
             renderRow={(p) => (
               <>
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                <span
+                  role="cell"
+                  className={`${colClass(ROSTER_COLUMNS[0])} break-words text-2sm text-foreground`}
+                >
                   {p.name}
                 </span>
-                <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-                  {(badgesById.get(p.id) ?? []).map((b) => (
-                    <EventBadge key={b.code} code={b.code} />
-                  ))}
-                </span>
-                <span className="w-16 shrink-0 text-right text-xs text-muted-foreground sw-num hidden @2xl/table:block">
-                  {p.restSlots ?? '—'}
-                </span>
                 <span
+                  role="cell"
+                  className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
+                >
+                  {/* Text codes, not chips (BRST-N2, R-E Option A): a chip
+                      per entry on every row was decoration — the codes ARE
+                      the data. Seed follows its code as `[n]` (BRST-N1);
+                      the vertical "who's in X?" scan lives on the draw's
+                      own participant list, one click away on Draws. */}
+                  {(badgesById.get(p.id) ?? []).map((b) => (
+                    <span
+                      key={b.code}
+                      className="whitespace-nowrap font-medium text-foreground sw-num"
+                      title={b.seed != null ? `${b.code} · seeded ${b.seed}` : b.code}
+                    >
+                      {b.code}
+                      {b.seed != null ? (
+                        <span className="font-normal text-muted-foreground"> [{b.seed}]</span>
+                      ) : null}
+                    </span>
+                  ))}
+                  {/* Min rest lost its column (BRST-1). It held the session
+                      default for every player — a column of identical 1s,
+                      which is a column that says nothing — and the value is
+                      still edited in the row detail. Only a player who
+                      DIFFERS from the default is worth a mark here. */}
+                  {p.restSlots != null && p.restSlots !== defaultRestSlots ? (
+                    <span
+                      className="whitespace-nowrap text-3xs text-muted-foreground sw-num"
+                      title={`Minimum rest between this player's matches: ${p.restSlots} slot${p.restSlots === 1 ? '' : 's'} (default is ${defaultRestSlots ?? 1})`}
+                    >
+                      rest {p.restSlots}
+                    </span>
+                  ) : null}
+                </span>
+
+                <span
+                  role="cell"
                   className="flex w-8 shrink-0 justify-end opacity-0 transition-opacity duration-fast ease-brand focus-within:opacity-100 group-hover:opacity-100"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -258,13 +303,16 @@ function BracketRosterTabCore({
           {filtered.length === 0 && !adding && (
             <p className="px-5 py-6 text-sm text-muted-foreground">
               {players.length === 0
-                ? 'No players yet — add the first one.'
+                ? 'No players yet. Add the first one.'
                 : 'No players match the search.'}
             </p>
           )}
         </div>
 
-        <DetailDock open={selected != null}>
+        <DetailDock
+          open={selected != null}
+          minContentWidth={ROSTER_DOCK_MIN_CONTENT_WIDTH}
+        >
           {selected && (
             <DetailPanel
               variant="docked"
@@ -273,7 +321,7 @@ function BracketRosterTabCore({
               onClose={() => setSelectedId(null)}
               testId="bracket-player-detail"
             >
-              <PlayerDetailFields
+              <BracketPlayerDetailFields
                 key={selected.id}
                 player={selected}
                 roster={players}
@@ -290,71 +338,3 @@ function BracketRosterTabCore({
   );
 }
 
-/* =========================================================================
- * PlayerDetailFields — the panel body: notes, min rest (slots), then the
- * shared Availability + Events blocks (BracketAvailabilityEventsFields —
- * the same implementation the Matches panel's player cards expand to).
- * ========================================================================= */
-function PlayerDetailFields({
-  player,
-  roster,
-  bracketData,
-  badges,
-  onUpdate,
-  onCommitEvent,
-}: {
-  player: BracketPlayerDTO;
-  roster: BracketPlayerDTO[];
-  bracketData: BracketTournamentDTO | null;
-  badges: BadgeEntry[];
-  onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
-  onCommitEvent: CommitEventFn | null;
-}) {
-  return (
-    <div className="flex flex-col gap-3 px-3 py-3">
-      <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASSES}>Notes</span>
-        <input
-          key={player.id + '-notes'}
-          type="text"
-          defaultValue={player.notes ?? ''}
-          onBlur={(e) => {
-            if (e.target.value !== (player.notes ?? '')) {
-              onUpdate(player.id, { notes: e.target.value });
-            }
-          }}
-          className={FIELD_INPUT_CLASSES}
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASSES}>Min rest (slots)</span>
-        <input
-          key={player.id + '-rest'}
-          type="number"
-          min={0}
-          defaultValue={player.restSlots != null ? String(player.restSlots) : ''}
-          placeholder="default (1)"
-          aria-label="Min rest (slots)"
-          onBlur={(e) => {
-            const raw = e.target.value;
-            const next = raw === '' ? undefined : Math.max(0, Number(raw) || 0);
-            if (next !== player.restSlots) {
-              onUpdate(player.id, { restSlots: next });
-            }
-          }}
-          className={`${FIELD_INPUT_CLASSES} sw-num`}
-        />
-      </label>
-
-      <BracketAvailabilityEventsFields
-        player={player}
-        roster={roster}
-        bracketData={bracketData}
-        badges={badges}
-        onUpdate={onUpdate}
-        onCommitEvent={onCommitEvent}
-      />
-    </div>
-  );
-}

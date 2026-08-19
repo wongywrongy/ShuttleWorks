@@ -39,10 +39,14 @@ origin than its API.
 
 Routes are grouped by the [architectural module](/architecture/system-overview) that owns them.
 Every router is registered in `app/main.py` under a single auth dependency (`get_current_user`),
-with four deliberate exceptions: `invites` (its public resolve endpoint declares per-endpoint
+with six deliberate exceptions: `invites` (its public resolve endpoint declares per-endpoint
 auth), `auth` (you must be able to log in while logged out), the **public display projection**
-(`/display/{token}/*` — the only unauthenticated data plane, resolved by a capability token),
-and `solve-jobs` (carries its own auth + per-route role deps). Workspace-scoped routes
+(`/display/{token}/*`, resolved by a capability token), `solve-jobs` (carries its own auth +
+per-route role deps), and — since SP-PROGRAM-1 Phase 6 — the two **entrant** routers,
+`/e/api/*` and `/e/account/*` (their own section below). Every one of
+those public endpoints is enumerated with a written reason in `tests/test_auth_surface.py`'s
+`PUBLIC_BY_DESIGN`, and a route that answers an anonymous caller without being in it fails
+that test — so the list above is derived, not maintained by hand. Workspace-scoped routes
 additionally attach the tenancy seam `require_tournament_access(min_role)` — see
 [Conventions](#conventions). The route → module rationale lives in
 [Backend structure](/architecture/backend-structure#route-ownership).
@@ -142,8 +146,9 @@ architectural module with no enable flag.
 ### Display — the public capability link
 
 Display's board is still poll-only, but since SP-CLOUD-2 the public link is a **capability
-token**, not a raw workspace id (`api/display.py`). The `/display/{token}/*` routes are the only
-unauthenticated data plane in the app, and they serve a *projection* — exactly the fields the
+token**, not a raw workspace id (`api/display.py`). The `/display/{token}/*` routes are one of
+two unauthenticated data planes in the app (the other is the entrant surface below), and the
+only **capability-keyed** one. They serve a *projection* — exactly the fields the
 board renders, never the raw state blob (which carries operator material such as the
 schedule-history revert pool). Every public route is `GET`; the token grants no mutation
 anywhere, and an invalid or rotated token answers the same uniform 404 as a nonexistent
@@ -160,6 +165,47 @@ workspace.
 
 Inside the authenticated shell (and in local mode) the board can still read the owner-side
 endpoints directly via `?id=`; the token URL (`/display?token=…`) is what spectators get.
+
+### Entries — the public entrant surface
+
+The second unauthenticated data plane, and the opposite of Display's: it is **slug-keyed and
+meant to be discoverable**, because the address gets printed on a poster. Since SP-PROGRAM-1
+Phase 6 (ruling R8-A) the *pages* live in a separate React Router 7 service and these routes
+are the JSON it reads plus the writes the browser posts directly. There is no capability token
+anywhere in it, and a raw workspace UUID is never a public address — the slug is the only key.
+
+Two prefixes, both registered without the global auth dependency:
+
+| Method · Path | Purpose |
+| --- | --- |
+| `GET /e/api/page/{slug}` | public: the entry page projection (page config, open events, fee schedule, the entrant list). Strict — entrant **names and event ids only**, opt-outs excluded, no contact data selected in the SQL |
+| `GET /e/api/config` | public: the entrant app's runtime config — the Turnstile **site** key and the auth mode. Cannot require a session: it is read by the page where a session is obtained |
+| `GET /e/api/pages` | public: the open pages' slugs, the list `/e/sitemap.xml` crawls. Filtered on `is_open` in SQL |
+| `POST /e/api/quote/{slug}` | **session-gated** (R8-C): the R14 running fee total. Shares one `compute_fee_total` with submit, so a quote cannot diverge from the charge |
+| `POST /e/api/submit/{slug}` | **session-gated**: creates the submission. Idempotent on `(tournament_id, account_id, idempotency_key)` |
+| `POST /e/account/signup` | public: entrant account creation — server-side Turnstile, its own `esignup:` throttle, the shared NIST password policy, and a uniform non-enumerating answer |
+| `POST /e/account/login` | public: the entrant login endpoint itself (`sw_play_session`) |
+| `POST /e/account/logout` | public: idempotent; no session to destroy is a no-op |
+| `GET /e/account/me` | the calling entrant's own record |
+
+Entrants are **not** `users`: they live in their own tables with their own `sw_play_session`
+cookie and never reach an operator route. Cookie-carrying writes here prove themselves with
+`X-ShuttleWorks-CSRF: 1` **or** a cookie-derived double-submit token (ruling R8-B), so a form
+that ships no JavaScript can still submit — there is no path-based CSRF exemption anywhere in
+the app, and `tests/test_csrf_cookie_registry.py` asserts that from source.
+
+::: tip Resolved: the CSP now admits Turnstile, on `/e/signup` only
+Entrant signup used to answer `403 AUTH_CHALLENGE_FAILED` in every deployed stack: the signup
+page loads Turnstile's script from `challenges.cloudflare.com`, the nginx CSP sent
+`script-src 'self'`, the browser blocked it, and the form posted no `cf-turnstile-response`.
+Fixed by the `$sw_turnstile_origin` map in `frontend/nginx.conf`, which adds that origin to
+`script-src` and `frame-src` — Cloudflare's
+[documented requirement](https://developers.cloudflare.com/turnstile/reference/content-security-policy/)
+— for `/e/signup` and no other path, so the operator console on the same origin still gets
+`script-src 'self'`. The cost is one trusted third-party script host on one public page.
+Held by `e2e/tests/10-entrant-r11-evidence.spec.ts`, which fails if the widget stops rendering
+**or** if the allowance widens past that page.
+:::
 
 ### Auth — self-hosted accounts & sessions
 

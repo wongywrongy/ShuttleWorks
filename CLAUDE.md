@@ -17,7 +17,7 @@ Monorepo: a CP-SAT scheduling product (meets + bracket draws) plus a shared desi
 - Backend tests: `cd products/scheduler && pytest`  (rootdir is products/scheduler; needs the repo .venv active)
 - Architecture boundaries: `npm run depcruise`
 - Python lint: `ruff check products/scheduler scheduler_core`
-- All local checks at once: `make check`
+- All local checks at once: `make check` — eslint, **`tsc -b` (frontend) + `typecheck:entrant`**, vitest, depcruise, ruff, pytest. The two type gates were added 2026-08-10: `make check` ran no build, so it structurally could not catch a TypeScript error that CI (`npm run build` = `tsc -b && vite build`) fails on.
 - Regenerate frontend DTOs after backend schema changes: `make -C products/scheduler generate-api` (product-local target; then reconcile src/api/dto.ts by hand)
 - Run the app: `make scheduler` (Docker; frontend :80, backend :8000) or `make scheduler-dev` (Vite :5173 + HMR); `make stop`. Where host :8000 is reserved (some Windows boxes), prefix `BACKEND_HOST_PORT=8600`.
 - Single frontend test: `npm --prefix products/scheduler/frontend run test:run -- src/path/x.test.ts` (filter with `-t "name"`). Type gate `tsc -b` runs inside `build`.
@@ -84,7 +84,7 @@ Fall back to grep/Read for non-indexed files (markdown, YAML, config) or when se
 - Backend ordering: list queries need a stable tiebreaker (`created_at DESC, id DESC` — `id` is a random UUID; `created_at` alone ties non-deterministically across SQLite/Postgres).
 - Route registration: newer FastAPI keeps each `include_router` as a nested `_IncludedRouter` (`path=None`) rather than flattening onto `app.routes` — assert a route exists via `app.openapi()["paths"]`, not `app.routes`.
 - vitest hoisting: `vitest` must stay hoisted to the **root** `node_modules` (root `@testing-library/jest-dom` resolves it there) and is a root devDep; pin `@vitest/coverage-v8` to vitest's major (project is on vitest 3).
-- Dead nav code: the left sidebar (`src/platform/product-shell/workspaceNav.ts`, `buildWorkspaceNav`) is the real in-workspace navigation. The old horizontal `TabBar` / `ModuleDock` / `BRACKET_TABS` are vestigial — editing them changes nothing users see.
+- Nav model: the left sidebar (`src/platform/product-shell/workspaceNav.ts`, `buildWorkspaceNav`) is the real in-workspace navigation. The old horizontal TabBar / ModuleDock / `BRACKET_TABS` were removed 2026-08-17 — only stale prose comments mentioning "TabBar" remain; `lib/bracketTabs.ts` now holds just the live tab-id/view helpers.
 - Playwright MCP screenshots: `browser_take_screenshot` saves a **bare** `filename` to the repo **root** (its output-dir is CWD — the plugin runs `@playwright/mcp` with no `--output-dir`), littering root with `*.png` (verified 2026-07-01). Always pass `filename: ".playwright-mcp/<name>.png"` — that dir is gitignored and is the documented home (page-snapshots/console logs already land there); use `docs/screenshots/<name>.png` (also gitignored) for keeper reference shots. Root `*.png` is gitignored as a backstop, but keep pics out of it.
 
 ## CI & the lean-gate philosophy

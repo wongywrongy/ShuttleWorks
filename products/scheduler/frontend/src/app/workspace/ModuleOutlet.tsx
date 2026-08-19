@@ -31,26 +31,25 @@ const EntriesProduct = lazy(() =>
 );
 
 interface ModuleOutletProps {
-  /** True only when BOTH Meet and Bracket are enabled (resolved from the
-   *  real module catalog in `AppShell`). Drives the unified Operations
-   *  surface; defaults to false so a single-engine workspace — and any
-   *  caller without enablement state — keeps today's engine-specific
-   *  Operations views. */
-  bothEnginesEnabled?: boolean;
+  /** Which engines this workspace runs (resolved from the real module
+   *  catalog in `AppShell`). Every Operations segment routes to the unified
+   *  `OperationsProduct` since the SP-CONSOLE-4 B3 flip — this only decides
+   *  which engine's actions it renders. Defaults to both. */
+  engines?: { meet: boolean; bracket: boolean };
 }
 
-/** Mounts the module that owns the current active tab. When both engines
- *  are enabled and the active tab is an Operations segment, the unified
- *  cross-engine Operations surface takes over (one Courts + one Live view
- *  with mixed-source rows); otherwise the owning engine renders as before. */
-export function ModuleOutlet({ bothEnginesEnabled = false }: ModuleOutletProps) {
+/** Mounts the module that owns the current active tab. Operations segments
+ *  render the unified Operations surface (single- or cross-engine, per
+ *  `engines`); every other tab renders its owning module's product. The
+ *  `VITE_LEGACY_OPS` fallback died with the legacy pages at SP-CONSOLE-4 B4. */
+export function ModuleOutlet({ engines }: ModuleOutletProps) {
   const activeTab = useUiStore((s) => s.activeTab);
   const kind = useUiStore((s) => s.activeTournamentKind);
   const module = moduleForTab(activeTab, kind);
 
   const child =
-    bothEnginesEnabled && isOperationsSegment(activeTab) ? (
-      <OperationsProduct />
+    isOperationsSegment(activeTab) ? (
+      <OperationsProduct engines={engines} />
     ) : module === 'bracket' ? (
       <BracketProduct />
     ) : module === 'display' ? (

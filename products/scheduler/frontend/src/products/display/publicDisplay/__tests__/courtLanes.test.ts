@@ -4,17 +4,15 @@
  * created. See task-8-brief.md.
  *
  * This is a BOARD-LOCAL helper, deliberately NOT shared with Operations'
- * `deriveCourtLanes` (products/operations/runtime/runModel.ts). That helper
- * sets `now` POSITIONALLY — the earliest non-done match on a court, even
- * when nothing on that court has actually started or been called (an idle
- * court with only scheduled matches still gets a `now` there, used for
- * Operations' internal bookkeeping/free-court-finding). The public board
- * must NEVER label a not-yet-live match "Now" on a spectator TV — `now`
- * here is strictly LIVE-gated (only ids the caller names in `nowState`),
- * never positional. That divergence (a different essential input — live
- * status — and a different `now` rule, not just a coarser vocabulary) is
- * why this is its own tested helper rather than a shared extraction — the
- * live-gating constraint on the board is the decisive difference.
+ * `deriveCourtLanes` (products/operations/runtime/runModel.ts). Both prefer
+ * a live match, but that helper ALWAYS gives an occupied court a `now`:
+ * with nothing live it falls back to the earliest non-done match, because
+ * Operations needs that for its internal bookkeeping/free-court-finding.
+ * The public board must NEVER label a not-yet-live match "Now" on a
+ * spectator TV — `now` here is strictly LIVE-gated (only ids the caller
+ * names in `nowState`), and an idle court has no `now` at all. That
+ * divergence (a different `now` rule, not just a coarser vocabulary) is
+ * why this is its own tested helper rather than a shared extraction.
  */
 import { describe, expect, it } from 'vitest';
 import { assignLanes, type LaneItem } from '../courtLanes';

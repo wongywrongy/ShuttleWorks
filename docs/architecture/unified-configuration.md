@@ -67,7 +67,7 @@ Only two fields are asymmetric:
   which is exactly why the control is withheld from the Bracket tab.
 - **`restBetweenRounds` is Bracket-only** — the one draw-specific timing knob
   (rest, in slots, between a draw's rounds). Courts, slot duration, and the day
-  window still live in workspace **Venue & schedule**, which the tab links to
+  window still live in workspace **Venue and schedule**, which the tab links to
   rather than re-owning.
 
 ### The shared scoring field set
@@ -218,7 +218,7 @@ guards the roster, not the schedule.
   retries with the flag.
 
 ::: warning Bracket lock signal is bracket-data-scoped
-The workspace-level **Venue & schedule** ribbon reads the *meet* store flag, so a
+The workspace-level **Venue and schedule** ribbon reads the *meet* store flag, so a
 bracket-only lock (committed bracket schedule / started draw) may show nothing
 there — the server 409 is the backstop. Tracked in `docs/audits/debt-log.md`.
 :::

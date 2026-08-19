@@ -39,8 +39,14 @@ The live surface is `products/operations/run/RunSurface.tsx`, driven by an
   bracket actions through non-solver `assignCourt` / `unassign` + the
   [result command queue](/architecture/bracket-result-queue).
 
-When both engines are enabled these surfaces interleave both engines' matches —
-see [Unified Operations view](/architecture/unified-operations-view).
+Every Operations segment renders these unified surfaces since the SP-CONSOLE-4
+routing flip — single-engine workspaces included (the `engines` prop decides
+which engine's actions render); a hybrid workspace interleaves both engines'
+matches — see [Unified Operations view](/architecture/unified-operations-view).
+The meet-side C4 seams (`run/useMeetRunOps` + `run/MeetMatchPanel` +
+`run/RunFinished`) carry score entry, undo-finish/undo-start, check-in and
+roster edits, and the shared-player impact list on the Run surface; the
+schedule XLSX export lives in `exports/scheduleXlsx.ts`.
 
 ## What it owns
 

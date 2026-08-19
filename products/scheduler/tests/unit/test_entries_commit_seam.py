@@ -152,8 +152,13 @@ def _entry(
     player_name="Alice Chen",
     state="confirmed",
     remarks=None,
+    player=None,
 ):
     """One confirmed entry, built at the level boundary ruling R13 drew.
+
+    Pass ``player`` to enter the SAME human in a second event — the
+    multi-event case ``EntryPlayer``'s own docstring describes ("three
+    events for one child"), and the one a per-entry helper cannot express.
 
     **This helper is the only thing in this file that SP-E1-2 changed.**
     ``player_name`` and ``remarks`` used to be columns on ``entries`` and
@@ -164,15 +169,16 @@ def _entry(
     there is no old value it could have come from, which is exactly why
     ruling D-A5 authorised a clean rebuild instead of one.
     """
-    player = EntryPlayer(
-        tournament_id=tournament_id,
-        account_id=_account(session).id,
-        full_name=player_name,
-        gender="F",
-        remarks=remarks,
-    )
-    session.add(player)
-    session.commit()
+    if player is None:
+        player = EntryPlayer(
+            tournament_id=tournament_id,
+            account_id=_account(session).id,
+            full_name=player_name,
+            gender="F",
+            remarks=remarks,
+        )
+        session.add(player)
+        session.commit()
     row = Entry(
         tournament_id=tournament_id,
         entry_event_id=entry_event.id,
@@ -554,6 +560,71 @@ def test_a_bracket_entry_becomes_a_participant_and_a_roster_player(repo, session
     assert roster[0]["sourceEntryId"] == str(entry.id)
     session.expire_all()
     assert entry.committed_player_id == participants[0].id == roster[0]["id"]
+
+
+def test_one_person_in_two_draws_is_one_roster_row_in_both_participant_lists(
+    repo, session
+):
+    """Regression (real-browser demo pass, 2026-08-10): the Lewisville
+    workspace's bracket roster read "42 players" for 23 people.
+
+    The seam keyed the roster row on the ENTRY, so a person entering three
+    events became three rows. ``EntryPlayer``'s own docstring already says
+    what the shape must be — "three events for one child must not carry
+    three copies of one sentence, because the commit seam writes it onto a
+    roster player". One row per person; the events fan out through the
+    per-event participant lists, which is where the roster's ``{code,
+    type}`` badges come from (``rosterEvents.badgesByPlayerId``).
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    _draft_event(repo, tid, "XD")
+    ms = _entry_event(session, tid, code="MS", bracket_event_id="MS")
+    xd = _entry_event(session, tid, code="XD", bracket_event_id="XD")
+    first = _entry(session, tid, ms, player_name="Alex Tan", remarks="leaving at 4")
+    second = _entry(session, tid, xd, player=first.player)
+
+    result = commit_entries(repo, tid)
+
+    assert {c.entry_id for c in result.committed} == {str(first.id), str(second.id)}
+    roster = repo.tournaments.get_by_id(tid).data["bracketPlayers"]
+    assert [p["name"] for p in roster] == ["Alex Tan"], "one row per PERSON"
+    # Both entries point at that single row, and it appears under both
+    # draws — badges derive from the per-event participant lists.
+    session.expire_all()
+    assert first.committed_player_id == second.committed_player_id == roster[0]["id"]
+    assert [p.id for p in repo.brackets.list_participants(tid, "MS")] == [roster[0]["id"]]
+    assert [p.id for p in repo.brackets.list_participants(tid, "XD")] == [roster[0]["id"]]
+
+
+def test_one_person_in_two_meet_events_is_one_player_carrying_both_ranks(
+    repo, session
+):
+    """The Meet half of the same defect. ``ranks[]`` is where a meet player
+    carries their events, so a second entry extends the list rather than
+    minting a second player."""
+    tid = _meet_workspace(repo, ranks=("MS", "XD"))
+    ms = _entry_event(session, tid, code="MS")
+    xd = _entry_event(session, tid, code="XD")
+    first = _entry(session, tid, ms, player_name="Alice Chen")
+    second = _entry(session, tid, xd, player=first.player)
+    # Distinct submitted_at: the seam orders by (submitted_at, id), and two
+    # same-transaction inserts can share one timestamp — the random-UUID id
+    # then breaks the tie arbitrarily and ranks[] arrives ["XD", "MS"]. The
+    # assertion below is about ORDER, so the fixture must actually make the
+    # MS entry earlier.
+    from datetime import timedelta
+
+    second.submitted_at = first.submitted_at + timedelta(seconds=1)
+    session.commit()
+
+    commit_entries(repo, tid)
+
+    players = _players(repo, tid)
+    assert [p["name"] for p in players] == ["Alice Chen"]
+    assert players[0]["ranks"] == ["MS", "XD"]
+    session.expire_all()
+    assert first.committed_player_id == second.committed_player_id == players[0]["id"]
 
 
 def test_a_started_draw_is_skipped_and_never_mutated(repo, session):

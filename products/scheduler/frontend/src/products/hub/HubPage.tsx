@@ -15,7 +15,13 @@ import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
-import { EmptyState, Skeleton, Eyebrow } from '../../components/control-plane';
+import {
+  EmptyState,
+  Skeleton,
+  Eyebrow,
+  DetailDock,
+  COL_PRIORITY_CLASS,
+} from '../../components/control-plane';
 import { temporalGroupOf } from './hubGrouping';
 import { HUB_FACETS, facetCounts, matchesFacet, type HubFacetId } from './hubFacets';
 import { sortBy, type HubSortId } from './hubSort';
@@ -23,6 +29,7 @@ import { SortControl } from './SortControl';
 import { needsAttention } from './hubSignals';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
+import { HUB_DOCK_MIN_CONTENT_WIDTH, HUB_DOCK_WIDTH } from './hubDockGeometry';
 import { EYEBROW_CLASS } from '../../lib/utils';
 
 /** The ⌘K handler accepts Ctrl too — the hint should name the key the
@@ -68,13 +75,17 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-md px-2.5 py-1 text-2xs transition-colors duration-fast ease-brand ${
+      className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-2xs transition-colors duration-fast ease-brand ${
         active
           ? 'bg-surface-active font-medium text-foreground'
           : 'text-muted-foreground hover:text-foreground'
       }`}
     >
-      {label} <span className={`sw-num ${countTone}`}>{count}</span>
+      {/* Same "label · count" grammar the match lists use (HUB-2). The two
+          strips claimed to share a grammar and did not: this one ran the
+          count straight on after a space. */}
+      {label} <span className="text-ink-faint">·</span>{' '}
+      <span className={`sw-num ${countTone}`}>{count}</span>
     </button>
   );
 }
@@ -191,9 +202,11 @@ export function HubPage() {
     [tournaments, selectedId],
   );
 
-  // Open a workspace on its readiness Overview (the in-workspace default).
+  // Open a workspace — on the CTA's named destination when it has one
+  // ("Open live day" opens the live day, G1), else the Overview default.
   const openTournament = useCallback(
-    (id: string) => navigate(`/tournaments/${id}/overview`),
+    (id: string, segment?: string) =>
+      navigate(`/tournaments/${id}/${segment ?? 'overview'}`),
     [navigate],
   );
 
@@ -226,7 +239,10 @@ export function HubPage() {
           avatar the prototype drew here already lives in the app's global
           left rail (its artboard had no rail) — not duplicated. */}
       <header className="flex h-12 shrink-0 items-center gap-3.5 border-b border-border bg-card px-4">
-        <ShuttleWorksMark />
+        {/* Below `sm` the wordmark stands down: the global rail carries the
+            same monogram two centimetres to its left, and it was the thing
+            the search field collided with. */}
+        <ShuttleWorksMark className="hidden shrink-0 sm:inline-flex" />
         <div className="flex min-w-0 flex-1 justify-center">
           <div className="relative w-full max-w-[420px]">
             <input
@@ -238,12 +254,15 @@ export function HubPage() {
               aria-label="Search workspaces"
               className="h-8 w-full rounded-md border border-border bg-bg-elev px-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
-            <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-[10px] text-muted-foreground">
+            {/* Hidden with the wordmark: a shortcut hint is dead weight on a
+                touch device, and it was the half of the collision that sat
+                on top of the other half. */}
+            <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-[10px] text-muted-foreground sm:block">
               {IS_MAC ? '⌘K' : 'Ctrl K'}
             </kbd>
           </div>
         </div>
-        <Button size="sm" onClick={() => navigate('/new')}>
+        <Button size="sm" className="shrink-0" onClick={() => navigate('/new')}>
           <span aria-hidden>＋</span> New workspace
         </Button>
       </header>
@@ -262,9 +281,22 @@ export function HubPage() {
       {!loading && tournaments.length > 0 ? (
         <div className="shrink-0 border-b border-border px-4 pb-2.5 pt-4">
           <h1 className="type-display text-2xl text-foreground">Workspaces</h1>
-          <div className="mt-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-0.5">
-              {HUB_FACETS.map((f) => (
+          <div className="mt-2.5 flex items-center justify-between gap-3">
+            {/* The strip SCROLLS when it doesn't fit. It used to overflow the
+                viewport under an ancestor's `overflow-hidden`, which put the
+                last two chips — "Needs attention" among them — past the edge
+                with no scrollbar, no swipe and no way to reach them at all. */}
+            <div
+              data-testid="hub-facet-strip"
+              className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+            >
+              {/* Zero-count facets are HIDDEN (H1.1): eight chips reading "0"
+                  above one row is a big dashboard's clothes on an empty one.
+                  "All" always shows, and the ACTIVE facet stays visible even
+                  at zero so a selection that empties remains escapable. */}
+              {HUB_FACETS.filter(
+                (f) => f.id === 'all' || counts[f.id] > 0 || facet === f.id,
+              ).map((f) => (
                 <FilterChip
                   key={f.id}
                   label={f.label}
@@ -282,8 +314,10 @@ export function HubPage() {
         </div>
       ) : null}
 
-      {/* Body: one flat, sorted, facet-filtered list (+ footer) + inspector */}
-      <div className="flex min-h-0 flex-1">
+      {/* Body: one flat, sorted, facet-filtered list (+ footer) + inspector.
+          `relative` + `overflow-hidden` is DetailDock's host contract: the
+          narrow fallback anchors its overlay layer to this box. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
           {error && (
@@ -300,7 +334,7 @@ export function HubPage() {
           ) : tournaments.length === 0 ? (
             <EmptyState
               title="No workspaces yet"
-              body="A workspace is your event control plane — it runs modules like Meet, Bracket, and Display."
+              body="A workspace is your event control plane: it runs modules like Meet, Bracket, and Display."
               action={<Button onClick={() => navigate('/new')}>Create workspace</Button>}
             />
           ) : visible.length === 0 ? (
@@ -313,13 +347,22 @@ export function HubPage() {
             <div>
               {/* Column header — the dense-table grammar from the handoff Hub
                   prototype (widths mirror WorkspaceRow's cells). */}
+              {/* `@container/table` matches WorkspaceRow's own — same row
+                  width, same priority-hide, so the header and its data rows
+                  collapse in lockstep instead of drifting apart at 390px. */}
               <div
                 aria-hidden
-                className={`flex items-center gap-3 border-b border-border px-4 py-2 ${EYEBROW_CLASS} text-ink-faint`}
+                className={`flex items-center gap-3 border-b border-border px-4 py-2 @container/table ${EYEBROW_CLASS} text-ink-faint`}
               >
                 <span className="min-w-0 flex-1">Workspace</span>
-                <span className="w-[108px] shrink-0">Modules</span>
-                {showDates ? <span className="w-16 shrink-0 text-right">Date</span> : null}
+                <span className={['w-[132px] shrink-0', COL_PRIORITY_CLASS[3]].join(' ')}>
+                  Attention
+                </span>
+                {showDates ? (
+                  <span className={['w-16 shrink-0 text-right', COL_PRIORITY_CLASS[2]].join(' ')}>
+                    Date
+                  </span>
+                ) : null}
                 <span className="w-40 shrink-0 px-2">Next action</span>
                 <span className="w-6 shrink-0" />
               </div>
@@ -332,13 +375,26 @@ export function HubPage() {
                     showDate={showDates}
                     selected={t.id === selectedId}
                     onSelect={() => setSelectedId(t.id)}
-                    onOpen={() => openTournament(t.id)}
+                    onOpen={(segment) => openTournament(t.id, segment)}
                     onSetDate={() => navigate(`/tournaments/${t.id}/settings?tab=general`)}
                     onSettings={() => navigate(`/tournaments/${t.id}/settings`)}
                     onDelete={t.role === 'owner' ? () => setDeleteTarget(t) : undefined}
                   />
                 ))}
               </div>
+              {/* Quiet empty-region treatment (H1.2): a short list leaves the
+                  canvas mostly bare — a subdued create affordance makes the
+                  emptiness read deliberate. Gone once the list fills out. */}
+              {tournaments.length < 4 ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/new')}
+                  data-testid="hub-quiet-create"
+                  className="mx-4 my-3 flex h-9 items-center gap-1.5 rounded-sm border border-dashed border-border px-3 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-foreground"
+                >
+                  ＋ Create a workspace
+                </button>
+              ) : null}
             </div>
           )}
           </div>
@@ -367,12 +423,21 @@ export function HubPage() {
           ) : null}
         </div>
 
-        <WorkspaceInspector
-          tournament={selected}
-          onOpen={openTournament}
-          onSetDate={(id) => navigate(`/tournaments/${id}/settings?tab=general`)}
-          onSettings={(id) => navigate(`/tournaments/${id}/settings`)}
-        />
+        {/* Geometry, and why it is these numbers: `hubDockGeometry.ts`. */}
+        <DetailDock
+          open={selected != null}
+          width={HUB_DOCK_WIDTH}
+          minContentWidth={HUB_DOCK_MIN_CONTENT_WIDTH}
+        >
+          <WorkspaceInspector
+            key={selected?.id}
+            tournament={selected}
+            onOpen={openTournament}
+            onSetDate={(id) => navigate(`/tournaments/${id}/settings?tab=general`)}
+            onSettings={(id) => navigate(`/tournaments/${id}/settings`)}
+            onClose={() => setSelectedId(null)}
+          />
+        </DetailDock>
       </div>
 
       {deleteTarget && (

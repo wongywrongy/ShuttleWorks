@@ -170,7 +170,7 @@ export async function enqueue(
   };
   await withStore('readwrite', async (store) => {
     const existing = await reqAsPromise(store.get(row.id));
-    if (existing) return; // dedupe — same id, same outcome
+    if (existing) return; // dedupe: same id, same outcome
     store.put(row);
   });
   return row.id;

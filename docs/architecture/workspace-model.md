@@ -47,7 +47,7 @@ Each workspace's enabled modules live in the **`workspace_modules`** table — o
 | Column | Notes |
 | --- | --- |
 | `tournament_id` | FK → `tournaments` (cascade delete), indexed |
-| `module_id` | `'meet' | 'bracket' | 'display'` |
+| `module_id` | `'meet' | 'bracket' | 'display' | 'entries'` (`MODULE_IDS`) |
 | `status` | the module status (see below) |
 | `config` | optional JSON per-module config |
 | `id`, `created_at`, `updated_at` | surrogate PK + audit; unique on `(tournament_id, module_id)` |
@@ -63,6 +63,16 @@ initial module set, after which the `workspace_modules` rows are authoritative. 
 caller may also pass an explicit `modules[]` seed, validated by `normalize_module_seed` (known id,
 no duplicates, valid status; `coming_soon` is rejected as a seedable status; missing modules
 backfilled as `available`).
+
+### The cloud-only carve-out
+
+`entries` is in `CLOUD_ONLY_MODULES`. Both the derive and the seed paths take an
+`include_cloud_only` flag, and **without it a cloud-only module is neither backfilled nor accepted
+when named explicitly** — naming one raises rather than being silently dropped, because persisting
+a row the read path would then hide is the confusing outcome. The route catches the case first and
+answers **`409 MODULE_REQUIRES_CLOUD`**; the `ValueError` behind it is defence in depth for any
+other caller. A workspace restored from cloud into local mode has the inherited row filtered at
+read time (ruling R6), mirroring the seed logic. See [Entries](/modules/entries).
 
 ## Module status lifecycle
 
@@ -113,7 +123,7 @@ enabled)` in `platform/product-shell/workspaceNav.ts`, which emits:
 - **Overview** (always, top).
 - One **section per enabled module** — Meet / Bracket (engines), Operations (shared), Display
   (output) — each tagged with a role badge.
-- A **Workspace** admin block (always, bottom): Venue & schedule, Members, Sharing, Modules,
+- A **Workspace** admin block (always, bottom): Venue and schedule, Members, Sharing, Modules,
   Sync and backups, Settings.
 
 The Operations section points at the *active engine's* schedule/live surfaces (single-engine ships

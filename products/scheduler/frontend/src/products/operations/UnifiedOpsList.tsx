@@ -7,11 +7,13 @@
  * engine's real actions. The board above is the spatial map; this is where
  * the operator runs the day.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
+import { STATE_WORD } from '../../lib/stateWords';
+import { InlineSearch } from '../../components/InlineSearch';
 
 interface Props {
   blocks: OpsBlock[];
@@ -19,6 +21,10 @@ interface Props {
   onSelect?: (key: string) => void;
   /** Live surface passes a handler; Courts omits it for a read-only overview. */
   onAction?: (block: OpsBlock, action: OperationalAction) => void;
+  /** Search + engine filter chips above the list (SP-CONSOLE-4 B1 —
+   *  absorbs the legacy matches-table search and the bracket events
+   *  dim-strip's need). Off by default. */
+  searchable?: boolean;
 }
 
 const actionBtn =
@@ -89,15 +95,31 @@ function RowActions({
   );
 }
 
-export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Props) {
+export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, searchable }: Props) {
+  const [query, setQuery] = useState('');
+  const [sources, setSources] = useState<Set<string>>(() => new Set());
+
+  // Search matches the row's code AND its player names — finding "where is
+  // Aiden playing next" is the desk's real lookup. Source chips narrow to
+  // one engine; no active chip means both.
+  const visible = useMemo(() => {
+    if (!searchable) return blocks;
+    const needle = query.trim().toLowerCase();
+    return blocks.filter((b) => {
+      if (sources.size > 0 && !sources.has(b.source)) return false;
+      if (needle === '') return true;
+      return `${b.label} ${b.sideA} ${b.sideB}`.toLowerCase().includes(needle);
+    });
+  }, [blocks, searchable, query, sources]);
+
   const { upNext, waiting, finished } = useMemo(() => {
-    const up = blocks
+    const up = visible
       .filter((b) => b.court != null && !b.done)
       .sort((x, y) => (x.slot ?? 0) - (y.slot ?? 0) || (x.court ?? 0) - (y.court ?? 0));
-    const wait = blocks.filter((b) => b.court == null && !b.done);
-    const fin = blocks.filter((b) => b.done);
+    const wait = visible.filter((b) => b.court == null && !b.done);
+    const fin = visible.filter((b) => b.done);
     return { upNext: up, waiting: wait, finished: fin };
-  }, [blocks]);
+  }, [visible]);
 
   const row = (b: OpsBlock) => {
     const dot = b.done
@@ -117,17 +139,21 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
         // Courts omits `onSelect` for a read-only overview — a row with nothing
         // to activate must not be focusable (audit G1).
         {...(onSelect ? selectableRowProps(() => onSelect(b.key), isSelected) : {})}
-        className={`flex items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${
+        // `flex-wrap`: same fix as the Run queue rows — at 390px the dot,
+        // code and court columns plus the action buttons left the sides
+        // column ~72px, so `break-words` broke names MID-WORD ("Damo/n
+        // Ferraro"). Columns wrap to a second line; sides keeps a 10rem floor.
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 hover:bg-muted/30 ${
           onSelect ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : ''
         } ${isSelected ? 'bg-muted/40' : ''}`}
       >
         <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
         {/* Same match-code grammar as the Run queue rows. */}
-        <span className="w-20 flex-shrink-0 truncate text-2xs font-semibold sw-num text-ink-3">{b.label}</span>
+        <span className="w-20 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">{b.label}</span>
         <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
-          {b.court != null ? `C${b.court} · S${b.slot}` : '—'}
+          {b.court != null ? `C${b.court} · S${b.slot}` : '–'}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm" title={`${b.sideA} vs ${b.sideB}`}>
+        <span className="min-w-[10rem] flex-1 break-words text-2sm">
           {b.sideA}
           <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
           {b.sideB}
@@ -151,14 +177,56 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction }: Prop
       </>
     ) : null;
 
+  const emptySearch =
+    searchable && visible.length === 0 && blocks.length > 0 ? (
+      <li className="px-4 py-3 text-sm text-muted-foreground">
+        No matches match this search.
+      </li>
+    ) : null;
+
   return (
-    // No border-t on the list shell: the first child is always a section band
-    // (`border-y`) whose top border IS the board→list seam — one hairline per
-    // seam (seamed, not gapped).
-    <ul className="divide-y divide-border/60">
-      {section('Up next', upNext)}
-      {section('Waiting', waiting)}
-      {section('Finished', finished)}
-    </ul>
+    <div>
+      {searchable ? (
+        <div className="border-t border-border px-4 py-1.5">
+          <InlineSearch
+            query={query}
+            onQueryChange={setQuery}
+            placeholder="Search matches or players"
+            resultCount={{ shown: visible.length, total: blocks.length }}
+            showClear
+            onClearAll={() => {
+              setQuery('');
+              setSources(new Set());
+            }}
+            filters={[
+              {
+                label: 'Engine',
+                options: [
+                  { id: 'meet', label: 'Meet' },
+                  { id: 'bracket', label: 'Bracket' },
+                ],
+                active: sources,
+                onToggle: (id) =>
+                  setSources((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  }),
+              },
+            ]}
+          />
+        </div>
+      ) : null}
+      {/* No border-t on the list shell: the first child is always a section band
+          (`border-y`) whose top border IS the board→list seam — one hairline per
+          seam (seamed, not gapped). */}
+      <ul className="divide-y divide-border/60">
+        {section('Up next', upNext)}
+        {section(STATE_WORD.pending, waiting)}
+        {section('Finished', finished)}
+        {emptySearch}
+      </ul>
+    </div>
   );
 }

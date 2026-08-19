@@ -62,13 +62,13 @@ describe('AppSidebar', () => {
       'cloud',
     );
     renderSidebar();
-    expect(screen.getByLabelText('Account')).toHaveAttribute('title', 'Director');
-    expect(screen.getByLabelText('Account')).toHaveTextContent('D');
+    expect(screen.getByLabelText('Director')).toHaveAttribute('title', 'Director');
+    expect(screen.getByLabelText('Director')).toHaveTextContent('D');
   });
 
   it('falls back to the email when there is no display name', () => {
     auth({ id: 'u1', email: 'ops@club.org', displayName: null, authMode: 'cloud' }, false, 'cloud');
     renderSidebar();
-    expect(screen.getByLabelText('Account')).toHaveAttribute('title', 'ops@club.org');
+    expect(screen.getByLabelText('ops@club.org')).toHaveAttribute('title', 'ops@club.org');
   });
 });

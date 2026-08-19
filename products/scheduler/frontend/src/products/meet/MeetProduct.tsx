@@ -11,12 +11,6 @@ const RosterTab = lazy(() =>
 const MatchesTab = lazy(() =>
   import('./matches/MatchesTab').then((m) => ({ default: m.MatchesTab })),
 );
-const SchedulePage = lazy(() =>
-  import('./SchedulePage').then((m) => ({ default: m.SchedulePage })),
-);
-const MatchControlCenterPage = lazy(() =>
-  import('./MatchControlCenterPage').then((m) => ({ default: m.MatchControlCenterPage })),
-);
 
 /** Meet product mode: the operator tab strip + the active meet tab. The `tv`
  *  tab is no longer here — it became the Display product mode. */
@@ -29,12 +23,19 @@ export function MeetProduct() {
     <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto bg-card">
         <Suspense fallback={<TabSkeleton tab={activeTab} />}>
-          <div key={activeTab} className="h-full animate-block-in">
+          {/* No entry animation. Tab switching is MOTION.md §2's High
+              frequency tier ("sub-200ms or no animation") and §6 names this
+              exact swap as one that stays a hard cut. The `block-in` entry
+              this used to carry is 450ms, and is the solver's LOCKED
+              "schedule re-flow" keyframe besides. `key` still remounts so
+              each tab starts fresh. */}
+          <div key={activeTab} className="h-full">
+            {/* The 'schedule'/'live' Operations segments route to the unified
+                OperationsProduct since the SP-CONSOLE-4 B3 flip — the legacy
+                SchedulePage / MatchControlCenterPage were deleted at B4. */}
             {activeTab === 'setup' ? <TournamentSetupPage /> : null}
             {activeTab === 'roster' ? <RosterTab /> : null}
             {activeTab === 'matches' ? <MatchesTab /> : null}
-            {activeTab === 'schedule' ? <SchedulePage /> : null}
-            {activeTab === 'live' ? <MatchControlCenterPage /> : null}
           </div>
         </Suspense>
       </div>

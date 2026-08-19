@@ -11,6 +11,12 @@ import type { RunSummary } from '../runtime/runModel';
 
 interface Props {
   summary: RunSummary;
+  /** Which engines these matches came from, e.g. "meet + bracket". The done
+   *  figure counts every match on the floor, and on a hybrid workspace an
+   *  operator reading "34 / 84 done" under a Meet-shaped mental model would
+   *  read it as the meet's own progress (LIVE-3). Same honesty the Display
+   *  footer already carries ("12 / 24 meet matches complete"). */
+  scope?: string;
 }
 
 interface StatItemProps {
@@ -52,7 +58,7 @@ function StatItem({
   );
 }
 
-export function RunSummaryBand({ summary }: Props) {
+export function RunSummaryBand({ summary, scope }: Props) {
   const { done, total, playing, courtsFree, late } = summary;
 
   return (
@@ -63,7 +69,7 @@ export function RunSummaryBand({ summary }: Props) {
     >
       <StatItem
         testId="run-band-done"
-        label="done"
+        label={scope ? `done · ${scope}` : 'done'}
         value={`${done} / ${total}`}
         tone={done === total && total > 0 ? 'text-status-done' : 'text-foreground'}
       />

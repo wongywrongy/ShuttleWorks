@@ -35,7 +35,7 @@ export function DraggablePlayerChip({
         isDragging ? 'opacity-40' : 'cursor-grab',
       ].join(' ')}
     >
-      <span className="flex-1 truncate">{player.name || '(unnamed)'}</span>
+      <span className="min-w-0 flex-1 break-words">{player.name || '(unnamed)'}</span>
       <span
         className={[
           'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-sm px-1 text-3xs tabular-nums',
@@ -45,10 +45,17 @@ export function DraggablePlayerChip({
         ].join(' ')}
         title={
           heavy
-            ? `High event load — ${eventCount} events`
+            ? `High event load: ${eventCount} events`
             : `${eventCount} event${eventCount === 1 ? '' : 's'}`
         }
-        aria-label={heavy ? `High event load: ${eventCount} events` : undefined}
+        // Always labelled. Unlabelled, this rendered as a bare "2" beside a
+        // name — the tooltip decoded it for a mouse and for nobody else, and
+        // a screen reader got the digit alone (RST-2).
+        aria-label={
+          heavy
+            ? `High event load: ${eventCount} events`
+            : `${eventCount} event${eventCount === 1 ? '' : 's'}`
+        }
       >
         {eventCount}
       </span>

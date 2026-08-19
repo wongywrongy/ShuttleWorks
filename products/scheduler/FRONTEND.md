@@ -7,9 +7,15 @@ React 19 + Vite app organised as a **workspace control plane**. The router
 (`app/App.tsx`) splits the public display and login from the authenticated
 operator app; inside a workspace, `AppShell` renders the workspace chrome
 (`WorkspaceShell` + the `ModuleDock`) around the active **module** — Meet /
-Bracket / Display / Settings — chosen by route and the workspace's module
-status. State is split across four Zustand stores; the tournament store is
-persisted via debounced PUTs to a server-side snapshot.
+Bracket / Display / Entries / Settings — chosen by route and the workspace's
+module status. State is split across five Zustand stores (tournament,
+match-state, UI, preferences, alert); the tournament store is persisted via
+debounced PUTs to a server-side snapshot.
+
+This file covers the **operator console** only. The public entrant tier is a
+separate app with different rules (no client JavaScript, no stores, no
+`apiClient`) — see [`entrant/README.md`](./entrant/README.md) and
+[the entrant tier](../../docs/architecture/entrant-tier.md).
 
 ## Top-level shape
 
@@ -45,7 +51,7 @@ frontend/src/
 
 ## State model
 
-Four stores, split by lifetime + persistence:
+Five stores, split by lifetime + persistence:
 
 | Store | File | Persistence | What it holds |
 |---|---|---|---|
@@ -53,6 +59,7 @@ Four stores, split by lifetime + persistence:
 | Match state | `store/matchStateStore.ts` | `/match-state` PUT on every mutation (no debounce) | live-ops match transitions (called / started / finished) |
 | UI | `store/uiStore.ts` | none — ephemeral | solver HUD, toast queue, drag pins, validation snapshots |
 | Preferences | `store/preferencesStore.ts` | `localStorage` | per-device theme + density |
+| Alert | `store/alertStore.ts` | none — ephemeral | the Alerts & Activity rail: live advisory `conditions` + a ring-buffered `activity` trail |
 
 Selectors that span stores live in `store/selectors.ts`.
 

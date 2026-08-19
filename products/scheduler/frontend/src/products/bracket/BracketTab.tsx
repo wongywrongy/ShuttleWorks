@@ -21,7 +21,7 @@ import { useBracket } from '../../hooks/useBracket';
 import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
-import { reconcileBracketRoster } from './bracketMigration';
+import { healBracketRosterNames, reconcileBracketRoster } from './bracketMigration';
 import { ConfigSurface, LockedFieldset } from '../../platform/settings/ConfigSurface';
 import { EngineConfigForm } from '../../platform/settings/EngineConfigForm';
 import { LockRibbon } from '../../components/status/LockRibbon';
@@ -33,11 +33,6 @@ import { BracketDrawsTab } from './BracketDrawsTab';
 import { BracketMatchesTab } from './BracketMatchesTab';
 import { BracketViewHeader } from './BracketViewHeader';
 import { DrawView, type BracketLayoutMode } from './DrawView';
-import { ScheduleView } from './ScheduleView';
-import { LiveView } from './LiveView';
-import { BracketScheduleHeader } from './BracketScheduleHeader';
-import { BracketMatchesTable } from './BracketMatchesTable';
-import { BracketScheduleSidebar } from './BracketScheduleSidebar';
 import { BracketEmptyState } from './BracketEmptyState';
 import { BracketInlineNotice } from './BracketInlineNotice';
 
@@ -115,33 +110,21 @@ function BracketTabBody() {
     }
   }, [data, eventId, searchParams]);
 
-  const [selectedPlayUnitId, setSelectedPlayUnitId] = useState<string | null>(null);
-
-  // Drop the selection when the selected play unit is GONE (regenerate, reset).
-  //
-  // This used to key on `[data]` and clear unconditionally, on the assumption
-  // that `data`'s reference only changes on a regenerate. It doesn't: `useBracket`
-  // POLLS every 2.5s and replaces `data` wholesale each time, so the effect wiped
-  // the operator's selection roughly twice a second-and-a-half. Clicking a chip on
-  // the Plan timeline looked like a dead handler — the ring appeared and then
-  // silently vanished (audit finding D1). Comparing CONTENT, not identity, keeps
-  // the selection across polls while still clearing it when the draw really changes.
-  // (The Schedule timeline aggregates chips from EVERY event, so a selection
-  // does not need clearing on an event switch — only when its unit is gone.)
-  useEffect(() => {
-    if (
-      selectedPlayUnitId &&
-      !data?.play_units.some((pu) => pu.id === selectedPlayUnitId)
-    ) {
-      setSelectedPlayUnitId(null);
-    }
-  }, [data, selectedPlayUnitId]);
+  // The effect above settles `eventId` one render AFTER `data` lands, so the
+  // event Select would see '' first — which it maps to `undefined`, i.e. an
+  // uncontrolled Radix root that then flips to controlled (React warns), and
+  // the Draw canvas flashes its "No draw generated" empty state. Resolve the
+  // id at render; the state stays the operator's choice once it exists.
+  const activeEventId =
+    data?.events.find((e) => e.id === eventId)?.id ?? data?.events[0]?.id ?? '';
 
   // First-load migration: if we have a legacy bracket with participants
   // but no bracketPlayers in store yet, extract them once.
-  // The ``bracketRosterMigrated`` flag in the store ensures this runs
-  // at most once per bracket load and does NOT re-fire on every 2.5s
-  // poll (``data`` reference changes but the flag stays true).
+  // The ``bracketRosterMigrated`` flag in the store keeps the EXTRACTION to
+  // once per bracket, so a 2.5s poll doesn't re-derive a roster the operator
+  // has since edited. The name-repair pass below it is not gated by the flag
+  // — see ``healBracketRosterNames`` for why a one-shot persisted migration
+  // needs one — and is a no-op (same array back) on every healthy poll.
   const bracketPlayers = useTournamentStore((s) => s.bracketPlayers);
   const setBracketPlayers = useTournamentStore((s) => s.setBracketPlayers);
   const bracketRosterMigrated = useTournamentStore((s) => s.bracketRosterMigrated);
@@ -149,15 +132,24 @@ function BracketTabBody() {
 
   useEffect(() => {
     if (!data) return;
-    if (bracketRosterMigrated) return;
-    if (bracketPlayers.length > 0) return;
     if (data.participants.length === 0) return;
-    const derived = reconcileBracketRoster(data);
-    if (derived.length > 0) {
-      setBracketPlayers(derived);
+    if (!bracketRosterMigrated && bracketPlayers.length === 0) {
+      const derived = reconcileBracketRoster(data);
+      if (derived.length > 0) {
+        setBracketPlayers(derived);
+      }
+      setBracketRosterMigrated(true);
+      return;
     }
-    setBracketRosterMigrated(true);
-  }, [data, bracketPlayers.length, bracketRosterMigrated, setBracketPlayers, setBracketRosterMigrated]);
+    // Already migrated — but the migration's OUTPUT is persisted, so a
+    // bracket migrated by an older build still carries whatever that build
+    // resolved, and the one-shot flag meant no later fix could ever reach it
+    // (defect V3: raw slugs surviving in the roster list, the draw picker and
+    // the match detail panel). Repair is idempotent and returns the same
+    // array when there is nothing to do, so this costs one scan per poll.
+    const healed = healBracketRosterNames(bracketPlayers, data);
+    if (healed !== bracketPlayers) setBracketPlayers(healed);
+  }, [data, bracketPlayers, bracketRosterMigrated, setBracketPlayers, setBracketRosterMigrated]);
 
   // ``activeTab`` is normalized to a ``bracket-*`` id by
   // ``TournamentPage`` once kind resolves; fall back to 'setup'
@@ -194,11 +186,7 @@ function BracketTabBody() {
 
   // Setup, Roster, and Events do NOT depend on bracket-events data.
   // Draw/Schedule/Live render the events' draws/Gantts; they need data.
-  const needsBracketData =
-    view === 'draw' ||
-    view === 'matches' ||
-    view === 'schedule' ||
-    view === 'live';
+  const needsBracketData = view === 'draw' || view === 'matches';
   if (needsBracketData && !data) {
     return (
       <div className="min-h-full bg-card">
@@ -222,16 +210,14 @@ function BracketTabBody() {
 
   return (
     <div className="flex h-full flex-col bg-card">
-      {/* Setup / Roster / Events own their header strips (SettingsShell
-          or tab-local) — rendering the view header there produced a
-          double-header stack the meet never shows. */}
-      {data && (view === 'draw' || view === 'schedule' || view === 'live') && (
+      {/* Setup / Roster / Events own their tab-local header strips —
+          rendering the view header there produced a double-header
+          stack the meet never shows. */}
+      {data && view === 'draw' && (
         <BracketViewHeader
-          view={view}
           data={data}
-          eventId={eventId}
+          eventId={activeEventId}
           onEventId={setEventId}
-          onRefresh={refresh}
           drawLayout={drawLayout}
           onDrawLayout={setDrawLayout}
         />
@@ -243,16 +229,17 @@ function BracketTabBody() {
           message={error}
         />
       )}
-      {/* Re-key on the active view so each sub-tab switch re-runs the
-          ``animate-block-in`` entry — matches the meet's per-tab
-          remount. Keyed on ``view`` (not ``activeTab``) so the
-          normalization transient — one render where ``activeTab`` is
-          still a stale non-bracket id — doesn't cause a spurious
-          remount. ``BracketViewHeader`` sits OUTSIDE this re-keyed
-          div, so the event selector persists across switches. */}
+      {/* Re-key on the active view so each sub-tab switch remounts clean —
+          matches the meet's per-tab remount. The swap is a HARD CUT: sub-tab
+          clicks are MOTION.md §2's High frequency tier, and §6 names this
+          case. Keyed on ``view`` (not ``activeTab``) so the normalization
+          transient — one render where ``activeTab`` is still a stale
+          non-bracket id — doesn't cause a spurious remount.
+          ``BracketViewHeader`` sits OUTSIDE this re-keyed div, so the event
+          selector persists across switches. */}
       <div
         key={view}
-        className="min-h-0 flex-1 overflow-auto animate-block-in"
+        className="min-h-0 flex-1 overflow-auto"
       >
         {view === 'setup' && (
           <ConfigSurface
@@ -306,44 +293,12 @@ function BracketTabBody() {
           <div className="h-full overflow-hidden">
             <DrawView
               data={data}
-              eventId={eventId}
+              eventId={activeEventId}
               onChange={setData}
               refresh={refresh}
               layoutMode={drawLayout}
             />
           </div>
-        )}
-        {view === 'schedule' && data && (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <BracketScheduleHeader data={data} />
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <div className="flex min-w-0 flex-1 flex-col">
-                <div className="shrink-0 overflow-x-auto px-4 py-3">
-                  <ScheduleView
-                    data={data}
-                    selectedId={selectedPlayUnitId}
-                    onSelect={setSelectedPlayUnitId}
-                  />
-                </div>
-                <BracketMatchesTable
-                  data={data}
-                  selectedId={selectedPlayUnitId}
-                  onSelect={setSelectedPlayUnitId}
-                />
-              </div>
-              <BracketScheduleSidebar
-                data={data}
-                selectedId={selectedPlayUnitId}
-              />
-            </div>
-          </div>
-        )}
-        {view === 'live' && data && (
-          <LiveView
-            data={data}
-            onChange={setData}
-            refresh={refresh}
-          />
         )}
       </div>
     </div>

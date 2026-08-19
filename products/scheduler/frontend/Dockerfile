@@ -6,15 +6,24 @@
 # shared @scheduler/design-system package so `npm ci` resolves the full
 # workspace graph the same way it does on the developer's machine.
 #
-# Stage 1: build the React app with node:20-alpine. We copy lockfile +
+# Stage 1: build the React app with node:22-alpine. We copy lockfile +
 # every workspace's package.json FIRST so `npm ci` lands on its own
 # cacheable layer — source edits below don't bust it.
+#
+# 22, not 20: `vite.config.ts` imports `rollup-plugin-visualizer`, whose
+# `engines.node` is `>=22` with no `^20` branch at all, so this image was
+# building the production bundle on an engine its own build plugin excludes.
+# Nothing caught it — CI runs node 22 (`.github/workflows/ci.yml`) and never
+# builds this image, so the two drifted apart silently while the shared root
+# lockfile moved on. `entrant/tests/deployStacks.test.ts` now pins every app
+# image's node major to CI's.
+#
 # Stage 2: serve the compiled assets with the nginx-unprivileged image,
 # which runs as UID 101 by default and listens on port 8080 (non-root
 # can't bind to <1024). Compose remaps 80:8080 so users still hit
 # http://localhost.
 
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 

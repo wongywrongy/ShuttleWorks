@@ -156,9 +156,15 @@ def endpoint_app(tmp_path, monkeypatch):
     from database.models import Tournament
     from database.session import SessionLocal
     from repositories.local import LocalRepository
+    from services.auth import ensure_bootstrap_user
 
     session = SessionLocal()
     try:
+        # ``tournament_members.user_id`` is an FK to ``users``, so the
+        # bootstrap operator needs its real row before it can own anything
+        # — the same call ``app.main``'s lifespan makes at startup, which
+        # this fixture skips by building the router itself.
+        ensure_bootstrap_user(session)
         session.add(Tournament(id=_TID, data={}))
         session.commit()
         repo = LocalRepository(session)

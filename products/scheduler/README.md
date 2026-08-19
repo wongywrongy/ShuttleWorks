@@ -1,10 +1,13 @@
 # CP-SAT Tournament Scheduler
 
-> **Note (2026-06):** This product is now a **workspace control plane** — the Hub lists your
-> workspaces; each enables **modules** (Meet / Bracket / Display). The text below describes the
-> **Meet** module. See the root [`README.md`](../../README.md#workspaces--modules--the-control-plane)
-> for the workspace model and [`../../docs/superpowers/specs/`](../../docs/superpowers/specs) for
-> the design record.
+> **Note (2026-06, updated 2026-08):** This product is now a **workspace control plane** — the Hub
+> lists your workspaces; each enables **modules** (Meet / Bracket / Display / Entries). The text
+> below describes the **Meet** module. See the root
+> [`README.md`](../../README.md#workspaces--modules--the-control-plane) for the workspace model and
+> [`../../docs/superpowers/specs/`](../../docs/superpowers/specs) for the design record.
+>
+> The public entrant site lives in [`entrant/`](./entrant) and is documented in
+> [the entrant tier](../../docs/architecture/entrant-tier.md).
 
 A single-day inter-school dual / tri-meet scheduler for badminton (and adjacent racquet sports). Built on Google OR-Tools CP-SAT with an interval-variable formulation, it produces optimal court assignments for tournaments where the same players play multiple events back-to-back.
 
@@ -37,7 +40,7 @@ It's designed for the operator running the day from a laptop in the corner of th
 
 ## Quick start
 
-Requires Docker (with Compose v2) and — for dev mode only — Node 20+.
+Requires Docker (with Compose v2) and — for dev mode only — Node 22+.
 
 ### Production (Docker)
 

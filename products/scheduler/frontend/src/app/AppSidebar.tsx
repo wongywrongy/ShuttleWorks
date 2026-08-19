@@ -58,8 +58,8 @@ export function AppSidebar() {
       <div className="mt-2 flex flex-1 flex-col items-center gap-1">
         <Link
           to="/settings"
-          title="Settings"
-          aria-label="Global settings"
+          title="Account"
+          aria-label="Account"
           aria-current={onSettings ? 'page' : undefined}
           data-testid="global-settings-link"
           className={railItemClass(onSettings)}
@@ -68,11 +68,14 @@ export function AppSidebar() {
         </Link>
       </div>
 
-      {/* Account */}
+      {/* Who you are signed in as. The gear above is the Account surface's nav
+          item and owns the word "Account"; this chip names the person, which
+          is the fact it actually carries and the only thing that tells the two
+          /settings links apart in a screen reader. */}
       <Link
         to="/settings?section=profile"
         title={identity}
-        aria-label="Account"
+        aria-label={identity}
         className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-2xs font-semibold text-muted-foreground hover:text-foreground"
       >
         {initial}

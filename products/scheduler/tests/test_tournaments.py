@@ -640,11 +640,16 @@ def test_shared_row_keeps_original_owner_name(client):
     from database.models import Tournament, TournamentMember
     from database.session import SessionLocal
     from app.dependencies import LOCAL_DEV_USER_UUID
+    from services.auth import ensure_bootstrap_user
 
     other_owner_uuid = uuid.uuid4()
     shared_id = uuid.uuid4()
     session = SessionLocal()
     try:
+        # The membership below is hand-seeded rather than earned through
+        # the API, so nothing has materialized the bootstrap operator yet
+        # — and ``tournament_members.user_id`` is an FK to ``users``.
+        ensure_bootstrap_user(session)
         session.add(Tournament(
             id=shared_id,
             data={},
@@ -1013,3 +1018,100 @@ def test_bracket_clear_atomic_rollback_on_write_failure(client, monkeypatch):
     ]
     # The config edit must not have applied either (atomic all-or-nothing).
     assert data["config"]["defaultRestMinutes"] == 30
+
+
+# ---- Backup retention, download and delete (SP-CONSOLE-2 WSB-3) ---------
+
+
+def test_manual_backup_survives_any_number_of_automatic_writes(client):
+    """The failure O-5 found in the wild: ten routine writes during setup
+    evicted the snapshot a director took deliberately that morning, which is
+    the one entry the feature exists for."""
+    created = client.post("/tournaments", json={"name": "A"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("seed"))
+
+    manual = client.post(f"/tournaments/{tid}/state/backup").json()
+    assert manual["created"] is True
+
+    # Far more automatic writes than the keep window.
+    for i in range(25):
+        client.put(f"/tournaments/{tid}/state", json=_basic_state(f"T{i}"))
+
+    entries = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+    names = [e["filename"] for e in entries]
+    assert manual["filename"] in names
+    assert any(e["origin"] == "manual" for e in entries)
+
+
+def test_automatic_backups_thin_to_one_per_hour_beyond_the_keep_window(client):
+    """A bounded list is not the same as a useful one. Beyond the newest N,
+    automatic rows keep one per hour so a mistake noticed at 4pm still has
+    something from the morning to go back to."""
+    import datetime as _dt
+
+    from database.session import SessionLocal
+    from database.models import TournamentBackup
+
+    created = client.post("/tournaments", json={"name": "A"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("seed"))
+
+    # Plant a day's worth of automatic rows: 6 per hour across 8 hours.
+    session = SessionLocal()
+    try:
+        base = _dt.datetime(2026, 8, 10, 9, 0, tzinfo=_dt.timezone.utc)
+        for hour in range(8):
+            for minute in range(0, 60, 10):
+                session.add(
+                    TournamentBackup(
+                        tournament_id=uuid.UUID(tid),
+                        filename=f"auto-{hour:02d}{minute:02d}.json",
+                        snapshot={"x": 1},
+                        size_bytes=8,
+                        origin="auto",
+                        created_at=base + _dt.timedelta(hours=hour, minutes=minute),
+                    )
+                )
+        session.commit()
+    finally:
+        session.close()
+
+    # One more state write triggers rotation.
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("trigger"))
+
+    entries = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+    stamps = [e["modifiedAt"] for e in entries]
+    # Bounded…
+    assert len(entries) < 20
+    # …and it still reaches back across the day rather than the last few minutes.
+    assert min(stamps) < max(stamps)
+    assert any(s.startswith("2026-08-10T09") for s in stamps), stamps
+
+
+def test_backup_download_returns_the_snapshot_without_replacing_anything(client):
+    created = client.post("/tournaments", json={"name": "A"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("v1"))
+    filename = client.post(f"/tournaments/{tid}/state/backup").json()["filename"]
+
+    r = client.get(f"/tournaments/{tid}/state/backups/{filename}")
+    assert r.status_code == 200
+    assert r.headers["content-disposition"].endswith(f'filename="{filename}"')
+    assert isinstance(r.json(), dict)
+
+    # Non-destructive: the workspace is untouched.
+    assert client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+
+
+def test_backup_delete_removes_one_row_and_404s_for_an_unknown_name(client):
+    created = client.post("/tournaments", json={"name": "A"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("v1"))
+    filename = client.post(f"/tournaments/{tid}/state/backup").json()["filename"]
+
+    assert client.delete(f"/tournaments/{tid}/state/backups/{filename}").status_code == 204
+    remaining = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+    assert filename not in [e["filename"] for e in remaining]
+
+    assert client.delete(f"/tournaments/{tid}/state/backups/nope.json").status_code == 404

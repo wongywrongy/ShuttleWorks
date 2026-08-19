@@ -1,79 +1,71 @@
 /**
- * Flat-row match editor. No <table>, no card wrapper — each match
- * renders as a flex row with `border-b` only. Column-label row sits
- * above the match rows with the same `px-5` rhythm.
+ * Flat-row match LIST. No <table>, no card wrapper — each match renders as a
+ * flex row with `border-b` only. Column-label row sits above the match rows
+ * with the same `px-5` rhythm.
  *
- * Player cells: comma-separated underlined names with a small × in
- * muted grey after each, no pills. An inline "＋ add" link opens the
- * picker dropdown for adding more players.
+ * THE ROW IS A SUMMARY, NOT AN EDITOR (console-IA §0, §1). It used to carry a
+ * live Select, a text input, four player buttons and five delete buttons per
+ * match — ten controls a row, each calling `stopPropagation` specifically so
+ * the row click could not open the detail pane. That is the surface the owner
+ * described as "a direct row replacement", and it is why `✕ remove player`
+ * and `✕ remove match` ended up 23px apart at the right edge. Every editor
+ * now lives in `MatchDetailPanel`, which the row click opens; what is left
+ * here reads, and the only control in a row is the armed match delete.
  *
  * Search/Add-match/Export live in the page-header row owned by
  * `MatchesTab` — those affordances do NOT render here. This component
  * subscribes to the same `?q=` search param as the page header so the
  * URL is the shared source of truth.
  */
-import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
-import { Check, Warning } from '@phosphor-icons/react';
-import { Select } from '@scheduler/design-system/components';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { Warning } from '@phosphor-icons/react';
 import {
   BandedTable,
   ColumnHeaderRow,
   DetailDock,
-  MATCH_CELL,
-  MATCH_LIST_COLUMNS,
-  PickerPopover,
-  STATUS_CLASS,
-  STATUS_LABEL,
+  MatchStatusFilter,
+  MEET_MATCH_CELL,
+  MEET_MATCH_LIST_COLUMNS,
+  MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
+  MatchStatus,
+  parseMatchStatusFilter,
+  ScoreLane,
+  setsWinner,
   type BandedTableGroup,
   type MatchListStatus,
+  type SetPair,
 } from '../../../components/control-plane';
+import { formatPlayerName } from '../../../lib/names';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import { usePlayerMap } from '../../../store/selectors';
-import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
+import type { MatchDTO, PlayerDTO } from '../../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../../hooks/useSearchParamState';
 import { useDisruptions } from './useDisruptions';
-import { EVENT_LABEL, EVENT_ORDER, isDoublesRank } from '../roster/positionGrid/helpers';
+import { EVENT_LABEL, EVENT_ORDER } from '../roster/positionGrid/helpers';
 import { MatchDetailPanel } from './MatchDetailPanel';
 import { meetMatchStatus } from './meetMatchStatus';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 import { getActiveAssignments } from '../../../lib/getActiveAssignments';
-import { EYEBROW_CLASS } from '../../../lib/utils';
-
-/** Side capacity derived from the event rank. Singles = 1, doubles =
- *  2, unknown rank = 2 (let the operator fill it; validation will flag
- *  any oversized state). */
-function capacityForRank(rank: string | null | undefined): number {
-  if (!rank?.trim()) return 2;
-  return isDoublesRank(rank) ? 2 : 1;
-}
 
 /** Stable empty-array reference so MatchRow's useMemo deps don't churn
  *  when a match has no disruptions. */
 const EMPTY_ISSUES: MatchIssue[] = [];
 
-function playerLabel(p: PlayerDTO, groups: RosterGroupDTO[]): string {
-  const school = groups.find((g) => g.id === p.groupId)?.name ?? '?';
-  return `${p.name || '(unnamed)'} · ${school}`;
-}
-
 export function MatchesSpreadsheet({
   pendingFocusId,
   onFocusConsumed,
 }: {
-  /** Match ID whose row should auto-focus its event field after
-   *  mount. Set by MatchesTab after "+ Add match" so the operator can
-   *  pick the rank for the new row without hunting for it. */
+  /** Match ID whose detail pane should open after mount. Set by MatchesTab
+   *  after "+ Add match" so the operator lands on the new match's editor
+   *  instead of hunting for the row. */
   pendingFocusId?: string | null;
-  /** Called by the row that consumes the focus directive so the
-   *  parent can clear `pendingFocusId`. */
+  /** Called once the directive is consumed so the parent can clear it. */
   onFocusConsumed?: () => void;
 } = {}) {
   const matches = useTournamentStore((s) => s.matches);
   const players = useTournamentStore((s) => s.players);
-  const groups = useTournamentStore((s) => s.groups);
-  const updateMatch = useTournamentStore((s) => s.updateMatch);
   const deleteMatch = useTournamentStore((s) => s.deleteMatch);
   const schedule = useTournamentStore((s) => s.schedule);
   const matchStates = useMatchStateStore((s) => s.matchStates);
@@ -84,6 +76,11 @@ export function MatchesSpreadsheet({
 
   // Subscribes to the same URL-backed search the page header writes to.
   const [searchQuery] = useSearchParamState('q', '');
+  // Status facet (?status=): the filter strip above the list. Same URL
+  // contract as `?q=` — no debounce needed for a click, but consistency
+  // beats a second mechanism.
+  const [statusParam, setStatusParam] = useSearchParamState('status', '');
+  const statusFilter = parseMatchStatusFilter(statusParam);
   // Legacy filter params kept for URL backward compatibility — not
   // currently surfaced in any UI; if the user lands with these set, the
   // matches list still respects them.
@@ -93,12 +90,35 @@ export function MatchesSpreadsheet({
 
   const playerById = usePlayerMap();
 
+  // One status per match, computed once — feeds the filter strip counts,
+  // the status facet, and each row's Status cell.
+  const statusById = useMemo(() => {
+    const map = new Map<string, MatchListStatus>();
+    for (const m of matches) {
+      map.set(m.id, meetMatchStatus(m.id, assignedIds, matchStates));
+    }
+    return map;
+  }, [matches, assignedIds, matchStates]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<MatchListStatus, number> = {
+      done: 0,
+      live: 0,
+      ready: 0,
+      pending: 0,
+    };
+    for (const s of statusById.values()) counts[s] += 1;
+    return counts;
+  }, [statusById]);
+
   const filteredMatches = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     const eventActive = eventFilter.size > 0;
     const schoolActive = schoolFilter.size > 0;
     const typeActive = typeFilter.size > 0;
-    if (!q && !eventActive && !schoolActive && !typeActive) return matches;
+    const statusActive = statusFilter !== 'all';
+    if (!q && !eventActive && !schoolActive && !typeActive && !statusActive)
+      return matches;
 
     const playerName = (id: string) =>
       playerById.get(id)?.name?.toLowerCase() ?? '';
@@ -128,15 +148,24 @@ export function MatchesSpreadsheet({
       if (typeActive) {
         if (!typeFilter.has(m.matchType ?? 'dual')) return false;
       }
+      if (statusActive && statusById.get(m.id) !== statusFilter) return false;
       return true;
     });
-  }, [matches, searchQuery, eventFilter, schoolFilter, typeFilter, playerById]);
+  }, [
+    matches,
+    searchQuery,
+    eventFilter,
+    schoolFilter,
+    typeFilter,
+    statusFilter,
+    statusById,
+    playerById,
+  ]);
 
-  const config = useTournamentStore((s) => s.config);
   const disruptions = useDisruptions();
 
-  // Selected match — a click on a row's background/# cell (not its inline
-  // editors) opens the right-docked match DetailPanel. Derived find so a
+  // Selected match — a click ANYWHERE in a row opens the right-docked match
+  // DetailPanel, which is where the match is edited. Derived find so a
   // deleted match auto-dismisses the panel. Memoized so a re-render that
   // doesn't touch `matches`/`selectedId` doesn't re-scan the full match
   // array every time.
@@ -146,19 +175,14 @@ export function MatchesSpreadsheet({
     [matches, selectedId],
   );
 
-  // Configured event ranks — derived from `config.rankCounts`. Memoized so every
-  // row gets a STABLE `configuredRanks` reference (the React Compiler is not
-  // enabled here, so without this the array was rebuilt every render and
-  // defeated `MatchRow`'s memo on every keystroke).
-  const configuredRanks = useMemo<string[]>(() => {
-    const ranks: string[] = [];
-    if (config?.rankCounts) {
-      for (const [prefix, count] of Object.entries(config.rankCounts)) {
-        for (let i = 1; i <= (count ?? 0); i++) ranks.push(`${prefix}${i}`);
-      }
-    }
-    return ranks;
-  }, [config?.rankCounts]);
+  // "+ Add match" lands the operator on the new match's editor. It used to
+  // focus the row's own event Select; the editors have moved, so the pane
+  // opens instead — same intent, one surface.
+  useEffect(() => {
+    if (!pendingFocusId) return;
+    setSelectedId(pendingFocusId);
+    onFocusConsumed?.();
+  }, [pendingFocusId, onFocusConsumed]);
 
   // Group the filtered matches by event prefix so each discipline gets
   // its own collapsible section. Section order follows EVENT_ORDER; any
@@ -172,7 +196,7 @@ export function MatchesSpreadsheet({
     const groupsByPrefix = new Map<string, MatchDTO[]>();
     for (const m of filteredMatches) {
       const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
-      const key = prefix || '—';
+      const key = prefix || '–';
       if (!groupsByPrefix.has(key)) groupsByPrefix.set(key, []);
       groupsByPrefix.get(key)!.push(m);
     }
@@ -183,11 +207,11 @@ export function MatchesSpreadsheet({
       ),
     ];
     return orderedKeys.map((key) => {
-      const label = key === '—' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
+      const label = key === '–' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
       return {
         key,
         label,
-        code: key === '—' ? undefined : key,
+        code: key === '–' ? undefined : key,
         items: groupsByPrefix.get(key)!,
         testId: `match-group-${label}`,
       };
@@ -215,20 +239,33 @@ export function MatchesSpreadsheet({
 
   return (
     <>
-      {/* @container/table: the column-priority classes in MATCH_CELL query
+      {/* @container/table: the column-priority classes in MEET_MATCH_CELL query
           THIS wrapper's width, so columns collapse as the detail dock takes
           room — not just when the window shrinks. */}
-      <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col @container/table">
+        <MatchStatusFilter
+          counts={statusCounts}
+          active={statusFilter}
+          onChange={(v) => setStatusParam(v === 'all' ? '' : v)}
+          testIdPrefix="matches"
+        />
+        <div className="min-h-0 flex-1 overflow-auto">
         {filteredMatches.length === 0 ? (
           <>
-            <ColumnHeaderRow columns={MATCH_LIST_COLUMNS} />
+            {/* ColumnHeaderRow publishes role="row"/"columnheader" — they need
+                the table they claim to live in even with no rows under them. */}
+            <div role="table" aria-colcount={MEET_MATCH_LIST_COLUMNS.length}>
+              <div role="rowgroup">
+                <ColumnHeaderRow columns={MEET_MATCH_LIST_COLUMNS} />
+              </div>
+            </div>
             <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-              No matches match the current search.
+              No matches match the current filters.
             </div>
           </>
         ) : (
           <BandedTable
-            columns={MATCH_LIST_COLUMNS}
+            columns={MEET_MATCH_LIST_COLUMNS}
             groups={tableGroups}
             rowId={(m) => m.id}
             onRowClick={(m) =>
@@ -243,27 +280,30 @@ export function MatchesSpreadsheet({
             renderRow={(m) => (
               <MatchRow
                 match={m}
-                index={matches.indexOf(m)}
-                status={meetMatchStatus(m.id, assignedIds, matchStates)}
+                status={statusById.get(m.id) ?? 'pending'}
+                sets={matchStates[m.id]?.sets}
+                score={matchStates[m.id]?.score}
                 players={players}
-                groups={groups}
-                configuredRanks={configuredRanks}
                 issues={issuesFor(m)}
-                autoFocus={m.id === pendingFocusId}
-                onFocusConsumed={onFocusConsumed}
-                onUpdate={updateMatch}
                 onDelete={deleteMatch}
               />
             )}
           />
         )}
+        </div>
       </div>
-      <DetailDock open={selectedMatch != null}>
+      {/* Floor derived from MEET_MATCH_LIST_COLUMNS, not hand-picked: the old 560
+          default sat under the 672 `@2xl` tier, so selecting a match deleted
+          the `#` and `Status` columns. */}
+      <DetailDock
+        open={selectedMatch != null}
+        minContentWidth={MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
+      >
         {selectedMatch ? (
           <MatchDetailPanel
             key={selectedMatch.id}
             match={selectedMatch}
-            status={meetMatchStatus(selectedMatch.id, assignedIds, matchStates)}
+            status={statusById.get(selectedMatch.id) ?? 'pending'}
             onClose={() => setSelectedId(null)}
           />
         ) : null}
@@ -274,83 +314,59 @@ export function MatchesSpreadsheet({
 
 /* =========================================================================
  * MatchRow — the CELLS of one match row. The row shell (the canonical
- * banded row classes, `group` hover reveals, the disruption accent
- * stripe, click-to-select) is owned by the BandedTable shell in the
- * parent; every inline editor here stops click propagation so editing
- * never opens the match detail panel.
+ * banded row classes, `group` hover reveals, the disruption accent stripe,
+ * click-to-select) is owned by the BandedTable shell in the parent.
+ *
+ * Every cell here READS. Nothing in it stops click propagation, because
+ * there is nothing left that would need to: the whole row, edge to edge, is
+ * one target that opens the match's detail pane.
  * ========================================================================= */
 // Memoized: with many rows, a search keystroke (or any store write) re-renders
 // the parent; without memo every row re-rendered in full. Props are stable
-// references (zustand actions, memoized configuredRanks, the EMPTY_ISSUES
-// fallback), so unchanged rows now skip re-render.
+// references (zustand actions, the EMPTY_ISSUES fallback), so unchanged rows
+// now skip re-render.
 const MatchRow = memo(function MatchRow({
   match,
-  index,
   status,
+  sets,
+  score,
   players,
-  groups,
-  configuredRanks,
   issues,
-  autoFocus,
-  onFocusConsumed,
-  onUpdate,
   onDelete,
 }: {
   match: MatchDTO;
-  index: number;
   status: MatchListStatus;
+  /** Recorded set scores from the match state — present once finished. On
+   *  DONE rows they REPLACE the status pill (G6: scores + winner dot say
+   *  "done"; a pill restating it is paid-for redundancy). */
+  sets?: SetPair[];
+  /** Aggregate sets-won score — the PERSISTED meet result (per-set detail
+   *  is session-only until D19 lands). "2-0" in the lane beats a bare
+   *  DONE pill, and keeps the meet and bracket status columns speaking
+   *  the same language (owner ruling, P4 review). */
+  score?: SetPair;
   players: PlayerDTO[];
-  groups: RosterGroupDTO[];
-  /** Ranks defined in `config.rankCounts` — the select populates from
-   *  this list. Empty array → degrade to free-text input. */
-  configuredRanks: string[];
   /** Pre-computed disruption issues for this match from the global
    *  `useDisruptions` feed. Routing through the hook keeps the
    *  per-row flag and the TabBar badge from drifting out of sync. */
   issues: MatchIssue[];
-  /** When true on mount, focus the event field. Used by the
-   *  "+ Add match" flow to land focus on the new row. */
-  autoFocus?: boolean;
-  onFocusConsumed?: () => void;
-  onUpdate: (id: string, patch: Partial<MatchDTO>) => void;
   onDelete: (id: string) => void;
 }) {
-  // Ref typed loosely — the event field may render as a Radix Select
-  // trigger (button, configured ranks present) or an input (free-text
-  // fallback). Both inherit `focus()` from HTMLElement.
-  const eventFieldRef = useRef<HTMLButtonElement | HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!autoFocus) return;
-    eventFieldRef.current?.focus();
-    onFocusConsumed?.();
-    // The directive is a one-shot; ignore changes to onFocusConsumed
-    // after the initial mount (avoids re-firing if the parent
-    // changes its callback identity).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFocus]);
-
-  // The current rank may be (a) blank, (b) one of `configuredRanks`,
-  // or (c) a legacy free-text value no longer in the configured list.
-  // For (c) we keep the existing value visible in the select via a
-  // dedicated "current" option so the operator isn't surprised by
-  // their data silently disappearing.
-  const currentRank = match.eventRank ?? '';
-  const rankInConfigured =
-    !currentRank || configuredRanks.includes(currentRank);
-
   // Per-row disruption surfacing — partner-switch detection, side-count
   // mismatches, cross-side conflicts, stale player references. Issues
   // come from the global `useDisruptions` feed (consumed by the parent),
   // so the per-row Warning icon and the TabBar badge always agree.
   const severity = maxSeverity(issues);
-  const sideCapacity = capacityForRank(match.eventRank);
+  const laneSets =
+    status !== 'done' ? null : sets?.length ? sets : score ? [score] : null;
+  const scored = laneSets != null;
+  const winner = scored ? setsWinner(laneSets) : null;
 
   return (
     <>
       <span
-        className={`flex ${MATCH_CELL.warnGutter} shrink-0 items-center justify-center`}
-        aria-hidden={issues.length === 0}
+        role="cell"
+        className={`flex ${MEET_MATCH_CELL.warnGutter} shrink-0 items-center justify-center`}
         title={
           issues.length > 0
             ? issues.map((i) => `• ${i.message}`).join('\n')
@@ -368,368 +384,122 @@ const MatchRow = memo(function MatchRow({
           />
         ) : null}
       </span>
-      <span className={`${MATCH_CELL.number} text-xs text-muted-foreground tabular-nums`}>
-        {match.matchNumber ?? index + 1}
+      <span
+        role="cell"
+        className={`${MEET_MATCH_CELL.event} text-2sm font-semibold text-accent sw-num`}
+      >
+        {match.eventRank?.trim() || (
+          <span className="text-xs font-normal italic text-muted-foreground">
+            unset
+          </span>
+        )}
       </span>
-      {configuredRanks.length > 0 ? (
-        // `display: contents` wrapper — layout-transparent, but catches
-        // clicks from the Select trigger AND its portaled options (React
-        // events bubble through the component tree) so picking an event
-        // never opens the row's detail panel.
-        <span className="contents" onClick={(e) => e.stopPropagation()}>
-          <Select
-            triggerRef={eventFieldRef as React.RefObject<HTMLButtonElement>}
-            value={currentRank}
-            onValueChange={(v) =>
-              onUpdate(match.id, { eventRank: v || undefined })
-            }
-            options={[
-              ...configuredRanks.map((r) => ({ value: r, label: r })),
-              // Surface legacy/unknown current value so it doesn't vanish.
-              ...(!rankInConfigured && currentRank
-                ? [{ value: currentRank, label: `${currentRank} (legacy)` }]
-                : []),
-            ]}
-            clearable
-            size="sm"
-            ariaLabel="Event"
-            triggerClassName={`${MATCH_CELL.event} border-transparent px-1.5 py-0.5 text-accent font-semibold sw-num hover:border-border/60 focus:bg-card`}
-          />
-        </span>
-      ) : (
-        <input
-          ref={eventFieldRef as React.RefObject<HTMLInputElement>}
-          value={currentRank}
-          onChange={(e) =>
-            onUpdate(match.id, { eventRank: e.target.value || undefined })
-          }
-          onClick={(e) => e.stopPropagation()}
-          placeholder="MS1, WD2…"
-          aria-label="Event"
-          className={[
-            MATCH_CELL.event,
-            'rounded-sm border border-transparent px-1.5 py-0.5 text-sm font-semibold text-accent sw-num outline-none',
-            'transition-colors duration-fast ease-brand',
-            'hover:border-border/60 focus:border-accent focus:bg-card',
-          ].join(' ')}
-        />
-      )}
-      <PlayerCellEditor
+      <PlayerCellSummary
         side="Side A"
-        selected={match.sideA ?? []}
-        onChange={(ids) => onUpdate(match.id, { sideA: ids })}
+        ids={match.sideA ?? []}
         players={players}
-        groups={groups}
-        capacity={sideCapacity}
-        eligibleForRank={match.eventRank}
+        winner={winner === 'A'}
       />
-      <PlayerCellEditor
+      <PlayerCellSummary
         side="Side B"
-        selected={match.sideB ?? []}
-        onChange={(ids) => onUpdate(match.id, { sideB: ids })}
+        ids={match.sideB ?? []}
         players={players}
-        groups={groups}
-        capacity={sideCapacity}
-        eligibleForRank={match.eventRank}
+        winner={winner === 'B'}
       />
       <span
+        role="cell"
         data-testid={`match-status-${match.id}`}
-        className={`${MATCH_CELL.status} ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
+        className={`${MEET_MATCH_CELL.status} flex items-center justify-end`}
       >
-        {STATUS_LABEL[status]}
+        {/* X6-D (supersedes X3): a finished row's score IS its status — no
+            DONE label beside it. Text states and lanes share this slot and
+            both right-align, so the column still scans as one column. */}
+        {laneSets ? (
+          <ScoreLane sets={laneSets} data-testid={`match-score-${match.id}`} />
+        ) : (
+          <MatchStatus status={status} />
+        )}
       </span>
       {/* Two-click arm: deleting a match used to take one hover-revealed click,
           with no confirm and no undo (audit F1). */}
-      <ConfirmDeleteButton
-        label={match.eventRank ? `match ${match.eventRank}` : 'this match'}
-        onConfirm={() => onDelete(match.id)}
-        className={MATCH_CELL.actionGutter}
-        testId={`match-delete-${match.id}`}
-      />
+      <span role="cell" className="contents">
+        <ConfirmDeleteButton
+          label={match.eventRank ? `match ${match.eventRank}` : 'this match'}
+          onConfirm={() => onDelete(match.id)}
+          className={MEET_MATCH_CELL.actionGutter}
+          testId={`match-delete-${match.id}`}
+        />
+      </span>
     </>
   );
 });
 
-/* =========================================================================
- * PlayerCellEditor — comma-separated underlined names with inline × per
- * name. No pills, no wrapping element. "＋ add" link opens the picker
- * dropdown for adding more players.
- * ========================================================================= */
-/** Single picker entry — shared between "Eligible" and "All other"
- *  sections of the dropdown to keep the option styling identical. */
-function PickerRow({
-  player,
-  groups,
-  selected,
-  onClick,
-}: {
-  player: PlayerDTO;
-  groups: RosterGroupDTO[];
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left text-xs',
-        'transition-colors duration-fast ease-brand',
-        selected ? 'bg-accent/10 text-accent' : 'text-foreground hover:bg-muted/40',
-      ].join(' ')}
-    >
-      <span>{playerLabel(player, groups)}</span>
-      {selected ? (
-        <Check aria-label="Selected" className="h-3.5 w-3.5 text-accent" />
-      ) : null}
-    </button>
-  );
-}
 
-function PlayerCellEditor({
+/* =========================================================================
+ * PlayerCellSummary — one side, read only: the players' names, comma
+ * separated. Names ONLY.
+ *
+ * The cell used to print each player's SCHOOL beside the name (once after
+ * the last name when a doubles pair shared one — the `uniformSchool` rule,
+ * which existed solely to de-duplicate it). Owner ruling, 2026-08-12: "the
+ * side A and side B name for every row is too much. we dont need to list it.
+ * waste of space." It was 31 characters a side, a row, for
+ * "Nashville Badminton Association" — a column of identical strings, since a
+ * dual meet has exactly two schools and the sides ARE the schools. The
+ * school stays one click away, on the player card in the detail pane
+ * (`MatchSideSection`), which is where the rest of the player record lives.
+ *
+ * This cell used to be `PlayerCellEditor`: a name button per player, an
+ * inline `✕` per player, a "＋ add" link and a portaled picker, plus a
+ * hand-written rule about which clicks inside it were allowed to reach the
+ * row. All of that moved to `MatchSideSection` in the detail pane. The cell
+ * now holds no controls, so every pixel of it opens the pane.
+ * ========================================================================= */
+function PlayerCellSummary({
   side,
-  selected,
-  onChange,
+  ids,
   players,
-  groups,
-  capacity = 2,
-  eligibleForRank,
+  winner = false,
 }: {
   side: string;
-  selected: string[];
-  onChange: (ids: string[]) => void;
+  ids: string[];
   players: PlayerDTO[];
-  groups: RosterGroupDTO[];
-  /** Max players this side can hold. 1 = singles event (single-select
-   *  semantics, picking a new player replaces the current one,
-   *  picker auto-closes); 2 = doubles event (multi-select up to 2).
-   *  Default 2 lets the editor work for new rows with no event rank
-   *  yet — validation will flag any oversized state. */
-  capacity?: number;
-  /** When set, the picker surfaces players who hold this rank in
-   *  their roster `ranks[]` as a top-of-list "Eligible for {rank}"
-   *  section. The rest of the rostered players appear below grouped
-   *  by school. Ties the match editor to the Roster page — operators
-   *  see who's actually configured for the event they're editing
-   *  without having to remember. */
-  eligibleForRank?: string | null;
+  /** Marks this side as the recorded winner (G6 winner dot). */
+  winner?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const cellRef = useRef<HTMLDivElement | null>(null);
-  const selectedPlayers = useMemo(
-    () =>
-      selected
-        .map((id) => players.find((p) => p.id === id))
-        .filter(Boolean) as PlayerDTO[],
-    [selected, players],
-  );
-  const atCapacity = selected.length >= capacity;
-
-  const toggle = (id: string) => {
-    if (selected.includes(id)) {
-      // Always allow removal.
-      onChange(selected.filter((s) => s !== id));
-      return;
-    }
-    // Adding. Enforce capacity:
-    //   • singles (capacity = 1) → single-select: replace existing.
-    //     Auto-close the picker after the swap — "decisive" UX since
-    //     there's nothing else to pick on this side.
-    //   • doubles (capacity = 2) → multi-select up to 2: append if
-    //     room, no-op otherwise (operator must remove first). Picker
-    //     stays open for the partner pick.
-    if (capacity === 1) {
-      onChange([id]);
-      setOpen(false);
-      return;
-    }
-    if (selected.length < capacity) {
-      onChange([...selected, id]);
-    }
-  };
-
-  // Partition players for the picker:
-  //   eligible = players whose roster `ranks[]` includes the match's
-  //              event rank. Tied to the Roster page — this is the
-  //              "what the previous page says" list.
-  //   rest     = everyone else, grouped by school as the fallback.
-  // When eligibleForRank is undefined, eligible is empty and the
-  // picker behaves like before (all-by-school).
-  const eligible = useMemo(() => {
-    if (!eligibleForRank) return [] as PlayerDTO[];
-    return players.filter((p) => (p.ranks ?? []).includes(eligibleForRank));
-  }, [players, eligibleForRank]);
-
-  const restByGroup = useMemo(() => {
-    const eligibleIds = new Set(eligible.map((p) => p.id));
-    const by = new Map<string, PlayerDTO[]>();
-    for (const p of players) {
-      if (eligibleIds.has(p.id)) continue;
-      if (!by.has(p.groupId)) by.set(p.groupId, []);
-      by.get(p.groupId)!.push(p);
-    }
-    return by;
-  }, [players, eligible]);
+  const named = ids
+    .map((id) => players.find((p) => p.id === id))
+    .filter(Boolean) as PlayerDTO[];
 
   return (
-    // Clicks on the cell's INTERACTIVE content (name buttons, ×, ＋ add,
-    // the picker dropdown) must never bubble to the row's open-detail-panel
-    // handler — but the cell wrapper is much wider than its content, and a
-    // click on its EMPTY space is a row-background click and SHOULD open
-    // the panel (SP-D7 live finding: a 536px-wide swallow-all made most of
-    // the row read as click-dead). While the picker is open, every click in
-    // the cell is editor interaction.
-    <div
-      ref={cellRef}
+    <span
+      role="cell"
       data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
-      className={`relative ${MATCH_CELL.side}`}
-      onClick={(e: ReactMouseEvent<HTMLElement>) => {
-        const target = e.target as HTMLElement;
-        if (open || target.closest('button, input, [data-player-picker]')) {
-          e.stopPropagation();
-        }
-      }}
+      className={`${MEET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed`}
     >
-      <PickerPopover open={open} onOpenChange={setOpen}>
-      <PickerPopover.Anchor asChild>
-      <div className="flex flex-wrap items-baseline gap-x-1 text-sm leading-relaxed">
-        {selectedPlayers.length === 0 ? (
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="text-xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:text-accent"
-          >
-            ＋ add player
-          </button>
-        ) : (
-          selectedPlayers.map((p, i) => {
-            const groupName = groups.find((g) => g.id === p.groupId)?.name ?? '';
-            // Doubles partners are (almost) always same-school — repeating
-            // the school per name is noise. When every selected player
-            // shares one school, show it once, after the last name.
-            const uniformSchool =
-              selectedPlayers.length > 1 &&
-              selectedPlayers.every((sp) => sp.groupId === selectedPlayers[0].groupId);
-            const showSchool =
-              groupName !== '' && (!uniformSchool || i === selectedPlayers.length - 1);
-            return (
-            <span key={p.id} className="inline-flex items-baseline">
-              <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="text-foreground transition-colors duration-fast ease-brand hover:text-accent"
-                title={`Click to edit ${side}`}
-              >
-                {p.name || '—'}
-                {showSchool ? (
-                  <span className="ml-1 text-2xs text-muted-foreground">{groupName}</span>
-                ) : null}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggle(p.id);
-                }}
-                aria-label={`Remove ${p.name}`}
-                // Zero width at rest so the trailing comma hugs the name
-                // ("Kim, Novak" not "Kim , Novak"); expands on row hover.
-                className="w-0 overflow-hidden text-muted-foreground opacity-0 transition-opacity duration-fast ease-brand hover:text-destructive group-hover:ml-0.5 group-hover:w-auto group-hover:opacity-100"
-              >
-                ×
-              </button>
-              {i < selectedPlayers.length - 1 ? (
-                <span className="text-muted-foreground">,</span>
-              ) : null}
+      {named.length === 0 ? (
+        <span className="text-xs italic text-muted-foreground">No players</span>
+      ) : (
+        named.map((p, i) => (
+          <span key={p.id} className="inline-flex items-baseline">
+            {/* BWF presentation ("NAKAMURA Kei") — display-only; the stored
+                name, search and exports stay as typed. Pairs join with the
+                slash the mock (and every draw sheet) uses.
+
+                The winning side is marked by WEIGHT, not by the green dot
+                that used to float before its first name: at scan speed a
+                green dot reads as live/present, which is the one thing a
+                finished match is not (MAT-3). The outcome itself lives in
+                the result cell now. */}
+            <span className={winner ? 'font-semibold text-foreground' : 'text-foreground'}>
+              {p.name ? formatPlayerName(p.name) : '–'}
             </span>
-            );
-          })
-        )}
-        {selectedPlayers.length > 0 && !atCapacity ? (
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-label={`Add player to ${side}`}
-            className="text-xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:text-accent"
-          >
-            ＋ add
-          </button>
-        ) : null}
-      </div>
-      </PickerPopover.Anchor>
-      <PickerPopover.Panel data-player-picker guardRef={cellRef}>
-        <>
-          {/* Eligible-for-rank section — these are the players the
-              Roster page has configured for this match's event. Top
-              of the picker so the natural candidate is one click
-              away. Empty when no rank set or none are configured. */}
-          {eligible.length > 0 ? (
-            <div className="mb-1">
-              <div className="mb-0.5 flex items-baseline justify-between px-1 text-3xs font-semibold uppercase tracking-wider text-accent">
-                <span>Eligible for {eligibleForRank}</span>
-                <span className="text-muted-foreground tabular-nums">
-                  {eligible.length}
-                </span>
-              </div>
-              <div className="space-y-0.5">
-                {eligible.map((p) => (
-                  <PickerRow
-                    key={p.id}
-                    player={p}
-                    groups={groups}
-                    selected={selected.includes(p.id)}
-                    onClick={() => toggle(p.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {/* "All other rostered" section — partner-switch flexibility
-              for cases where a non-eligible player still needs to be
-              assigned (mid-tournament reassignments, edge cases). The
-              validator will flag the resulting `stale-rank` warning
-              so the operator knows they've stepped outside the
-              configured roster. */}
-          {restByGroup.size > 0 ? (
-            <div>
-              {eligible.length > 0 ? (
-                <div className="mb-0.5 px-1 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  All other rostered
-                </div>
-              ) : null}
-              {[...restByGroup.entries()].map(([groupId, list]) => {
-                const g = groups.find((gr) => gr.id === groupId);
-                return (
-                  <div key={groupId} className="mb-1 last:mb-0">
-                    <div className="mb-0.5 px-1 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {g?.name ?? 'Unassigned'}
-                    </div>
-                    <div className="space-y-0.5">
-                      {list.map((p) => (
-                        <PickerRow
-                          key={p.id}
-                          player={p}
-                          groups={groups}
-                          selected={selected.includes(p.id)}
-                          onClick={() => toggle(p.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-
-          {players.length === 0 ? (
-            <div className="px-1 py-2 text-xs text-muted-foreground">
-              No players. Add some in the Roster tab.
-            </div>
-          ) : null}
-        </>
-      </PickerPopover.Panel>
-      </PickerPopover>
-    </div>
+            {i < named.length - 1 ? (
+              <span className="px-1 text-muted-foreground">/</span>
+            ) : null}
+          </span>
+        ))
+      )}
+    </span>
   );
 }

@@ -42,7 +42,7 @@ function mount(refObj: { current: string }) {
 }
 
 /** Set a module's tri-state via its radiogroup, the way an operator does. */
-function setModule(label: string, state: 'On' | 'Later' | 'Off') {
+function setModule(label: string, state: 'On' | 'Off') {
   const group = screen.getByRole('radiogroup', { name: label });
   fireEvent.click(within(group).getByRole('radio', { name: state }));
 }
@@ -96,12 +96,14 @@ describe('NewWorkspacePage', () => {
     returnCreated('w1', [m('meet', 'enabled'), m('bracket', 'available'), m('display', 'enabled')]);
     const loc = { current: '' };
     mount(loc);
-    setModule('Bracket', 'Later');
+    setModule('Bracket', 'Off');
     setModule('Display', 'On');
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(loc.current).toBe('/tournaments/w1/overview'));
     const body = vi.mocked(apiClient.createTournament).mock.calls[0][0];
     expect(body.kind).toBe('meet');
+    // Off seeds as `available`, not `disabled` (R-B): at creation the two
+    // said the same thing, so the form stopped asking.
     expect(seedFor(body)).toMatchObject({
       meet: 'enabled',
       bracket: 'available',
@@ -119,14 +121,14 @@ describe('NewWorkspacePage', () => {
     await waitFor(() => expect(loc.current).toBe('/tournaments/w2/overview'));
     const body = vi.mocked(apiClient.createTournament).mock.calls[0][0];
     expect(body.kind).toBe('bracket');
-    expect(seedFor(body)).toMatchObject({ bracket: 'enabled', meet: 'disabled' });
+    expect(seedFor(body)).toMatchObject({ bracket: 'enabled', meet: 'available' });
   });
 
   it('routes to Modules when nothing is enabled, and warns first', async () => {
     returnCreated('w4', [m('meet', 'available'), m('bracket', 'available'), m('display', 'disabled')]);
     const loc = { current: '' };
     mount(loc);
-    setModule('Meet', 'Later');
+    setModule('Meet', 'Off');
     // Warn, never block — the state is recoverable from Modules.
     expect(screen.getByTestId('modules-hint')).toHaveTextContent(/opens on Modules/i);
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));

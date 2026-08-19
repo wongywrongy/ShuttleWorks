@@ -274,8 +274,8 @@ def detect_running_behind(
             kind="running_behind",
             severity=severity,
             summary=(
-                f"Tournament is running {int(avg_delay)} min behind schedule "
-                f"(over the last {len(recent)} matches)"
+                f"Tournament is running {_humanize_minutes(int(avg_delay))} "
+                f"behind schedule (over the last {len(recent)} matches)"
             ),
             detail=(
                 "Consider compressing remaining transitions or warm-restarting "
@@ -288,6 +288,15 @@ def detect_running_behind(
             detectedAt=now_iso(),
         )
     ]
+
+
+def _humanize_minutes(minutes: int) -> str:
+    """A delay a human can read. "286294 min" is a number, not a duration."""
+    if minutes < 120:
+        return f"{minutes} min"
+    if minutes < 2880:
+        return f"{round(minutes / 60)} h"
+    return f"{round(minutes / 1440)} days"
 
 
 def detect_start_delay(
@@ -331,7 +340,7 @@ def detect_start_delay(
             kind="start_delay_detected",
             severity=severity,
             summary=(
-                f"Tournament started {int(delay_min)} min late "
+                f"Tournament started {_humanize_minutes(int(delay_min))} late "
                 f"({actual_start.strftime('%H:%M')} vs scheduled "
                 f"{scheduled_start.strftime('%H:%M')})"
             ),

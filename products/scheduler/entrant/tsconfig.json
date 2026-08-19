@@ -1,0 +1,26 @@
+{
+  "include": ["app/**/*.ts", "app/**/*.tsx", "tests/**/*.ts", ".react-router/types/**/*"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"],
+    "rootDirs": [".", "./.react-router/types"],
+    "moduleDetection": "force",
+    // `tests/helpers/entryPage.fixture.json` — the one entry-page projection
+    // shared by `tests/entry.render.test.ts` and `scripts/measure-page-weight.mjs`,
+    // in JSON because those two consumers share no module system.
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  }
+}

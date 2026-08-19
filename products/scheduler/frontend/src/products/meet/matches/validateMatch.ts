@@ -54,13 +54,13 @@ export function validateMatch(
         issues.push({
           severity: 'warning',
           code: `undersized-${side.tag}`,
-          message: `Side ${side.tag} needs a partner — ${rank} requires ${expected}.`,
+          message: `Side ${side.tag} needs a partner: ${rank} requires ${expected}.`,
         });
       } else if (side.ids.length > expected) {
         issues.push({
           severity: 'error',
           code: `oversized-${side.tag}`,
-          message: `Side ${side.tag} has ${side.ids.length} players — ${rank} allows ${expected}.`,
+          message: `Side ${side.tag} has ${side.ids.length} players: ${rank} allows ${expected}.`,
         });
       }
     }
@@ -96,7 +96,7 @@ export function validateMatch(
         issues.push({
           severity: 'warning',
           code: `stale-rank-${id}`,
-          message: `${p.name || '(unnamed)'} no longer holds ${rank} — reassign.`,
+          message: `${p.name || '(unnamed)'} no longer holds ${rank}: reassign.`,
         });
       }
     }

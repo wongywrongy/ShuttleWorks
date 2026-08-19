@@ -128,7 +128,7 @@ def submit_solve_job(
         raise http_error(
             429,
             ErrorCode.SOLVE_QUOTA_EXCEEDED,
-            "too many solves running — wait for one to finish",
+            "too many solves running: wait for one to finish",
             extra={"activeJobs": exc.held, "limit": exc.limit},
         )
     except ActiveSolveJobConflict as exc:

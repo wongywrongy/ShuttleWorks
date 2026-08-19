@@ -3,6 +3,13 @@
  * persistent global sidebar to the left of the routed content. The page in the
  * <Outlet/> owns its own scroll; the layout owns the viewport height (so pages
  * use `h-full`, not `h-screen`, to avoid a double scrollbar).
+ *
+ * This `<main>` is THE main landmark for every authenticated page — the only
+ * element on an authed screen outside it is the global nav rail, which is
+ * exactly what a main landmark is supposed to exclude. Routed pages must not
+ * open a second one (the HTML spec allows only one per document and screen
+ * readers announce both); `AppShell` deep-links past its own chrome with a
+ * plain `<div id="main">` instead.
  */
 import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';

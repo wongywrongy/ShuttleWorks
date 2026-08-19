@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, StatusBar, StatusPill } from '@scheduler/design-system';
+import { Button } from '@scheduler/design-system';
 import { useBracket } from '../../hooks/useBracket';
 import { useBracketApi } from '../../api/bracketClient';
 import { useTournamentId } from '../../hooks/useTournamentId';
@@ -29,11 +29,16 @@ import {
   DetailDock,
   EmptyState,
   colClass,
+  dockMinContentWidth,
   type BandedListColumn,
   type BandedTableGroup,
 } from '../../components/control-plane';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { Modal } from '../../components/common/Modal';
+import {
+  MAX_EVENT_CODE_LENGTH,
+  validateEventCode,
+} from '../../platform/settings/MeetEventsSection';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import type { PickedSingle, PickedPair } from './ParticipantPicker';
 import { DrawDetailPanel } from './DrawDetailPanel';
@@ -62,23 +67,49 @@ interface DrawRow {
   isSwiss: boolean;
   swissRounds?: number;
   roundComplete: boolean;
-  completed: boolean;
 }
 
 /** Column set for the draws table. The trailing unlabeled column hosts the
  *  per-row action buttons (Generate / Configure / Next round / Open). */
 // Fixed cells are `shrink-0` so a docked detail pane can never crush them
-// into overlapping their neighbors — only Format (truncates) and Progress
-// (overflow-hidden) give way.
+// into overlapping their neighbors. Nothing here ellipsises: Format wraps
+// (the row grows) and yields entirely at priority 3; Progress is a
+// fraction + segmented bar (DRW-N1) that cannot wrap by construction —
+// the four-chip tally it replaced line-wrapped at three digits.
+//
+// Progress is FIXED-WIDTH and Format is the grower (defect D4). The two were
+// the other way round, which put the progress content — which cannot
+// reflow — in whatever the row had left over: a 104px sliver colliding
+// with the STATUS chip at 1280px, and a 904px expanse at full width.
 const DRAW_COLUMNS: BandedListColumn[] = [
-  { label: 'Code', className: 'w-16 shrink-0' },
-  { label: 'Format', className: 'w-44 min-w-0', priority: 3 },
+  // THE ROW'S WIDTH BUDGET. At 1280 the content box is ~950px, and these seven
+  // columns have to live inside it. Sized from what each actually holds, after
+  // two failures worth recording:
+  //
+  //   w-16 (64px) for Code wrapped "md-classic" into "md-" / "classic".
+  //   NAME_COL_MIN (160px) fixed that and overran the budget by 34px, which
+  //   `flex-1 min-w-0` Format absorbed by collapsing to ZERO: its header ink
+  //   painted over SIZE, and "Single elimination" broke to one character per
+  //   line, making every row 273px tall.
+  //
+  // So Code is sized for a draw id (~14 chars) rather than for a person's
+  // name, and Format carries a real floor instead of `min-w-0` so it can never
+  // be the crush victim again. Total with Format at its floor: 904px.
+  { label: 'Code', className: 'w-28 shrink-0' },
+  { label: 'Format', className: 'min-w-[5rem] flex-1', priority: 3 },
   { label: 'Size', className: 'w-12 shrink-0 text-right', priority: 2 },
   { label: 'Entered', className: 'w-16 shrink-0 text-right' },
-  { label: 'Progress', className: 'min-w-0 flex-1' },
+  { label: 'Progress', className: 'w-48 shrink-0' },
   { label: 'Status', className: 'w-28 shrink-0 text-right' },
-  { label: '', className: 'w-80 shrink-0' },
+  // `ml-auto` keeps the action cluster on the right edge in the narrow case
+  // where Format has yielded and no column is growing.
+  { label: '', className: 'ml-auto w-56 shrink-0' },
 ];
+
+/** Content floor for the draws dock, derived from DRAW_COLUMNS. The old
+ *  hand-picked 760 sat under the 896 `@4xl` tier `Format` uses, so selecting
+ *  a draw deleted the Format column. */
+const DRAWS_DOCK_MIN_CONTENT_WIDTH = dockMinContentWidth(DRAW_COLUMNS);
 
 export function BracketDrawsTab() {
   const { data, setData, refresh } = useBracket();
@@ -140,11 +171,6 @@ export function BracketDrawsTab() {
           isSwiss,
           swissRounds,
           roundComplete,
-          completed:
-            !!counts &&
-            counts.done > 0 &&
-            roundComplete &&
-            (!isSwiss || (swissRounds !== undefined && ev.rounds.length >= swissRounds)),
         };
       }),
     [events, countsByEvent],
@@ -287,16 +313,24 @@ export function BracketDrawsTab() {
               rowAttrs={(row) => ({ 'aria-label': `Draw ${row.ev.id}` })}
               renderRow={(row) => (
                 <>
+                  {/* Body ink, not accent. The code is an identifier, and in
+                      accent it read as the row's link — so each row offered
+                      two link-shaped things and only the trailing "Open draw"
+                      actually navigated (DRW-2). Accent stays for controls
+                      that go somewhere. */}
                   <span
-                    className="w-16 shrink-0 truncate text-sm font-semibold text-accent sw-num"
-                    title={row.ev.id}
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[0])} break-words text-2sm font-semibold text-foreground sw-num`}
                   >
                     {row.ev.id}
                   </span>
                   {/* Cell visibility derives from the column spec (colClass)
                       so header and body can never drift on a priority
                       change. */}
-                  <span className={`${colClass(DRAW_COLUMNS[1])} truncate text-xs text-muted-foreground`}>
+                  <span
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[1])} break-words text-xs text-muted-foreground`}
+                  >
                     {formatLabel(row.ev.format)}
                     {row.isSwiss && row.swissRounds !== undefined && row.generated ? (
                       <span className="ml-1.5 sw-num">
@@ -304,11 +338,15 @@ export function BracketDrawsTab() {
                       </span>
                     ) : null}
                   </span>
-                  <span className={`${colClass(DRAW_COLUMNS[2])} text-xs text-muted-foreground sw-num`}>
+                  <span
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[2])} text-xs text-muted-foreground sw-num`}
+                  >
                     {row.targetSize}
                   </span>
                   <span
-                    className={`w-16 shrink-0 text-right text-xs sw-num ${
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[3])} text-right text-xs sw-num ${
                       row.partCount < row.targetSize
                         ? 'text-status-warning'
                         : 'text-muted-foreground'
@@ -316,25 +354,19 @@ export function BracketDrawsTab() {
                   >
                     {row.partCount}/{row.targetSize}
                   </span>
-                  <span className="min-w-0 flex-1 overflow-hidden">
+                  <span role="cell" className={colClass(DRAW_COLUMNS[4])}>
                     {row.counts ? (
-                      <StatusBar
-                        items={[
-                          { tone: 'done', label: 'DONE', count: row.counts.done },
-                          { tone: 'green', label: 'LIVE', count: row.counts.live },
-                          { tone: 'amber', label: 'READY', count: row.counts.ready },
-                          { tone: 'idle', label: 'PEND', count: row.counts.pending },
-                        ]}
-                      />
+                      <DrawProgressCell counts={row.counts} />
                     ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <span className="text-xs text-muted-foreground">–</span>
                     )}
                   </span>
-                  <span className="flex w-28 shrink-0 justify-end">
-                    <StatusPillFor status={row.status} completed={row.completed} />
+                  <span role="cell" className={`${colClass(DRAW_COLUMNS[5])} flex justify-end`}>
+                    <DrawStatusCell status={row.status} />
                   </span>
                   <span
-                    className="flex w-80 shrink-0 items-center justify-end gap-3"
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[6])} flex items-center justify-end gap-3`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ActionCell
@@ -375,7 +407,7 @@ export function BracketDrawsTab() {
                       disabled={!row.generated}
                       data-testid={`bracket-open-draw-${row.ev.id}`}
                       title={row.generated ? `Open the ${row.ev.id} draw` : 'Generate the draw first'}
-                      className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                      className="text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:opacity-40 disabled:no-underline"
                     >
                       Open draw →
                     </button>
@@ -386,10 +418,13 @@ export function BracketDrawsTab() {
           )}
         </div>
 
-        {/* minContentWidth ≈ the draws row's fixed-cell total (with Format
-            collapsed) — below it the dock overlays instead of docking, so
-            the shrink-0 cells never force a squashed/overflowing table. */}
-        <DetailDock open={selectedRow != null} minContentWidth={760}>
+        {/* Below the derived floor the dock overlays instead of docking, so
+            the shrink-0 cells never force a squashed/overflowing table and
+            Format never vanishes just because a row was selected. */}
+        <DetailDock
+          open={selectedRow != null}
+          minContentWidth={DRAWS_DOCK_MIN_CONTENT_WIDTH}
+        >
           {selectedRow ? (
             <DrawDetailPanel
               key={selectedRow.ev.id}
@@ -407,6 +442,7 @@ export function BracketDrawsTab() {
 
       {creating && (
         <NewDrawModal
+          existingIds={events.map((e) => e.id)}
           onClose={() => setCreating(false)}
           onCreate={async ({ id, ...body }) => {
             try {
@@ -482,33 +518,67 @@ function drawCountsByEvent(data: BracketTournamentDTO): Map<string, DrawCounts> 
   return byEvent;
 }
 
-function StatusPillFor({
-  status,
-  completed = false,
-}: {
-  status: BracketEventStatus;
-  completed?: boolean;
-}) {
+/**
+ * DRW-N1: the Progress cell — `done/total` in tabular figures plus a thin
+ * single-line segmented bar (done · live · ready painted in that order;
+ * the unpainted track is pending). Never wraps by construction — the old
+ * four-chip tally line-wrapped at three digits. Exact breakdown lives on
+ * the title tooltip.
+ */
+function DrawProgressCell({ counts }: { counts: DrawCounts }) {
+  const total = counts.done + counts.live + counts.ready + counts.pending;
+  if (total === 0) return <span className="text-xs text-muted-foreground">–</span>;
+  const segments = [
+    { key: 'done', count: counts.done, cls: 'bg-status-success-fg' },
+    { key: 'live', count: counts.live, cls: 'bg-status-live-solid' },
+    { key: 'ready', count: counts.ready, cls: 'bg-status-started' },
+  ];
+  return (
+    <span
+      className="flex min-w-0 items-center gap-2"
+      title={`${counts.done} done · ${counts.live} live · ${counts.ready} ready · ${counts.pending} pending`}
+      data-testid="draw-progress"
+    >
+      <span className="shrink-0 text-xs text-foreground sw-num">
+        {counts.done}/{total}
+      </span>
+      <span className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-sunken">
+        {segments
+          .filter((s) => s.count > 0)
+          .map((s) => (
+            <span
+              key={s.key}
+              className={s.cls}
+              style={{ width: `${(s.count / total) * 100}%` }}
+            />
+          ))}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * DRW-N2 per the X6 ladder: Draft and Generated are pre-live default
+ * states → text, two weights. STARTED is silent — the Progress bar's
+ * live/done segments already say it — and so is the derived Completed:
+ * a full bar with an n/n fraction IS the status (X6-D logic). The
+ * column stays because the state set is genuinely distinct (Phase 0
+ * verified draft | generated | started + derived completion).
+ */
+function DrawStatusCell({ status }: { status: BracketEventStatus }) {
   if (status === 'draft') {
     return (
-      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
+      <span className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
         ○ Draft
       </span>
     );
   }
   if (status === 'generated') {
-    return <StatusPill tone="amber" dot>Generated</StatusPill>;
+    return (
+      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>Generated</span>
+    );
   }
-  // A fully-resolved draw is DONE — the backend event status stays 'started'
-  // (it has no terminal value), so completion is derived from the counters:
-  // every unit resolved, nothing live/ready/pending. Without this the card
-  // pulsed "Started" forever on a finished bracket.
-  if (completed) {
-    return <StatusPill tone="done">Completed</StatusPill>;
-  }
-  // Started = live (matches are being played) — the pulsing dot + own-hue
-  // glow is the handoff pill's live-signal treatment (sw-pulse).
-  return <StatusPill tone="green" dot pulse>Started</StatusPill>;
+  return null;
 }
 
 function ActionCell({
@@ -529,7 +599,8 @@ function ActionCell({
 
   if (status === 'draft') {
     return (
-      // xs (28px) — the only Button height that FITS the 32px banded row;
+      // xs (28px). DRAW_COLUMNS carries no name column, so the row reserves
+      // one line (24px) and this button is what actually sets its height;
       // sm (36px) overflowed the row hairlines and dwarfed the bar controls.
       <Button variant="brand" size="xs" disabled={!eventReady} onClick={onGenerate}>
         Generate
@@ -736,7 +807,7 @@ function FormatCard({
     >
       <span className="flex items-center gap-2">
         <Glyph className={`h-5 w-5 shrink-0 ${selected ? 'text-accent' : 'text-muted-foreground'}`} />
-        <span className="truncate text-sm font-semibold">{descriptor.label}</span>
+        <span className="min-w-0 break-words text-sm font-semibold">{descriptor.label}</span>
         {!descriptor.implemented && (
           <span className="ml-auto shrink-0 text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Planned
@@ -769,15 +840,20 @@ interface NewDrawSubmitBody extends ColumnFieldValues {
  * afterward, then the draw is generated.
  */
 function NewDrawModal({
+  existingIds,
   onClose,
   onCreate,
 }: {
+  /** Draw ids already in this bracket — an upsert onto one of them would
+   *  silently replace that draw. */
+  existingIds: readonly string[];
   onClose: () => void;
   onCreate: (body: NewDrawSubmitBody) => void;
 }) {
   const [id, setId] = useState('');
   const [discipline, setDiscipline] = useState('MS');
   const [format, setFormat] = useState<string>('se');
+  const [errors, setErrors] = useState<{ id?: string; discipline?: string }>({});
   const [values, setValues] = useState<FieldValues>(() =>
     defaultFieldValues(descriptorFor('se')?.fields ?? []),
   );
@@ -792,10 +868,33 @@ function NewDrawModal({
 
   const submit = () => {
     if (!id.trim()) return;
+    // The discipline is the grouping prefix, exactly what Meet calls an event
+    // code — so it gets Meet's own rule (letters only, uppercased,
+    // length-capped) instead of the bare free-text box defaulting to the
+    // literal string "MS" that shipped here (console IA pass, Theme 3).
+    // It is NOT deduped: several draws legitimately share one discipline.
+    const disciplineResult = validateEventCode(discipline, []);
+    if ('error' in disciplineResult) {
+      setErrors({ discipline: disciplineResult.error });
+      return;
+    }
+    // The draw ID is the thing that must be unique — `eventUpsert` onto an
+    // existing id silently REPLACES that draw. Digits are legitimate here
+    // (MS1, MS2, U19), so it takes the cap and the dedupe, not the letters
+    // rule Meet needs because its ranks are prefix+digits.
+    const code = id.trim().toUpperCase();
+    if (code.length > MAX_EVENT_CODE_LENGTH) {
+      setErrors({ id: `Draw IDs are at most ${MAX_EVENT_CODE_LENGTH} characters.` });
+      return;
+    }
+    if (existingIds.includes(code)) {
+      setErrors({ id: `${code} is already a draw.` });
+      return;
+    }
     const { column, config } = splitFieldPayload(descriptor.fields, values);
     onCreate({
-      id: id.trim(),
-      discipline,
+      id: code,
+      discipline: disciplineResult.code,
       format: descriptor.id,
       ...column,
       ...(config ? { config } : {}),
@@ -826,20 +925,41 @@ function NewDrawModal({
               type="text"
               value={id}
               autoFocus
-              onChange={(e) => setId(e.target.value)}
+              onChange={(e) => {
+                setId(e.target.value);
+                setErrors((prev) => ({ ...prev, id: undefined }));
+              }}
               onKeyDown={(e) => e.key === 'Enter' && submit()}
               placeholder="MS"
-              className={FIELD_INPUT_CLASS}
+              aria-invalid={errors.id ? true : undefined}
+              /* `uppercase` styles the placeholder too — normal-case keeps the
+                 hint from shouting. Same treatment as Meet's event-code field. */
+              className={`${FIELD_INPUT_CLASS} uppercase placeholder:normal-case`}
             />
+            {errors.id && (
+              <span role="alert" className="mt-1 block text-2xs text-destructive">
+                {errors.id}
+              </span>
+            )}
           </label>
           <label className="block">
             <span className={FIELD_LABEL_CLASS}>Discipline</span>
             <input
               type="text"
               value={discipline}
-              onChange={(e) => setDiscipline(e.target.value)}
-              className={FIELD_INPUT_CLASS}
+              onChange={(e) => {
+                setDiscipline(e.target.value);
+                setErrors((prev) => ({ ...prev, discipline: undefined }));
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              aria-invalid={errors.discipline ? true : undefined}
+              className={`${FIELD_INPUT_CLASS} uppercase placeholder:normal-case`}
             />
+            {errors.discipline && (
+              <span role="alert" className="mt-1 block text-2xs text-destructive">
+                {errors.discipline}
+              </span>
+            )}
           </label>
         </div>
 

@@ -44,15 +44,37 @@ describe('DrawDetailPanel', () => {
       <DrawDetailPanel ev={ev} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,
     );
     expect(screen.getByText(/Pick participants/i)).toBeInTheDocument();
-    const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[0]);
-    fireEvent.click(checkboxes[1]);
-    fireEvent.click(screen.getByRole('button', { name: /^Commit$/i }));
+    // Options are grouped by initial and sorted: Alex Tan, then Ben Carter.
+    fireEvent.click(screen.getByRole('checkbox', { name: /Ben Carter/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Save participants$/i }));
     await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
     const picks = onCommitPicks.mock.calls[0][0];
     expect(picks).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: 'p-alex' })]),
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'p-alex' }),
+        expect.objectContaining({ id: 'p-ben' }),
+      ]),
     );
+  });
+
+  // Commit REPLACES the event's participants. Opening the picker empty meant
+  // ticking one name dropped everyone already entered.
+  it('opens holding the participants already entered in the draw', () => {
+    render(
+      <DrawDetailPanel ev={ev} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,
+    );
+    expect(screen.getByRole('checkbox', { name: /Alex Tan/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Ben Carter/ })).not.toBeChecked();
+    expect(screen.getByText(/Pick participants \(1\)/i)).toBeInTheDocument();
+  });
+
+  it('groups the roster by initial so a long list is navigable', () => {
+    render(
+      <DrawDetailPanel ev={ev} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,
+    );
+    const picker = screen.getByTestId('participant-picker');
+    expect(within(picker).getByRole('group', { name: 'A' })).toBeInTheDocument();
+    expect(within(picker).getByRole('group', { name: 'B' })).toBeInTheDocument();
   });
 
   it('closes via the panel close button', () => {

@@ -124,8 +124,10 @@ for (const [theme, vars] of [['light', varsOf(lightBlock)], ['dark', varsOf(dark
     check(theme, `status-${st}-fg on surface-raised`, v(`--status-${st}-fg`), v('--surface-raised'), 4.5);
   }
 
-  // Muted-solid board chips: ink on solid fill.
-  for (const fam of ['live', 'called'])
+  // Muted-solid board chips: ink on solid fill. Every role family that can
+  // render as a filled band belongs here — a family added to tokens.css but
+  // not to this list is silently unchecked, and the gate still reports green.
+  for (const fam of ['live', 'called', 'late', 'overdue'])
     check(theme, `status-${fam}-ink on status-${fam}-solid`, v(`--status-${fam}-ink`), v(`--status-${fam}-solid`), 4.5);
 
   // Interaction washes must keep text legible on them (Phase 0a).

@@ -22,6 +22,13 @@ vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({ exportCsvUrl: () => '/mock-export.csv' }),
 }));
 
+// ExcelJS is lazy-imported inside the export; stub the module so the test
+// asserts the PROJECTION handed to it, not a workbook.
+const mockExportMatchesXlsx = vi.fn().mockResolvedValue(undefined);
+vi.mock('../exports/xlsxExports', () => ({
+  exportBracketMatchesXlsx: (...args: unknown[]) => mockExportMatchesXlsx(...args),
+}));
+
 const slot = (participant_id: string | null = null) => ({
   participant_id,
   feeder_play_unit_id: null,
@@ -125,9 +132,9 @@ function makeRichData(): BracketTournamentDTO {
   };
 }
 
-/** The `#` cell of a rendered match row (first w-8 span). */
-const indexOfRow = (row: HTMLElement) =>
-  row.querySelector('.w-8')?.textContent;
+/** The event-label cell of a rendered match row. */
+const labelOfRow = (row: HTMLElement) =>
+  row.querySelector('.w-28')?.textContent;
 
 /** Render BracketMatchesTab within a MemoryRouter for useSearchParamState support. */
 const renderWithRouter = (component: React.ReactElement) =>
@@ -151,37 +158,40 @@ describe('<BracketMatchesTab />', () => {
     expect(screen.getAllByTestId(/^bracket-match-row-/)).toHaveLength(6);
   });
 
-  it('restarts the # index for each event group', () => {
+  it('strips the group discipline prefix from row labels (G6 — no repetition inside a band)', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
-    expect(rows.map(indexOfRow)).toEqual(['1', '2', '3', '1', '2', '3']);
+    // The band header already says MS / WD — row identity is SF1, SF2, F
+    // (both groups, whatever their banding order).
+    expect(rows.map(labelOfRow)).toEqual(['SF1', 'SF2', 'F', 'SF1', 'SF2', 'F']);
+    // The full labels are gone from the rows…
+    expect(screen.queryByText('MS SF1')).toBeNull();
+    // …and the raw id survives as the traceability tooltip.
+    const msSf1 = screen.getByTestId('bracket-match-row-pu-ms-1');
+    expect(labelOfRow(msSf1)).toBe('SF1');
+    expect(msSf1.querySelector('.w-28')).toHaveAttribute('title', 'pu-ms-1');
   });
 
-  it('renders friendly play-unit codes instead of raw ids', () => {
+  it('joins doubles sides with a slash, in BWF presentation (SURNAME Given)', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    for (const code of ['MS SF1', 'MS SF2', 'MS F', 'WD SF1', 'WD SF2', 'WD F']) {
-      expect(screen.getByText(code)).toBeInTheDocument();
-    }
-    // Raw id survives as the traceability tooltip.
-    expect(screen.getByText('MS SF1')).toHaveAttribute('title', 'pu-ms-1');
+    expect(screen.getAllByText('KIM Elle / WU Fay').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('LOPEZ Gia / SATO Hana').length).toBeGreaterThan(0);
   });
 
-  it('joins doubles sides with a slash', () => {
+  it('renders the status column per the X6 ink budget — only LIVE chips', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    expect(screen.getAllByText('Elle Kim / Fay Wu').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Gia Lopez / Hana Sato').length).toBeGreaterThan(0);
-  });
-
-  it('tones the status column per state (done/live/ready/pending)', () => {
-    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    expect(screen.getByText('Done').className).toContain('text-status-done');
-    expect(screen.getByText('Live').className).toContain('text-status-live');
-    for (const el of screen.getAllByText('Ready')) {
-      expect(el.className).toContain('text-status-warning');
-    }
-    for (const el of screen.getAllByText('Pending')) {
+    // LIVE is the one routine container; READY/PENDING are muted text.
+    expect(screen.getByText('Live').className).toContain('bg-status-live-bg');
+    for (const el of [
+      ...screen.getAllByText('Ready'),
+      ...screen.getAllByText('Pending'),
+    ]) {
+      expect(el.className).not.toContain('bg-status-');
       expect(el.className).toContain('text-muted-foreground');
     }
+    // The done row has a result but no recorded sets, so it takes the text
+    // fallback — never a chip (X6-D: with sets it would render the lane).
+    expect(screen.getByText('Done').className).not.toContain('bg-status-');
   });
 
   it('renders unresolved sides as a muted-italic TBD placeholder (Meet placeholder grammar)', () => {
@@ -195,25 +205,62 @@ describe('<BracketMatchesTab />', () => {
     }
   });
 
+  it('names the feeder on an unresolved side instead of printing TBD (BMAT-4)', () => {
+    const data = makeRichData();
+    // The MS final waits on the MS semi. Production draws always carry this
+    // link; the base fixture omits it, which is why the row above still
+    // reads TBD.
+    const finalPu = data.play_units.find((p) => p.id === 'pu-ms-3')!;
+    finalPu.slot_a = { participant_id: null, feeder_play_unit_id: 'pu-ms-1' };
+    renderWithRouter(<BracketMatchesTab data={data} />);
+
+    expect(screen.getByText(/^Winner of /)).toBeInTheDocument();
+    // The other side has no feeder, so it must NOT claim anything — a
+    // feeder-less empty slot reads as "Bye" in sideLabel, which would be a
+    // lie for a round the draw has not built yet.
+    expect(screen.getAllByText('TBD')).toHaveLength(3);
+    expect(screen.queryByText('Bye')).not.toBeInTheDocument();
+  });
+
   it('collapsing a band hides only that band\'s rows', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.click(screen.getByTestId('bracket-match-group-MS-1'));
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
     expect(rows).toHaveLength(3);
-    expect(rows.map(indexOfRow)).toEqual(['1', '2', '3']);
+    for (const row of rows) {
+      expect(row.getAttribute('data-testid')).toMatch(/^bracket-match-row-pu-wd/);
+    }
   });
 
-  it('keeps # numbers stable under search (no renumbering of filtered rows)', () => {
+  it('search filters rows without renumbering anything (row identity is the label)', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.change(screen.getByTestId('bracket-matches-search'), {
       target: { value: 'Carol' },
     });
     const rows = screen.getAllByTestId(/^bracket-match-row-/);
     expect(rows).toHaveLength(1);
-    // pu-ms-2 is the second match of MS-1 — it must keep #2.
+    // pu-ms-2 is MS SF2 — its identity survives filtering as its label.
     expect(rows[0]).toHaveAttribute('data-testid', 'bracket-match-row-pu-ms-2');
-    expect(indexOfRow(rows[0])).toBe('2');
+    expect(labelOfRow(rows[0])).toBe('SF2');
     expect(screen.getByText('· showing 1')).toBeInTheDocument();
+  });
+
+  it('filters by status via the strip, with full-list counts on the chips', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    // Counts come from the FULL list: 1 done, 1 live, 2 ready, 2 pending.
+    expect(screen.getByTestId('bracket-matches-status-all')).toHaveTextContent('All · 6');
+    expect(screen.getByTestId('bracket-matches-status-live')).toHaveTextContent('Live · 1');
+    expect(screen.getByTestId('bracket-matches-status-ready')).toHaveTextContent('Ready · 2');
+
+    fireEvent.click(screen.getByTestId('bracket-matches-status-live'));
+    const rows = screen.getAllByTestId(/^bracket-match-row-/);
+    expect(rows).toHaveLength(1);
+    // pu-wd-1 is WD's first match — its label survives the facet unchanged.
+    expect(rows[0]).toHaveAttribute('data-testid', 'bracket-match-row-pu-wd-1');
+    expect(labelOfRow(rows[0])).toBe('SF1');
+
+    fireEvent.click(screen.getByTestId('bracket-matches-status-all'));
+    expect(screen.getAllByTestId(/^bracket-match-row-/)).toHaveLength(6);
   });
 
   it('shows the no-results message when the search matches nothing', () => {
@@ -222,7 +269,7 @@ describe('<BracketMatchesTab />', () => {
       target: { value: 'zzz-no-such-player' },
     });
     expect(
-      screen.getByText('No matches match the current search.'),
+      screen.getByText('No matches match the current filters.'),
     ).toBeInTheDocument();
     expect(screen.queryAllByTestId(/^bracket-match-row-/)).toHaveLength(0);
   });
@@ -244,13 +291,17 @@ describe('<BracketMatchesTab /> — match detail panel', () => {
     );
   });
 
-  it('shows the selected match\'s read-only status pill in the panel', () => {
+  it('shows the G6 result card for a decided match, the pill for an undecided one', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    // pu-ms-1 has a recorded result → Done.
+    // pu-ms-1 has a recorded result → the Result card replaces the pill
+    // (scores + winner dot say "done"; a pill restating it is redundancy).
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
+    expect(screen.getByTestId('bracket-match-result-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('bracket-match-status-pill')).toBeNull();
+    // An undecided match keeps the read-only pill.
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-2'));
     const pill = screen.getByTestId('bracket-match-status-pill');
-    expect(pill).toHaveTextContent('Done');
-    expect(pill.tagName).toBe('SPAN');
+    expect(pill).toHaveTextContent(/Live|Ready|Pending/);
   });
 
   it('closes the panel via the × button', () => {
@@ -302,5 +353,42 @@ describe('<BracketMatchesTab /> — row-level contingency menu gating', () => {
     expect(
       within(row).getByLabelText('Contingency for MS SF2'),
     ).toBeInTheDocument();
+  });
+});
+
+/* D14 — this surface offered "Export CSV" through a raw <a href> to the API's
+ * /export.csv while every other export in the product produces XLSX. The
+ * label was not the lie; the format was the inconsistency. */
+describe('<BracketMatchesTab /> — export', () => {
+  it('exports XLSX, like every other surface, and says so', async () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    const button = screen.getByTestId('bracket-export-matches');
+    expect(button).toHaveTextContent('Export XLSX');
+    expect(button.tagName).toBe('BUTTON');
+    expect(button).not.toHaveAttribute('href');
+    fireEvent.click(button);
+    await vi.waitFor(() => expect(mockExportMatchesXlsx).toHaveBeenCalledTimes(1));
+    const rows = mockExportMatchesXlsx.mock.calls[0][0];
+    // Same projection the operator is looking at: friendly labels, resolved
+    // names, the status word from the STATUS column.
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: 'MS-1',
+          match: 'MS SF1',
+          sideA: 'Aiko Tan',
+          sideB: 'Ben Cruz',
+          status: 'Done',
+        }),
+      ]),
+    );
+  });
+
+  it('disables the export when the search matches nothing', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    fireEvent.change(screen.getByTestId('bracket-matches-search'), {
+      target: { value: 'zzzz' },
+    });
+    expect(screen.getByTestId('bracket-export-matches')).toBeDisabled();
   });
 });

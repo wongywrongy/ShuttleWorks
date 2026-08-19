@@ -3,9 +3,19 @@ import { liveMatches } from './bracketDisplayData';
 
 /** Read-only "what's playing now" view for the bracket TV — the bracket
  *  analog of the meet display's CourtsView. Oversized match cards, one per
- *  on-court / called bracket match, readable across a gym. No controls. */
-export function BracketLiveView({ data }: { data: BracketTournamentDTO }) {
+ *  on-court / next-up bracket match, readable across a gym. No controls.
+ *
+ *  `isFullscreen` buys the same step up the meet board's court cards take
+ *  once the board owns the whole screen. */
+export function BracketLiveView({
+  data,
+  isFullscreen = false,
+}: {
+  data: BracketTournamentDTO;
+  isFullscreen?: boolean;
+}) {
   const rows = liveMatches(data);
+  const sideSize = isFullscreen ? 'text-5xl' : 'text-3xl';
 
   if (rows.length === 0) {
     return (
@@ -32,23 +42,26 @@ export function BracketLiveView({ data }: { data: BracketTournamentDTO }) {
             <span className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Court {m.court}
             </span>
+            {/* "Next" is the calm state, so it stays a plain muted chip —
+                the warning tint belonged to a "Called" that was never a
+                fact about the data (see bracketDisplayData#liveMatches). */}
             <span
               className={[
                 'rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
                 m.status === 'on-court'
                   ? 'bg-accent/15 text-accent'
-                  : 'bg-status-warning/20 text-status-warning',
+                  : 'border border-border text-muted-foreground',
               ].join(' ')}
             >
-              {m.status === 'on-court' ? 'On court' : 'Called'}
+              {m.status === 'on-court' ? 'On court' : 'Next'}
             </span>
           </div>
           <div className="flex flex-col gap-1.5">
-            <span className="truncate text-3xl font-bold leading-tight text-foreground">
+            <span className={`${sideSize} break-words font-bold leading-tight text-foreground`}>
               {m.sideA}
             </span>
             <span className="text-base font-medium text-muted-foreground">vs</span>
-            <span className="truncate text-3xl font-bold leading-tight text-foreground">
+            <span className={`${sideSize} break-words font-bold leading-tight text-foreground`}>
               {m.sideB}
             </span>
           </div>

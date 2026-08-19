@@ -28,12 +28,13 @@
  *   on the band, once, rather than on every row.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Button } from '@scheduler/design-system';
+import { Button, Notice } from '@scheduler/design-system';
 import { StatusPill } from '../../components/StatusPill';
 import {
   ActionsBar,
   BandedTable,
   EmptyState,
+  NAME_COL_MIN,
   colClass,
   type BandedTableColumn,
 } from '../../components/control-plane';
@@ -56,7 +57,8 @@ import {
 const CONFIRMABLE_FROM = 'pending';
 
 const COLUMNS: BandedTableColumn[] = [
-  { label: 'Entrant', className: 'min-w-0 flex-[2]' },
+  // Entrant carries a person name — it floors at NAME_COL_MIN, not zero.
+  { label: 'Entrant', className: `${NAME_COL_MIN} flex-[2]` },
   { label: 'Event', className: 'w-16' },
   { label: 'State', className: 'w-28' },
   { label: 'Attention', className: 'w-32', priority: 2 },
@@ -67,19 +69,36 @@ const COLUMNS: BandedTableColumn[] = [
 export function EntriesDesk({ tid }: { tid: string }) {
   const canEdit = useCanEdit();
   const [entries, setEntries] = useState<EntryDTO[] | null>(null);
+  // A THIRD state, distinct from "loading" (`entries === null`) and from
+  // "loaded, and there are none" (`entries.length === 0`). The read used to
+  // collapse a rejection into the empty array, and the desk then told the
+  // organiser "0 submitted · No entries yet" while the GET had 500'd on 54
+  // real submissions (2026-08-10 full-scale browser pass). How many entries
+  // exist is UNKNOWN when the read fails; it is never zero.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [result, setResult] = useState<EntryCommitResultDTO | null>(null);
 
   const load = useCallback(async () => {
-    const rows = await apiClient.listEntries(tid);
-    setEntries(rows);
+    try {
+      setEntries(await apiClient.listEntries(tid));
+      setLoadFailed(false);
+    } catch {
+      // Keep whatever rows we already have — a failed refresh doesn't delete
+      // them — but stop presenting the list as complete.
+      setLoadFailed(true);
+    }
   }, [tid]);
 
   useEffect(() => {
     let cancelled = false;
+    // A different workspace's rows are not this one's; drop them rather than
+    // showing them under the new tid while the first read is in flight.
+    setEntries(null);
+    setLoadFailed(false);
     apiClient
       .listEntries(tid)
       .then((rows) => !cancelled && setEntries(rows))
-      .catch(() => !cancelled && setEntries([]));
+      .catch(() => !cancelled && setLoadFailed(true));
     return () => {
       cancelled = true;
     };
@@ -117,7 +136,9 @@ export function EntriesDesk({ tid }: { tid: string }) {
       <ActionsBar
         title="Entries"
         status={
-          entries ? (
+          loadFailed ? (
+            <span className="text-xs text-status-warning-fg">Count unknown</span>
+          ) : entries ? (
             <span className="text-xs text-muted-foreground">
               {entries.length} submitted
             </span>
@@ -136,13 +157,34 @@ export function EntriesDesk({ tid }: { tid: string }) {
           <CommitSummary result={result} nameById={nameById} />
         ) : null}
 
+        {loadFailed ? (
+          <div className="p-5" data-testid="entries-load-error">
+            <Notice
+              tone="warning"
+              title="Entries didn't load"
+              action={
+                <Button size="xs" variant="ghost" onClick={() => void load()}>
+                  Retry
+                </Button>
+              }
+            >
+              This is a failed read, not an empty desk: how many entries this
+              workspace has is unknown until it loads.
+            </Notice>
+          </div>
+        ) : null}
+
         {entries === null ? (
-          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+          loadFailed ? null : (
+            <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+          )
         ) : entries.length === 0 ? (
-          <EmptyState
-            title="No entries yet"
-            body="Entries submitted through this workspace's public entry page land here for review."
-          />
+          loadFailed ? null : (
+            <EmptyState
+              title="No entries yet"
+              body="Entries submitted through this workspace's public entry page land here for review."
+            />
+          )
         ) : (
           <BandedTable
             columns={COLUMNS}
@@ -163,20 +205,23 @@ export function EntriesDesk({ tid }: { tid: string }) {
             rowTestId={(e) => `entry-row-${e.id}`}
             renderRow={(e) => (
               <>
-                <span className={`${colClass(COLUMNS[0])} min-w-0`}>
-                  <span className="block truncate text-xs text-foreground">
+                <span role="cell" className={colClass(COLUMNS[0])}>
+                  <span className="block break-words text-xs text-foreground">
                     {e.playerName}
                   </span>
                 </span>
-                <span className={`${colClass(COLUMNS[1])} text-xs text-muted-foreground`}>
-                  {e.eventCode ?? '—'}
+                <span
+                  role="cell"
+                  className={`${colClass(COLUMNS[1])} text-xs text-muted-foreground`}
+                >
+                  {e.eventCode ?? '–'}
                 </span>
-                <span className={colClass(COLUMNS[2])}>
+                <span role="cell" className={colClass(COLUMNS[2])}>
                   <StatusPill tone={ENTRY_STATE_TONE[e.state]} dot>
                     {ENTRY_STATE_LABEL[e.state]}
                   </StatusPill>
                 </span>
-                <span className={`${colClass(COLUMNS[3])} flex flex-wrap gap-1`}>
+                <span role="cell" className={`${colClass(COLUMNS[3])} flex flex-wrap gap-1`}>
                   {e.pendingReasons.map((code) => (
                     <span
                       key={code}
@@ -191,13 +236,19 @@ export function EntriesDesk({ tid }: { tid: string }) {
                     </span>
                   ))}
                 </span>
+                {/* Free text, so it is the cell most likely to need two
+                    lines — and the one an ellipsis destroys, since a remark's
+                    point is usually its end ("…allergic to latex"). The
+                    column is already priority 3: on a narrow desk it yields
+                    ENTIRELY rather than showing a cut-off version, and where
+                    it is shown it wraps and the row grows. */}
                 <span
-                  className={`${colClass(COLUMNS[4])} min-w-0 truncate text-2xs text-muted-foreground`}
-                  title={e.remarks ?? undefined}
+                  role="cell"
+                  className={`${colClass(COLUMNS[4])} min-w-0 break-words text-2xs text-muted-foreground`}
                 >
                   {e.remarks ?? ''}
                 </span>
-                <span className={`${colClass(COLUMNS[5])}`}>
+                <span role="cell" className={`${colClass(COLUMNS[5])}`}>
                   {canEdit && e.state === CONFIRMABLE_FROM ? (
                     <Button
                       size="xs"
@@ -235,7 +286,7 @@ function CommitSummary({
     >
       <p className="text-xs font-medium text-foreground">
         {committed.length === 0 && skipped.length === 0
-          ? 'Nothing new to commit — every confirmed entry is already on the roster.'
+          ? 'Nothing new to commit: every confirmed entry is already on the roster.'
           : `${committed.length} committed to the roster.`}
       </p>
       {skipped.length > 0 ? (
@@ -245,7 +296,7 @@ function CommitSummary({
               <span className="font-medium text-foreground">
                 {nameById.get(s.id) ?? s.id}
               </span>{' '}
-              skipped — {skipReasonLabel(s.reason)}
+              skipped: {skipReasonLabel(s.reason)}
             </li>
           ))}
         </ul>

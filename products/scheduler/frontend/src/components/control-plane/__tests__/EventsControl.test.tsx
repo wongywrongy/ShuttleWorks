@@ -73,6 +73,84 @@ describe('EventsControl', () => {
     expect(within(mixed).getByText('Not entered')).toBeInTheDocument();
   });
 
+  /**
+   * V2 — the browser pass found the bracket roster panel's EVENTS section
+   * reading "1 entered" over three categories all reading "Not entered", and
+   * DOUBLES setting `aria-expanded=true` over a 10px div with zero children.
+   * Both come from the fixed {MS,WS,MD,WD,XD} table meeting operator-defined
+   * disciplines: an entry outside the five belongs to no category while still
+   * counting, and a category with no draw behind it opens onto nothing.
+   */
+  describe('operator-defined disciplines (V2)', () => {
+    it('gives an entry outside the five its own category instead of dropping it', () => {
+      // The reported state: entered in exactly one event, and every category
+      // saying "Not entered". A badge that counts must be a badge you can see.
+      render(
+        <EventsControl
+          entries={[{ code: 'BS1', type: 'BS' }]}
+          renderTypeEditor={(t) => <div data-testid={`editor-${t}`} />}
+        />,
+      );
+      const own = screen.getByTestId('events-category-BS');
+      expect(within(own).getByText('BS1')).toBeInTheDocument();
+      // And it is reachable: expanding offers the editor for that discipline.
+      fireEvent.click(own);
+      expect(screen.getByTestId('editor-BS')).toBeInTheDocument();
+    });
+
+    it('does not render a category whose codes no event declares', () => {
+      // `types` is the consumer's real universe. With only a BS draw, Doubles
+      // has nothing to offer, so it is absent rather than an inert caret.
+      render(
+        <EventsControl
+          entries={[]}
+          types={['BS']}
+          renderTypeEditor={(t) => <div data-testid={`editor-${t}`} />}
+        />,
+      );
+      expect(screen.getByTestId('events-category-BS')).toBeInTheDocument();
+      expect(screen.queryByTestId('events-category-doubles')).toBeNull();
+      expect(screen.queryByTestId('events-category-singles')).toBeNull();
+      expect(screen.queryByTestId('events-category-mixed')).toBeNull();
+    });
+
+    it('every rendered disclosure opens onto at least one editor', () => {
+      // The contract the empty 10px body broke, stated directly: expand every
+      // category the component chose to render; each must produce a body.
+      render(
+        <EventsControl
+          entries={[{ code: 'BS1', type: 'BS' }]}
+          types={['MS', 'BS']}
+          renderTypeEditor={(t) => <div data-testid={`editor-${t}`}>{t}</div>}
+        />,
+      );
+      const headers = screen.getAllByRole('button', { expanded: false });
+      expect(headers.length).toBeGreaterThan(0);
+      for (const header of headers) {
+        fireEvent.click(header);
+        const body = header.parentElement?.querySelector(
+          '[data-testid^="editor-"]',
+        );
+        expect(body).not.toBeNull();
+      }
+    });
+
+    it('narrows a default category to the codes that exist', () => {
+      // Singles survives on MS alone; the WS row it has no draw for does not
+      // render, so expanding Singles cannot show an empty half.
+      render(
+        <EventsControl
+          entries={[]}
+          types={['MS']}
+          renderTypeEditor={(t) => <div data-testid={`editor-${t}`} />}
+          categoriesOpen={['singles']}
+        />,
+      );
+      expect(screen.getByTestId('editor-MS')).toBeInTheDocument();
+      expect(screen.queryByTestId('editor-WS')).toBeNull();
+    });
+  });
+
   it('honors categoriesOpen as the initial expanded set', () => {
     render(
       <EventsControl

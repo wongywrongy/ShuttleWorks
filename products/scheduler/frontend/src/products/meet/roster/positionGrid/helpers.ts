@@ -23,7 +23,28 @@ import { DISCIPLINE_NAMES } from '../../../../lib/disciplineNames';
 
 // Canonical order lives in lib/eventColors (shared with the bracket's
 // matches list); re-exported here for the meet's existing import sites.
+import { DISCIPLINE_ORDER } from '../../../../lib/eventColors';
 export { DISCIPLINE_ORDER as EVENT_ORDER } from '../../../../lib/eventColors';
+
+/**
+ * The configured events of a meet, in default column order: the canonical
+ * disciplines first (MD/WD/XD/WS/MS), then every OTHER configured event in
+ * `rankCounts` order.
+ *
+ * A meet's events are ITS OWN vocabulary — a junior league configures U10 /
+ * U11, not disciplines. Callers used to intersect `rankCounts` against the
+ * canonical five, which silently dropped every such event: the roster grid
+ * said "No events configured" on a workspace with two, and the roster export
+ * wrote a sheet with no event columns (2026-08-10 browser pass). Events with
+ * a zero count are omitted — that is how an event is turned off.
+ */
+export function defaultEventOrder(counts: Record<string, number>): string[] {
+  const configured = Object.keys(counts).filter((ev) => (counts[ev] ?? 0) > 0);
+  return [
+    ...DISCIPLINE_ORDER.filter((ev) => configured.includes(ev)),
+    ...configured.filter((ev) => !(DISCIPLINE_ORDER as readonly string[]).includes(ev)),
+  ];
+}
 
 export const EVENT_LABEL: Record<
   string,
@@ -55,6 +76,21 @@ export const EVENT_LABEL: Record<
     body:   'bg-amber-50/40 dark:bg-amber-500/5',
   },
 };
+
+/**
+ * Pointer travel (px) before a roster pool row turns into a drag.
+ *
+ * It was 4px, which is INSIDE normal click jitter: a click that drifted four
+ * pixels stopped being a click and became a drag onto whatever cell the
+ * pointer was over (console-IA finding 1.2, the best code-level explanation
+ * of the misclick complaint). 8px is the threshold the platform conventionally
+ * uses and still fires long before a deliberate drag feels sticky.
+ *
+ * Lives here rather than inline in `RosterTab` so it is assertable: jsdom runs
+ * no layout and dispatches no real pointer stream, so a rendering test cannot
+ * observe dnd-kit's activation maths — the number itself is the contract.
+ */
+export const ROSTER_DRAG_ACTIVATION_DISTANCE = 8;
 
 export function isDoubles(prefix: string): boolean {
   return prefix.endsWith('D');

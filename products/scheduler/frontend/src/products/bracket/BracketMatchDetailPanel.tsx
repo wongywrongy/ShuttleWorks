@@ -8,29 +8,38 @@
  * through the canonical `bracketPlayers` roster record via
  * `updateBracketPlayer`). Unresolved feeder slots render a dashed
  * "Not yet determined" placeholder with the "Winner of …" reference;
- * structural byes render "Bye". Below the sides sits the read-only
- * status pill — display only, Operations owns run-state.
+ * structural byes render "Bye".
+ *
+ * State-exclusive blocks (INS-N1): UNFINISHED leads with the read-only
+ * Status section (display only — Operations owns run-state) over the
+ * SIDE A/SIDE B sections; FINISHED renders the Result block as the sole
+ * roster surface, hosting the same interactive member cards on its team
+ * lines. Every block is a `DetailPanel.Section` (SIDE A / SIDE B /
+ * STATUS / RESULT / CONTINGENCY): one label recipe, reached one way.
  */
 import { useMemo, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import {
   DetailPanel,
-  STATUS_CLASS,
-  STATUS_LABEL,
+  MatchStatus,
+  ResultSides,
   type BracketMatchStatus,
+  type MatchReason,
 } from '../../components/control-plane';
 import { useTournamentStore } from '../../store/tournamentStore';
+import { formatBracketSlot } from './formatBracketSlot';
 import type {
+  BracketSetScore,
   BracketTournamentDTO,
   Participant,
   PlayUnitDTO,
 } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { disciplineLabel, sideLabel } from './bracketLabels';
-import { badgesByPlayerId, type BadgeEntry } from './rosterEvents';
+import { badgeForEvent, badgesByPlayerId, type BadgeEntry } from './rosterEvents';
+import { EventBadge } from '../../components/control-plane/EventsControl';
 import {
   BracketAvailabilityEventsFields,
-  FIELD_LABEL_CLASSES,
   type CommitEventFn,
 } from './BracketPlayerFields';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
@@ -95,6 +104,52 @@ export function BracketMatchDetailPanel({
     onCommitEvent,
   };
 
+  // G6 Result card facts: the recorded result + the footer meta strip
+  // (court + planned time), so the pane answers "who won, where, when".
+  const result = data.results.find((r) => r.play_unit_id === pu.id) ?? null;
+  const validSets = Array.isArray(result?.score?.sets)
+    ? result.score.sets.filter(
+        (s): s is BracketSetScore =>
+          !!s && typeof s.sideA === 'number' && typeof s.sideB === 'number',
+      )
+    : [];
+  const winner =
+    result?.winner_side === 'A' || result?.winner_side === 'B'
+      ? result.winner_side
+      : null;
+  const reason: MatchReason | null =
+    result?.reason ?? (result?.walkover ? 'walkover' : null);
+  const assignment = data.assignments.find((a) => a.play_unit_id === pu.id);
+  const meta = assignment
+    ? `Court ${assignment.court_id} · ${formatBracketSlot(assignment.slot_id, data)}`
+    : null;
+
+  // State-exclusive blocks (INS-N1): FINISHED renders the Result block as
+  // the SOLE roster surface — the same interactive member cards the side
+  // sections host, winner by weight, score right-aligned. UNFINISHED keeps
+  // the side sections and leads with where/when it plays (MAT-5).
+  const finished = status === 'done';
+
+  // Side-rail identity (RES-1): the event badge once per side — a bracket
+  // entrant's identity is the event it is seeded into (BMAT-3), and the
+  // seed is the side-differentiating half, per participant not per member.
+  const railBadge = (side: string[] | null, slot: PlayUnitDTO['slot_a']) => {
+    if (!event) return null;
+    const pid =
+      side && side.length > 0
+        ? side[0]
+        : slot.participant_id && slot.participant_id !== '__BYE__'
+          ? slot.participant_id
+          : null;
+    if (!pid) return null;
+    const entry = (event.participants ?? []).find(
+      (p) => p.id === pid || (p.members ?? []).includes(pid),
+    );
+    return (
+      <EventBadge code={badgeForEvent(event, data.events)} seed={entry?.seed} />
+    );
+  };
+
   return (
     <DetailPanel
       variant="docked"
@@ -105,28 +160,62 @@ export function BracketMatchDetailPanel({
       onClose={onClose}
       testId="bracket-match-detail"
     >
-      <div className="flex flex-col gap-3 px-3 py-3">
-        <SideSection label="Side A" side={pu.side_a} slot={pu.slot_a} {...sideProps} />
-        <SideSection label="Side B" side={pu.side_b} slot={pu.slot_b} {...sideProps} />
-        <div className="flex flex-col gap-1">
-          <span className={FIELD_LABEL_CLASSES}>Status</span>
-          {/* Read-only pill — Operations owns run-state; never interactive. */}
-          <span
-            data-testid="bracket-match-status-pill"
-            className={`inline-flex w-fit items-center rounded-sm border border-border bg-card px-2 py-0.5 ${EYEBROW_CLASS} ${STATUS_CLASS[status]}`}
-          >
-            {STATUS_LABEL[status]}
+      {!finished ? (
+        <DetailPanel.Section eyebrow="Status">
+          {/* Read-only — Operations owns run-state; never interactive. */}
+          <span data-testid="bracket-match-status-pill" className="inline-flex w-fit">
+            <MatchStatus status={status} />
           </span>
-        </div>
-        {onRecordContingency && status !== 'done' ? (
-          <ContingencySection
-            sideALabel={sideLabel(pu.side_a, pu.slot_a, nameById, labelById)}
-            sideBLabel={sideLabel(pu.side_b, pu.slot_b, nameById, labelById)}
-            initial={initialContingency ?? null}
-            onRecord={onRecordContingency}
+          {meta ? (
+            <p className="mt-1.5 text-2xs text-muted-foreground">{meta}</p>
+          ) : null}
+        </DetailPanel.Section>
+      ) : null}
+      {finished ? (
+        <DetailPanel.Section eyebrow="Result">
+          <ResultSides
+            sideA={
+              <SidePlayers
+                side={pu.side_a}
+                slot={pu.slot_a}
+                emphasis={winner === 'A'}
+                showBadges={false}
+                {...sideProps}
+              />
+            }
+            sideB={
+              <SidePlayers
+                side={pu.side_b}
+                slot={pu.slot_b}
+                emphasis={winner === 'B'}
+                showBadges={false}
+                {...sideProps}
+              />
+            }
+            railA={railBadge(pu.side_a, pu.slot_a)}
+            railB={railBadge(pu.side_b, pu.slot_b)}
+            sets={validSets}
+            winner={winner}
+            reason={reason}
+            reasonSide={reason && winner ? (winner === 'A' ? 'B' : 'A') : null}
+            meta={meta}
+            data-testid="bracket-match-result-card"
           />
-        ) : null}
-      </div>
+        </DetailPanel.Section>
+      ) : (
+        <>
+          <SideSection label="Side A" side={pu.side_a} slot={pu.slot_a} {...sideProps} />
+          <SideSection label="Side B" side={pu.side_b} slot={pu.slot_b} {...sideProps} />
+        </>
+      )}
+      {onRecordContingency && !finished ? (
+        <ContingencySection
+          sideALabel={sideLabel(pu.side_a, pu.slot_a, nameById, labelById)}
+          sideBLabel={sideLabel(pu.side_b, pu.slot_b, nameById, labelById)}
+          initial={initialContingency ?? null}
+          onRecord={onRecordContingency}
+        />
+      ) : null}
     </DetailPanel>
   );
 }
@@ -153,80 +242,67 @@ function ContingencySection({
   const confirmB = useConfirmClick(() => reason && onRecord(reason, 'B'));
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className={FIELD_LABEL_CLASSES}>Contingency</span>
-      <div className="flex gap-1">
-        {(['walkover', 'retired', 'forfeit'] as const).map((r) => (
-          <button
-            key={r}
-            type="button"
-            data-testid={`contingency-${r}`}
-            aria-pressed={reason === r}
-            onClick={() => {
-              setReason(r);
-              confirmA.reset();
-              confirmB.reset();
-            }}
-            className={[
-              'rounded-sm border px-2 py-0.5 ${EYEBROW_CLASS}',
-              'transition-colors duration-fast ease-brand',
-              reason === r
-                ? 'border-accent bg-accent/10 text-accent'
-                : 'border-border text-muted-foreground hover:text-foreground',
-            ].join(' ')}
-          >
-            {CONTINGENCY_LABEL[r]}
-          </button>
-        ))}
-      </div>
-      {reason ? (
-        <div className="flex gap-1.5">
-          {([['A', sideALabel, confirmA], ['B', sideBLabel, confirmB]] as const).map(
-            ([side, label, confirm]) => (
-              <button
-                key={side}
-                type="button"
-                data-testid={`contingency-advance-${side}`}
-                onClick={confirm.press}
-                className={[
-                  'flex-1 rounded-sm border px-2 py-1 text-xs',
-                  'transition-colors duration-fast ease-brand',
-                  confirm.armed
-                    ? 'border-destructive bg-destructive/10 text-destructive'
-                    : 'border-border text-foreground hover:bg-muted/40',
-                ].join(' ')}
-              >
-                {confirm.armed
-                  ? `Confirm: ${label} advances`
-                  : `${label} advances`}
-              </button>
-            ),
-          )}
+    <DetailPanel.Section eyebrow="Contingency">
+      <div className="flex flex-col gap-1.5">
+        {/* Picking a kind writes NOTHING — it only reveals the two armed
+            advance buttons below. Three result-writing buttons in a row is
+            exactly the misclick the console IA pass flagged (§1.3). */}
+        <div role="group" aria-label="Contingency kind" className="flex gap-1">
+          {(['walkover', 'retired', 'forfeit'] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              data-testid={`contingency-${r}`}
+              aria-pressed={reason === r}
+              onClick={() => {
+                setReason(r);
+                confirmA.reset();
+                confirmB.reset();
+              }}
+              className={[
+                `rounded-sm border px-2 py-0.5 ${EYEBROW_CLASS}`,
+                'transition-colors duration-fast ease-brand',
+                reason === r
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              {CONTINGENCY_LABEL[r]}
+            </button>
+          ))}
         </div>
-      ) : null}
-    </div>
+        {reason ? (
+          <div className="flex gap-1.5">
+            {([['A', sideALabel, confirmA], ['B', sideBLabel, confirmB]] as const).map(
+              ([side, label, confirm]) => (
+                <button
+                  key={side}
+                  type="button"
+                  data-testid={`contingency-advance-${side}`}
+                  onClick={confirm.press}
+                  onBlur={confirm.reset}
+                  className={[
+                    'flex-1 rounded-sm border px-2 py-1 text-xs',
+                    'transition-colors duration-fast ease-brand',
+                    confirm.armed
+                      ? 'border-destructive bg-destructive/10 text-destructive'
+                      : 'border-border text-foreground hover:bg-muted/40',
+                  ].join(' ')}
+                >
+                  {confirm.armed
+                    ? `Confirm: ${label} advances`
+                    : `${label} advances`}
+                </button>
+              ),
+            )}
+          </div>
+        ) : null}
+      </div>
+    </DetailPanel.Section>
   );
 }
 
-/* =========================================================================
- * SideSection — one side of the play unit. Resolved: one card per human
- * (team participants expand to their members, name only). Unresolved
- * feeder slot: dashed "Not yet determined" + the feeder reference. No
- * participant and no feeder: structural "Bye".
- * ========================================================================= */
-function SideSection({
-  label,
-  side,
-  slot,
-  participantById,
-  labelById,
-  roster,
-  badgesById,
-  data,
-  onUpdate,
-  onCommitEvent,
-}: {
-  label: string;
+interface SidePlayersProps {
   side: string[] | null;
   slot: PlayUnitDTO['slot_a'];
   participantById: ReadonlyMap<string, Participant>;
@@ -236,7 +312,35 @@ function SideSection({
   data: BracketTournamentDTO;
   onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
   onCommitEvent: CommitEventFn | null;
-}) {
+  /** Winner side (finished Result block) — names read bold. */
+  emphasis?: boolean;
+  /** False inside the Result block (RES-1): the event badge renders ONCE
+   *  on the side rail, so collapsed member cards drop theirs — a member's
+   *  own entries stay inside the expanded row's Events block. */
+  showBadges?: boolean;
+}
+
+/* =========================================================================
+ * SidePlayers — one side's HUMANS as expandable cards (team participants
+ * expand to their members). Unresolved feeder slot: dashed "Not yet
+ * determined" + the feeder reference; no participant and no feeder:
+ * structural "Bye". Hosted by a SIDE section while the match is
+ * unfinished, and by the Result block's team lines once it is (INS-N1) —
+ * the one card anatomy, reached both ways.
+ * ========================================================================= */
+function SidePlayers({
+  side,
+  slot,
+  participantById,
+  labelById,
+  roster,
+  badgesById,
+  data,
+  onUpdate,
+  onCommitEvent,
+  emphasis = false,
+  showBadges = true,
+}: SidePlayersProps) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) =>
     setOpenIds((prev) => {
@@ -266,8 +370,7 @@ function SideSection({
   }
 
   return (
-    <section className="flex flex-col gap-1.5">
-      <span className={FIELD_LABEL_CLASSES}>{label}</span>
+    <div className="flex flex-col gap-1.5">
       {humanIds.length === 0 ? (
         slot.feeder_play_unit_id ? (
           <div className="rounded-sm border border-dashed border-border px-3 py-2">
@@ -295,7 +398,7 @@ function SideSection({
                 key={id}
                 className="rounded-sm border border-border px-3 py-2 text-xs text-muted-foreground"
               >
-                <span>{name}</span>
+                <span className={emphasis ? 'font-semibold' : ''}>{name}</span>
                 <span className="ml-1.5 text-2xs text-muted-foreground">
                   Not on roster
                 </span>
@@ -323,9 +426,25 @@ function SideSection({
                     open ? 'rotate-90' : '',
                   ].join(' ')}
                 />
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                <span
+                  className={[
+                    'min-w-0 flex-1 break-words text-sm text-foreground',
+                    emphasis ? 'font-semibold' : '',
+                  ].join(' ')}
+                >
                   {name}
                 </span>
+                {/* Identity chip on the collapsed card, matching Meet's side
+                    section, where the same card carries a SchoolChip. This
+                    panel showed a bare name and a chevron while Meet's showed
+                    a name and its identity, so the two panes read as two
+                    products (BMAT-3). A bracket entrant's identity is the
+                    event it is seeded into, not a club. */}
+                {showBadges
+                  ? (badgesById.get(id) ?? []).slice(0, 2).map((b) => (
+                      <EventBadge key={b.code} code={b.code} seed={b.seed} />
+                    ))
+                  : null}
               </button>
               {open ? (
                 <div className="flex flex-col gap-3 border-t border-border/60 px-2 py-2">
@@ -343,6 +462,15 @@ function SideSection({
           );
         })
       )}
-    </section>
+    </div>
+  );
+}
+
+/** SIDE A / SIDE B section — the unfinished match's roster surface. */
+function SideSection({ label, ...rest }: SidePlayersProps & { label: string }) {
+  return (
+    <DetailPanel.Section eyebrow={label}>
+      <SidePlayers {...rest} />
+    </DetailPanel.Section>
   );
 }

@@ -1,0 +1,105 @@
+{
+  "tournament": {
+    "name": "Spring Open",
+    "date": "2026-09-12"
+  },
+  "org": {
+    "name": "Kingsway BC"
+  },
+  "venue": {
+    "name": "Kingsway Centre",
+    "address": "4 Kingsway"
+  },
+  "page": {
+    "slug": "spring-open",
+    "introText": "Entries close on the 1st.",
+    "regulationsText": "BWF laws apply.",
+    "regulationsVersion": 3,
+    "regulationsUpdatedAt": "2026-08-12T10:00:00+00:00",
+    "paymentInstructions": "Bank transfer on the day.",
+    "feeSchedule": {
+      "2": 2500
+    }
+  },
+  "policy": {
+    "maxEventsPerPerson": 2,
+    "disciplineCaps": null,
+    "collectPhone": false,
+    "waiverRequired": false
+  },
+  "publication": {
+    "entrants": true,
+    "draws": false,
+    "results": false
+  },
+  "events": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "code": "MS",
+      "discipline": "Men's Singles",
+      "feeCents": 1500,
+      "genderConstraint": "M",
+      "opensAt": "2026-06-01 09:00 UTC",
+      "closesAt": "2026-08-14 23:59 UTC",
+      "withdrawsUntil": "2026-09-05 18:00 UTC",
+      "opensAtIso": "2026-06-01T09:00:00+00:00",
+      "closesAtIso": "2026-08-14T23:59:00+00:00",
+      "withdrawsUntilIso": "2026-09-05T18:00:00+00:00",
+      "isOpen": true,
+      "ageBracketed": false,
+      "entryCount": 7
+    },
+    {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "code": "WD",
+      "discipline": "Women's Doubles",
+      "feeCents": 2000,
+      "genderConstraint": "F",
+      "opensAt": "2026-06-01 09:00 UTC",
+      "closesAt": "2026-08-14 23:59 UTC",
+      "withdrawsUntil": "2026-09-05 18:00 UTC",
+      "opensAtIso": "2026-06-01T09:00:00+00:00",
+      "closesAtIso": "2026-08-14T23:59:00+00:00",
+      "withdrawsUntilIso": "2026-09-05T18:00:00+00:00",
+      "isOpen": true,
+      "ageBracketed": false,
+      "entryCount": 4
+    },
+    {
+      "id": "33333333-3333-4333-8333-333333333333",
+      "code": "XD",
+      "discipline": "Mixed Doubles",
+      "feeCents": 3000,
+      "genderConstraint": null,
+      "opensAt": "2026-06-01 09:00 UTC",
+      "closesAt": "2026-08-01 23:59 UTC",
+      "withdrawsUntil": "2026-09-05 18:00 UTC",
+      "opensAtIso": "2026-06-01T09:00:00+00:00",
+      "closesAtIso": "2026-08-01T23:59:00+00:00",
+      "withdrawsUntilIso": "2026-09-05T18:00:00+00:00",
+      "isOpen": false,
+      "ageBracketed": false,
+      "entryCount": 1
+    }
+  ],
+  "entrants": [
+    {
+      "personKey": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "name": "Ada Lovelace",
+      "club": "Analytical BC",
+      "eventCodes": ["MS", "WD"]
+    },
+    {
+      "personKey": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "name": "Grace Hopper",
+      "club": null,
+      "eventCodes": ["WD"]
+    },
+    {
+      "personKey": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "name": "Katherine Johnson",
+      "club": "Orbit SC",
+      "eventCodes": ["MS", "XD"]
+    }
+  ]
+}

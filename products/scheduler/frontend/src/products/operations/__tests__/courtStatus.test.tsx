@@ -15,9 +15,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ── 1. Hoist mutable tab so vi.mock factories close over it ───────────────
 
-const { mockTab, mockPlanFinalized } = vi.hoisted(() => ({
+const { mockTab, mockPlanFinalized, mockSchedule } = vi.hoisted(() => ({
   mockTab: { value: 'live' as string },
   mockPlanFinalized: { value: undefined as boolean | undefined },
+  mockSchedule: { value: null as unknown },
 }));
 
 // ── 2. Mock all hook/store/component dependencies ────────────────────────
@@ -47,7 +48,16 @@ vi.mock('../../../hooks/useBracket', () => ({
 
 vi.mock('../../../store/uiStore', () => ({
   useUiStore: (selector: (s: unknown) => unknown) =>
-    selector({ activeTab: mockTab.value, pushToast: vi.fn(), setBracketSelectedMatchId: vi.fn() }),
+    selector({
+      activeTab: mockTab.value,
+      pushToast: vi.fn(),
+      setActiveTab: vi.fn(),
+      setBracketSelectedMatchId: vi.fn(),
+      // The Plan toolbar carries the read-only gate since SP-CONSOLE-4 B1
+      // (the guard the unified Generate button had lost) — these tests
+      // exercise the editable path.
+      activeTournamentRole: 'owner',
+    }),
 }));
 
 vi.mock('../../../store/tournamentStore', () => ({
@@ -55,7 +65,7 @@ vi.mock('../../../store/tournamentStore', () => ({
     selector({
       config: null,
       matches: [],
-      schedule: null,
+      schedule: mockSchedule.value,
       players: [],
       groups: [],
       planFinalized: mockPlanFinalized.value,
@@ -65,19 +75,43 @@ vi.mock('../../../store/tournamentStore', () => ({
 
 vi.mock('../../../store/matchStateStore', () => ({
   useMatchStateStore: (selector: (s: unknown) => unknown) =>
-    selector({ matchStates: {} }),
+    selector({ matchStates: {}, recentConflictsByMatchId: {} }),
 }));
 
 vi.mock('../../../hooks/useCommandQueue', () => ({
   useCommandQueue: () => ({ submit: vi.fn() }),
 }));
 
+// The meet Run seams bridge (C4) mounts useLiveTracking (router +
+// polling) — stub the whole bridge; its internals have their own tests.
+vi.mock('../run/useMeetRunOps', () => ({
+  useMeetRunOps: () => ({
+    matches: [],
+    matchStates: {},
+    players: [],
+    config: null,
+    updateMatchStatus: vi.fn().mockResolvedValue(undefined),
+    confirmPlayer: vi.fn().mockResolvedValue(undefined),
+    substitutePlayer: vi.fn(),
+    removePlayer: vi.fn(),
+    undoStart: vi.fn(),
+    analyzeImpact: () => null,
+  }),
+}));
+
+vi.mock('../../../hooks/useActivityLog', () => ({
+  useActivityLog: () => {},
+}));
+
 vi.mock('../../../hooks/useBracketResultQueue', () => ({
   useBracketResultQueue: () => ({ submit: vi.fn() }),
 }));
 
+// Stable handle: the factory used to mint a fresh vi.fn() per call, so a test
+// could never observe whether a click reached it.
+const mockGenerateSchedule = vi.hoisted(() => vi.fn());
 vi.mock('../../../hooks/useSchedule', () => ({
-  useSchedule: () => ({ generateSchedule: vi.fn(), loading: false }),
+  useSchedule: () => ({ generateSchedule: mockGenerateSchedule, loading: false }),
 }));
 
 vi.mock('../../../hooks/useCurrentSlot', () => ({
@@ -133,6 +167,7 @@ import * as clientModule from '../../../api/client';
 beforeEach(() => {
   vi.clearAllMocks();
   mockPlanFinalized.value = undefined;
+  mockSchedule.value = null;
 });
 
 describe('OperationsProduct — Live segment renders RunSurface', () => {
@@ -155,13 +190,13 @@ describe('OperationsProduct — Courts (Plan) segment renders the interactive bo
   });
 });
 
-describe('OperationsProduct — Plan-side "ready to run" toggle (Task 17)', () => {
-  it('renders the toggle with "Mark plan ready to run" when planFinalized is falsy', () => {
+describe('OperationsProduct — Plan-side "plan ready" toggle (Task 17)', () => {
+  it('renders the toggle with "Mark plan ready" when planFinalized is falsy', () => {
     mockTab.value = 'schedule';
     render(<OperationsProduct />);
     const toggle = screen.getByTestId('ops-plan-finalize-toggle');
     expect(toggle).toBeInTheDocument();
-    expect(toggle).toHaveTextContent('Mark plan ready to run');
+    expect(toggle).toHaveTextContent('Mark plan ready');
   });
 
   it('clicking the toggle calls apiClient.setPlanFinalized with negated value', async () => {
@@ -178,8 +213,8 @@ describe('OperationsProduct — Plan-side "ready to run" toggle (Task 17)', () =
   });
 });
 
-describe('OperationsProduct — Run header readiness pill (single header)', () => {
-  it('Live + planFinalized shows the "ready to run" pill, not the pending note', () => {
+describe('OperationsProduct — Live-day header readiness pill (single header)', () => {
+  it('Live + planFinalized shows the "ready for live day" pill, not the pending note', () => {
     mockTab.value = 'live';
     mockPlanFinalized.value = true;
     render(<OperationsProduct />);
@@ -193,5 +228,78 @@ describe('OperationsProduct — Run header readiness pill (single header)', () =
     render(<OperationsProduct />);
     expect(screen.getByTestId('run-plan-pending')).toBeInTheDocument();
     expect(screen.queryByTestId('run-plan-finalized')).toBeNull();
+  });
+});
+
+// O2 of the console IA pass. "Re-plan day" DISCARDS the plan; "Plan ready ✓"
+// commits it. They were the same size, the same accent fill and 8px apart —
+// the destructive one dressed as the primary, in a same-shape pair with the
+// one action that keeps the work.
+describe('OperationsProduct — the Plan header does not pair discard with commit', () => {
+  it('only the commit action wears the primary glow, and a rule separates them', () => {
+    mockTab.value = 'schedule';
+    mockSchedule.value = { assignments: [] };
+    render(<OperationsProduct />);
+
+    const resolve = screen.getByTestId('ops-generate-meet');
+    const commit = screen.getByTestId('ops-plan-finalize-toggle');
+
+    expect(resolve).toHaveTextContent('Re-plan day');
+    expect(resolve.className).not.toMatch(/bg-accent/);
+    expect(resolve.className).not.toMatch(/shadow-glow/);
+    expect(commit.className).toMatch(/bg-accent/);
+
+    // ...and they are not two chips in one 8px run: a rule still closes the
+    // run immediately before the commit button. The header now carries the
+    // solve | proposals | export groups between them (SP-CONSOLE-4 B1,
+    // ratified) — the protected property is unchanged: nothing between the
+    // discard action and commit wears the glow, and a rule separates commit
+    // from whatever precedes it.
+    expect(commit.previousElementSibling?.className).toMatch(/w-px/);
+    let node = resolve.nextElementSibling;
+    let sawRule = false;
+    while (node && node !== commit) {
+      if (node.className.includes('w-px')) sawRule = true;
+      if (node.tagName === 'BUTTON') {
+        expect(node.className).not.toMatch(/bg-accent/);
+        expect(node.className).not.toMatch(/shadow-glow/);
+      }
+      node = node.nextElementSibling;
+    }
+    expect(node).toBe(commit);
+    expect(sawRule).toBe(true);
+  });
+});
+
+// A re-solve replaces a plan the operator may have adjusted by hand, so it
+// arms. Solving for the FIRST time destroys nothing and must not arm: an arm
+// the operator learns to double-click through has stopped guarding anything
+// by the time it guards something real.
+describe('OperationsProduct — re-solve arms, first solve does not', () => {
+  it('does not re-solve on the first press: it arms and names the consequence', () => {
+    mockTab.value = 'schedule';
+    mockSchedule.value = { assignments: [] };
+    render(<OperationsProduct />);
+
+    const btn = screen.getByTestId('ops-generate-meet');
+    expect(btn).toHaveTextContent('Re-plan day');
+
+    fireEvent.click(btn);
+    expect(mockGenerateSchedule).not.toHaveBeenCalled();
+    expect(btn).toHaveTextContent('Press again to replace the plan');
+
+    fireEvent.click(btn);
+    expect(mockGenerateSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('solves immediately when there is no plan to destroy', () => {
+    mockTab.value = 'schedule';
+    mockSchedule.value = null;
+    render(<OperationsProduct />);
+
+    const btn = screen.getByTestId('ops-generate-meet');
+    expect(btn).toHaveTextContent('Generate meet');
+    fireEvent.click(btn);
+    expect(mockGenerateSchedule).toHaveBeenCalledTimes(1);
   });
 });

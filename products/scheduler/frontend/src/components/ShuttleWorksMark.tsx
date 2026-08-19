@@ -49,15 +49,20 @@ type Props = {
   tile?: boolean;
 };
 
-export function ShuttleWorksMark({ className = 'inline-flex', tile = true }: Props) {
+/** The Console wordmark chip: accent-filled, right edge clipped to a chevron —
+ *  the mock's brand mark. Still a placeholder system (type + tokens, no image
+ *  asset); the clip-path IS the mark. */
+export function ShuttleWorksMark({ className = 'inline-flex', tile = false }: Props) {
   return (
     <span
       aria-label="ShuttleWorks"
       title="ShuttleWorks"
-      className={[className, 'items-center gap-2 text-foreground'].join(' ')}
+      className={[className, 'items-center gap-2'].join(' ')}
     >
       {tile ? <SwMonogram /> : null}
-      <span className="type-display text-[15px] font-semibold leading-none tracking-[-0.01em]">
+      <span
+        className="inline-block bg-accent py-1.5 pl-3 pr-4 text-xs font-extrabold leading-none tracking-[0.02em] text-accent-ink [clip-path:polygon(0_0,100%_0,calc(100%-9px)_100%,0_100%)]"
+      >
         ShuttleWorks
       </span>
     </span>

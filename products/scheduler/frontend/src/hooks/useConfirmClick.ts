@@ -65,5 +65,20 @@ export function useConfirmClick(
     setArmed(false);
   }, [clear]);
 
+  // Escape is the canon "back out" key — an operator who armed by mistake
+  // (or on a busy floor, changed their mind) should be able to cancel
+  // deliberately instead of only waiting out the decay. A global listener
+  // rather than a per-button onKeyDown: it covers every consumer of this
+  // hook (Run's Record button, bracket's WinnerButton, ConfirmDeleteButton,
+  // ...) from the one shared place, and only while THIS instance is armed.
+  useEffect(() => {
+    if (!armed) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') reset();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [armed, reset]);
+
   return { armed, press, reset };
 }

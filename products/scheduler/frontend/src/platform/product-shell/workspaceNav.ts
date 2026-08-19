@@ -2,7 +2,7 @@
  * The workspace left-sidebar navigation model — the single source of truth for
  * the in-workspace IA. Three tiers:
  *   - Tier 1: collapsible section triggers (Meet / Bracket / Operations /
- *     Display) with a role badge — landmarks, not destinations.
+ *     Display) — landmarks, not destinations.
  *   - Tier 2: the nav items inside each section (the actual destinations).
  *   - Tier 3: Overview (always, top) + Workspace admin (always, bottom).
  *
@@ -19,8 +19,9 @@ import type { ModuleId } from './types';
 export type WsKind = 'meet' | 'bracket' | null;
 /** The architectural anatomy: intake → engine → emit. `intake` is new with
  *  Entries (SP-E1-1). Reusing `shared` would have been cheaper and would have
- *  lied in the badge — Operations is shared *between* the engines; Entries
- *  feeds them. */
+ *  lied — Operations is shared *between* the engines; Entries feeds them.
+ *  Model-only since G2: the sidebar badge is gone; the taxonomy reads out in
+ *  the Modules catalog descriptions. */
 export type SectionRole = 'intake' | 'engine' | 'shared' | 'output';
 
 export interface WsNavItem {
@@ -62,16 +63,6 @@ export const ENTRIES_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>(['entries']
 
 export function isAdminSegment(tab: AppTab): boolean {
   return ADMIN_SEGMENTS.has(tab);
-}
-
-const ROLE_LABEL: Record<SectionRole, string> = {
-  intake: 'Intake',
-  engine: 'Engine',
-  shared: 'Shared',
-  output: 'Output',
-};
-export function roleBadge(role: SectionRole): string {
-  return ROLE_LABEL[role];
 }
 
 export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): WorkspaceNav {
@@ -125,11 +116,11 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
       items: opsBracket
         ? [
             { segment: 'bracket-schedule', label: 'Plan' },
-            { segment: 'bracket-live', label: 'Run' },
+            { segment: 'bracket-live', label: 'Live day' },
           ]
         : [
             { segment: 'schedule', label: 'Plan' },
-            { segment: 'live', label: 'Run' },
+            { segment: 'live', label: 'Live day' },
           ],
     });
   }
@@ -151,12 +142,12 @@ export function buildWorkspaceNav(kind: WsKind, enabled: Set<ModuleId>): Workspa
     admin: {
       label: 'Workspace',
       items: [
-        { segment: 'ws-venue', label: 'Venue & schedule' },
+        { segment: 'ws-venue', label: 'Venue and schedule' },
         { segment: 'ws-members', label: 'Members' },
         { segment: 'ws-sharing', label: 'Sharing' },
         { segment: 'ws-modules', label: 'Modules' },
-        { segment: 'ws-sync', label: 'Sync and backups' },
-        { segment: 'ws-settings', label: 'Settings' },
+        { segment: 'ws-sync', label: 'Backups' },
+        { segment: 'ws-settings', label: 'Workspace settings' },
       ],
     },
   };

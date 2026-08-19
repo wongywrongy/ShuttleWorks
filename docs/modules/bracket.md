@@ -69,10 +69,10 @@ in that frozen set: `recordBracketResultCommand` (the live recording path above)
 surface). They are described here in prose rather than claimed as contract-owned.
 
 :::warning Plan / Run are Operations-owned, even on a bracket
-The schedule and live *view components* (`ScheduleView`, `LiveView`) live in `products/bracket/`, but
-the `bracket-schedule` / `bracket-live` *nav segments* — surfaced as **Plan** and **Run** — belong to
-`operationsContract`, not Bracket. Bracket owns Roster · Draws · Matches · Configuration; Operations
-points its Plan/Run surfaces at the active engine. See [Operations](/modules/operations).
+The `bracket-schedule` / `bracket-live` *nav segments* — surfaced as **Plan** and **Run** — belong
+to `operationsContract` and render the unified `OperationsProduct` (the bracket-resident
+`ScheduleView` / `LiveView` components were deleted at SP-CONSOLE-4 B4). Bracket owns
+Roster · Draws · Matches · Configuration. See [Operations](/modules/operations).
 :::
 
 ## The draw canvas
@@ -192,4 +192,5 @@ Bracket's inputs are its own create/seed/result shapes — **`BracketCreateIn`, 
 - [Bracket draw canvas](/architecture/bracket-draw-canvas) · [Bracket schedule streaming](/architecture/bracket-schedule-streaming)
 - [Scheduling unification](/architecture/scheduling-unification) · [ADR 0006](/decisions/0006-unified-scheduling-core)
 - [Operations module](/modules/operations) · [Meet module](/modules/meet) · [Display module](/modules/display)
+- [Entries module](/modules/entries) — online entry; its commit seam writes bracket participants, and it refuses to touch a draw that is already generated or started
 - [Data flow](/architecture/data-flow)

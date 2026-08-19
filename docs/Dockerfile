@@ -8,14 +8,21 @@
 # and see the root-level VitePress devDependency, and lets stage 1 COPY the
 # docs/ tree that the build reads.
 #
-# Stage 1: build the site with node:20-alpine. Copy the lockfile + each
+# Stage 1: build the site with node:22-alpine. Copy the lockfile + each
 # workspace's package.json FIRST so `npm ci` lands on its own cacheable layer —
 # editing a doc below doesn't bust the install.
+#
+# 22 to match CI and the other two app images. This build has no >=22
+# dependency of its own today (vitepress and vite both still carry a `^20.19`
+# branch), but it installs the same root lockfile they do, and an exception
+# list is where a version rule goes to die — so it follows the same pin, held
+# by `products/scheduler/entrant/tests/deployStacks.test.ts`.
+#
 # Stage 2: serve the compiled site with nginx-unprivileged (UID 101, port
 # 8080). Compose remaps host 8081 -> 8080 so it stays clear of the app (:80)
 # and the codanna MCP server (:8080).
 
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 

@@ -33,3 +33,22 @@ export function lifecycleBadge(
   if (phase === 'complete') return { text: 'Complete', tone: 'done' };
   return null;
 }
+
+/**
+ * The CHIP variant of the badge — R-D ruling (SP-CONSOLE-3, Option A):
+ * LIVE is suppressed (on a live day every surface already screams it;
+ * a LIVE capsule on top is decoration), while Archived / Complete still
+ * chip. One helper so the five render sites (shell header, hub row, hub
+ * inspector, overview header, workspace settings) can't drift.
+ *
+ * Callers with a resting fallback must apply it only when
+ * `lifecycleBadge` itself is null — a suppressed LIVE renders NOTHING,
+ * never the fallback (the shell would otherwise say "active" mid-play).
+ */
+export function lifecycleChip(
+  phase: WorkspacePhase | null | undefined,
+  status: WorkspaceStatus | string | null | undefined,
+): LifecycleBadge | null {
+  const badge = lifecycleBadge(phase, status);
+  return badge?.text === 'Live' ? null : badge;
+}

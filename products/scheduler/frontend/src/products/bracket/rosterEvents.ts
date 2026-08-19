@@ -39,6 +39,9 @@ export function sortBadges(codes: Iterable<string>): string[] {
 export interface BadgeEntry {
   code: string;
   type: string;
+  /** The player's seed IN that event (1 = top). Inline after the code —
+   *  seeds are never a separate column (SP-CONSOLE-REFINE G6/B1). */
+  seed?: number | null;
 }
 
 /**
@@ -74,9 +77,13 @@ export function badgesByPlayerId(
     for (const part of ev.participants ?? []) {
       const ids =
         part.members && part.members.length > 0 ? part.members : [part.id];
+      // Seed is PER PARTICIPANT (a doubles pair's seed applies to both
+      // members), so a seeded entry can't share the event-level object.
+      const withSeed =
+        part.seed != null ? { ...entry, seed: part.seed } : entry;
       for (const id of ids) {
         const byCode = out.get(id) ?? new Map<string, BadgeEntry>();
-        byCode.set(code, entry);
+        byCode.set(code, withSeed);
         out.set(id, byCode);
       }
     }

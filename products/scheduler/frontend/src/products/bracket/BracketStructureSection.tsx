@@ -30,8 +30,8 @@ import { Row, Section } from '../../platform/settings/SettingsControls';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineLabel, formatLabel } from './bracketLabels';
 
-const LINK_CLASSES =
-  'inline-flex items-center rounded-sm border border-border bg-card px-3 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40';
+const NAV_LINK_CLASSES =
+  'inline-flex items-center gap-1 rounded-sm text-xs font-medium text-accent hover:underline';
 
 export function BracketStructureSection() {
   const tid = useTournamentId();
@@ -48,17 +48,15 @@ export function BracketStructureSection() {
   return (
     <Section title="Events">
       <Row
+        readOnly
         label="Active disciplines"
-        control={
-          <span className="text-sm text-foreground">
-            {disciplines.length > 0 ? disciplines.join(', ') : 'None yet'}
-          </span>
-        }
+        control={disciplines.length > 0 ? disciplines.join(', ') : 'None yet'}
       />
 
       {events.map((ev) => (
         <Row
           key={ev.id}
+          readOnly
           label={
             <span className="inline-flex items-baseline gap-2">
               {disciplineLabel(ev.discipline)}
@@ -68,7 +66,7 @@ export function BracketStructureSection() {
             </span>
           }
           control={
-            <span className="text-xs text-muted-foreground sw-num">
+            <span className="sw-num text-xs">
               {formatLabel(ev.format)} · {ev.bracket_size ?? ev.participant_count} ·{' '}
               {ev.participant_count} seeded
             </span>
@@ -76,6 +74,10 @@ export function BracketStructureSection() {
         />
       ))}
 
+      {/* These leave the page; the rows above and below them change it. A
+          bordered button says "this acts on what you are looking at", which
+          is the one thing these do not do, so they read as links with the
+          direction of travel shown (BCFG-2). */}
       <Row
         label="Draws"
         control={
@@ -83,9 +85,9 @@ export function BracketStructureSection() {
             type="button"
             data-testid="bracket-open-draws"
             onClick={() => go('bracket-draws')}
-            className={`${INTERACTIVE_BASE} ${LINK_CLASSES}`}
+            className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES}`}
           >
-            Manage draws
+            Manage draws →
           </button>
         }
       />
@@ -96,9 +98,9 @@ export function BracketStructureSection() {
             type="button"
             data-testid="bracket-open-roster"
             onClick={() => go('bracket-roster')}
-            className={`${INTERACTIVE_BASE} ${LINK_CLASSES}`}
+            className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES}`}
           >
-            Manage participants
+            Manage participants →
           </button>
         }
         last

@@ -22,12 +22,14 @@ describe('ShuttleWorksMark', () => {
     expect(container.querySelector('.border-foreground')).toBeNull();
   });
 
-  it('renders the monogram tile by default and drops it when tile={false}', () => {
-    const { container: withTile } = render(<ShuttleWorksMark />);
-    expect(withTile.textContent).toContain('SW');
-
-    const { container: bare } = render(<ShuttleWorksMark tile={false} />);
+  it('renders the bare Console chip by default and adds the tile on tile={true}', () => {
+    // Console direction (2026-08-13): the chevron-clipped accent chip IS the
+    // mark, so the monogram tile is opt-in rather than default.
+    const { container: bare } = render(<ShuttleWorksMark />);
     expect(bare.textContent).toBe('ShuttleWorks');
+
+    const { container: withTile } = render(<ShuttleWorksMark tile />);
+    expect(withTile.textContent).toContain('SW');
   });
 
   it('hides the tile from the accessibility tree (it is decoration beside the name)', () => {

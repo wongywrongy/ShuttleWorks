@@ -129,7 +129,7 @@ export function useBracketResultQueue(handlers: BracketResultHandlers) {
       const own = outcomes.find((o) => o.id === commandId);
       const result: BracketSubmitResult = own?.result ?? {
         kind: 'networkError',
-        message: 'no outcome — possibly absorbed by a concurrent flush',
+        message: 'no outcome: possibly absorbed by a concurrent flush',
       };
 
       switch (result.kind) {

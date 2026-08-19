@@ -15,6 +15,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { ArrowsClockwise } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import { useMatchStateStore } from '../../../store/matchStateStore';
+import { useMeetResultsLock } from '../../../hooks/useMeetResultsLock';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import type { MatchDTO } from '../../../api/dto';
 
@@ -39,6 +41,26 @@ export function RegenerateMenu() {
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+
+  // Two tiers of guard, unified with the rest of the app (MAT-2 / O-4):
+  //
+  // * RESULTS EXIST (`useMeetResultsLock`, started/finished) → the action is
+  //   DISABLED, with the reason where the button is. This is the same lock
+  //   Configuration's ribbon runs on; this surface used to run its own wider
+  //   definition beside it, so "settings are read-only while matches are in
+  //   play" was true one nav item away and false here.
+  // * LIVE but no results yet (anything past `scheduled`, e.g. called) →
+  //   allowed, behind the armed confirm below that states what is destroyed.
+  //
+  // Regenerated lineup slots get fresh ids, which severs recorded status and
+  // orphans schedule assignments — verified against `importMatches`, which
+  // replaces the list wholesale. Custom matches keep their ids and survive.
+  const matchStates = useMatchStateStore((s) => s.matchStates);
+  const resultsLocked = useMeetResultsLock();
+  const isLiveDay = useMemo(
+    () => Object.values(matchStates).some((st) => st.status !== 'scheduled'),
+    [matchStates],
+  );
 
   const ranks = useMemo(() => expandRanks(config?.rankCounts), [config?.rankCounts]);
   const groupByPlayer = useMemo(
@@ -134,7 +156,7 @@ export function RegenerateMenu() {
 
   const infoLine = !canGenerate
     ? ranks.length === 0
-      ? 'No events configured — set them in Configuration.'
+      ? 'No events configured. Set them in Configuration.'
       : groups.length < 2
         ? 'Need at least 2 schools to generate matches.'
         : 'No feasible pairings with the current roster.'
@@ -146,13 +168,23 @@ export function RegenerateMenu() {
 
   return (
     <div ref={ref} className="relative">
+      {/* Deliberately NOT the primary style (SP-CONSOLE-REFINE G3.3): this
+          rebuilds lineup matches with fresh identities, which on a live day
+          destroys their recorded state. A destructive-leaning action must not
+          be the most prominent button on the surface. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        disabled={resultsLocked}
+        title={
+          resultsLocked
+            ? 'Results are recorded. Regenerating would destroy them; the action unlocks when the results lock does.'
+            : undefined
+        }
         data-testid="regenerate-toggle"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded bg-accent px-2.5 text-xs font-semibold text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50`}
       >
         <ArrowsClockwise aria-hidden="true" className="h-3.5 w-3.5" />
         Regenerate from roster
@@ -167,10 +199,21 @@ export function RegenerateMenu() {
             Regenerate from roster
           </div>
           <p className="text-xs text-muted-foreground">{infoLine}</p>
+          {isLiveDay ? (
+            <p
+              data-testid="regenerate-live-warning"
+              className="mt-2 border-l-2 border-destructive/50 bg-destructive/5 px-2 py-1 text-xs text-destructive"
+            >
+              <span className="font-medium">This day is live.</span> Rebuilt lineup
+              matches lose their recorded status and schedule assignments: the
+              plan must be re-planned. Custom matches are kept, and a backup of
+              the current state is snapshotted automatically on the next save.
+            </p>
+          ) : null}
           {incompletePairs.length > 0 ? (
             <p className="mt-2 border-l-2 border-status-warning/50 bg-status-warning/5 px-2 py-1 text-xs text-status-warning">
               <span className="font-medium">Skipping incomplete doubles:</span>{' '}
-              {incompletePairs.join(', ')} — assign both partners in Roster.
+              {incompletePairs.join(', ')}: assign both partners in Roster.
             </p>
           ) : null}
           <div className="mt-3 flex items-center justify-end">
@@ -179,9 +222,13 @@ export function RegenerateMenu() {
               onClick={regenerate}
               disabled={!canGenerate}
               data-testid="regenerate-confirm"
-              className="rounded-sm border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:opacity-50"
+              className={
+                isLiveDay
+                  ? 'rounded-sm border border-destructive bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive transition-colors duration-fast ease-brand hover:bg-destructive/20 disabled:opacity-50'
+                  : 'rounded-sm border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:opacity-50'
+              }
             >
-              Regenerate
+              {isLiveDay ? 'Regenerate anyway' : 'Regenerate'}
             </button>
           </div>
         </div>

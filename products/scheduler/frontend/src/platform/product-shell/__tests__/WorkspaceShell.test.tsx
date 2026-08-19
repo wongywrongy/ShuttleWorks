@@ -69,3 +69,34 @@ describe('WorkspaceShell', () => {
     expect(onOpenAdmin).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * When the module catalog is UNKNOWN (the `/modules` fetch failed), an empty
+ * section list is as much a lie as a guessed one — it reads as "this
+ * workspace has no modules". The rail has to say it doesn't know, and offer
+ * a way to find out.
+ */
+describe('WorkspaceShell — an unknown module catalog', () => {
+  it('says the modules are unknown instead of drawing a guessed rail', () => {
+    renderShell({ modules: [], modulesUnknown: true });
+    expect(screen.getByTestId('ws-modules-unknown')).toBeInTheDocument();
+    expect(screen.queryByTestId('ws-section-meet')).toBeNull();
+    // Overview + Workspace admin still work — they belong to the shell, not
+    // to any module, so they are known regardless.
+    expect(screen.getByTestId('ws-nav-overview')).toBeInTheDocument();
+    expect(screen.getByTestId('ws-nav-ws-modules')).toBeInTheDocument();
+  });
+
+  it('offers a retry rather than a dead end', async () => {
+    const onRetryModules = vi.fn();
+    renderShell({ modules: [], modulesUnknown: true, onRetryModules });
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(onRetryModules).toHaveBeenCalledTimes(1);
+  });
+
+  it('NEGATIVE CONTROL: a known catalog still renders its sections', () => {
+    renderShell({ modules: modulesForWorkspace('meet') });
+    expect(screen.getByTestId('ws-section-meet')).toBeInTheDocument();
+    expect(screen.queryByTestId('ws-modules-unknown')).toBeNull();
+  });
+});

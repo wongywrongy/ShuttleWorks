@@ -14,9 +14,11 @@ import { Select } from '@scheduler/design-system/components';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { useFullscreen } from '../publicDisplay/useFullscreen';
 import { FullscreenButton } from '../publicDisplay/FullscreenButton';
+import { BoardSwitch } from '../publicDisplay/BoardSwitch';
 import { LiveStatusPill } from '../publicDisplay/LiveStatusPill';
 import { STALE_CAPTION } from '../publicDisplay/freshness';
 import { useBracketDisplaySync } from './useBracketDisplaySync';
+import { isComplete } from './bracketDisplayData';
 import { BracketLiveView } from './BracketLiveView';
 import { BracketDrawView } from './BracketDrawView';
 import { BracketResultsView } from './BracketResultsView';
@@ -28,15 +30,30 @@ const VIEWS: { id: BracketView; label: string }[] = [
   { id: 'results', label: 'Results' },
 ];
 
-export function BracketDisplayPage() {
+/** `hybrid` — this workspace also runs a Meet, so the header carries a switch
+ *  back to that board (see `PublicDisplayPage` for why the two boards stay
+ *  separate rather than merging). */
+export function BracketDisplayPage({
+  hybrid = false,
+  preview = false,
+}: { hybrid?: boolean; preview?: boolean } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as BracketView | null;
-  const view: BracketView =
-    viewParam && VIEWS.some((v) => v.id === viewParam) ? viewParam : 'live';
   const [now, setNow] = useState<Date>(() => new Date());
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const { data, freshness, syncError } = useBracketDisplaySync(now);
+
+  // A finished tournament opening on Live shows "No matches on court", which
+  // reads as "hasn't started yet" — so with nothing left to play, open on the
+  // results instead. An explicit `?view=` always wins: the board a director
+  // pointed the TV at never moves under them.
+  const view: BracketView =
+    viewParam && VIEWS.some((v) => v.id === viewParam)
+      ? viewParam
+      : data && isComplete(data)
+        ? 'results'
+        : 'live';
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
 
   // 1 Hz clock drives the freshness derivation.
@@ -62,11 +79,13 @@ export function BracketDisplayPage() {
     setSearchParams(next, { replace: true });
   };
 
-  const tabClass = (mode: BracketView) =>
+  // Takes the active flag rather than the view id, so the hybrid board switch
+  // (which is never one of this board's views) wears the same chrome.
+  const tabClass = (active: boolean) =>
     [
       INTERACTIVE_BASE,
       'border px-4 py-2 text-base font-semibold',
-      view === mode
+      active
         ? 'border-accent bg-accent/15 text-accent'
         : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
     ].join(' ');
@@ -78,20 +97,26 @@ export function BracketDisplayPage() {
       className="flex min-h-[100dvh] flex-col bg-background text-foreground"
     >
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        {/* Venue render drops the view tabs and the fullscreen button — the
+            board is not operated from the wall (TV-8). */}
         <div role="tablist" aria-label="Display view" className="flex items-center gap-2">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={view === v.id}
-              data-testid={`bracket-view-${v.id}`}
-              className={tabClass(v.id)}
-              onClick={() => setParam('view', v.id)}
-            >
-              {v.label}
-            </button>
-          ))}
+          {preview
+            ? VIEWS.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v.id}
+                  data-testid={`bracket-view-${v.id}`}
+                  className={tabClass(view === v.id)}
+                  onClick={() => setParam('view', v.id)}
+                >
+                  {v.label}
+                </button>
+              ))
+            : null}
+          {/* Survives the venue render — see the meet board's note. */}
+          {hybrid ? <BoardSwitch to="meet" className={tabClass(false)} /> : null}
           {view === 'draw' && events.length > 1 ? (
             <span className="ml-2 inline-flex">
               <Select
@@ -107,7 +132,9 @@ export function BracketDisplayPage() {
         <div className="flex items-center gap-3">
           <span className="tabular-nums text-base text-muted-foreground">{currentTime}</span>
           <LiveStatusPill status={freshness} />
-          <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+          {preview ? (
+            <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+          ) : null}
         </div>
       </header>
 
@@ -132,9 +159,9 @@ export function BracketDisplayPage() {
         ) : view === 'draw' ? (
           <BracketDrawView data={data} eventId={activeEventId} />
         ) : view === 'results' ? (
-          <BracketResultsView data={data} />
+          <BracketResultsView data={data} isFullscreen={isFullscreen} />
         ) : (
-          <BracketLiveView data={data} />
+          <BracketLiveView data={data} isFullscreen={isFullscreen} />
         )}
       </main>
     </div>

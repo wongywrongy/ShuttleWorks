@@ -1320,6 +1320,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/state/backups/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Tournament Backup
+         * @description Hand the snapshot back as a file.
+         *
+         *     Viewer, matching ``GET /state``: a backup is a workspace state the caller
+         *     is already allowed to read, at an earlier moment. The value of this over
+         *     Restore is that it is not destructive — a director who wants to check what
+         *     a snapshot contains before replacing today's work has, until now, had only
+         *     the replacing option.
+         */
+        get: operations["download_tournament_backup_tournaments__tournament_id__state_backups__filename__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Tournament Backup
+         * @description Owner, matching Restore: both are irreversible, in opposite directions.
+         *
+         *     Needed because manual snapshots no longer rotate — a list that only ever
+         *     grows needs a way to shrink, or the exemption that protects a director's
+         *     backup becomes the thing that clutters their list.
+         */
+        delete: operations["delete_tournament_backup_tournaments__tournament_id__state_backups__filename__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/state/restore/{filename}": {
         parameters: {
             query?: never;
@@ -1532,6 +1566,8 @@ export interface paths {
          * @description Update a module's status / config, enforcing the control-plane rules.
          *
          *     Rules (each a 409 with a stable error code):
+         *     - A cloud-only module (``entries``) cannot be touched on a local-mode
+         *       deployment.
          *     - ``coming_soon`` modules are immutable.
          *     - Enabling ``display`` requires ≥1 enabled operational module.
          *     - A module with data (meet→matches, bracket→bracket_events) cannot be
@@ -1540,6 +1576,484 @@ export interface paths {
          *     Only status / config are writable; omitted fields are preserved.
          */
         patch: operations["patch_module_tournaments__tournament_id__modules__module_id__patch"];
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Entries
+         * @description The desk list: newest submission first, each row naming its act.
+         *
+         *     ``submitted_at`` is this table's created_at. It alone ties
+         *     non-deterministically across SQLite and Postgres — several entries can
+         *     genuinely land in the same tick — so ``id`` is the tiebreaker, per the
+         *     house rule for every list query. Without it the same page reorders
+         *     between reads and an operator loses their place mid-review.
+         *
+         *     **Submission grouping (R13), and why it costs no extra query.** Each
+         *     row carries the submission that produced it, with the submitting
+         *     account and the act's fee total, so the desk can show "these four
+         *     entries arrived on one form" instead of leaving an operator to group by
+         *     eye on a repeated email address. Both hops are declared ``lazy="joined"``
+         *     on the models — ``Entry.submission`` and ``Submission.account`` — so
+         *     this is still **one** SELECT with two joins, batched by the database
+         *     rather than by a second round trip per page. A colocated test counts
+         *     the statements, because that property is a loader-configuration
+         *     decision one edit away from becoming an N+1 nobody notices until a desk
+         *     has four hundred rows on it.
+         */
+        get: operations["list_entries_tournaments__tournament_id__entries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entries/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Entries Route
+         * @description Run Seam A and return the per-entry summary.
+         *
+         *     Safe to press twice: the seam is idempotent by design (Q3 — entries
+         *     reopen, late arrivals are routine), so a double-click commits nothing
+         *     twice and answers with an empty ``committed`` list.
+         *
+         *     Declared **before** the ``{entry_id}`` route below only for reading
+         *     order; ``/entries/commit`` and ``/entries/{entry_id}/confirm`` are
+         *     different depths and cannot shadow each other.
+         */
+        post: operations["commit_entries_route_tournaments__tournament_id__entries_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entries/{entry_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Entry
+         * @description ``pending → confirmed`` — the operator's decision, made explicit.
+         *
+         *     A wrong starting state is a 409 rather than a silent success. Confirming
+         *     an already-confirmed entry is harmless in itself, but it means the
+         *     operator is looking at a screen that disagrees with the database, and
+         *     answering 200 would leave them believing they had just done something.
+         */
+        post: operations["confirm_entry_tournaments__tournament_id__entries__entry_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entry-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upsert Entry Page
+         * @description Create or replace this workspace's entry page.
+         *
+         *     One row per workspace — the table's primary key *is* ``tournament_id``
+         *     — so PUT is the honest verb and there is nothing for a POST to create
+         *     a second of.
+         *
+         *     ``regulations_version`` bumps only when ``regulationsText`` actually
+         *     changes (Q11.4). Every entry records the version it accepted, so a
+         *     bump on every save would silently invalidate every acknowledgment on
+         *     file the next time an operator fixed a typo in the intro paragraph.
+         *
+         *     **The R12/R14 columns are written here too** (SP-E1-2, finding
+         *     F-E1-2-D1). They were added to ``entry_pages`` by the schema reshape
+         *     and read by the public page, the pricing and the policy check, but no
+         *     route ever set them — so the only way to configure a price was a SQL
+         *     client, which is the state this module was written to end. Additive:
+         *     every field is optional and the PUT's whole-state semantics are
+         *     unchanged, so a body written against the older shape still clears them
+         *     exactly as it clears ``introText``.
+         */
+        put: operations["upsert_entry_page_tournaments__tournament_id__entry_page_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entry-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Entry Event
+         * @description Add one entry-facing event to this workspace.
+         *
+         *     ``code`` is the pivot the commit seam maps onto Meet's ``ranks[]`` or a
+         *     bracket event, so a blank one is an entry that can never be committed —
+         *     refused here rather than discovered at commit time, where the seam
+         *     would (correctly) skip-and-report it and the operator would have to
+         *     work out why.
+         *
+         *     No uniqueness on ``code``: two events can legitimately share one — a
+         *     workspace running the same discipline in two age bands maps both onto
+         *     the same rank — and the desk shows the discipline alongside.
+         *
+         *     **``genderConstraint`` and ``withdrawsUntil`` are set here** (SP-E1-2,
+         *     finding F-E1-2-D1). Both columns exist and are read — the first drives
+         *     the public form's default event filter (R12), the second is R14 §3's
+         *     deliberately separate withdrawal deadline, rendered on the page's
+         *     timeline — and until now neither had a route that could write them.
+         *     Additive and optional: an event created without them is open to every
+         *     entrant and carries no withdrawal deadline, which is what every event
+         *     created before this commit already is.
+         */
+        post: operations["create_entry_event_tournaments__tournament_id__entry_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/page/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entry Page Projection
+         * @description Everything the entry page renders, in one public read.
+         *
+         *     Public by design (Q4): a poster URL, not a capability URL. Reading it
+         *     never requires an account; only the form inside it does. The
+         *     information architecture is the incumbent's (R14 §6) — timeline,
+         *     money, venue, organisation, events with counts, the entrant list —
+         *     because it is proven and entrants already read it.
+         */
+        get: operations["entry_page_projection_e_api_page__slug__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entrant Config
+         * @description Public runtime configuration for the entrant app.
+         *
+         *     Read by the RR7 signup route to render the Turnstile widget. The
+         *     alternative — a second ``TURNSTILE_SITE_KEY`` env var on the node
+         *     service — would be a second source of truth for a value whose *pair*
+         *     (the secret) is validated only here, and a sitekey that drifts from
+         *     its secret fails the challenge for every honest entrant while looking
+         *     like a Cloudflare outage.
+         *
+         *     No repository access and no session: this is configuration, not data,
+         *     which is why it needs neither a slug nor a tenancy seam.
+         */
+        get: operations["entrant_config_e_api_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entry Page List
+         * @description Every OPEN entry page's slug — the list Task 26's ``sitemap.xml``
+         *     route crawls.
+         *
+         *     **``is_open`` is the entire point of this route, not an incidental
+         *     filter.** ``EntryPage.is_open`` (default ``False``) is what makes a page
+         *     public at all — ``_resolve`` answers the same uniform 404 for a closed
+         *     page as for an unknown slug. A list that ignored it would publish the
+         *     addresses of unopened events into a crawlable sitemap: worse than the
+         *     404, because it discloses that a workspace and its slug exist *before*
+         *     the director has opened entries.
+         *
+         *     Ordered by ``slug``, which carries its own unique index
+         *     (``uq_entry_pages_slug``) — unlike a random-UUID primary key, two rows
+         *     can never tie on it, so no second tiebreaker is needed for a stable
+         *     order across SQLite and Postgres.
+         */
+        get: operations["entry_page_list_e_api_pages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/quote/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quote Entry
+         * @description R14's "Update events and total", as a route the RR7 form can call.
+         *
+         *     **Session-gated (ruling R8-C)**, matching the incumbent's filter branch
+         *     (``api/entries_public.py``'s ``action=filter``) rather than becoming a
+         *     public fee oracle: it reads a director's price list against a
+         *     caller-chosen basket, which is the shape of a scraper.
+         *
+         *     It calls the **same** ``check_policy`` and ``compute_fee_total`` the
+         *     write calls, over the same per-person grouping. That is not
+         *     convenience — Seam B's invariant is that the total shown to the entrant
+         *     IS the total recorded, and two implementations cannot promise that
+         *     however carefully they are kept in step.
+         *
+         *     Writes nothing, and does not spend the entry budget: the budget counts
+         *     entries, and this is somebody still filling in a form.
+         *
+         *     **Two answers, by ``Accept``.** A hydrated caller asks for JSON and gets
+         *     ``QuoteResponse``. A native form post cannot read JSON at all — it is a
+         *     navigation — so a browser ``Accept: text/html`` gets a **307** back to
+         *     the entry page, which re-posts the entrant's own body there and leaves
+         *     only the server's total in the query string (``_echo_redirect``). That
+         *     is what keeps R14's "Update events and total" working with JavaScript
+         *     disabled (spec §7) without node ever relaying a credential: the browser
+         *     talks to this route directly, on one origin, and the RR7 page renders
+         *     the body it is handed back.
+         */
+        post: operations["quote_entry_e_api_quote__slug__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/submit/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Entry Json
+         * @description Record one submission. **The order of the guards is the contract**,
+         *     and it is ``api/entries_public.submit_entry``'s verbatim.
+         *
+         *     1. the entrant session (the dependency above — no bootstrap fallback);
+         *     2. slug -> page -> tournament, or the uniform 404;
+         *     3. the form CSRF token, before anything is read out of the body;
+         *     4. the per-IP budget on its own ``entry:`` namespace, so an entry flood
+         *        cannot lock a venue out of *signing in*;
+         *     5. the acknowledgment, with the version agreed to recorded at that
+         *        instant on the submission;
+         *     6. entry policy, refused WITH THE RULE STATED;
+         *     7-9. replay, flags and the write, all inside the submission service.
+         *
+         *     **What is different from the incumbent, and only this.** The answer is
+         *     a **303** to an RR7 receipt route instead of a rendered page: a
+         *     POST/redirect/GET target means a reload never re-posts. And the
+         *     ``action=filter`` branch is gone — it is ``POST /e/api/quote/{slug}``
+         *     now, which is a better shape for the same act (it writes nothing and it
+         *     said so only in a comment before).
+         *
+         *     **The Idempotency-Key is read from the body as well as the header**,
+         *     and the body is what makes it reachable. A native form cannot send a
+         *     header, so until this phase the key was always NULL for a real entrant
+         *     and ``UNIQUE (tournament_id, idempotency_key)`` guarded nothing they
+         *     could hit. The key is minted in the loader that renders the form —
+         *     not at submit, where a double-click mints two.
+         *
+         *     The body is read as a raw form rather than declared as ``Form(...)``
+         *     parameters because the payload is 1-N players each with 1-N events,
+         *     which FastAPI's form binding cannot express.
+         */
+        post: operations["submit_entry_json_e_api_submit__slug__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/account/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Signup
+         * @description Create an entrant account. **The order of the guards is the contract.**
+         *
+         *     1. **Per-IP throttle**, read first because it is one local query and
+         *        the challenge is an outbound request with a 5-second timeout.
+         *        Verifying the challenge first would let an already-refused address
+         *        spend one of our outbound requests on every post.
+         *     2. **Turnstile, server-side.** Signup is now the cheapest bot target in
+         *        the product and the one act with no session behind it (spec Q4, R3
+         *        restack). A widget nobody verifies is worth nothing — bots post
+         *        straight here without ever rendering it.
+         *     3. **The password policy**, after the challenge so its response cannot
+         *        be used as a free oracle by something that never solved one.
+         *     4. **Create, or pretend to.** See the module docstring.
+         *
+         *     ``202``, not ``201``: on the already-registered branch nothing was
+         *     created, and a ``201`` there would be a lie told by the status line
+         *     while the body was busy telling the truth.
+         */
+        post: operations["signup_e_account_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/account/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description Credentials → an entrant session cookie.
+         *
+         *     Two throttle keys, both in the entrant namespaces: the address
+         *     (``eacct:``) so guessing at one account is bounded, and the client IP
+         *     (``eip:``) so guessing at *many* accounts from one place is bounded
+         *     too. Neither is the operator's bucket — a public form must not be able
+         *     to lock a director out of the console, and that is the property
+         *     ``tests/test_entrant_auth_routes.py`` asserts at route level.
+         *
+         *     One failure answer for every cause (unknown address, no password set,
+         *     wrong password), with the Argon2 cost paid on the miss as well, so
+         *     neither the body nor the timing tells a caller which it was. The
+         *     uniformity is ``services/entrants.authenticate``'s, not this route's —
+         *     it returns an account or ``None`` and offers no way to ask why.
+         *
+         *     **Two shapes for that one answer, by ``Accept``.** A JSON caller keeps
+         *     the 401 verbatim; a browser navigation — which renders whatever it is
+         *     handed as the whole document — gets a 303 to ``_LOGIN_FAILED_PAGE``.
+         *     Same branch, same cause-blindness, same absence of anything an attacker
+         *     can read: what changes is only whether the refusal arrives as a page or
+         *     as ``{"detail":{"code":...}}`` in the entrant's face.
+         */
+        post: operations["login_e_account_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/account/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description Revoke the presented session and clear the cookie.
+         *
+         *     Idempotent, following ``/auth/logout``: nothing to destroy is a no-op,
+         *     not a 401 the caller cannot act on. **Only the presented token** is
+         *     revoked — logging out of a library computer must not log the entrant
+         *     out of their phone — and revocation is a timestamp, never a delete, so
+         *     the row outlives the credential.
+         */
+        post: operations["logout_e_account_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/account/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description Who the entrant cookie says you are — 401 if it says nothing.
+         *
+         *     Declares ``get_current_entrant`` itself rather than inheriting an
+         *     app-wide dependency, which is what keeps the two principals from being
+         *     resolvable by one seam. There is no repository read here: everything
+         *     the answer contains came out of the session resolution already.
+         */
+        get: operations["me_e_account_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/invites/{token}": {
@@ -2039,6 +2553,11 @@ export interface components {
             sizeBytes: number;
             /** Modifiedat */
             modifiedAt: string;
+            /**
+             * Origin
+             * @default auto
+             */
+            origin: string;
         };
         /** BackupListDTO */
         BackupListDTO: {
@@ -2164,6 +2683,10 @@ export interface components {
             restSlots?: number | null;
             /** Availability */
             availability?: components["schemas"]["AvailabilityWindow"][];
+            /** Sourceentryid */
+            sourceEntryId?: string | null;
+            /** Remarks */
+            remarks?: string | null;
         };
         /**
          * BracketScheduleCandidate
@@ -2446,15 +2969,17 @@ export interface components {
             /** Matches */
             matches: components["schemas"]["MatchDTO"][];
             originalSchedule: components["schemas"]["ScheduleDTO"];
-            /**
-             * Matchstates
-             * @default {}
-             */
-            matchStates: {
+            /** Matchstates */
+            matchStates?: {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
         };
-        /** DisplaySummaryDTO */
+        /**
+         * DisplaySummaryDTO
+         * @description ``kind`` is the BOARD kind — which engine(s) the display renders —
+         *     not the workspace's legacy ``kind`` column. ``meet`` | ``bracket`` |
+         *     ``hybrid``.
+         */
         DisplaySummaryDTO: {
             /** Kind */
             kind: string;
@@ -2503,6 +3028,358 @@ export interface components {
             reason?: string | null;
         };
         /**
+         * EntrantConfigDTO
+         * @description The two values the entrant app cannot compute for itself.
+         *
+         *     Small on purpose. This is a **publication** route, not a settings
+         *     dump: everything on it is already public by nature (a Turnstile
+         *     sitekey is rendered into every signup page; the auth mode is
+         *     observable from whether an anonymous write is refused). Nothing that
+         *     is secret, or that would become interesting in aggregate, belongs
+         *     here — and the negative control in
+         *     ``tests/test_entries_json_routes.py`` exists because the secret key
+         *     sits one line away from the sitekey in ``app/config.py`` with a
+         *     near-identical name.
+         */
+        EntrantConfigDTO: {
+            /** Turnstilesitekey */
+            turnstileSiteKey: string;
+            /** Authmode */
+            authMode: string;
+        };
+        /**
+         * EntrantDTO
+         * @description What an entrant is told about themselves. Note what is absent: no
+         *     org, no role, no workspace, no membership — an entrant has none, and
+         *     a DTO that carried the fields would invite a client to look for them.
+         */
+        EntrantDTO: {
+            /** Id */
+            id: string;
+            /** Email */
+            email: string;
+            /** Displayname */
+            displayName?: string | null;
+            /**
+             * Emailverified
+             * @default false
+             */
+            emailVerified: boolean;
+        };
+        /**
+         * EntrantRowDTO
+         * @description The strict projection (Q4/I6), and nothing else.
+         *
+         *     ``_entrants`` answers one row per PERSON, so this is one row per person:
+         *     the codes are a LIST on that row precisely because the alternative — a
+         *     row per person-per-event — is the 2026-08-10 duplication defect, which
+         *     printed 42 rows for 23 people on the live page.
+         *
+         *     Two fields, and the second is the event dimension the Entrants tab
+         *     groups by (SP-P6-2 G5a). Contact data stays structurally absent rather
+         *     than fetched-and-then-hidden: the club sits one column away on
+         *     ``entry_players`` and is deliberately NOT here, because the
+         *     acknowledgment an entrant ticks promises publication of their name
+         *     (``entrant/app/routes/entry.form.tsx``) — a third field is only allowed
+         *     to appear here after the copy that consents to it does.
+         */
+        EntrantRowDTO: {
+            /** Name */
+            name: string;
+            /**
+             * Eventcodes
+             * @default []
+             */
+            eventCodes: string[];
+        };
+        /**
+         * EntryCommitOutcomeDTO
+         * @description One committed entry: which entry, which roster player it became.
+         */
+        EntryCommitOutcomeDTO: {
+            /** Id */
+            id: string;
+            /** Playerid */
+            playerId: string;
+        };
+        /** EntryCommitResultDTO */
+        EntryCommitResultDTO: {
+            /** Committed */
+            committed?: components["schemas"]["EntryCommitOutcomeDTO"][];
+            /** Skipped */
+            skipped?: components["schemas"]["EntrySkipDTO"][];
+        };
+        /**
+         * EntryDeskRowDTO
+         * @description One row of the operator's entries desk.
+         *
+         *     A **projection**, not the table. The doubles columns are deliberately
+         *     absent: they exist in the schema (created now to avoid migration churn)
+         *     but mean nothing until E3 and would read as broken features.
+         *
+         *     **The credential material this projection used to exclude no longer
+         *     exists.** E1 carried ``Entry.manage_token_hash`` and this docstring
+         *     named it as the field kept off an operator screen; ruling R10 deleted
+         *     the column, and managing an entry is login-gated "my entries" against
+         *     an entrant account (E2). The claim survives its column, one level out:
+         *     the account's password hash and its session token are what must never
+         *     reach here now, which is why nothing below reaches through
+         *     ``submission.account`` for anything but a name and an address.
+         *
+         *     ``eventCode`` is denormalized from ``entry_events`` so the desk can
+         *     render a row without a second lookup per entry — it is the same string
+         *     the commit seam turns into ``ranks[]``.
+         */
+        EntryDeskRowDTO: {
+            /** Id */
+            id: string;
+            /** Entryeventid */
+            entryEventId: string;
+            /** Eventcode */
+            eventCode?: string | null;
+            /** State */
+            state: string;
+            /** Pendingreasons */
+            pendingReasons?: string[];
+            submission?: components["schemas"]["EntrySubmissionDTO"] | null;
+            /** Playername */
+            playerName: string;
+            /** Remarks */
+            remarks?: string | null;
+            /**
+             * Listoptout
+             * @default false
+             */
+            listOptOut: boolean;
+            /** Committedplayerid */
+            committedPlayerId?: string | null;
+            /** Submittedat */
+            submittedAt?: string | null;
+            /** Withdrawnat */
+            withdrawnAt?: string | null;
+        };
+        /**
+         * EntryEventCreateDTO
+         * @description One entry-facing event (spec Q2/§4).
+         *
+         *     ``entryType`` is a ``Literal`` rather than a validated string so an
+         *     unknown value is refused by the schema, before the route: E1 is
+         *     singles-only and doubles is E3, and anything else would reach the
+         *     commit seam as an event it cannot map.
+         *
+         *     ``bracketEventId`` stays a plain string, matching the column's
+         *     deliberately unconstrained pointer — the seam skips-and-reports an
+         *     unmappable code rather than guessing, so a dangling pointer is a
+         *     handled state and not one worth a foreign key that would cascade.
+         */
+        EntryEventCreateDTO: {
+            /** Code */
+            code: string;
+            /** Discipline */
+            discipline: string;
+            /**
+             * Entrytype
+             * @default singles
+             * @enum {string}
+             */
+            entryType: "singles" | "doubles";
+            /** Bracketeventid */
+            bracketEventId?: string | null;
+            /** Cap */
+            cap?: number | null;
+            /** Feecents */
+            feeCents?: number | null;
+            /** Genderconstraint */
+            genderConstraint?: ("M" | "F" | "mixed") | null;
+            /** Opensat */
+            opensAt?: string | null;
+            /** Closesat */
+            closesAt?: string | null;
+            /** Withdrawsuntil */
+            withdrawsUntil?: string | null;
+        };
+        /** EntryEventDTO */
+        EntryEventDTO: {
+            /** Id */
+            id: string;
+            /** Code */
+            code: string;
+            /** Discipline */
+            discipline: string;
+            /** Entrytype */
+            entryType: string;
+            /** Bracketeventid */
+            bracketEventId?: string | null;
+            /** Cap */
+            cap?: number | null;
+            /** Feecents */
+            feeCents?: number | null;
+            /** Genderconstraint */
+            genderConstraint?: string | null;
+            /** Opensat */
+            opensAt?: string | null;
+            /** Closesat */
+            closesAt?: string | null;
+            /** Withdrawsuntil */
+            withdrawsUntil?: string | null;
+        };
+        /**
+         * EntryPageDTO
+         * @description The stored entry page as the operator sees it back.
+         */
+        EntryPageDTO: {
+            /** Slug */
+            slug: string;
+            /** Isopen */
+            isOpen: boolean;
+            /** Introtext */
+            introText?: string | null;
+            /** Regulationstext */
+            regulationsText?: string | null;
+            /** Waiverrequired */
+            waiverRequired: boolean;
+            /** Regulationsversion */
+            regulationsVersion: number;
+            /** Feeschedule */
+            feeSchedule?: {
+                [key: string]: unknown;
+            } | null;
+            /** Paymentinstructions */
+            paymentInstructions?: string | null;
+            /** Maxeventsperperson */
+            maxEventsPerPerson?: number | null;
+            /** Disciplinecaps */
+            disciplineCaps?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Collectphone
+             * @default false
+             */
+            collectPhone: boolean;
+            /** Venuename */
+            venueName?: string | null;
+            /** Venueaddress */
+            venueAddress?: string | null;
+        };
+        /** EntryPageListItemDTO */
+        EntryPageListItemDTO: {
+            /** Slug */
+            slug: string;
+        };
+        /**
+         * EntryPageProjection
+         * @description One loader, one call. The RR7 loader renders a whole entry page from
+         *     this and makes no second request — meta and OG tags included (spec §7).
+         */
+        EntryPageProjection: {
+            tournament: components["schemas"]["TournamentDTO"];
+            org?: components["schemas"]["NamedDTO"] | null;
+            venue?: components["schemas"]["VenueDTO"] | null;
+            page: components["schemas"]["PageDTO"];
+            policy: components["schemas"]["PolicyDTO"];
+            /** Events */
+            events: components["schemas"]["EventDTO"][];
+            /** Entrants */
+            entrants: components["schemas"]["EntrantRowDTO"][];
+            viewer: components["schemas"]["ViewerDTO"];
+        };
+        /**
+         * EntryPageUpsertDTO
+         * @description The operator's entry-page configuration, whole.
+         *
+         *     A PUT body, so it is the complete desired state and an omitted optional
+         *     field means "clear it" — the alternative (omission means "keep") gives
+         *     a route with no way to erase an intro paragraph.
+         *
+         *     ``regulationsVersion`` is deliberately **not** here. It is derived: the
+         *     server bumps it when ``regulationsText`` actually changes (Q11.4), so
+         *     an entry's recorded ``regulations_version_accepted`` refers to words
+         *     that really were on the page. A client-settable version is a client
+         *     that can rewrite the terms without invalidating consent to the old ones.
+         */
+        EntryPageUpsertDTO: {
+            /** Slug */
+            slug: string;
+            /**
+             * Isopen
+             * @default false
+             */
+            isOpen: boolean;
+            /** Introtext */
+            introText?: string | null;
+            /** Regulationstext */
+            regulationsText?: string | null;
+            /**
+             * Waiverrequired
+             * @default false
+             */
+            waiverRequired: boolean;
+            /** Feeschedule */
+            feeSchedule?: {
+                [key: string]: unknown;
+            } | null;
+            /** Paymentinstructions */
+            paymentInstructions?: string | null;
+            /** Maxeventsperperson */
+            maxEventsPerPerson?: number | null;
+            /** Disciplinecaps */
+            disciplineCaps?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Collectphone
+             * @default false
+             */
+            collectPhone: boolean;
+            /** Venuename */
+            venueName?: string | null;
+            /** Venueaddress */
+            venueAddress?: string | null;
+        };
+        /**
+         * EntrySkipDTO
+         * @description One skipped entry and the stable reason code for the skip.
+         *
+         *     Spec §5: partial success is reported per-entry, not rolled back
+         *     wholesale — so this list is a normal outcome, not an error body.
+         */
+        EntrySkipDTO: {
+            /** Id */
+            id: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * EntrySubmissionDTO
+         * @description The act an entry belongs to, as much of it as a desk needs (R13).
+         *
+         *     Four fields, and the restraint is the point. ``id`` is the **grouping
+         *     key** — the desk shows "these four entries arrived on one form" by
+         *     reading it, not by grouping on a repeated email string, which is what
+         *     an operator had to do by eye before R13. The account's address is who
+         *     to write to. The fee total belongs to the act rather than to any entry
+         *     under it, because tiered pricing prices the *person*, not the event.
+         *
+         *     What is deliberately not here: the idempotency key (a retry mechanism,
+         *     not information), and anything at all from the account beyond a name
+         *     and an address — a password hash and a session token are the material
+         *     this projection exists to keep off an operator screen (a colocated test
+         *     greps the serialized row for it).
+         */
+        EntrySubmissionDTO: {
+            /** Id */
+            id: string;
+            /** Accountemail */
+            accountEmail?: string | null;
+            /** Accountname */
+            accountName?: string | null;
+            /** Feetotalcents */
+            feeTotalCents?: number | null;
+            /** Submittedat */
+            submittedAt?: string | null;
+        };
+        /**
          * EventConfigPatchIn
          * @description Body of PATCH /bracket/events/{event_id} — edit a DRAFT draw's
          *     configuration without touching its participants (the upsert route
@@ -2523,6 +3400,37 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** EventDTO */
+        EventDTO: {
+            /** Id */
+            id: string;
+            /** Code */
+            code: string;
+            /** Discipline */
+            discipline: string;
+            /** Feecents */
+            feeCents?: number | null;
+            /** Genderconstraint */
+            genderConstraint?: string | null;
+            /** Opensat */
+            opensAt?: string | null;
+            /** Closesat */
+            closesAt?: string | null;
+            /** Withdrawsuntil */
+            withdrawsUntil?: string | null;
+            /** Opensatiso */
+            opensAtIso?: string | null;
+            /** Closesatiso */
+            closesAtIso?: string | null;
+            /** Withdrawsuntiliso */
+            withdrawsUntilIso?: string | null;
+            /** Isopen */
+            isOpen: boolean;
+            /** Agebracketed */
+            ageBracketed: boolean;
+            /** Entrycount */
+            entryCount: number;
         };
         /** EventIn */
         EventIn: {
@@ -2643,6 +3551,10 @@ export interface components {
         /**
          * GenerateScheduleRequest
          * @description The complete solver input — includes all data needed.
+         *
+         *     The collection bounds matter more here than anywhere else in the API:
+         *     this payload is what reaches CP-SAT, and solve cost grows with the
+         *     grid it describes rather than with the bytes it occupies.
          */
         GenerateScheduleRequest: {
             config: components["schemas"]["TournamentConfig"];
@@ -2766,6 +3678,10 @@ export interface components {
          *     ``email`` (SP-CLOUD-2) turns this into an email invite: the link is
          *     delivered via the email seam and the invite expires. Omitted =
          *     local link-style invite (copy the URL yourself).
+         *
+         *     The address is bounded here and validated for shape by
+         *     ``normalize_email`` at the handler — that regex rejects all
+         *     whitespace, which is what keeps a newline out of the ``To:`` header.
          */
         InviteCreateDTO: {
             /**
@@ -2867,16 +3783,10 @@ export interface components {
             players: components["schemas"]["PlayerDTO"][];
             /** Matches */
             matches: components["schemas"]["MatchDTO"][];
-            /**
-             * Groups
-             * @default []
-             */
-            groups: components["schemas"]["RosterGroupDTO"][];
-            /**
-             * Matchstates
-             * @default {}
-             */
-            matchStates: {
+            /** Groups */
+            groups?: components["schemas"]["RosterGroupDTO"][];
+            /** Matchstates */
+            matchStates?: {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
             /** Matchid */
@@ -2949,6 +3859,21 @@ export interface components {
         /**
          * MatchMetricsDTO
          * @description The inspector's metric triplet. ``toDo`` = attention-reason count.
+         *
+         *     ``played`` counts terminally-resolved matches (finished/retired on the
+         *     meet side, recorded results on the bracket side) — the same play state
+         *     the lifecycle phase reads, so the Overview's live-progress readout can
+         *     never disagree with ``phase``.
+         *
+         *     ``playing`` / ``courtsFree`` REVERSE this DTO's original rule that live
+         *     counts belong to Operations alone (SP-CONSOLE-2 INS-4 / OV-4). The reason
+         *     the rule was right no longer holds and the reason to break it is concrete:
+         *     played/remaining/total is planning information, and during a live day the
+         *     question both the Hub inspector and the Overview are being asked is "is
+         *     anything happening, and is a court free" — which neither could answer,
+         *     because the Hub reads only these server-computed signals and has no other
+         *     route to match state. The data was already loaded here for ``played``;
+         *     withholding the count was a boundary, not a cost.
          */
         MatchMetricsDTO: {
             /**
@@ -2966,6 +3891,18 @@ export interface components {
              * @default 0
              */
             toDo: number;
+            /**
+             * Played
+             * @default 0
+             */
+            played: number;
+            /**
+             * Playing
+             * @default 0
+             */
+            playing: number;
+            /** Courtsfree */
+            courtsFree?: number | null;
         };
         /**
          * MatchMove
@@ -3019,8 +3956,6 @@ export interface components {
             originalSlotId?: number | null;
             /** Originalcourtid */
             originalCourtId?: number | null;
-        } & {
-            [key: string]: unknown;
         };
         /**
          * MeetStandingRowDTO
@@ -3106,6 +4041,11 @@ export interface components {
              */
             comingSoon: number;
         };
+        /** NamedDTO */
+        NamedDTO: {
+            /** Name */
+            name: string;
+        };
         /**
          * NextMatchDTO
          * @description One upcoming match for the inspector's "Next up" list.
@@ -3126,6 +4066,30 @@ export interface components {
              * @default scheduled
              */
             status: string;
+            /** Matchid */
+            matchId?: string | null;
+            /** Source */
+            source?: ("meet" | "bracket") | null;
+        };
+        /** PageDTO */
+        PageDTO: {
+            /** Slug */
+            slug: string;
+            /** Introtext */
+            introText?: string | null;
+            /** Regulationstext */
+            regulationsText?: string | null;
+            /** Regulationsversion */
+            regulationsVersion: number;
+            /** Paymentinstructions */
+            paymentInstructions?: string | null;
+            /**
+             * Feeschedule
+             * @default {}
+             */
+            feeSchedule: {
+                [key: string]: number;
+            };
         };
         /** ParticipantIn */
         ParticipantIn: {
@@ -3207,6 +4171,10 @@ export interface components {
             minRestMinutes?: number | null;
             /** Notes */
             notes?: string | null;
+            /** Sourceentryid */
+            sourceEntryId?: string | null;
+            /** Remarks */
+            remarks?: string | null;
         };
         /**
          * PlayerImpact
@@ -3221,6 +4189,25 @@ export interface components {
             matchCount: number;
             /** Earliestslotdelta */
             earliestSlotDelta: number;
+        };
+        /** PolicyDTO */
+        PolicyDTO: {
+            /** Maxeventsperperson */
+            maxEventsPerPerson?: number | null;
+            /** Disciplinecaps */
+            disciplineCaps?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Collectphone
+             * @default false
+             */
+            collectPhone: boolean;
+            /**
+             * Waiverrequired
+             * @default false
+             */
+            waiverRequired: boolean;
         };
         /**
          * PreviousAssignmentDTO
@@ -3290,6 +4277,27 @@ export interface components {
             /** Courtid */
             courtId: number;
         };
+        /**
+         * QuoteResponse
+         * @description What a basket costs, and whether it is allowed.
+         *
+         *     Both, in one answer, deliberately: a quote that priced a basket policy
+         *     would refuse is a number the entrant will never be charged, and a
+         *     refusal with no price makes them re-tick to find out what a legal
+         *     basket costs.
+         */
+        QuoteResponse: {
+            /** Totalcents */
+            totalCents?: number | null;
+            /**
+             * Feebasis
+             * @default {}
+             */
+            feeBasis: {
+                [key: string]: unknown;
+            };
+            refusal?: components["schemas"]["RefusalDTO"] | null;
+        };
         /** RecordResultIn */
         RecordResultIn: {
             /** Play Unit Id */
@@ -3313,6 +4321,26 @@ export interface components {
             /** Seen Version */
             seen_version?: number | null;
         };
+        /**
+         * RefusalDTO
+         * @description A refusal the entrant can act on.
+         *
+         *     ``code`` is stable wire vocabulary for a caller that wants to branch;
+         *     ``message`` **contains the rule** — the number, or the discipline —
+         *     because "your entry was refused" is not an answer someone can do
+         *     anything with (R14 §4).
+         */
+        RefusalDTO: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /**
+             * Subjects
+             * @default []
+             */
+            subjects: string[];
+        };
         /** RegisterRequest */
         RegisterRequest: {
             /** Email */
@@ -3330,11 +4358,8 @@ export interface components {
             players: components["schemas"]["PlayerDTO"][];
             /** Matches */
             matches: components["schemas"]["MatchDTO"][];
-            /**
-             * Matchstates
-             * @default {}
-             */
-            matchStates: {
+            /** Matchstates */
+            matchStates?: {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
             disruption: components["schemas"]["Disruption"];
@@ -3521,6 +4546,19 @@ export interface components {
             rounds: string[][];
             /** Positions */
             positions?: number[] | null;
+        };
+        /** SignupResponse */
+        SignupResponse: {
+            /**
+             * Status
+             * @default accepted
+             */
+            status: string;
+            /**
+             * Message
+             * @default If that address can be used, the account is ready. Sign in to continue.
+             */
+            message: string;
         };
         /** SoftViolation */
         SoftViolation: {
@@ -3767,7 +4805,7 @@ export interface components {
             /** Deuceenabled */
             deuceEnabled?: boolean | null;
             /** Tvdisplaymode */
-            tvDisplayMode?: ("strip" | "grid" | "list") | null;
+            tvDisplayMode?: ("auto" | "strip" | "grid" | "list") | null;
             /** Tvaccent */
             tvAccent?: string | null;
             /** Tvpreset */
@@ -3784,6 +4822,10 @@ export interface components {
             hiddenCourts?: number[] | null;
             /** Standingsmode */
             standingsMode?: ("off" | "side" | "rotate") | null;
+            /** Tvrotationslides */
+            tvRotationSlides?: ("courts" | "standings" | "upNext")[] | null;
+            /** Tvrotationdwellseconds */
+            tvRotationDwellSeconds?: number | null;
             /** Eventorder */
             eventOrder?: string[] | null;
             /** Eventvisible */
@@ -3826,6 +4868,13 @@ export interface components {
             tournamentDate?: string | null;
             /** Modules */
             modules?: components["schemas"]["WorkspaceModuleSeedDTO"][] | null;
+        };
+        /** TournamentDTO */
+        TournamentDTO: {
+            /** Name */
+            name?: string | null;
+            /** Date */
+            date?: string | null;
         };
         /**
          * TournamentMemberDTO
@@ -4060,6 +5109,55 @@ export interface components {
             /** Conflicts */
             conflicts?: components["schemas"]["ValidationConflict"][];
         };
+        /** VenueDTO */
+        VenueDTO: {
+            /** Name */
+            name?: string | null;
+            /** Address */
+            address?: string | null;
+        };
+        /**
+         * ViewerDTO
+         * @description Who is reading, as seen from THIS request's cookies — which is not
+         *     the same thing as who is reading the page.
+         *
+         *     ``formCsrf`` is empty for a signed-out reader because ``_form_csrf``
+         *     derives it from the session cookie and there is none.
+         *
+         *     **And on a server-rendered page it is ALWAYS empty, for every reader.**
+         *     The RR7 tier fetches this projection from node, and node sends a frozen
+         *     ``accept``-only allowlist (``app/lib/apiFetch.server.ts``) because it
+         *     renders and never relays credentials. So ``_optional_entrant`` reads a
+         *     cookie that was never sent, and ``signedIn`` is ``False`` and
+         *     ``formCsrf`` is ``""`` for a signed-in entrant exactly as much as for a
+         *     stranger. These two fields are meaningful only to a caller that sends
+         *     its own cookies — a hydrated browser fetch — and a server renderer must
+         *     not gate anything on them. It is pinned as a contract by
+         *     ``tests/test_entrant_ssr_contract.py``.
+         *
+         *     An earlier version of this docstring said the pre-session
+         *     ``sw_play_csrf`` double-submit was something "the SSR tier mints".
+         *     Nothing implemented that; ``issue_play_csrf`` had zero production call
+         *     sites and has been deleted. Ruling R8-D made the claim true instead:
+         *     the node loader mints the nonce on the SSR document response and
+         *     renders its digest (``app/lib/formCsrf.server.ts``), which
+         *     ``require_form_csrf`` below and ``app.form_csrf.form_csrf_proves``
+         *     already accepted as a second candidate secret.
+         */
+        ViewerDTO: {
+            /**
+             * Signedin
+             * @default false
+             */
+            signedIn: boolean;
+            /** Email */
+            email?: string | null;
+            /**
+             * Formcsrf
+             * @default
+             */
+            formCsrf: string;
+        };
         /** WarmRestartRequest */
         WarmRestartRequest: {
             originalSchedule: components["schemas"]["ScheduleDTO"];
@@ -4068,11 +5166,8 @@ export interface components {
             players: components["schemas"]["PlayerDTO"][];
             /** Matches */
             matches: components["schemas"]["MatchDTO"][];
-            /**
-             * Matchstates
-             * @default {}
-             */
-            matchStates: {
+            /** Matchstates */
+            matchStates?: {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
             /**
@@ -4104,6 +5199,11 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Hasdata
+             * @default false
+             */
+            hasData: boolean;
         };
         /**
          * WorkspaceModulePatchDTO
@@ -6049,7 +7149,9 @@ export interface operations {
                 /** @description Sanction the edit by clearing the committed schedule(s) it invalidates, atomically with the write. Refused (409 DRAW_STARTED) while any bracket draw is started. */
                 clearSchedule?: boolean;
             };
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 tournament_id: string;
             };
@@ -6131,6 +7233,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BackupCreatedDTO"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_tournament_backup_tournaments__tournament_id__state_backups__filename__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                filename: string;
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_tournament_backup_tournaments__tournament_id__state_backups__filename__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                filename: string;
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -6498,6 +7662,403 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_entries_tournaments__tournament_id__entries_get: {
+        parameters: {
+            query?: {
+                /** @description Filter to one lifecycle state (spec §6). */
+                state?: string | null;
+            };
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryDeskRowDTO"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_entries_route_tournaments__tournament_id__entries_commit_post: {
+        parameters: {
+            query?: {
+                /** @description Commit only this entry event (spec §5's event filter). */
+                entry_event_id?: string | null;
+            };
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryCommitResultDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_entry_tournaments__tournament_id__entries__entry_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryDeskRowDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_entry_page_tournaments__tournament_id__entry_page_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntryPageUpsertDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryPageDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_entry_event_tournaments__tournament_id__entry_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntryEventCreateDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryEventDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entry_page_projection_e_api_page__slug__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryPageProjection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entrant_config_e_api_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntrantConfigDTO"];
+                };
+            };
+        };
+    };
+    entry_page_list_e_api_pages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryPageListItemDTO"][];
+                };
+            };
+        };
+    };
+    quote_entry_e_api_quote__slug__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_entry_json_e_api_submit__slug__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signup_e_account_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupResponse"];
+                };
+            };
+            /** @description Form post: redirect to the login page */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    login_e_account_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntrantDTO"];
+                };
+            };
+            /** @description Form post: redirect to `next` carrying the session cookie, or to the sign-in page's refusal variant on a bad credential */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logout_e_account_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_e_account_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntrantDTO"];
                 };
             };
         };

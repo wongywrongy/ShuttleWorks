@@ -10,6 +10,7 @@ function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' |
     span: 1,
     status: 'scheduled',
     late: false,
+    timeliness: 'ontime' as const,
     eligible: true,
     ...p,
   };
@@ -18,7 +19,7 @@ function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' |
 const QUEUE: RunMatch[] = [
   mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1', sideA: 'Alpha', sideB: 'Beta' }),
   mkMatch({ key: 'bracket:pu1', id: 'pu1', source: 'bracket', label: 'QF1', sideA: 'Gamma', sideB: 'Delta' }),
-  mkMatch({ key: 'meet:m3', id: 'm3', source: 'meet', label: 'MD2', sideA: 'Epsilon', sideB: 'Zeta', late: true }),
+  mkMatch({ key: 'meet:m3', id: 'm3', source: 'meet', label: 'MD2', sideA: 'Epsilon', sideB: 'Zeta' }),
 ];
 
 describe('RunQueue', () => {
@@ -45,17 +46,22 @@ describe('RunQueue', () => {
   it('renders the exact empty-state copy when queue is empty', () => {
     render(<RunQueue queue={[]} onSelect={vi.fn()} />);
     expect(
-      screen.getByText('Queue empty — every match is on a court.'),
+      screen.getByText('Queue empty. Every match is on a court.'),
     ).toBeInTheDocument();
     expect(screen.queryByTestId(/^run-queue-row-/)).toBeNull();
   });
 
-  it('a row with late:true shows the late marker', () => {
-    render(<RunQueue queue={QUEUE} onSelect={vi.fn()} />);
+  it('a row in lateKeys shows the late marker', () => {
+    // `lateKeys` is the ONE late seam for queue rows: `RunMatch.late` is never
+    // true off toRunMatches (deriveCourtLanes sets it on lane clones only), so
+    // the old badge keyed on it was dead code and was removed (SP-CONSOLE-REFINE).
+    render(<RunQueue queue={QUEUE} onSelect={vi.fn()} lateKeys={new Set(['meet:m3'])} />);
     const lateRow = screen.getByTestId('run-queue-row-meet:m3');
     expect(lateRow).toBeInTheDocument();
     // "Late" text must be visible inside the row
     expect(lateRow.textContent).toMatch(/late/i);
+    // ...and only on the flagged row.
+    expect(screen.getByTestId('run-queue-row-meet:m1').textContent).not.toMatch(/late/i);
   });
 
   it('clicking a row fires onSelect with the match key', () => {
@@ -81,5 +87,37 @@ describe('RunQueue', () => {
 
     expect(screen.getByTestId('run-queue-row-meet:m1')).toHaveAttribute('data-source', 'meet');
     expect(screen.getByTestId('run-queue-row-bracket:pu1')).toHaveAttribute('data-source', 'bracket');
+  });
+});
+
+// A queue row said nothing about whether it could actually be sent. The send
+// affordance rendered only for eligible+scheduled rows; every other row —
+// blocked on an earlier result, or already called to a court — looked
+// identical to a playable one, with nothing saying why (audit T2 item 7).
+describe('RunQueue — readiness is legible on the row', () => {
+  const READINESS: RunMatch[] = [
+    mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1' }),
+    mkMatch({
+      key: 'bracket:pu9', id: 'pu9', source: 'bracket', label: 'SF1',
+      eligible: false, sideA: 'TBD', sideB: 'TBD',
+    }),
+    mkMatch({ key: 'meet:m7', id: 'm7', source: 'meet', label: 'MS7', status: 'called' }),
+  ];
+
+  it('separates playable-now, pending-on-an-earlier-result, and already-called', () => {
+    render(<RunQueue queue={READINESS} onSelect={vi.fn()} onSend={vi.fn()} />);
+
+    // Playable now: the send affordance.
+    expect(screen.getByTestId('queue-send-meet:m1')).toBeInTheDocument();
+
+    // Blocked: no send, and it SAYS why rather than just going quiet.
+    expect(screen.queryByTestId('queue-send-bracket:pu9')).toBeNull();
+    const blocked = screen.getByTestId('queue-blocked-bracket:pu9');
+    expect(blocked.textContent).toMatch(/pending/i);
+    expect(blocked).toHaveAttribute('title', expect.stringMatching(/earlier result/i));
+
+    // Already called: no send either, but a different reason.
+    expect(screen.queryByTestId('queue-send-meet:m7')).toBeNull();
+    expect(screen.getByTestId('queue-state-meet:m7').textContent).toMatch(/called/i);
   });
 });

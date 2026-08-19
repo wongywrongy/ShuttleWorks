@@ -474,6 +474,12 @@ def test_list_recent_is_bounded_and_stably_ordered(session, tournament_id):
     for i in range(3):
         job = _claim_and_run(session, tournament_id, idempotency_key=f"k{i}")
         solve_jobs.complete_success(session, job, {})
+        # Distinct created_at per job: three same-transaction inserts can land
+        # on ONE timestamp, and within a tie the ordering contract is
+        # (created_at DESC, id DESC) — deterministic but arbitrary vs insertion
+        # order, since ids are random UUIDs. This test asserts newest-first, so
+        # it must actually make each job newer than the last.
+        job.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=i)
         session.commit()
         ids.append(job.id)
     listed = solve_jobs.list_recent(session, tournament_id, limit=2)

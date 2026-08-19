@@ -8,8 +8,9 @@ module seams without tracing every import.
 
 ## Why it matters
 
-The four modules are coupled by real seams: Meet's schedule feeds Operations' live layout, Bracket's
-draw feeds the same layout, and Operations' match state feeds the public Display. Historically that
+The five modules are coupled by real seams: Entries' confirmed entries become roster players, Meet's
+schedule feeds Operations' live layout, Bracket's draw feeds the same layout, and Operations' match
+state feeds the public Display. Historically that
 coupling was *implicit* — a Zustand selector here, a polling hook there, no single place that said
 "this is the boundary and this is who owns it." The contract layer makes the coupling **explicit and
 honest**, so a developer can see the seams without tracing every import.
@@ -20,12 +21,12 @@ honest**, so a developer can see the seams without tracing every import.
 
 | Field | Meaning |
 | --- | --- |
-| `id` | the `ArchModuleId` — `'meet' \| 'bracket' \| 'display'` (Tier-1) or `'operations'` (Tier-2) |
+| `id` | the `ArchModuleId` — `'meet' \| 'bracket' \| 'display' \| 'entries'` (Tier-1) or `'operations'` (Tier-2) |
 | `enableable` | whether it is a user-facing module with a `workspace_modules` row (Operations: `false`) |
 | `ownedSegments` | the left-nav segments this module's section renders |
 | `ownedEndpoints` / `consumedEndpoints` | **references to real `apiClient` methods** it owns vs consumes |
 | `produces` / `consumes` | the DTO type names that cross the wire (a compile-time union, `DtoName`) |
-| `emits` / `reactsTo` | the named cross-module edges — the `SeamEdge` union `scheduleFinalized \| drawGenerated \| matchStateChanged` |
+| `emits` / `reactsTo` | the named cross-module edges — the `SeamEdge` union `scheduleFinalized \| drawGenerated \| matchStateChanged \| entriesCommitted` |
 
 **Honesty is the invariant.** The colocated test (`__tests__/moduleContract.test.ts`) turns each
 field into a checked assertion:
@@ -45,10 +46,11 @@ ownership by *referencing* existing seams, not by rewiring them. No slice moves;
 edit. This is why it can be "honest, not aspirational": it describes what the code does today.
 :::
 
-## The four descriptors and the four seams
+## The five descriptors and the seams
 
-The descriptors are `meetContract`, `bracketContract`, `operationsContract`, `displayContract`. The
-design names four seams between them; **three are wired** and have a contract page:
+The descriptors are `meetContract`, `bracketContract`, `operationsContract`, `displayContract` and
+`entriesContract`. The design letters four seams between the original four modules; **three are
+wired** and have a contract page:
 
 | Seam | Pair | Named edge | Page |
 | --- | --- | --- | --- |
@@ -56,6 +58,21 @@ design names four seams between them; **three are wired** and have a contract pa
 | **B** | Bracket → Operations | `drawGenerated` | [Bracket → Operations](/contracts/bracket-operations) |
 | **C** | Operations → Bracket (advancement) | *(none)* | *unwired — see below* |
 | **D** | Operations → Display | `matchStateChanged` | [Operations → Display](/contracts/operations-display) |
+
+A fifth wired edge joined them with the Entries module and is deliberately **outside that
+lettering**:
+
+| Seam | Pair | Named edge | Page |
+| --- | --- | --- | --- |
+| **the commit seam** | Entries → Meet \| Bracket | `entriesCommitted` | [Entries](/modules/entries#the-commit-seam) |
+
+::: warning `entriesCommitted` is not a store subscription
+The other three edges are poll or store-subscription edges. This one is an **operator-pressed,
+server-side commit** that writes roster players. It is named in the same union because the honesty
+rule is about whether an edge *exists*, not about which mechanism carries it. Note also that the
+Entries design spec letters its own seams and calls this one "Seam A" — unrelated to Seam A above.
+Use the edge name, not the letter.
+:::
 
 ::: warning Mind the lettering
 The three contract pages are the **wired** seams A, B, and **D**. Seam **C** is a *different*,

@@ -307,14 +307,14 @@
   30%  { box-shadow: 0 0 18px 1px hsl(var(--status-called) / 0.75); }
   100% { box-shadow: 0 0 0 0 hsl(var(--status-called) / 0); }
 }
-.sw-call-flash { animation: sw-call-flash 900ms var(--ease) 1; }
+.sw-call-flash { animation: sw-call-flash var(--motion-moderate) var(--ease) 1; }
 
 /* Go live: green fill wipes in from the left (apply to an overlay layer). */
 @keyframes sw-go-live {
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0 0 0 0); }
 }
-.sw-go-live { animation: sw-go-live var(--dur-xslow) var(--ease) both; }
+.sw-go-live { animation: sw-go-live var(--motion-moderate) var(--ease) both; }
 
 /* Late nudge: slow, gentle throb — subtler than the live pulse. */
 @keyframes sw-late-nudge { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -421,33 +421,38 @@
  * the app come from dnd-kit. */
 
 /* ===========================================================================
- * prefers-reduced-motion: kill infinite motion, keep short signals.
- * BRAND.md §5 reduced-motion contract.
+ * prefers-reduced-motion — MOTION.md §8, the accessibility contract.
+ *
+ * This used to be a hand-maintained list of ~20 selectors, and it rotted
+ * exactly the way hand-maintained lists do: the 2026-08-11 design audit found
+ * `.motion-enter`, `.motion-enter-icon`, `.animate-block-in` and
+ * `.animate-slide-up` had never been added — including on the Display board's
+ * automatic 15-second standings rotation, which runs for hours on a screen
+ * nobody can pause. The list also silently failed to cover anything the
+ * Tailwind preset generates (`animate-block-in`, `animate-sheen`, …) or
+ * anything a product adds later.
+ *
+ * So it is a universal rule now. New animations are covered by default,
+ * which is the only version of this that stays true. `0.01ms` rather than
+ * `none` on purpose: the animation still STARTS and ENDS, so `fill-mode`
+ * end-states land and `animationend` listeners still fire (RunLiveBoard
+ * clears its one-shot call-flash/go-live classes that way — under
+ * `animation: none` those never fired and the class stuck forever).
+ *
+ * Where this collides with a duration rule, reduced motion wins: the
+ * signal-carrying loops of MOTION.md §7 (scan-sweep, marching-ants,
+ * phase-glow, sw-pulse on LIVE/CALLING) all stop here too. Each one has a
+ * non-motion equivalent by §8.3 — the LIVE pill reads "LIVE" whether or not
+ * it breathes — which is what makes stopping them legal.
  * ======================================================================== */
 @media (prefers-reduced-motion: reduce) {
-  .animate-scan-sweep,
-  .animate-phase-glow,
-  .animate-marching-ants,
-  .animate-cell-pulse,
-  .sw-pulse,
-  .sw-float-in,
-  .sw-stagger > *,
-  .sw-call-flash,
-  .sw-go-live,
-  .sw-late-nudge,
-  .sw-glow-in,
-  .sw-ring-focus,
-  .sw-rail-expand,
-  .sw-now-sweep,
-  .sw-panel-in,
-  .sw-drawer-in,
-  .sw-overlay-fade,
-  .sw-sheet-up,
-  .pin-marquee,
-  .scan-bar::after {
-    animation: none !important;
-  }
-  .sw-dock-transition {
-    transition: none !important;
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

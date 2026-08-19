@@ -147,7 +147,7 @@ describe('bracket engine config (shared form)', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText('Freeze horizon in slots')).toBeInTheDocument();
     // Optimisation goals (previously Meet-only)
-    expect(screen.getByLabelText('Maximise court utilisation')).toBeInTheDocument();
+    expect(screen.getByLabelText('Maximize court utilization')).toBeInTheDocument();
     expect(screen.getByLabelText('Enforce game spacing')).toBeInTheDocument();
     expect(screen.getByLabelText('Compact schedule')).toBeInTheDocument();
     expect(screen.getByLabelText('Allow player overlap')).toBeInTheDocument();

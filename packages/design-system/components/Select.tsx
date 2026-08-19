@@ -47,7 +47,7 @@ export interface SelectProps<T extends string = string> {
   disabled?: boolean;
   /** Monospaced + tabular-nums on both trigger value and items. */
   mono?: boolean;
-  /** Show a "—" reset option that emits `''` when picked. */
+  /** Show a "–" reset option that emits `''` when picked. */
   clearable?: boolean;
   /** Forwarded to the trigger button (for autoscroll / focus). */
   triggerRef?: React.Ref<HTMLButtonElement>;
@@ -57,7 +57,7 @@ export function Select<T extends string = string>({
   value,
   onValueChange,
   options,
-  placeholder = '—',
+  placeholder = '–',
   ariaLabel,
   triggerClassName,
   triggerStyle,

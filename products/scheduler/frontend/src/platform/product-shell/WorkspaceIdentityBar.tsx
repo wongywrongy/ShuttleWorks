@@ -1,7 +1,7 @@
 import { ArrowLeft } from '@phosphor-icons/react';
 import { StatusPill } from '@scheduler/design-system';
 import { INTERACTIVE_BASE } from '../../lib/utils';
-import { lifecycleBadge } from '../domain/lifecycle';
+import { lifecycleBadge, lifecycleChip } from '../domain/lifecycle';
 import type { WorkspaceIdentity } from './types';
 
 interface WorkspaceIdentityBarProps {
@@ -34,12 +34,14 @@ function statusTone(status: WorkspaceIdentity['status']) {
 
 /** The badge the shell actually shows: the shared lifecycle precedence
  *  (archived > live > complete — see platform/domain/lifecycle.ts), falling
- *  back to the raw operator status pill when neither applies. */
+ *  back to the raw operator status pill when neither applies. LIVE is
+ *  suppressed (R-D, Option A) — suppressed, not fallen through, or the
+ *  shell would say "active" mid-play. */
 function shellBadge(
   identity: WorkspaceIdentity,
 ): { text: string; tone: 'green' | 'idle' | 'done' } | null {
   const badge = lifecycleBadge(identity.phase, identity.status);
-  if (badge) return badge;
+  if (badge) return lifecycleChip(identity.phase, identity.status);
   if (identity.status) return { text: identity.status, tone: statusTone(identity.status) };
   return null;
 }
@@ -61,8 +63,8 @@ export function WorkspaceIdentityBar({ identity, onBackToHub }: WorkspaceIdentit
       >
         <ArrowLeft size={14} aria-hidden="true" />
       </button>
-      <div className="flex min-w-0 items-baseline gap-2">
-        <span className="truncate text-sm font-semibold text-foreground">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <span className="min-w-0 break-words text-[15px] font-bold text-foreground">
           {identity.name || 'Untitled'}
         </span>
         {identity.date ? (

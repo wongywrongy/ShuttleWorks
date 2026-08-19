@@ -1,7 +1,8 @@
 # Data flow
 
 This page traces how data moves **between** modules and **out** to operators and the public
-display. There are three wired cross-module seams, a match-state machine, an idempotent command
+display. There are three wired cross-module seams in the module graph (plus the Entries commit
+seam, which is a different shape — see below), a match-state machine, an idempotent command
 pipeline, and a crash-safe outbox. The per-seam detail lives in [Module contracts](/contracts/);
 this page is the whole-system picture.
 
@@ -16,6 +17,16 @@ unwired.
 | **B** | Bracket → Operations | `drawGenerated` | ~2.5 s poll (`GET …/bracket`) | `BracketTournamentDTO` | **wired** |
 | **C** | Operations → Bracket (advancement) | *(none)* | none — advancement is intra-bracket | none | **unwired, out of scope** |
 | **D** | Operations → Display | `matchStateChanged` | dual poll: ~5 s match-state + ~10 s tournament-state | `MatchStateDTO`, `TournamentStateDTO`, `BracketTournamentDTO` | **wired** |
+
+::: info A fourth wired edge sits outside this lettering
+The [Entries](/modules/entries) module added `entriesCommitted` (Entries → Meet | Bracket) in
+2026-08. It is deliberately unlettered here because it is not the same kind of edge: the four above
+are poll or store-subscription edges that move continuously, while the commit seam is an
+**operator-pressed, server-side write** that turns confirmed entries into roster players and then
+stops. It runs before an event rather than during one, which is also why the offline guarantee is
+unaffected: nothing on event day reads an entry row. See
+[the commit seam](/modules/entries#the-commit-seam).
+:::
 
 ::: warning Seam C is intentionally not wired
 Bracket advancement (recording a result via `POST …/bracket/commands`) materialises the winner

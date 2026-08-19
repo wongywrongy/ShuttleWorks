@@ -51,8 +51,13 @@ import pytest
 #   by nature, not by policy — an account is what the caller is trying to
 #   obtain — exactly as ``/auth/register`` and ``/auth/login`` are. ``/logout``
 #   joins them on ``/auth/logout``'s precedent: nothing to destroy is a no-op.
-# - **``GET /e/{slug}`` STAYS.** The page is still public by design; R10
-#   changed who *writes*, not who reads.
+# - **The public entry read STAYS, under a new name.** The page is still
+#   public by design; R10 changed who *writes*, not who reads. Phase 6's
+#   cut-over retired the FastAPI-rendered ``GET /e/{slug}`` — that address
+#   is served by the React Router 7 tier now and never reaches FastAPI —
+#   and its allowlist slot passed to ``GET /e/api/page/{slug}``, the JSON
+#   projection that tier reads. Same posture, same guards, one fewer
+#   renderer.
 # - **``POST /e/{slug}/submit`` is OUT** (SP-E1-2 Phase C). R10 put
 #   submission behind a session; the route now depends on
 #   ``get_current_entrant``, which has no bootstrap fallback in either mode,
@@ -93,11 +98,39 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
     ("GET", "/invites/{token}"): (
         "invite preview — the recipient has no account yet by definition"
     ),
-    ("GET", "/e/{slug}"): (
-        "the public entry page. Discoverable and shareable BY DESIGN (Q4) — "
-        "it is a poster URL, not a capability URL. Strict projection: "
-        "entrant names + events only, opt-outs excluded, no contact data "
-        "selected; unknown or closed slug answers the uniform 404"
+    ("GET", "/e/api/page/{slug}"): (
+        "the public entry page as JSON, read by the RR7 loader that serves "
+        "/e/{slug} — the address this replaced in the Phase 6 cut-over. "
+        "Discoverable and shareable BY DESIGN (Q4): it is a poster URL, not "
+        "a capability URL. Strict projection (entrant names + the codes of "
+        "the events they entered, one row per PERSON, opt-outs excluded, no "
+        "contact data selected — not even the club the consent copy does "
+        "not cover), the "
+        "slug as the only key so a raw tournament UUID is never a public "
+        "address, and the uniform 404 for an unknown or closed page. The "
+        "leak claim is checked, not assumed, in "
+        "tests/test_entries_json_routes.py::"
+        "test_the_projection_never_carries_an_entrants_contact_data"
+    ),
+    ("GET", "/e/api/config"): (
+        "public runtime configuration for the entrant app: the Turnstile "
+        "SITEKEY (rendered into every signup page — public by nature) and "
+        "the auth mode. It cannot require a session: it is read by the "
+        "signup page, which is where a session is obtained. Two fields, no "
+        "repository access, no tenant scope. The claim that it never "
+        "carries the SECRET key — the adjacent, near-identically-named "
+        "setting — is checked in tests/test_entries_json_routes.py::"
+        "test_the_config_route_never_publishes_the_turnstile_secret"
+    ),
+    ("GET", "/e/api/pages"): (
+        "the open entry pages' slugs — the list Task 26's sitemap.xml route "
+        "crawls. Public for the same reason GET /e/{slug} is: a poster URL "
+        "is meant to be discoverable. Filtered on is_open, which is checked "
+        "as a negative control in "
+        "tests/test_entries_json_routes.py::"
+        "test_a_closed_pages_slug_never_appears_in_the_list — an unfiltered "
+        "list would publish a closed workspace's address into a crawlable "
+        "sitemap, disclosing it exists before the director opened entries"
     ),
     ("POST", "/e/account/signup"): (
         "entrant account creation — cannot require an account, for the same "
@@ -123,17 +156,20 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
 }
 
 # Note on the entry that is NO LONGER here, kept because its absence is the
-# deliberate act. ``POST /e/{slug}/submit`` was listed until SP-E1-2 Phase
-# C; it now carries ``get_current_entrant`` and answers this gate's 401 like
-# any other guarded route. The reason the removal is worth a paragraph is
-# that the gate would have tolerated the route either way: it probes with a
-# random-uuid slug and every field on that route is optional at the schema
-# level, so an anonymous probe used to reach the handler and get the uniform
-# 404 — a pass on the gate's own terms, with or without the allowlist line.
-# The allowlist records *intent*, and a public write the gate happens to
-# tolerate silently is exactly what this file exists to make visible. The
-# refusal is asserted directly in
-# ``tests/test_entries_public_routes.py::test_an_anonymous_submit_is_rejected``,
+# deliberate act. The public submit was listed until SP-E1-2 Phase C; it now
+# carries ``get_current_entrant`` and answers this gate's 401 like any other
+# guarded route. (Phase 6's cut-over moved the route itself: the address is
+# ``POST /e/api/submit/{slug}`` and the FastAPI-rendered
+# ``POST /e/{slug}/submit`` no longer exists. The posture is what this note
+# is about, and that did not move.) The reason the removal is worth a
+# paragraph is that the gate would have tolerated the route either way: it
+# probes with a random-uuid slug and every field on that route is optional
+# at the schema level, so an anonymous probe used to reach the handler and
+# get the uniform 404 — a pass on the gate's own terms, with or without the
+# allowlist line. The allowlist records *intent*, and a public write the
+# gate happens to tolerate silently is exactly what this file exists to make
+# visible. The refusal is asserted directly in
+# ``tests/test_entries_submit_api.py::test_an_anonymous_submit_is_rejected``,
 # with the signed-in submit as its negative control.
 
 # Ops-token-gated rather than session-gated. Separate because they are
@@ -355,21 +391,26 @@ def _post_entry(client, workspace, **overrides):
     }
     headers = overrides.pop("headers", {})
     data.update(overrides)
-    return client.post(f"/e/{workspace['slug']}/submit", data=data, headers=headers)
+    return client.post(
+        f"/e/api/submit/{workspace['slug']}",
+        data=data,
+        headers=headers,
+        follow_redirects=False,
+    )
 
 
 def test_the_entry_page_answers_an_anonymous_caller(cloud_client, entry_page):
     """It must. An entrant has no account, and this is the negative control
     for every 404 asserted below."""
     client, _ = cloud_client
-    r = client.get(f"/e/{entry_page['a']['slug']}")
+    r = client.get(f"/e/api/page/{entry_page['a']['slug']}")
     assert r.status_code == 200, r.text
-    assert "Club A Open" in r.text
+    assert r.json()["tournament"]["name"] == "Club A Open"
 
 
 def test_a_bogus_slug_answers_the_uniform_404(cloud_client, entry_page):
     client, _ = cloud_client
-    r = client.get(f"/e/{_PARAM_FILL}")
+    r = client.get(f"/e/api/page/{_PARAM_FILL}")
     assert r.status_code == 404
     assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
@@ -380,7 +421,7 @@ def test_the_page_of_one_workspace_never_carries_another_workspaces_data(
     """The cross-tenant probe. Two workspaces exist and neither knows the
     other; a slug is a key to exactly one of them."""
     client, _ = cloud_client
-    body = client.get(f"/e/{entry_page['a']['slug']}").text
+    body = client.get(f"/e/api/page/{entry_page['a']['slug']}").text
     assert "Club B Invitational" not in body
     assert entry_page["b"]["tid"] not in body
     assert entry_page["b"]["event"] not in body
@@ -399,7 +440,7 @@ def test_the_page_of_one_workspace_never_carries_another_workspaces_data(
 #   always-pass control and the throttle-before-the-outbound-call ordering
 #   at signup — the act a stranger can now perform;
 # - the flood and idempotency claims moved *with the route's new shape*, to
-#   ``tests/test_entries_public_routes.py``, where the key is resolved at
+#   ``tests/test_entries_submit_api.py``, where the key is resolved at
 #   the submission level (R13) and the throttle sits behind the session;
 # - and the headline control — "the always-pass secret WRITES the entry" —
 #   inverts into the pair below. That inversion is the point of this file:
@@ -426,8 +467,6 @@ def test_the_same_submit_with_an_entrant_session_is_accepted(
     """Negative control for the refusal above: same request, same route,
     one session cookie different. Without it, the assertion above would
     pass just as happily against a route that refuses everything."""
-    import re as _re
-
     client, _ = cloud_client
     assert (
         client.post(
@@ -453,11 +492,15 @@ def test_the_same_submit_with_an_entrant_session_is_accepted(
         == 200
     )
 
-    body = client.get(f"/e/{entry_page['a']['slug']}").text
-    token = _re.search(r'name="_csrf" value="([0-9a-f]*)"', body).group(1)
+    # Read off the projection rather than recomputed: a recomputed digest
+    # would pass even if the loader stopped emitting the field, and that
+    # field is the only thing that lets an unhydrated form post this write.
+    token = client.get(f"/e/api/page/{entry_page['a']['slug']}").json()[
+        "viewer"
+    ]["formCsrf"]
 
     r = _post_entry(client, entry_page["a"], _csrf=token)
-    assert r.status_code == 201, r.text
+    assert r.status_code == 303, r.text
     assert _entry_count(entry_page["a"]["tid"]) == 1
 
 

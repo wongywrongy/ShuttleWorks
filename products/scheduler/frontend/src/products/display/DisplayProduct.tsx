@@ -51,7 +51,7 @@ export function DisplayProduct() {
       <div className="relative min-h-0 flex-1 overflow-hidden bg-card">
         <div className="absolute inset-0 overflow-auto">
           <Suspense fallback={<TabSkeleton tab="tv" />}>
-            <PublicDisplayPage />
+            <PublicDisplayPage preview />
           </Suspense>
         </div>
       </div>

@@ -7,11 +7,11 @@ why Settings is deliberately *not* a module in the engine sense.
 
 ## Settings is not a `ModuleId`
 
-The user-facing module union is exactly three engines/outputs:
+The user-facing module union is exactly four intake/engine/output modules:
 
 ```ts
 // platform/product-shell/types.ts
-export type ModuleId = 'meet' | 'bracket' | 'display';
+export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries';
 ```
 
 There is no `settings` member, **no `workspace_modules` row for "settings"**, it
@@ -44,7 +44,7 @@ always-present `nav.overview` item), and the six `ws-*` segments form the
 | Surface | Segment | Component | What it does |
 | --- | --- | --- | --- |
 | **Overview** | `overview` | `WorkspaceOverview` | the workspace **readiness checklist** — event name/date/type, attention items, and named setup steps with done/incomplete states (incomplete steps link to their section). Not a metrics dashboard. |
-| **Venue & schedule** | `ws-venue` | `VenueScheduleTab` | the shared venue + day-window fields (see below) |
+| **Venue and schedule** | `ws-venue` | `VenueScheduleTab` | the shared venue + day-window fields (see below) |
 | **Members** | `ws-members` | `PeopleAccessTab` | People & Access — lists members with **real identity** (names/emails from the `users` table since SP-CLOUD-2) and their roles |
 | **Sharing** | `ws-sharing` | `SharingTab` | the public display **capability link** (mint / copy / rotate via `…/display-token`) plus collaborator invites — copy-URL link invites (no expiry) and email invites (delivered via the email seam, TTL-bounded) |
 | **Modules** | `ws-modules` | `ModulesSettingsTab` | the module catalog — enable / disable per the dependency rules |
@@ -60,7 +60,7 @@ The live Overview is the readiness-checklist `WorkspaceOverview` in
 variant was removed in the 2026-06 debt-paydown cleanup.)
 :::
 
-## Venue & schedule — a shared surface worth noting
+## Venue and schedule — a shared surface worth noting
 
 `VenueScheduleTab` (`products/workspace/VenueScheduleTab.tsx`) is a
 workspace-level surface that hoists the venue + day-window fields that were
@@ -121,7 +121,7 @@ See the [API reference](/api/) for the full endpoint list and the
 - **Settings is chrome, not a module.** Intentionally excluded from the `ModuleId`
   union and the module-contract layer — it composes existing control-plane
   endpoints rather than exposing a seam.
-- **The shared `/state` blob is the persistence.** Venue & schedule and the
+- **The shared `/state` blob is the persistence.** Venue and schedule and the
   general settings (name / date / status) live in the tournament `data` blob,
   written through the same debounced snapshot path as the rest of the workspace
   document; backups under Sync are full snapshots of that blob.

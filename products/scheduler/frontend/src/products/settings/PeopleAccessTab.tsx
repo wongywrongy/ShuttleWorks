@@ -14,7 +14,7 @@ import {
 } from './memberActions';
 
 const ROLE_LEGEND: { role: string; desc: string }[] = [
-  { role: 'Owner', desc: 'Full control — modules, sharing, delete.' },
+  { role: 'Owner', desc: 'Full control: modules, sharing, delete.' },
   { role: 'Operator', desc: 'Run event operations.' },
   { role: 'Viewer', desc: 'Read-only / display support.' },
 ];
@@ -76,20 +76,30 @@ export function PeopleAccessTab({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Same class of defect as the Entries desk (2026-08-10 browser pass): a
+  // rejected read became `[]` and rendered as "No members yet" — a state that
+  // cannot exist, since a workspace always has at least an owner. It also
+  // poisoned `currentUserRole` below, which is derived from this list and
+  // gates every action in the row menus.
+  const [loadFailed, setLoadFailed] = useState(false);
+
   const load = useCallback(async () => {
     try {
       setMembers(await apiClient.listMembers(tid));
+      setLoadFailed(false);
     } catch {
-      setMembers([]);
+      setLoadFailed(true);
     }
   }, [tid]);
 
   useEffect(() => {
     let cancelled = false;
+    setMembers(null);
+    setLoadFailed(false);
     apiClient
       .listMembers(tid)
       .then((m) => !cancelled && setMembers(m))
-      .catch(() => !cancelled && setMembers([]));
+      .catch(() => !cancelled && setLoadFailed(true));
     return () => {
       cancelled = true;
     };
@@ -139,7 +149,7 @@ export function PeopleAccessTab({
         } else if (e.status === 404) {
           setError('That member is no longer part of this workspace.');
         } else if (e.status === 403) {
-          setError('Your role in this workspace changed — you can no longer do that.');
+          setError('Your role in this workspace changed. You can no longer do that.');
         } else {
           setError(e.message || 'Could not complete that change. Please try again.');
         }
@@ -195,22 +205,31 @@ export function PeopleAccessTab({
   };
 
   return (
-    <div className="max-w-3xl space-y-5 p-6">
+    <div className="mx-auto max-w-3xl space-y-5 p-6">
       <div>
-        <h2 className="text-base font-semibold tracking-tight text-foreground">Members &amp; roles</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">Members and roles</h2>
         {summary?.ownerName && (
           <p className="mt-1 text-xs text-muted-foreground">Owner: {summary.ownerName}</p>
         )}
       </div>
 
-      <ul className="space-y-1.5">
-        {ROLE_LEGEND.map((r) => (
-          <li key={r.role} className="flex gap-2 text-xs">
-            <span className="w-16 shrink-0 font-medium text-foreground">{r.role}</span>
-            <span className="text-muted-foreground">{r.desc}</span>
-          </li>
-        ))}
-      </ul>
+      {/* Onboarding copy, not page furniture (WSM-2): after the first visit
+          the three definitions never change, and they were permanently
+          occupying the top of a page whose actual content is the member
+          list. Native disclosure — closed by default, one click away. */}
+      <details data-testid="role-legend" className="text-xs">
+        <summary className="cursor-pointer select-none text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground">
+          What the roles mean
+        </summary>
+        <ul className="mt-1.5 space-y-1.5 pl-1">
+          {ROLE_LEGEND.map((r) => (
+            <li key={r.role} className="flex gap-2 text-xs">
+              <span className="w-16 shrink-0 font-medium text-foreground">{r.role}</span>
+              <span className="text-muted-foreground">{r.desc}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-foreground">Members</h3>
@@ -237,11 +256,29 @@ export function PeopleAccessTab({
         )}
 
         <ul className="divide-y divide-border rounded border border-border">
-          {members === null ? (
+          {loadFailed ? (
+            <li
+              role="alert"
+              data-testid="members-load-error"
+              className="flex items-center justify-between gap-3 p-3 text-sm text-muted-foreground"
+            >
+              <span>
+                The members list didn&rsquo;t load. This workspace has members.
+                They just aren&rsquo;t known right now.
+              </span>
+              <Button size="xs" variant="ghost" onClick={() => void load()}>
+                Retry
+              </Button>
+            </li>
+          ) : members === null ? (
             <li className="p-3 text-sm text-muted-foreground">Loading…</li>
           ) : members.length === 0 ? (
             <li className="p-3 text-sm text-muted-foreground">
-              No members yet — invite collaborators from the Sharing tab.
+              No members yet. Invite collaborators from the{' '}
+              <Link to={`/tournaments/${tid}/ws-sharing`} className="text-accent hover:underline">
+                Sharing
+              </Link>{' '}
+              tab.
             </li>
           ) : (
             members.map((m) => {
@@ -303,20 +340,11 @@ export function PeopleAccessTab({
                 });
               }
 
-              // The reason a control is unavailable belongs next to the
-              // control, visibly. A hover tooltip is not enough: nobody
-              // hovers a thing they have no reason to believe is
-              // interactive, and the menu has to be opened to see it at
-              // all. Stable, knowable-in-advance reasons get inline text.
-              const blockedReason = [actions.remove, actions.leave, actions.changeRole].find(
-                (a) => a.shown && a.disabled,
-              )?.reason;
-
               return (
                 <li
                   key={m.userId}
                   data-testid={`member-${m.userId}`}
-                  className="flex items-center justify-between gap-3 p-3"
+                  className="flex items-center justify-between gap-3 px-3 py-1.5"
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <span
@@ -326,21 +354,20 @@ export function PeopleAccessTab({
                       {name ? name[0].toUpperCase() : initialFor(m.userId)}
                     </span>
                     <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-xs font-medium text-foreground">
+                      <span className="break-words text-xs font-medium text-foreground">
                         {label}
                         {currentUserId === m.userId && (
                           <span className="ml-1 text-2xs text-muted-foreground">(you)</span>
                         )}
                       </span>
+                      {/* No resting reason line (WSM-1). The last-owner rule
+                          used to sit as a standing third line on the owner's
+                          own card, a warning about an action nobody had
+                          taken. It now surfaces where the attempt happens:
+                          on the menu item itself (disabled, reason in its
+                          accessible name) and as the row error if the server
+                          refuses anyway. */}
                       <span className="text-2xs capitalize text-muted-foreground">{m.role}</span>
-                      {blockedReason && (
-                        <span
-                          data-testid={`member-reason-${m.userId}`}
-                          className="mt-0.5 text-2xs text-muted-foreground"
-                        >
-                          {blockedReason}
-                        </span>
-                      )}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
@@ -369,7 +396,7 @@ export function PeopleAccessTab({
           <Link to={`/tournaments/${tid}/ws-sharing`} className="text-accent hover:underline">
             Sharing
           </Link>
-          {' '}— collaborator invite links carry a role.
+          {': '}collaborator invite links carry a role.
         </p>
       </div>
 
@@ -406,7 +433,7 @@ export function PeopleAccessTab({
                     {displayNameFor(pending.member, summary) ?? shortId(pending.member.userId)}
                   </span>{' '}
                   will become the owner of this workspace. You will become an operator, and
-                  you will not be able to reverse this on your own — only the new owner can
+                  you will not be able to reverse this on your own. Only the new owner can
                   transfer it back.
                 </p>
               )}

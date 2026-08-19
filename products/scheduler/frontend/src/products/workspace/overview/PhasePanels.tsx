@@ -111,14 +111,15 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
         <SectionLabel>Schedule</SectionLabel>
         <Figures
           items={[
-            { value: m ? m.total : '—', label: 'matches' },
-            { value: m ? m.scheduled : '—', label: 'scheduled' },
-            { value: first?.timeLabel ?? '—', label: 'first match' },
+            { value: m ? m.total : '–', label: 'matches' },
+            { value: m ? m.scheduled : '–', label: 'scheduled' },
+            { value: first?.timeLabel ?? '–', label: 'first match' },
           ]}
         />
       </div>
-      <div className="flex gap-2">
-        <Button onClick={() => onNavigate(seg.run)}>Open live day</Button>
+      {/* The phase's primary CTA ("Open live day") lives in the page header
+          (G3.1) — the panel keeps only its secondary action. */}
+      <div>
         <Button variant="outline" onClick={() => onNavigate(seg.plan)}>
           Review the plan
         </Button>
@@ -127,28 +128,83 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
   );
 }
 
-function LivePanel({ summary, onNavigate }: PanelProps) {
-  const seg = segments(summary.kind);
+function LivePanel({ summary }: PanelProps) {
   const m = summary.signals?.matches;
   const nextUp = summary.signals?.nextUp ?? [];
+  // Play-through progress (played = terminally-resolved, the same state the
+  // phase reads). Optional on older payloads — the bar simply doesn't render.
+  const played = m?.played;
+  const showProgress = m != null && played != null && m.total > 0;
+  const pct = showProgress
+    ? Math.round((Math.min(played, m.total) / m.total) * 100)
+    : 0;
   return (
     <section className="space-y-5">
       <div>
         <SectionLabel>In progress</SectionLabel>
+        {/* Played / Remaining / Total (W1.2): "matches" and "scheduled"
+            duplicated whenever everything was scheduled. Remaining counts
+            down as played counts up; total anchors both. The Hub inspector
+            speaks the same triplet. */}
         <Figures
-          items={[
-            { value: m ? m.total : '—', label: 'matches' },
-            { value: m ? m.scheduled : '—', label: 'scheduled' },
-          ]}
+          items={
+            m && played != null
+              ? [
+                  { value: played, label: 'played' },
+                  { value: Math.max(0, m.total - played), label: 'remaining' },
+                  { value: m.total, label: 'total' },
+                ]
+              : [
+                  { value: m ? m.total : '–', label: 'matches' },
+                  { value: m ? m.scheduled : '–', label: 'scheduled' },
+                ]
+          }
         />
+        {showProgress ? (
+          <div
+            role="progressbar"
+            aria-label="Matches played"
+            aria-valuemin={0}
+            aria-valuemax={m.total}
+            aria-valuenow={Math.min(played, m.total)}
+            data-testid="overview-played-progress"
+            className="mt-3 h-1.5 max-w-80 overflow-hidden rounded-full bg-surface-sunken"
+          >
+            <div
+              className="h-full rounded-full bg-status-success-fg"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        ) : null}
+        {/* The live line (OV-4, the inspector's mirror): the triplet is
+            planning information; what LIVE is asked is "is anything
+            happening, and is a court free". Only while something is. */}
+        {m?.playing != null && m.playing > 0 ? (
+          <p
+            data-testid="overview-live-line"
+            className="mt-2 text-xs text-muted-foreground"
+          >
+            <span className="font-medium text-status-live">
+              {m.playing} on court
+            </span>
+            {m.courtsFree != null
+              ? ` · ${m.courtsFree} court${m.courtsFree === 1 ? '' : 's'} free`
+              : ''}
+          </p>
+        ) : null}
       </div>
-      <div>
-        <Button onClick={() => onNavigate(seg.run)}>Open live day</Button>
-      </div>
+      {/* "Open live day" lives in the page header (G3.1). */}
       {nextUp.length > 0 ? (
         <div>
-          <SectionLabel>Next up</SectionLabel>
-          <NextUpList items={nextUp} />
+          <SectionLabel>Up next</SectionLabel>
+          <NextUpList
+            items={nextUp}
+            linkFor={(n) =>
+              n.matchId && n.source
+                ? `/tournaments/${summary.id}/live?select=${n.source}:${n.matchId}`
+                : null
+            }
+          />
         </div>
       ) : null}
     </section>
@@ -156,16 +212,15 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
 }
 
 function CompletePanel({ summary, onNavigate }: PanelProps) {
-  const seg = segments(summary.kind);
   const m = summary.signals?.matches;
   return (
     <section className="space-y-5">
       <div>
         <SectionLabel>Results</SectionLabel>
-        <Figures items={[{ value: m ? m.total : '—', label: 'matches played' }]} />
+        <Figures items={[{ value: m ? m.total : '–', label: 'matches played' }]} />
       </div>
-      <div className="flex gap-2">
-        <Button onClick={() => onNavigate(seg.matches)}>View results</Button>
+      {/* "View results" lives in the page header (G3.1). */}
+      <div>
         <Button variant="outline" onClick={() => onNavigate('ws-sync')}>
           Back up this event
         </Button>

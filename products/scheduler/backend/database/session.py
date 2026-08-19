@@ -10,6 +10,7 @@ same database.
 """
 from __future__ import annotations
 
+import sqlite3
 from typing import Iterator
 
 from sqlalchemy import create_engine, event
@@ -18,6 +19,35 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
+
+
+# Registered on the Engine *class*, not on one engine, and deliberately:
+# SQLite defaults ``PRAGMA foreign_keys`` to OFF on every new connection,
+# so without this every ``ondelete="CASCADE"`` in database/models.py is
+# inert on the director's laptop while working normally on cloud
+# Postgres — a silent behaviour divergence between the two supported
+# backends, not merely a missing feature. Deleting a workspace left
+# orphaned entry_pages / entries / entry_events / entry_players behind,
+# and because entry_pages.slug is globally unique the orphan kept that
+# public address taken forever.
+#
+# Class-level because engines are built in three places: here, the Alembic
+# env (``engine_from_config``) and 20 test fixtures calling create_engine
+# directly — worker.py is the only consumer that reuses ``SessionLocal``.
+# Enabling it per site is what let the gap open; one listener leaves
+# nowhere for the next one to open. The isinstance guard is what keeps it
+# off Postgres — psycopg connections never match.
+if not getattr(Engine, "_shuttleworks_sqlite_fk_pragma", False):
+
+    @event.listens_for(Engine, "connect")
+    def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):  # noqa: ANN001
+        if isinstance(dbapi_connection, sqlite3.Connection):
+            dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
+    # The test suite purges ``database.*`` from sys.modules between tests,
+    # so this module is imported hundreds of times per run; the flag lives
+    # on the (never-purged) SQLAlchemy class so the listener registers once.
+    Engine._shuttleworks_sqlite_fk_pragma = True
 
 
 def _enable_sqlite_wal(engine: Engine) -> None:

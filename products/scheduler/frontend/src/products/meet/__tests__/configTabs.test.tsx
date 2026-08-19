@@ -86,7 +86,7 @@ describe('Meet Configuration (one merged surface)', () => {
     // No "Format" section: it collided with the "Match format" row in
     // Scoring, and Meet type is now a row inside Events.
     expect(screen.queryByRole('button', { name: /^Format$/ })).toBeNull();
-    for (const title of ['Events', 'Scoring', 'Timing', 'Optimisation goals', 'Advanced solver']) {
+    for (const title of ['Events', 'Scoring', 'Timing', 'Optimization goals', 'Advanced solver']) {
       expect(screen.getByRole('button', { name: new RegExp(title) })).toBeInTheDocument();
     }
   });

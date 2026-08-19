@@ -42,6 +42,8 @@ import type {
   CommandConflictDTO,
   UserDTO,
   DisplayTokenDTO,
+  EntryPageDTO,
+  EntryPagePublicationPatchDTO,
 } from './dto';
 import { SOLVE_JOB_TERMINAL_STATUSES } from './dto';
 import type {
@@ -387,7 +389,7 @@ export function handleApiResponseError(error: any): never {
     } catch {
       // non-browser test environments without CustomEvent — ignore
     }
-    message = 'Your session has expired — please sign in again';
+    message = 'Your session has expired. Please sign in again';
   }
 
   const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
@@ -530,6 +532,30 @@ class ApiClient {
   async rotateDisplayToken(tid: string): Promise<DisplayTokenDTO> {
     const r = await this.client.post<DisplayTokenDTO>(
       `/tournaments/${tid}/display-token/rotate`,
+    );
+    return r.data;
+  }
+
+  // ---- Public-site publication (SP-P7) ---------------------------------
+
+  /** The stored entry page — 404 (ENTRY_PAGE_NOT_FOUND) when the workspace
+   *  has never configured one; the Sharing card hides on that. */
+  async getEntryPage(tid: string): Promise<EntryPageDTO> {
+    const r = await this.client.get<EntryPageDTO>(
+      `/tournaments/${tid}/entry-page`,
+    );
+    return r.data;
+  }
+
+  /** Flip publication gates — a sliver of the page, so the card can never
+   *  race a desk edit into a lost update. */
+  async patchEntryPagePublication(
+    tid: string,
+    body: EntryPagePublicationPatchDTO,
+  ): Promise<EntryPageDTO> {
+    const r = await this.client.patch<EntryPageDTO>(
+      `/tournaments/${tid}/entry-page/publication`,
+      body,
     );
     return r.data;
   }
@@ -1093,6 +1119,20 @@ class ApiClient {
       `/tournaments/${tid}/state/restore/${encodeURIComponent(filename)}`,
     );
     return res.data;
+  }
+
+  /** The download URL for one backup snapshot (served as a JSON attachment).
+   *  A URL, not a fetch: the browser's own download flow handles the
+   *  Content-Disposition, and cookies ride along same-origin. */
+  backupDownloadUrl(tid: string, filename: string): string {
+    return `${this.client.defaults.baseURL}/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`;
+  }
+
+  /** Delete one backup (owner; 404 for an unknown name). */
+  async deleteTournamentBackup(tid: string, filename: string): Promise<void> {
+    await this.client.delete(
+      `/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`,
+    );
   }
 
   // ---- Match State Management ------------------------------------------

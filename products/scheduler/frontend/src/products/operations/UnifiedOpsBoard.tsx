@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
+  KeyboardSensor,
   MouseSensor,
   TouchSensor,
   useSensor,
@@ -33,6 +34,7 @@ import {
 } from '@scheduler/design-system/components';
 import { Check, X as XIcon } from '@phosphor-icons/react';
 import { apiClient } from '../../api/client';
+import { STATE_WORD } from '../../lib/stateWords';
 import { useBracketApi } from '../../api/bracketClient';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useTournamentStore } from '../../store/tournamentStore';
@@ -210,9 +212,15 @@ export function UnifiedOpsBoard({
     [meet.config, meet.schedule, meet.matches, players, bracketApi],
   );
 
+  // KeyboardSensor is not optional: without it, drag-to-reschedule — the
+  // planning verb of this whole surface — is pointer-only, so a keyboard
+  // operator can inspect the plan but never change it (WCAG 2.1.1). dnd-kit
+  // ships it; Space/Enter picks a block up, arrows move it over the same
+  // droppable cells the pointer targets, Space/Enter drops, Escape cancels.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor),
   );
 
   const onDragStart = useCallback((e: DragStartEvent) => setActiveKey(String(e.active.id).slice('block:'.length)), []);
@@ -321,6 +329,11 @@ export function UnifiedOpsBoard({
     />
   );
 
+  const LEGEND = [
+    { label: STATE_WORD.live, dot: 'bg-status-live-solid' },
+    { label: STATE_WORD.called, dot: 'bg-status-called-solid' },
+  ];
+
   const zoomBar = (
     // No border-t: the grid's last court row already carries a `border-b`
     // hairline (GanttTimeline), so a border-t here would double it on the
@@ -339,6 +352,21 @@ export function UnifiedOpsBoard({
       <button type="button" aria-label="Less time per cell" onClick={() => zoomBy(1 / 1.25)} className="h-5 w-5 rounded border border-border bg-card leading-none hover:bg-muted/60">−</button>
       <span className="w-9 text-center tabular-nums text-muted-foreground">{Math.round(timeZoom * 100)}%</span>
       <button type="button" aria-label="More time per cell" onClick={() => zoomBy(1.25)} className="h-5 w-5 rounded border border-border bg-card leading-none hover:bg-muted/60">+</button>
+
+      {/* Legend (PLAN-1 / PLAN-3). Two of the four chip states fill solid, and
+          the same two colors lead the rows of the Up next list below — so the
+          board's loudest signal and the list's only signal were both
+          undefined anywhere on the surface. Naming them costs one strip and
+          means the fills can stay: it is the unexplained saturation that was
+          the problem, not the saturation. */}
+      <span className="ml-auto flex items-center gap-3 text-muted-foreground">
+        {LEGEND.map((l) => (
+          <span key={l.label} className="inline-flex items-center gap-1">
+            <span aria-hidden className={`h-2 w-2 rounded-full ${l.dot}`} />
+            {l.label}
+          </span>
+        ))}
+      </span>
     </div>
   );
 
@@ -354,7 +382,7 @@ export function UnifiedOpsBoard({
           {hoverCell && validation ? (
             validation.feasible ? (
               <span className="inline-flex items-center gap-1 text-status-done">
-                <Check className="h-3.5 w-3.5" /> Feasible — drop to pin at C{hoverCell.courtId} · S{hoverCell.slotId}
+                <Check className="h-3.5 w-3.5" /> Feasible: drop to pin at C{hoverCell.courtId} · S{hoverCell.slotId}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-destructive">
@@ -363,7 +391,7 @@ export function UnifiedOpsBoard({
             )
           ) : (
             <span className="text-muted-foreground">
-              Drag a match to any cell to reschedule — meet and bracket on one court plan.
+              Drag a match to any cell to reschedule: meet and bracket share one court plan.
             </span>
           )}
         </div>
@@ -459,7 +487,7 @@ function BlockView({
         opacity: translucent && !isDragging ? 0.4 : 1,
       }}
       className={`px-1.5 ${block.done ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}
-      title={`${block.source === 'meet' ? 'Meet' : 'Bracket'} · ${block.label} — ${block.sideA} vs ${block.sideB} [${block.status}]`}
+      title={`${block.source === 'meet' ? 'Meet' : 'Bracket'} · ${block.label}: ${block.sideA} vs ${block.sideB} [${block.status}]`}
     />
   );
 }

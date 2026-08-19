@@ -172,6 +172,44 @@ Status colors carry meaning and **must not be used as brand color or general emp
 
 Each has a `-bg` variant for tinted backgrounds. Use them in `StatusPill`, Gantt blocks, MATCHES list, control center workflow chips. Nowhere else.
 
+### 4.1 X6 — the status ink budget (SP-CONSOLE-3)
+
+**Containers (pills/chips/badges) are reserved for exceptional, time-sensitive
+states: LIVE, CALLED, LATE, and error conditions. Default states (READY,
+PENDING), terminal states (DONE), and identity metadata use plain text, ink
+weight, or data (scores, fractions). No list column may render the same chip on
+every row — a chip whose value never varies within a surface is decoration, not
+information.**
+
+Rendering ladder for dense operator lists and panels:
+
+| State class | Treatment |
+|---|---|
+| PENDING | plain text, muted ink, normal weight (no fainter checked ink exists — `--ink-faint` aliases `--text-muted`, so weight is the second step) |
+| READY | plain text, muted ink, semibold |
+| LIVE | chip (dot + tinted container) — the only routine chip |
+| CALLED / LATE | chip, respective status tokens (queue/ops contexts) |
+| DONE | **no label** — the right-aligned score in tabular figures *is* the status (X6-D; supersedes the SP-CONSOLE-2 X3 chip-plus-score ruling) |
+| Error / blocked | chip, error token |
+
+The one match-list renderer is `MatchStatus`
+(`frontend/src/components/control-plane/matchStatus.tsx`); its property test
+asserts the rendered DOM, with a demonstrated negative control. **Exemption:**
+glance-at-distance operator surfaces — Live day court cards, Plan grid fills,
+the venue TV — keep their high-contrast fills (SP-CONSOLE-2 PLAN-1 rationale);
+X6 governs dense lists and panels only.
+
+**Result side blocks (SP-CONSOLE-3A RES-1).** Score is a per-side fact, so
+the finished panel's Result renders as TWO side blocks (`ResultSides` in
+`control-plane/MatchCard.tsx`, both engines): each block nests its player
+rows beside a rail carrying the side's identity ONCE (Meet school chip /
+Bracket event badge — never repeated per player row) and the side's score
+in a fixed-width tabular slot, vertically centered, that holds a games
+tally ("2") or set scores without layout change. Winner reads by
+**weight** — bolder score and names on the winning block; no dot, no fill
+(the `WinnerDot` stays a list/`MatchCard` cue). A hairline separates the
+blocks; the court · time caption sits below.
+
 ---
 
 ## 5. Typography quick rules

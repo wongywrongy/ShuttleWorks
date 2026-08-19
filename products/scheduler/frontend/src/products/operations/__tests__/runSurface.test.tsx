@@ -17,7 +17,21 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 // single microtask) guarantees the whole `Promise.resolve().then().finally()`
 // chain drains before act resolves.
 const flushAssignSettle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+// Recording is terminal (runMachine's `done` has no edge out, Meet has no
+// reopen), so the button arms on the first press and commits on the second.
+const pressRecord = () => {
+  fireEvent.click(screen.getByTestId('run-act-record'));
+  fireEvent.click(screen.getByTestId('run-act-record'));
+};
+// The Run write controls carry the viewer read-only vocabulary (audit A2)
+// since SP-CONSOLE-4 B4 — these tests exercise the editable path.
+vi.mock('../../../hooks/useCanEdit', () => ({
+  useCanEdit: () => true,
+  assertCanEdit: () => true,
+}));
+
 import { RunSurface, computeAutoPull } from '../run/RunSurface';
+import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { OpsBlock } from '../opsBlock';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
@@ -30,14 +44,12 @@ const {
   mockBracketMatchAction,
   mockBracketUnassign,
   mockBracketResultSubmit,
-  mockPushToast,
 } = vi.hoisted(() => ({
   mockMeetSubmit: vi.fn(),
   mockBracketAssignCourt: vi.fn().mockResolvedValue({}),
   mockBracketMatchAction: vi.fn().mockResolvedValue({}),
   mockBracketUnassign: vi.fn().mockResolvedValue({}),
   mockBracketResultSubmit: vi.fn().mockResolvedValue({}),
-  mockPushToast: vi.fn(),
 }));
 
 // ── 2. Mock the seam hook modules ─────────────────────────────────────────────
@@ -59,10 +71,10 @@ vi.mock('../../../hooks/useBracketResultQueue', () => ({
   useBracketResultQueue: () => ({ submit: mockBracketResultSubmit }),
 }));
 
-vi.mock('../../../store/uiStore', () => ({
-  useUiStore: (selector: (s: unknown) => unknown) =>
-    selector({ pushToast: mockPushToast }),
-}));
+// uiStore stays REAL: `bracketSelectedMatchId` is a genuine seam here (Run
+// publishes its selection, MatchDetailPanel subscribes to it), so a stub that
+// doesn't notify subscribers would test nothing. Toasts are inert without a
+// toast host mounted.
 
 // ── 3. Test helpers ────────────────────────────────────────────────────────────
 
@@ -94,6 +106,7 @@ function mkMatch(
     span: 1,
     status: 'scheduled',
     late: false,
+    timeliness: 'ontime' as const,
     eligible: true,
     ...overrides,
   };
@@ -137,6 +150,7 @@ function makeAutoFillBlocks(): OpsBlock[] {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useMatchStateStore.getState().reset();
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -255,6 +269,67 @@ describe('RunSurface — summary band derived counts', () => {
   // (RunSurface no longer renders its own header) — see courtStatus.test.tsx.
 });
 
+// `useCommandQueue.submit()` records every 409 into `matchStateStore.conflicts`
+// specifically so `ConflictBanner` can render it — but the banner was mounted
+// NOWHERE in production, so an operator who lost a race to another desk got no
+// feedback at all (audit ship blocker #3).
+describe('RunSurface — a rejected command is visible on the live desk', () => {
+  it('renders the conflict banner, named by match, and dismisses it', () => {
+    render(
+      <RunSurface
+        blocks={makeAutoFillBlocks()}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    expect(screen.queryByTestId('conflict-banner-conflict')).toBeNull();
+
+    // What useCommandQueue does on a 409 `conflict` outcome.
+    act(() => {
+      useMatchStateStore
+        .getState()
+        .recordConflict('m1', 'conflict', 'Cannot transition finished → playing');
+    });
+
+    const strip = screen.getByTestId('run-conflicts');
+    expect(strip).toHaveTextContent('Cannot transition finished → playing');
+    // Named, so a six-court desk knows WHICH match was rejected.
+    expect(strip).toHaveTextContent('MS1');
+
+    fireEvent.click(screen.getByTestId('conflict-dismiss'));
+    expect(screen.queryByTestId('run-conflicts')).toBeNull();
+  });
+});
+
+// The Plan branch wraps its rail in `DetailDock` (OperationsProduct.tsx), which
+// owns the narrow-viewport overlay fallback. Run hand-rolled a `w-72
+// flex-shrink-0` rail that was ALWAYS mounted, so at 390px the board+queue
+// column measured 0px with nothing reachable (audit T2 / ship blocker #9).
+describe('RunSurface — the inspector is hosted by DetailDock', () => {
+  it('reserves no inspector column until a match is selected, then docks one', () => {
+    render(
+      <RunSurface
+        blocks={makeAutoFillBlocks()}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    // Nothing selected → no rail at all (so no fixed 288px column to steal).
+    expect(screen.queryByTestId('run-inspector')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('run-card-meet:m1'));
+
+    const dock = screen.getByTestId('run-detail-dock');
+    expect(dock).toContainElement(screen.getByTestId('run-inspector'));
+  });
+});
+
 describe('RunSurface — select Now playing meet match + Record result', () => {
   it('calls meetSubmit("finish_match") when Record result is clicked', async () => {
     render(
@@ -273,7 +348,7 @@ describe('RunSurface — select Now playing meet match + Record result', () => {
     // Inspector in "now" + "playing" role shows "Record result"
     expect(screen.getByTestId('run-act-record')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    pressRecord();
     // record auto-pulls m2 → fireAssign → drain its settle microtask in act
     await flushAssignSettle();
 
@@ -294,7 +369,7 @@ describe('RunSurface — auto-pull after record empties a court', () => {
     );
 
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    pressRecord();
 
     // Two calls: (1) finish_match for m1, (2) assign_court for m2 (auto-pull)
     expect(mockMeetSubmit).toHaveBeenCalledTimes(2);
@@ -319,7 +394,7 @@ describe('RunSurface — auto-pull after record empties a court', () => {
 
     // Record → auto-pull: 2 calls
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    pressRecord();
     // Drain the auto-pull settle microtask in act BEFORE the rerender below,
     // so it can't fire un-acted mid-rerender.
     await flushAssignSettle();
@@ -358,10 +433,11 @@ describe('RunSurface — auto-pull after record empties a court', () => {
     // Count UNCHANGED — rerender did not trigger another auto-pull
     expect(mockMeetSubmit).toHaveBeenCalledTimes(2);
 
-    // m1 is done → on the LIVE board it stays as a completed block on the
-    // timeline (buildLiveChips keeps court-assigned done blocks, spanning their
-    // actual length) — unlike the old positional lane that dropped done matches.
-    expect(screen.getByTestId('run-card-meet:m1')).toBeInTheDocument();
+    // m1 is done → it VACATES its court card (Console grid: a card states the
+    // court's CURRENT condition; finished matches leave the board — the
+    // whole-day record lives on Plan). Court 1 now reads free.
+    expect(screen.queryByTestId('run-card-meet:m1')).toBeNull();
+    expect(screen.getByTestId('run-court-free-1')).toBeInTheDocument();
     await flushAssignSettle();
   });
 });
@@ -393,7 +469,7 @@ describe('RunSurface — auto-pull skips ineligible queue head', () => {
     );
 
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
-    fireEvent.click(screen.getByTestId('run-act-record'));
+    pressRecord();
 
     // Only the record fires — no auto-pull because head is ineligible
     expect(mockMeetSubmit).toHaveBeenCalledTimes(1);
@@ -448,7 +524,10 @@ describe('RunSurface — queued match Send to free court fires assign', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /** Minimal bracketData that makes play unit 'pu1' eligible. */
-function mkBracketData(playUnitId: string): BracketTournamentDTO {
+function mkBracketData(
+  playUnitId: string,
+  opts?: { startedOnCourt?: number },
+): BracketTournamentDTO {
   return {
     courts: 1, total_slots: 10, rest_between_rounds: 0, interval_minutes: 15,
     start_time: null, events: [], participants: [],
@@ -458,7 +537,14 @@ function mkBracketData(playUnitId: string): BracketTournamentDTO {
       slot_a: { participant_id: null, feeder_play_unit_id: null },
       slot_b: { participant_id: null, feeder_play_unit_id: null },
     }],
-    assignments: [], // not assigned → eligible
+    assignments:
+      opts?.startedOnCourt == null
+        ? [] // not assigned → eligible
+        : [{
+            play_unit_id: playUnitId, slot_id: 5, court_id: opts.startedOnCourt,
+            duration_slots: 1, actual_start_slot: null, actual_end_slot: null,
+            started: true, finished: false,
+          }],
     results: [],    // no result → not done
   };
 }
@@ -625,5 +711,97 @@ describe('RunSurface — in-flight assign guard (no double-assign across courts)
     // the still-free court 2 during the round-trip window.
     expect(screen.queryByTestId('run-queue-row-meet:m1')).toBeNull();
     expect(screen.queryByTestId('run-act-send')).toBeNull();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Section 6: a bracket match RUNNING gets the rich bracket panel.
+//
+// `MatchDetailPanel` — Undo start, set-by-set score entry, the armed winner
+// buttons — was reachable only via OpsDetailRail's `live === true` branch, and
+// the sole production call site hardcodes `live={false}`. RunSurface never
+// imported it. So a bracket match lost undo exactly where it matters most
+// (audit T2 / ship blocker "rich match panel").
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('RunSurface — a bracket match on court reaches the rich bracket panel', () => {
+  it('offers Undo start for a PLAYING bracket match, and does not before it starts', () => {
+    const playing: OpsBlock[] = [
+      mkBlock({
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        court: 1, slot: 5, status: 'started', sideA: 'Alice', sideB: 'Bob',
+      }),
+    ];
+
+    const { rerender } = render(
+      <RunSurface
+        blocks={playing}
+        bracketData={mkBracketData('pu1', { startedOnCourt: 1 })}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('run-card-bracket:pu1'));
+    expect(screen.getByRole('button', { name: 'Undo start' })).toBeInTheDocument();
+
+    // A bracket match that has NOT started keeps the plain run inspector — the
+    // panel would otherwise duplicate its Start button beside the inspector's.
+    rerender(
+      <RunSurface
+        blocks={[
+          mkBlock({
+            id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+            court: 1, slot: 5, status: 'called', sideA: 'Alice', sideB: 'Bob',
+          }),
+        ]}
+        bracketData={mkBracketData('pu1')}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Undo start' })).toBeNull();
+    expect(screen.getByTestId('run-act-start')).toBeInTheDocument();
+  });
+
+  // 2026-08-12: RunInspector's identity block and MatchDetailPanel's own
+  // Participants block both render the two side names + "vs" — wasteful at
+  // 1280, over half the 287px overlay duplicated at 390. RunInspector owns
+  // match identity (it is always mounted, for every role); MatchDetailPanel
+  // — reused standalone in the bracket Live tab, where nothing else shows
+  // identity — drops its own copy only when RunSurface embeds it below an
+  // inspector that already has one.
+  it('does not repeat the team names + vs between the inspector and the bracket panel', () => {
+    const playing: OpsBlock[] = [
+      mkBlock({
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        court: 1, slot: 5, status: 'started', sideA: 'Alice', sideB: 'Bob',
+      }),
+    ];
+
+    render(
+      <RunSurface
+        blocks={playing}
+        bracketData={mkBracketData('pu1', { startedOnCourt: 1 })}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('run-card-bracket:pu1'));
+    // The rich panel really did mount (Undo start only exists there) — so the
+    // counts below are not vacuous.
+    expect(screen.getByRole('button', { name: 'Undo start' })).toBeInTheDocument();
+
+    // The court CARD names the sides (Console grid, by design) and the
+    // inspector names them once more — but the embedded bracket panel must
+    // NOT add a third copy. "vs" belongs to the inspector alone (cards
+    // stack the sides without a joiner).
+    expect(screen.getAllByText('Alice')).toHaveLength(2);
+    expect(screen.getAllByText('Bob')).toHaveLength(2);
+    expect(screen.getAllByText('vs')).toHaveLength(1);
   });
 });

@@ -238,11 +238,13 @@ def check_display_consistency(client: SimClient, ctx: RunContext, *, meet: bool,
 
     This is the Operations -> Display seam check: what a spectator's
     polling surface renders must agree with what the operator recorded.
-    """
-    from .client import SimClient as _C  # local to build an independent session
 
+    Fresh *connection*, same tenant — these are the tenant-scoped routes, not
+    the public ``/display/{token}/*`` projection, so a client with no session
+    is simply nobody and reads nothing.
+    """
     v: list[Violation] = []
-    fresh = _C(client.base_url, stats=ctx.client.stats)
+    fresh = client.clone()
     try:
         if meet:
             states = fresh.get_match_states(ctx.tid) or {}

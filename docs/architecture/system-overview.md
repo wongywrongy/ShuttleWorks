@@ -1,6 +1,6 @@
 # System overview
 
-ShuttleWorks is built as **four architectural modules** over a shared CP-SAT engine and a
+ShuttleWorks is built as **five architectural modules** over a shared CP-SAT engine and a
 single SQLite-backed persistence layer. This page is the map: what each module owns, what it
 produces, and what it consumes. The seams *between* modules are documented in
 [Module contracts](/contracts/).
@@ -8,27 +8,46 @@ produces, and what it consumes. The seams *between* modules are documented in
 ## Two tiers of module
 
 ```
-              ┌─────────────────────── Workspace ───────────────────────┐
-              │                                                          │
-  Tier 1      │   ┌────────┐        ┌─────────┐              ┌────────┐  │
- (user,       │   │  Meet  │        │ Bracket │              │Display │  │
-  enableable) │   └───┬────┘        └────┬────┘              └───▲────┘  │
-              │       │ ScheduleDTO      │ BracketTournamentDTO  │       │
-              │       ▼                  ▼                       │       │
-  Tier 2      │   ┌──────────────────────────────────┐  MatchStateDTO   │
- (architectural│  │           Operations             │──────────┘       │
-  always-on)  │   │      (Plan board + live Run)      │                  │
-              │   └──────────────────────────────────┘                  │
-              └──────────────────────────────────────────────────────────┘
+   ┌──────── public ────────┐   ┌─────────────── Workspace ────────────────┐
+   │  the entrant tier /e/  │   │                                          │
+   │  (its own SSR app)     │   │  ┌─────────┐                             │
+   │        submits ────────┼───┼─▶│ Entries │                             │
+   └────────────────────────┘   │  └────┬────┘  entriesCommitted           │
+                                │       │ PlayerDTO                        │
+  Tier 1                        │  ┌────▼───┐   ┌─────────┐   ┌────────┐   │
+ (user, enableable)             │  │  Meet  │   │ Bracket │   │Display │   │
+                                │  └───┬────┘   └────┬────┘   └───▲────┘   │
+                                │      │ ScheduleDTO │ BracketTournamentDTO │
+                                │      ▼             ▼            │        │
+  Tier 2                        │  ┌────────────────────┐ MatchStateDTO    │
+ (architectural, always-on)     │  │     Operations     │─────────┘        │
+                                │  │ (Plan + live Run)  │                  │
+                                │  └────────────────────┘                  │
+                                └──────────────────────────────────────────┘
                        all over  scheduler_core (CP-SAT)  +  SQLite
 ```
 
-- **Tier 1 — user-facing modules**: `Meet`, `Bracket`, `Display`. These appear in the module
-  catalog, have a row in the `workspace_modules` table, and are members of the `ModuleId` union
-  (`'meet' | 'bracket' | 'display'`).
+- **Tier 1 — user-facing modules**: `Meet`, `Bracket`, `Display`, `Entries`. These appear in the
+  module catalog, have a row in the `workspace_modules` table, and are members of the `ModuleId`
+  union (`'meet' | 'bracket' | 'display' | 'entries'`).
 - **Tier 2 — architectural module**: `Operations`. It owns real nav, routes, and a store slice,
   but it is **always-on and has no enable flag**. In code it is the `'operations'` arm of
   `ArchModuleId = ModuleId | 'operations'`.
+
+::: info Entries is Tier-1 but cloud-only
+`Entries` joined the Tier-1 set in SP-PROGRAM-1 (2026-08-06). It is the one module that cannot be
+enabled in local mode — the seed omits it, an inherited row is filtered at read time, and enabling
+it answers `409 MODULE_REQUIRES_CLOUD`. That does **not** put the internet on the critical path for
+an event: the cloud dependency ends at commit, and nothing on event day reads an entry row. See
+[Entries](/modules/entries).
+:::
+
+::: tip There are two frontends
+The operator console (`products/scheduler/frontend`) is the React + Vite SPA. The public
+[**entrant tier**](/architecture/entrant-tier) (`products/scheduler/entrant`) is a separate
+server-rendered React Router app under `/e/` that ships **zero client JavaScript**. It is not a
+module — it is a delivery tier in front of the Entries module's public data plane.
+:::
 
 This split is declared, and **test-enforced**, in
 `frontend/src/platform/contracts/moduleContract.ts` (against its colocated
@@ -42,6 +61,7 @@ This split is declared, and **test-enforced**, in
 | **Bracket** | Roster · Draws · Matches · Configuration | `…/bracket*` (draws, schedule-next, results + result-command queue, match-action, import/export) | `BracketTournamentDTO` (carrying `PlayUnitDTO` / `AssignmentDTO` / `ResultDTO`) | `BracketCreateIn`, `EventIn`, `ResultDTO` |
 | **Operations** | Plan · Run (for the active engine) | `…/match-states*`, `…/commands` | `MatchStateDTO` | `ScheduleDTO`, `BracketTournamentDTO` |
 | **Display** | Preview · Configuration | `/display/{token}/*` (public capability-token projection) | *(none — read-only)* | `TournamentStateDTO`, `MatchStateDTO`, `BracketTournamentDTO` |
+| **Entries** | Entries (the desk) | `…/entries*` (desk, confirm, commit), `…/entry-page`, `…/entry-events`, plus the public `/e/api/*` + `/e/account/*` data plane | `PlayerDTO` (via the commit seam, into the roster) | `EntryDTO`, `EntryCommitResultDTO` |
 
 :::info Plan / Run were formerly Courts / Live
 The Operations nav labels were renamed: **Plan** (the drag-to-reschedule court board) and **Run**
@@ -76,6 +96,10 @@ A few things worth internalising:
   every route `GET`, minted/rotated by the owner at `…/display-token`.
 - **`/state` is shared, not owned by Meet.** The persisted tournament blob (`GET/PUT …/state`)
   lives in the control-plane `tournaments` router and is *consumed* by Meet, not owned by it.
+- **Entries is intake, and it never writes the roster behind your back.** The public tier collects
+  submissions; an operator confirms them; a commit run turns confirmed entries into roster players,
+  re-runnably and idempotently, skipping and *reporting* anything it cannot map rather than
+  guessing. See [Entries](/modules/entries).
 
 ## What each module produces (the DTO vocabulary)
 
@@ -88,8 +112,10 @@ type error, not silent drift:
   participants). **Bracket → Operations and → Display.**
 - `MatchStateDTO` — live match status + timestamps + score. **Operations → Meet and → Display.**
 - `TournamentStateDTO` — the persisted workspace state blob. **shared → Display.**
+- `PlayerDTO` — a roster player. **Entries → Meet** across the commit seam (`entriesCommitted`),
+  alongside `EntryDTO` / `EntryCommitResultDTO` on the desk side.
 
-These four are the substance of the [module contracts](/contracts/).
+These are the substance of the [module contracts](/contracts/).
 
 ## The shared foundation
 
@@ -106,6 +132,7 @@ Everything sits on two shared layers:
 
 ## See also
 
+- [Entrant tier](/architecture/entrant-tier) — the second frontend: the public site under `/e/`.
 - [Workspace model](/architecture/workspace-model) — what a workspace is, how modules are persisted, the status lifecycle.
 - [Data flow](/architecture/data-flow) — how a plan becomes a live court and reaches the display.
 - [State management](/architecture/state-management) — the Zustand stores behind the modules.

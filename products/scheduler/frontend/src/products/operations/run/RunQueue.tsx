@@ -9,16 +9,30 @@
  */
 import type { CSSProperties } from 'react';
 import type { RunMatch } from '../runtime/runModel';
+import { RUN_STATUS_LABEL } from '../runtime/runMachine';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 import { EYEBROW_CLASS } from '../../../lib/utils';
+import { STATE_WORD } from '../../../lib/stateWords';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 
-// ── source initial + square tint (M=meet azure, B=bracket violet) ─────────
-const SOURCE_INITIAL: Record<'meet' | 'bracket', string> = { meet: 'M', bracket: 'B' };
+// ── source label + square tint (M=meet azure, B=bracket violet) ───────────
+// One vocabulary for the engine, everywhere on this surface: the square shows
+// the INITIAL of the same word the row's tooltip and the inspector's
+// `SourceChip` spell out. The inspector used to say "BRKT" beside a "B".
+const SOURCE_LABEL: Record<'meet' | 'bracket', string> = { meet: 'Meet', bracket: 'Bracket' };
 const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
   meet: 'bg-module-meet/15 text-module-meet',
   bracket: 'bg-module-bracket/15 text-module-bracket',
 };
-const SOURCE_LABEL: Record<'meet' | 'bracket', string> = { meet: 'Meet', bracket: 'Bracket' };
+
+// Why an ineligible row can't be sent, in the terms of its own engine —
+// `RunMatch.eligible` means "both sides known" for meet and "every feeder
+// resolved" for bracket (see toRunMatches).
+const PENDING_REASON: Record<'meet' | 'bracket', string> = {
+  meet: 'Both sides have to be decided first',
+  bracket: 'An earlier result decides a side',
+};
 
 // ── props ─────────────────────────────────────────────────────────────────
 export interface RunQueueProps {
@@ -35,10 +49,12 @@ export interface RunQueueProps {
 
 // ── component ─────────────────────────────────────────────────────────────
 export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: RunQueueProps) {
+  // Viewer read-only vocabulary (audit A2) — send is a write.
+  const canEdit = useCanEdit();
   if (queue.length === 0) {
     return (
       <div className="flex items-center justify-center px-4 py-6 text-sm text-muted-foreground">
-        Queue empty — every match is on a court.
+        Queue empty. Every match is on a court.
       </div>
     );
   }
@@ -51,7 +67,6 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
     <ul className="sw-stagger divide-y divide-border/60 border-t border-border">
       {queue.map((match, i) => {
         const isSelected = selectedKey === match.key;
-        const sidesLabel = `${match.sideA} vs ${match.sideB}`;
 
         return (
           <li
@@ -59,11 +74,16 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
             data-testid={`run-queue-row-${match.key}`}
             data-source={match.source}
             style={{ '--i': i } as CSSProperties}
-            className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
+            className={`cursor-pointer px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
               isSelected ? 'bg-muted/40' : ''
             }`}
             {...selectableRowProps(() => onSelect(match.key), isSelected)}
           >
+            {/* `flex-wrap`: at 390px the fixed columns (#n, source, code) plus
+                the badges left the sides column ~91px, so `break-words` broke
+                names MID-WORD ("Winn/er"). The trailing columns now wrap to a
+                second line instead; the sides column keeps a 10rem floor. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {/* Position */}
             <span className="w-6 flex-shrink-0 text-right text-2xs sw-num text-ink-faint">
               #{i + 1}
@@ -75,19 +95,18 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               title={SOURCE_LABEL[match.source]}
               className={`inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-xs text-[9px] font-semibold sw-num ${SOURCE_SQUARE[match.source]}`}
             >
-              {SOURCE_INITIAL[match.source]}
+              {SOURCE_LABEL[match.source][0]}
             </span>
 
             {/* Match code — tabular */}
-            <span className="w-16 flex-shrink-0 truncate text-2xs font-semibold sw-num text-ink-3">
+            <span className="w-16 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">
               {match.label}
             </span>
 
-            {/* Sides — truncated with tooltip */}
-            <span
-              className="min-w-0 flex-1 truncate text-sm"
-              title={sidesLabel}
-            >
+            {/* Sides — wrap; the row grows. The court caller reads names off
+                this queue, and a tooltip is not a thing you can hover on the
+                tablet it runs on. */}
+            <span className="min-w-[10rem] flex-1 break-words text-sm">
               {match.sideA}
               <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
                 v
@@ -95,33 +114,45 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               {match.sideB}
             </span>
 
-            {/* Late marker */}
-            {match.late && (
-              <span
-                data-testid={`run-queue-late-${match.key}`}
-                aria-label="Late"
-                className={`sw-late-nudge flex-shrink-0 ${EYEBROW_CLASS} text-status-warning`}
-              >
-                Late
-              </span>
-            )}
-
-            {/* Behind-plan badge — same voice as the board's run-late marker */}
+            {/* Behind-plan badge — same voice as the board's run-late marker.
+                (`match.late` is NEVER true on queue rows — runModel derives
+                late only onto court-lane Now clones — so the old second badge
+                keyed on it was dead code; `lateKeys` is the one source.) */}
             {lateKeys?.has(match.key) && (
               <span
                 data-testid={`queue-late-${match.key}`}
-                aria-label="Late"
-                className="sw-late-nudge flex-shrink-0 text-[9px] font-semibold uppercase tracking-wide text-status-warning"
+                aria-label={STATE_WORD.late}
+                className={`sw-late-nudge flex-shrink-0 ${EYEBROW_CLASS} text-status-late`}
               >
-                LATE
+                {STATE_WORD.late}
               </span>
             )}
 
-            {/* Quick-send — eligible scheduled rows only */}
-            {onSend && match.eligible && match.status === 'scheduled' && (
+            {/* Readiness — every row says which of the three it is. The send
+                affordance used to be the only marker, so a row blocked on an
+                earlier result and a row already called to a court both read as
+                a plain, unexplained absence. */}
+            {!match.eligible ? (
+              <span
+                data-testid={`queue-blocked-${match.key}`}
+                title={PENDING_REASON[match.source]}
+                className={`flex-shrink-0 ${EYEBROW_CLASS} text-ink-faint`}
+              >
+                {STATE_WORD.pending}
+              </span>
+            ) : match.status !== 'scheduled' ? (
+              <span
+                data-testid={`queue-state-${match.key}`}
+                className={`flex-shrink-0 ${EYEBROW_CLASS} text-muted-foreground`}
+              >
+                {RUN_STATUS_LABEL[match.status]}
+              </span>
+            ) : onSend ? (
               <button
                 type="button"
                 data-testid={`queue-send-${match.key}`}
+                disabled={!canEdit}
+                title={canEdit ? undefined : READ_ONLY_MESSAGE}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSend(match.key);
@@ -130,7 +161,14 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, onSend }: Run
               >
                 ↵ send
               </button>
-            )}
+            ) : null}
+            </div>
+
+            {/* Reserved second line (O2.2) — the future blocker-reason strip.
+                Empty on purpose: reserving the height NOW means the rows don't
+                reflow the day the reason text ships. Aligned under the sides
+                column (past #n's w-6 + gap-3). */}
+            <div aria-hidden className="min-h-4 pl-9 text-2xs text-muted-foreground" />
           </li>
         );
       })}

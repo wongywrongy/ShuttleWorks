@@ -19,7 +19,12 @@ describe('OpsDetailRail', () => {
     render(<OpsDetailRail block={meetBlock} data={null} onBracketChange={() => {}} onAction={onAction} live={true} />);
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getByText('Bob')).toBeInTheDocument();
-    expect(screen.getByText(/Court C2 · slot 3/)).toBeInTheDocument();
+    // Same two facts, now as labelled rows in the Status section rather than
+    // one unlabelled "Court C2 · slot 3" line in a flat stack.
+    expect(screen.getByText('Court')).toBeInTheDocument();
+    expect(screen.getByText('C2')).toBeInTheDocument();
+    expect(screen.getByText('Slot')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Start match/i }));
     expect(onAction).toHaveBeenCalledWith(meetBlock, { kind: 'start' });
     fireEvent.click(screen.getByRole('button', { name: /Call to court/i }));

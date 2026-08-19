@@ -113,7 +113,7 @@ def to_ics(
         round_index = int(pu.metadata.get("round", 0)) if pu.metadata else 0
         side_a = _side_label(pu.side_a, state) or "TBD"
         side_b = _side_label(pu.side_b, state) or "TBD"
-        summary = f"{pu.event_id} R{round_index} — {side_a} vs {side_b}"
+        summary = f"{pu.event_id} R{round_index}: {side_a} vs {side_b}"
         status = (
             "CONFIRMED" if pu_id in state.results else "TENTATIVE"
         )

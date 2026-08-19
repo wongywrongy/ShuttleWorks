@@ -78,6 +78,24 @@ describe('DetailPanel', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('groups content under one section label recipe', () => {
+    render(
+      <DetailPanel label="Player" value="Kim" onClose={() => {}}>
+        <DetailPanel.Section eyebrow="Availability" right={<span>2 windows</span>}>
+          <p>window rows</p>
+        </DetailPanel.Section>
+      </DetailPanel>,
+    );
+    // `Eyebrow` uppercases the text content, so the DOM matches the visual
+    // and a text query resolves the plain label.
+    const heading = screen.getByText('AVAILABILITY');
+    // The one canonical recipe: EYEBROW_CLASS (10px semibold caps, tracked).
+    expect(heading.className).toContain('text-2xs');
+    expect(heading.className).toContain('uppercase');
+    expect(screen.getByText('2 windows')).toBeInTheDocument();
+    expect(screen.getByText('window rows')).toBeInTheDocument();
+  });
+
   it('honors a custom testId', () => {
     render(
       <DetailPanel label="Match" value="MS1" onClose={() => {}} testId="match-panel">

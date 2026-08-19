@@ -3,771 +3,227 @@
 The **visible backlog** the code-health practice feeds (`CODE_HEALTH.md` #6):
 when a change spots debt outside its own scope, it lands here instead of being
 silently fixed (scope creep) or silently dropped. Each entry: **what · where ·
-why it matters · rough size**. This is a living file — add rows as debt is
-found, strike rows as it is cleared, and keep it honest so "the log growing
-faster than it shrinks" stays a real signal (that's the trigger to run another
-bounded program, per `CODE_HEALTH.md`).
+why it matters · rough size**. Add rows as debt is found, move rows to
+**Closed** as it is cleared, and keep it honest so "the log growing faster than
+it shrinks" stays a real signal — that is the trigger to run another bounded
+program, per `CODE_HEALTH.md`.
 
-Seeded 2026-07-01 (SP-REFACTOR **Phase 5**) from a fresh measurement pass + the
-design-gated items deferred out of Phases 1–4; reconciled again in **Phase 6**
-(doc-consolidation sweep — a fresh knip/radon/depcruise **diff** confirmed no code
-drift since Phase 5, so no entries changed state). The current authoritative
-snapshot is `docs/audits/06-state-of-codebase.md`; the ledger is
-`REFACTOR_PROGRESS.md`.
+**Keep entries short.** An entry earns its length only when the *decision* is
+hard to state; the narration of how it was found belongs in the commit or the
+audit doc it came from. A log nobody reads is the same as no log.
 
----
-
-## Measurement snapshot — 2026-07-01
-
-**Cyclomatic complexity** (`radon cc 6.0.1`, `scheduler_core` + backend
-`app/adapters/services/repositories/api`, tests/migrations excluded):
-
-- **690 blocks analyzed · average `A` (3.94)** — the codebase is healthy in
-  aggregate; this is a *targeted* backlog, not a systemic problem.
-- **54 blocks rank above the >10 threshold** (`C`+). The tail, not the body.
-- Re-run: `python -m radon cc scheduler_core products/scheduler/backend/{app,adapters,services,repositories,api} -nc -s --total-average -e "*/tests/*,*/migrations/*,*/alembic/*"`
-
-**Engine coverage** (`pytest --cov=scheduler_core`): **80%** total (590 BE tests).
-
-**Frontend complexity: UNMEASURED** (gap logged below — `radon` is Python-only).
+**Reconciled 2026-08-11.** Every open entry was re-checked against the code:
+16 were already fixed and had never been closed, 1 described a file that no
+longer exists, and 5 were fixed in that pass (`83e3b96`, `512996a`, `330f069`).
+The rest were tightened and grouped. Before: 1,329 lines. After: this.
 
 ---
 
-## Locked-function candidates (high complexity **AND** low coverage)
+## Open — needs an owner decision
 
-Per `CODE_HEALTH.md` #10, this is the highest-risk category. **Both were covered
-in Phase 7** (`docs/audits/07-locked-functions.md`, commit `caf5275`) → they are
-**no longer locked** (now high-complexity-but-*covered* = decompose-when-touched,
-not load-bearing-untouchable). Decomposition (Part-2 Steps 4–5) is **HELD** — see
-the ⏳ note below.
+These are decisions to make, then execute. Nothing here is blocked on effort.
 
-| Function | Location | Complexity | Coverage | Status |
-| --- | --- | --- | --- | --- |
-| `GreedyBackend.solve` | `scheduler_core/engine/backends.py` | ~~E (37)~~ → **A (5)** (class ~~E38~~→B7) | ~~19%~~ → **99%** | ✅ characterized **+ decomposed** (Phase 7). Split into `_GreedyPlacer` (engine) + `_locked_match_ids` (intake) + `_result` (emit). **Open Q resolved:** confirmed a *fallback with no in-repo production caller*. |
-| `SchedulingProblemBuilder.build` | `scheduler_core/engine/bridge.py` | ~~C (19)~~ → **A (2)** (class ~~C20~~→A3) | ~~19%~~ → **97%** | ✅ characterized **+ decomposed** (Phase 7). Split into `_select_unit_ids`/`_apply_horizon`/`_build_players`/`_build_matches`/`_build_previous_assignments`. **Corrected claim:** does **NOT** "guard every schedule build" — Meet/Bracket build `ScheduleRequest` directly (`api/schedule.py:111`, `services/bracket/adapter.py:89`). |
-
-✅ **Decomposition DONE (2026-07-01, `d09396c` + `1534756`).** Initially held at
-the Step-3→4 checkpoint, then reversed on Kyle's call ("finish the last part").
-Both decomposed along intake → engine → emit with the characterization net green
-throughout; complexity dropped and distributed (largest new unit B9); an independent
-fresh-context review verified behavior-equivalence line-by-line. Neither is *locked*
-any longer. See `07-locked-functions.md §7`.
-
-## Latent bugs found while characterizing (Phase 7) — FIXED 2026-07-01
-
-Found while characterizing; per the Part-2 STOP rule they were pinned (not fixed)
-in the characterization commit, then **fixed in a follow-up** on Kyle's call
-("fix the bugs"). Both verified — full backend suite 620 green.
-
-| Bug | Where | Fix ✅ |
-| --- | --- | --- |
-| **`build` config field-drop** | `scheduler_core/engine/bridge.py:118–137` | Both rebuilds switched from a hand-listed copy to `dataclasses.replace(config, …)` (prior art: `handle_court_outage`), so every field is preserved except the overridden one(s). The tripwire test flipped to a preservation regression-guard (`test_freeze_override_preserves_all_config_fields` + `..._rolling_horizon_..._preserving_fields`). **No production impact** — the override path had no in-repo caller. |
-| **Stale example** | `examples/badminton_event_setup.py` | Rewritten to the current API (manual `PlayUnit`s → `SchedulingProblemBuilder.build` → `CPSATBackend`); the cut generation layer (`PoolGenerationPolicy`/`CompetitionGraph`) is gone for good. Verified runnable (`Status: optimal, assignments: 6`). |
-
-## Live-ops match-state divergence (found 2026-07-01, frontend-revamp verification) — ✅ FIXED (same day)
-
-Found while visually verifying the Run surface; **reproduced end-to-end**, then fixed
-on Kyle's "fix things in your follow up" call.
-
-| What | Where | Status |
-| --- | --- | --- |
-| **Commands didn't write through to `match_states`** | `repositories/local.py` `process_command` Step 5 set `matches.status` only; the Run surface polls the legacy `/match-states` table, so a command-applied call/start vanished on reload and a retried Call 409'd forever ("cannot transition from 'playing' to 'called'") | ✅ **Fixed**: the apply branch now mirrors the transition into the `match_states` row in the same transaction (legacy spelling map; `retired`→`finished`; postpone/uncall clear live timing). Pinned by `tests/unit/test_commands.py` §8 (mirror + postpone-clears). QA residue (WS1/WS2 stuck canonical-`playing`) healed via the legacy PUT route → both consistent `finished`. |
-| **409 toast leaks internals** | conflict toast on the Run surface shows the raw match UUID + `request <id>` instead of the match code ("WS2") | ✅ **Fixed 2026-07-02**: `useLiveTracking` now resolves the meet match's display code (`Match M12`, via `matchNumber`) at both toast call-sites instead of `matchId.slice(0,8)`. The backend `detail` is kept as secondary diagnostic text. |
-
----
-
-## High complexity but well-covered (decompose *when touched*, not locked)
-
-Complex, but the tests exist — so they are **not** high-risk in the locked sense.
-Apply the Boy-Scout rule (#2) when a task already brings you into them; don't
-open them speculatively.
-
-| Function | Location | Complexity | Coverage |
+| # | What | The decision owed | Size |
 | --- | --- | --- | --- |
-| `find_conflicts` | `scheduler_core/engine/validation.py:71` | **F (68)** — worst single score | 83% |
-| `generate_event_route` | `products/scheduler/backend/api/brackets.py:1624` | **F (41)** — worst backend | BE ~81% (API-tested) |
-| `Objective.apply` | `scheduler_core/engine/constraints/objective.py:68` | E (36) | 85% |
-| `_slice_for` | `products/scheduler/backend/api/schedule_repair.py:103` | E (35) | — |
-| `compute_impact` | `products/scheduler/backend/services/schedule_impact.py:77` | E (32) | — |
-| `_hydrate_session` | `products/scheduler/backend/api/brackets.py:442` | D (29) | — |
-| `parse_matches_csv` | `products/scheduler/backend/services/csv_importer.py:70` | D (26) | — |
-| `on_solution_callback` | `scheduler_core/engine/cpsat_backend.py:124` | D (23) | 94% |
-| `process_command` | `products/scheduler/backend/repositories/local.py:1504` | D (21) | — |
+| D1 | **`resolveClosedWindows` swallows every bracket-occupancy failure** — see the full entry below; it is the one open item with a live correctness cost. | Fail the solve, warn the operator, or distinguish unknown-from-none at the seam | S + a product call |
+| D2 | **`matchStateStore` ownership** (F-ARCH-3) — stays in shared `store/` or moves to Operations. Moving it *creates* new `no-cross-product` violations (Meet + Bracket also consume it). Two reasonable options, no code-driven winner. `01-findings.md §F-ARCH-3`, ADR 0011. | Where it lives | Decision, then S |
+| D3 | **The `no-cross-product` warns — 14 of them, in three clusters** (measured 2026-08-11; the log's older "the last 2" claim was stale). *ops→bracket*: `OpsDetailRail→MatchDetailPanel`, `OperationsProduct→BracketScheduleModal`, `opsBlock→bracketLabels`. *workspace→display*: `displayConfig/DisplayPreview` → `publicDisplay/{CourtsView,displayPresets,courtLayout,tvSizing}` and `DisplayLayoutEditor→courtLayout` — the config board reuses the public board's real renderer for visual fidelity. *workspace→settings*: `WorkspaceShellSurface` → the four settings tabs it hosts, which is an aggregator edge. Same question for all three: accept them as legitimate consumer/aggregator edges, or relocate the shared pieces to a neutral home (the `SourceChip` precedent). Clearing them is the blocker to ratcheting that rule warn→**error**. | Accept or relocate, per cluster | Decision, then S–M |
+| D4 | **The Run nav item is two different surfaces.** Meet-only workspaces get the legacy meet Live page (Director/Disruption/Re-optimize/XLSX, score entry); hybrid workspaces get the SP-G1b unified board (queue/inspector/zoom, no meet tools). Same label, disjoint affordances — an operator moving between workspaces re-learns the page. The F-ARCH-3 neighbourhood. **Sharpened 2026-08-12 by a browser verification:** the split also makes code unreachable. `ModuleOutlet.tsx:52` routes Operations segments to `OperationsProduct` whenever BOTH engines are enabled, so `MeetProduct`'s `live` tab — and with it `meet/control-center/GanttChart.tsx`, the only production consumer of `getRenderSlot`/`isNearPlan` — never executes on a dual-engine workspace. A fix landed in that file reaches single-engine meet workspaces and nothing else, which is not visible from the file. | Converge or keep two | L (decision first) |
+| D5 | **`seen_version` is optional on `POST /bracket/results`** — declared `Optional[int]`, guarded only `if not None`, so any caller that omits it is silently unprotected: a fail-*open* optimistic-concurrency check. SP-CLOUD-4 closed the identical defect on `PUT …/state` by making `If-Match` mandatory (412 when absent). The frontend already sends the token. | Tighten to mandatory (a public API shape change) or document the fail-open | S |
+| D6 | **Two conflict dialects for one concept.** `PUT …/match-states/{id}` answers **412** on a stale version; `PUT …/state` answers **409** with the current state in the body. Both are defensible alone — 412 is strict HTTP, 409-with-state lets a client reconcile in one round trip — but a codebase should not teach two answers to one question. Converging means changing a shipped, tested path with a working client counterpart (`MatchVersionMismatch`). | Which dialect wins, and accept the break | M |
+| D7 | **The entrant-account CASCADE pre-decides E2's erasure question.** `submissions.account_id` and `entry_players.account_id` both FK `entrant_accounts` with `ondelete=CASCADE` (migration `s3d8f2b5c0e1`), so deleting one entrant account would erase every submission and entry it ever made — including entries a director has confirmed. No delete path exists yet, but E2 builds withdraw-and-erase, and the schema has already answered its hardest question in the most destructive direction. Alternatives: `ON DELETE SET NULL` + tombstone; soft-delete the account; PII-scrub while keeping rows. **A ruling is owed BEFORE E2.** | Entrant erasure right vs organiser's records | S now, M after E2 ships against the cascade |
+| D8 | **The Meet mapping targets a rank *slot*, not a division.** `rankCounts: {MS: 3}` declares MS1/MS2/MS3 with one player per school per singles slot (`useRankValidation.ts`), but Seam A maps every entrant of entry event "MS1" onto that same slot in the same seam-created group — so the roster's normalization stripped `ranks[]` from all but the first committed player on the next autosave. Division-level mapping or seam-side slot assignment; not a patch. Spec §9.3 owns the redesign. | Which mapping | M |
+| D9 | **8 of the 10 e2e spec files are stale and fail against the current UI.** `00-sanity`, `02`–`08` and `99-baseline-screenshots` were last touched 2026-05-11 and predate the Hub/workspace redesign: they assert `toHaveTitle(/schedul\|tournament/i)` and `getByTestId('tab-setup')` (the vestigial TabBar). `make test-e2e` reports 19 failures that are all rot, so a real regression would be indistinguishable from the noise. Only `interaction-smoke.spec.ts` runs in CI. | Repair against the sidebar nav, or delete and let interaction-smoke be the e2e surface | M |
+| D10 | **`comingSoon` keeps retired vocabulary alive in the contract.** `ModuleCountsDTO.comingSoon` and the `coming_soon` module status still exist in the backend schema, `dto.ts`, `dto.generated.ts` and ~8 fixtures, but nothing renders it — `modulesFromDto` maps the value to `available`. Dead weight that invites someone to resurface it; removing it touches the DTO contract on both sides. | A contract call | S |
+| D11 | **Bracket `POST /events/{id}/generate` ignores the session solver config** — builds `TournamentDriver` with no `solver_options` (`brackets.py:2245`), silently dropping the session's time_limit/deterministic/seed. Fixing it changes solver inputs on a shipped path. | Whether generate should honour the session budget | S |
+| D12 | **Self-hosted first-run provisioning is throttled at four operator accounts per hour per IP.** `registration_max_per_ip` is 5 and the lock fires at `failures - max >= 0`, so the fifth registration succeeds and sets a 300s lock with doubling backoff — an admin standing up an instance for six clubs from one office gets four accounts, then a five-minute wall, then ten. The throttle is doing its job (SEC-03 counts successful registrations deliberately) and the budget is configurable; the gap is that there is *no* provisioning path other than public self-service — no admin create-user route, no CLI, and invite-accept needs an already-registered user. The demo works around it with `REGISTRATION_MAX_PER_IP=20`. | An owner-authenticated "create operator" route, or document the knob in the self-host runbook | S |
+| D19 | **Meet set-by-set scores do not persist server-side.** `MatchStateDTO.sets` is declared on the wire and written by the frontend, but `match_states` has no column for it — `_dto_to_fields` (`api/match_state.py`) maps an explicit column list and silently drops `sets`, and `_row_to_dto` never returns it. Found by SP-CONSOLE-REFINE G6: the meet Matches score lane renders sets only while they live in the session store; after a reload a finished meet match is back to a bare "Done". The bracket half persists fine (`ResultDTO.score.sets`). | Add a `sets` JSON column + DTO mapping (S + a migration), or rule that meet scores are aggregate-only and the lane reads `score` | S + a product call |
+| D14 | **Should a scheduled — not per-PR — e2e job exist?** `products/scheduler/e2e` is in no eslint project (only `lint:scheduler`/`lint:entrant` exist, and neither covers it), and CI runs only `interaction-smoke.spec.ts`. That was tolerable while e2e held one spec; it is less so now that `10-entrant-r11-evidence.spec.ts` is the sole successor to three dropped R11 viewport claims — so R11 went from "held by the design system and by review" to "a control that exists and can be run", not to "enforced", in a file that is not even type-linted. Two separable fixes: an eslint project + `lint:e2e` (XS), and the CI job (a gate-policy call CLAUDE.md says not to make casually). | The gate policy | XS + M |
+| D15 | **`--status-started` (sky) reads as interactive next to the azure accent, and `--module-meet` is the accent hex.** The "one accent" rule is literally satisfied and perceptually broken: a *scheduled* chip and a clickable control are both blue on the Ops board. A token-mapping change, but it moves colours on a shipped operational surface. | Belongs with the palette direction decision | S |
+| D16 | **The `ready` / `live` / `complete` Overview panels are minimal.** SP-UI-1 shipped `setup` fully and gave the other three honest versions built only from data that already exists (`signals.matches`, `signals.nextUp`) — structure over faked richness. They want real content: live court occupancy, per-event progress, a results/export summary. | What each phase owes | M |
+| D17 | **An irreversible, backup-less delete of user data runs unattended at startup.** Migration `u5f0b4d7e2a3` purges pre-enforcement orphans from the app lifespan (`_run_migrations`, `app/main.py`), takes no snapshot, and its `downgrade()` is a documented no-op. `e6a4749` bounded it to rows whose violated FK declares `ON DELETE CASCADE` — which removed the *known* bad case (a workspace whose org row vanished is reachable data and was being deleted along with its matches, members and `tournament_backups`) but not the category. Two structural problems remain: `_run_migrations` catches and continues, so the purge has no way to refuse a database it does not like; and a director's laptop runs this with nobody watching. The safe shape is startup *detects and logs* (`PRAGMA foreign_key_check` is cheap and read-only) with deletion operator-invoked behind a `tournament_backups` snapshot. Raised by the agent that bounded it; it declined to move it because that changes the migration chain's semantics. | Leave it in the chain, or split detect-from-delete | S–M |
 
-Moderate watch: `extraction.py:extract_solution` C(18)@68%; `engine/live_ops.py`
-40% coverage (low complexity, low coverage — a light characterization win).
+
+### D1, in full — the double-booking swallow
+
+> **2026-08-11 · A dropped bracket-occupancy fetch tells the meet solver the bracket occupies
+> no courts, and the schedule it returns can double-book them.**
+> `useSchedule.resolveClosedWindows`
+> (`products/scheduler/frontend/src/hooks/useSchedule.ts:83`) catches *every* failure of
+> `apiClient.getBracket` and returns `[]`. The comment defending it is reasonable read on its
+> own — "a broken bracket poll must never block a meet solve" — and it is correct about the
+> case it was written for: a meet-only workspace answers 404, and 404 really does mean no
+> bracket occupancy. It is wrong about every other failure. A timeout, a 500, a dropped
+> connection and an expired session all land in the same `catch` and produce the same `[]`,
+> and `[]` is not "unknown" — it is the positive claim *the bracket is using no courts at no
+> time*. `closedCourtWindows` is the only channel Meet has for bracket occupancy
+> (`lib/bracketOccupancy.ts`), so the engine takes that claim at face value and is free to
+> place meet matches on courts the bracket is already running on. All three meet solve entry
+> points route through it (`useSchedule.ts:233` generate, `:251` warm-restart, `:295` repair),
+> and the same swallow is hand-written a second time at `useLiveOperations.ts:243`, where the
+> stakes are highest: that is the live-day re-solve, running while both engines are actually
+> on court. Nothing in the product distinguishes the two schedules afterwards — a double-booked
+> court looks like a normal solve until two matches are called to it. Three honest options, and
+> picking between them is the reason this was left rather than fixed: **fail the solve** when
+> occupancy cannot be read on a workspace that has a bracket (safest, and turns a degraded
+> network into a blocked solve — exactly what the comment was trying to avoid); **solve and warn
+> the operator** that the schedule was computed without bracket occupancy (keeps the solve
+> unblocked, moves the judgement to the person who can see both boards); or **distinguish "no
+> occupancy" from "unknown occupancy"** at the seam — let `resolveClosedWindows` return `null`
+> for unknown and `[]` only for a genuine 404, and let each of the four call sites decide. The
+> third is the enabling change for either of the first two and is the smallest real fix; on its
+> own it changes nothing. Any of them changes what a solve does when the network is bad, which
+> makes this a design call rather than cleanup. Size S (the `null`/`[]` distinction + threading
+> it through four call sites) + a product decision on the response. *(Found in the closing
+> review of the demo session.)*
 
 ---
 
-## Design-gated (need Kyle's decision, not mechanical work)
+## Open — genuinely large
 
-Carried over from SP-REFACTOR Phases 1–4. These are **not** "do them" items —
-they are decisions to make, then execute.
-
-| ID | What | Why it matters | Size |
-| --- | --- | --- | --- |
-| **F-ARCH-3** | `matchStateStore` ownership: stays in shared `store/` vs. move to Operations | Moving it *creates* new `no-cross-product` violations (Meet + Bracket also consume it). Two reasonable options, no code-driven winner. See `docs/audits/01-findings.md §F-ARCH-3` + ADR 0011. | Design call, then S |
-| **ops→bracket UI edges** | `OpsDetailRail→MatchDetailPanel`, `OperationsProduct→BracketScheduleModal` | The **last 2** `no-cross-product` violations. Clearing them (or accepting them as legit) is the blocker to ratcheting that rule warn→**error**. | Design call, then M |
-| **workspace→display UI edges** (added 2026-07-03, Display-redesign Task 6) | `displayConfig/DisplayPreview.tsx → display/publicDisplay/{CourtsView,displayPresets}` — the new Display Configuration board-layout preview reuses the public board's actual card renderer + preset table for visual fidelity (2 new `no-cross-product` **warns**, confirmed via `npm run depcruise`: 0 errors). Same shape as the ops→bracket edges above: accept as a legit consumer edge, or relocate `CourtsView`/`displayPresets` to a neutral shared location (`components/` or a `products/display/shared/`) per the `SourceChip` precedent. | Design call, then S |
-
----
-
-## Cleanup backlog (behavior-preserving; mechanical but not free)
-
-The backlog pass was **finished** 2026-07-01 (see **Cleared**). The mechanical
-export/type/dep items are done; what remains is **one product call** + the
-design-gated items above + engine coverage.
-
-| Item | Detail | Status |
+| # | What | Size |
 | --- | --- | --- |
-| **Unused exported types (dto)** | Verified each against `dto.generated.ts` (the authoritative backend contract): **deleted 10** truly-dead frontend-private types + **un-exported 11** used-internally-by-kept-types in `dto.ts`, and **un-exported 6** back-compat internal shapes in `bracketDto.ts`. **8 backend-mirror types intentionally retained** (`CourtClosure`, `SoftViolation`, `AvailabilityWindow`, `PlayerImpact`, `SchoolImpact`, `MetricDelta`, `ProposalKind`, `SuggestedAction`) — present in the generated contract, so deleting would create reconcile drift. They read "unused" to knip but are the hand-maintained mirror | ✅ done |
-| **Unused package deps** | Removed `@radix-ui/react-dialog` + `@radix-ui/react-tooltip` + `date-fns` (genuinely dead — verified zero imports anywhere; existed only as dead `vite.config.ts` `manualChunks` strings, which were pruned too) and `tailwindcss-animate` (design-system's tailwind preset provides it). knip-ignored `@radix-ui/react-select` + `clsx` + `tailwind-merge` (live via design-system, named in `manualChunks`) and `openapi-typescript` (the `generate-api` CLI). **knip unused-deps → 0** | ✅ done |
-| **Duplicate export** (`slotToTime`\|`formatSlotTime`) | **Accepted as intentional** — `formatSlotTime` is a live alias (`export const formatSlotTime = slotToTime`) with ~20 call sites each. Renaming is risky cosmetic churn with no behavior benefit; not debt | ✅ accept |
-| **Unused exports (display presets)** | `DISPLAY_PRESETS` / `getPreset` / `DisplayPreset` (`displayPresets.ts`) — a coherent, authored preset-picker unit (8 venue presets) in the live Display module. **Product decision (2026-07-01): KEEP for the future picker.** Intentionally retained; knip will keep flagging them as unused — expected, not overlooked. | ✅ keep (by decision) |
-| **Engine coverage** | ~~`backends.py`/`bridge.py` 19%~~ → **97%/96% (Phase 7 ✅)**; `live_ops.py` 40%, `extraction.py` 68% remain | ⏳ backends/bridge done; live_ops/extraction are light characterization wins when touched |
-| **Bracket drag-validate ignores roster availability** (found 2026-07-02, SP-D7 S2) | `services/bracket/validation.py:109` (`validate_bracket_move`) builds engine Players **without** the new `player_extras` channel, so `POST /bracket/validate` won't flag a drag into a roster player's blocked-out window — the subsequent `/pin` re-solve *does* honor it (the solver just moves things), so this is a UX-advisory gap, not a correctness hole. Fix = thread `session.player_extras` into `validate_bracket_move` → `build_players(extras=...)` (+ a conflict kind for window violations). ~1–2 h incl. tests | ✅ **Fixed 2026-07-02**: `validate_bracket_move` takes `player_extras` and passes `extras=` to `build_players`; the route threads `session.player_extras`. `find_conflicts` already emits `type="availability"`/`"rest"`, so no new conflict kind was needed. Pinned by `test_validate_move_respects_roster_availability` (feasible without extras, availability conflict with them). |
-| **Participant seeds don't survive an echo through `eventUpsert`** (found 2026-07-02, SP-D7 S3) | `ParticipantOut` (`api/brackets.py:229`) serializes `id`/`name`/`members` but **not** `seed` (stored in participant metadata), so any flow that echoes an event's current participants back through the create-or-replace upsert silently drops seeds set via CSV/JSON import or direct API. Pre-existing gap: the Draws picker always rebuilt the full list seedless; the S3 roster entry toggles echo the same shape. No UI assigns seeds today, so no live regression. Fix = add `seed` to `ParticipantOut` (incl. the new `EventOut.participants`), mirror on frontend `Participant`, echo in `toUpsertParticipant` + the picker. ~1 h incl. tests | ✅ **Fixed 2026-07-02**: `ParticipantOut.seed` added (both flat + `EventOut.participants`, from `metadata["seed"]`); frontend `Participant.seed` mirror; `toUpsertParticipant` echoes seed; the Draws picker carries an existing participant's seed on re-commit. Pinned by `test_upsert_event_preserves_seeds_through_echo` + `rosterEvents.test.ts` (`toUpsertParticipant`). |
-| **Meet Matches row-click dead zone** (found 2026-07-02, SP-D7 S5 live pass) | ~~Side A/B cell wrappers swallowed clicks on their empty space~~ **FIXED 2026-07-02**: the wrapper's `onClick` now stops propagation only for clicks on actual editors (`button`/`input`/the `[data-player-picker]` dropdown, or any click while the picker is open); empty-space clicks bubble to the row and open the panel. Regression test in `MatchesSpreadsheet.test.tsx` ("no dead zone") | ✅ fixed |
-| **Plan board grid→zoom-bar doubled hairline** (found 2026-07-02, P12 T5 live pass) | Inside the shared board component: the last court row's `border-b border-border/60` sits adjacent to the zoom bar's `border-t border-border/60` (~2px line at 60% alpha). Pre-existing, not from the P12 commits (Run doesn't double there — a scrollbar strip separates them). Fix = drop one of the two hairlines. Size XS | ✅ **Fixed 2026-07-02**: dropped the `border-t` from the Plan zoom bar (`UnifiedOpsBoard`); the grid's last-row `border-b` is now the single seam. Run keeps its own `border-t` (scrollbar-separated). |
-| **Hub "Next up" can show already-played meet matches** (found 2026-07-03, Phase-14 review) | `api/workspace_signals.py` `_meet_match_signals` builds Next-up from the schedule assignments in `data` sorted by slot, with no finished-filter — a meet match's finished state lives in the `match_states` table, not the loaded `data` blob, so filtering it would break the summary's no-per-row-query guarantee. On a mid-run/completed meet, Next-up surfaces the earliest (likely already-played) matches as "Sched". **Bracket is already filtered** (its blob carries `actual_end_slot`). Meet fix options: (a) accept (Hub is a glance; Operations Run is the live surface), (b) add a per-tournament grouped finished-match-id set to `RowCounts` and exclude them (one more grouped query — trades the zero-query purity), or (c) cap Next-up to future slots vs a stored "now". Size S–M · **product call** | ⏳ open |
-| **Shared StatusPill `pulse` glow is dormant** (found 2026-07-02, P12 T5 live pass) | `2601f93` gave pulsing dots sw-pulse + own-hue glow, but no reachable surface passes `pulse` to `src/components/StatusPill.tsx` (Display-page pills are separate local components). Utilities verified synthetically. Either wire `pulse` on live-ish pills (e.g. bracket Live tab) or fold the Display pills onto the shared component. Size S | ✅ **Fixed 2026-07-02**: the bracket "Started" (live) draw pill now renders `dot pulse` (`BracketDrawsTab.StatusPillFor`), so the `sw-pulse` + own-hue glow is reachable on a genuinely-live status; "Generated" uses a static `dot`. |
-| **Error toasts stack without auto-dismiss** (observed 2026-07-02, SP-D7 S5 live pass) | ~~Repeated 409s accumulated identical toasts~~ **FIXED 2026-07-02**: `uiStore.pushToast` dedupes on (level, message) — an identical toast refreshes the existing entry (latest detail wins) instead of stacking. Verified live (double MD2X generate → one toast). Errors remain persistent (no TTL) by design | ✅ fixed |
-| **`useAdvisories()` call in `MeetDisplayPage` is now dead weight** (found 2026-07-03, Display-redesign Task 3 — removed the operator `AdvisoryBanner` from the public board) | The hook's own source of a tournament id (`useTournamentIdOrNull()`) is a **route path param only** — no `?id=` query fallback (unlike `useLiveTracking`/`useDisplaySync`). On the standalone `/display?id=` route that id is always null, so the poll effect returns before firing — the call is inert there. On the embedded AppShell "TV preview" tab, `AppShell` already mounts `useAdvisories()` globally (gated to `kind==='meet'`), so the call is redundant there too. With the banner gone, nothing on this page reads `useUiStore.advisories` anymore. Left in place unchanged — removing it is a behavior change outside Task 3's scope (import + render-block removal only). Fix = delete the `useAdvisories()` call + its import from `MeetDisplayPage.tsx` once confirmed no other consumer needs it re-added here. Size XS | ⏳ open |
-| **Bracket result `reason` not mirrored to Supabase** (found 2026-07-14, task 5b — commit `1a55358` threaded a new `reason` field (walkover/retired/forfeit) through the bracket result path, including the outbox payload) | `services/sync_service.py` `_bracket_result_to_payload` briefly pushed `"reason": result.reason` to the Supabase upsert, but the cloud `bracket_results` schema is applied out-of-band (see `docs/deploy/cloud.md`'s migration chain: `step_a_matches_table_and_rls`, `step_t_a_bracket_schema_and_rls`, `step_t_d_bracket_realtime_publication`) and has **no** `reason` column — an unknown key fails the upsert, and the outbox row's `attempts` climbs and caps at 10, silently degrading sync for any deployed cloud mirror. Reverted the key (local SQLite already persists `reason` via migration `k4a7b1c9d3e5`, and the UI reads the local API, so nothing user-facing regresses). Fix = add a `reason` column to Supabase `bracket_results` via a migration in the documented chain style, THEN re-add `"reason": result.reason` to `_bracket_result_to_payload`. Size S | ✅ **closed 2026-08-06 — obsolete, not fixed.** The mirror was removed entirely in SP-CLOUD-3 ([ADR 0012](../decisions/0012-remove-the-supabase-mirror.md)): `services/sync_service.py` is deleted, `_bracket_result_to_payload` has zero call sites, and `sync_queue` was dropped in migration `p9a3b7c1d5e6`. There is no cloud schema to add a column to. Local SQLite already persists `reason` (migration `k4a7b1c9d3e5`) and the UI reads the local API, so nothing was ever user-visible. The prescribed fix is now unperformable — recorded rather than deleted so the entry's disappearance does not read as a silent fix. |
-| **`matchStateStore.liveState` is now fully dead** (found 2026-07-14/15, perf pass 2 — render-hotspot fix) | Perf pass 2 removed `useLiveTracking`'s 1s `setInterval` that wrote a fresh `liveState` object into the store every second via the now-deleted `setCurrentTime` setter (it forced every `useLiveTracking()` consumer, e.g. the 746-line `MatchControlCenterPage`, to re-render once a second regardless of data). Investigation (grep across `src` for `currentTime`/`liveState`/`liveTracking.`) found **no component reads `useLiveTracking().liveState`** — `MeetDisplayPage`/`BracketDisplayPage` compute their own page-local `now`/`currentTime` (needed for freshness derivation, untouched here) rather than consuming the store's copy. `buildLiveState`/`setLastSynced`/the `LiveScheduleState.currentTime` DTO field were deliberately left in place (pass-1 sync code, out of scope) but are removal candidates: `setLastSynced` still rebuilds a new `liveState` object every 5s in `syncMatchStates` for a value nothing reads. Fix = delete `liveState`/`buildLiveState`/`setLastSynced`/the DTO field once confirmed still unused. Size S | ⏳ open |
-
-> Note: knip still reports the 8 retained contract mirrors + the displayPresets
-> unit + the `slotToTime` alias as "unused." That is expected and intentional —
-> they are kept for the reasons above, not overlooked.
->
-> Classification caveat: mirror-vs-private was decided by name-matching each
-> flagged type against `dto.generated.ts`. If a hand-written `dto.ts` name ever
-> diverged from its generated counterpart, a mirror type could have been
-> classified private and deleted. This cannot affect runtime (types are
-> compile-time only, tsc-verified) — worst case is minor reconcile drift, and the
-> deleted set is unmistakably frontend-private by nature (import DTOs, Graph viz,
-> the `TournamentExportV2` tied to the removed file manager). Flagged so a future
-> `generate-api` reconcile isn't surprised.
+| L1 | **GDPR/export/delete tooling is a pre-launch requirement** — account deletion, data export, and a story for the PII carried on workspaces. Explicitly deferred by the SP-CLOUD-2 prompt. | L |
+| L2 | **`upsert_data`'s compare-and-swap is identity-map-scoped, so it does not detect a cross-session concurrent write.** `get_by_id` is `session.get`, which answers from the identity map, and `SessionLocal` sets `expire_on_commit=False` (`database/session.py:97`) — so the re-read the CAS performs "immediately before the mutation" returns *the version this session last saw*, not the row's. Two writers on one session are caught; two writers on different sessions (what real concurrency looks like) are not, and the stale write is accepted. The HTTP `PUT /state` path is unaffected in practice (fresh session, one read); the exposure is any in-request code that reads, works, then writes with `expected_version` — the shape of the Entries commit seam, which is why that seam expires its own snapshot instead of trusting the guard. Characterized in `tests/test_concurrent_state_writes.py` with a negative control. Fix: expire inside `upsert_data`, or move the compare into `UPDATE … WHERE state_version = :seen` (the `services/members.py` correlated-subquery pattern). Shared load-bearing write path. | M |
+| L3 | **`DESIGN.md` still enforces the retired brutalist direction.** §1.2/§1.3/§1.8.b/§1.9/§1.10/§1.11 describe Signal-Orange, 90° corners and hard-offset-only shadows, none of which ship. The 2026-08-06 review added a superseded banner and flipped §10 precedence to `tokens.css` → `DESIGN_COLOR.md` → `DESIGN.md`, but left the rule bodies intact: they are load-bearing for agents and a blind rewrite risks loosening rules that are still correct. The follow-up is restating each rule against the current token ladder. | M |
+| L4 | **50 raw `<input>` elements remain outside `TextField`** across ~24 files, each re-deriving its own border/radius/focus treatment. Not broken (they mostly use `border-border` correctly) — drift-prevention, and a wide mechanical sweep best done as its own slice. | M |
+| L5 | **Viewer read-only vocabulary — the surfaces that still render enabled and then no-op.** The *correctness* half is closed: no viewer write leaves the browser (`useProposals`, `api/bracketClient` refuse client-side; `platform/domain/permissions.ts` fails closed on an unknown role), and the backend already required `operator` on all of it. What remains is vocabulary — a control should say "you can't" before it is pressed, not after. Still ungated: **Meet roster** (`PlayerDetailPanel`, `positionGrid/*`); **Meet matches** (`MatchesSpreadsheet` row event input, `PlayerCellEditor`, `RegenerateMenu`); **Bracket** (`BracketDrawsTab`, `BracketDataSection`, `BracketRosterTab`, `BracketPlayerFields`, `BracketEngineSection`, `DrawView`, `ParticipantPicker`, `BracketScoreEntry`, `BracketViewHeader`); **Workspace/admin** (`SharingTab`, `SyncBackupsTab`, `ModulesSettingsTab`, `VenueScheduleTab`, `displayConfig/`). Each is S and mechanical: fold `useCanEdit()` into the file's existing `locked`/`disabled` expression (copy `MatchDetailsPanel`), or self-gate an always-mutating control (copy `ConfirmDeleteButton` / `WinnerButton`). **The unit suite cannot prove this** — it mocks `useBracketApi` and the store seams, which is exactly how an ungated bracket write path survived a green 1,100-test suite; the real check is the viewer flow in `e2e/tests/interaction-smoke.spec.ts`, which asserts zero `POST/PUT/PATCH/DELETE` leave the browser as a viewer. | M (sum of many S) |
+| L6 | **The documented remote worker is not deployed.** `docs/how-to/add-a-worker.md` describes `neo` as a remote compute host and the SP-CLOUD-3 env matrix has a `neo (worker)` column, but neo runs no ShuttleWorks container — all solve work is carried by cayde's `EMBEDDED_WORKER=true`. A runbook describing a host that isn't running the thing is how an operator loses an hour during an event. | M (deploy) / S (doc) |
 
 ---
 
-## Measurement / enforcement gaps
+## Open — small and unscheduled
 
-| Gap | Detail | How to close |
-| --- | --- | --- |
-| **Frontend complexity unmeasured** | `radon` is Python-only; the FE (`products/scheduler/frontend/src`) has no complexity number | Add ESLint `complexity` as a **report-only** (`warn`) rule, or run `npx ts-complex` ad-hoc, and record the FE tail here |
-| **Broad ruff deferred** | Gate is `select=["F"]`; the `E,I,B,UP` set is ~1506 findings (mostly stylistic, + `B008` FastAPI `Depends()` false-positives) | Kyle gate decision — see `pyproject.toml` + `CLAUDE.md` lean-gate philosophy |
-| **Stale gate ratchets** | `no-cross-product` (warn, blocked on the 2 ops→bracket edges above); a complexity gate (`radon`/`xenon` threshold) is *not* wired | All are **Kyle** decisions — logged here as candidates, not tightened unilaterally (`CODE_HEALTH.md` #5) |
+Mechanical, each independently shippable. Grouped only so the list stays scannable.
+
+**Backend / API**
+- **`GET /tournaments` loads all rows and filters in Python** against the caller's memberships (`api/tournaments.py:309`). Fine at solo scale, wrong shape for multi-tenant cloud. Move the filter into SQL — `ix_tournament_members_user` exists. S.
+- **`GET /tournaments/{id}/state` recomputes meet standings per call** (`_meet_standings_for`: catalog lookup + an extra `match_states` read + `compute_meet_standings` over all matches) and the debounced 500 ms PUT rewrites a blob whose `scheduleHistory` grows unboundedly (each PUT also snapshots a backup row). Not today's lag source; both scale with tournament size. Memo standings on a results version; cap/compact `scheduleHistory`. S–M.
+- **Bracket writes advance `state_version` without returning it.** `api/brackets.py` bumps the concurrency token through `upsert_data` but returns bracket payloads with no `ETag`, so a client that acts on the bracket and then saves meet state gets one spurious 409. It self-heals (the recovery re-reads and re-syncs) but is a visible hiccup. Threading a token through ~21 call sites was judged disproportionate; the alternative is a response hook stamping the ETag centrally for any route under `/tournaments/{id}/`. M.
+- **A worker that loses its lease keeps solving to completion.** The heartbeat ownership guard stops a ghost from *extending* a lease and `_record_outcome` discards its result, but nothing tells the ghost's child to stop — it burns a core, then throws the answer away. `solve_runner`'s `heartbeat` param is `Callable[[], None]`, so the signal has nowhere to go: widen that type, or fold the check into `cancel_check` (already kills the child, already called on the same 2s tick). Cost of not fixing: one wasted solve per lease loss, bounded and rare. S.
+- **Nothing enforces "a streaming generator must not touch the repository".** The repo-closing middleware runs when `call_next` returns, which for a `StreamingResponse` is *before* the body streams — the session returns to the pool while the generator is still yielding. The one live streaming route is safe only because `_hydrate_session` materializes everything first; a future route that lazy-loads inside its generator would fail in production under a shape unit tests don't reproduce. Verified safe 2026-08-04 — the gap is the unguarded invariant. Candidate check: assert no `StreamingResponse` route both depends on `get_repository` and references it after the first yield. S.
+- **`/health/metrics` is a full-table aggregate** — `GROUP BY` over every `solve_jobs` row including terminal ones retained for `JOB_RETENTION_DAYS` (30). The obvious narrowing is **wrong**: `succeeded`/`failed` are part of the published response. The right fix is an index on `solve_jobs.status` if volumes ever make the scrape visible; not doing it now costs a migration for an unmeasurable scan. S.
+
+**Entrant tier**
+- **`POST /e/api/quote/{slug}` echoes the whole posted body into its 303 `Location`, so entrant PII lands in a URL.** `_echo_redirect` (`api/entries_json.py`) builds `f"/e/{slug}?{urlencode(echoed)}"` from `form.multi_items()` minus `_ECHO_DROP`, so `playerName`, `club`, `birthYear` and free-text `remarks` cross into the address bar — nginx access logs, browser history, any intermediary. Junior events collect a birth year, so this is personal data of minors in logs never scoped to hold it. The entrant tier cannot fix it alone (a native form posts every field; only events are priced; the typing must survive the round trip). Shape of the fix: answer **307** to `/e/{slug}` so method and body are preserved, with only `totalCents`/`refusalCode`/`refusalSubjects` in the query, plus an `action` on `routes/entry.tsx` reading the re-posted body into the existing `FormEcho` (holds no credential, makes no upstream call — R8-D untouched). Second consequence of the same line: the target is always the bare `/e/{slug}`, so a recalculation drops the `/signed-in` variant. The in-tier half is pinned by `entry.quote.test.ts`'s "recalculates by POST". S (backend) + XS (entrant).
+- **A THROTTLED entrant sign-in still paints raw JSON.** The wrong-credentials branch is fixed (`d3684ef`); the throttle branch is not — both `throttle_check` hits raise `_throttled(...)`, which is `api/auth.py`'s 429 shape verbatim, and a native `<form method=post>` is a navigation, so that object is the whole document. Reachable ordinarily: the same address typed wrong a few times, or one venue's phones behind one NAT sharing the `eip:` bucket. **It cannot be folded into `/e/login/failed`** — "check the address and password" said to someone whose password is right costs them the entry. Needs its own path (`/e/login/wait`) carrying the wait, which is the only number safe to show. **Whatever renders it must not become an enumeration oracle**: the throttle is keyed on the address as well as the IP, so distinguishing "this address is throttled" from "wrong password" would tell a caller which addresses have accounts. One copy for both keys, no mention of which bucket tripped. S.
+- **The entrant tier derives its own public origin from the client's `Host` header**, so `/e/sitemap.xml` and `/e/robots.txt` are Host-header injectable: `routes/{sitemap,robots}.tsx` build absolute URLs from `new URL(request.url).origin`, and `frontend/nginx.conf` is the only `server` block on `listen 8080` — the implicit default server — so `server_name localhost` constrains nothing. Verified: `curl -H 'Host: evil.example' /e/sitemap.xml` emits `<loc>http://evil.example/…</loc>`. **Bounded, not harmless**: nginx rejects anything outside the host grammar, so the injected value can only be an authority, and nothing caches it — the poisoned document goes back to whoever forged the header. The durable fix is the one the backend already has: **be told** the origin (`PUBLIC_APP_ORIGIN`, already set on `api` in the self-host stack) instead of deriving it. Not done here because it is worse half-applied — an env fallback to the request origin is a defence absent in every stack that forgets the variable, and a *wrong* value is a silently wrong sitemap in production. A `server_name` allowlist cannot substitute: `nginx.conf` is `COPY`'d into the image while the hostname arrives at compose time, so the list would need templating across all six stacks. S (entrant + two compose files) or M (with the templating).
+- **The CSRF `compare_digest` comparison is duplicated** — `api/entries_json.py`'s `require_form_csrf` and `app/form_csrf.py::form_csrf_proves` each independently encode-and-compare a presented token against the same two cookie-derived candidates. (A third copy in `api/entries_public.py` is gone.) Both are correct today, but the same non-ASCII `TypeError` defect — an accented character turning a 403 into a 500 — had to be fixed in each copy separately, in different passes. One shared helper the two call sites delegate to. S.
+- **The receipt page is unverified.** `app/routes/receipt.tsx` renders for ANY well-formed submission UUID, because node holds no entrant credential and must not grow one (spec §3). The 404 shape is uniform across entrant B, entrant A and a stranger, so there is no enumeration oracle and nothing of A's is disclosed — but a receipt page is not evidence of anything: a stranger handed `/e/{slug}/receipt/{any-uuid}?totalCents=99999` gets it rendered as the organiser's branded receipt. Existence and ownership confirmation belong to the browser-side "my entries" fetch, which holds the cookie this route deliberately does not. Name Phase 7 as the consumer that closes it. S.
+- **`find_for_account` has zero production callers.** `services/submissions.py:175` was the mitigation for a real defect (a submission read scoped by `(tournament_id, key)` alone returned another entrant's receipt on an id collision), but nothing routes a submission read through it — `session.get(Submission, id)` still compiles, and nothing structural stops a future call site, the way the OpenAPI-derived tenancy test enforces `require_tournament_access`. Exercised only by its own unit test. Phase 7's "my entries" fetch is the named consumer. S.
+
+**Frontend**
+- **`useBracketDisplaySync` still cannot see a revoked token.** The poll now stops on a terminal error (`83e3b96`), but `apiClient.getDisplayBracket` passes `validateStatus: s === 200 || s === 404` and returns `null` on 404 — the deliberate "no draw configured yet" contract — so a revoked capability never surfaces as an error at all. (It is unreachable today anyway: `useDisplayKind` `.catch(() => setKind('meet'))`, so a revoked token renders the *meet* board and this hook never mounts.) Splitting the two meanings — a distinct code for a revoked capability, or a `getDisplaySummary` failure that surfaces instead of defaulting — is a display-contract change. S.
+- **`matchStateStore.liveState` is fully dead.** Nothing reads it; `buildLiveState` rebuilds it on every `setMatchStates`/`setMatchState`/`applyOptimisticStatus`, and `setLastSynced` rebuilds it every 5s in two hooks for a value nobody consumes. Delete `liveState`/`buildLiveState`/`setLastSynced`/the `LiveScheduleState.currentTime` DTO field together; the `useLiveTracking.clock.test.tsx` perf guard is written against `liveState` and needs re-pointing at the property that still matters (no 1s write cadence). S.
+- **The Venue & schedule lock signal is meet-only.** The LockRibbon and its confirm-unlock guard read the meet store flag; a bracket-only lock (committed bracket schedule, draw in play) shows nothing, because bracket lock state needs data not loaded at workspace level. Backstop today: the server 409s (`CONFIG_LOCKED`/`DRAW_STARTED`). M.
+- **Hard-lock read-only is visual, not semantic.** `LockedFieldset`'s `sw-readonly` restores full contrast but controls stay natively `disabled` — not keyboard-focusable, values not selectable. True per-control `readOnly`/`aria-readonly` means touching Toggle/Select/Slider individually. M.
+- **`OverflowMenu` disabled items still close the menu.** Activation is blocked in the click handler, but Headless UI closes on select regardless, so clicking a disabled item dismisses the menu while doing nothing — it reads as a dead control. Needs an `onClose` guard or a non-`MenuItem` render for disabled entries. S.
+- **`MatchesSpreadsheet.tsx` is 430 lines against DESIGN.md's 300 limit** (down from 755 when its row editors moved into the detail panel, 2026-08-12). Splitting `MatchRow` out is blocked by `components/control-plane/__tests__/matchListParity.test.ts`, which requires `MATCH_LIST_COLUMNS` / `MATCH_CELL` / `STATUS_LABEL` / `STATUS_CLASS` to be imported from that exact path. Re-point the parity test at a shared module, then split. S.
+- **`BracketDrawsTab.tsx` is 1028 lines and `BracketMatchDetailPanel.tsx` 355**, both over the 300-line limit and both pre-dating the 2026-08-12 pass. S–M each.
+- **A read-only Configuration cannot be read.** `LockedFieldset`'s native `fieldset[disabled]` cascade also disables `Section`'s disclosure button, so `Advanced solver` cannot be expanded while the lock is on. The fix (`defaultOpen={readOnly}`) is one line but breaks `products/bracket/__tests__/BracketEngineConfig.test.tsx`, whose `expandConfigSections()` helper calls `getAllByRole('button', { expanded: false })` and throws when nothing is collapsed. Fix the helper to `queryAllByRole` first. XS, blocked on a peer's test. Related to the entry above it about semantic read-only.
+- ~~**`EventsControl` is down to one consumer** (`products/bracket/BracketPlayerFields.tsx`) since Meet moved to `EventPicker` on 2026-08-12. Its fixed `{MS,WS,MD,WD,XD}` category table is the root of the operator-defined-code bug fixed elsewhere, and it survives here. Bracket's usage renders real Enter/Entered rows so it does not show the empty-body symptom, which is why it was left.~~ **CORRECTED 2026-08-12 — the struck sentence was wrong, and a browser pass disproved it the same day.** Bracket's usage renders real rows only when a draw's discipline happens to be one of the five. The reported state: the panel's EVENTS header read "1 entered" while SINGLES / DOUBLES / MIXED all read "Not entered" (the entered discipline was outside the fixed table, so it counted in the header and belonged to no category), and expanding DOUBLES set `aria-expanded=true` over a 10px div with zero children (no MD/WD draw existed, so `EventTypeEditor` returned null for both types). Same fixed-table root as D1/D8, same symptom, one engine over. **Fixed:** `EventsControl` takes the consumer's real discipline `types` and builds categories from them, so a code outside the five gets its own category and a category with no draw behind it is not rendered at all. The remaining debt is only the original inline-or-migrate cleanup — now that the fixed table is gone, the component is chrome plus a category derivation, and its one consumer could own both. S.
+  - *The claim was recorded without being run.* It read plausibly from the source (Bracket does render Enter/Entered rows) and was false for the configuration the workspace was actually in. Left here rather than deleted so the record shows a source-only judgement that a browser contradicted.
+- **`Eyebrow` uppercases its text in JS as well as in CSS**, so `<Eyebrow>Details</Eyebrow>` puts `DETAILS` in the DOM while `<span className={EYEBROW_CLASS}>` puts `Details`. Visually identical; screen readers may spell out an all-caps string, and the component and the class constant disagree about DOM text. Six call sites; removing it changes DOM text tests may query. S.
+- **The shell identity bar can disagree with the Overview about a workspace's name** — a `ready` workspace whose Overview header read "Interaction smoke" showed `Untitled` in the shell top bar. The two read different sources (`WorkspaceIdentity` vs the fetched summary) and one lags. Belongs to the identity seam. S.
+- **The Hub's module glyphs have no legend for a sighted touch user.** M/B/D/E are decoded by `title` (pointer) and, since `463e0ba`, by an `aria-label` (assistive tech) — but the only surface that names the modules in words is `WorkspaceInspector`, which is `hidden … lg:flex`. On the tablet the owner has ruled in scope, selecting a row therefore does nothing visible and the letters stay undecoded. Fix: reach the inspector below `lg` (a sheet, or `DetailDock` with its overlay fallback), which also restores the point of row selection at that width. S–M. *(2026-08-11 design audit, T4 — out of the shell diff's budget.)*
+- **Overview rail has no "last backup" row.** Specified, then dropped: it needs a second list fetch on every workspace landing to render a glance-only fact, and the Overview otherwise makes exactly one extra call. Add it when the summary payload or a cheap head endpoint can carry `lastBackupAt`. S.
+- **`minContentWidth={760}` on `BracketDrawsTab` is a hand-summed magic number** (fixed-cell total with Format collapsed). If `DRAW_COLUMNS` changes width it silently drifts; derive it or pin it with a test. S.
+- **Gantt header time-labels may bleed** onto the following label-less column since the `overflow-visible whitespace-nowrap` clipping fix; at extreme zoom-out two labels could touch. Cosmetic. S.
+- **Standings and columns use different court-count bases.** `MeetDisplayPage` drives `defaultColumns()` from the *visible* court count but `standingsPlacement()` from the *raw* `config.courtCount`, so hiding courts down to ≤6 shrinks the grid without flipping a large venue's standings from `rotate` to `side`. Both are operator-overridable defaults; pick one base if unified behaviour is wanted. S.
+- **Design-polish residuals** (2026-07-09 design-skills audit, all S unless noted): the same advisory renders as both the top banner *and* an error toast (two Review buttons) and is error-red for what is an operational nudge — render once, demote to amber (S–M); the repair strip's "0 min finish, 0 moves" has no unit or direction and `Apply` with 0 moves invites "apply what?"; Run's OUTLINE legend uses orange for both Resting and Late and blue for both Selected and Impacted ("colour is status" violation); the Display preview shows shell `COMPLETE` beside board `LIVE` (freshness) — spectator-calm vocabulary is deliberate on the TV but misreads in the operator preview; Generate/Re-plan/Re-optimize/Apply are all visible with no destructiveness hierarchy (only Generate carries the live-day guard) and ties into D4 (M).
+- **Cosmetic shortlist**, from the same passes: a `(moved)` tag on an in-progress match that was never moved (trigger looks like command-path court/slot writes differing from the schedule assignment); Score "Save" disabled-state styling reads as enabled; `Solutions: –`/`Score: 50`/`Time: 0ms` solver jargon in the Plan header; unlabeled green `Idle` health chip; unlabeled red check-in dots on Plan rows; standings `0L` in red; `COURT 1 —` dangling dash and duplicate fullscreen affordances; 12h clock on Display vs 24h axis on Run; hybrid board strikethrough reads "cancelled" for done; the DE round selector R1–R6 doesn't say which bracket it scopes; bracket draw cards leak the internal event id (`ev-de`) as a label chip; a Radix Select controlled→uncontrolled warning on Hub/Display config; `DetailDock` close-retention shows a deleted entity's pane for ≤450 ms (accepted); `previewByCourt` computes lanes for busy courts that don't consume them; `actualCourtId ?? courtId` inlined 3× in `MeetDisplayPage`; `Optional[list[int]]` vs `typing.List` style in `schemas.py`; standings rotation dwell 15s and side-panel `w-96` magic numbers.
+- **Cleanup shortlist** from the 2026-07-16 review, each S: a shared date-format helper (`fmtDate` is the ~7th private copy); LockRibbon's inline SVG → phosphor `LockSimple`; a shared `prefersReducedMotion()` (2 copies); `DetailPanel.width` is a dead API; dead `::-webkit-scrollbar` rules on Chromium ≥121, and thin scrollbars silently applying to the TV display; `useContainerWidth` setState per resize (wants a threshold/hysteresis + an initial sync measurement); the ops board lacks column-priority degradation when the Courts dock takes width.
+
+**Docs & measurement**
+- **`dto.generated.ts` freshness is on the honour system.** Nothing gates it, and it had silently drifted since before SP-CLOUD-2 Phase 3 (missing every `/auth/*` and `/display/{token}/*` route) until regenerated in `bb29b21`. A CI step that regenerates and diffs would catch it. S.
+- **Schema-vs-model drift is unchecked, and we know it exists.** Removing `sync_queue` surfaced that migration `e2a5f3b8c1d6` created `ix_sync_queue_created_attempts` while the model never declared it — ORM metadata and real schema had silently diverged, caught only because writing a downgrade forced reproducing the true schema. No reason to assume it was the only table. Proposed: on a scratch DB run `alembic upgrade head`, then diff against `Base.metadata` (or autogenerate and assert the migration is empty). Cheap, dual-dialect. S.
+- **`docs:freshness` tracked globs are too coarse.** Four areas reported BEHIND after the mirror removal purely because an unrelated symbol left `models.py` and a comment changed in `useBracket.ts`; none of those pages mentioned the mirror. A signal that cries wolf gets ignored. Narrow the globs (per-symbol or per-directory rather than whole files like `database/models.py`, which every slice touches), or teach it to ignore commits that only remove content the docs never referenced. S.
+- **VitePress docs don't yet cover SP-CLOUD-2** (auth model, tenancy seam, display capability link) — `backend/README.md` is the current source; fold into `architecture/` + `contracts/`. S.
+- **Engine coverage tail**: `scheduler_core/engine/live_ops.py` 40%, `extraction.py` 68%. Light characterization wins when touched. S.
+- **Frontend complexity is unmeasured** — `radon` is Python-only. Add ESLint `complexity` as a report-only `warn`, or run `npx ts-complex` ad-hoc, and record the FE tail here.
+- **The operator SPA autosaves the state blob and re-normalizes seam-written data** through Meet's domain rules (observed as `state_version` bumps v3/v4 after the seam's v2). Any future seam-written roster field needs either a snapshot round-trip test (as `sourceEntryId`/`remarks` have) or a shape that survives normalization. One characterization test in E2. S.
+- **The workspace identity bar collides with the surface header at 390px** (verified 2026-08-12). The bar's title wraps to a second line without the bar growing, so "Aug 10, 2026 LIVE" overlaps "Plan the day…" beneath it, and the meet Schedule tab's "COURTS / ALERTS / ME" overlap each other. Same class as the Plan header buttons fixed in `4e92c84` (a fixed-height box holding text that needs two lines) but a different component, and it predates that work. **Below the ruled floor:** the owner ruled the operator console must work at tablet width, and 768px is clean — 390px was never ruled a requirement for the console. Fix when the console gets a phone story, or rule that it does not have one. S.
+- **The public display board overflows 390px horizontally by ~143px** (verified 2026-08-12). It is a TV surface and nobody is meant to read it on a phone, so this is logged rather than fixed — but a director checking the board from their pocket is not an exotic case, and R11's dual-width rule is stated for the entrant tier only, never ruled on for Display. Either give the board a phone layout or write down that it has no phone story. S.
 
 ---
 
-## Cleared
+## Recorded deliberately — not defects, not scheduled
 
-- **2026-07-15 (bracket solver-options negative guard)** — closed the
-  2026-07-14 debt-log entry: added
-  `test_bracket_solver_options_ignores_config_time_limit`
-  (`tests/unit/test_bracket_hydrate_config.py`), which sets
-  `solverTimeLimitSeconds` in the camel config and asserts
-  `_bracket_solver_options(...)` still returns the passed-in
-  session/request `time_limit_seconds`, unmodified by the config. Test-only
-  change; backend suite green.
-- **2026-07-02 (loose-ends pass)** — cleared the five open polish/UX items in one
-  sweep alongside the Hub dashboard integration: the 409-toast raw-UUID (meet match
-  code at the `useLiveTracking` call-sites), the Plan zoom-bar doubled hairline
-  (dropped the zoom bar's `border-t`), the dormant shared `StatusPill` pulse (wired
-  on the live "Started" bracket pill), the bracket drag-validate availability gap
-  (`player_extras` threaded into `validate_bracket_move`), and participant-seed drop
-  on upsert echo (`ParticipantOut.seed` + `toUpsertParticipant`/picker echo). Each
-  pinned by a test (see the struck rows above). Gates: frontend tsc/eslint 0-err,
-  backend ruff-F + pytest green.
-- **2026-07-01 (Phase 7 — decompose, Steps 4–5)** — decomposed both engine functions
-  along intake → engine → emit: `GreedyBackend.solve` **E37→A5** (extracted `_GreedyPlacer`
-  + `_locked_match_ids` + `_result`); `SchedulingProblemBuilder.build` **C19→A2** (extracted
-  `_select_unit_ids`/`_apply_horizon`/`_build_*`). Largest new unit B9; coverage held (99%/97%);
-  full suite 620 green; independent review verified behavior-equivalence line-by-line. Commits
-  `d09396c` + `1534756`. See `07-locked-functions.md §7`.
-- **2026-07-01 (Phase 7 — bug fixes, follow-up)** — fixed the two latent bugs found
-  during characterization: (1) `bridge.build` config field-drop → `dataclasses.replace`
-  on both rebuilds (`bridge.py:118–137`), tripwire tests flipped to preservation
-  guards; (2) rewrote the stale `examples/badminton_event_setup.py` to the current
-  API (verified runnable). Full backend suite 620 green, ruff-F clean. Verified the
-  same copy-and-override bug class exists nowhere else (grep: all other `ScheduleConfig`
-  builds are from params/DTO inputs, not config copies; `handle_court_outage` already
-  used `replace`).
-- **2026-07-01 (Phase 7 — cover-before-modify)** — characterized both locked
-  engine functions: `GreedyBackend.solve` **19%→97%**, `SchedulingProblemBuilder.build`
-  **19%→96%** (28 golden-master tests, commit `caf5275`, test-only). Confirmed both
-  are library surface with **no in-repo production caller** (corrected the "build
-  guards every schedule build" claim). They are no longer *locked*. Decomposition
-  (Steps 4–5) **held** as decompose-when-touched (low blast radius). Found + logged
-  two latent bugs (config field-drop; stale example) above. An independent
-  fresh-context review verified all claims + added 2 tripwires (30 tests total, full
-  suite 620 green). See `docs/audits/07-locked-functions.md`.
-- **2026-07-01 (Phase 5 — practice install)** — stale `no-cross-product` comment
-  in `.dependency-cruiser.cjs` ("16 known" → 11); 5 truly-dead FE symbols removed +
-  `DEFAULT_EVENT_COLOR` un-exported.
-- **2026-07-01 (Phase 5 — backlog pass)** — unused **exports 37→3**, **exported
-  types 60→36**, **duplicate exports 2→1** (dropped the redundant `apiClient`
-  default), and **7 unused deps + `@types/uuid`** removed. 44 symbols un-exported
-  (used internally, tsc-verified), the rest deleted. Dep removals verified by
-  `npm install` (clean −107-line lockfile diff) + a real `vite build` + 743 tests
-  green. See `REFACTOR_PROGRESS.md` Phase 5.
-- **2026-07-01 (Phase 5 — backlog finish)** — dto/bracketDto **types 36→9** (the 9
-  = 8 retained contract mirrors + `DisplayPreset`): deleted 10 dead + un-exported
-  17, verified vs `dto.generated.ts`. Deps: removed 4 more (`react-dialog`,
-  `react-tooltip`, `date-fns`, `tailwindcss-animate`) + pruned their dead
-  `manualChunks` entries; knip-ignored the 4 legit config/CLI deps → **knip
-  unused-deps 0**. Cleaned the `SettingsNav` orphan left by the `SettingsShell`
-  deletion. `slotToTime`/`formatSlotTime` accepted as an intentional alias.
-  Verified: `tsc` + real `vite build` + eslint 0-err + **743 tests** + pytest 590.
-  **Corrected a prior mis-finding:** the "design-system undeclared deps" latent bug
-  was wrong — `react-dialog`/`react-tooltip`/`date-fns` are imported nowhere; they
-  were dead `manualChunks` strings, now removed.
-- **2026-07-01 (Phase 6 — doc consolidation + staleness sweep)** — grounded the
-  canonical docs against code (codanna down → grep/Read; 4 Explore agents + a
-  change-set pass). Fixed **9** canonical docs (5 layer/package READMEs + `data-flow`,
-  `operations`, `repo-layout`, `build-on-the-engine`) and banner-labeled the
-  historical trees (`superpowers/**`, `architecture/workspace-suite/**`, the
-  2026-06-25 handoff). Code sweep was a **diff** vs this log: no new dead code, no new
-  complexity crossings → nothing removed. Outputs: `06-doc-inventory.md`,
-  `06-stale-doc-findings.md`, `06-state-of-codebase.md`.
+Kept so a future reader doesn't rediscover them as bugs.
 
-## Display redesign follow-ups (found in the 2026-07-04 final whole-feature review — non-blocking)
-- **Standings vs columns use different court-count bases.** `MeetDisplayPage.tsx` drives `defaultColumns()` from the *visible* court count (`displayedCourtRows.length`) but `standingsPlacement()` from the *raw* count (`config.courtCount`). Hiding courts down to ≤6 shrinks the column grid but does NOT flip a large venue's standings from `rotate` back to `side`. Both are sensible operator-overridable defaults; pick one base if unified behavior is wanted. Size S.
-- **Grid-mode column default is now responsive on the real board (behavior note, not a bug).** Task 7's `defaultColumns` replaced the old hard `GRID_COLS[2]` fallback — the public board in grid mode now auto-picks 2/3/4 columns by court count instead of always 2. Intended, within the Display blast radius (not scheduling). Recorded so it isn't a surprise.
-- Minor cosmetics deferred: `Optional[list[int]]` vs `typing.List` style (schemas.py); standings rotation dwell 15s + side-panel `w-96` magic numbers; `previewByCourt` computes lanes for busy courts that don't consume them; `actualCourtId ?? courtId` inlined 3× in MeetDisplayPage.
+- **Same origin fuses the entrant and operator blast radii** (ACCEPTED RISK). Ruling R8-A puts the entrant app, the operator SPA and `/api/` on one public hostname, so a script with a foothold anywhere reaches all three: it can read the `_csrf` hidden field out of the DOM (double-submit is same-origin-readable by construction) and, worse, attach `X-ShuttleWorks-CSRF: 1` itself and drive `/api/*` with the httponly `sw_session` — that header proves "a same-origin browser sent this" and nothing more. **In-phase mitigations shipped**: the SSR tier ships zero client JavaScript (so `script-src 'self'` is strict rather than decorative), a per-response nonce is minted by node (R8-D), no user-supplied HTML appears in any loader output. **Named exit: Phase 11's origin split** — `play.*` on its own hostname is what actually fixes this, and R8-A defers the subdomain to that cut-over deliberately. Size M, and the size is Phase 11's.
+- **The origin trusts `challenges.cloudflare.com` on `/e/signup`, and only there.** The scoping (an nginx `map` on `$uri`, not a wider snippet) is what keeps the operator console out of the risk above. Phase 11's origin split remains the real exit.
+- **No in-product off-site durability in local mode.** `tournament_backups` rows live in the same database as the data they protect, so a lost disk loses both. Local mode is one operator on their own machine, where off-site copies are their responsibility exactly as for any desktop application, and `install-local.md` says so. Cloud mode has a real answer in `install-selfhost.md` (`pg_dump` + `pg_dumpall --globals-only`, encrypted, off-host, monthly restore drill). Revisit only if local mode stops being single-operator.
+- **The entrant tier has no password-visibility affordance, deliberately.** `TextField` gives every `type="password"` a "Show password" toggle driven by `onClick`; on a tier that renders no client JavaScript that shipped a control that did nothing. Now opted out with `revealable={false}` rather than made to work, because making it work needs a script budget the tier does not have (a blocking 4 KB gate against a measured 2.5 KB of HTML and zero JS). The prohibition is derived, not spelled: `login.test.ts` fails any `<button type="button">` in the login, signup or entry documents. Revisit if Phase 11 re-opens the JS question.
+- **The CSRF form channel depends on a Starlette internal.** `app/form_csrf.py::form_csrf_proves` reads the request body inside the middleware, and the only thing keeping the downstream route from receiving an **empty** form is `starlette.middleware.base._CachedRequest.wrapped_receive` replaying `request._body`. A private attribute of a private class, verified against Starlette 1.3.1. If a future upgrade changes that replay branch, every urlencoded route behind the middleware silently receives a blank body — the entry form would accept submissions with no players. Mitigation in place: `tests/test_form_csrf_channel.py` asserts an eight-player ~20 KB submission on **stored rows**, so the breakage is a red test rather than quiet data loss. **Grep for `wrapped_receive` before bumping Starlette.**
+- **`bracket_results.reason` is not mirrored anywhere** — obsolete rather than fixed. The Supabase mirror was removed entirely in SP-CLOUD-3 (ADR 0012); `sync_service.py` is deleted and `sync_queue` was dropped in migration `p9a3b7c1d5e6`. Local SQLite persists `reason` (migration `k4a7b1c9d3e5`) and the UI reads the local API, so nothing was ever user-visible. Recorded so the entry's disappearance does not read as a silent fix.
+- **`DISPLAY_PRESETS` / `getPreset` / `DisplayPreset`** are kept for the future venue-preset picker (product decision 2026-07-01). knip keeps flagging them; expected.
+- **`slotToTime` / `formatSlotTime`** is an intentional alias (~20 call sites each). Renaming is cosmetic churn with no behaviour benefit.
+- **8 dto types read "unused" to knip and are kept on purpose** — `CourtClosure`, `SoftViolation`, `AvailabilityWindow`, `PlayerImpact`, `SchoolImpact`, `MetricDelta`, `ProposalKind`, `SuggestedAction`. They are present in `dto.generated.ts`, so deleting them would create reconcile drift. The mirror-vs-private split was decided by name-matching against the generated contract; a hand-written name that had diverged could in principle have been misclassified and deleted. Types are compile-time only and tsc-verified, so the worst case is minor reconcile drift — flagged so a future `generate-api` reconcile isn't surprised.
+- **Grid-mode column default is responsive on the real board.** Task 7's `defaultColumns` replaced the hard `GRID_COLS[2]` fallback, so the public board auto-picks 2/3/4 columns by court count instead of always 2. Intended, inside the Display blast radius.
 
-## Full-flow UI audit findings (2026-07-09, tournament-sim–seeded dev server + browser walk — non-blocking)
-Found by driving four simulated tournaments (mid-day meet / full meet / DE bracket / mixed) through the real UI at :5173 → :8600. Ordered by severity.
-**Resolution (same day, commits `65d9edd` + `bf8309b`):** DrawView score guard, deleted-workspace poll stop, Run-board axis extent, PanZoomCanvas drag crash, useSmoothedAssignments hydration deadlock, phantom (moved), Display-preview freshness, signals.phase lifecycle seam (Hub/shell/inspector/draw-card), live-aware+eventRank nextUp, one naming dialect (advisories/suggestions/Plan list), live-day Generate guard, Run eyebrow alignment. STILL OPEN: Run-surface convergence decision (meet Live page vs unified board — F-ARCH-3 neighborhood); Radix Select controlled/uncontrolled warning; ev-de id chip on draw cards; solver jargon in Plan header; 403-vs-404 ordering on deleted tournaments (backend).
+---
 
-- **DrawView crashes on unknown score blobs.** `DrawView.tsx:896` does `result.score?.sets.map(...)` — a `score` dict without a `sets` array throws a TypeError (whole draw view down); a `sets` array of the wrong element shape renders "undefined-undefined" pills. The backend stores the blob opaquely (`RecordResultIn.score: Optional[dict]`), so any non-frontend writer (sync restore, import, API client) can poison it. Guard with `Array.isArray` + per-set shape check, fall back to winner-only. The blob's expected shape (`{sets:[{sideA,sideB}]}`) is documented nowhere — worth a line in ADR 0006. Size S.
-- **Deleted-workspace polling never stops → endless 403 storm.** With a bracket page open, deleting the tournament (this or another session) leaves the ~2.5s poll running forever against 403s; no user-facing "workspace gone" state. Also: access-check runs before existence-check, so deleted reads as *Forbidden*, not *Not Found*. Stop polling on 403/404 + surface a dead-workspace banner. Size M.
-- **The Run nav item is two different surfaces.** Meet-only workspaces get the legacy meet Live page (Director/Disruption/Re-optimize/XLSX, score entry); hybrid workspaces get the SP-G1b unified board (queue/inspector/zoom, no meet tools). Same label, disjoint affordances — an operator moving between workspaces re-learns the page. Deliberate convergence decision needed (this is the F-ARCH-3 neighborhood). Size L (decision first).
-- **Actual-time chips render off-axis.** On both Run boards, playing/done chips place at wall-clock-derived actual slots while the axis only spans the planned range — chips float in unlabeled space far right (meet-only board) or off-viewport (hybrid). Any day that starts late (or any compressed replay) degrades this way. Extend the axis to `max(planned, actual, now)` or clamp actuals. Size M.
-- **Lifecycle states never reach the control plane.** ~~A 43%-played (or 100%-done) tournament still shows Hub filter *Draft*, header pill *DRAFT*, "Next action: Set date", Overview "0 to do"/"results ✓"~~, "Next up" listing already-finished matches as `Sched` (reads schedule, not match states), ~~and a fully-resolved draw card saying *STARTED*~~. Display shows *DELAYED* on a finished meet. Size M–L (one derived-status seam would fix most). **Mostly closed:** the `signals.phase` seam landed 2026-07-10 (Hub row action, shell badge, inspector, draw card) and SP-UI-1 closed the **Overview** half on 2026-08-06 — it is now phase-keyed and says Setup/Ready/Live/Complete outright. The Hub **facets** followed on the same day — they now read the derived phase (All / Setup / Ready / Live / Complete / Shared / Needs attention / Archived) with archived outranking the phase, so a live event no longer files under *Draft*. Still open: the meet `nextUp` finished-match filter (its own row above) and Display's *DELAYED* on a finished meet.
-- **Plan invites destructive actions mid-tournament.** Plan page on a live tournament: footer says "Solver idle — click Generate to begin", Generate/Re-plan enabled, finished matches drag-able, no played-state indication on chips. A mid-day Generate re-solves everything. Needs a planFinalized/live guard or confirm. Size M.
-- **Match naming is triple-dialect.** Same match is `MS1` (chips), `M1` (Plan list "Match" column), `#1` (Run advisory banner "Match #1 was called…"). Operators must mentally join three keys; the advisory is the worst (no court/event context). Standardize on eventRank codes. Size S.
-- **Minor**: "(moved)" tag shows on an in-progress match that was never moved (mid-day sim, MD2) — trigger appears to be command-path court/slot writes differing from schedule assignment; Radix Select uncontrolled→controlled warning (console, Hub/Display config); Score "Save" disabled-state styling reads as enabled; bracket draw card leaks internal event id (`ev-de`) as a label chip; solver jargon in Plan header ("Score: 50", "Time: 0ms").
+---
 
-## Residual polish from the 2026-07-09 design-skills audit (post-fix pass — all non-blocking)
-Audited against `.agents/skills/shuttleworks-design` (archetype/token/voice rules) on post-fix screenshots. The lifecycle/naming/axis/guard fixes verified as landing; remaining, by weight:
-- **Advisory duplication + tone**: the same advisory renders as BOTH the top banner and a red error toast (two Review buttons); on Plan the toasts are error-red for what is an operational nudge — brand tone puts over-time in the amber called/late ramp. Render once; demote to amber. Size S–M.
-- **Repair strip legibility**: "0 min finish, 0 moves" has no unit/direction and `Apply` with 0 moves invites "apply what?" — turn the metric into a sentence ("saves ~0 min, moves 0 matches"). Match-code fix for the title already landed (`_repair_title` eventRank) — pending a backend restart to show. Size S.
-- **One hue, two meanings**: Run OUTLINE legend uses orange for both Resting and Late, blue for both Selected and Impacted ("color is status" violation). Late keeps amber + `LATE +n`; Resting → neutral dashed. Size S.
-- **Freshness pill vs lifecycle badge**: Display preview shows shell `COMPLETE` beside board `LIVE` (freshness) — spectator-calm vocabulary is deliberate on the TV, but in the operator preview the adjacency misreads; consider `Updated · 2s` phrasing in preview only. Size S.
-- **Solver verb pile-up**: Generate / Re-plan / Re-optimize / Apply all visible with no destructiveness hierarchy (Generate now carries the live-day guard; the others don't). Ties into the Run-convergence decision. Size M.
-- Minor: `Solutions: –`/`Score: 50` jargon; unlabeled green `Idle` health chip; unlabeled red check-in dots on Plan rows; standings `0L` in red; `COURT 1 —` dangling dash + duplicate fullscreen affordances; 12h clock on Display vs 24h axis on Run; hybrid board strikethrough reads "cancelled" for done; DE round selector R1–R6 doesn't say which bracket it scopes.
+## Open incident
 
-## Viewer read-only vocabulary — remaining surfaces (2026-07-13, audit A2-followup)
-The **correctness** half is closed: no viewer write leaves the browser. The two
-seams that were ungated — `hooks/useProposals.ts` (Commit repair / Commit move)
-and `api/bracketClient.tsx` (**every** bracket mutation) — now refuse
-client-side, and `platform/domain/permissions.ts` fails closed on an unknown
-role.
+- **2026-08-11 · 118 × HTTP 500 under ordinary concurrency — unexplained, not reproduced, OPEN.**
+  Two requests per concurrent batch succeeded and the rest failed instantly (~15 ms, not a timeout),
+  on ordinary navigation, against an idle container. Path- and data-independent; every failing route
+  was synchronous, DB-backed and via `get_repository`, while dependency-free `/health` never failed.
+  **Not reproduced since**, including a 25-minute soak of 68,619 requests with zero non-200s — and
+  **no change has been made that would explain it, so it must not be recorded as closed.** Two things
+  now exist to catch a recurrence: the backend logs again (`efeb08c` — Alembic's `fileConfig` had been
+  disabling every uvicorn logger for the life of the process, which is why hundreds of 500s left no
+  traceback) and `test_concurrent_requests.py` (`7cae310`) fires genuinely parallel requests at the
+  whole app. **Full account, evidence and soak numbers: `docs/audits/2026-08-11-incident-500-burst.md`.**
+  Size: unknown by construction; it is an investigation, not a task.
 
-To be precise about what was at risk: the backend already required
-`operator` on all of those routes, so a viewer never could corrupt data. The bug
-was the client experience — the press went to the wire, 403'd, and offered a
-retry that could never succeed. What remains below is purely **vocabulary**:
-controls that render enabled for a viewer and then no-op. Nothing here is unsafe;
-each is a control that should say "you can't" before it is pressed, not after.
 
-Gated so far: the live-day clusters (Run/workflow cards/MatchDetailsPanel incl.
-Sub, Remove, Move, Mark overrun, Cancel match, Close court), Generate, roster
-Add-school + Bulk-import, Add-match, and — via self-gating shared components —
-every `ConfirmDeleteButton` row delete and every bracket `WinnerButton`.
+## Closed
 
-Still rendering enabled for a viewer, by surface:
-- **Meet roster**: `PlayerDetailPanel` (school select, availability, min-rest,
-  notes, event-rank toggles); `positionGrid/*` (assign/unassign/add-partner,
-  column reorder/hide/reset).
-- **Meet matches**: `MatchesSpreadsheet` per-row event input + `PlayerCellEditor`
-  side pickers; `RegenerateMenu`.
-- **Bracket**: `BracketDrawsTab` (create/generate/delete event),
-  `BracketDataSection` (remove/reset), `BracketRosterTab`, `BracketPlayerFields`,
-  `BracketEngineSection`, `DrawView` (generateNext, scoring), `ParticipantPicker`,
-  `BracketScoreEntry`, `BracketViewHeader`. (All are *refused at the seam* — this
-  is the one area where the gap is most visible, since bracket had no gating at
-  all before.)
-- **Workspace/admin**: `SharingTab`, `SyncBackupsTab`, `ModulesSettingsTab`,
-  `VenueScheduleTab`, and the `displayConfig/` layout editor.
+Newest first. One line each — the commit carries the detail.
 
-Size S each, mechanical: `useCanEdit()` folded into the file's existing
-`locked`/`disabled` expression. The pattern to copy is `MatchDetailsPanel`
-(`const locked = updating || !canEditWorkspace`) or, for a control that is always
-a mutation, self-gate it like `ConfirmDeleteButton` / `WinnerButton`.
+**2026-08-13 — D13 and D18, the created_at-tie flake pair.** Both fixtures now stamp
+strictly increasing timestamps (the `test_backup_create_and_list_newest_first` precedent):
+`test_list_recent_is_bounded_and_stably_ordered` sets distinct `created_at` per job
+(`7cbeed2`), `test_one_person_in_two_meet_events_…both_ranks` sets distinct `submitted_at`
+per entry. The queries were right; the assertions claimed an order tied timestamps never
+promised. 8/8 green in repeat runs, each having failed ~1-in-6 before.
 
-**Verification note:** the unit suite cannot prove this. It mocks `useBracketApi`
-and the store seams, which is exactly why an ungated bracket write path survived
-a green 1,100-test suite. The real check is the viewer flow in
-`e2e/tests/interaction-smoke.spec.ts` (now running in CI): it asserts zero
-`POST/PUT/PATCH/DELETE` leave the browser as a viewer.
+**2026-08-12 — the console IA pass** (`f5553d7`, `5662279`, `3646952`, `83447a0`, `1b06315`, `dca9685`, `00347d0`).
+`DetailDock`'s overlay fallback kept docked semantics -> the dock now publishes its resolved mode
+through `DockModeContext` and a covering pane re-acquires `role="dialog"`, mount focus and
+outside-mousedown dismissal, with a carve-out for Radix poppers so choosing a Select option inside a
+demoted pane no longer dismisses it. · `RunSurface`'s hand-rolled inspector rail is on `DetailDock` +
+`DetailPanel`, which deleted two hand-rolled close buttons and is what makes that fallback reach it. ·
+`WorkspaceInspector`'s `w-[344px]` and its `hidden lg:flex` are gone the same way, so a Hub row click
+now shows something on a tablet. · Full account and corrections: `2026-08-12-console-ia-proposal.md`.
 
-- ~~**2026-07-14 · bracket/contingency**~~ ✅ **resolved 2026-07-15**:
-  `record_result` commands carry `reason: walkover|retired|forfeit`, persisted
-  end-to-end locally (scheduler_core `Result` → DB column → DTO). PRODUCT
-  DECISION (2026-07-15): **BYE-downstream-only**. A `retired`/`forfeit` result
-  now routes its LOSER exactly like a walkover for the loser feed only — the
-  affected loser's consolation/plate/`feeder_take='loser'` slot becomes a BYE
-  — but the stored `Result` keeps `walkover=False` / `reason` set; a
-  retirement/forfeit is not reported as a walkover. Winner advancement is
-  unchanged. Deliberately NO automatic withdrawal from the player's OTHER
-  draws — the operator decides that manually per draw (out of scope by
-  design, not deferred). Implementation: single predicate
-  `services.bracket.advancement.loser_cannot_continue(walkover, reason)`,
-  used by `_loser_participant_id`; the auto-walkover BYE sweep
-  (`_sweep_walkovers`) and its own result construction are untouched. Tests:
-  `tests/unit/test_advancement_loser_routing.py::test_retired_loser_is_bye_and_plate_cascades`
-  and `::test_forfeit_loser_is_bye_and_plate_cascades` (twins of the existing
-  `test_walkover_loser_is_bye_and_plate_cascades`), plus a negative guard
-  `::test_plain_result_with_no_reason_routes_loser_normally`. Entry points:
-  `app/schemas.py BracketCommandRequest.reason`,
-  `BracketMatchDetailPanel.ContingencySection`,
-  `services/bracket/advancement.py`.
-- ~~**2026-07-14 · bracket solver-options negative guard untested**~~ ✅ **fixed
-  2026-07-15**: added `test_bracket_solver_options_ignores_config_time_limit`
-  (`tests/unit/test_bracket_hydrate_config.py`) — asserts
-  `_bracket_solver_options(5.0, {"solverTimeLimitSeconds": 999}).time_limit_seconds
-  == 5.0`, proving `config.solverTimeLimitSeconds` does not override the
-  session/request time budget. Behavior was already correct (per the
-  function's docstring); only the regression guard was missing. See
-  **Cleared** below.
+**2026-08-11 (log reconciliation)**
+- Bracket display poll storms a revoked token forever → stops on a terminal error (`83e3b96`).
+- `/e/` was a soft-404 (HTTP 200, empty body); bare `/e` fell through to the operator SPA → index route + `location = /e` redirect (`512996a`).
+- The `useAdvisories()` call in `MeetDisplayPage` (dead on both routes), the tracked frontend `package-lock.json` (379 KB, nothing reads it), and "Node 20+" in five prerequisite docs (wrong since `rollup-plugin-visualizer@7.0.1`) → deleted/corrected (`330f069`).
+- A workspace the caller cannot see, and an unrecognised workspace segment, both left the SPA on a spinner or a guessed Configuration form → honest not-found pages (`9dbf79e`, `67dbab5`).
+- Members were unmanageable over HTTP and rendered as UUID chips → member management routes + real identity in the members list (`b3a140f`, `44dcd2f`).
+- `/health/deep` never touched the database and `_enforce_cloud_secrets` demanded API-only settings of a worker → real readiness check + role-aware validation (`08876f2`).
+- `docker-compose.release.yml` set no `DATABASE_URL`, so the release image fell back to a CWD-relative SQLite file on a read-only rootfs (`feba243`).
+- Hub "Next up" listed already-finished meet matches → `_meet_match_signals` excludes anything that left `scheduled` (`1cec926`).
+- The backend CSV importer (`csv_importer.py` + `RosterImportDTO`) was unreachable dead code, and the reason SEC-16 was closed not-exploitable → removed (`3836b64`).
+- The entrant footer offered "Sign out" in the same document that told the reader to sign in; a refused sign-in painted raw JSON; `DEFAULT_NEXT` sent a destination-less sign-in back to a page that said nothing (`367fba8`, `d3684ef`).
+- The docked-pane interaction-smoke scenario had never been executed — `interaction-smoke.spec.ts` now runs in CI (`ci.yml`), which is the only gate on real container-query reflow.
+- `403`-before-`404` on a deleted tournament — closed by SP-CLOUD-2's uniform 404 seam (`require_tournament_access`).
+- **Deleted, not fixed:** "api/README.md still documents an EventSource SSE flow" — that file no longer exists. (`unscheduledMatches` remains a contract field nothing renders; not worth an entry.)
 
-- ~~**2026-07-15 · bracket GET is a full session rebuild per request**~~ ✅
-  **resolved 2026-07-15**: added a bounded-staleness in-process cache,
-  `services/bracket/response_cache.py` — `GET /tournaments/{id}/bracket`
-  serves the cached serialized `TournamentOut` when younger than
-  `TTL_SECONDS` (2.0 s, below the frontend's 2.5 s poll period so staleness
-  never exceeds existing poll latency), and rebuilds via `_hydrate_session` +
-  `_serialize_session` on a miss. Every mutating bracket route (create,
-  delete, schedule-next, schedule-next/commit, event upsert/patch/generate/
-  delete, rounds/next, results, commands, match-action, pin, assign,
-  unassign, import.json, import.csv — 17 sites) calls `invalidate(tid)`
-  after its write, before returning; `PUT /tournaments/{id}/state
-  ?clearSchedule=true` (`api/tournaments.py`) also invalidates when it nulls
-  bracket assignments. The command path's POST-then-immediate-GET (the one
-  user-visible staleness case) is covered explicitly. Fail-safety: a missed
-  invalidation site degrades to ≤2 s staleness then self-heals — never
-  permanent — and the cache assumes the single uvicorn process CLAUDE.md
-  documents (no cross-process coherence). Tests:
-  `tests/unit/test_bracket_response_cache.py` (cache-module unit tests +
-  cache-hit-skips-hydrate, write-invalidation incl. the command path, TTL
-  expiry, `clearSchedule` invalidation) — full backend suite (804 tests)
-  green with the cache live, proving invalidation coverage rather than
-  disabling the cache in tests.
-- **2026-07-15 · GET /tournaments/{id}/state recomputes meet standings per
-  call** (`api/tournaments.py` `_meet_standings_for`: module-catalog lookup +
-  an extra `match_states.list_for_tournament` read + `compute_meet_standings`
-  over all matches on every GET) and the debounced 500 ms PUT writes the
-  whole blob whose `scheduleHistory` grows unboundedly over a tournament's
-  life (every PUT also snapshots a backup row). Not the measured lag source
-  today, but both scale with tournament size. Fix directions: standings memo
-  keyed on results version; cap/compact `scheduleHistory`. Size S–M.
-- **2026-07-15 · RunSurface's RunInspector column not yet on DetailDock**
-  (`products/operations/run/RunSurface.tsx` ~382-436): the Live Run surface
-  keeps its own always-mounted inspector column instead of the shared
-  `DetailDock` host every other detail pane now uses (docked width column +
-  container-query table reflow + narrow-viewport overlay fallback). It does
-  NOT exhibit the push-on-click bug (it is persistent, so width never
-  changes on selection), which is why it was deferred from the 2026-07-15
-  docked-pane rework. Aligning it would unify the last rail onto one
-  primitive and give it the narrow-viewport fallback. Size S.
-- **2026-07-15 · docked-pane + polish rework — residuals** (from the
-  DetailDock/LockRibbon/polish sessions; all shipped-around, none blocking):
-  - **Hard-lock read-only is visual, not semantic.** `LockedFieldset`'s
-    `sw-readonly` restores full contrast (via `!important` overrides of the
-    per-control `disabled:` utilities) but controls stay natively `disabled` —
-    not keyboard-focusable, values not selectable. True per-control
-    `readOnly`/`aria-readonly` means touching Toggle/Select/Slider
-    individually. Size M.
-  - **The new interaction-smoke scenario has not been executed.** The
-    docked-pane spec block in `e2e/tests/interaction-smoke.spec.ts` (and it is
-    the ONLY gate on real container-query reflow — jsdom can't) was written
-    but not run: it needs the Docker stack + seed-smoke fixture. Run it before
-    trusting the reflow gate. Size S (just run it).
-  - **`minContentWidth={760}` on BracketDrawsTab is a hand-summed magic
-    number** (fixed-cell total with Format collapsed). If DRAW_COLUMNS
-    changes width, it silently drifts; derive it or pin it with a test. Size S.
-  - **Gantt header time-labels may bleed** onto the following (label-less)
-    column since the `overflow-visible whitespace-nowrap` clipping fix; at
-    extreme zoom-out two labels could touch. Cosmetic. Size S.
-  - **DetailDock close-retention shows stale children ≤450 ms** (deleted
-    entity's pane content persists for the close animation). Accepted
-    trade-off; noting in case a deleted-row flash ever confuses someone.
-  - **Members page can only name the OWNER** (summary.ownerName); other
-    members still render derived id chips because the members API exposes no
-    name/email. Backend gap. Size S–M (API + row).
-- **2026-07-16 · /code-review follow-ups (post-fix residuals)**:
-  - **DetailDock overlay-fallback keeps docked semantics.** In the narrow
-    fallback the pane COVERS the table yet stays `role="complementary"` with
-    no outside-click dismissal (children are hardcoded `variant="docked"`).
-    Right fix: dock exposes its mode to children (context/render-prop) so
-    overlay mode re-acquires dialog role + outside-mousedown close. Size M.
-  - **Venue & schedule lock signal is meet-only.** The LockRibbon + new
-    confirm-unlock guard read the meet store flag; a bracket-only lock
-    (committed bracket schedule / draw in play) shows nothing there because
-    bracket lock state needs bracket data not loaded at workspace level.
-    Backstop today: the server 409s (CONFIG_LOCKED/DRAW_STARTED). Size M.
-  - Cleanup shortlist from the same review (below the findings cap): shared
-    date-format helper (fmtDate is ~7th private copy), LockRibbon inline SVG
-    → phosphor `LockSimple`, shared `prefersReducedMotion()` (2 copies),
-    `DetailPanel.width` dead API, dead `::-webkit-scrollbar` rules on
-    Chromium ≥121 + thin scrollbars silently applying to the TV display,
-    `useContainerWidth` per-resize setState (threshold/hysteresis + initial
-    sync measurement), ops board lacks column-priority degradation when the
-    Courts dock takes width. Size S each.
-- **2026-08-03 · SP-CLOUD-1 Phase 0 audit findings (adjacent, out of slice scope)**:
-  - **docker-compose.release.yml sets no DATABASE_URL** — the release image
-    falls back to `sqlite:///./local.db` on a read-only rootfs, so first
-    write fails. Add the explicit URL the main compose already carries. Size S.
-  - ~~**`test_backup_create_and_list_newest_first` created_at-tie flake**~~
-    **CLEARED 2026-08-03** (with a diagnosis correction: the query already
-    carried the `, id DESC` tiebreaker — but `id` is a *random* UUID, so the
-    tiebreaker makes same-tick ordering deterministic, not "newest". The test
-    was the bug: it relied on sub-tick timestamp separation. Fixed by
-    stamping strictly increasing `created_at`, the same pattern the
-    neighboring rotate/list_all tests already used.)
-  - **Bracket `POST /events/{id}/generate` ignores session solver config** —
-    builds `TournamentDriver` with no `solver_options` (brackets.py:2225-2230),
-    silently dropping the session's time_limit/deterministic/seed. Size S.
-  - ~~**docker-compose.dev.yml header advertises `make dev-postgres`**~~ —
-    ✅ **CLEARED 2026-08-04.** The target was added (plus `dev-postgres-stop`)
-    rather than the comment reworded: `CLOUD_PROGRESS.md` referenced it too,
-    and it is the quickest way to get a Postgres for the dual-dialect tests.
-  - **Nothing enforces "a streaming generator must not touch the repository".**
-    The repo-closing middleware (`app/main.py`) runs when `call_next` returns,
-    which for a `StreamingResponse` is *before* the body streams — so the
-    session goes back to the pool while the generator is still yielding. The
-    one live streaming route (`schedule_next_round_stream`) is safe only
-    because `_hydrate_session` materializes everything into a Pydantic object
-    first; a future route that lazy-loads inside its generator would fail in
-    production under a shape unit tests don't reproduce (TestClient drains the
-    stream differently). Verified safe today, 2026-08-04 — the gap is that
-    it's an unguarded invariant, not a live bug. Candidate check: assert in a
-    test that no `StreamingResponse` route both depends on `get_repository`
-    and references it after the first yield, or give streaming routes their
-    own session lifetime. Size S.
-  - **A worker that loses its lease keeps solving to completion.** The
-    heartbeat ownership guard (2026-08-04, `solve_jobs.heartbeat`) stops a
-    ghost worker from *extending* a lease it lost, and `_record_outcome`
-    already discards its result — but nothing tells the ghost's child to stop.
-    It burns a core until it finishes, then throws the answer away. Fixing it
-    means giving the beat a return channel to the runner: `solve_runner`'s
-    `heartbeat` param is `Callable[[], None]`, so a "you lost the lease"
-    signal has nowhere to go — either widen that type or fold the check into
-    the existing `cancel_check` (which already kills the child and is called
-    on the same 2s tick). Cost of not fixing: one wasted solve per lease loss,
-    bounded and rare. Size S.
-  - **api/README.md still documents an EventSource SSE flow** (now fully
-    retired — solves are jobs; the meet SSE routes answer 410); and
-    `unscheduledMatches` is returned by every solve but rendered nowhere. Size S.
-  - ~~**scheduler_core `_player_matches()` iterates hash-ordered sets**~~ —
-    ✅ **Fixed 2026-08-04 (SP-CLOUD-3, commit below).** The honest fix landed:
-    `get_player_ids` now returns a sorted list, so `_player_matches`' key
-    order — and therefore constraint emission order — follows from the input
-    alone. Measured: before, four `PYTHONHASHSEED` values gave four distinct
-    CP-SAT model fingerprints (`5d6d4ff8…` pinned); after, six seeds give one
-    (`88f2ee35…`). All three compensations were removed **together** per
-    Rule 7 — the child's `PYTHONHASHSEED=0` pin, its hard-refusal to run
-    unpinned, and `services/determinism.py` entirely. A warning whose stated
-    justification has become false is worse than silence. The replacement
-    guard is a test that double-solves *unpinned*
-    (`tests/unit/test_engine_build_order.py`), which the log line could never
-    be. Negative control performed: dropping the `sorted()` fails 3 of its 4
-    tests.
+**2026-08-10** — Entrant page weight: the 100 KB budget was unachievable under React Router 7 SSR (a 98.8 KB framework floor), raised to 123 KB by ruling R8-F, then made moot — `security-headers.conf` sends `script-src 'self'` with no nonce while `<Scripts/>` emits inline scripts, so the app had **never hydrated in production**. `<Scripts/>` dropped, prod and dev now agree, measured **2.5 KB all-HTML**, budget re-derived at 4 KB, still blocking (`bd4d55a`). · Turnstile's script was blocked by our own CSP, so **no entrant could sign up in any deployed stack**; the owner's ruling was to allow it, scoped by an nginx `map $uri` to `/e/signup` and nowhere else, with `frame-src` spelled out so `default-src` was not widened (`1c3452f`). · `/e/robots.txt` was inert until the origin root mapped at it — `location = /robots.txt` now proxies to it, one body, held by `ingress.test.ts`.
 
-- **2026-08-03 — SP-CLOUD-2 (auth & tenancy) adjacent findings:**
-  - **GDPR/export/delete tooling is a pre-launch requirement** (explicitly
-    deferred by the SP-CLOUD-2 prompt): account deletion, data export, and
-    the `owner_email` PII already mirrored into Supabase `tournaments` all
-    need a story before public launch. Size L.
-  - **`GET /tournaments` loads all rows and filters in Python** against the
-    caller's memberships; fine at solo scale, wrong shape for multi-tenant
-    cloud. Move the membership filter into SQL (index
-    `ix_tournament_members_user` now exists). Size S.
-  - ~~**`GET /invites/{token}` is a token-existence oracle**~~ — ✅ **Fixed
-    2026-08-04 (SP-CLOUD-3, commit `7e62f0c`).** One uniform 404
-    (`INVITE_NOT_FOUND`) for unknown / revoked / expired / workspace-deleted on
-    both resolve and accept (accept's 410 collapsed in too); the public DTO
-    dropped `valid`/`expiresAt`/`revokedAt`. Timing equalized structurally — a
-    query-count probe showed 1 vs 2 queries, so the no-invite branch now does a
-    sentinel lookup. Pinned by `tests/test_invite_oracle.py`.
-  - ~~**Supabase mirror ignores the new tenancy columns** (`org_id` gap + the
-    unpopulated-RLS story)~~ — ✅ **Closed 2026-08-04 (SP-CLOUD-3 / 0.E,
-    commit `d3a46b6`).** Resolved by deletion, not by fixing: the mirror was
-    removed entirely. Both halves of this entry die with the subsystem. See
-    [ADR 0012](/decisions/0012-remove-the-supabase-mirror).
-  - **VitePress docs don't yet cover SP-CLOUD-2** (auth model, tenancy seam,
-    display capability link) — `backend/README.md` is the current source;
-    fold into `docs/architecture/` + `contracts/` pages. Size S.
-  - **Members remain unmanageable over HTTP** (no remove/demote/transfer
-    endpoints) — unchanged from pre-slice, now more visible since People &
-    Access shows real identities. Size M.
+**2026-08-04/05** — `_player_matches()` iterated hash-ordered sets: `get_player_ids` now returns a sorted list, so constraint emission order follows from the input alone (six `PYTHONHASHSEED` values, one model fingerprint). All three compensations removed together — the child's seed pin, its refusal to run unpinned, and `services/determinism.py` — replaced by a test that double-solves *unpinned*. · `GET /invites/{token}` was a token-existence oracle → one uniform 404 on both resolve and accept, timing equalized structurally (`7e62f0c`). · The Supabase mirror was removed entirely, taking its tenancy gap with it (`d3a46b6`, ADR 0012). · `make dev-postgres` was added rather than the comment reworded. · The deploy runbook's `/opt/shuttleworks` was the wrong case on a case-sensitive host — 26 occurrences corrected across five files.
 
-- **2026-08-04 — SP-CLOUD-3 adjacent findings:**
-  - **No in-product off-site durability for local mode — documented as operator
-    responsibility, not an oversight.** `tournament_backups` rows live in the
-    same database as the data they protect, so a lost disk loses both. The
-    Supabase mirror nominally covered this dimension but never actually did (it
-    was one-way, restore-less, and never configured), so removing it in
-    [ADR 0012](/decisions/0012-remove-the-supabase-mirror) took away nothing
-    real. **This is a deliberate choice, recorded so a future reader doesn't
-    rediscover it as a bug:** local mode is one operator on their own machine,
-    where off-site copies are their responsibility exactly as for any desktop
-    application, and `docs/how-to/install-local.md` states that plainly. Cloud
-    mode — where it genuinely isn't optional — has a real answer in
-    `install-selfhost.md` (`pg_dump` + `pg_dumpall --globals-only`, encrypted,
-    off-host, with a monthly restore drill). Revisit only if local mode ever
-    stops being single-operator. Size — (accepted, not scheduled).
-  - **`dto.generated.ts` freshness is on the honour system.** Nothing gates it,
-    and it had silently drifted since before SP-CLOUD-2 Phase 3 (missing every
-    `/auth/*` and `/display/{token}/*` route) until regenerated in `bb29b21`. A
-    CI check that regenerates and diffs would catch it. Size S.
-  - **`_enforce_cloud_secrets` is API-shaped.** It fires on `ENVIRONMENT=cloud`
-    and demands `AUTH_MODE`, `SESSION_COOKIE_SECURE`, and SMTP — none of which
-    the standalone worker reads, so a worker-only host would need dummy SMTP
-    credentials just to boot. Make the validator role-aware. Size S.
-    *(Scheduled: SP-CLOUD-3 Phase 3.)*
-  - **`/health/deep` never touches the database** — it checks data-dir
-    writability and the ortools import, so it reports `healthy` with Postgres
-    unreachable. A health check that cannot fail turns an outage into a silent
-    outage. Size S. *(Scheduled: SP-CLOUD-3 Phase 3, 0.F.6.)*
-  - **Schema-vs-model drift is unchecked, and we know it exists.** Removing
-    `sync_queue` surfaced that migration `e2a5f3b8c1d6` created
-    `ix_sync_queue_created_attempts` while the `SyncQueue` model **never declared
-    it** — the ORM metadata and the real schema had silently diverged. It was
-    caught only because writing a downgrade forced reproducing the true schema;
-    nothing in the test suite or CI would have found it, and there is no reason
-    to assume `sync_queue` was the only table affected. Proposed check: on a
-    scratch database, run `alembic upgrade head`, then compare the resulting
-    schema against `Base.metadata` (either `metadata.create_all` on a second
-    scratch DB and diff, or `alembic revision --autogenerate` and assert the
-    generated migration is empty). Cheap CI step, dual-dialect, would find the
-    rest. Size S.
-  - **`docs:freshness` tracked globs are too coarse.** Four areas reported BEHIND
-    after the mirror removal purely because an unrelated symbol left `models.py`
-    and a comment changed in `useBracket.ts`; none of those pages ever mentioned
-    the mirror. A freshness signal that cries wolf gets ignored, and the next
-    real staleness will look identical. Either narrow the globs (per-symbol or
-    per-directory rather than whole files like `database/models.py`, which every
-    slice touches) or teach it to ignore commits that only remove content the
-    docs never referenced. Size S.
-  - **`/health/metrics` full-table aggregate.** The status counts are a
-    `GROUP BY` over every row in `solve_jobs`, including terminal rows retained
-    for `JOB_RETENTION_DAYS` (30 by default) — a sequential scan on Postgres on
-    every scrape, growing between prunes. The obvious narrowing (restrict the
-    `WHERE` to live statuses) is **wrong**: `succeeded` and `failed` are part of
-    the endpoint's published response, so filtering them out would silently
-    zero two documented numbers. The right fix is an index on `solve_jobs.status`
-    if volumes ever make the scrape visible. Not doing it now: at present
-    volumes the scan is not measurable, and it costs a migration. Size S.
-    *(Found in the 2026-08-05 review; deliberately left after confirming the
-    suggested fix would have been a regression.)*
-  - **`OverflowMenu` disabled items still close the menu.** Activation is blocked
-    in the click handler, but Headless UI closes the menu on select regardless,
-    so clicking a disabled item dismisses the menu while doing nothing — it
-    reads as a dead control. The doc comment now states this; the behaviour is
-    unfixed. Needs either an `onClose` guard or a non-`MenuItem` render for
-    disabled entries. Size S. *(2026-08-05 review.)*
-  - **The backend CSV importer is dead code.** `backend/services/csv_importer.py`
-    (`CSVImporterService.parse_roster_csv` / `parse_matches_csv`) and
-    `RosterImportDTO` in `app/schemas.py` have **zero references** anywhere in
-    the repo — no route, no service, no test. SP-SEC-1 Phase 0 filed the
-    unguarded `int(parts[3])` in it as finding SEC-16 (a malformed column raises
-    an uncaught `ValueError`); Phase 1 established the code is unreachable, so
-    the finding is not exploitable and was closed rather than fixed — patching
-    dead code just makes it look maintained. Delete both, or wire the importer
-    up if roster CSV import is still wanted (the UI's CSV affordances are all
-    export today). Size S. *(SP-SEC-1 Phase 1.)*
-  - ~~**The deploy runbook's path is the wrong case.**~~ **RESOLVED 2026-08-05**
-    (SP-SEC-1 Phase 3 runbook commit — 26 occurrences corrected across five
-    files; the docs were wrong, not the host). `docs/how-to/deploy.md:66`
-    (and `install-selfhost.md:44`) instruct `cd /opt/shuttleworks`; the actual
-    deployment is `/opt/ShuttleWorks`, and on the case-sensitive Linux host the
-    lowercase directory does not exist, so the runbook's very first step fails.
-    Worth fixing carefully rather than blindly: decide whether the *docs* or the
-    *host* is wrong (renaming the live directory means recreating the compose
-    project name and its volumes, so the docs are almost certainly the thing to
-    change). Size S. *(Found in SP-REPO-1 while verifying what cayde ran; not
-    fixed there because that slice was no-code-changes.)*
-  - **The documented remote worker is not deployed.** `docs/how-to/add-a-worker.md`
-    describes `neo` as a remote compute host, and the SP-CLOUD-3 audit's env
-    matrix has a `neo (worker)` column, but neo runs no ShuttleWorks container
-    at all — its Docker is entirely homelab (jellyfin, signoz, bookstack,
-    nginx-proxy-manager). All solve work is carried by cayde's
-    `EMBEDDED_WORKER=true`. Either deploy the worker or mark the runbook as
-    aspirational; a runbook describing a host that isn't running the thing is
-    how an operator loses an hour during an event. Size M (deploy) / S (doc).
-    *(Found in SP-REPO-1 while locating the deployment host.)*
-  - **`seen_version` is optional on `POST /bracket/results`.** The DTO declares
-    it `Optional[int]` and the guard runs only `if body.seen_version is not
-    None`, so any caller that omits it is silently unprotected — a fail-*open*
-    optimistic-concurrency check. SP-CLOUD-4 closed the identical defect one
-    route over by making `If-Match` mandatory on `PUT …/state` (412 when
-    absent); this route was left as-is because the frontend already sends the
-    token, so tightening it is a small, low-risk follow-up rather than a
-    behaviour change anyone would notice. Size S. *(SP-CLOUD-4; re-confirmed
-    by the 2026-08-06 review.)*
-  - **Two conflict dialects on the same concept.** `PUT …/match-states/{id}`
-    answers **412** on a stale version; `PUT …/state` answers **409** with the
-    current state in the body. Both are correct in isolation — 412 is the
-    strict HTTP reading of a failed precondition, 409-with-state is what lets a
-    client reconcile in one round trip — but a codebase should not teach two
-    answers for one question. Converging them means changing a shipped, tested
-    path with a working client-side counterpart (`MatchVersionMismatch`), so it
-    is a deliberate breaking change, not a cleanup. Size M. *(SP-CLOUD-4.)*
-  - **Bracket writes advance `state_version` without returning it.**
-    `api/brackets.py` persists session metadata and clears draws through
-    `upsert_data`, which bumps the concurrency token, but those routes return
-    bracket payloads and have no `ETag`. A client that performs a bracket
-    action and then saves meet state gets one spurious `409`, which now
-    self-heals (the recovery re-reads and re-syncs) but is still a visible
-    hiccup. Threading a token through ~21 call sites was judged
-    disproportionate to that; the alternative is a small response hook that
-    stamps the ETag centrally for any route under `/tournaments/{id}/`.
-    Size M. *(2026-08-06 review.)*
-  - **`DESIGN.md` still enforces the retired brutalist direction.** The agent
-    rulebook's §1.2/§1.3/§1.8.b/§1.9/§1.10/§1.11 describe Signal-Orange, 90°
-    corners, and hard-offset-only shadows — none of which ship. The 2026-08-06
-    design review added a superseded-rules banner and flipped the §10
-    precedence to `tokens.css` → `DESIGN_COLOR.md` → `DESIGN.md`, but the
-    individual rule bodies were left intact rather than rewritten: they are
-    load-bearing for agents and a blind rewrite risks loosening rules that are
-    still correct. The full rewrite (restate each rule against the current
-    token ladder, drop the `products/tournament/frontend` consumer) is the
-    follow-up. Size M. *(2026-08-06 frontend design review — see
-    `docs/audits/15-frontend-design-review.md`.)*
-  - **50 raw `<input>` elements remain outside `TextField`.** The review added
-    the missing input primitive and adopted it on the auth surface and global
-    settings (4 files), leaving ~50 hand-rolled inputs across ~24 files, each
-    re-deriving its own border/radius/focus treatment. They are not broken —
-    they mostly use `border-border` correctly — so this is drift-prevention,
-    not a defect fix, and it is a wide mechanical sweep best done as its own
-    slice. Size M. *(2026-08-06 frontend design review.)*
-  - **`--status-started` (sky) reads as interactive next to the azure accent,
-    and `--module-meet` is the accent hex.** The system's "one accent" rule is
-    literally satisfied but perceptually broken: a *scheduled* chip and a
-    clickable control are both blue on the Ops board, and the Meet module's
-    categorical identity color is the same value as `--action-primary`. Fixing
-    it is a token-mapping change, but it moves colors on a shipped operational
-    surface, so it belongs with the palette direction decision rather than
-    ahead of it. Size S. *(2026-08-06 frontend design review.)*
-  - **`Eyebrow` uppercases its text content in JS as well as in CSS.** So
-    `<Eyebrow>Details</Eyebrow>` puts `DETAILS` in the DOM while the equivalent
-    `<span className={EYEBROW_CLASS}>Details</span>` puts `Details`. Visually
-    identical (CSS `uppercase` does the work either way), but screen readers
-    may spell out an all-caps string, and it makes the component and the class
-    constant disagree about DOM text. Six call sites. Deferred because removing
-    it changes DOM text that tests may query, which is unrelated to the config
-    unification it surfaced during. Size S. *(2026-08-06 config-surface
-    unification — see `docs/audits/15-frontend-design-review.md` §6.)*
-  - **A dead workspace link hangs on "Loading workspace…" forever.**
-    `/tournaments/{unknown-id}/<segment>` renders the full workspace shell —
-    sidebar, module sections, admin nav — for a workspace that does not exist,
-    and never leaves the loading state. The only signal is a dismissible toast
-    (`TOURNAMENT_NOT_FOUND`), so once it auto-dismisses the surface is a
-    permanent spinner with a nav for nothing. A stale bookmark, a shared link
-    to a deleted workspace, or a revoked membership all land here. Wants a
-    not-found state with a route back to the Hub; `useTournamentState`'s
-    hydrate failure is the seam. Size S. *(2026-08-06 full-flow route pass.)*
-  - **8 of the 10 e2e spec files are stale and fail against the current UI.**
-    `00-sanity`, `02-inline-roster`, `03-auto-generate-matches`,
-    `04-solve-happy-path`, `05-drag-reschedule`, `06-persistence`,
-    `07-schedule-xlsx-import`, `08-suggestions-inbox` (plus
-    `99-baseline-screenshots`) were last touched 2026-05-11 and predate the
-    Hub / workspace control-plane redesign. They assert
-    `toHaveTitle(/schedul|tournament/i)` (the app is "ShuttleWorks") and
-    `getByTestId('tab-setup')` — the horizontal TabBar that CLAUDE.md already
-    documents as vestigial. `make test-e2e` reports 19 failures that are all
-    rot, so the suite currently provides negative value: a real regression
-    would be indistinguishable from the noise. Only
-    `interaction-smoke.spec.ts` is in CI and it is actively maintained (16/16).
-    Decision needed — repair against the sidebar nav, or delete and let
-    interaction-smoke be the e2e surface. Size M. *(2026-08-06 full-flow pass.)*
-  - **An unknown workspace segment silently renders Meet Configuration.**
-    `/tournaments/{id}/not-a-segment` falls back to the Configuration surface
-    while the URL keeps the bogus segment, so URL and content disagree and the
-    address is misleading if bookmarked or shared. Unknown segments should
-    redirect to `overview` the way unknown top-level routes redirect to the
-    Hub. Size S. *(2026-08-06 full-flow route pass.)*
-  - **Overview rail has no "last backup" row.** SP-UI-1's rail shows event
-    date, public display and collaborators. Last-backup was specified but
-    dropped: it needs a second list fetch (`ws-sync`'s backups endpoint) on
-    every workspace landing to render a glance-only fact, and the Overview
-    otherwise makes exactly one extra call. Add it if/when the summary payload
-    or a cheap head endpoint can carry a `lastBackupAt` stamp. Size S.
-    *(2026-08-06 SP-UI-1.)*
-  - **The `ready` / `live` / `complete` Overview panels are minimal.** SP-UI-1
-    shipped `setup` fully and gave the other three honest versions built only
-    from data that already exists (`signals.matches`, `signals.nextUp`) —
-    structure over completeness, deliberately, rather than faking richness.
-    They want real content: live court occupancy, per-event progress, a
-    results/export summary. Size M, product call on what each phase owes.
-    *(2026-08-06 SP-UI-1.)*
-  - **The shell identity bar can disagree with the Overview about a
-    workspace's name.** Seen while verifying SP-UI-1: a `ready` workspace whose
-    Overview header read "Interaction smoke" showed `Untitled` in the shell top
-    bar. The two read different sources (`WorkspaceIdentity` vs the fetched
-    summary) and one lags. Pre-existing; not touched by SP-UI-1 because the
-    fix belongs to the identity seam, not the Overview. Size S.
-    *(2026-08-06 SP-UI-1 verification.)*
-  - **`comingSoon` keeps retired vocabulary alive in the contract.**
-    `ModuleCountsDTO.comingSoon` and the `coming_soon` module status still
-    exist in the backend schema, `dto.ts`, `dto.generated.ts` and ~8 test
-    fixtures, but nothing renders a coming-soon state — `modulesFromDto` maps
-    the value to `available`. "Coming soon" is retired product vocabulary, so
-    the field is dead weight that invites someone to resurface it. Removing it
-    touches the DTO contract both sides. Size S, needs a contract call.
-    *(2026-08-06 SP-UI-1.)*
-- **2026-08-06 · SP-E1-1 Seam A characterization findings** (recorded, deliberately
-  not fixed inside a seam task):
-  - **`upsert_data`'s compare-and-swap is identity-map-scoped, so it does not
-    detect a cross-session concurrent write.** `get_by_id` is `session.get`,
-    which answers from the identity map, and `SessionLocal` sets
-    `expire_on_commit=False` (`database/session.py:97`). The re-read the CAS
-    performs "immediately before the mutation" therefore returns *the version
-    this session last saw*, not the row's version. Two writers on the same
-    session are caught (that is what
-    `test_the_write_is_a_compare_and_swap_not_just_a_precheck` pins); two
-    writers on different sessions — which is what real concurrency looks like,
-    one session per request — are not: the stale write is accepted and the
-    other writer's change is lost. Characterized in
-    `tests/test_concurrent_state_writes.py::test_a_stale_session_snapshot_defeats_the_cas_entirely`
-    with its negative control
-    (`…::test_expiring_the_snapshot_is_what_makes_the_cas_fire`). The HTTP
-    `PUT /state` path is unaffected in practice because each request gets a
-    fresh session that reads the row once; the exposure is any in-request code
-    that reads, does other work, then writes with `expected_version` — which is
-    exactly the shape of the Entries commit seam, and why that seam expires its
-    own snapshot before every attempt instead of trusting the guard. Fixing it
-    properly means either expiring inside `upsert_data` or moving the compare
-    into the `UPDATE … WHERE state_version = :seen` statement (the
-    `services/members.py` correlated-subquery pattern). Size M, touches a
-    shared load-bearing write path. *(2026-08-06 SP-E1-1 Task 1.)*
+**2026-08-03** — `test_backup_create_and_list_newest_first`'s created_at-tie flake: the query already carried `, id DESC`, but `id` is a random UUID, so the tiebreaker is deterministic, not "newest"; the *test* was the bug, fixed by stamping strictly increasing `created_at`.
 
-- **2026-08-07 · SP-E1-1 Phase E live-run findings** (design inputs for E2/Phase 7,
-  deliberately not patched ad hoc — spec §9.3 owns the redesign):
-  - **The Meet mapping targets a rank *slot*, not a division.** `rankCounts: {MS: 3}`
-    declares slots MS1/MS2/MS3 with one player per school per singles slot
-    (`products/meet/roster/hooks/useRankValidation.ts`), but Seam A maps every entrant
-    of entry event "MS1" onto that same slot inside the same seam-created group, so the
-    roster's normalization stripped `ranks[]` from all but the first committed player on
-    the SPA's next autosave. Names, remarks, `sourceEntryId` and groups survived. The
-    fix is a design decision (division-level mapping or seam-side slot assignment), not
-    a patch. Size M, blocks nothing in E1. *(SP-E1-1 Phase E, workspace `sw-e1-demo`.)*
-  - **The operator SPA autosaves the state blob and re-normalizes seam-written data**
-    through Meet's domain rules (observed as state_version bumps v3/v4 after the seam's
-    v2). Any future seam-written roster field needs either a snapshot round-trip test
-    (as `sourceEntryId`/`remarks` have) or a shape that survives normalization. Size S:
-    one characterization test in E2. *(Same run.)*
+**2026-07-15/16** — `GET /tournaments/{id}/bracket` rebuilt the whole session per request → bounded-staleness in-process cache (`response_cache.py`, 2.0s TTL under the 2.5s poll), invalidated by every mutating bracket route incl. the command path and `?clearSchedule=true`; suite green with the cache live rather than disabled in tests. · Bracket contingency: `record_result` carries `reason: walkover|retired|forfeit`, persisted end-to-end; product ruling **BYE-downstream-only** (a retired/forfeit loser routes like a walkover for the loser feed only; `walkover=False` is preserved, winner advancement unchanged, no automatic withdrawal from other draws). · `_bracket_solver_options` never let `config.solverTimeLimitSeconds` override the session budget — behaviour was already right, the guard was missing.
 
-- **2026-08-07 · SP-E1-2 verify finding — the entrant-account CASCADE pre-decides E2's
-  erasure question.** `submissions.account_id` and `entry_players.account_id` both FK
-  `entrant_accounts` with `ondelete=CASCADE` (migration `s3d8f2b5c0e1`), so deleting one
-  entrant account would erase every submission and entry it ever made — including entries
-  a director has confirmed. No delete path exists yet, but E2 builds withdraw-and-erase,
-  and the schema has silently answered its hardest question (entrant erasure right vs
-  organiser's records) in the most destructive direction. **A ruling is owed BEFORE E2**
-  (alternatives: ON DELETE SET NULL + tombstone; soft-delete the account; PII-scrub while
-  keeping rows). Size S now, M after E2 ships against the cascade. *(SP-E1-2 verify.)*
+**2026-07-09/14** — Full-flow UI audit fixes (`65d9edd`, `bf8309b`, `1cec926`): DrawView score guard, deleted-workspace poll stop, Run-board axis extent, PanZoomCanvas drag crash, `useSmoothedAssignments` hydration deadlock, Display-preview freshness, the `signals.phase` lifecycle seam across Hub/shell/inspector/draw-card (Overview and the Hub facets followed in SP-UI-1), live-aware `nextUp`, one naming dialect, the live-day Generate guard, Run eyebrow alignment.
+
+**2026-07-01/02** — Phase 7 unlocked both locked engine functions: `GreedyBackend.solve` **E37→A5** and `SchedulingProblemBuilder.build` **C19→A2**, characterized first (19%→97%/96%, 28 golden-master tests, `caf5275`) then decomposed along intake → engine → emit (`d09396c`, `1534756`), largest new unit B9, behaviour-equivalence verified line-by-line by an independent review. Two latent bugs found while characterizing were fixed after: `bridge.build`'s config field-drop → `dataclasses.replace` on both rebuilds, and a stale `examples/badminton_event_setup.py`. Neither had a production caller. · Phase 5 backlog: unused **exports 37→3**, **exported types 60→9**, **11 unused deps** removed, knip unused-deps → 0, verified by a real `vite build`. · Loose-ends sweep: the 409 toast's raw UUID, the Plan zoom-bar doubled hairline, the dormant `StatusPill` pulse, bracket drag-validate ignoring roster availability (`player_extras` threaded into `validate_bracket_move`), participant seeds dropped on upsert echo, the Meet Matches row-click dead zone, and error toasts stacking without dedupe. · Live-ops: commands didn't write through to `match_states`, so a command-applied call vanished on reload and a retried Call 409'd forever — the apply branch now mirrors the transition in the same transaction.

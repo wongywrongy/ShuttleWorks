@@ -6,21 +6,24 @@
  *   • 'list'        — compact rows, one per court. Best for 16+ courts on
  *                     1080p TVs; trades the giant court-number for one-line
  *                     scannability.
- *   • 'strip'       — single-column tall cards stacked vertically.
- *   • 'grid'        — N-column responsive grid of the same card shape.
+ *   • 'auto'        — N-column grid whose column count is derived from the
+ *                     BOARD's shape and the court count, paginating rather
+ *                     than shrinking past the legibility floor (TV-6).
+ *   • 'grid'        — the same card grid at the director's own column count.
  *
- * Strip and Grid share the same card render — only the wrapping container
- * (flex vs grid) differs. Both modes use the same status tint tokens so
- * the visual language stays consistent.
+ * Auto and Grid share the card render and differ only in who chose the
+ * column count; the retired 'strip' mode was this same render in a single
+ * flex column, and stored values map to 'auto' before they reach here.
+ * Every mode uses the same status tint tokens.
  */
-import type { ReactNode } from 'react';
-
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
 import { formatElapsed } from '../../../lib/timeFormatters';
+import { sideSurnameLine } from '../../../lib/names';
+import { STATE_WORD } from '../../../lib/stateWords';
 import { formatPlayers, isCourtClosedNow } from './helpers';
 
 type CourtStatus = 'active' | 'called' | 'empty';
-type CourtDisplayMode = 'list' | 'strip' | 'grid';
+type CourtDisplayMode = 'list' | 'auto' | 'grid';
 
 interface CourtRow {
   courtId: number;
@@ -92,7 +95,10 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
         return (
           <div
             key={courtId}
-            className={`grid h-14 items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
+            // `min-h`, not `h`: the players cell wraps rather than
+            // ellipsising, so a long doubles pairing makes the row taller
+            // instead of hiding a surname from the far side of the hall.
+            className={`grid min-h-[3.5rem] items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
               isClosed ? 'opacity-50' : ''
             }`}
           >
@@ -102,9 +108,9 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
               {courtId}
             </span>
             <span className="tabular-nums text-base font-semibold text-muted-foreground">
-              {isClosed ? '—' : match ? match.eventRank || `M${match.matchNumber || '?'}` : '—'}
+              {isClosed ? '–' : match ? match.eventRank || `M${match.matchNumber || '?'}` : '–'}
             </span>
-            <span className="truncate">
+            <span className="min-w-0 break-words">
               {isClosed ? (
                 <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
               ) : match ? (
@@ -157,18 +163,19 @@ function CourtsCardMode({
   gridColsClass,
   cardHeightPx,
   cardPadX,
-  courtNumSize,
-  eventCodeSize,
   playerSize,
-  tvAccent,
   tvShowScores,
   isFullscreen,
   playerNames,
 }: CourtsViewProps) {
   return (
     <div
-      className={`w-full ${displayMode === 'grid' ? `grid gap-3 ${gridColsClass}` : 'flex flex-col gap-2'}`}
-      style={displayMode === 'grid' ? { gridAutoRows: `${cardHeightPx}px` } : undefined}
+      className={`w-full ${displayMode === 'list' ? 'flex flex-col gap-2' : `grid gap-3 ${gridColsClass}`}`}
+      // `minmax(h, auto)`, not a fixed track: the card height is the DESIGNED
+      // height, not a cap. A doubles pairing too long for one line grows its
+      // row instead of being clipped by the card — nothing on a hall board is
+      // readable at half a name.
+      style={displayMode === 'list' ? undefined : { gridAutoRows: `minmax(${cardHeightPx}px, auto)` }}
     >
       {courts.map((row, idx) => (
         <CourtCard
@@ -178,10 +185,7 @@ function CourtsCardMode({
           isClosed={isCourtClosedNow(config, row.courtId, now)}
           cardHeightPx={cardHeightPx}
           cardPadX={cardPadX}
-          courtNumSize={courtNumSize}
-          eventCodeSize={eventCodeSize}
           playerSize={playerSize}
-          tvAccent={tvAccent}
           tvShowScores={tvShowScores}
           isFullscreen={isFullscreen}
           playerNames={playerNames}
@@ -197,170 +201,179 @@ interface CourtCardProps {
   isClosed: boolean;
   cardHeightPx: number;
   cardPadX: string;
-  courtNumSize: string;
-  eventCodeSize: string;
   playerSize: string;
-  tvAccent: string;
   tvShowScores: boolean;
   isFullscreen: boolean;
   playerNames: Map<string, string>;
 }
 
+/**
+ * The Console board card (2026-08-13): a colored condition BAND heads the
+ * card ("COURT 2 · WD2 | LIVE · 0:21"), the body stacks each player on a
+ * line (BWF presentation) with per-set score columns on the right — the
+ * won set's number reads in the live hue, the current set in full ink.
+ * The Next/Later idle-court lanes and the closed-court state are unchanged
+ * behavior under the new skin. Live/called bands use the AA-proven status
+ * tokens (an arbitrary `tvAccent` hex cannot promise readable ink).
+ */
 function CourtCard({
   row,
   idx,
   isClosed,
   cardHeightPx,
   cardPadX,
-  courtNumSize,
-  eventCodeSize,
   playerSize,
-  tvAccent,
   tvShowScores,
   isFullscreen,
   playerNames,
 }: CourtCardProps) {
   const { courtId, match, state, status, nextMatch, nextStartTime, laterMatch, laterStartTime } = row;
   const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-  // Active / called cards get a tinted background carrying state. Full-card
-  // tint + inset highlight ring replaces the banned left-stripe accent.
-  const cardBgClass = isClosed
-    ? 'bg-muted/30 opacity-60'
+  const code = match ? match.eventRank || `M${match.matchNumber || '?'}` : null;
+  const sets = tvShowScores && status === 'active' ? state?.sets ?? [] : [];
+  // No per-set breakdown but an aggregate exists → show it as one score
+  // column per side, so a score-carrying match never renders scoreless.
+  const scoresA = sets.length > 0 ? sets.map((s) => s.sideA)
+    : tvShowScores && status === 'active' && state?.score ? [state.score.sideA] : [];
+  const scoresB = sets.length > 0 ? sets.map((s) => s.sideB)
+    : tvShowScores && status === 'active' && state?.score ? [state.score.sideB] : [];
+
+  const band = isClosed
+    ? { cls: 'bg-muted text-muted-foreground', word: STATE_WORD.closed }
     : status === 'active'
-      ? 'bg-status-live-bg/80 ring-1 ring-status-live/30 shadow-[inset_0_0_0_1px_hsl(var(--status-live)/0.25)]'
+      ? {
+          cls: 'bg-status-live-solid text-status-live-ink',
+          word: elapsed ? `${STATE_WORD.live} · ${elapsed}` : STATE_WORD.live,
+        }
       : status === 'called'
-        ? 'bg-status-called-bg/70 ring-1 ring-status-called/25'
-        : 'bg-card/60';
-  const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
-  const sideA = match ? formatPlayers(match.sideA, playerNames) : '';
-  const sideB = match ? formatPlayers(match.sideB, playerNames) : '';
+        ? { cls: 'bg-status-called-solid text-status-called-ink', word: STATE_WORD.called }
+        : { cls: 'bg-muted text-muted-foreground', word: STATE_WORD.free };
 
   return (
     <div
-      className={`overflow-hidden rounded-sm border border-border animate-block-in ${cardBgClass}`}
+      className={`flex flex-col overflow-hidden rounded border border-border bg-card sw-float-in ${
+        isClosed ? 'opacity-60' : ''
+      } ${status === 'empty' && !isClosed ? 'border-dashed' : ''}`}
       style={{
-        height: cardHeightPx,
+        minHeight: cardHeightPx,
         // Staggered entry — each tile arrives 60 ms after the previous
-        // so the grid doesn't flash on every poll.
+        // so the grid doesn't flash on every poll. (Cards are keyed by
+        // courtId, so this fires on arrival, not on every poll.)
         animationDelay: `${idx * 60}ms`,
       }}
     >
       <div
-        className={`grid h-full items-center gap-3 ${cardPadX} grid-cols-[auto_auto_1fr_auto_auto]`}
+        className={`flex items-center justify-between gap-2 whitespace-nowrap ${cardPadX} ${
+          isFullscreen ? 'py-2 text-base' : 'py-1.5 text-xs'
+        } font-extrabold uppercase tracking-[0.06em] ${band.cls}`}
       >
-        {/* Court number — anchor of the card */}
-        <div className="flex items-baseline gap-2">
-          <span className="text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Court
-          </span>
-          <span className={`${courtNumSize} font-black tabular-nums leading-none`}>{courtId}</span>
-        </div>
-
-        {/* Event code */}
-        {/* Blank, not a dash, when no match is ON the court. Only one court
-            is usually in play, so a placeholder glyph here put a meaningless
-            mark beside every other court number on the board. The min-width
-            holds the column so the players still line up. */}
-        <div className={`min-w-[3.5rem] ${eventCodeSize} font-bold text-foreground tabular-nums`}>
-          {match ? match.eventRank || `M${match.matchNumber || '?'}` : ''}
-        </div>
-
-        {/* Players (grows). Always rendered on their own lines so long
-            doubles names never truncate. */}
-        <div className={`min-w-0 ${playerSize} leading-tight text-foreground`}>
-          {isClosed ? (
-            <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
-          ) : match ? (
-            <PlayerStack sideA={sideA} sideB={sideB} isFullscreen={isFullscreen} />
-          ) : nextMatch ? (
-            <NextUp
-              nextStartTime={nextStartTime}
-              nextSideA={formatPlayers(nextMatch.sideA, playerNames)}
-              nextSideB={formatPlayers(nextMatch.sideB, playerNames)}
-              laterStartTime={laterStartTime}
-              laterSideA={laterMatch ? formatPlayers(laterMatch.sideA, playerNames) : undefined}
-              laterSideB={laterMatch ? formatPlayers(laterMatch.sideB, playerNames) : undefined}
-              isFullscreen={isFullscreen}
-            />
-          ) : (
-            <span className="text-muted-foreground">Available</span>
-          )}
-        </div>
-
-        {/* Status pill */}
-        <div>
-          {status === 'active' && (
-            <CourtStatusPill
-              label="Live"
-              bgAlpha={`${tvAccent}33`}
-              color={tvAccent}
-              dotColor={tvAccent}
-              isFullscreen={isFullscreen}
-              pulse
-            />
-          )}
-          {status === 'called' && (
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full bg-status-called/20 ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider text-status-called`}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-status-called sw-pulse" />
-              Calling
-            </span>
-          )}
-        </div>
-
-        {/* Score + elapsed */}
-        <div
-          className={`flex items-baseline gap-3 tabular-nums ${isFullscreen ? 'text-2xl' : 'text-lg'}`}
-        >
-          {tvShowScores && aggregate && <span className="font-semibold text-foreground">{aggregate}</span>}
-          {elapsed && (
-            <span className="text-muted-foreground min-w-[4.5rem] text-right">{elapsed}</span>
-          )}
-        </div>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span>Court {courtId}</span>
+          {code ? <span className="sw-num opacity-90">{code}</span> : null}
+        </span>
+        <span className="sw-num">{band.word}</span>
       </div>
 
-      {/* Per-set breakdown */}
-      {tvShowScores && status === 'active' && state?.sets && state.sets.length > 0 && (
-        <div
-          className={`border-t border-border px-4 ${isFullscreen ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} flex flex-wrap gap-1.5 sw-num`}
-        >
-          {state.sets.map((s, i) => (
-            <span
-              key={i}
-              className={`rounded-sm bg-muted ${isFullscreen ? 'px-2.5 py-1' : 'px-1.5 py-0.5'} tabular-nums text-foreground`}
-              title={`Set ${i + 1}`}
-            >
-              {s.sideA}–{s.sideB}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className={`flex flex-1 flex-col justify-center gap-1 ${cardPadX} py-2`}>
+        {isClosed ? (
+          <span className={`${playerSize} uppercase tracking-wider text-muted-foreground`}>
+            Court closed
+          </span>
+        ) : match ? (
+          <>
+            <SideScoreRow
+              name={sideSurnameLine(formatPlayers(match.sideA, playerNames), ' & ')}
+              scores={scoresA}
+              others={scoresB}
+              playerSize={playerSize}
+            />
+            <SideScoreRow
+              name={sideSurnameLine(formatPlayers(match.sideB, playerNames), ' & ')}
+              scores={scoresB}
+              others={scoresA}
+              playerSize={playerSize}
+            />
+            {/* What this court does NEXT, on the card itself (TV-3). The ETA
+                was already derived and already shown on FREE cards; a
+                spectator watching an occupied court is the one who most wants
+                it. Client-side from the schedule the projection already
+                ships — no new field, no new route. */}
+            {nextMatch ? (
+              <span className="text-2xs uppercase tracking-[0.06em] text-muted-foreground sw-num">
+                next: {nextMatch.eventRank || `M${nextMatch.matchNumber || '?'}`}
+                {nextStartTime ? ` ~${nextStartTime}` : ''}
+              </span>
+            ) : null}
+          </>
+        ) : nextMatch ? (
+          <NextUp
+            nextStartTime={nextStartTime}
+            nextSideA={formatPlayers(nextMatch.sideA, playerNames)}
+            nextSideB={formatPlayers(nextMatch.sideB, playerNames)}
+            laterStartTime={laterStartTime}
+            laterSideA={laterMatch ? formatPlayers(laterMatch.sideA, playerNames) : undefined}
+            laterSideB={laterMatch ? formatPlayers(laterMatch.sideB, playerNames) : undefined}
+            isFullscreen={isFullscreen}
+          />
+        ) : (
+          <span className={`${playerSize} text-muted-foreground`}>court free</span>
+        )}
+      </div>
     </div>
   );
 }
 
-function PlayerStack({
-  sideA,
-  sideB,
-  isFullscreen,
+/**
+ * One side of the board card: a single line of surnames with the side's
+ * per-set scores right-aligned (TV-1). A decided set's winning number takes
+ * the live hue; the set in progress (the last one) stays full ink.
+ *
+ * The score columns are the DOMINANT element (TV-2 / ruling R-C): two rows of
+ * them own roughly 38% of the card's height budget, sized a step and a half
+ * above the names, because a score is the one thing a spectator crosses a
+ * hall to read. The slot renders empty today for meet matches — the wire
+ * carries no per-set data and there is no live score entry in the domain — and
+ * it is laid out anyway, so a future score-relay app lights it up without
+ * redesigning the card.
+ */
+function SideScoreRow({
+  name,
+  scores,
+  others,
+  playerSize,
 }: {
-  sideA: string;
-  sideB: string;
-  isFullscreen: boolean;
+  name: string;
+  scores: number[];
+  others: number[];
+  playerSize: string;
 }) {
+  const last = scores.length - 1;
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="block truncate font-medium" title={sideA}>
-        {sideA}
-      </span>
+    <div className="flex min-h-[30px] items-center gap-2">
       <span
-        className={`${isFullscreen ? 'text-sm' : 'text-xs'} uppercase tracking-widest text-muted-foreground`}
+        className={`${playerSize} min-w-0 flex-1 break-words font-semibold leading-tight text-foreground`}
       >
-        vs
+        {name}
       </span>
-      <span className="block truncate font-medium" title={sideB}>
-        {sideB}
+      {/* Reserved even when empty — the lane is part of the card, not a
+          conditional. Two of these stack to the score block's budget. */}
+      <span className="flex shrink-0 items-center gap-1.5">
+        {scores.length === 0 ? <span aria-hidden className="w-9" /> : null}
+        {scores.map((v, i) => (
+          <span
+            key={i}
+            title={`Set ${i + 1}`}
+            className={`w-9 shrink-0 text-right text-3xl font-bold leading-none tabular-nums ${
+              i === last
+                ? 'text-foreground'
+                : v > (others[i] ?? 0)
+                  ? 'text-status-live'
+                  : 'text-muted-foreground'
+            }`}
+          >
+            {v}
+          </span>
+        ))}
       </span>
     </div>
   );
@@ -430,31 +443,3 @@ function NextUp({
   );
 }
 
-function CourtStatusPill({
-  label,
-  bgAlpha,
-  color,
-  dotColor,
-  isFullscreen,
-  pulse,
-}: {
-  label: ReactNode;
-  bgAlpha: string;
-  color: string;
-  dotColor: string;
-  isFullscreen: boolean;
-  pulse?: boolean;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full ${isFullscreen ? 'px-3.5 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'} font-bold uppercase tracking-wider`}
-      style={{ backgroundColor: bgAlpha, color }}
-    >
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${pulse ? 'sw-pulse' : ''}`}
-        style={{ backgroundColor: dotColor }}
-      />
-      {label}
-    </span>
-  );
-}

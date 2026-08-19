@@ -60,13 +60,25 @@ ENTRANT_REACHABLE = (
     set(PUBLIC_BY_DESIGN)
     | OPS_TOKEN_GATED
     | {("GET", ME)}
+    # SP-P7 §3.1: the entrant's own record — the second route the entrant
+    # credential exists for. Like /e/account/me it declares
+    # ``get_current_entrant`` itself and reads nothing but the session's
+    # own account; an operator cookie on it is refused by the same
+    # two-seams construction this file exists to hold.
+    | {("GET", "/e/api/me/entries")}
     # SP-E1-2 Phase C: submit left PUBLIC_BY_DESIGN when it acquired the
     # session gate, so it has to be named here instead — a logged-in
     # entrant reaching the route their credential exists for is the
     # intended outcome, not an escalation. The sweep below would in fact
     # tolerate it either way (a random-uuid slug answers the uniform 404,
     # which counts as a refusal), which is exactly why it is written down.
-    | {("POST", "/e/{slug}/submit")}
+    #
+    # Phase 6's cut-over moved the address (``POST /e/{slug}/submit`` is
+    # gone) and added the quote route beside it: "Update events and total"
+    # is session-gated by ruling R8-C, so it is entrant-reachable **by
+    # design** rather than by oversight — an entrant pricing their own
+    # basket is the same credential doing the same job one step earlier.
+    | {("POST", "/e/api/submit/{slug}"), ("POST", "/e/api/quote/{slug}")}
 )
 
 
@@ -341,6 +353,86 @@ def test_the_sweep_is_not_vacuous(client):
             json={} if method in ("POST", "PUT", "PATCH") else None,
             headers=CSRF,
         )
+        if r.status_code not in (401, 403, 404):
+            reachable += 1
+
+    assert reachable > 0
+
+
+# ---- The third caller: a deputy relaying a cookie it did not mint ------
+
+
+def test_a_relayed_operator_cookie_without_the_header_reaches_no_write(client):
+    """**The third caller** (Phase 6, spec section 3, negative control #5).
+
+    The two directions above are the two principals. This is the caller
+    ruling R8-A creates: a *deputy* — a node process holding a cookie it
+    did not mint, forwarding it to the API. The design forbids the deputy
+    outright (the entrant tier relays no credential, and nginx will strip
+    ``sw_session`` on the way in — Task 22), and this is the property that
+    holds even if one day something does relay one: a cookie without the
+    header authorizes no write anywhere in the application.
+
+    That is not a claim about a route list, it is a claim about the whole
+    write surface, so it sweeps the OpenAPI document. Writes only — reads
+    are not CSRF-gated and never were, which is why the nginx containment
+    exists alongside this rather than instead of it.
+
+    It is also the bound on channel two seen from the outside. Channel two
+    reads an urlencoded body for a cookie-derived token; this caller sends
+    no such token, and `form_csrf.form_csrf_proves` refuses the channel
+    outright the moment the operator cookie is in the jar, so no entrant-
+    minted proof can rescue this request either.
+    """
+    from app.config import settings
+    from app.main import app
+
+    operator = _operator_cookie(client)
+    _only(client, settings.session_cookie_name, operator)
+
+    reachable: list[str] = []
+    checked = 0
+    # BLIND SPOT, on purpose: ``POST /e/api/submit/{slug}`` passes this
+    # sweep *vacuously*. ``_concrete`` fills the slug with a random UUID,
+    # which answers the uniform 404 before CSRF matters — so this is no
+    # proof of that route's CSRF gate. Its real proofs live in
+    # test_form_csrf_channel.py (the middleware's two channels) and in
+    # test_entries_submit_api.py (the route's own ``require_form_csrf``).
+    for method, path in _routes(app):
+        if method not in ("POST", "PUT", "PATCH", "DELETE"):
+            continue
+        if (method, path) in OPS_TOKEN_GATED:
+            continue
+        checked += 1
+        r = client.request(method, _concrete(path), json={})
+        if r.status_code not in (401, 403, 404):
+            reachable.append(f"{method} {path} -> {r.status_code}")
+
+    assert checked > 20, f"only {checked} writes swept — the scan is broken"
+    assert not reachable, (
+        "A relayed operator cookie with no CSRF header authorized these "
+        "writes:\n  " + "\n  ".join(sorted(reachable))
+    )
+
+
+def test_the_relay_sweep_is_not_vacuous(client):
+    """Control for the sweep above, in the shape `:323` uses for its own:
+    the identical loop, with the header restored, finds reachable writes.
+    Without it a sweep that refused everything for an unrelated reason
+    would be indistinguishable from a passing one."""
+    from app.config import settings
+    from app.main import app
+
+    operator = _operator_cookie(client)
+    _only(client, settings.session_cookie_name, operator)
+
+    reachable = 0
+    for method, path in _routes(app):
+        if method not in ("POST", "PUT", "PATCH", "DELETE"):
+            continue
+        if (method, path) in OPS_TOKEN_GATED:
+            continue
+        r = client.request(method, _concrete(path), json={}, headers=CSRF)
         if r.status_code not in (401, 403, 404):
             reachable += 1
 

@@ -27,7 +27,12 @@ from pydantic import BaseModel
 from api.match_state import MatchStateDTO, _row_to_dto
 from app.dependencies import require_tournament_access
 from app.error_codes import ErrorCode, http_error
-from database.models import DisplayToken, Tournament
+from database.models import (
+    DisplayToken,
+    Tournament,
+    WorkspaceModule,
+    derive_modules,
+)
 from repositories import LocalRepository, get_repository
 
 public_router = APIRouter(prefix="/display", tags=["display-public"])
@@ -104,8 +109,41 @@ def _resolve(repo: LocalRepository, token: str) -> Tournament:
 
 
 class DisplaySummaryDTO(BaseModel):
+    """``kind`` is the BOARD kind — which engine(s) the display renders —
+    not the workspace's legacy ``kind`` column. ``meet`` | ``bracket`` |
+    ``hybrid``."""
+
     kind: str
     name: Optional[str] = None
+
+
+def _board_kind(t: Tournament, repo: LocalRepository) -> str:
+    """Which board(s) this workspace has, keyed off ENABLED MODULES.
+
+    The legacy ``kind`` column is fixed at create time and names exactly one
+    engine, so reading it made a workspace running both modules — a supported
+    state; ``derive_modules`` seeds the foreign operator as ``available`` and
+    the control plane promotes it — structurally unable to show half of
+    itself on the board.
+
+    Read-only on purpose: this is the unauthenticated data plane, so it must
+    not trigger the write-on-read module seed (``modules.ensure_modules``). A
+    workspace whose rows aren't seeded yet falls back to the very derivation
+    that seed would have written.
+    """
+    rows = (
+        repo.session.query(WorkspaceModule)
+        .filter(WorkspaceModule.tournament_id == t.id)
+        .all()
+    )
+    statuses = {r.module_id: r.status for r in rows} or derive_modules(t.kind)
+    meet = statuses.get("meet") == "enabled"
+    bracket = statuses.get("bracket") == "enabled"
+    if meet and bracket:
+        return "hybrid"
+    if bracket:
+        return "bracket"
+    return "meet"
 
 
 @public_router.get("/{token}/summary", response_model=DisplaySummaryDTO)
@@ -114,7 +152,7 @@ def display_summary(
     repo: LocalRepository = Depends(get_repository),
 ) -> DisplaySummaryDTO:
     t = _resolve(repo, token)
-    return DisplaySummaryDTO(kind=t.kind, name=t.name)
+    return DisplaySummaryDTO(kind=_board_kind(t, repo), name=t.name)
 
 
 # The exact field set the meet board consumes (useDisplaySync.ts) —

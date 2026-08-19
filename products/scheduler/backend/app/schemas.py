@@ -140,7 +140,11 @@ class TournamentConfig(StrictModel):
     pointsPerSet: Optional[int] = Field(None, ge=11, le=30)
     deuceEnabled: Optional[bool] = None
     # Public TV display mode (UI-only metadata; preserved across PUT).
-    tvDisplayMode: Optional[Literal["strip", "grid", "list"]] = None
+    # "strip" is RETIRED as a choice (SP-CONSOLE-2 DC-1) but stays accepted:
+    # it was the default, so every workspace that never touched the setting
+    # has it stored. The board maps it to "auto" on read — no migration, and
+    # a rollback keeps working. New writes only ever send auto/grid/list.
+    tvDisplayMode: Optional[Literal["auto", "strip", "grid", "list"]] = None
     # Public-display branding + layout knobs (all UI-only).
     # Hex "#RRGGBB". Validated here as well as in the browser: the
     # frontend's ``resolveTvAccent`` is a client-side control over a
@@ -164,7 +168,15 @@ class TournamentConfig(StrictModel):
     hiddenCourts: Optional[List[Annotated[int, Field(ge=1, le=MAX_COURTS)]]] = Field(
         None, max_length=MAX_COURTS
     )
+    # "side" is retired as a PLACEMENT (SP-CONSOLE-2 TV-5) — the persistent
+    # panel took a third of the board's width from the courts — but stays
+    # accepted, and "off" still means off. Everything else rotates.
     standingsMode: Optional[Literal["off", "side", "rotate"]] = None
+    # Board rotation (TV-7 / DC-3). None = every slide that has data.
+    tvRotationSlides: Optional[
+        List[Literal["courts", "standings", "upNext"]]
+    ] = Field(None, max_length=3)
+    tvRotationDwellSeconds: Optional[int] = Field(None, ge=5, le=120)
     # Roster position-grid event-column order + visibility (UI-only).
     eventOrder: Optional[List[Code]] = Field(None, max_length=MAX_RANKS)
     eventVisible: Optional[Dict[Code, bool]] = Field(None, max_length=MAX_RANKS)
@@ -620,11 +632,23 @@ class WorkspaceModuleDTO(BaseModel):
     moduleId: str
     status: str
     config: Optional[Dict[str, Any]] = None
+    #: Whether this module owns operational data (matches, draws). Disabling
+    #: such a module is refused with a 409, and the catalog could not know
+    #: that until it had already asked — so the operator learned the rule from
+    #: a failure toast rather than from a control that was plainly unavailable
+    #: (SP-CONSOLE-2 WSMOD-2). Server-computed, because "has data" is a
+    #: question about rows the client does not hold.
+    hasData: bool = False
 
     @classmethod
-    def from_row(cls, row) -> "WorkspaceModuleDTO":
+    def from_row(cls, row, has_data: bool = False) -> "WorkspaceModuleDTO":
         """Build the DTO from a ``WorkspaceModule`` ORM row (duck-typed)."""
-        return cls(moduleId=row.module_id, status=row.status, config=row.config)
+        return cls(
+            moduleId=row.module_id,
+            status=row.status,
+            config=row.config,
+            hasData=has_data,
+        )
 
 
 # ---- Entries (SP-E1-1) -----------------------------------------------
@@ -794,6 +818,22 @@ class EntryPageUpsertDTO(StrictModel):
     venueAddress: Optional[Notes] = None
 
 
+class EntryPagePublicationPatchDTO(StrictModel):
+    """PATCH body for the publication card (SP-P7 §4).
+
+    Every field optional and independent — patch semantics: only the flags
+    the card actually toggled travel, so two operators flipping different
+    switches near-simultaneously cannot clobber each other through a
+    whole-state PUT. Strict, so a typoed flag name is a 422 rather than a
+    silently ignored no-op that leaves the operator believing they
+    published.
+    """
+
+    entrantsPublished: Optional[bool] = None
+    drawsPublished: Optional[bool] = None
+    resultsPublished: Optional[bool] = None
+
+
 class EntryPageDTO(BaseModel):
     """The stored entry page as the operator sees it back."""
     slug: str
@@ -802,6 +842,7 @@ class EntryPageDTO(BaseModel):
     regulationsText: Optional[str] = None
     waiverRequired: bool
     regulationsVersion: int
+    regulationsUpdatedAt: Optional[str] = None
     feeSchedule: Optional[dict] = None
     paymentInstructions: Optional[str] = None
     maxEventsPerPerson: Optional[int] = None
@@ -809,6 +850,12 @@ class EntryPageDTO(BaseModel):
     collectPhone: bool = False
     venueName: Optional[str] = None
     venueAddress: Optional[str] = None
+    # SP-P7 §4 publication gates, default-off. Read by the Sharing tab's
+    # publication card; the public tier reads them off its own projection,
+    # never this operator DTO.
+    entrantsPublished: bool = False
+    drawsPublished: bool = False
+    resultsPublished: bool = False
 
     @classmethod
     def from_row(cls, row) -> "EntryPageDTO":
@@ -819,6 +866,14 @@ class EntryPageDTO(BaseModel):
             regulationsText=row.regulations_text,
             waiverRequired=bool(row.waiver_required),
             regulationsVersion=row.regulations_version,
+            regulationsUpdatedAt=(
+                row.regulations_updated_at.isoformat()
+                if row.regulations_updated_at is not None
+                else None
+            ),
+            entrantsPublished=bool(row.entrants_published),
+            drawsPublished=bool(row.draws_published),
+            resultsPublished=bool(row.results_published),
             feeSchedule=row.fee_schedule,
             paymentInstructions=row.payment_instructions,
             maxEventsPerPerson=row.max_events_per_person,

@@ -209,7 +209,7 @@ export const DRAW_FORMATS: FormatDescriptor[] = [
   {
     id: 'se',
     label: 'Single elimination',
-    blurb: 'Classic knockout — win and advance, lose and you’re out.',
+    blurb: 'Classic knockout: win and advance, lose and you’re out.',
     matchesHint: '1 loss and out',
     glyph: SeGlyph,
     implemented: true,
@@ -260,7 +260,7 @@ export const DRAW_FORMATS: FormatDescriptor[] = [
     id: 'monrad',
     label: 'Monrad',
     blurb: 'Knockout with consolation rounds until every place is decided.',
-    matchesHint: 'Every place decided — everyone keeps playing',
+    matchesHint: 'Every place decided, everyone keeps playing',
     glyph: MonradGlyph,
     implemented: true,
     renderer: 'segments',
@@ -293,7 +293,7 @@ export const DRAW_FORMATS: FormatDescriptor[] = [
   {
     id: 'swiss',
     label: 'Swiss',
-    blurb: 'Every round pairs players on similar scores — no rematches.',
+    blurb: 'Every round pairs players on similar scores: no rematches.',
     matchesHint: 'Fixed rounds, standings decide',
     glyph: SwissGlyph,
     implemented: true,
@@ -322,8 +322,8 @@ export const DRAW_FORMATS: FormatDescriptor[] = [
   {
     id: 'ladder',
     label: 'Ladder',
-    blurb: 'A standing challenge board — challenge up, winners swap ranks.',
-    matchesHint: 'Ongoing — matches by challenge',
+    blurb: 'A standing challenge board: challenge up, winners swap ranks.',
+    matchesHint: 'Ongoing, matches by challenge',
     glyph: LadderGlyph,
     implemented: false,
     renderer: 'grid',

@@ -9,6 +9,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  autoLayout,
+  cardAreaFraction,
+  MIN_CARD_AREA,
   orderCourts,
   visibleCourts,
   defaultColumns,
@@ -180,5 +183,56 @@ describe('reorderIds', () => {
 
   it('handles moving to the end', () => {
     expect(reorderIds([1, 2, 3, 4], 1, 4)).toEqual([2, 3, 4, 1]);
+  });
+});
+
+/* =========================================================================
+ * autoLayout — the TV-6 contract, stated as a property.
+ * ========================================================================= */
+describe('autoLayout — no card is smaller than the venue-legibility floor', () => {
+  // Every plausible venue: 1..64 courts across the aspect ratios a board
+  // actually renders at (16:9 TV, 16:10, ultrawide, a portrait panel).
+  const ASPECTS = [16 / 9, 16 / 10, 21 / 9, 4 / 3, 9 / 16];
+
+  it('holds for every court count on every board aspect', () => {
+    for (const aspect of ASPECTS) {
+      for (let n = 1; n <= 64; n += 1) {
+        const layout = autoLayout(n, aspect);
+        expect(cardAreaFraction(layout)).toBeGreaterThanOrEqual(MIN_CARD_AREA);
+      }
+    }
+  });
+
+  it('NEGATIVE CONTROL: remove the pagination cap and the property fails', () => {
+    // The cap is the whole mechanism. Recompute a layout that spreads every
+    // court onto ONE page — which is what the code did before TV-6 — and the
+    // same property must break, or the test above proves nothing.
+    const uncapped = (n: number, aspect: number) => {
+      const columns = Math.min(4, Math.max(1, Math.round(Math.sqrt((n * aspect) / 1.6))));
+      const rows = Math.ceil(n / columns);
+      return 1 / (columns * Math.max(1, rows));
+    };
+    expect(uncapped(20, 16 / 9)).toBeLessThan(MIN_CARD_AREA);
+  });
+
+  it('paginates past the cap and spreads pages evenly', () => {
+    expect(autoLayout(12, 16 / 9).pages).toBe(1);
+    // 13 courts do NOT become 12 + 1: a page holding one giant card reads
+    // as a bug, so both pages carry 7.
+    const thirteen = autoLayout(13, 16 / 9);
+    expect(thirteen.pages).toBe(2);
+    expect(thirteen.perPage).toBe(7);
+  });
+
+  it("the director's column override wins for columns but never defeats pagination", () => {
+    const layout = autoLayout(20, 16 / 9, 2);
+    expect(layout.columns).toBe(2);
+    expect(layout.pages).toBe(2);
+  });
+
+  it('derives more columns from a wider board, fewer from a portrait one', () => {
+    expect(autoLayout(8, 21 / 9).columns).toBeGreaterThan(
+      autoLayout(8, 9 / 16).columns,
+    );
   });
 });

@@ -6,9 +6,10 @@
  * operator-set status) and shows them as one time-sorted flat list.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { HubPage } from '../HubPage';
+
 import { apiClient } from '../../../api/client';
 
 vi.mock('../../../api/client', () => ({
@@ -97,22 +98,35 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
   });
 
-  it('offers the lifecycle facet strip (All / Setup / Ready / Live / Complete / Shared / attention / Archived)', async () => {
+  it('hides zero-count facet chips — only All and the facets with content render (H1.1)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    for (const name of [/^All\b/, /^Setup\b/, /^Ready\b/, /^Live\b/, /^Complete\b/, /^Shared\b/, /^Archived\b/]) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument();
-    }
+    // Both seeded workspaces are un-started drafts: All + Setup carry counts,
+    // every other facet is zero and must stay off the strip — eight "0" chips
+    // above two rows is a big dashboard's clothes on an empty one.
+    // The two drafts flag "Needs attention", so that chip has a count too.
+    expect(screen.getByRole('button', { name: /^All\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Setup\b/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Needs attention/ })).toBeInTheDocument();
+    for (const name of [/^Ready\b/, /^Live\b/, /^Complete\b/, /^Shared\b/, /^Archived\b/]) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
   });
 
-  it('a lifecycle facet filters the flat list (Live hides both un-started workspaces)', async () => {
+  it('a lifecycle facet filters the flat list (Setup shows the un-started pair)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    // Neither seeded workspace has been played, so the Live facet empties the list.
-    fireEvent.click(screen.getByRole('button', { name: /^Live\b/ }));
-    expect(screen.queryByText('Bracket A')).not.toBeInTheDocument();
-    expect(screen.queryByText('Meet A')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Setup\b/ }));
+    expect(screen.getByText('Bracket A')).toBeInTheDocument();
+    expect(screen.getByText('Meet A')).toBeInTheDocument();
+  });
+
+  it('offers the quiet create affordance while the list is short (H1.2)', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    expect(screen.getByTestId('hub-quiet-create')).toHaveTextContent(
+      'Create a workspace',
+    );
   });
 
   it('search filters the workspace list by name', async () => {
@@ -132,15 +146,13 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByText('MODULES')).toBeInTheDocument();
   });
 
-  it('rows carry a Modules column (dashboard redesign)', async () => {
+  it('rows carry an Attention column, not a Modules one (HUB-3)', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    // The redesign re-adds a Modules column: one cell per row. The seeded
-    // workspaces have no enabled modules → a dashed kind-default glyph (M for
-    // the meet, B for the bracket).
-    expect(screen.getAllByTestId('row-modules')).toHaveLength(2);
-    expect(screen.getByTestId('row-module-meet')).toBeInTheDocument();
-    expect(screen.getByTestId('row-module-bracket')).toBeInTheDocument();
+    expect(screen.getAllByTestId('row-attention')).toHaveLength(2);
+    // Modules are static config and belong to the inspector, not to the
+    // surface whose job is naming which workspace needs the director now.
+    expect(screen.queryByTestId('row-modules')).toBeNull();
   });
 
   it('shows a footer summary bar with workspace + attention counts', async () => {
@@ -191,5 +203,80 @@ describe('HubPage time-oriented control plane', () => {
     expect(displayRow.textContent).toMatch(/enabled/i);
     const meetRow = screen.getByText('Meet').closest('li')!;
     expect(meetRow.textContent).toMatch(/enabled/i);
+  });
+});
+
+/**
+ * At 390px the last two chips — "Needs attention" among them, the one an
+ * operator scans for — sat at x=390.75 and x=460 with `overflow-x: visible`
+ * clipped by an ancestor's `overflow-hidden`: no scrollbar, no swipe, no way
+ * to reach them (2026-08-11 design audit, T4).
+ */
+describe('HubPage — the facet strip is reachable at any width', () => {
+  it('holds every facet in one horizontally scrollable strip', async () => {
+    mount({ current: '' });
+    const strip = await screen.findByTestId('hub-facet-strip');
+    // Overflowing content gets a scrollbar instead of being clipped away.
+    expect(strip.className).toMatch(/\boverflow-x-auto\b/);
+    // Every VISIBLE facet is INSIDE that strip (zero-count chips are hidden
+    // since H1.1) — including "Needs attention", the one that used to fall
+    // off the end — so scrolling reaches all of them.
+    for (const chip of within(strip).getAllByRole('button')) {
+      expect(strip.contains(chip)).toBe(true);
+    }
+    const attention = within(strip).getByRole('button', { name: /needs attention/i });
+    fireEvent.click(attention);
+    expect(attention).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+/**
+ * The inspector as a panel (W10 / debt-log:119).
+ *
+ * It used to be a hand-rolled `<aside className="hidden w-[344px] … lg:flex">`
+ * with its own `RailLabel` — a fourth panel geometry and a fourth eyebrow
+ * spelling, in an app with one dock and one `DetailPanel.Section`. The `hidden
+ * lg:flex` was the sharpest edge of it: below 1024px a Hub row click did
+ * nothing at all, on the tablet the owner actually runs.
+ */
+describe('HubPage — the workspace inspector is a DetailPanel in a DetailDock', () => {
+  it('renders inside the shared dock rather than a hand-rolled rail', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Meet A'));
+
+    const dock = screen.getByTestId('detail-dock');
+    expect(within(dock).getByTestId('workspace-inspector')).toBeInTheDocument();
+  });
+
+  it('is not gated behind a breakpoint: a selection is visible at every width', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Meet A'));
+
+    // Walk the panel's ancestors: no bare `display:none` anywhere between it
+    // and the page. `hidden lg:flex` is the pattern that made the pane silently
+    // absent on a tablet; the dock's own narrow fallback handles small widths
+    // by presenting the pane as a dialog, not by deleting it. (`overflow-hidden`
+    // is a different utility and is the dock's host contract, hence the exact
+    // class-token match rather than a substring.)
+    let node: HTMLElement | null = screen.getByTestId('workspace-inspector');
+    while (node) {
+      expect(node.className.split(/\s+/)).not.toContain('hidden');
+      node = node.parentElement;
+    }
+  });
+
+  it('the panel close button clears the selection', async () => {
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Meet A'));
+    expect(screen.getByTestId('workspace-inspector')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close detail' }));
+    // The dock RETAINS the pane's content while it slides shut (inert, then
+    // dropped), so the assertion is on it going away, not on it being gone the
+    // same tick.
+    await waitFor(() => expect(screen.queryByTestId('workspace-inspector')).toBeNull());
   });
 });

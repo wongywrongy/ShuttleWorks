@@ -413,6 +413,37 @@ class Settings(BaseSettings):
         """
         return (self.session_cookie_name, self.entrant_session_cookie_name)
 
+    @property
+    def csrf_relevant_cookie_names(self) -> tuple[str, ...]:
+        """**The registry the CSRF middleware triggers on.**
+
+        A superset of ``session_cookie_names``, and the difference is the
+        point. ``session_cookie_names`` answers "does this request carry a
+        credential" — a question about identity, read by anything that cares
+        who the caller is. This answers "must this write prove it was sent
+        deliberately", which is strictly wider: the pre-session
+        ``sw_play_csrf`` nonce carries no identity at all, and a login or
+        signup post holding it still has to present a matching token.
+
+        Keeping them as two properties rather than one widened list is what
+        stops the nonce from ever being mistaken for a credential by code
+        reading the registry for the other reason. See
+        ``app/form_csrf.py::PLAY_CSRF_COOKIE``.
+
+        The import is deferred because ``app.form_csrf`` reads ``settings``
+        at module scope. Deliberately importing the name rather than
+        repeating the string: the constant there is the one the
+        ``set_cookie`` call uses and the one
+        ``tests/test_csrf_cookie_registry.py`` resolves out of the source, so
+        a second copy here could drift — and the copy the middleware trusted
+        would be the one the browser never received. (The ``set_cookie`` call
+        itself now lives in the SSR tier under ruling R8-D; this file, that
+        constant and the verification path are unchanged by that.)
+        """
+        from app.form_csrf import PLAY_CSRF_COOKIE
+
+        return (*self.session_cookie_names, PLAY_CSRF_COOKIE)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

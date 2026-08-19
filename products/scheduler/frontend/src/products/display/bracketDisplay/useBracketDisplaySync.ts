@@ -12,9 +12,10 @@
  * instead of drifting into separate Reconnecting/Offline language.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../../api/client';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
+import { isTerminalPollError } from '../../../lib/pollPolicy';
 import { deriveFreshness, type FreshnessState } from '../publicDisplay/freshness';
 
 const POLL_MS = 10_000;
@@ -27,10 +28,13 @@ export interface UseBracketDisplaySyncResult {
 
 export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
   const [searchParams] = useSearchParams();
+  const params = useParams<{ id: string }>();
   // Public capability link (SP-CLOUD-2): ?token= reads the unauthenticated
   // /display/{token}/bracket projection; ?id= keeps the viewer-gated path.
+  // The `:id` route param is the in-shell Preview tab (/tournaments/:id/tv),
+  // which has no query string — same fallback `useDisplaySync` carries.
   const token = searchParams.get('token');
-  const tid = searchParams.get('id');
+  const tid = searchParams.get('id') ?? params.id ?? null;
   const [data, setData] = useState<BracketTournamentDTO | null>(null);
   const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -41,6 +45,11 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
       return;
     }
     let cancelled = false;
+    let timer: number | null = null;
+    const stop = () => {
+      cancelled = true;
+      if (timer !== null) window.clearInterval(timer);
+    };
     const pull = async () => {
       try {
         const remote = token
@@ -53,14 +62,16 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
       } catch (err) {
         if (cancelled) return;
         setSyncError(err instanceof Error ? err.message : 'Connection lost');
+        // Revoked token / deleted workspace / expired session: retrying can
+        // never succeed, so stop instead of storming the same failure every
+        // 10s at a TV nobody is watching. Same `lib/pollPolicy` contract every
+        // other polling hook in the app honours.
+        if (isTerminalPollError(err)) stop();
       }
     };
     void pull();
-    const t = window.setInterval(() => void pull(), POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(t);
-    };
+    timer = window.setInterval(() => void pull(), POLL_MS);
+    return stop;
   }, [tid, token]);
 
   const freshness: FreshnessState = useMemo(() => {

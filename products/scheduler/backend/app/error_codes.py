@@ -114,6 +114,10 @@ class ErrorCode(str, Enum):
     # not, and a message naming the holder would be a cross-tenant leak on
     # an otherwise ordinary validation error.
     ENTRY_PAGE_SLUG_TAKEN = "ENTRY_PAGE_SLUG_TAKEN"
+    # Operator-facing (SP-P7): publication controls address a page that was
+    # never created. Honest by the same argument as ENTRY_NOT_FOUND — the
+    # desk is behind the tenancy seam, so it may say exactly what is wrong.
+    ENTRY_PAGE_NOT_FOUND = "ENTRY_PAGE_NOT_FOUND"
 
     # Tenancy (SP-CLOUD-2) — the uniform cross-tenant answer. A caller
     # without membership can never learn whether the workspace exists.

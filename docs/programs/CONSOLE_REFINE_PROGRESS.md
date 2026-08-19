@@ -1,0 +1,165 @@
+# SP-CONSOLE-REFINE — full-surface design refinement (ledger)
+
+Read at session start, update at session end. Branch: `dev/prog1-p6-2-public-ia`.
+Started 2026-08-13. "Before" artifact: `docs/audits/2026-08-13-console-full-surface-report.html`
+(31 captures; hand-authored HTML — Phase 7 means Playwright re-capture + authoring a new report).
+
+**Nature:** presentation/copy/layout/density + the MatchCard archetype. **NO behavioral, endpoint,
+or store changes.** Display only projects. Read-only-while-live locks preserved. `/tv` typography
+exempt from density. en-US everywhere. Contrast gate must stay green after every phase.
+**Gates baseline (don't regress):** vitest ≥1751 · entrant 584 · pytest 1600 · contrast 64/64 both
+themes · eslint/tsc/depcruise 0 errors. Full gate = `make check` + entrant `test:run` + 
+`node packages/design-system/scripts/check-contrast.mjs`. **Run the entrant suite alone** — 
+concurrent with the frontend suite it throws a transient typegen error.
+
+Naming source of truth: `docs/design/console-naming.md` (VitePress Architecture sidebar).
+
+## Done (commits on top of checkpoint `486bc65`)
+
+- **P1 naming** `a0c36b3` — Run→Live day (nav/eyebrow/chips; route segments unchanged);
+  Re-solve meet→**Re-plan day** (coexists with warm-restart "Re-plan from here"); Sharing H1;
+  ws-settings gains H1 "Settings"; &→and everywhere; module tri-state Later→**Available**;
+  picker Commit/Commit pairs→**Save participants/Save pairs** (verified: they only upsert the
+  participant list — row-level Generate creates the draw; "Lock draw" would have lied);
+  en-US sweep (Optimization/utilization/organizer — identifiers + dto.generated.ts exempt).
+- **P2 buttons+decisions** `281aba6` — Overview phase CTA hoisted to header top-right
+  (panels keep secondary); form saves to Section `action` slot (Profile/Security/ws-Settings);
+  **Regenerate from roster** demoted to outline + live-day destruction warning in its popover
+  (verified against importMatches: rebuilt lineup slots get fresh ids → statuses/results severed,
+  schedule stale; custom matches keep ids); header gear labeled **Workspace**; status chip
+  **silent when idle** (dot-only popover trigger; label only Solving/Degraded); ws-Settings
+  lifecycle row **display-only** (dropdown removed; save sends name+date only) and danger-zone
+  Archive became **Archive/Unarchive toggle** (same updateTournament seam).
+- **P3 density** `54d3600` — new `--text-2sm` (13px) ladder step; `BANDED_ROW_BASE` carries it;
+  row cells across meet/bracket/hub/ops lists adopt it; ColumnHeaderRow+GroupBandHeader py-1;
+  member rows px-3 py-1.5; density tokens 36→32/8→6. Banded 2-line reservation STAYS 48px
+  (BRAND spacing ladder + row-uniformity ruling) — density lands in type+chrome.
+- **P4 MatchCard** `d50691b` + rollout `7017c60` — new `components/control-plane/MatchCard.tsx`
+  (MatchCard, ScoreLane w-9 set columns, WinnerDot, REASON_BADGE W.O./Ret./FF, setsWinner).
+  Both match lists: ordinal `#` column DELETED (6-col anatomy; Status w-28 = score lane on
+  done rows; meet floor 672, bracket 692 — geometry tests updated); bracket rows strip the
+  group discipline prefix (rows read R161/QF1/F; full label≠tooltip, tooltip=raw pu.id);
+  winner dots on side cells. Bracket roster: Min rest shows effective value (override ink,
+  default muted — default = ceil(defaultRestMinutes/intervalMinutes)); event badges carry
+  inline seeds "(3)". Draws StatusBar + DrawView header strip suppress zero-count tokens.
+  NextUp rows dropped the dead "Sched" tag (H2.1/W1.3). Draw tree: per-side set value columns
+  (w-6), winner dot, W.O. badge, **card height 88→160** (doubles two-line-per-side budget),
+  **pair members stack one per line with NO " / "** (owner ruling — split the participant
+  NAME too, it carries the join). Meet list status lane: per-set when session has sets, else
+  the **persisted aggregate "2-0"**, else pill (owner ruling: meet/bracket status columns
+  speak the same language). Both detail panes: done state renders the MatchCard (Result
+  section) + **footer meta strip "Court N · time"** (meta also shows under the pill when
+  scheduled — M2.5's pane placement); meet pane player cards use new
+  `components/SchoolChip.tsx` (accent dot + `accent.abbrev` code, full name in tooltip).
+- **P5 part 1** `28fe1a6` + `519f28c` — Hub zero-count facet chips hidden (All always;
+  active facet escapable at zero); quiet "＋ Create your next workspace" affordance when
+  list <4 (H1.1/H1.2); Hub row+inspector CTAs land the destination they name via
+  `RowAction.segment` ("Open live day"→/live kind-aware, "View results"→matches);
+  live triplet = **played / remaining / total** on Overview LivePanel AND Hub inspector
+  (no in-progress signal exists server-side; W1.2); Venue results-lock note deleted —
+  ribbon is the one lock message (A1.1; test updated).
+- **Flake fixes (test-only, D13+D18 closed in debt-log):** `7cbeed2` solve-jobs created_at,
+  `936a05e` entries submitted_at. Debt-log gained **D19**: meet set scores are NOT persisted
+  (match_states has no sets column; `_dto_to_fields` drops them) — meet per-set lane is
+  session-only until a migration; bracket persists fine. Out of scope here (rule 1).
+- **P5 part 2 (2026-08-17) — Phase 5 COMPLETE.** A7 `mx-auto` on all six listed wrappers
+  (EngineConfigForm's covers both Meet Setup + Bracket hosts) **plus ModulesSettingsTab and
+  SyncBackupsTab** — same admin column, consistency; A2.1 Sharing is a real Link (reused the
+  file's own line-393 pattern); A5.1 restore confirm names "Aug 12, 3:04 PM" + states
+  matches/results/settings replaced and since-changes discarded; A5.2 rows grouped by day
+  ("Today"/"Aug 12", year appended off-year), lead = time-of-day · size, filename demoted to
+  mono 2xs secondary (aria-labels/testids keep the filename — unique + pinned); G2 roleBadge
+  deleted entirely (fn + render + import; `role` stays as model, test now pins model only);
+  A4.1 taxonomy folded into catalog capabilities as "Engine · …/Output · …/Intake · …"
+  (middot, NOT the ledger's em-dash examples — the emDashContract bans U+2014 in copy);
+  A4.2 `blockedReason` prop computed in ModulesSettingsTab (client-knowable rules only:
+  last-operational, display-needs-engine; skips the reason line when it would repeat the
+  dependency line verbatim); B4.1 dynamic suffix "slot(s) · N min" from config.intervalMinutes;
+  D1.1 loss count → muted ink (deviation note for report); D1.3 WAS drifted — footer legend
+  "active" used the arbitrary tvAccent hex while cards band with status-live; now one token
+  (tvAccent stays on progress fill + brand chrome only); D2.1 both Sharing mentions are real
+  Links (FieldRow `hint` is ReactNode — no restructure needed; DisplayConfig tests now wrap
+  in MemoryRouter); D2.2 helper line under the court list (comment there claimed the fact
+  rode the hide control's label — it didn't; fixed); O2.2 rows are now a column with a
+  reserved empty muted second line (min-h-4, pl-9 aligned); O2.3 court cards verified ONE
+  late rule (`bandFor` → destructive band). **Boy-Scout: RunQueue's `match.late` badge was
+  DEAD CODE** — runModel only ever sets `late` on court-lane Now clones, never on queue rows
+  — deleted; `lateKeys` is the one seam, its badge unified onto EYEBROW_CLASS; the runQueue
+  test now drives the marker through `lateKeys` (the fixture's `late: true` was a state
+  production cannot produce).
+- **P6 (2026-08-17) — Phase 6 COMPLETE (code).** P1.1 shipped ZERO-JS: facet radios became
+  instant-apply **links** (the tier's own `?tab=` idiom) — each carries the whole current
+  query with its one facet swapped; the GET form remains for the free date range only, with
+  chosen facets + q as hidden fields ("Apply dates"); selected facet carries
+  `aria-current="true"`; the py-1.5 target-size ruling carried over to the link rows; tests
+  updated (components + discovery.render) to pin hrefs, aria-current, hidden carry-through,
+  labelled navs. **P2.1 = documented deviation, no code:** viewer-local needs JS (banned +
+  CSP + weight gate), venue-local needs a timezone the data model doesn't record (schema
+  change = out of program scope), and `<time>` does NOT localize display without script —
+  UTC-labeled display stays; carry this to the report's deviations list.
+- Gates after P5p2+P6: `make check` exit 0 · vitest 1751 · **entrant 586** (was 584; +2 from
+  the FilterStrip suite) · pytest green · contrast 64/64 both themes · tsc/eslint/depcruise 0.
+
+## P7 (2026-08-17) — Phase 7 COMPLETE. Program COMPLETE pending final STOP review.
+
+All 31 surfaces re-captured live (backend :8600 + Vite :5173 + entrant SSR :5175, the
+Nashville signed-in session) and authored into
+`docs/audits/2026-08-17-console-refine-report.html` (same hand-authored anatomy as the
+13 Aug before; embedded JPEGs; PNG keepers in `docs/screenshots/report-2026-08-17/`, which
+also holds two per-product review PDFs — operator console 26pp, public site 5pp). The report
+carries the full deliberate-deviations list (D1.1 muted-L, D19 meet-sets gap, B2.2
+already-done, "Lock draw" resolution, StaleBanner "Re-solve", EntriesDesk + director-proposal
+"Commit" retained, P2.1 UTC-stays, A4.1 middot, contrast-floor carryovers).
+
+Recapture-time verifications, all folded in:
+- **D2.3** ✓ — display-mode Strip→Grid persisted across a full reload (tv* blob round-trip),
+  reverted after; no dead control found.
+- **O2.4** ✓ — Live-day stat-strip labels render at eyebrow tier.
+- **P3.1** ✓ — entry form captured in its OPEN state against "2026 Dave Freeman Jr Open"
+  (entries open, closes in 8d) — no seeding needed, the discovery data already had two open.
+- **P5.1** ✓ — /e/signup renders the REAL Cloudflare Turnstile widget from the
+  `/e/api/config` site key (local test key auto-passes; prod swaps the key by env, no code).
+- P1.3/P4: nothing needed, as predicted.
+
+Two code fixes surfaced by the done-condition greps (both trivial, no behavior):
+- `WarmRestartDialog.tsx` — rendered hint "re-optimises" → "re-optimizes" (P1 en-US escape).
+- `positionGrid/GridHeader.tsx` — comment documenting the `#` header as the console's one
+  deliberate ordinal (the Meet-pairings exception the done conditions require documented).
+
+Done-condition greps otherwise clean: no "Links & access"/"Re-solve meet"/"&" nav labels/
+-ise/-isation/organiser in rendered copy (comment instances deliberately left — the P1 sweep
+scoped to rendered copy); the remaining "Commit" buttons are proposal/entries commits, not
+the renamed draw picker (deviation-listed).
+
+Gates after P7: `make check` exit 0 · vitest 1751 · entrant 586 (run solo) · pytest green ·
+contrast 64/64 both themes · tsc/eslint/depcruise 0.
+
+## Done conditions (from the prompt)
+
+Every directive implemented or explicitly deferred with a one-line reason in the closing
+report · console-naming.md exists and the tree greps clean for retired terms ("Links &
+access" H1, "Commit" draw button, "Re-solve meet", "&" in nav labels, -ise/-isation/
+organiser in rendered copy) · no ordinal `#` outside the documented Meet-pairings exception
+(PositionGrid rank slot — KEEP, document in component if not already) · no repeated event
+prefixes in grouped lists · MatchCard is the single shared component on the Phase-4 surfaces
+· gates ≥ baseline · regenerated report committed to docs/audits/ · no behavioral/endpoint/
+store changes in the diff.
+
+## Recapture environment (Phase 7)
+
+- Backend: uvicorn on **:8600** (port 8000 is Windows-reserved), repo `.venv`, from
+  products/scheduler/backend with
+  `DATABASE_URL=sqlite:///C:/Users/avlis/OneDrive/Documentos/Projects/ShuttleWorks/products/scheduler/data/local.db`.
+  `.env` there sets AUTH_MODE=cloud (real accounts). Vite on :5173 (proxy default :8000 —
+  set `VITE_API_PROXY_TARGET=http://localhost:8600`; it was already right last run).
+- The Playwright MCP browser profile holds a signed-in session owning
+  **"Nashville Doubles Classic 2026 (Internal)"** = `1584071c-c0ae-4ea3-a840-9c90a72a822d`
+  (meet+bracket+display, LIVE, 3×16 bracket draws with full set scores; meet m007/m008/
+  m015-m018 have seeded sets). Accounts: demo `director@fk-tournaments.example.test` /
+  `DemoOperator2026!` (owns F&K meet); sim `sim@simulator.example.test` / `SimOperator2026!`
+  (owns a 16-draw MS bracket `6158cfc2-…`). Simulator:
+  `PYTHONPATH=simulator ../../.venv/Scripts/python.exe -m tournament_sim run --scenario
+  <demo|bracket|…> --seed N --base-url http://localhost:8600` from products/scheduler.
+- Writing meet sets via API: PUT `/tournaments/{tid}/match-states/{id}` needs `If-Match`
+  ETag + `X-ShuttleWorks-CSRF: 1` + **status:'finished' re-asserted** (else 409).
+- Screenshots → `.playwright-mcp/<name>.png` (gitignored); keepers → `docs/screenshots/`.

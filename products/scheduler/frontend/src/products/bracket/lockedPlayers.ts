@@ -38,4 +38,4 @@ export function lockedPlayerIds(
 
 /** Why the delete is refused — shown on the disabled control. */
 export const ROSTER_LOCKED_REASON =
-  'Placed in a generated draw — re-generate or reset the draw to remove this player.';
+  'Placed in a generated draw. Re-generate or reset the draw to remove this player.';

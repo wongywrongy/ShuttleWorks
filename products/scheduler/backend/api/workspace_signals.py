@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -62,10 +62,32 @@ class CollaborationDTO(BaseModel):
 
 
 class MatchMetricsDTO(BaseModel):
-    """The inspector's metric triplet. ``toDo`` = attention-reason count."""
+    """The inspector's metric triplet. ``toDo`` = attention-reason count.
+
+    ``played`` counts terminally-resolved matches (finished/retired on the
+    meet side, recorded results on the bracket side) — the same play state
+    the lifecycle phase reads, so the Overview's live-progress readout can
+    never disagree with ``phase``.
+
+    ``playing`` / ``courtsFree`` REVERSE this DTO's original rule that live
+    counts belong to Operations alone (SP-CONSOLE-2 INS-4 / OV-4). The reason
+    the rule was right no longer holds and the reason to break it is concrete:
+    played/remaining/total is planning information, and during a live day the
+    question both the Hub inspector and the Overview are being asked is "is
+    anything happening, and is a court free" — which neither could answer,
+    because the Hub reads only these server-computed signals and has no other
+    route to match state. The data was already loaded here for ``played``;
+    withholding the count was a boundary, not a cost.
+    """
     total: int = 0
     scheduled: int = 0
     toDo: int = 0
+    played: int = 0
+    playing: int = 0
+    #: ``None`` when the workspace has no court count to subtract from —
+    #: an unknown is not zero, and "0 courts free" would be a lie about a
+    #: workspace that simply has not said how many courts it has.
+    courtsFree: Optional[int] = None
 
 
 class NextMatchDTO(BaseModel):
@@ -79,6 +101,13 @@ class NextMatchDTO(BaseModel):
     timeLabel: Optional[str] = None
     courtLabel: Optional[str] = None
     status: str = "scheduled"
+    #: Identity, so the row can be a DOOR rather than a readout — the Overview
+    #: and the Hub inspector both list these and neither could open one
+    #: (SP-CONSOLE-2 OV-1). ``source`` matters as much as the id: Operations
+    #: keys its selection ``{source}:{id}`` because meet and bracket match
+    #: records are non-merged (ADR 0006), so an id alone cannot address a row.
+    matchId: Optional[str] = None
+    source: Optional[Literal["meet", "bracket"]] = None
 
 
 class WorkspaceSignalsDTO(BaseModel):
@@ -195,8 +224,35 @@ def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
     day_start = config.get("dayStart")
     interval = config.get("intervalMinutes") or 30
 
+    # Same blob-membership guard as ``played``: an orphaned match_states row
+    # must not inflate either figure.
+    playing_ids = {
+        mid for mid, s in status_by_id.items() if s in _IN_PLAY and mid in by_id
+    }
+    court_of = {
+        _first(a, "matchId", "match_id"): _first(a, "courtId", "court", "court_id")
+        for a in assignments
+        if isinstance(a, dict)
+    }
+    busy_courts = {
+        court_of.get(mid) for mid in playing_ids if court_of.get(mid) is not None
+    }
+    court_count = (data.get("config") or {}).get("courtCount")
     metrics = MatchMetricsDTO(
-        total=len(matches), scheduled=len(assignments), toDo=to_do
+        total=len(matches),
+        scheduled=len(assignments),
+        toDo=to_do,
+        played=sum(
+            1
+            for mid, s in status_by_id.items()
+            if s in _TERMINAL and mid in by_id
+        ),
+        playing=len(playing_ids),
+        courtsFree=(
+            max(0, int(court_count) - len(busy_courts))
+            if isinstance(court_count, int) and court_count > 0
+            else None
+        ),
     )
 
     def slot_of(a):
@@ -232,6 +288,8 @@ def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
             timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
             courtLabel=_court_label(_first(a, "courtId", "court", "court_id")),
             status="scheduled",
+            matchId=str(mid) if mid is not None else None,
+            source="meet",
         ))
     return metrics, next_up
 
@@ -257,6 +315,7 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         total=counts.bracket_matches,
         scheduled=len(assignments),
         toDo=to_do,
+        played=len(counts.bracket_resolved_ids),
     )
 
     def slot_of(a):
@@ -286,12 +345,18 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
             timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
             courtLabel=_court_label(a.get("court_id")),
             status="scheduled",
+            matchId=str(a.get("play_unit_id") or "") or None,
+            source="bracket",
         ))
     return metrics, next_up
 
 
 #: canonical match statuses that mean "this match is over"
 _TERMINAL = frozenset({"finished", "retired"})
+#: On a court right now. ``called`` is deliberately NOT here: a called match
+#: has been sent to a court but is not occupying it yet, so counting it would
+#: report a court busy while the players are still walking to it.
+_IN_PLAY = frozenset({"started", "playing"})
 
 
 def _derive_phase(data: dict, counts: RowCounts) -> str:

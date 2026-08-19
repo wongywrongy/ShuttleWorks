@@ -5,9 +5,12 @@
  * tv* fields only drive the Meet board, so the new sections are gated to
  * Meet-enabled workspaces.
  */
-import { describe, expect, it, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+// The Sharing mentions are real <Link>s now (D2.1) — renders need a router.
+import { MemoryRouter } from 'react-router-dom';
 import { DisplayConfig } from '../DisplayConfig';
+import { apiClient } from '../../../api/client';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import type { WorkspaceModule } from '../../../platform/product-shell/types';
 
@@ -17,7 +20,16 @@ const BRACKET_ONLY: WorkspaceModule[] = [
   { id: 'bracket', label: 'Bracket', status: 'enabled' },
 ];
 
+// The public link is minted server-side (`/tournaments/{id}/display-token`),
+// the same seam Settings → Sharing uses — so every render here needs it stubbed.
+const TOKEN_DTO = { token: 'cap-tok', url: '/display?token=cap-tok' };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 beforeEach(() => {
+  vi.spyOn(apiClient, 'getDisplayToken').mockResolvedValue(TOKEN_DTO);
   useTournamentStore.setState({
     config: {
       intervalMinutes: 30,
@@ -33,7 +45,7 @@ beforeEach(() => {
 
 describe('<DisplayConfig /> — Board layout + Preview mount', () => {
   it('shows Board layout + Preview when Meet is enabled', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(screen.getByRole('heading', { name: 'Board layout' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Preview' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Display mode' })).toBeInTheDocument();
@@ -41,16 +53,38 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
   });
 
   it('hides Board layout + Preview for a bracket-only workspace (tv* fields do not drive it)', () => {
-    render(<DisplayConfig tid="t1" modules={BRACKET_ONLY} />);
+    render(<DisplayConfig tid="t1" modules={BRACKET_ONLY} />, { wrapper: MemoryRouter });
     expect(screen.queryByRole('heading', { name: 'Board layout' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Preview' })).toBeNull();
   });
 
   it('still renders the existing Feeds + Public link sections untouched', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(screen.getByRole('heading', { name: 'Feeds' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Public link' })).toBeInTheDocument();
     expect(screen.getByLabelText('Public display URL')).toBeInTheDocument();
+  });
+
+  // The link on this tab used to be `${origin}/display?id=<uuid>` under the
+  // caption "Anyone with the link can watch, with no sign-in." That route is
+  // viewer-gated: signed out it 401s, the board says the link "has been turned
+  // off or never existed", and the client blames an expired session that never
+  // existed. The real public link is the capability token.
+  it('shows the minted ?token= capability link, never the viewer-gated ?id= URL', async () => {
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
+    const field = screen.getByLabelText('Public display URL') as HTMLInputElement;
+    await waitFor(() =>
+      expect(field.value).toBe(`${window.location.origin}/display?token=cap-tok`),
+    );
+    expect(field.value).not.toContain('?id=');
+    expect(apiClient.getDisplayToken).toHaveBeenCalledWith('t1');
+  });
+
+  it('says what to do instead of handing over a URL when no link can be minted', async () => {
+    vi.spyOn(apiClient, 'getDisplayToken').mockRejectedValue(new Error('404'));
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
+    expect(await screen.findByTestId('display-link-unavailable')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Public display URL')).toBeNull();
   });
 
   // Locks the headline feature end-to-end: editor -> store -> preview, with
@@ -60,12 +94,46 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
   // score disappear from the preview frame in the SAME render pass, with no
   // debounced PUT needed (setConfig writes to the store synchronously).
   it('reflects an unsaved editor edit in the preview immediately (live-draft preview)', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     const preview = screen.getByTestId('display-preview-frame');
-    expect(preview).toHaveTextContent('11–7');
+    // Console board cards render the score per SIDE row (11 / 7), not as a
+    // joined "11–7" aggregate — assert both columns are on the board.
+    expect(within(preview).getByText('11')).toBeInTheDocument();
+    expect(within(preview).getByText('7')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: 'Show scores' }));
 
-    expect(preview).not.toHaveTextContent('11–7');
+    expect(within(preview).queryByText('11')).toBeNull();
+    expect(within(preview).queryByText('7')).toBeNull();
+  });
+});
+
+/**
+ * Defect D7: the Preview rendered "MS1 A. Ntumba vs D. Reyes", 11-7, on four
+ * courts, with nothing saying it was invented. It is a fixed fixture on
+ * purpose (a schedule-less workspace would otherwise preview the board's "no
+ * schedule" placeholder, and the point here is to preview LAYOUT) — but an
+ * unlabelled board that shows names and scores teaches the operator something
+ * false about their own event.
+ */
+describe('<DisplayConfig /> — the Preview says its data is a sample', () => {
+  it('captions the preview, before the board, naming what is invented', () => {
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
+    const caption = screen.getByTestId('display-preview-caption');
+    expect(caption).toHaveTextContent(/sample data/i);
+    expect(caption).toHaveTextContent(/players, scores and courts are invented/i);
+    // Read BEFORE the board it describes, not after it.
+    expect(
+      caption.compareDocumentPosition(screen.getByTestId('display-preview-frame')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('carries the sample warning in the accessible name too', () => {
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
+    expect(screen.getByTestId('display-preview-frame')).toHaveAttribute(
+      'aria-label',
+      'Board layout preview, sample data',
+    );
   });
 });

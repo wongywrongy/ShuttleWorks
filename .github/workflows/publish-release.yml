@@ -1,4 +1,4 @@
-# Builds and pushes the backend + frontend container images to GHCR on
+# Builds and pushes the backend + frontend + entrant container images to GHCR on
 # every version tag (``v1.0.0`` etc.) and on every push to ``main`` as
 # ``:latest``. The launcher scripts + docker-compose.release.yml pull
 # these images so users never have to build locally.
@@ -28,6 +28,12 @@ jobs:
             # Context = repo root: the Dockerfile copies the workspace
             # root package.json/lockfile + packages/design-system from
             # the repo root, so a narrowed context can't satisfy it.
+            context: .
+          - name: entrant
+            # The public entrant SSR tier. docker-compose.release.yml
+            # references ghcr.io/<owner>/scheduler-entrant, so it has to
+            # be published here or that stack cannot be pulled.
+            dockerfile: products/scheduler/entrant/Dockerfile
             context: .
     steps:
       - uses: actions/checkout@v4

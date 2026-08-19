@@ -61,7 +61,7 @@ export function requestClearScheduleOnNextSave(): void {
 function crossModuleNoteFor(schedules: string[] | undefined): string | undefined {
   if (!schedules || !schedules.includes('bracket')) return undefined;
   if (schedules.includes('meet')) {
-    return 'This will also clear the bracket schedule — both the meet and bracket schedules will be cleared.';
+    return 'This will also clear the bracket schedule. Both the meet and bracket schedules will be cleared.';
   }
   return 'This will also clear the bracket schedule.';
 }
@@ -104,7 +104,7 @@ async function handleRejectedSave(tid: string, err: unknown): Promise<void> {
         message: 'Someone else saved first',
         detail:
           'This workspace changed in another tab or by another operator. ' +
-          'Your view has been re-synced to the server — re-apply your change ' +
+          'Your view has been re-synced to the server. Re-apply your change ' +
           'if it is still needed.',
         durationMs: 8000,
       });
@@ -113,14 +113,14 @@ async function handleRejectedSave(tid: string, err: unknown): Promise<void> {
         level: 'warn',
         message: "A started draw locks the schedule",
         detail:
-          "It can't be cleared while a draw is in play — the workspace has been re-synced to the server.",
+          "It can't be cleared while a draw is in play. The workspace has been re-synced to the server.",
         durationMs: 6000,
       });
     } else {
       useUiStore.getState().pushToast({
         level: 'warn',
         message: 'That change was rejected',
-        detail: `${message} — the workspace has been re-synced to the server.`,
+        detail: `${message}. The workspace has been re-synced to the server.`,
         durationMs: 6000,
       });
     }

@@ -1,6 +1,7 @@
 /**
- * Vitest test for useLiveTracking's 5s match-state sync visibility gate
- * (perf pass 1). Only the 5s `syncMatchStates` interval is in scope here.
+ * Vitest tests for useLiveTracking's 5s match-state sync interval: the
+ * visibility gate (perf pass 1) and the terminal-error stop. Only that
+ * interval is in scope here.
  *
  * Perf pass 2 removed the 1s wall-clock tick (`setCurrentTime`) entirely —
  * see `useLiveTracking.clock.test.tsx` for the regression test proving it's
@@ -73,6 +74,46 @@ describe('useLiveTracking — 5s sync pauses while hidden', () => {
     // Regain triggers an immediate sync.
     expect(apiClient.getMatchStates).toHaveBeenCalledTimes(callsAfterMount + 1);
 
+    unmount();
+  });
+});
+
+describe('useLiveTracking — 5s sync stops on a terminal error', () => {
+  it('a 404 (workspace gone / bad display token) ends the poll', async () => {
+    vi.mocked(apiClient.getMatchStates).mockRejectedValue(
+      Object.assign(new Error('Tournament not found'), { status: 404 }),
+    );
+    const { unmount } = renderHook(() => useLiveTracking(), { wrapper: wrap('t1') });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const callsAfterMount = vi.mocked(apiClient.getMatchStates).mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000 * 6);
+    });
+    // A 404 can never come good — retrying every 5s just storms the console
+    // forever (an invalid display link did exactly that).
+    expect(apiClient.getMatchStates).toHaveBeenCalledTimes(callsAfterMount);
+    unmount();
+  });
+
+  it('keeps polling through a transient failure (5xx / network blip)', async () => {
+    vi.mocked(apiClient.getMatchStates).mockRejectedValue(
+      Object.assign(new Error('Bad gateway'), { status: 502 }),
+    );
+    const { unmount } = renderHook(() => useLiveTracking(), { wrapper: wrap('t1') });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const callsAfterMount = vi.mocked(apiClient.getMatchStates).mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000 * 3);
+    });
+    expect(
+      vi.mocked(apiClient.getMatchStates).mock.calls.length,
+    ).toBeGreaterThan(callsAfterMount);
     unmount();
   });
 });

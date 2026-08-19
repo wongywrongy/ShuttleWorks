@@ -54,7 +54,7 @@ to refer to the module everywhere else.
 
 ```ts
 // products/scheduler/frontend/src/platform/product-shell/types.ts
-export type ModuleId = 'meet' | 'bracket' | 'display' | 'standings';
+export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries' | 'standings';
 ```
 
 ::: warning Operations is NOT a `ModuleId`

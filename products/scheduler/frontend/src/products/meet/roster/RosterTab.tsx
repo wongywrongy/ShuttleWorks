@@ -38,19 +38,31 @@ import type { PlayerDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { exportRosterXlsx } from '../exports/xlsxExports';
 import { DraggablePlayerChip, PositionGrid } from './PositionGrid';
-import { EVENT_LABEL, isDoublesRank } from './positionGrid/helpers';
+import {
+  EVENT_LABEL,
+  ROSTER_DRAG_ACTIVATION_DISTANCE,
+  isDoublesRank,
+} from './positionGrid/helpers';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { DetailDrawer } from './PlayerDetailPanel';
+import { EYEBROW_CLASS } from '../../../lib/utils';
 import { DetailDock, PickerPopover } from '../../../components/control-plane';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { useCanEdit } from '../../../hooks/useCanEdit';
+import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
+import { useTournamentId } from '../../../hooks/useTournamentId';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 
 export function RosterTab() {
+  const tid = useTournamentId();
+  // Feeds the picker's results guard (PICK-4): the lightweight loader for
+  // "renders live state without the full useLiveTracking machinery" —
+  // without it the matchState store is empty and the guard fails open.
+  useMatchStateSync(tid);
   const groups = useTournamentStore((s) => s.groups);
   const players = useTournamentStore((s) => s.players);
   const config = useTournamentStore((s) => s.config);
@@ -143,7 +155,9 @@ export function RosterTab() {
   }, [activeSchoolId]);
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: ROSTER_DRAG_ACTIVATION_DISTANCE },
+    }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
     useSensor(KeyboardSensor),
   );
@@ -247,41 +261,59 @@ export function RosterTab() {
     >
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         {/* ───── ACTIONS BAR — page-level controls ───────────────────── */}
-        <MeetActionsBar
-          title="Roster"
-          status={
-            <span className="text-sm font-semibold text-foreground tabular-nums">
-              {players.length} player{players.length === 1 ? '' : 's'}
-            </span>
-          }
-        >
-          <BulkImportMenu
-            schoolId={activeSchoolId}
-            onImport={(names) => {
-              if (!activeSchoolId) return;
-              for (const name of names) {
-                addPlayer({
-                  id: uuid(),
-                  name,
-                  groupId: activeSchoolId,
-                  ranks: [],
-                  availability: [],
-                });
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => exportRosterXlsx(players, groups, config)}
-            disabled={!canExport}
-            data-testid="export-roster"
-            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
+        {/* T4 (390px, 2026-08-12): a long school roster (e.g. "+ Add school"
+            after several school pills' worth of status text) can push the
+            bar's content past its own width. The root `overflow-hidden`
+            above then clipped it with no scrollbar and no way to reach the
+            trailing control — same "what doesn't fit gets a scrollbar"
+            answer already used for the desk row and SchoolTabs below,
+            applied to the one surface in between that didn't have it yet.
+            The `overflow-y-hidden` that came with it is gone: `ActionsBar`
+            now WRAPS to a second row at tablet width, and a hidden y-axis
+            would clip that row off exactly the way this wrapper exists to
+            prevent on the x-axis (V1, 2026-08-12). */}
+        <div className="shrink-0 overflow-x-auto">
+          <MeetActionsBar
+            title="Roster"
+            status={
+              // Both objects, because the surface holds both and its primary
+              // action makes SCHOOLS (RST-1). A header that counted only
+              // players sat above a "+ Add school" button, so the readout and
+              // the action described different models.
+              <span className="text-sm font-semibold text-foreground tabular-nums">
+                {groups.length} school{groups.length === 1 ? '' : 's'} ·{' '}
+                {players.length} player{players.length === 1 ? '' : 's'}
+              </span>
+            }
           >
-            <Download aria-hidden="true" className="h-3.5 w-3.5" />
-            Export XLSX
-          </button>
-          <AddSchoolMenu onAddSchool={(name) => addGroup({ id: uuid(), name })} />
-        </MeetActionsBar>
+            <BulkImportMenu
+              schoolId={activeSchoolId}
+              onImport={(names) => {
+                if (!activeSchoolId) return;
+                for (const name of names) {
+                  addPlayer({
+                    id: uuid(),
+                    name,
+                    groupId: activeSchoolId,
+                    ranks: [],
+                    availability: [],
+                  });
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => exportRosterXlsx(players, groups, config)}
+              disabled={!canExport}
+              data-testid="export-roster"
+              className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
+            >
+              <Download aria-hidden="true" className="h-3.5 w-3.5" />
+              Export XLSX
+            </button>
+            <AddSchoolMenu onAddSchool={(name) => addGroup({ id: uuid(), name })} />
+          </MeetActionsBar>
+        </div>
 
         {/* ───── CONTENT — school tabs above the three-pane body ─────── */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -294,8 +326,15 @@ export function RosterTab() {
           {/* Flex ROW: list · grid · docked detail drawer. The drawer is a
               real layout column (DetailDock) so the grid reflows beside it;
               `relative` anchors the dock's narrow-viewport overlay
-              fallback. minContentWidth accounts for the 260px left aside. */}
-          <div className="relative flex min-h-0 flex-1 overflow-hidden">
+              fallback. minContentWidth accounts for the 260px left aside.
+
+              Scrolls on x rather than clipping: the aside is `shrink-0` and
+              flex `grow` never fires on negative free space, so on a viewport
+              narrower than 260 + the grid's floor the grid used to resolve to
+              literally 0px behind `overflow-hidden` — present in the DOM,
+              invisible, with nothing to say it was there. Same answer as the
+              Entries desk: what doesn't fit gets a scrollbar. */}
+          <div className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
             {/* LEFT — filter + player list */}
             <aside
               data-testid="roster-left-panel"
@@ -306,8 +345,23 @@ export function RosterTab() {
                   <InlineSearch
                     query={query}
                     onQueryChange={setQuery}
-                    placeholder={`Filter ${schoolPlayers.length} player${schoolPlayers.length === 1 ? '' : 's'}…`}
+                    // No count: this one was the ACTIVE school's, while the
+                    // header above stated every school's, so the page showed
+                    // two different player counts at once (RST-3).
+                    placeholder="Filter players…"
                   />
+                </div>
+              )}
+              {/* Column header for the list. The trailing number per row had
+                  no header and no visible name, so it was a digit the reader
+                  had to guess at (RST-2). */}
+              {schoolPlayers.length > 0 && (
+                <div
+                  aria-hidden
+                  className={`flex items-center justify-between gap-2 border-b border-border/60 px-4 py-1 ${EYEBROW_CLASS} text-ink-faint`}
+                >
+                  <span>Player</span>
+                  <span>Events</span>
                 </div>
               )}
               <PlayerListSection
@@ -321,10 +375,12 @@ export function RosterTab() {
               />
             </aside>
 
-            {/* CENTER — position grid (always full width; scrolls) */}
-            <main
+            {/* CENTER — position grid (always full width; scrolls). A <div>,
+                not a <main>: AuthedLayout owns the page's one main landmark
+                and this pane is a third of a desk, not the page. */}
+            <div
               data-testid="roster-right-panel"
-              className="flex min-w-0 flex-1 flex-col overflow-hidden"
+              className="flex min-w-[320px] flex-1 flex-col overflow-hidden"
             >
               <div className="min-h-0 flex-1 overflow-auto">
                 {activeSchoolId ? (
@@ -342,7 +398,7 @@ export function RosterTab() {
                   </div>
                 )}
               </div>
-            </main>
+            </div>
 
             {/* DETAIL DRAWER — docked beside the grid. A clicked position
                 (its 1–2 occupants) or a clicked list player. */}
@@ -360,11 +416,12 @@ export function RosterTab() {
                 }
                 occupants={positionOccupants}
                 groups={groups}
+                rank={selectedRank}
                 emptyHint={
                   positionOccupants.length < (isDoublesRank(selectedRank) ? 2 : 1)
                     ? positionOccupants.length === 0
-                      ? 'No one assigned yet — click the cell to assign a player.'
-                      : 'Partner not assigned — double-click the cell to add one.'
+                      ? 'No one assigned yet. Click the cell to assign a player.'
+                      : 'Partner not assigned. Use ＋ add partner in the cell.'
                     : null
                 }
                 onClose={closeDrawer}
@@ -409,7 +466,7 @@ function SchoolTabs({
   if (groups.length === 0) {
     return (
       <div className="shrink-0 border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">
-        No schools yet — add one from the actions bar above.
+        No schools yet. Add one from the actions bar above.
       </div>
     );
   }
@@ -434,7 +491,10 @@ function SchoolTabs({
                 : 'border-b-transparent text-muted-foreground hover:text-foreground',
             ].join(' ')}
           >
-            <span className="max-w-[14rem] truncate">{g.name}</span>
+            {/* No width cap: the pill bar is `overflow-x-auto`, so a long
+                school name widens its pill and the bar scrolls — the pill
+                is the only place that name is written. */}
+            <span>{g.name}</span>
             <span
               className={`tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground'}`}
             >

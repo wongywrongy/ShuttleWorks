@@ -258,6 +258,15 @@ def test_clear_schedule_via_put_tournament_state_invalidates_cache(
 
     state = client.get(f"/tournaments/{tid}/state").json()
     state.pop("standings", None)
+    # A REAL scheduling-field edit. ``?clearSchedule=true`` sanctions an edit
+    # the config lock would otherwise refuse, and the clear is gated on there
+    # being one (``if clearSchedule and fields``). This used to send the state
+    # back UNCHANGED and still clear, because the lock compared a
+    # defaults-filled DTO dump against a sparse stored blob and reported 13
+    # phantom changes — the same defect that made every Bracket page raise
+    # "Discard committed schedule?" on load. The subject here is the cache
+    # invalidation, so the edit is the smallest real one.
+    state["config"]["courtCount"] = (state["config"]["courtCount"] or 4) + 1
     r = client.put(
         f"/tournaments/{tid}/state?clearSchedule=true", json=state
     )

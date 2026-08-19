@@ -207,7 +207,58 @@ describe('<BracketMatchDetailPanel />', () => {
     renderPanel(PU_MS, 'live');
     const pill = screen.getByTestId('bracket-match-status-pill');
     expect(pill).toHaveTextContent('Live');
-    expect(pill.className).toContain('text-status-live');
+    // The wrapper hosts a design-system StatusPill; live carries the green
+    // tinted fill (Console pill vocabulary).
+    expect(pill.querySelector('.bg-status-live-bg')).not.toBeNull();
     expect(pill.tagName).toBe('SPAN');
+    expect(pill.querySelector('button, a, input')).toBeNull();
+  });
+
+  it('renders READY as muted text, not a chip (X6)', () => {
+    renderPanel(PU_MS, 'ready');
+    const pill = screen.getByTestId('bracket-match-status-pill');
+    expect(pill).toHaveTextContent('Ready');
+    expect(pill.querySelector('[class*="bg-status-"]')).toBeNull();
+  });
+
+  it('finished: Result block is the sole roster surface with interactive lines (INS-N1)', () => {
+    const data = makeData();
+    data.results = [
+      {
+        play_unit_id: 'pu-ms',
+        winner_side: 'A',
+        walkover: false,
+        finished_at_slot: 2,
+        score: { sets: [{ sideA: 21, sideB: 15 }] },
+      },
+    ];
+    render(
+      <BracketMatchDetailPanel
+        pu={PU_MS}
+        data={data}
+        label="MS SF1"
+        status="done"
+        labelById={LABELS}
+        onClose={() => {}}
+        onCommitEvent={null}
+        onRecordContingency={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('bracket-match-result-card')).toBeInTheDocument();
+    // SIDE A/SIDE B sections and the status pill do not render — the
+    // Result lines carry the sides now.
+    expect(screen.queryByText('Side A')).not.toBeInTheDocument();
+    expect(screen.queryByText('Side B')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('bracket-match-status-pill'),
+    ).not.toBeInTheDocument();
+    // Contingency is gone too (nothing left to award).
+    expect(screen.queryByTestId('contingency-walkover')).not.toBeInTheDocument();
+    // The team lines stay interactive: the rostered player still expands
+    // to the shared Availability + Events blocks.
+    const card = screen.getByTestId('bracket-match-player-card-p-aiko-tan');
+    fireEvent.click(card);
+    expect(card).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('availability-control')).toBeInTheDocument();
   });
 });

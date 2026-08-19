@@ -44,10 +44,89 @@ export const FIELD_INPUT_CLASSES =
   'w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
 /* =========================================================================
- * BracketAvailabilityEventsFields — the availability editor (unavailable-
- * periods UX over the solver-wired positive windows) plus the categorized
- * multi-event entry editor. One implementation for the roster panel and
- * the matches panel's player cards.
+ * BracketAvailabilityField / BracketEventsField — the two editors, WITHOUT
+ * a label of their own. A panel that groups them with `DetailPanel.Section`
+ * already has the heading; a card that expands in place does not, so
+ * `BracketAvailabilityEventsFields` below adds the labelled wrappers.
+ * ========================================================================= */
+export function BracketAvailabilityField({
+  player,
+  bracketData,
+  onUpdate,
+}: {
+  player: BracketPlayerDTO;
+  bracketData: BracketTournamentDTO | null;
+  onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
+}) {
+  const bounds = sessionDayBounds(bracketData);
+  return (
+    <>
+      <AvailabilityControl
+        value={player.availability ?? []}
+        dayStart={bounds.dayStart}
+        dayEnd={bounds.dayEnd}
+        onChange={(availability) => onUpdate(player.id, { availability })}
+      />
+      {!bounds.anchored ? (
+        <p className="text-2xs text-muted-foreground">
+          Applies when the session start time is set.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+export function BracketEventsField({
+  player,
+  roster,
+  bracketData,
+  badges,
+  onCommitEvent,
+}: {
+  player: BracketPlayerDTO;
+  roster: BracketPlayerDTO[];
+  bracketData: BracketTournamentDTO | null;
+  /** Entered event badges ({code, type}) for the collapsed summary —
+   *  explicit discipline attribution so event-id-relabeled codes still
+   *  land under the right category header. */
+  badges: BadgeEntry[];
+  onCommitEvent: CommitEventFn | null;
+}) {
+  const events = bracketData?.events ?? [];
+  if (events.length === 0) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        No draws yet. Create one in Draws to enter this player.
+      </span>
+    );
+  }
+  return (
+    <EventsControl
+      entries={badges}
+      // The disciplines this bracket's draws actually declare — the SAME
+      // array `EventTypeEditor` filters, so a category exists exactly when
+      // it has a row to show. Without it the fixed {MS,WS,MD,WD,XD} table
+      // ran the section: an operator-defined discipline counted in the
+      // header ("1 entered") and appeared under no category, while DOUBLES
+      // offered a caret over an empty body.
+      types={[...new Set(events.map((e) => e.discipline).filter(Boolean))]}
+      renderTypeEditor={(type) => (
+        <EventTypeEditor
+          typeCode={type}
+          player={player}
+          roster={roster}
+          events={events}
+          onCommitEvent={onCommitEvent}
+        />
+      )}
+    />
+  );
+}
+
+/* =========================================================================
+ * BracketAvailabilityEventsFields — the two editors under their own
+ * labels, for the Matches panel's expanding player cards (a card is not a
+ * panel; it has no section chrome to inherit a heading from).
  * ========================================================================= */
 export function BracketAvailabilityEventsFields({
   player,
@@ -60,53 +139,30 @@ export function BracketAvailabilityEventsFields({
   player: BracketPlayerDTO;
   roster: BracketPlayerDTO[];
   bracketData: BracketTournamentDTO | null;
-  /** Entered event badges ({code, type}) for the collapsed summary —
-   *  explicit discipline attribution so event-id-relabeled codes still
-   *  land under the right category header. */
   badges: BadgeEntry[];
   onUpdate: (id: string, updates: Partial<BracketPlayerDTO>) => void;
   onCommitEvent: CommitEventFn | null;
 }) {
-  const bounds = sessionDayBounds(bracketData);
-  const events = bracketData?.events ?? [];
-
   return (
     <>
       <div className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASSES}>Availability</span>
-        <AvailabilityControl
-          value={player.availability ?? []}
-          dayStart={bounds.dayStart}
-          dayEnd={bounds.dayEnd}
-          onChange={(availability) => onUpdate(player.id, { availability })}
+        <BracketAvailabilityField
+          player={player}
+          bracketData={bracketData}
+          onUpdate={onUpdate}
         />
-        {!bounds.anchored ? (
-          <p className="text-2xs text-muted-foreground">
-            Applies when the session start time is set.
-          </p>
-        ) : null}
       </div>
 
       <div className="flex flex-col gap-1.5">
         <span className={FIELD_LABEL_CLASSES}>Events</span>
-        {events.length === 0 ? (
-          <span className="text-xs text-muted-foreground">
-            No draws yet — create one in Draws to enter this player.
-          </span>
-        ) : (
-          <EventsControl
-            entries={badges}
-            renderTypeEditor={(type) => (
-              <EventTypeEditor
-                typeCode={type}
-                player={player}
-                roster={roster}
-                events={events}
-                onCommitEvent={onCommitEvent}
-              />
-            )}
-          />
-        )}
+        <BracketEventsField
+          player={player}
+          roster={roster}
+          bracketData={bracketData}
+          badges={badges}
+          onCommitEvent={onCommitEvent}
+        />
       </div>
     </>
   );
@@ -217,7 +273,7 @@ function EventTypeEditor({
               <span className="w-9 shrink-0 text-2xs font-semibold text-accent sw-num">
                 {ev.id}
               </span>
-              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              <span className="min-w-0 flex-1 break-words text-xs text-muted-foreground">
                 {disciplineLabel(ev.discipline)}
               </span>
               {isDraft ? (
@@ -228,7 +284,7 @@ function EventTypeEditor({
                   data-testid={`event-toggle-${ev.id}`}
                   onClick={() => handleToggle(ev)}
                   className={[
-                    'rounded-md border px-2 py-0.5 text-2xs font-medium sw-num',
+                    'rounded-sm border px-2 py-0.5 text-2xs font-medium sw-num',
                     'transition-colors duration-fast ease-brand disabled:cursor-not-allowed disabled:opacity-50',
                     entered
                       ? 'border-accent bg-accent/10 text-accent'
@@ -241,7 +297,7 @@ function EventTypeEditor({
                 <span className="flex shrink-0 items-center gap-1.5">
                   {entered ? (
                     <span
-                      className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent"
+                      className="rounded-sm border border-accent/30 bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent"
                       data-testid={`event-entered-${ev.id}`}
                     >
                       Entered
@@ -252,7 +308,7 @@ function EventTypeEditor({
                     data-testid={`event-locked-${ev.id}`}
                     title="Participants are locked once a draw is generated."
                   >
-                    locked — draw generated
+                    locked: draw generated
                   </span>
                 </span>
               )}

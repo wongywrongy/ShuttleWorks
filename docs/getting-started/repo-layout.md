@@ -24,6 +24,10 @@ products/
     │       ├── platform/      cross-module: product-shell, domain (module model), contracts, auth, settings
     │       ├── components/    shared UI incl. control-plane/ primitives
     │       └── api / store / hooks / lib …
+    ├── entrant/               the PUBLIC tier: React Router 7 SSR, zero client JS (/e/*)
+    │   ├── app/               routes/ (explicit route table), components/, lib/
+    │   ├── scripts/           measure-page-weight.mjs (the blocking 4 KB gate)
+    │   └── tests/             vitest, incl. source-scan contracts (no truncation, no em dash, no client fee rules)
     ├── e2e/                   Playwright specs
     ├── tests/                 backend + solver tests
     ├── docker-compose*.yml    dev / prod-shape stacks
@@ -43,11 +47,13 @@ Makefile                       top-level chooser
 The root `package.json` declares the workspaces:
 
 ```json
-"workspaces": ["packages/*", "products/scheduler/frontend"]
+"workspaces": ["packages/*", "products/scheduler/frontend", "products/scheduler/entrant"]
 ```
 
 Root scripts (`dev:scheduler`, `build:scheduler`, `docs:dev`, `docs:build`, …) delegate into the
-workspace. The frontend has its own `package.json` (`type: module`); the **repo root is
+workspace, and the entrant tier has its own pair of each (`dev:entrant`, `build:entrant`,
+`lint:entrant`, `typecheck:entrant`, `test:entrant`, `depcruise:entrant`). The frontend has its own
+`package.json` (`type: module`); the **repo root is
 CommonJS**, which is why the VitePress config is `docs/.vitepress/config.mts` (the `.mts`
 extension forces ESM loading regardless of the root package type).
 
