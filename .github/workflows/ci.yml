@@ -317,11 +317,28 @@ jobs:
             exit 1
           }
 
+      # Browser install was 219s of a 557s job (40%) — the download, not the
+      # tests. The binary is immutable per Playwright version, so it caches on
+      # the lockfile that pins it. `--only-shell` fetches the headless shell
+      # instead of full headed Chromium (the suite never runs headed).
+      # System libs are NOT in the cache path, so `install-deps` still runs on
+      # a hit; it is the cheap half.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/e2e/package-lock.json') }}
+
       - name: Install Chromium
         working-directory: tests/e2e
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps --only-shell chromium
+          fi
 
       - name: Interaction smoke
         working-directory: tests/e2e
