@@ -1,7 +1,7 @@
 # SP-COURT-1 — Court policy: queue-run vs court-tied scheduling
 
-**Type:** Program plan. Multi-session. Research complete; **no implementation has been done.**
-**Status:** PLANNED — Phase 0 ruling owed by the owner before any code moves.
+**Type:** Program plan. Multi-session.
+**Status:** **COMPLETE 2026-08-19** — all phases shipped (see the final ledger entry); ADR 0015 records the rulings.
 **Created:** 2026-08-19 (research session; nothing in the tree was changed for this program).
 **Owning module:** Operations (Tier-2). The engine serves the policy; it does not own it.
 **Companion documents:** `docs/reference/debt-log.md` (D1, D4, **D20**), `docs/explanation/architecture/data-flow.md`, `CODE_HEALTH.md`.
@@ -252,3 +252,18 @@ Append one entry per session: phase, tasks + commits, gates run and results, dev
 
   **Shape reproduces; magnitude does not.** §3 records 0.239 s / 0.044 s / 5× at this point. The research session's generator was deleted, so this script's synthetic instances are not the same instances — B is an order of magnitude faster with an equal makespan and a valid colouring, which is the claim Phase 2 rests on, but the speedup *factor* is instance-dependent and §3's absolute A-times are not reproducible from this script. Recorded rather than reconciled: silently overwriting §3 with these numbers would fake a continuity that does not exist.
 - **Next task:** unchanged — Phase 0, owner answers **CP1–CP8**, then ADR 0015. Plus the new open item: rule on **D20** (and whether it waits for Phase 4a).
+
+### 2026-08-19 — implementation: ALL PHASES SHIPPED (branch `feat/sp-court-1-queue-mode` + `main` d6b1bbc)
+
+- **Phase 0:** owner ruled CP1 (two modes + per-court override), CP2 (pinned default), CP3 (per workspace, config blob, no migration), CP4 (call list + feasibility band), CP5 (**configurable 1–5**, default 3, desk only), CP6 (both engines), CP8(a) (**v1** fallback), CP8(b) (derived order). **ADR 0015** written; `decisions/index.md` also gained its missing 0013/0014 rows. D20 ruled "fix first as its own phase".
+- **Phase A (D20, on `main` via fix/d20-player-busy):** `Match.playerIds` through both adapters; `busyPlayers`/`isPlayerBusy`; `nextEligible(queue, busy)` with a REQUIRED busy set; soft `restShortKeys` + "Short rest" badge; negative controls throughout. D20 closed in the debt log.
+- **D1 (prerequisite):** ruled distinguish-unknown-from-none and closed — `resolveClosedWindows` returns `null` for unknown (banner set, all three solve entry points stop, pinAndResolve rolls back its pin); `OperationsProduct` passes `undefined` while the bracket snapshot is unloaded. Negative control: meet-only 404 still solves friction-free.
+- **Phase 1:** `court_policy` + `court_overrides` on `ScheduleConfig` + the params seam; `pinned` proven byte-identical to unset (the CP2 test).
+- **Phase 2:** `engine/court_pool.py` — `plan_pool` decides the effective policy ONCE (CP8-v1 windows fallback; per-court overrides; **a soundness rule the plan missed**: a locked/pinned/frozen match on a POOL court forces pinned, because a forced court reserves a window the cumulative cannot express — kept matches on pinned-OVERRIDE courts keep queue mode, which is the show-court case). Pooled matches lose court variables; one `AddCumulative(|pool|)`; deterministic left-edge colouring in extraction AND in the candidate-pool callback (same `sort_key`); `court_change_penalty` guarded (it was a **KeyError on warm-restart**, not a no-op); `ScheduleResult.effective_policy`. 27 engine tests incl. order determinism, permuted-input independence, lock survival, both negative controls.
+- **Plumbing:** `TournamentConfig.courtPolicy/courtOverrides/onDeckCount` (Pydantic, string-key coercion tested) → `schedule_config_from_dto` → both engines (CP6); `ScheduleDTO.effectivePolicy`; `dto.generated.ts` regenerated. **Moved-tag fixed at the root:** a pooled match "moved" only if its TIME moved — the §1-predicted spurious `(moved)` symptom, killed by test.
+- **Phase 3 (CP4):** `PlanCallList` (ordered call list + "N matches fit inside C courts · ends ~T" band) replaces the grid in queue mode; CP8-v1 fallback shows the grid again with a banner saying why.
+- **Phase 4 (CP5):** `onDeck(queue, busy, n)` — `nextEligible` is now its head (one predicate, one order) — rendered as the Run surface's "On deck" strip, count clamped 1–5 from `onDeckCount`. Phase 4a shrank to confirmation as predicted (Phase A landed the enforcement). `deriveQueue` needed no change: `plannedSlot` IS the solved start, and its `(slot, key)` sort is already deterministic.
+- **Phase 5 (CP1/CP3):** Venue & schedule "Court policy" section — Court-tied|Queue seg, on-deck count, per-court C1..Cn chips storing pinned overrides as exceptions. Engine side was built pool-as-a-set from Phase 1, so this was exposure, not re-architecture.
+- **Gates:** backend full suite 1668 passed / 66 skipped; frontend 198 files / 1782 tests; ruff, eslint (0 errors), depcruise (0 errors, 16 pre-existing warnings), import-linter 15/15, docs:build clean.
+- **Deferred, recorded honestly:** CP8-v2 capacity dummies (take only if a real fixture needs queue concurrent with bracket occupancy); public call-list projection (§7a stands — no public serializer gained a field); Display lookahead (CP5 was ruled desk-only by the §7a freeze).
+- **Program status: COMPLETE.**
