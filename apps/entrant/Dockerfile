@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Entrant tier Dockerfile — the public React Router 7 SSR app (spec §5,
 # ruling R8-A). Serves everything under `/e/` that is not `/e/api/` or
-# `/e/account/`; nginx (`products/scheduler/frontend/nginx.conf`) does the
+# `/e/account/`; nginx (`apps/console/nginx.conf`) does the
 # split and strips the operator cookie on the way in.
 #
 # Build context = repo root, same as the backend and frontend Dockerfiles,
@@ -34,11 +34,11 @@ WORKDIR /app
 
 # Lockfile + every workspace manifest first, so `npm ci` lands on its own
 # cacheable layer that source edits do not bust. Same layout as
-# products/scheduler/frontend/Dockerfile.
+# apps/console/Dockerfile.
 COPY package.json package-lock.json ./
 COPY packages/design-system/package.json ./packages/design-system/package.json
-COPY products/scheduler/frontend/package.json ./products/scheduler/frontend/package.json
-COPY products/scheduler/entrant/package.json ./products/scheduler/entrant/package.json
+COPY apps/console/package.json ./apps/console/package.json
+COPY apps/entrant/package.json ./apps/entrant/package.json
 
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm ci --no-audit --no-fund
@@ -46,9 +46,9 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 # The design system ships as raw .tsx (its exports map points at source), so
 # the SSR bundler transpiles it — it has to be present, not just installed.
 COPY packages/design-system ./packages/design-system
-COPY products/scheduler/entrant ./products/scheduler/entrant
+COPY apps/entrant ./apps/entrant
 
-RUN npm run -w products/scheduler/entrant build
+RUN npm run -w apps/entrant build
 
 
 FROM node:22-alpine
@@ -63,16 +63,16 @@ WORKDIR /app
 # appears as a crash on first request in a deployed stack, which is a poor
 # trade for image size. react, react-dom and react-router hoist to this root
 # tree; `@react-router/node` and `@react-router/serve` do NOT (the lockfile
-# places them under `products/scheduler/entrant/node_modules/`), which is why
+# places them under `apps/entrant/node_modules/`), which is why
 # the CMD's path is workspace-local and why the entrant directory below is
 # copied WITH the node_modules `npm ci` created in it.
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/package.json ./package.json
 COPY --from=builder --chown=node:node /app/packages/design-system ./packages/design-system
-COPY --from=builder --chown=node:node /app/products/scheduler/entrant ./products/scheduler/entrant
+COPY --from=builder --chown=node:node /app/apps/entrant ./apps/entrant
 
 USER node
-WORKDIR /app/products/scheduler/entrant
+WORKDIR /app/apps/entrant
 
 # `react-router-serve` defaults to 3000 and honours PORT. nginx proxies to
 # `entrant:3000`; changing one without the other is a 502.
@@ -96,7 +96,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # `dist/cli.js` installs its own SIGTERM/SIGINT handlers (`server.close()`).
 #
 # The path is workspace-local, not hoisted: `package-lock.json` pins
-# `@react-router/serve` at `products/scheduler/entrant/node_modules/...` and
+# `@react-router/serve` at `apps/entrant/node_modules/...` and
 # `npm ci` reproduces the lockfile tree exactly, so it lands there in the image
 # too. `bin.js` (the package's own `react-router-serve` entry, which is what
 # `npm start` ran) rather than `dist/cli.js`: it defaults NODE_ENV=production

@@ -8,7 +8,7 @@
  * the code that runs, not against a spare part.
  *
  * **The golden digests are the drift pin.** They are byte-identical to
- * `products/scheduler/tests/unit/test_form_csrf.py`'s `_GOLDEN`, which is the
+ * `tests/backend/unit/test_form_csrf.py`'s `_GOLDEN`, which is the
  * incumbent Python derivation's captured output. That closes the loop the
  * other way from `tests/unit/test_form_csrf_cross_tier.py`: that file reads
  * THIS module's constants and recomputes these digests through them, so a

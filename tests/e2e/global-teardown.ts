@@ -10,10 +10,14 @@ export default async function globalTeardown(): Promise<void> {
     console.log('[e2e] leaving docker stack running');
     return;
   }
-  const productRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  // The compose stack lives in infra/compose/ since SP-REORG-1. This used to
+  // resolve `..` (products/scheduler), where the compose file sat beside the
+  // apps; the stack directory and the suite's own parent are no longer the
+  // same place, so it is spelled out rather than derived from one `..`.
+  const stackDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'infra', 'compose');
   console.log('[e2e] docker-compose down');
   execSync('docker-compose down', {
-    cwd: productRoot,
+    cwd: stackDir,
     stdio: 'inherit',
   });
 }

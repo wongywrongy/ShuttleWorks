@@ -39,7 +39,7 @@ import pytest
 
 from _helpers import purge_backend_modules
 
-_BACKEND = Path(__file__).resolve().parents[2] / "backend"
+_BACKEND = Path(__file__).resolve().parents[3] / "apps" / "api"
 
 # Named because they are the ones that actually went dark: uvicorn's access
 # log and the channel it reports unhandled exceptions on, plus one of the

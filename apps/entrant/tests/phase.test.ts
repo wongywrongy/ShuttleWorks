@@ -89,11 +89,11 @@ describe('parseMoment', () => {
   });
 
   it('pins the format against the Python side (the cross-tier idiom)', () => {
-    // `_moment` (backend/api/entries_public.py) is the producer. If its
+    // `_moment` (apps/api/api/entries_public.py) is the producer. If its
     // strftime format ever changes, this line goes red HERE, where the parser
     // that assumed it lives — the `test_form_csrf_cross_tier.py` argument.
     const source = readFileSync(
-      new URL('../../backend/api/entries_public.py', import.meta.url),
+      new URL('../../../apps/api/api/entries_public.py', import.meta.url),
       'utf8',
     );
     expect(source).toContain('"%Y-%m-%d %H:%M UTC"');

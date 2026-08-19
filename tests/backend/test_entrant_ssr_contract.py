@@ -30,7 +30,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests import test_entries_json_routes as _routes
+from tests.backend import test_entries_json_routes as _routes
 
 # Re-exported by assignment rather than by ``from ... import``: pytest
 # collects fixtures by module-level name either way, but the import form
@@ -44,7 +44,7 @@ page = _routes.page
 turnstile = _routes.turnstile
 
 _ENTRANT_TESTS = (
-    Path(__file__).resolve().parents[1] / "entrant" / "tests"
+    Path(__file__).resolve().parents[2] / "apps" / "entrant" / "tests"
 )
 
 

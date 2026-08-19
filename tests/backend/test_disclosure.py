@@ -16,7 +16,7 @@ DSN were appended to it.
 from __future__ import annotations
 
 
-from tests._helpers import isolate_test_database, seed_tournament
+from tests.backend._helpers import isolate_test_database, seed_tournament
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 

@@ -47,10 +47,14 @@ export default async function globalSetup(): Promise<void> {
   const upFlags = FORCE_REBUILD ? '-d --build' : '-d';
   // URL.pathname encodes spaces as %20 — use fileURLToPath so `execSync`
   // gets a real decoded filesystem path when the project dir contains a space.
-  const productRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  // The compose stack lives in infra/compose/ since SP-REORG-1. This used to
+  // resolve `..` (products/scheduler), where the compose file sat beside the
+  // apps; the stack directory and the suite's own parent are no longer the
+  // same place, so it is spelled out rather than derived from one `..`.
+  const stackDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'infra', 'compose');
   console.log(`[e2e] docker-compose up ${upFlags}`);
   execSync(`docker-compose up ${upFlags}`, {
-    cwd: productRoot,
+    cwd: stackDir,
     stdio: 'inherit',
   });
 

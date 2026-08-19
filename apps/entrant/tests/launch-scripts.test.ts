@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 
-const REPO_ROOT = join(import.meta.dirname, '..', '..', '..', '..');
+const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 
 function rootScripts(): Record<string, string> {
   return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).scripts;

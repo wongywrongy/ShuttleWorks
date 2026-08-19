@@ -4,10 +4,17 @@ module.exports = {
     {
       name: 'entrant-no-operator-frontend',
       comment:
-        'The frontend/ analogue of platform-no-products. There is no platform/ layer in the SSR app, so the boundary that matters is the one spec §4 draws: the entrant tier must not reach into the operator SPA. Named case: frontend/src/api/client.ts is browser-coupled and unsafe in a shared node process — a Zustand toast singleton (:6, :397), a module-scoped stateEtags Map (:265), a module singleton export (:1682), withCredentials (:456), window.dispatchEvent on 401 (:384-391), and a relative base URL (:79). Module state shared across requests in one node process is a cross-entrant leak. Greenfield with 0 violations, so this is an error from day one. `to.reachable: true` for the same reason as entrant-server-only-stays-server: a plain path match only catches a direct import, and a re-export barrel one hop away would otherwise sail through.',
+        'The console/ analogue of platform-no-products. There is no platform/ layer in the SSR app, so the boundary that matters is the one spec §4 draws: the entrant tier must not reach into the operator SPA. Named case: apps/console/src/api/client.ts is browser-coupled and unsafe in a shared node process — a Zustand toast singleton (:6, :397), a module-scoped stateEtags Map (:265), a module singleton export (:1682), withCredentials (:456), window.dispatchEvent on 401 (:384-391), and a relative base URL (:79). Module state shared across requests in one node process is a cross-entrant leak. Greenfield with 0 violations, so this is an error from day one. `to.reachable: true` for the same reason as entrant-server-only-stays-server: a plain path match only catches a direct import, and a re-export barrel one hop away would otherwise sail through.',
       severity: 'error',
       from: { path: '^app/' },
-      to: { path: '[/\\\\]frontend[/\\\\]src[/\\\\]', reachable: true },
+      // SP-REORG-1: `frontend` -> `console`. This literal is the whole rule.
+      // The operator SPA moved from products/scheduler/frontend to
+      // apps/console, and a path regex naming a directory that no longer
+      // exists matches nothing - the rule would have kept reporting zero
+      // violations forever while enforcing nothing, which is the one failure
+      // mode a boundary gate must not have. apps/entrant/tests/boundaries.test.ts
+      // proves it still fires by planting a real violation.
+      to: { path: '[/\\\\]console[/\\\\]src[/\\\\]', reachable: true },
     },
     {
       name: 'entrant-server-only-stays-server',

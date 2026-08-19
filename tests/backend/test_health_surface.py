@@ -31,7 +31,7 @@ import re
 
 import pytest
 
-from tests._helpers import isolate_test_database
+from tests.backend._helpers import isolate_test_database
 
 
 @pytest.fixture
@@ -360,7 +360,7 @@ def test_worker_entrypoint_declares_its_role_before_config_import():
     demanded SMTP."""
     import pathlib
 
-    src = pathlib.Path(__file__).resolve().parents[1] / "backend" / "worker.py"
+    src = pathlib.Path(__file__).resolve().parents[2] / "apps" / "api" / "worker.py"
     text = src.read_text(encoding="utf-8")
     role_at = text.index('os.environ.setdefault("PROCESS_ROLE"')
     # No app/services import may appear before it.

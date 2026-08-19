@@ -216,7 +216,7 @@ def test_xlsx_exports_are_not_formula_injectable_by_construction():
     """
     from pathlib import Path
 
-    root = Path(__file__).resolve().parents[1] / "frontend" / "src" / "products"
+    root = Path(__file__).resolve().parents[2] / "apps" / "console" / "src" / "products"
     sources = [
         root / "bracket" / "exports" / "xlsxExports.ts",
         root / "meet" / "exports" / "xlsxExports.ts",

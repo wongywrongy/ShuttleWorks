@@ -1,6 +1,6 @@
 """Standalone solve-worker entry point (cloud mode).
 
-Run from ``products/scheduler/backend``::
+Run from ``apps/api``::
 
     python -m worker [--concurrency N] [--worker-id ID]
 

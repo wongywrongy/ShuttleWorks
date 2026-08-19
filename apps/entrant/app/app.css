@@ -3,7 +3,7 @@
  * Design tokens, typography, density, animation keyframes and texture
  * utilities all live in @scheduler/design-system; this file is the thin
  * shell that wires the design system + Tailwind directives, exactly as
- * products/scheduler/frontend/src/index.css does.
+ * apps/console/src/index.css does.
  *
  * If you find yourself adding rules here, ask first: does it belong in
  * the design system instead? See packages/design-system/DESIGN.md.

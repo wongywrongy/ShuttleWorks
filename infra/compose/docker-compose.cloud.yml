@@ -34,7 +34,7 @@
 # appears in exactly the stacks that have a frontend, so adding one here
 # without nginx fails, and so does adding nginx without one.
 
-name: btp-cloud
+name: shuttleworks-cloud
 
 services:
   postgres:
@@ -59,7 +59,7 @@ services:
   backend:
     build:
       context: ../..
-      dockerfile: products/scheduler/backend/Dockerfile
+      dockerfile: apps/api/Dockerfile
     # Host 8000 sits in a Windows-reserved port range on some dev boxes,
     # so the default host port is 8600 (same convention as local dev).
     ports:
@@ -106,7 +106,7 @@ services:
   worker:
     build:
       context: ../..
-      dockerfile: products/scheduler/backend/Dockerfile
+      dockerfile: apps/api/Dockerfile
     command: ["python", "-m", "worker"]
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-info}

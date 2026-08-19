@@ -13,7 +13,7 @@
  * declaration.
  *
  * Held byte-identical to `app/form_csrf.FORM_FIELD` by
- * `products/scheduler/tests/unit/test_form_csrf_cross_tier.py`, which reads
+ * `tests/backend/unit/test_form_csrf_cross_tier.py`, which reads
  * THIS file. That pin is load-bearing precisely because the rendered form
  * reads the constant instead of repeating the literal: change it here and the
  * input's name changes with it, instead of the two drifting while the test

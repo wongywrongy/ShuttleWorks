@@ -1,5 +1,5 @@
 /**
- * A small model of `products/scheduler/frontend/nginx.conf` — enough of one
+ * A small model of `apps/console/nginx.conf` — enough of one
  * to ASK IT QUESTIONS rather than to grep it.
  *
  * The reason for the parser is the failure it is meant to catch. `nginx -t`
@@ -24,8 +24,10 @@ const NGINX_CONF = join(
   '..',
   '..',
   '..',
-  'frontend',
-  'nginx.conf',
+  '..',
+  'infra',
+  'nginx',
+  'console.conf',
 );
 
 export function nginxSource(): string {

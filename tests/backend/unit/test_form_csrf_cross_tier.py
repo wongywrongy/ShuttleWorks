@@ -52,9 +52,9 @@ from pathlib import Path
 
 import pytest
 
-from tests.unit.test_form_csrf import _GOLDEN
+from tests.backend.unit.test_form_csrf import _GOLDEN
 
-_TS_LIB = Path(__file__).resolve().parents[2] / "entrant" / "app" / "lib"
+_TS_LIB = Path(__file__).resolve().parents[3] / "apps" / "entrant" / "app" / "lib"
 _TS_PATH = _TS_LIB / "formCsrf.server.ts"
 
 # ``FORM_FIELD`` alone is declared next door, in a module with no ``.server``

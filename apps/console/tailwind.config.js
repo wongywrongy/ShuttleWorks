@@ -10,7 +10,7 @@ export default {
     // components (e.g. Button's `bg-brand`/`text-brand-ink`) are
     // emitted. Without this, any class used ONLY inside a shared
     // component silently no-ops.
-    '../../../packages/design-system/components/**/*.{ts,tsx}',
-    '../../../packages/design-system/icons/**/*.{ts,tsx}',
+    '../../packages/design-system/components/**/*.{ts,tsx}',
+    '../../packages/design-system/icons/**/*.{ts,tsx}',
   ],
 };

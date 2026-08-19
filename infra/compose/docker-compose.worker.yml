@@ -19,7 +19,7 @@ services:
   worker:
     build:
       context: ../..
-      dockerfile: products/scheduler/backend/Dockerfile
+      dockerfile: apps/api/Dockerfile
     restart: always
     command: ["python", "-m", "worker"]
     # The shared backend image ships a HEALTHCHECK that GETs

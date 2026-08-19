@@ -18,7 +18,7 @@ import uuid
 
 import pytest
 
-from tests._helpers import isolate_test_database
+from tests.backend._helpers import isolate_test_database
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 

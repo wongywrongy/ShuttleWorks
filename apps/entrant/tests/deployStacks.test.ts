@@ -11,7 +11,7 @@
  *      Router serializes error messages and absolute-path stack traces into
  *      `window.__reactRouterContext`, on a public page. Verified, not
  *      assumed: the same image run with `NODE_ENV=development` published
- *      `file:///app/products/scheduler/entrant/node_modules/...` frames into
+ *      `file:///app/apps/entrant/node_modules/...` frames into
  *      the HTML (task-22-report.md, mutation E).
  *   3. `SESSION_COOKIE_SECURE` is read by TWO processes — the backend for
  *      its session cookie, node for the `sw_play_csrf` nonce — on ONE
@@ -40,9 +40,9 @@ import { describe, expect, it } from 'vitest';
 import { contains, hostAt } from './helpers/cidr';
 import { directive } from './helpers/nginxConf';
 
-const STACK_DIR = join(import.meta.dirname, '..', '..');
+const STACK_DIR = join(import.meta.dirname, '..', '..', '..', 'infra', 'compose');
 const DOCKERFILE = join(import.meta.dirname, '..', 'Dockerfile');
-const REPO_ROOT = join(import.meta.dirname, '..', '..', '..', '..');
+const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'publish-release.yml');
 
 const stackFiles = readdirSync(STACK_DIR).filter((f) => /^docker-compose.*\.yml$/.test(f));
@@ -338,7 +338,7 @@ describe('the chain from "who is the client" to "which bucket" holds in every st
     //
     // COMMENTED values count. A template's commented-out line is what people
     // uncomment, which is exactly how a dead address travels.
-    const dirs = [STACK_DIR, join(STACK_DIR, 'backend')];
+    const dirs = [STACK_DIR, join(REPO_ROOT, 'apps', 'api')];
     const templates = dirs.flatMap((dir) =>
       readdirSync(dir)
         .filter((f) => /^\.env.*\.example$/.test(f))
@@ -434,7 +434,7 @@ describe('the images build on the node CI tests on', () => {
    * inherit each other's engine requirements — but each pins its own base
    * image, and nothing compared those pins to anything.
    *
-   * They drifted. `products/scheduler/frontend/Dockerfile` sat on
+   * They drifted. `apps/console/Dockerfile` sat on
    * `node:20-alpine` while `frontend/vite.config.ts` imported
    * `rollup-plugin-visualizer`, whose `engines.node` is `>=22` with no `^20`
    * branch — the production bundle was being built on an engine its own build
@@ -451,8 +451,8 @@ describe('the images build on the node CI tests on', () => {
 
   // Relative to REPO_ROOT. Every image that installs the root lockfile.
   const dockerfiles = [
-    'products/scheduler/frontend/Dockerfile',
-    'products/scheduler/entrant/Dockerfile',
+    'apps/console/Dockerfile',
+    'apps/entrant/Dockerfile',
     'docs/Dockerfile',
   ];
 

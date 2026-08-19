@@ -5,8 +5,8 @@ HTTP-only boundary holds even here) with a fresh SQLite file in a temp
 dir. The backend's lifespan runs Alembic ``upgrade head`` on startup, so
 the schema self-provisions.
 
-The subprocess runs with ``cwd=backend/``, so it reads ``backend/.env``
-like any other local backend — a machine configured for ``AUTH_MODE=cloud``
+The subprocess runs with ``cwd=apps/api/``, so it reads ``apps/api/.env``
+like any other local API — a machine configured for ``AUTH_MODE=cloud``
 gets an ephemeral server that requires real accounts too. ``ScenarioRunner``
 handles both by asking ``/auth/me`` rather than assuming the bootstrap
 identity is there.
@@ -26,8 +26,8 @@ from pathlib import Path
 
 import httpx
 
-#: repo-relative location of the backend package (cwd for the subprocess)
-_BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
+#: repo-relative location of the API package (cwd for the subprocess)
+_BACKEND_DIR = Path(__file__).resolve().parents[2] / "apps" / "api"
 
 
 def _free_port() -> int:

@@ -11,7 +11,7 @@ import time
 
 from scheduler_core.engine.cancel_token import CancelToken
 from scheduler_core.engine.warm_start import solve_warm_start
-from tests.helpers.solver_fixtures import make_minimal_warm_start_inputs
+from tests.backend.helpers.solver_fixtures import make_minimal_warm_start_inputs
 
 
 def test_token_starts_uncancelled():

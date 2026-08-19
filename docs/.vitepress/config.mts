@@ -84,6 +84,15 @@ export default defineConfig({
     // would put two competing versions of the same subject on the site with
     // nothing linking to the stale one.
     '**/*.superseded-draft-*.md',
+    // The two product records SP-REORG-1 relocated out of products/scheduler/.
+    // They are the same genre as `tech-stack.md` above: written for the repo,
+    // not for this site, and carrying GitHub-relative links that only resolved
+    // from their old home. Excluded rather than rewritten because Phase 5 is
+    // what decides which Diataxis quadrant each one belongs in; until then
+    // they stay readable on GitHub and out of the curated IA.
+    'SCHEDULER.md',
+    'PRODUCT.md',
+    'proposal-pipeline-smoke.md',
     'README.md',
   ],
 

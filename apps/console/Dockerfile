@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Frontend Dockerfile — multi-stage production build with npm workspaces.
 #
-# Build context = repo root (set in products/scheduler/docker-compose.yml).
+# Build context = repo root (set in infra/compose/docker-compose.yml).
 # That lets us copy the workspace root (package.json + lockfile) plus the
 # shared @scheduler/design-system package so `npm ci` resolves the full
 # workspace graph the same way it does on the developer's machine.
@@ -35,7 +35,7 @@ COPY package.json package-lock.json ./
 # workspace graph. Source files come later so editing a .tsx doesn't
 # invalidate the install layer.
 COPY packages/design-system/package.json ./packages/design-system/package.json
-COPY products/scheduler/frontend/package.json ./products/scheduler/frontend/package.json
+COPY apps/console/package.json ./apps/console/package.json
 
 # Install the workspace graph. Cache mount keeps the npm download cache
 # across builds; the cache mount itself is not part of the final layer.
@@ -46,28 +46,28 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 
 # Now copy the full source for the workspaces we actually build.
 COPY packages/design-system ./packages/design-system
-COPY products/scheduler/frontend ./products/scheduler/frontend
+COPY apps/console ./apps/console
 
 # Build args — baked into the static bundle at build time.
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Build via the workspace runner so paths resolve correctly.
-RUN npm run -w products/scheduler/frontend build
+RUN npm run -w apps/console build
 
 
 # Stage 2 — serve with the non-root nginx image.
 FROM nginxinc/nginx-unprivileged:alpine
 
-COPY products/scheduler/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY infra/nginx/console.conf /etc/nginx/conf.d/default.conf
 # Security headers live in a snippet because nginx drops inherited
 # add_header directives in any location that declares one of its own, so the
 # list has to be repeated per location — see SEC-02 in the snippet's header.
-COPY products/scheduler/frontend/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY infra/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 
 # nginx-unprivileged already owns /usr/share/nginx/html as UID 101.
 COPY --from=builder --chown=101:101 \
-    /app/products/scheduler/frontend/dist /usr/share/nginx/html
+    /app/apps/console/dist /usr/share/nginx/html
 
 EXPOSE 8080
 

@@ -5,7 +5,7 @@ Pulls the database URL from ``app.config.settings`` so a single env var
 metadata is the ``Base`` declarative base from ``database.models``;
 ``--autogenerate`` diffs the live database against that metadata.
 
-Invoke from ``products/scheduler/backend/``:
+Invoke from ``apps/api/``:
 
   alembic upgrade head
   alembic revision --autogenerate -m "<message>"
@@ -19,7 +19,7 @@ from sqlalchemy import engine_from_config, event, pool
 from alembic import context
 
 # ``prepend_sys_path = .`` in alembic.ini puts backend/ on sys.path so
-# these imports resolve when alembic is run from products/scheduler/backend/.
+# these imports resolve when alembic is run from apps/api/.
 from app.config import settings  # noqa: E402
 from database.models import Base  # noqa: E402
 from database.session import normalize_database_url  # noqa: E402

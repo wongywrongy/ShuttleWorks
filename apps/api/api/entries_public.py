@@ -4,7 +4,7 @@
 It shipped ``GET /e/{slug}`` and ``POST /e/{slug}/submit`` as HTML built
 from f-strings, and called itself throwaway while doing it. Phase 6 spent
 the program's single sanctioned new-dependency exception on React Router 7:
-the page moved to ``products/scheduler/entrant/`` and is served by node
+the page moved to ``apps/entrant/`` and is served by node
 behind nginx, and the write became ``POST /e/api/submit/{slug}`` in
 ``api/entries_json.py``. What is left here is the half that was never about
 rendering — resolving a slug to a page, projecting the entrant list, and

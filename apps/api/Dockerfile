@@ -23,16 +23,16 @@ WORKDIR /build
 
 # Third-party deps first — pinned in requirements.txt and rarely
 # touched, so this layer stays cached across normal app/engine edits.
-COPY products/scheduler/backend/requirements.txt ./requirements.txt
+COPY apps/api/requirements.txt ./requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     pip install --prefix=/install -r ./requirements.txt
 
 # scheduler_core is installed as a regular package via its pyproject.toml.
 # Copied + installed in its own layer so engine edits don't invalidate
 # the (much larger) third-party dep layer above.
-COPY scheduler_core ./scheduler_core
+COPY packages/scheduler-core ./scheduler-core
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    pip install --prefix=/install --no-deps ./scheduler_core
+    pip install --prefix=/install --no-deps ./scheduler-core
 
 
 FROM python:3.11-slim AS runtime
@@ -59,25 +59,28 @@ RUN useradd --create-home --uid 1001 app \
 # importable from anywhere — no sys.path bootstrap required.
 COPY --from=builder /install /usr/local
 
-# Build context is the repo root (set in products/scheduler/docker-compose.yml)
+# Build context is the repo root (set in infra/compose/docker-compose.yml)
 # so this Dockerfile can COPY the backend tree out of the monorepo.
 # Each top-level package gets its own COPY so a change inside one
 # directory only invalidates that layer (and the ones below it).
-COPY --chown=app:app products/scheduler/backend/app/          ./app/
-COPY --chown=app:app products/scheduler/backend/api/          ./api/
-COPY --chown=app:app products/scheduler/backend/adapters/     ./adapters/
-COPY --chown=app:app products/scheduler/backend/services/     ./services/
-COPY --chown=app:app products/scheduler/backend/database/     ./database/
-COPY --chown=app:app products/scheduler/backend/repositories/ ./repositories/
-COPY --chown=app:app products/scheduler/backend/alembic/      ./alembic/
-COPY --chown=app:app products/scheduler/backend/alembic.ini   ./alembic.ini
+COPY --chown=app:app apps/api/app/          ./app/
+COPY --chown=app:app apps/api/api/          ./api/
+COPY --chown=app:app apps/api/adapters/     ./adapters/
+COPY --chown=app:app apps/api/services/     ./services/
+COPY --chown=app:app apps/api/database/     ./database/
+COPY --chown=app:app apps/api/repositories/ ./repositories/
+COPY --chown=app:app apps/api/alembic/      ./alembic/
+COPY --chown=app:app apps/api/alembic.ini   ./alembic.ini
 # Standalone solve-worker entry (cloud mode: `python -m worker`). The
 # same image serves as API and worker; compose picks the command.
-COPY --chown=app:app products/scheduler/backend/worker.py     ./worker.py
-# Backend/frontend shared contract data. services/config_lock.py resolves
-# it as backend/../shared on the host, which maps to /shared when the
-# backend tree lives at /app.
-COPY --chown=app:app products/scheduler/shared/               /shared/
+COPY --chown=app:app apps/api/worker.py     ./worker.py
+# API/console shared contract data. services/config_lock.py finds this by
+# walking UP from its own file looking for packages/shared-contract, so the
+# image mirrors the repository path rather than inventing a flat /shared.
+# The old layout copied it to /shared purely to make a `parents[2]` index
+# come out right in a container whose tree is flatter than the repo's - a
+# coincidence that no longer has to be maintained on two sides.
+COPY --chown=app:app packages/shared-contract/  /packages/shared-contract/
 
 # Healthcheck hits /health/deep so we catch "backend is up but can't
 # persist or can't import the solver" failure modes, not just liveness.

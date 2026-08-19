@@ -1,10 +1,30 @@
 .PHONY: help \
         scheduler scheduler-dev scheduler-rebuild \
         entrant-dev local-dev \
+        dev-postgres dev-postgres-stop \
         stop logs ps clean \
-        test test-e2e check \
+        test test-e2e test-e2e-install test-e2e-rebuild test-e2e-dev check \
         sim sim-ephemeral sim-all sim-test \
-        engine-readme
+        generate-api engine-readme
+
+# SP-REORG-1 Phase 1 folded the former products/scheduler/Makefile into this
+# file. There is no product directory left to delegate into, and the two-level
+# arrangement had stopped paying for itself long before that: every target here
+# was a one-line `$(MAKE) -C` forward to a target with a different name, so the
+# name a developer typed and the name that failed were never the same name.
+#
+# Compose files live in infra/compose/ and are always addressed with an
+# explicit -f. Compose resolves build contexts, bind mounts and secret files
+# relative to the FILE, not to the working directory, so these run correctly
+# from anywhere in the tree.
+COMPOSE       := docker compose -f infra/compose/docker-compose.yml
+COMPOSE_DEV   := docker compose -f infra/compose/docker-compose.dev.yml
+COMPOSE_CLOUD := docker compose -f infra/compose/docker-compose.cloud.yml
+
+# Every Python tree ruff is expected to lint. Spelled out rather than `.`
+# because pyproject.toml now sits at the repo root, so a bare `ruff check .`
+# would walk archive/ and node_modules looking for reasons to fail.
+PY_SOURCES := apps/api tests/backend tests/e2e simulator tools packages/scheduler-core
 
 # Default target — list everything.
 help:
@@ -12,61 +32,96 @@ help:
 	@echo ""
 	@echo "Run:"
 	@echo "  make scheduler          Build + start the scheduler stack"
-	@echo "                          (frontend :80, backend :8000, docs :8081)"
-	@echo "  make scheduler-dev      Backend in Docker, Vite dev server on :5173"
+	@echo "                          (console :80, api :8000, docs :8081)"
+	@echo "  make scheduler-dev      API in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
-	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host backend on :8600"
+	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host API on :8600"
 	@echo "  make local-dev          Both surfaces at once: operator :5173 + entrant :5174"
 	@echo "                          (local only — see docs/getting-started/running-locally)"
+	@echo "  make dev-postgres       Local Postgres + API (exercise the cloud path)"
 	@echo "  make stop               Stop the dev-facing stacks (default, dev, cloud)"
 	@echo "  make logs               Tail container logs"
 	@echo "  make ps                 Show running containers"
 	@echo ""
 	@echo "Tests:"
-	@echo "  make test               Run scheduler pytest suite"
-	@echo "  make test-e2e           Run scheduler Playwright e2e (boots stack)"
+	@echo "  make test               Run the backend pytest suite"
+	@echo "  make test-e2e           Run Playwright e2e (boots stack)"
+	@echo "  make test-e2e-dev       Run e2e against http://localhost:5173 (requires 'make scheduler-dev')"
 	@echo "  make check              Run all local checks (lint, types, vitest, depcruise, ruff, pytest)"
 	@echo ""
 	@echo "Tournament simulator (internal dev tool, not in CI):"
-	@echo "  make sim                Run a scenario vs a running backend (SCENARIO=, SEED=, SIM_URL=)"
-	@echo "  make sim-ephemeral      Same, against an isolated throwaway backend"
+	@echo "  make sim                Run a scenario vs a running API (SCENARIO=, SEED=, SIM_URL=)"
+	@echo "  make sim-ephemeral      Same, against an isolated throwaway API"
 	@echo "  make sim-all            Every scenario + all bracket formats (ephemeral)"
 	@echo "  make sim-test           Simulator's own pytest (boundary guard + smoke)"
 	@echo ""
 	@echo "Misc:"
+	@echo "  make generate-api       Regenerate apps/console/src/api/dto.generated.ts from the OpenAPI schema"
 	@echo "  make clean              Down + remove images / volumes"
+	@echo "  make engine-readme      Open the shared scheduler_core README"
 	@echo ""
 	@echo "  Server stacks are started explicitly and NOT touched by stop/clean:"
-	@echo "    docker compose -f products/scheduler/docker-compose.selfhost.yml ..."
-	@echo "    docker compose -f products/scheduler/docker-compose.worker.yml ..."
-	@echo "  make engine-readme      Open the shared scheduler_core/ README"
-	@echo ""
-	@echo "The legacy ``make tournament`` target was retired in the"
-	@echo "backend-merge arc (PR 4). Bracket draws now live in the Bracket"
-	@echo "tab of the scheduler shell — boot via ``make scheduler``."
+	@echo "    docker compose -f infra/compose/docker-compose.selfhost.yml ..."
+	@echo "    docker compose -f infra/compose/docker-compose.worker.yml ..."
 
-# === Scheduler product ===
+# === The scheduler stack (Docker) ===
 
 scheduler:
-	$(MAKE) -C products/scheduler run
+	$(COMPOSE) up -d --build
+	@echo ""
+	@echo "Application starting..."
+	@echo "  Console:  http://localhost"
+	@echo "  API:      http://localhost:8000"
+	@echo "  API docs: http://localhost:8000/docs"
+	@echo "  Docs:     http://localhost:8081"
+	@echo ""
+	@echo "Run 'make logs' to view logs"
+
+# Nuclear rebuild: stop, remove old images, rebuild from scratch with no layer
+# cache. Use this when UI changes aren't showing up. Also forces a browser
+# hard-refresh — nginx sends no-cache on index.html so a reload suffices after.
+scheduler-rebuild:
+	$(COMPOSE) down --rmi local --remove-orphans || true
+	$(COMPOSE) build --no-cache
+	$(COMPOSE) up -d
+	@echo ""
+	@echo "Fresh rebuild complete."
+	@echo "  Console: http://localhost  (hard-refresh the browser: Cmd+Shift+R)"
+	@echo "  API:     http://localhost:8000"
+	@echo ""
 
 scheduler-dev:
-	$(MAKE) -C products/scheduler dev
+	@echo "Starting development environment..."
+	@echo "API: Docker | Console: npm dev server"
+	@echo ""
+	$(COMPOSE) up -d --build backend
+	@echo "Waiting for the API..."
+	@sleep 5
+	@curl -s http://localhost:8000/health > /dev/null && echo "API ready!" || echo "API starting..."
+	@echo ""
+	@echo "Starting the console dev server..."
+	npm run dev:scheduler
 
-scheduler-rebuild:
-	$(MAKE) -C products/scheduler rebuild
+# Local Postgres + API, for exercising the cloud path without leaving the
+# laptop. Also the quickest way to get a Postgres for the dual-dialect tests:
+#   TEST_POSTGRES_URL=postgresql://scheduler:scheduler@localhost:5433/scheduler pytest
+dev-postgres:
+	$(COMPOSE_DEV) up -d --build
 
-# === Entrant product (public SSR site) ===
+dev-postgres-stop:
+	$(COMPOSE_DEV) down
+
+# === Entrant tier (public SSR site) ===
 #
 # Local only — no nginx, no compose, no tunnel. See
 # docs/getting-started/running-locally.md for the full recipe and the
 # Docker-stack trap (the SPA's /api proxy defaults to :8000, exactly where
-# the Docker backend listens, so a host backend on :8600 goes silently
-# unused unless the stack is stopped first).
+# the Docker API listens, so a host API on :8600 goes silently unused
+# unless the stack is stopped first).
 #
 # Two different variables, one per surface — do not swap them:
-#   VITE_API_PROXY_TARGET  operator SPA only (frontend/vite.config.ts dev proxy)
-#   API_BASE_URL           entrant SSR server only (entrant/app/lib/apiFetch.server.ts,
+#   VITE_API_PROXY_TARGET  operator SPA only (apps/console/vite.config.ts dev proxy)
+#   API_BASE_URL           entrant SSR server only (apps/entrant/app/lib/apiFetch.server.ts,
 #                          which THROWS when it is unset)
 # Ports are passed as `--port`, the only thing either dev server reads; a
 # PORT env var is ignored and the loser of a race silently increments.
@@ -75,12 +130,12 @@ scheduler-rebuild:
 # Git Bash (or any shell where GNU Make finds sh.exe on PATH). Under cmd.exe
 # `&` sequences instead of backgrounding and the first server blocks forever.
 
-entrant-dev:  ## Run the PUBLIC entrant site (SSR) at :5174 against a host backend on :8600
+entrant-dev:  ## Run the PUBLIC entrant site (SSR) at :5174 against a host API on :8600
 	API_BASE_URL=http://localhost:8600 npm run dev:entrant -- --port 5174
 
-local-dev:  ## Run BOTH surfaces: operator product :5173 + public entrant site :5174
-	@echo "Backend must already be running on :8600 — see docs/getting-started."
-	@echo "  operator product     http://localhost:5173"
+local-dev:  ## Run BOTH surfaces: operator console :5173 + public entrant site :5174
+	@echo "The API must already be running on :8600 — see docs/getting-started."
+	@echo "  operator console     http://localhost:5173"
 	@echo "  public entrant site  http://localhost:5174"
 	VITE_API_PROXY_TARGET=http://localhost:8600 npm run dev:scheduler -- --port 5173 & \
 	API_BASE_URL=http://localhost:8600 npm run dev:entrant -- --port 5174
@@ -91,47 +146,92 @@ local-dev:  ## Run BOTH surfaces: operator product :5173 + public entrant site :
 # a `make stop` that reaches into a production stack is a footgun, not a
 # convenience. Leading `-` so a stack that was never up is not an error.
 stop:
-	$(MAKE) -C products/scheduler stop
-	-cd products/scheduler && docker compose -f docker-compose.dev.yml down
-	-cd products/scheduler && docker compose -f docker-compose.cloud.yml down
+	-$(COMPOSE) down
+	-$(COMPOSE_DEV) down
+	-$(COMPOSE_CLOUD) down
 
 logs:
-	$(MAKE) -C products/scheduler logs
+	$(COMPOSE) logs -f
 
 ps:
-	@cd products/scheduler && docker compose ps || true
+	@$(COMPOSE) ps || true
 
 # === Tests ===
 
 test:
-	cd products/scheduler && pytest
+	pytest
+
+test-e2e-install:
+	cd tests/e2e && npm install && npx playwright install --with-deps chromium
 
 test-e2e:
-	$(MAKE) -C products/scheduler test-e2e
+	cd tests/e2e && npm install --silent && npx playwright test
+
+test-e2e-rebuild:
+	cd tests/e2e && npm install --silent && E2E_REBUILD=1 npx playwright test
+
+test-e2e-dev:
+	cd tests/e2e && npm install --silent && E2E_BASE_URL=http://localhost:5173 E2E_MANAGE_STACK=0 npx playwright test
 
 # === Tournament simulator (internal dev tool) ===
+# Full-tournament workflow simulation over the real HTTP API. NOT part of
+# 'make check' or CI — see simulator/README.md for the boundary rules.
+
+SCENARIO ?= small-meet
+SEED ?= 42
+SIM_URL ?= http://localhost:8600
+FORMAT ?= se
 
 sim:
-	$(MAKE) -C products/scheduler sim
+	PYTHONPATH=simulator python -m tournament_sim run --scenario $(SCENARIO) --seed $(SEED) --base-url $(SIM_URL) --format $(FORMAT)
 
 sim-ephemeral:
-	$(MAKE) -C products/scheduler sim-ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario $(SCENARIO) --seed $(SEED) --ephemeral --format $(FORMAT)
 
 sim-all:
-	$(MAKE) -C products/scheduler sim-all
+	PYTHONPATH=simulator python -m tournament_sim run --scenario small-meet --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario full-meet --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format se --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format rr --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format swiss --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format monrad --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format compass --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario bracket --format de --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario mixed --seed $(SEED) --ephemeral
+	PYTHONPATH=simulator python -m tournament_sim run --scenario chaos --seed $(SEED) --ephemeral
 
 sim-test:
-	$(MAKE) -C products/scheduler sim-test
+	cd simulator && pytest
+
+# === API contract generation ===
+#
+# Regenerate the console's TS DTOs from the FastAPI OpenAPI schema. Imports
+# the FastAPI app directly via tools/generate_openapi.py — no running API
+# required, so the target is safe to run in CI.
+#
+# Contract types in apps/console/src/api/dto.ts are the curated view of the
+# auto-generated dto.generated.ts: when schemas.py changes, run this target,
+# inspect the diff in dto.generated.ts, and reconcile dto.ts by hand.
+# Console-private types (SSE events, internal enums) stay in dto.ts and are
+# NOT touched by this target.
+generate-api:
+	@echo "Dumping OpenAPI schema..."
+	@python tools/generate_openapi.py apps/console/src/api/.openapi.json
+	@echo "Generating apps/console/src/api/dto.generated.ts..."
+	@cd apps/console && npx openapi-typescript ./src/api/.openapi.json --output ./src/api/dto.generated.ts
+	@rm apps/console/src/api/.openapi.json
+	@echo "Done. Inspect 'git diff apps/console/src/api/dto.generated.ts'."
 
 # === Cleanup ===
 
 clean:
-	-$(MAKE) -C products/scheduler clean
-	-cd products/scheduler && docker compose -f docker-compose.dev.yml down -v
-	-cd products/scheduler && docker compose -f docker-compose.cloud.yml down -v
+	-$(COMPOSE) down -v --rmi local
+	-$(COMPOSE_DEV) down -v
+	-$(COMPOSE_CLOUD) down -v
+	@echo "Cleaned up containers and images"
 
 engine-readme:
-	@$${PAGER:-less} scheduler_core/README.md
+	@$${PAGER:-less} packages/scheduler-core/scheduler_core/README.md
 
 # === Local CI checks ===
 
@@ -155,12 +255,12 @@ check:
 # The entrant tier is a SEPARATE invocation because it needs a separate step:
 # its `typecheck` runs `react-router typegen` first, and without the generated
 # route types `tsc` there is meaningless. Root already exposes it for CI.
-	cd products/scheduler/frontend && npx tsc -b
+	cd apps/console && npx tsc -b
 	npm run typecheck:entrant
-	npm --prefix products/scheduler/frontend run test:run
+	npm --prefix apps/console run test:run
 	npm run depcruise
-	ruff check products/scheduler scheduler_core
-	cd products/scheduler && pytest
+	ruff check $(PY_SOURCES)
+	pytest
 	@echo ""
 	@echo "--- docs freshness (advisory — never fails the gate) ---"
 	-npm run docs:freshness

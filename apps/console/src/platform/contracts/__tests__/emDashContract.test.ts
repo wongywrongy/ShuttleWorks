@@ -44,7 +44,11 @@ import { describe, expect, it } from 'vitest';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '../../..');
-const REPO = path.resolve(HERE, '../../../../../../..');
+// Six levels: __tests__ -> contracts -> platform -> src -> console -> apps -> repo root.
+// SP-REORG-1 shortened this by one (the old path had products/scheduler between
+// the app and the root). Getting it wrong fails loudly at collect time, which is
+// the good case - the test reads real files off disk and cannot silently pass.
+const REPO = path.resolve(HERE, '../../../../../..');
 const DESIGN_SYSTEM = path.join(REPO, 'packages/design-system');
 
 /** Every shipped `.ts`/`.tsx`/`.css` file under `dir`, enumerated from disk. */
@@ -144,7 +148,7 @@ describe('the em dash contract has something to scan', () => {
     // A walker that silently returns [] would make every assertion below pass.
     expect(FRONTEND_FILES.length).toBeGreaterThan(200);
     expect(DESIGN_SYSTEM_FILES.length).toBeGreaterThan(5);
-    expect(FILES.some((f) => rel(f) === 'products/scheduler/frontend/src/products/hub/WorkspaceRow.tsx')).toBe(true);
+    expect(FILES.some((f) => rel(f) === 'apps/console/src/products/hub/WorkspaceRow.tsx')).toBe(true);
     expect(FILES.some((f) => rel(f) === 'packages/design-system/components/Button.tsx')).toBe(true);
     // Markdown is out of scope - proves the design-system walk excludes it
     // rather than just happening not to match the extension filter twice.

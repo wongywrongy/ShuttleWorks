@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests._helpers import isolate_test_database, seed_tournament
+from tests.backend._helpers import isolate_test_database, seed_tournament
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 GOOD_PW = "a perfectly fine passphrase"

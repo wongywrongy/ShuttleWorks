@@ -77,7 +77,7 @@ _CONFIRMABLE_FROM = "pending"
 # is additive, narrowing it breaks every printed poster.
 _SLUG_RE = re.compile(r"^[a-z0-9-]{3,60}$")
 
-# Path segments the entrant app (`products/scheduler/entrant`) claims ahead
+# Path segments the entrant app (`apps/entrant`) claims ahead
 # of its `:slug` catch-all, plus the two prefixes ruling R8-A hands to this
 # backend by nginx longest-prefix match (`/e/api/`, `/e/account/`). A slug
 # equal to any of these would be unreachable: node's `app/routes.ts` ranks

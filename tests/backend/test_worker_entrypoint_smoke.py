@@ -37,7 +37,7 @@ pytestmark = pytest.mark.skipif(
     reason="TEST_POSTGRES_URL not set (the worker refuses SQLite in cloud mode)",
 )
 
-BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
+BACKEND_DIR = Path(__file__).resolve().parents[2] / "apps" / "api"
 BOOT_DEADLINE_SECONDS = 60.0
 STARTUP_MARKER = "solve worker up"
 

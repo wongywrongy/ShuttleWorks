@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-_PRODUCT_ROOT = Path(__file__).resolve().parents[1]
-_BACKEND_ROOT = str(_PRODUCT_ROOT / "backend")
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_BACKEND_ROOT = str(_REPO_ROOT / "apps" / "api")
 
 _BACKEND_PACKAGE_PREFIXES = (
     "app.",

@@ -49,7 +49,7 @@ ME = "/e/account/me"
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("AUTH_MODE", "cloud")
     monkeypatch.setenv("ENVIRONMENT", "local")
-    from tests._helpers import isolate_test_database
+    from tests.backend._helpers import isolate_test_database
 
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
@@ -67,7 +67,7 @@ def proxied_client(tmp_path, monkeypatch):
     connector = "10.42.0.9"
     monkeypatch.setenv("AUTH_MODE", "cloud")
     monkeypatch.setenv("ENVIRONMENT", "local")
-    from tests._helpers import isolate_test_database
+    from tests.backend._helpers import isolate_test_database
 
     isolate_test_database(tmp_path, monkeypatch)
     from app.config import settings
@@ -809,7 +809,7 @@ def test_a_dead_cookie_does_not_stop_a_fresh_login(client, account):
 def local_client(tmp_path, monkeypatch):
     """The same app in ``AUTH_MODE=local`` — the solo-operator posture."""
     monkeypatch.setenv("AUTH_MODE", "local")
-    from tests._helpers import isolate_test_database
+    from tests.backend._helpers import isolate_test_database
 
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient

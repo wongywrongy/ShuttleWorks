@@ -3,7 +3,7 @@
 Companion to test_match_state.py — kept separate so the two new
 assertions are easy to locate during review.
 
-conftest.py adds products/scheduler/backend/ to sys.path, so imports
+conftest.py adds apps/api/ to sys.path, so imports
 are relative to that root (no 'backend.' prefix).
 """
 from __future__ import annotations

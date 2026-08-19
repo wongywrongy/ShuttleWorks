@@ -13,7 +13,7 @@ This is the check. Each row names an old test and the test that takes over
 its claim, in two dicts because the migration crosses a tier boundary:
 ``SUPERSEDED`` for the 74 claims a backend successor took, ``RENDER_TIER``
 for the 18 that were claims about *markup* and therefore belong to
-``products/scheduler/entrant/`` or to nobody.
+``apps/entrant/`` or to nobody.
 
 Three assertions held the pair honest while the migration was in flight:
 
@@ -36,19 +36,22 @@ import ast
 import re
 from pathlib import Path
 
-_PRODUCT_ROOT = Path(__file__).resolve().parents[1]
-_OLD = _PRODUCT_ROOT / "tests" / "test_entries_public_routes.py"
+# Repo-root anchored since SP-REORG-1: the suite lives at tests/backend/ and
+# the entrant tier at apps/entrant/, so no single directory is the parent of
+# both any more. Every path below is written relative to the repository root.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_OLD = _REPO_ROOT / "tests" / "backend" / "test_entries_public_routes.py"
 
-_PAGE = "tests/test_entries_page_api.py"
-_SUBMIT = "tests/test_entries_submit_api.py"
+_PAGE = "tests/backend/test_entries_page_api.py"
+_SUBMIT = "tests/backend/test_entries_submit_api.py"
 
 # Renamed with the SP-P6-2 route split: the form's document tests moved to
 # the enter page's suites, successor test names unchanged.
-_RENDER = "entrant/tests/enter.render.test.ts"
-_QUOTE = "entrant/tests/enter.quote.test.ts"
-_ECHO = "entrant/tests/echo.test.ts"
-_INGRESS = "entrant/tests/ingress.test.ts"
-_RECEIPT = "entrant/tests/receipt.test.ts"
+_RENDER = "apps/entrant/tests/enter.render.test.ts"
+_QUOTE = "apps/entrant/tests/enter.quote.test.ts"
+_ECHO = "apps/entrant/tests/echo.test.ts"
+_INGRESS = "apps/entrant/tests/ingress.test.ts"
+_RECEIPT = "apps/entrant/tests/receipt.test.ts"
 
 # old test name -> (file that holds its successor, successor test name)
 SUPERSEDED: dict[str, tuple[str, str]] = {
@@ -352,7 +355,7 @@ def test_every_successor_named_in_the_ledger_exists():
 
     missing: list[str] = []
     for old, (rel, successor) in sorted(rows.items()):
-        target = _PRODUCT_ROOT / rel
+        target = _REPO_ROOT / rel
         if not target.exists() or successor not in _test_names(target):
             missing.append(f"{old} -> {rel}::{successor}")
 

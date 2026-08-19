@@ -2,7 +2,7 @@
 
 Used by ``make generate-api`` to feed openapi-typescript without needing
 the backend to be running. Imports the production FastAPI app directly
-from ``backend/app/main.py`` and writes the OpenAPI 3.1 document to the
+from ``apps/api/app/main.py`` and writes the OpenAPI 3.1 document to the
 file path passed on argv.
 """
 from __future__ import annotations
@@ -11,9 +11,9 @@ import json
 import sys
 from pathlib import Path
 
-_BACKEND = Path(__file__).resolve().parents[1] / "backend"
-if str(_BACKEND) not in sys.path:
-    sys.path.insert(0, str(_BACKEND))
+_API = Path(__file__).resolve().parents[1] / "apps" / "api"
+if str(_API) not in sys.path:
+    sys.path.insert(0, str(_API))
 
 from app.main import app  # noqa: E402  -- after sys.path setup
 

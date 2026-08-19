@@ -37,14 +37,14 @@ test('the entrant app is clean against its own boundary rules', () => {
 });
 
 test('importing the operator frontend is an error', () => {
-  // frontend/src/api/client.ts is module-singleton, browser-coupled and
+  // apps/console/src/api/client.ts is module-singleton, browser-coupled and
   // withCredentials-bearing (spec §4). Shared across requests in one node
   // process, its module state is a cross-entrant leak. The rule is the thing
   // that stops someone reaching for it.
   mkdirSync('app/lib', { recursive: true });
   writeFileSync(
     'app/routes/__boundary_fixture__.tsx',
-    "import { apiClient } from '../../../frontend/src/api/client';\n" +
+    "import { apiClient } from '../../../console/src/api/client';\n" +
       'export const fixture = apiClient;\n',
   );
 
@@ -90,14 +90,14 @@ test('a one-hop re-export barrel does not launder a .server import (transitive c
 });
 
 test('CI runs the entrant gates', () => {
-  const ci = readFileSync('../../../.github/workflows/ci.yml', 'utf8');
+  const ci = readFileSync('../../.github/workflows/ci.yml', 'utf8');
   expect(ci).toContain('npm run lint:entrant');
   expect(ci).toContain('npm run typecheck:entrant');
-  expect(ci).toContain('npm --prefix products/scheduler/entrant run test:run');
+  expect(ci).toContain('npm --prefix apps/entrant run test:run');
   expect(ci).toContain('npm run depcruise:entrant');
   // The export-level half of entrant-server-only-stays-server. Asserted here
   // so narrowing the depcruise rule off app/routes/ (Task 15) cannot quietly
   // become "routes are unguarded" if someone later trims the CI job.
-  expect(ci).toContain('npm --prefix products/scheduler/entrant run build');
+  expect(ci).toContain('npm --prefix apps/entrant run build');
   expect(ci).toContain('npm run knip:entrant || true');
 });

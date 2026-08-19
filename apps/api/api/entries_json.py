@@ -2,7 +2,7 @@
 
 **What this module is.** ``api/entries_public.py`` calls itself throwaway
 in its own first paragraph, and Phase 6 is where that is honoured: the
-React Router 7 app in ``products/scheduler/entrant/`` renders the entrant
+React Router 7 app in ``apps/entrant/`` renders the entrant
 experience, and this module is the only thing it reads. The split is the
 point of ruling R8-A — one origin, nginx routing ``/e/api/`` here and
 ``/e/{slug}`` to node, so a form post from the entrant page reaches

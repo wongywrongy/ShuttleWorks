@@ -32,12 +32,12 @@ from pathlib import Path
 
 import pytest
 
-from tests._helpers import isolate_test_database
+from tests.backend._helpers import isolate_test_database
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 GOOD_PW = "a perfectly fine passphrase"
 
-_BACKEND = Path(__file__).resolve().parents[1] / "backend"
+_BACKEND = Path(__file__).resolve().parents[2] / "apps" / "api"
 
 # **Every directory where a cookie can be set, not every directory where one
 # happened to be set when this guard was written.** The scan covered ``api/``

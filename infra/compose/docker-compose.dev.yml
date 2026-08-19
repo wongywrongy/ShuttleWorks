@@ -4,15 +4,15 @@
 # stands up a Postgres instance alongside the backend so we can exercise
 # the cloud path without leaving the laptop.
 #
-#   make -C products/scheduler dev-postgres
+#   make dev-postgres
 #   # or directly:
-#   docker compose -f products/scheduler/docker-compose.dev.yml up --build
+#   docker compose -f infra/compose/docker-compose.dev.yml up --build
 #
 # The backend container reads ``DATABASE_URL`` from the environment —
 # overridden here to point at the in-network Postgres service. The same
 # env var points at the production Postgres with zero code change.
 
-name: ${COMPOSE_PROJECT_NAME:-btp-dev}
+name: ${COMPOSE_PROJECT_NAME:-shuttleworks-dev}
 
 services:
   postgres:
@@ -25,7 +25,7 @@ services:
       # 5433 to avoid colliding with a host Postgres on 5432.
       - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - ../../data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler"]
       interval: 5s
@@ -35,7 +35,7 @@ services:
   backend:
     build:
       context: ../..
-      dockerfile: products/scheduler/backend/Dockerfile
+      dockerfile: apps/api/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,7 +47,7 @@ services:
       - DATABASE_URL=postgresql://scheduler:scheduler@postgres:5432/scheduler
       - ENVIRONMENT=local
     volumes:
-      - ./data:/app/data
+      - ../../data:/app/data
     restart: unless-stopped
     read_only: true
     tmpfs:

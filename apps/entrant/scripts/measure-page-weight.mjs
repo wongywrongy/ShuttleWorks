@@ -51,7 +51,7 @@ const serverEntry = path.join(root, 'build', 'server', 'index.js');
 
 if (!fs.existsSync(serverEntry) || !fs.existsSync(clientDir)) {
   console.error(`Production build not found under ${path.join(root, 'build')}.`);
-  console.error(`Run: npm --prefix products/scheduler/entrant run build`);
+  console.error(`Run: npm --prefix apps/entrant run build`);
   process.exit(1);
 }
 

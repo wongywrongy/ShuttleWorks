@@ -35,7 +35,7 @@ import sqlalchemy as sa
 
 from _helpers import purge_backend_modules
 
-_BACKEND = Path(__file__).resolve().parents[2] / "backend"
+_BACKEND = Path(__file__).resolve().parents[3] / "apps" / "api"
 
 # The revision that creates the entries family, the one that narrows its
 # idempotency scope (the new head), and the one the family must follow.

@@ -32,13 +32,13 @@
  * **Drift with the Python derivation is the one real hazard here** and it is
  * pinned in two directions, because this is a second implementation of a
  * security primitive:
- *   - `products/scheduler/tests/unit/test_form_csrf_cross_tier.py` reads THIS
+ *   - `tests/backend/unit/test_form_csrf_cross_tier.py` reads THIS
  *     FILE, extracts every constant below, and asserts each equals its
  *     `backend/app/form_csrf.py` counterpart — then recomputes the golden
  *     digests through the extracted prefix. Change the prefix on either side
  *     and it goes red.
  *   - `tests/formCsrf.server.test.ts` asserts this derivation's output against
- *     the same golden hex `products/scheduler/tests/unit/test_form_csrf.py`
+ *     the same golden hex `tests/backend/unit/test_form_csrf.py`
  *     pins for the same inputs, so an algorithm change here (sha1, hex→base64,
  *     a dropped encoding) is red on the node side too.
  */

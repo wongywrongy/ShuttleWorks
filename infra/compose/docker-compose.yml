@@ -1,4 +1,4 @@
-name: ${COMPOSE_PROJECT_NAME:-btp}
+name: ${COMPOSE_PROJECT_NAME:-shuttleworks-local}
 
 services:
   # Backend API - FastAPI + CP-SAT solver
@@ -7,7 +7,7 @@ services:
       # Context = repo root so the Dockerfile can COPY the shared
       # scheduler_core/ tree at the top level.
       context: ../..
-      dockerfile: products/scheduler/backend/Dockerfile
+      dockerfile: apps/api/Dockerfile
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
     # Optional: pass-through env file. Copy backend/.env.example to
@@ -26,7 +26,7 @@ services:
       # the default ``./local.db`` path.
       - DATABASE_URL=sqlite:////app/data/local.db
     volumes:
-      - ./data:/app/data
+      - ../../data:/app/data
     restart: unless-stopped
     # Read-only root filesystem with a writable tmpfs for /tmp — the
     # app only persists inside ./data, so anything else getting written
@@ -61,7 +61,7 @@ services:
       # Context = repo root (matches backend/frontend) so `npm ci` sees the
       # root lockfile and the shared packages/design-system tree.
       context: ../..
-      dockerfile: products/scheduler/entrant/Dockerfile
+      dockerfile: apps/entrant/Dockerfile
     # No `ports:` — deliberately unreachable except through nginx. A
     # published port would be a second door into the entrant tier that
     # bypasses the Cookie allowlist in nginx.conf, which is the control that
@@ -105,7 +105,7 @@ services:
       # Phase 2a consolidated to a root-only lockfile; building from the
       # frontend dir alone can't run `npm ci` without it.
       context: ../..
-      dockerfile: products/scheduler/frontend/Dockerfile
+      dockerfile: apps/console/Dockerfile
       args:
         - VITE_API_BASE_URL=/api
     ports:

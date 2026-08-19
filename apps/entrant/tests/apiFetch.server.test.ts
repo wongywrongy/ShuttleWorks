@@ -81,7 +81,7 @@ describe('apiGet', () => {
     // nests `http_error`'s structured payload under `detail`
     // (backend/app/error_codes.py:171-183), so an unknown slug answers
     // `{"detail": {"code": "TOURNAMENT_NOT_FOUND", "message": "..."}}`
-    // (backend/api/entries_public.py:219-226).
+    // (apps/api/api/entries_public.py:219-226).
     vi.stubGlobal(
       'fetch',
       stubFetch(

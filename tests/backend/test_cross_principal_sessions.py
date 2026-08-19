@@ -39,7 +39,7 @@ import json
 
 import pytest
 
-from tests.test_auth_surface import (
+from tests.backend.test_auth_surface import (
     OPS_TOKEN_GATED,
     PUBLIC_BY_DESIGN,
     _concrete,
@@ -89,7 +89,7 @@ def client(tmp_path, monkeypatch):
     caller is already the bootstrap operator by design."""
     monkeypatch.setenv("AUTH_MODE", "cloud")
     monkeypatch.setenv("ENVIRONMENT", "local")
-    from tests._helpers import isolate_test_database
+    from tests.backend._helpers import isolate_test_database
 
     isolate_test_database(tmp_path, monkeypatch)
     from services import turnstile as service

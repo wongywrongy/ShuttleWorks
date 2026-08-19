@@ -93,7 +93,7 @@ def test_there_is_exactly_one_derivation_in_the_backend():
     """
     from pathlib import Path
 
-    backend = Path(__file__).resolve().parents[2] / "backend"
+    backend = Path(__file__).resolve().parents[3] / "apps" / "api"
     owner = backend / "app" / "form_csrf.py"
 
     offenders = [
@@ -211,7 +211,7 @@ def test_the_backend_no_longer_mints_the_nonce_itself():
     # AST, not a substring pair: ``config.py`` legitimately says both
     # "set_cookie" and "sw_play_csrf" in prose, and a guard that a docstring
     # can trip is a guard someone eventually silences.
-    backend = Path(__file__).resolve().parents[2] / "backend"
+    backend = Path(__file__).resolve().parents[3] / "apps" / "api"
     offenders = []
     for path in backend.rglob("*.py"):
         source = path.read_text(encoding="utf-8")
@@ -255,7 +255,7 @@ def test_the_deleted_minter_is_named_only_in_its_own_obituaries():
     """
     from pathlib import Path
 
-    backend = Path(__file__).resolve().parents[2] / "backend"
+    backend = Path(__file__).resolve().parents[3] / "apps" / "api"
     hits = [
         f"{path.relative_to(backend).as_posix()}:{n}"
         for path in sorted(backend.rglob("*.py"))
@@ -284,7 +284,7 @@ def test_the_trigger_list_reads_the_cookie_name_from_its_owner():
     import ast
     from pathlib import Path
 
-    path = Path(__file__).resolve().parents[2] / "backend" / "app" / "config.py"
+    path = Path(__file__).resolve().parents[3] / "apps" / "api" / "app" / "config.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
     # Docstrings are excluded on purpose: naming the cookie in prose is how

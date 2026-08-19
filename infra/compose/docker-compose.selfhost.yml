@@ -65,7 +65,7 @@ services:
   api:
     build:
       context: ../..
-      dockerfile: products/scheduler/backend/Dockerfile
+      dockerfile: apps/api/Dockerfile
     restart: always
     # No `ports:` — nothing is published. cloudflared reaches this over
     # the compose network. Publishing a port here would create exactly
@@ -199,7 +199,7 @@ services:
   entrant:
     build:
       context: ../..
-      dockerfile: products/scheduler/entrant/Dockerfile
+      dockerfile: apps/entrant/Dockerfile
     restart: always
     # No `ports:` — nothing published, same reasoning as `api` and
     # `frontend`. nginx is the only client.
@@ -243,7 +243,7 @@ services:
       # Context = repo root: the Dockerfile copies workspace root
       # metadata + the shared packages/design-system tree.
       context: ../..
-      dockerfile: products/scheduler/frontend/Dockerfile
+      dockerfile: apps/console/Dockerfile
       args:
         # Same-origin API calls; nginx proxies /api/* to the backend.
         - VITE_API_BASE_URL=/api
@@ -325,7 +325,7 @@ networks:
   #   1. this subnet,
   #   2. TRUSTED_PROXY_IPS on `api` above — whether the API believes the
   #      client address nginx vouches for,
-  #   3. `set_real_ip_from` in products/scheduler/frontend/nginx.conf —
+  #   3. `set_real_ip_from` in apps/console/nginx.conf —
   #      whether nginx believes CF-Connecting-IP from cloudflared at all.
   #      It is baked into the image, so it needs a rebuild.
   # Miss (2) or (3) and the per-client limits silently become one global
@@ -342,8 +342,8 @@ secrets:
   # import with a config error rather than a permissions one.
   # None is committed — ./secrets/.gitignore excludes everything in here.
   postgres_password:
-    file: ./secrets/postgres_password
+    file: ../../secrets/postgres_password
   database_url:
-    file: ./secrets/database_url
+    file: ../../secrets/database_url
   ops_token:
-    file: ./secrets/ops_token
+    file: ../../secrets/ops_token

@@ -15,9 +15,9 @@
  * "behind"); uncommitted source edits are noted too.
  *
  * Usage:
- *   node scripts/docs-freshness.mjs           # summary table
- *   node scripts/docs-freshness.mjs --list     # + list the source commits behind
- *   node scripts/docs-freshness.mjs --json      # machine-readable output
+ *   node tools/docs-freshness.mjs           # summary table
+ *   node tools/docs-freshness.mjs --list     # + list the source commits behind
+ *   node tools/docs-freshness.mjs --json      # machine-readable output
  *
  * Exit code: 1 if any area is BEHIND (so CI can gate), else 0.
  *
@@ -30,56 +30,56 @@ const AREAS = [
   {
     name: 'API reference',
     docs: ['docs/api'],
-    src: ['products/scheduler/backend/api', 'products/scheduler/backend/app/schemas.py'],
+    src: ['apps/api/api', 'apps/api/app/schemas.py'],
   },
   {
     name: 'Backend structure & data flow',
     docs: ['docs/architecture/backend-structure.md', 'docs/architecture/data-flow.md'],
     src: [
-      'products/scheduler/backend/database',
-      'products/scheduler/backend/repositories',
-      'products/scheduler/backend/services',
-      'products/scheduler/backend/alembic',
+      'apps/api/database',
+      'apps/api/repositories',
+      'apps/api/services',
+      'apps/api/alembic',
     ],
   },
   {
     name: 'Workspace model',
     docs: ['docs/architecture/workspace-model.md'],
     src: [
-      'products/scheduler/backend/api/workspace_modules.py',
-      'products/scheduler/backend/api/workspace_signals.py',
-      'products/scheduler/backend/database/models.py',
+      'apps/api/api/workspace_modules.py',
+      'apps/api/api/workspace_signals.py',
+      'apps/api/database/models.py',
     ],
   },
   {
     name: 'State management',
     docs: ['docs/architecture/state-management.md'],
-    src: ['products/scheduler/frontend/src/store', 'products/scheduler/frontend/src/hooks'],
+    src: ['apps/console/src/store', 'apps/console/src/hooks'],
   },
   {
     name: 'Module contracts & overview',
     docs: ['docs/contracts', 'docs/architecture/system-overview.md'],
     src: [
-      'products/scheduler/frontend/src/platform/contracts',
-      'products/scheduler/frontend/src/app/workspace/workspaceNav.ts',
+      'apps/console/src/platform/contracts',
+      'apps/console/src/app/workspace/workspaceNav.ts',
     ],
   },
   {
     name: 'Modules',
     docs: ['docs/modules'],
-    src: ['products/scheduler/frontend/src/products'],
+    src: ['apps/console/src/products'],
   },
   {
     name: 'Extending (how-to guides)',
     docs: ['docs/how-to'],
     src: [
-      'products/scheduler/frontend/src/platform/product-shell/types.ts',
-      'products/scheduler/frontend/src/app/workspace/workspaceNav.ts',
-      'products/scheduler/frontend/src/store/uiStore.ts',
-      'products/scheduler/frontend/src/platform/contracts/moduleContract.ts',
-      'products/scheduler/frontend/src/api/client.ts',
-      'products/scheduler/backend/database/models.py',
-      'products/scheduler/backend/api/workspace_modules.py',
+      'apps/console/src/platform/product-shell/types.ts',
+      'apps/console/src/app/workspace/workspaceNav.ts',
+      'apps/console/src/store/uiStore.ts',
+      'apps/console/src/platform/contracts/moduleContract.ts',
+      'apps/console/src/api/client.ts',
+      'apps/api/database/models.py',
+      'apps/api/api/workspace_modules.py',
       'scheduler_core/engine/constraints',
     ],
   },
@@ -94,17 +94,17 @@ const AREAS = [
     // for its first two months, which is exactly how it stayed undocumented.
     name: 'Entrant tier (the public site)',
     docs: ['docs/architecture/entrant-tier.md'],
-    src: ['products/scheduler/entrant/app', 'products/scheduler/entrant/scripts'],
+    src: ['apps/entrant/app', 'apps/entrant/scripts'],
   },
   {
     name: 'Entries module',
     docs: ['docs/modules/entries.md'],
     src: [
-      'products/scheduler/backend/services/entries.py',
-      'products/scheduler/backend/api/entries.py',
-      'products/scheduler/backend/api/entries_json.py',
-      'products/scheduler/backend/api/entrants.py',
-      'products/scheduler/frontend/src/products/entries',
+      'apps/api/services/entries.py',
+      'apps/api/api/entries.py',
+      'apps/api/api/entries_json.py',
+      'apps/api/api/entrants.py',
+      'apps/console/src/products/entries',
     ],
   },
 ]

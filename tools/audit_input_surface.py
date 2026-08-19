@@ -5,13 +5,12 @@ Walks every request body schema, resolves $refs, and reports:
   - array fields with no maxItems
   - integer/number fields with no bounds
   - models that permit additional properties
-Run from the repo root: .venv/Scripts/python.exe scripts/audit_input_surface.py
+Run from the repo root: .venv/Scripts/python.exe tools/audit_input_surface.py
 """
-import json
 import os
 import sys
 
-BACKEND = os.path.join(os.getcwd(), "products", "scheduler", "backend")
+BACKEND = os.path.join(os.getcwd(), "apps", "api")
 sys.path.insert(0, BACKEND)
 os.environ.setdefault("DATABASE_URL", "sqlite:///./_audit_tmp.db")
 

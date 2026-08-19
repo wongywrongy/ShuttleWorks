@@ -415,7 +415,7 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
     // universal (applies to every element, `.motion-enter` included), not
     // because the design system quietly dropped reduced-motion coverage.
     const designSystemGlobals = readFileSync(
-      new URL('../../../../packages/design-system/globals.css', import.meta.url),
+      new URL('../../../packages/design-system/globals.css', import.meta.url),
       'utf8',
     );
     const universalBlock =

@@ -10,7 +10,7 @@ import logging
 
 import pytest
 
-from tests._helpers import isolate_test_database, seed_tournament
+from tests.backend._helpers import isolate_test_database, seed_tournament
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 
@@ -138,7 +138,7 @@ def test_display_routes_have_no_mutation_surface(client, workspace):
 
 def test_token_management_is_owner_gated(client, workspace):
     tid, _ = workspace
-    from tests._helpers import purge_backend_modules  # noqa: F401
+    from tests.backend._helpers import purge_backend_modules  # noqa: F401
 
     # A registered non-member gets the uniform 404 on the manage routes.
     client.cookies.clear()

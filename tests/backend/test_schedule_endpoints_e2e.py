@@ -13,7 +13,7 @@ import uuid as uuid_mod
 
 import pytest
 
-from tests._helpers import isolate_test_database, seed_tournament
+from tests.backend._helpers import isolate_test_database, seed_tournament
 
 
 @pytest.fixture

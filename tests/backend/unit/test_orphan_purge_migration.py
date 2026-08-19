@@ -40,7 +40,7 @@ import sqlalchemy as sa
 # The fixture is shared rather than copied — it is fiddly (it must purge the
 # cached backend settings before `alembic/env.py` reads DATABASE_URL) and two
 # copies would drift.
-from tests.unit.test_entries_migration import alembic_cfg  # noqa: F401
+from tests.backend.unit.test_entries_migration import alembic_cfg  # noqa: F401
 
 ORPHAN_PURGE_REVISION = "u5f0b4d7e2a3"
 
@@ -50,11 +50,10 @@ def _revision_reached(url: str, revision: str) -> bool:
     i.e. the current head is it or a descendant of it."""
     from alembic.script import ScriptDirectory
     from alembic.config import Config as _Cfg
-    import os as _os
 
-    here = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-    cfg = _Cfg(_os.path.join(here, "backend", "alembic.ini"))
-    cfg.set_main_option("script_location", _os.path.join(here, "backend", "alembic"))
+    api = Path(__file__).resolve().parents[3] / "apps" / "api"
+    cfg = _Cfg(str(api / "alembic.ini"))
+    cfg.set_main_option("script_location", str(api / "alembic"))
     script = ScriptDirectory.from_config(cfg)
     head = _head_revision(url)
     return any(
@@ -64,8 +63,7 @@ def _revision_reached(url: str, revision: str) -> bool:
 PREVIOUS_REVISION = "t4e9a3c6d1f2"
 
 _MIGRATION = (
-    Path(__file__).resolve().parents[2]
-    / "backend"
+    Path(__file__).resolve().parents[3] / "apps" / "api"
     / "alembic"
     / "versions"
     / "u5f0b4d7e2a3_purge_pre_enforcement_orphans.py"

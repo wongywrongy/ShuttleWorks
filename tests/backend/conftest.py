@@ -1,11 +1,18 @@
 """Shared pytest setup for the backend test suite.
 
-Pytest's rootdir is ``products/scheduler/``. The FastAPI app and its
-adapter / api / services packages live under ``products/scheduler/backend/``;
-we insert that directory at the front of ``sys.path`` at conftest load
-time so every test can do ``from app.X import Y`` and friends without
-local sys.path manipulation. We also add ``tests/`` to ``sys.path`` so
+Pytest's rootdir is the repository root. The FastAPI app and its
+adapter / api / services packages live under ``apps/api/``; we insert
+that directory at the front of ``sys.path`` at conftest load time so
+every test can do ``from app.X import Y`` and friends without local
+sys.path manipulation. We also add this directory to ``sys.path`` so
 test modules can ``from _helpers import isolate_test_database``.
+
+The insert is still required after SP-REORG-1. It exists because the API
+is a set of top-level packages (``app``, ``api``, ``services``, ...) that
+are imported by those bare names, not because the old tree was ambiguous,
+so moving the tree did not remove the need for it. Phase 3 is what can
+retire it: once the API is one importable root, this becomes a single
+path entry or nothing at all.
 
 ``scheduler_core`` is installed as a regular package via its own
 ``pyproject.toml`` and reaches every test through site-packages.
@@ -18,11 +25,11 @@ from pathlib import Path
 import pytest
 
 
-_TESTS_DIR = Path(__file__).resolve().parent
-_PRODUCT_ROOT = _TESTS_DIR.parent
-_BACKEND_ROOT = str(_PRODUCT_ROOT / "backend")
+_TESTS_DIR = Path(__file__).resolve().parent          # tests/backend
+_REPO_ROOT = _TESTS_DIR.parents[1]                    # the repository root
+_API_ROOT = str(_REPO_ROOT / "apps" / "api")
 
-for entry in (str(_TESTS_DIR), _BACKEND_ROOT):
+for entry in (str(_TESTS_DIR), _API_ROOT):
     if entry not in sys.path:
         sys.path.insert(0, entry)
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests._helpers import isolate_test_database
+from tests.backend._helpers import isolate_test_database
 
 
 @pytest.fixture

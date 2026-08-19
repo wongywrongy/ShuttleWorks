@@ -25,7 +25,7 @@ jobs:
       - name: Lint
         run: npm run lint:scheduler
       - name: Unit tests
-        run: npm --prefix products/scheduler/frontend run test:run
+        run: npm --prefix apps/console run test:run
       - name: Architecture boundaries (dependency-cruiser)
         run: npm run depcruise
 
@@ -49,7 +49,7 @@ jobs:
     # Mirrors the frontend job step for step. Separate rather than folded in,
     # because a failure here should name the entrant tier: it is a different
     # runtime (node SSR, not a static SPA) with a different trust boundary
-    # (see products/scheduler/entrant/.dependency-cruiser.cjs).
+    # (see apps/entrant/.dependency-cruiser.cjs).
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -66,7 +66,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck:entrant
       - name: Request-level tests
-        run: npm --prefix products/scheduler/entrant run test:run
+        run: npm --prefix apps/entrant run test:run
       - name: Architecture boundaries (dependency-cruiser)
         run: npm run depcruise:entrant
       # Not a packaging step — a boundary gate. React Router refuses to build
@@ -78,7 +78,7 @@ jobs:
       # is stronger. Verified by probe: adding `export const PROBE = apiGet` to
       # app/routes/entry.tsx fails this build and nothing else.
       - name: Server-only boundary (react-router build)
-        run: npm --prefix products/scheduler/entrant run build
+        run: npm --prefix apps/entrant run build
 
       # Spec §7's no-JS posture, held to a number: the entry page's real
       # server-rendered HTML plus every script that HTML references, gzipped,
@@ -91,7 +91,7 @@ jobs:
       # a React Router hydration floor no browser ever downloaded. See
       # docs/audits/debt-log.md for the record.
       - name: Page-weight budget (entry page, HTML + referenced scripts gzipped)
-        run: node products/scheduler/entrant/scripts/measure-page-weight.mjs
+        run: node apps/entrant/scripts/measure-page-weight.mjs
 
       # Report-only for the same reason the frontend job gives above: knip's
       # verdict is a hypothesis, and a gate that fails on a false positive
@@ -130,18 +130,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install scheduler_core + backend deps
+      - name: Install scheduler_core + API deps
         run: |
           python -m pip install --upgrade pip
-          pip install ./scheduler_core
-          pip install -r products/scheduler/backend/requirements.txt
-          pip install -r products/scheduler/backend/requirements-dev.txt
+          pip install ./packages/scheduler-core
+          pip install -r apps/api/requirements.txt
+          pip install -r apps/api/requirements-dev.txt
       - name: Lint (ruff)
-        run: ruff check products/scheduler scheduler_core
+        run: ruff check apps/api tests/backend tests/e2e simulator tools packages/scheduler-core
       - name: Unit tests (pytest)
         env:
           TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler
-        run: pytest products/scheduler/tests
+        run: pytest tests/backend
 
   compose-lint:
     name: Compose files parse (docker compose config)
@@ -156,7 +156,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate every compose file
-        working-directory: products/scheduler
+        working-directory: infra/compose
         env:
           # Dummy values for the `${VAR:?}` fail-fast variables. Their
           # real values are per-deployment; what is under test here is
@@ -178,8 +178,8 @@ jobs:
         run: |
           # The self-host stack declares file-backed secrets; `config`
           # resolves the paths, so the files must exist.
-          mkdir -p secrets
-          touch secrets/postgres_password secrets/database_url secrets/ops_token
+          mkdir -p ../../secrets
+          touch ../../secrets/postgres_password ../../secrets/database_url ../../secrets/ops_token
           status=0
           for f in docker-compose.yml \
                    docker-compose.dev.yml \
@@ -201,7 +201,7 @@ jobs:
     # real UI works. A fully green 1100-test suite coexisted with a viewer who
     # could not edit anything, Run-view Undo buttons that 409'd on every press,
     # and a rejected roster delete that killed all further saving.
-    # See products/scheduler/e2e/README.md and
+    # See tests/e2e/README.md and
     # docs/programs/design-plan/INTERACTION_FINDINGS.md.
     #
     # Unlike the older e2e specs this does NOT boot the Docker stack — it runs a
@@ -221,11 +221,11 @@ jobs:
         run: |
           npm ci
           python -m pip install --upgrade pip
-          pip install ./scheduler_core
-          pip install -r products/scheduler/backend/requirements.txt
+          pip install ./packages/scheduler-core
+          pip install -r apps/api/requirements.txt
 
       - name: Start backend
-        working-directory: products/scheduler/backend
+        working-directory: apps/api
         env:
           DATABASE_URL: sqlite:///./smoke.db
         run: |
@@ -247,21 +247,21 @@ jobs:
       # script prints `tid=` / `viewerTid=` lines straight into $GITHUB_OUTPUT.
       - name: Seed the smoke workspaces
         id: seed
-        run: node products/scheduler/e2e/interaction-sweep/seed-smoke.mjs http://127.0.0.1:8600 >> "$GITHUB_OUTPUT"
+        run: node tests/e2e/interaction-sweep/seed-smoke.mjs http://127.0.0.1:8600 >> "$GITHUB_OUTPUT"
 
       # No HTTP path to a viewer role exists (the creator is always written as
       # `owner`), so the fixture writes the row the API won't. Without this the
       # viewer-gating test skips and audit finding A2 goes unguarded.
       - name: Demote the viewer workspace
         run: |
-          python products/scheduler/e2e/interaction-sweep/make-viewer.py \
-            products/scheduler/backend/smoke.db \
+          python tests/e2e/interaction-sweep/make-viewer.py \
+            apps/api/smoke.db \
             "${{ steps.seed.outputs.viewerTid }}"
 
       # The suite asserts on the error harness, so it must be compiled in — that
       # is what lets a failure name the button that broke.
       - name: Build the app WITH the error harness
-        working-directory: products/scheduler/frontend
+        working-directory: apps/console
         env:
           VITE_ERROR_HARNESS: "1"
           # REQUIRED. api/client.ts falls back to a hardcoded
@@ -280,7 +280,7 @@ jobs:
         run: npm run build
 
       - name: Serve the production build
-        working-directory: products/scheduler/frontend
+        working-directory: apps/console
         env:
           VITE_API_PROXY_TARGET: http://127.0.0.1:8600
         run: |
@@ -300,13 +300,13 @@ jobs:
           }
 
       - name: Install Chromium
-        working-directory: products/scheduler/e2e
+        working-directory: tests/e2e
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
       - name: Interaction smoke
-        working-directory: products/scheduler/e2e
+        working-directory: tests/e2e
         env:
           E2E_BASE_URL: http://127.0.0.1:4173
           E2E_MANAGE_STACK: "0"
@@ -319,5 +319,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: interaction-smoke-report
-          path: products/scheduler/e2e/playwright-report/
+          path: tests/e2e/playwright-report/
           retention-days: 7

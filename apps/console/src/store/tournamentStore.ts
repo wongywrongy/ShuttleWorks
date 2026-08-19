@@ -125,7 +125,7 @@ const INITIAL = {
 
 /** Config keys that never feed the solver — changing them must not mark
  *  the schedule stale or trip the lock. MUST stay in lockstep with
- *  products/scheduler/shared/non-scheduling-keys.json (the backend
+ *  packages/shared-contract/non-scheduling-keys.json (the backend
  *  classifier's source) — pinned by nonSchedulingKeys.parity.test.ts. */
 export const NON_SCHEDULING_KEYS: ReadonlyArray<keyof TournamentConfig> = [
   'scoringFormat',

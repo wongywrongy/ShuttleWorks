@@ -37,7 +37,7 @@
  * **What this file cannot hold, and where it lives instead.** The POSITIVE
  * path — that the form's POST really logs out — and the strong reading of
  * "logged out" are proved against the real backend in
- * `products/scheduler/tests/test_entrant_auth_routes.py`
+ * `tests/backend/test_entrant_auth_routes.py`
  * (`test_a_form_logout_kills_the_session_and_lands_on_a_node_owned_get`),
  * which replays the pre-logout token from a jar cleared and rebuilt by hand —
  * something no `Set-Cookie` can fake — and requires a 401. Delete
@@ -167,7 +167,7 @@ describe('the sign-out form, unhydrated', () => {
     // The NAME is read from `FORM_FIELD` rather than pasted, so this really
     // pins "whatever node calls the field" and not one spelling of it. That
     // node's constant equals the backend's is a separate, cross-tier claim,
-    // held by `products/scheduler/tests/unit/test_form_csrf_cross_tier.py`.
+    // held by `tests/backend/unit/test_form_csrf_cross_tier.py`.
     const form = logoutForm(await fetchEntry());
 
     expect(form).toMatch(

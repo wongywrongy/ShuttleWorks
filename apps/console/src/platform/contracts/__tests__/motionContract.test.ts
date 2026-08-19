@@ -18,7 +18,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(HERE, '../../../../../../..');
+// Six levels: __tests__ -> contracts -> platform -> src -> console -> apps -> repo root.
+// SP-REORG-1 shortened this by one (the old path had products/scheduler between
+// the app and the root). Getting it wrong fails loudly at collect time, which is
+// the good case - the test reads real files off disk and cannot silently pass.
+const REPO = path.resolve(HERE, '../../../../../..');
 const SRC = path.resolve(HERE, '../../..');
 
 const read = (p: string) => readFileSync(path.join(REPO, p), 'utf8');

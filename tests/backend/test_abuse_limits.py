@@ -20,7 +20,7 @@ import uuid
 
 import pytest
 
-from tests._helpers import isolate_test_database
+from tests.backend._helpers import isolate_test_database
 
 GOOD_PW = "a perfectly fine passphrase"
 

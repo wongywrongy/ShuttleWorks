@@ -5,6 +5,16 @@
 #
 # The ``OWNER`` env var lets a fork publish to a different GHCR namespace
 # without editing this file. Defaults to ``misogyu`` (the upstream repo).
+#
+# ``name`` is stated rather than inferred. This file carried no project name,
+# so Compose derived one from the containing directory - which was
+# ``products/scheduler``, giving ``scheduler``. SP-REORG-1 moved the file to
+# ``infra/compose``, and an inferred name would silently have become
+# ``compose``: every container renamed, and any volume addressed by project
+# name orphaned, with nothing in the diff naming the change. A stack's
+# identity should not be a function of where its file happens to sit.
+name: ${COMPOSE_PROJECT_NAME:-shuttleworks-release}
+
 services:
   backend:
     image: ghcr.io/${OWNER:-misogyu}/scheduler-backend:${TAG:-latest}
@@ -52,7 +62,7 @@ services:
       # about, which is one Docker assigns.
       - TRUSTED_PROXY_IPS=10.202.0.10
     volumes:
-      - ./data:/app/data
+      - ../../data:/app/data
     restart: unless-stopped
     read_only: true
     tmpfs:

@@ -5,7 +5,7 @@
  * That task was written before the cut-over (Task 31, commit 84b73a3) landed
  * and assumed it would have to re-home all eighteen render-level claims of
  * the retired `tests/test_entries_public_routes.py`. The cut-over got there
- * first and homed fourteen of them in `products/scheduler/entrant/tests/`,
+ * first and homed fourteen of them in `apps/entrant/tests/`,
  * where they run inside a REQUIRED CI gate (`.github/workflows/ci.yml`, the
  * `entrant` job). Restating them here would move a green claim out of the
  * gate and into a suite CI deliberately never runs — a downgrade dressed as
@@ -76,7 +76,7 @@
  * Run against an already-running stack (the ports below are overridable
  * because :80 and :8000 are frequently taken on a dev box):
  *
- *   cd products/scheduler && FRONTEND_HOST_PORT=8090 BACKEND_HOST_PORT=8600 \
+ *   FRONTEND_HOST_PORT=8090 BACKEND_HOST_PORT=8600 \
  *     docker compose up -d backend entrant frontend
  *   cd e2e && E2E_BASE_URL=http://localhost:8090 E2E_MANAGE_STACK=0 \
  *     npx playwright test tests/10-entrant-r11-evidence.spec.ts

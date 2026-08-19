@@ -2,7 +2,7 @@
 
 Slow by design (boots uvicorn + runs a CP-SAT solve); it lives here —
 outside the product's pytest rootdir — so the CI PR gate never runs it.
-Invoke with:  cd products/scheduler/simulator && pytest tests/test_smoke.py
+Invoke with:  cd simulator && pytest tests/test_smoke.py
 """
 from __future__ import annotations
 

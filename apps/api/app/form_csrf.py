@@ -93,7 +93,7 @@ def form_csrf_token(secret: Optional[str]) -> str:
 #
 # The pages that need a pre-session nonce — the entry page now, login and
 # signup in Tasks 19-21 — are all rendered by React Router in
-# ``products/scheduler/entrant/``, so the mint lives there in
+# ``apps/entrant/``, so the mint lives there in
 # ``app/lib/formCsrf.server.ts`` and nowhere else. That is a second
 # implementation of a security primitive, which is a real hazard, so the
 # derivation and this file's ``_FORM_CSRF_PREFIX`` are pinned against each

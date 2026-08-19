@@ -91,15 +91,23 @@ Thumbs.db
 # Logs
 *.log
 
-# Frontend (per-product + root workspace)
+# JS build output (per-app + root workspace)
+#
+# These were `**/frontend/...` globs until SP-REORG-1. That pattern keyed on a
+# DIRECTORY NAME, so renaming products/scheduler/frontend to apps/console would
+# have silently un-ignored node_modules, dist and the tsbuildinfo under the new
+# name - thousands of untracked files, and nothing to announce it but a longer
+# `git status`. Keyed on the apps/ tier instead, so a future app is covered the
+# day it is created and a rename cannot outrun it.
 /node_modules/
-**/frontend/node_modules/
-**/frontend/dist/
-**/frontend/build/
-**/frontend/tsconfig.tsbuildinfo
+apps/*/node_modules/
+apps/*/dist/
+apps/*/build/
+apps/*/.vite/
+apps/*/tsconfig.tsbuildinfo
+tests/e2e/node_modules/
 packages/*/node_modules/
 packages/*/dist/
-**/frontend/.vite/
 
 # Persisted state (Docker volumes; runtime, not source)
 **/data/
@@ -159,5 +167,5 @@ docs/.vitepress/dist/
 docs/.vitepress/cache/
 
 # Self-host secrets + Postgres bind mount (docker-compose.selfhost.yml).
-products/scheduler/secrets/
-products/scheduler/data/postgres/
+secrets/
+data/postgres/

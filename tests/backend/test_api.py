@@ -14,7 +14,7 @@ import pytest
 
 
 def _import_fastapi_app():
-    backend_root = str(Path(__file__).resolve().parents[1] / "backend")
+    backend_root = str(Path(__file__).resolve().parents[2] / "apps" / "api")
     sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
     for k in [m for m in list(sys.modules)
               if m in ("app", "adapters")
