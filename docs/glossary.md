@@ -90,7 +90,7 @@ Five modules share one anatomy — **intake → engine → emit**:
 ## The public (entrant) tier
 
 - **Entrant tier** — the second frontend: a server-rendered React Router app at
-  `products/scheduler/entrant`, served under `/e/`, shipping **zero client
+  `apps/entrant`, served under `/e/`, shipping **zero client
   JavaScript**. Not a module; a delivery tier in front of Entries' public data
   plane. See [Entrant tier](/architecture/entrant-tier).
 - **Entrant** — a person who enters a tournament. Entrants have their own
@@ -121,9 +121,9 @@ Five modules share one anatomy — **intake → engine → emit**:
   constraint plugins.
 - **Solver backend** — a strategy that produces assignments: `CPSATBackend` (the
   live path) and `GreedyBackend` (a simpler fallback), in
-  `scheduler_core/engine/backends.py`.
+  `packages/scheduler-core/scheduler_core/engine/backends.py`.
 - **Constraint plugin** — a pluggable scheduling rule under
-  `scheduler_core/engine/constraints/` (e.g. rest, court eligibility). Constraints
+  `packages/scheduler-core/scheduler_core/engine/constraints/` (e.g. rest, court eligibility). Constraints
   are composed, not hard-coded.
 - **`ScheduleConfig`** — the single dataclass that scheduling parameters become,
   built in one place by `build_schedule_config`

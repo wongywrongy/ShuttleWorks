@@ -8,7 +8,7 @@ fuller explanation. Snippets are intentionally minimal — read the linked page 
 the nuance.
 
 ::: info Where these live
-Frontend recipes are under `products/scheduler/frontend/src/`; the engine recipe
+Frontend recipes are under `apps/console/src/`; the engine recipe
 is the `scheduler_core` Python package at the repo root. File paths in the
 comments are relative to those roots.
 :::

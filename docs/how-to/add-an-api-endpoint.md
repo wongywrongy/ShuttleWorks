@@ -88,9 +88,9 @@ it). The contract test checks these by **referential identity** to real
 
 ```bash
 # backend (from repo root)
-.venv/Scripts/python.exe -m pytest products/scheduler/backend -q
+.venv/Scripts/python.exe -m pytest apps/api -q
 # frontend
-cd products/scheduler/frontend && npx tsc -b && npx vitest run
+cd apps/console && npx tsc -b && npx vitest run
 ```
 
 Open the live Swagger UI at `http://localhost:8000/docs` to exercise the route.

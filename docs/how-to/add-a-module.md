@@ -11,7 +11,7 @@ subset of the steps below.
 
 ::: info Requirements
 - You can run the app locally ([Quickstart](/getting-started/quickstart)) and
-  the frontend test suite (`cd products/scheduler/frontend && npx vitest run`).
+  the frontend test suite (`cd apps/console && npx vitest run`).
 - You've read [System overview](/architecture/system-overview) for the
   four-module model and [Module contracts](/contracts/) for what a contract is.
 - You have a module **id** in mind. This guide adds a fictional `scoreboard`
@@ -36,7 +36,7 @@ folder (`products/meet/`, `products/bracket/`) when you lay yours out.
 `ModuleId` is the compile-time union every other surface keys off. Add yours.
 
 ```ts
-// products/scheduler/frontend/src/platform/product-shell/types.ts
+// apps/console/src/platform/product-shell/types.ts
 export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries' | 'scoreboard';
 ```
 
@@ -53,7 +53,7 @@ The backend is the source of truth for which modules a workspace has. Add the id
 to `MODULE_IDS` and decide its lazy-seed default in `derive_modules`.
 
 ```python
-# products/scheduler/backend/database/models.py
+# apps/api/database/models.py
 MODULE_IDS = ("meet", "bracket", "display", "scoreboard")   # ~line 619
 # OPERATIONAL_MODULES stays ("meet", "bracket") unless your module is an engine.
 ```
@@ -70,7 +70,7 @@ Every sidebar destination is an `AppTab` literal. Add one per surface your modul
 owns (intake / engine / emit).
 
 ```ts
-// products/scheduler/frontend/src/store/uiStore.ts  (the AppTab union, ~line 19)
+// apps/console/src/store/uiStore.ts  (the AppTab union, ~line 19)
 export type AppTab =
   | /* …existing… */
   | 'scoreboard-setup'    // intake  (Configuration)
@@ -170,7 +170,7 @@ new `apiClient` methods in the contract's `ownedEndpoints` (step 7).
 ## Verify
 
 ```bash
-cd products/scheduler/frontend
+cd apps/console
 npx vitest run src/platform/contracts        # the contract test must pass
 npx tsc -b                                    # the AppTab/ModuleId unions must type-check
 ```

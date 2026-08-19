@@ -143,7 +143,7 @@ counts from batched row counts — no per-row DB work.
 ## Adding a new HTTP route
 
 1. Add a Pydantic model to `app/schemas.py`. Run `make generate-api`
-   from `products/scheduler/` to refresh `frontend/src/api/dto.generated.ts`
+   from the repo root to refresh `apps/console/src/api/dto.generated.ts`
    from FastAPI's OpenAPI schema; reconcile any drift into the curated
    `frontend/src/api/dto.ts` by hand. `dto.generated.ts` carries a "do
    not edit by hand" header.
@@ -159,7 +159,7 @@ counts from batched row counts — no per-row DB work.
 `frontend/src/api/dto.generated.ts` is auto-generated from the running
 backend's OpenAPI schema via `openapi-typescript`. After any change to
 `app/schemas.py` (or any Pydantic model referenced from a route handler),
-run `make generate-api` from `products/scheduler/` to refresh it. The
+run `make generate-api` from the repo root to refresh it. The
 target imports the FastAPI app directly (via `tools/generate_openapi.py`)
 so no Docker / uvicorn is needed.
 
@@ -194,10 +194,10 @@ be silenced in tests without quieting the app log.
 Install the dev set (which pulls in the prod set via `-r`):
 
 ```
-pip install -r products/scheduler/backend/requirements-dev.txt
+pip install -r apps/api/requirements-dev.txt
 ```
 
-Then run from `products/scheduler/`:
+Then run from the repo root:
 
 ```
 pytest                                 # HTTP-layer + solver unit tests

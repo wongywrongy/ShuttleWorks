@@ -61,7 +61,7 @@ canonical seam naming (A/B/C/D) lives in
 ## Verify
 
 ```bash
-cd products/scheduler/frontend
+cd apps/console
 npx vitest run src/platform/contracts   # the seam literals must match the honest set
 ```
 

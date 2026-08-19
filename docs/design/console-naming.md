@@ -33,7 +33,7 @@ govern everything below:
 ## Match state vocabulary
 
 One word per state, everywhere. The words live in exactly one place —
-`products/scheduler/frontend/src/lib/stateWords.ts` (`STATE_WORD`) — and every
+`apps/console/src/lib/stateWords.ts` (`STATE_WORD`) — and every
 surface reads them from there. That module is the enforcement mechanism: there
 is no second copy to drift.
 

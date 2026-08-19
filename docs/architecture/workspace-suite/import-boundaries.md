@@ -23,7 +23,7 @@ backend-ownership-map.md.
    "tournament"/"workspace" strings. (Event-*kind* labels like "MEET"/"TOURNAMENT"
    badge are a separate concern, not governed by this rule yet.)
 5. **The design system is a leaf.** `@scheduler/design-system` must not import from
-   `products/scheduler/frontend/src/*`.
+   `apps/console/src/*`.
 
 ## Backend rules
 

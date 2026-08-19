@@ -93,7 +93,7 @@ whispered.
 **Stance:** one `make scheduler` boots the whole stack on any Docker host.
 
 - **Docker Compose**, repo-root build context so images can copy the shared
-  `scheduler_core/` + `packages/design-system`. Frontend and docs are served by
+  `packages/scheduler-core/scheduler_core/` + `packages/design-system`. Frontend and docs are served by
   **non-root `nginx-unprivileged`** images with a **read-only root filesystem** +
   tmpfs — anything trying to write outside `./data` surfaces as a bug immediately.
 - **Host-port remapping.** `BACKEND_HOST_PORT` / `FRONTEND_HOST_PORT` / `DOCS_HOST_PORT`
@@ -111,7 +111,7 @@ whispered.
   same shape and registers through the [module contract](/contracts/). The end-to-end
   recipe is [Add a module](/how-to/add-a-module).
 - **Scheduling is pluggable.** Constraints are plugins under
-  `scheduler_core/engine/constraints/`; params centralize in one `ScheduleConfig`
+  `packages/scheduler-core/scheduler_core/engine/constraints/`; params centralize in one `ScheduleConfig`
   builder ([Scheduling unification](/architecture/scheduling-unification),
   [Add a CP-SAT constraint](/how-to/add-a-cpsat-constraint)).
 - **The engine is reusable standalone.** `scheduler_core` is HTTP-free and pip-
@@ -135,7 +135,7 @@ event, not a fleet.
   [contract pages](/contracts/) — treat them as *staleness bounds*, not guarantees.
 - **Capacity target.** One director + browser operators for a single event on one
   LAN (or a tunnel). Two solver backends exist — `CPSATBackend` (live) and
-  `GreedyBackend` (simpler fallback) — in `scheduler_core/engine/backends.py`.
+  `GreedyBackend` (simpler fallback) — in `packages/scheduler-core/scheduler_core/engine/backends.py`.
 
 ## Observability
 

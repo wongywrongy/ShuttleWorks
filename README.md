@@ -15,7 +15,7 @@ folded the tournament app into the scheduler. The legacy tournament
 product is archived at
 [`archive/tournament-pre-merge/`](./archive/tournament-pre-merge/);
 all live development happens in
-[`products/scheduler/`](./products/scheduler).
+[`apps/`](./apps).
 
 ### Workspaces & modules — the control plane
 
@@ -47,13 +47,13 @@ routing. The design record for this control-plane redesign lives in
 
 Everything above is the **operator console**. A tournament's public face — where a player
 finds it, sees the fees and deadlines, and enters it — is a **second frontend**
-([`products/scheduler/entrant/`](./products/scheduler/entrant)) served under `/e/`: React
+([`apps/entrant/`](./apps/entrant)) served under `/e/`: React
 Router 7, server-rendered, **zero client JavaScript**, held to a blocking 4 KB per-page weight
 budget. It shares `packages/design-system` with the console and nothing else. See
 [the entrant tier](./docs/architecture/entrant-tier.md).
 
 All modules depend on the shared
-[`scheduler_core/`](./scheduler_core) — a pure-Python CP-SAT engine
+[`packages/scheduler-core/`](./packages/scheduler-core) — a pure-Python CP-SAT engine
 with no HTTP / no I/O. Build your own product on top by importing
 its dataclasses; the scheduler in this repo is the worked example.
 
@@ -90,7 +90,7 @@ Code uses to navigate the monorepo before grep. Keep the HTTP server up with the
 self-healing script — leave the terminal open:
 
 ```powershell
-.\scripts\codanna-serve.ps1     # self-restarting `codanna serve --http --watch`
+.	oolsdanna-serve.ps1     # self-restarting `codanna serve --http --watch`
 codanna index                   # rebuild the index after a big pull / refactor
 ```
 
@@ -107,8 +107,8 @@ Requires Docker (with Compose v2) for the production-shape stack.
 For dev-server mode, also Node 22+.
 
 ```bash
-make scheduler          # → http://localhost (frontend), backend on :8000
-make scheduler-dev      # backend in Docker, Vite dev server on :5173 (HMR)
+make scheduler          # → http://localhost (console), api on :8000
+make scheduler-dev      # api in Docker, Vite dev server on :5173 (HMR)
 make stop               # stop the stack
 make help               # full target list
 ```
@@ -120,7 +120,7 @@ Drop a `backend/.env` with `ENVIRONMENT=cloud` to flip into the
 multi-tenant cloud runtime (Postgres, standalone worker
 containers, real accounts); it fails closed at startup without
 Postgres, `AUTH_MODE=cloud`, HTTPS-only cookies, and SMTP. See
-[`products/scheduler/backend/README.md`](./products/scheduler/backend/README.md).
+[`apps/api/README.md`](./apps/api/README.md).
 
 ---
 
@@ -162,34 +162,45 @@ Full breakdown: [`docs/tech-stack.md`](./docs/tech-stack.md).
 
 ## Layout
 
-```
-scheduler_core/                shared CP-SAT engine (pure Python, no HTTP)
-├── domain/                    dataclasses + sport-agnostic model
-├── engine/                    CP-SAT backend + constraint plugins
-└── README.md                  engine docs + plugin contract
+Deployable applications live under `apps/`, shared libraries under `packages/`,
+deployment orchestration under `infra/`.
 
-products/
-└── scheduler/                 the workspace control plane (the only live product)
-    ├── backend/               FastAPI + state machine + sync service + command log
-    │   ├── alembic/           SQLite + Postgres schema migrations (head: j3e7f9a1b5c8)
-    │   ├── api/               route handlers — tournaments, workspace_modules, match-states, commands, brackets, …
-    │   ├── app/               app + exceptions + constants + auth dependencies
-    │   ├── repositories/      LocalRepository + per-entity sub-repos (members, modules, brackets, backups, …)
-    │   └── services/          match_state, sync_service (outbox), bracket/ (draws + advancement + I/O)
-    ├── frontend/              React 19 + Zustand + IndexedDB command queue
-    │   └── src/
-    │       ├── products/      per module: hub (the workspace Hub), meet,
-    │       │                  bracket, operations (live-ops), display, settings
-    │       ├── platform/      cross-module: product-shell (workspace chrome + module dock),
-    │       │                  domain (module model), auth, settings
-    │       ├── components/    shared UI incl. control-plane/ (MetricStat / HealthDot /
-    │       │                  OverflowMenu / SectionCard / EmptyState / Skeleton)
-    │       └── api / store / hooks / lib …
-    ├── e2e/                   Playwright specs
-    ├── tests/                 backend + solver tests (Vitest for frontend in src/)
-    ├── docker-compose.yml     dev / prod-shape stack
-    ├── Makefile               product-local targets
-    └── README.md              product docs
+```
+apps/
+├── console/                   OPERATOR SPA — React 19 + Zustand + IndexedDB command queue
+│   └── src/
+│       ├── products/          per module: hub (the workspace Hub), meet,
+│       │                      bracket, operations (live-ops), display, settings, entries
+│       ├── platform/          cross-module: product-shell (workspace chrome + nav model),
+│       │                      domain (module model), contracts, auth, settings
+│       ├── components/        shared UI incl. control-plane/ (MetricStat / HealthDot /
+│       │                      OverflowMenu / SectionCard / EmptyState / Skeleton)
+│       └── api / store / hooks / lib …
+├── entrant/                   PUBLIC tier — React Router 7 SSR, zero client JS, under /e/
+└── api/                       FastAPI + state machine + command log
+    ├── alembic/               SQLite + Postgres schema migrations
+    ├── api/                   route handlers — tournaments, workspace_modules, match-states, commands, brackets, …
+    ├── app/                   app + exceptions + constants + auth dependencies
+    ├── repositories/          LocalRepository + per-entity sub-repos (members, modules, brackets, backups, …)
+    └── services/              match_state, bracket/ (draws + advancement + I/O), solve rail
+
+packages/
+├── design-system/             shared React components + the Tailwind preset
+├── scheduler-core/            CP-SAT engine distribution (pure Python, no HTTP)
+│   └── scheduler_core/        the importable package — domain/, engine/, README.md
+└── shared-contract/           data both tiers read (non-scheduling-keys.json)
+
+infra/
+├── compose/                   the six stacks + their .env.*.example files
+└── nginx/                     console.conf · docs.conf · security-headers.conf
+
+tests/
+├── backend/                   API + solver tests (pytest)
+└── e2e/                       Playwright specs
+
+simulator/                     internal full-workflow HTTP simulator (not in CI)
+tools/                         generate_openapi.py · docs-freshness.mjs · audit_input_surface.py
+legacy/                        sealed pre-merge deployment files (never edited)
 
 archive/
 └── tournament-pre-merge/      frozen snapshot of the legacy tournament product
@@ -208,7 +219,8 @@ docs/                          project planning artifacts
 └── programs/                  program ledgers — read at session start, updated at session
                                end (CLOUD / SEC / REFACTOR / FRONTEND _PROGRESS.md) plus
                                design-plan/ working notes. Moved off the root 2026-08-06.
-Makefile                       top-level chooser (this is what most people use)
+Makefile                       every target (the former product Makefile folded in)
+pyproject.toml                 pytest + ruff config for the whole repo
 ```
 
 ---
@@ -225,15 +237,15 @@ Makefile                       top-level chooser (this is what most people use)
 
 ## Working in the code
 
-- [`products/scheduler/README.md`](./products/scheduler/README.md) — scheduler features, dev workflow, proposal pipeline, suggestions inbox
-- [`products/scheduler/BACKEND.md`](./products/scheduler/BACKEND.md) — FastAPI routes, request lifecycle, how to add an endpoint or a constraint
-- [`products/scheduler/FRONTEND.md`](./products/scheduler/FRONTEND.md) — shell + tabs, store split, theme system
+- [`docs/SCHEDULER.md`](./docs/SCHEDULER.md) — scheduler features, dev workflow, proposal pipeline, suggestions inbox
+- [`apps/api/BACKEND.md`](./apps/api/BACKEND.md) — FastAPI routes, request lifecycle, how to add an endpoint or a constraint
+- [`apps/console/FRONTEND.md`](./apps/console/FRONTEND.md) — shell + tabs, store split, theme system
 - [`docs/tech-stack.md`](./docs/tech-stack.md) — full architecture + data model + state machine + command flows + conflict UX
 - **Deploying?** [`docs/how-to/install-local.md`](./docs/how-to/install-local.md) (one machine) or [`docs/how-to/install-selfhost.md`](./docs/how-to/install-selfhost.md) (cloud, Cloudflare Tunnel) — plus [`add-a-worker.md`](./docs/how-to/add-a-worker.md) for a second compute host. `docs/deploy/cloud.md` is now only a tombstone — the Supabase-era guide it held was removed on 2026-08-06 (it documented three surfaces that never existed); the full text remains in git history.
 - [`docs/superpowers/specs/`](./docs/superpowers/specs) — per-slice design record, incl. the workspace-suite control-plane redesign (`2026-06-23-workspace-suite-architecture-design.md` → the SP-A…SP-D specs)
 - [`docs/architectural-roadmap.md`](./docs/architectural-roadmap.md) — the (historical) backend-merge arc roadmap
 - [`docs/changes/`](./docs/changes/) — dated decision log
-- [`scheduler_core/README.md`](./scheduler_core/README.md) — engine internals: variables, constraints, soft penalties
+- [`packages/scheduler-core/scheduler_core/README.md`](./packages/scheduler-core/scheduler_core/README.md) — engine internals: variables, constraints, soft penalties
 
 ---
 

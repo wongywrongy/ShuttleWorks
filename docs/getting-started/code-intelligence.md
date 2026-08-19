@@ -2,7 +2,7 @@
 
 [codanna](https://github.com/bartolli/codanna) is an optional, local code-intelligence MCP
 server — semantic search, symbol lookup, find-callers / get-calls, and impact analysis across the
-monorepo. Claude Code uses it (see `CLAUDE.md`) to navigate `products/scheduler` and
+monorepo. Claude Code uses it (see `CLAUDE.md`) to navigate `apps/` and
 `scheduler_core` before falling back to grep, and you can run its tools directly from the CLI.
 
 It is **per-developer tooling**: the index is machine-local and gitignored, so nothing here is
@@ -30,7 +30,7 @@ irm https://raw.githubusercontent.com/bartolli/codanna/main/scripts/install.ps1 
 codanna --version
 
 # 2. Build the index (4 trees; downloads a ~150 MB embedding model once)
-codanna index products/scheduler/backend products/scheduler/frontend/src packages/design-system scheduler_core
+codanna index apps/api apps/console/src packages/design-system scheduler_core
 ```
 
 The four indexed paths are persisted to `.codanna/settings.toml`, so later a bare `codanna index`
@@ -77,7 +77,7 @@ re-reads the config.)
 
 Two ways to keep it alive:
 
-- **A terminal you leave open (self-healing)** — simplest: `.\scripts\codanna-serve.ps1` from
+- **A terminal you leave open (self-healing)** — simplest: `.	oolsdanna-serve.ps1` from
   the repo root. It's a restart loop around `codanna serve --http --watch`, so if codanna exits
   (crash, reload hiccup) it's back in ~2s; Ctrl+C stops it. (Bare `codanna serve --http --watch`
   also works if you don't want the loop.)

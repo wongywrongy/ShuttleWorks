@@ -5,35 +5,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # ShuttleWorks
 
 Monorepo: a CP-SAT scheduling product (meets + bracket draws) plus a shared design system.
-- `products/scheduler/frontend` — React + Vite + Zustand (the app).
-- `products/scheduler/backend` — FastAPI + SQLAlchemy.
-- `scheduler_core/` — pip-installed CP-SAT engine (domain models, solver). Imported as `scheduler_core.*`.
+- `apps/console` — React + Vite + Zustand (the app).
+- `apps/api` — FastAPI + SQLAlchemy.
+- `packages/scheduler-core/scheduler_core/` — pip-installed CP-SAT engine (domain models, solver). Imported as `scheduler_core.*` (the kebab-case folder is the distribution; the import name is unchanged).
+- `apps/entrant` — React Router 7 SSR public tier, zero client JS, served under `/e/`.
 - `packages/design-system` — shared React components.
+- `packages/shared-contract/` — data both tiers read (`non-scheduling-keys.json`).
+- `infra/compose` + `infra/nginx` — the six deployment stacks and the three server configs. Dockerfiles stay with their apps.
+- `tests/backend`, `tests/e2e`, `simulator/`, `tools/` — top level; none of them belongs to one app.
 - `archive/` — FROZEN pre-merge tournament product. Never edit.
 
 ## Commands
-- Frontend tests: `npm --prefix products/scheduler/frontend run test:run`  (vitest)
-- Frontend lint: `npm run lint:scheduler`
-- Backend tests: `cd products/scheduler && pytest`  (rootdir is products/scheduler; needs the repo .venv active)
+- Frontend tests: `npm --prefix apps/console run test:run`  (vitest)
+- Frontend lint: `npm run lint:scheduler` (the npm script names still say `scheduler`; only the workspace paths moved)
+- Backend tests: `pytest`  (rootdir is the repo root; needs the repo .venv active)
 - Architecture boundaries: `npm run depcruise`
-- Python lint: `ruff check products/scheduler scheduler_core`
+- Python lint: `ruff check apps/api tests/backend tests/e2e simulator tools packages/scheduler-core`
 - All local checks at once: `make check` — eslint, **`tsc -b` (frontend) + `typecheck:entrant`**, vitest, depcruise, ruff, pytest. The two type gates were added 2026-08-10: `make check` ran no build, so it structurally could not catch a TypeScript error that CI (`npm run build` = `tsc -b && vite build`) fails on.
-- Regenerate frontend DTOs after backend schema changes: `make -C products/scheduler generate-api` (product-local target; then reconcile src/api/dto.ts by hand)
-- Run the app: `make scheduler` (Docker; frontend :80, backend :8000) or `make scheduler-dev` (Vite :5173 + HMR); `make stop`. Where host :8000 is reserved (some Windows boxes), prefix `BACKEND_HOST_PORT=8600`.
-- Single frontend test: `npm --prefix products/scheduler/frontend run test:run -- src/path/x.test.ts` (filter with `-t "name"`). Type gate `tsc -b` runs inside `build`.
-- Single backend test: `cd products/scheduler && pytest tests/unit/test_x.py::test_name` (or `pytest -k name`). rootdir is `products/scheduler/`; async tests are opt-in (`asyncio_mode = strict`).
+- Regenerate console DTOs after API schema changes: `make generate-api` (root target; then reconcile `apps/console/src/api/dto.ts` by hand)
+- Run the app: `make scheduler` (Docker; console :80, api :8000) or `make scheduler-dev` (Vite :5173 + HMR); `make stop`. Where host :8000 is reserved (some Windows boxes), prefix `BACKEND_HOST_PORT=8600`.
+- Single frontend test: `npm --prefix apps/console run test:run -- src/path/x.test.ts` (filter with `-t "name"`). Type gate `tsc -b` runs inside `build`.
+- Single backend test: `pytest tests/backend/unit/test_x.py::test_name` (or `pytest -k name`). rootdir is the repo root; async tests are opt-in (`asyncio_mode = strict`).
 - Docs: `npm run docs:dev` to browse; `npm run docs:build` is a gate (fails on broken internal links); `npm run docs:freshness` flags docs lagging the code.
 
 ### Running the backend locally without Docker (Windows)
-- **TRAP: if the Docker stack is (still) up, Vite proxies to the CONTAINER, not your host backend.** `vite.config.ts` defaults the `/api` proxy to `:8000` — exactly where `btp-backend-1` listens — so without `VITE_API_PROXY_TARGET` every browser call hits the container's *baked image* (possibly weeks stale) and its bind-mounted `products/scheduler/data/local.db`, while your host uvicorn (`:8600`, CWD-relative `backend/local.db`) serves nothing. Backend code changes then silently "don't work" in the browser. Check `docker ps` first; `make stop` the stack, run the host backend with `DATABASE_URL` pointed at `products/scheduler/data/local.db` (absolute URL) to keep the same data, and start Vite with `VITE_API_PROXY_TARGET=http://localhost:8600`.
-- `uvicorn app.main:app --port 8600` from `products/scheduler/backend` using the repo `.venv\Scripts\python.exe`. Auto-runs Alembic + seeds a synthetic local-dev user (no auth). **Port 8000 is unusable** — it's in a Windows reserved range, so uvicorn dies with `PermissionError` binding it.
+- **TRAP: if the Docker stack is (still) up, Vite proxies to the CONTAINER, not your host backend.** `vite.config.ts` defaults the `/api` proxy to `:8000` — exactly where `btp-backend-1` listens — so without `VITE_API_PROXY_TARGET` every browser call hits the container's *baked image* (possibly weeks stale) and its bind-mounted `data/local.db`, while your host uvicorn (`:8600`, CWD-relative `backend/local.db`) serves nothing. Backend code changes then silently "don't work" in the browser. Check `docker ps` first; `make stop` the stack, run the host backend with `DATABASE_URL` pointed at `data/local.db` (absolute URL) to keep the same data, and start Vite with `VITE_API_PROXY_TARGET=http://localhost:8600`.
+- `uvicorn app.main:app --port 8600` from `apps/api` using the repo `.venv\Scripts\python.exe`. Auto-runs Alembic + seeds a synthetic local-dev user (no auth). **Port 8000 is unusable** — it's in a Windows reserved range, so uvicorn dies with `PermissionError` binding it.
 - Point Vite at it: `VITE_API_PROXY_TARGET=http://localhost:8600 npm run dev`.
 - **The Vite dev proxy buffers `text/event-stream`** — SSE solver-progress UIs stall through `:5173` *in dev only* (fine direct-to-backend and in prod). Not a defect.
 
 ## Architecture — the module model
 ShuttleWorks is a **workspace control plane**, not a stack of apps: the Hub (`/`) lists workspaces; each workspace enables **modules**. Four architectural modules share one anatomy — intake → engine → emit:
-- **Meet** & **Bracket** are ENGINES (roster/config/draw → CP-SAT in `scheduler_core/` → matches). Both import the same pure, HTTP-free engine; their match *records* stay separate (non-merged — ADR 0006). Non-obvious: **neither Meet lineup nor Bracket advancement is a CP-SAT constraint** — both pre-resolve fully-formed matches and hand them to the same solver + plugins. Scheduling params become a `ScheduleConfig` in one place — `backend/services/scheduling/params.py` (`build_schedule_config`); constraints are plugins in `scheduler_core/engine/constraints/`.
-- **Operations** OPERATES matches: a Plan board + a live **Run** surface (`products/scheduler/frontend/src/products/operations/run/` + `runtime/`) governed by an Operations-owned match-state machine (canonical `scheduled→called→playing→finished|retired`) and an idempotent command queue. It is **Tier-2** — always-on, no enable flag, `ArchModuleId = ModuleId | 'operations'`, no `workspace_modules` row.
+- **Meet** & **Bracket** are ENGINES (roster/config/draw → CP-SAT in `scheduler_core/` → matches). Both import the same pure, HTTP-free engine; their match *records* stay separate (non-merged — ADR 0006). Non-obvious: **neither Meet lineup nor Bracket advancement is a CP-SAT constraint** — both pre-resolve fully-formed matches and hand them to the same solver + plugins. Scheduling params become a `ScheduleConfig` in one place — `apps/api/services/scheduling/params.py` (`build_schedule_config`); constraints are plugins in `scheduler_core/engine/constraints/`.
+- **Operations** OPERATES matches: a Plan board + a live **Run** surface (`apps/console/src/products/operations/run/` + `runtime/`) governed by an Operations-owned match-state machine (canonical `scheduled→called→playing→finished|retired`) and an idempotent command queue. It is **Tier-2** — always-on, no enable flag, `ArchModuleId = ModuleId | 'operations'`, no `workspace_modules` row.
 - **Display** PROJECTS results (read-only poll). Since SP-CLOUD-2 it owns the public capability-token routes `/display/{token}/*` (strict projection; raw tournament UUIDs are never public keys).
 
 **The module contract is load-bearing.** `src/platform/contracts/moduleContract.ts` declares, per module, what it owns/produces/consumes (segments, `apiClient` endpoints by *reference*, DTOs, seam edges); its test (`__tests__/moduleContract.test.ts`) holds those declarations to the running app. Adding a module touches that contract + its test baselines AND `ModuleId`, backend `MODULE_IDS`/`derive_modules`, `AppTab`, `buildWorkspaceNav`, `moduleModel.ts` (`MODULE_ORDER`/`MODULE_LABELS`/`moduleForTab`), and `ModuleOutlet`.
@@ -45,16 +49,16 @@ ShuttleWorks is a **workspace control plane**, not a stack of apps: the Hub (`/`
 **Cloud runtime & auth (SP-CLOUD, 2026-08):**
 - The meet batch solve is an **async job** (`POST /tournaments/{id}/solve-jobs`, idempotency keys, worker subprocess with pinned determinism; old `/schedule` routes answer 410). One worker loop runs embedded (local) or as `python -m worker` containers. Interactive solves (proposals/director/bracket) stay in-request by design — but only through **tenant-scoped** routes: the untenanted `POST /schedule/repair` and `/schedule/warm-restart` also answer 410 (the engines behind them are very much alive, reached via `/tournaments/{id}/schedule/proposals[/warm-restart]`).
 - Deployment stacks, each with its own `.env.*.example` next to it: `docker-compose.yml` (default dev), `.dev.yml` (+ Postgres, `make dev-postgres`), `.cloud.yml` (smoke stack, deliberately `ENVIRONMENT=local`), `.selfhost.yml` (production: SPA + API + Postgres + cloudflared — the tunnel points at `frontend:8080`, and `api` carries a `backend` network alias so one `nginx.conf` serves every stack), `.worker.yml` (remote compute host). CI lints all six with `docker compose config`.
-- Lease ownership is checked on **both** lease-mutating writes — completion *and* heartbeat. A worker that lost its lease must not extend it; see `services/solve_jobs.py` and `tests/unit/test_lease_recovery.py`.
+- Lease ownership is checked on **both** lease-mutating writes — completion *and* heartbeat. A worker that lost its lease must not extend it; see `apps/api/services/solve_jobs.py` and `tests/backend/unit/test_lease_recovery.py`.
 - `/health` is public liveness (dependency-free on purpose). `/health/ready|deep|metrics` carry operational detail and require `X-ShuttleWorks-Ops-Token`; `OPS_TOKEN` is blank (guard off) in local mode and **required** by the cloud API profile. Do not rely on ingress to hide them — a tunnel publishes a hostname, not a route list.
 - Identity: cookie sessions (`users`/`auth_sessions`, Argon2id, CSRF header `X-ShuttleWorks-CSRF: 1` on cookie-carrying writes). `AUTH_MODE=local` (default) resolves credential-less requests to the zero-UUID bootstrap operator — the solo flow stays zero-friction and offline; `AUTH_MODE=cloud` requires real accounts.
-- Tenancy: orgs own workspaces (`tournaments.org_id`); membership in `tournament_members` (FK to `users`). **Every workspace route needs a path param named exactly `tournament_id` + `Depends(require_tournament_access(role))`, which answers a uniform 404 to non-members** — `tests/test_tenant_isolation.py` derives all such routes from OpenAPI and fails CI on a missing seam. See `backend/README.md` ("Auth & tenancy") and `docs/how-to/add-an-api-endpoint.md`.
+- Tenancy: orgs own workspaces (`tournaments.org_id`); membership in `tournament_members` (FK to `users`). **Every workspace route needs a path param named exactly `tournament_id` + `Depends(require_tournament_access(role))`, which answers a uniform 404 to non-members** — `tests/backend/test_tenant_isolation.py` derives all such routes from OpenAPI and fails CI on a missing seam. See `apps/api/README.md` ("Auth & tenancy") and `docs/how-to/add-an-api-endpoint.md`.
 - Ledger: `docs/programs/CLOUD_PROGRESS.md`. Current snapshot: `docs/audits/08-state-of-codebase.md`.
 
 The authoritative deeper reference is the VitePress docs site (`docs/`): `architecture/system-overview`, `architecture/data-flow`, `contracts/`, and the `how-to/` extension guides.
 
 ## Code navigation — codanna first
-Before grep/Read on anything in `products/scheduler` or `scheduler_core`, use codanna:
+Before grep/Read on anything in `apps/` or `packages/`, use codanna:
 1. `codanna mcp semantic_search_with_context query:"..." limit:5` — start here for "where is X" / "how does X work". Use specific technical terms, not vague phrases.
 2. Read only the returned line range (`limit = end_line - start_line + 1`), not the whole file.
 3. `codanna retrieve describe symbol_id:N` — full signature, docs, calls, callers.
@@ -62,9 +66,9 @@ Before grep/Read on anything in `products/scheduler` or `scheduler_core`, use co
 
 Fall back to grep/Read for non-indexed files (markdown, YAML, config) or when semantic search returns nothing above ~0.6 relevance.
 
-**One-time setup** (the index is per-machine; `.codanna/` is gitignored): install codanna **0.9.22**, add `~/.local/bin` to PATH, then from the repo root run `codanna index products/scheduler/backend products/scheduler/frontend/src packages/design-system scheduler_core`. On Windows set `parallelism = 4` + `tantivy_heap_mb = 25` in `.codanna/settings.toml` and keep `index_path` outside any OneDrive-synced folder (Defender locks Tantivy writes otherwise). Re-index after large pulls with `codanna index`.
+**One-time setup** (the index is per-machine; `.codanna/` is gitignored): install codanna **0.9.22**, add `~/.local/bin` to PATH, then from the repo root run `codanna index apps/api apps/console/src apps/entrant/app packages/design-system packages/scheduler-core`. On Windows set `parallelism = 4` + `tantivy_heap_mb = 25` in `.codanna/settings.toml` and keep `index_path` outside any OneDrive-synced folder (Defender locks Tantivy writes otherwise). Re-index after large pulls with `codanna index`.
 
-**The MCP server runs in HTTP mode** (`.mcp.json` → `http://127.0.0.1:8080/mcp`) so multiple CLIs share one index. **It must be running or no CLI connects** — simplest is the self-healing `.\scripts\codanna-serve.ps1` (a restart loop around `codanna serve --http --watch`; leave the terminal open), or run that command bare. If codanna tools fail with `ConnectionRefused at …:8080/mcp` the server is down; a CLI still on the pre-switch stdio config instead shows `-32000` and needs a restart. Then per session run `/mcp` → authorize `codanna` (browser approval). codanna's OAuth keys are **in-memory** (nothing persisted under `~/.codanna`), so a cached token dies whenever the server restarts → re-auth ≈once per reboot is the floor (0.9.22 has no on-disk OAuth persistence and no no-auth HTTP mode). If re-auth is *more* frequent, the Scheduled Task is probably not registered (`Get-ScheduledTaskInfo -TaskName codanna-http-mcp`) so the server dies with its terminal; an on-click auth error in `/mcp` is a stale cred → `claude mcp logout codanna`, then re-auth. Keep it always-on with a per-user logon Scheduled Task (`codanna-http-mcp`) — reproducible snippet + troubleshooting live in the docs at `getting-started/code-intelligence`. Don't fall back to stdio `serve`: it takes an exclusive per-index `serve.lock`, so a second concurrent CLI's server dies with `-32000`; HTTP excludes via port binding, no lock.
+**The MCP server runs in HTTP mode** (`.mcp.json` → `http://127.0.0.1:8080/mcp`) so multiple CLIs share one index. **It must be running or no CLI connects** — simplest is the self-healing `.	oolsdanna-serve.ps1` (a restart loop around `codanna serve --http --watch`; leave the terminal open), or run that command bare. If codanna tools fail with `ConnectionRefused at …:8080/mcp` the server is down; a CLI still on the pre-switch stdio config instead shows `-32000` and needs a restart. Then per session run `/mcp` → authorize `codanna` (browser approval). codanna's OAuth keys are **in-memory** (nothing persisted under `~/.codanna`), so a cached token dies whenever the server restarts → re-auth ≈once per reboot is the floor (0.9.22 has no on-disk OAuth persistence and no no-auth HTTP mode). If re-auth is *more* frequent, the Scheduled Task is probably not registered (`Get-ScheduledTaskInfo -TaskName codanna-http-mcp`) so the server dies with its terminal; an on-click auth error in `/mcp` is a stale cred → `claude mcp logout codanna`, then re-auth. Keep it always-on with a per-user logon Scheduled Task (`codanna-http-mcp`) — reproducible snippet + troubleshooting live in the docs at `getting-started/code-intelligence`. Don't fall back to stdio `serve`: it takes an exclusive per-index `serve.lock`, so a second concurrent CLI's server dies with `-32000`; HTTP excludes via port binding, no lock.
 
 ## Architecture boundaries (enforced by dependency-cruiser)
 - `src/platform/` is the foundation layer — it must NOT import from `products/` or `pages/` (**ERROR**, clean), nor from `app/` (**ERROR** since the `workspaceNav` relocation, clean — the nav model now lives in `platform/product-shell/`).
@@ -80,7 +84,7 @@ Fall back to grep/Read for non-indexed files (markdown, YAML, config) or when se
 - Don't restate rules `ruff`/eslint already enforce deterministically — fix the lint config instead of repeating style rules here.
 
 ## Known hazards
-- Shadow packages: both `products/scheduler/frontend/src/app` and `products/scheduler/backend/app` exist; backend tests must put `backend/` first on sys.path. See `products/scheduler/tests/conftest.py`.
+- Shadow packages: both `apps/console/src/app` and `apps/api/app` exist; backend tests must put `apps/api/` first on sys.path. See `tests/backend/conftest.py`. SP-REORG-1 did not remove this; Phase 3 is what can.
 - Backend ordering: list queries need a stable tiebreaker (`created_at DESC, id DESC` — `id` is a random UUID; `created_at` alone ties non-deterministically across SQLite/Postgres).
 - Route registration: newer FastAPI keeps each `include_router` as a nested `_IncludedRouter` (`path=None`) rather than flattening onto `app.routes` — assert a route exists via `app.openapi()["paths"]`, not `app.routes`.
 - vitest hoisting: `vitest` must stay hoisted to the **root** `node_modules` (root `@testing-library/jest-dom` resolves it there) and is a root devDep; pin `@vitest/coverage-v8` to vitest's major (project is on vitest 3).

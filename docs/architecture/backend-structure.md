@@ -32,7 +32,7 @@ backend/
 └── worker.py              standalone worker entrypoint (`python -m worker`, cloud mode)
 ```
 
-The solver engine itself lives under `scheduler_core/` and is installed as a regular package, so
+The solver engine itself lives under `packages/scheduler-core/scheduler_core/` and is installed as a regular package, so
 `import scheduler_core` resolves without any `sys.path` bootstrap.
 
 ## Route ownership
@@ -192,7 +192,7 @@ counts (no N+1). This is the most important cross-cutting backend feature and ha
 ## Adding a route
 
 1. Add a Pydantic model to `app/schemas.py`, then run `make generate-api` from
-   `products/scheduler/` to refresh `frontend/src/api/dto.generated.ts` from the OpenAPI schema.
+   the repo root to refresh `apps/console/src/api/dto.generated.ts` from the OpenAPI schema.
 2. Create the handler under `api/<feature>.py` with `router = APIRouter(prefix=…, tags=[…])`.
 3. Register it in `app/main.py` via `app.include_router(...)`.
 4. **Workspace-scoped?** Take the tenant id from a path param named exactly `tournament_id` and

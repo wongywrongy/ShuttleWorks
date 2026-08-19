@@ -2,7 +2,7 @@
 
 # Backend Ownership Map
 
-Maps current `products/scheduler/backend/` modules to their future suite owner.
+Maps current `apps/api/` modules to their future suite owner.
 No files move in Phase 1. Routes (`/tournaments/*`) and tables are unchanged.
 FastAPI app + router includes are assembled in `app/main.py`.
 

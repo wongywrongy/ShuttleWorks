@@ -2,52 +2,70 @@
 
 ShuttleWorks is an npm-workspaces monorepo with a Python solver package alongside.
 
+Deployable applications live under `apps/`, shared libraries under `packages/`, and
+deployment orchestration under `infra/` — the layout Turborepo, Nx and pnpm workspaces all
+converge on. SP-REORG-1 moved the tree here on 2026-08-19; before that everything sat under
+`products/scheduler/`, which named a directory rather than a boundary.
+
 ```
-scheduler_core/                shared CP-SAT engine (pure Python, no HTTP, no I/O)
-├── domain/                    dataclasses + sport-agnostic model
-├── engine/                    CP-SAT backend + constraint plugins
-└── README.md                  engine docs + plugin contract
+apps/                          the deployable surfaces
+├── console/                   OPERATOR SPA — React 19 + Zustand + Vite
+│   ├── src/
+│   │   ├── app/               router, AppShell, ModuleOutlet (nav model lives in platform/product-shell)
+│   │   ├── products/          one folder per module: hub, meet, bracket, operations, display, settings, workspace, entries
+│   │   ├── platform/          cross-module: product-shell, domain (module model), contracts, auth, settings
+│   │   ├── components/        shared UI incl. control-plane/ primitives
+│   │   └── api / store / hooks / lib …
+│   ├── Dockerfile             builds the static bundle; served by nginx (config in infra/nginx/)
+│   └── FRONTEND.md            shell + tabs, the store split, theme system
+├── entrant/                   PUBLIC tier — React Router 7 SSR, zero client JS (/e/*)
+│   ├── app/                   routes/ (explicit route table), components/, lib/
+│   ├── scripts/               measure-page-weight.mjs (the blocking 4 KB gate)
+│   └── tests/                 vitest, incl. source-scan contracts (no truncation, no em dash, no client fee rules)
+└── api/                       FastAPI + persistence + command log
+    ├── alembic/               SQLite + Postgres schema migrations
+    ├── api/                   route handlers (one APIRouter per resource)
+    ├── app/                   app, schemas, error codes, auth deps
+    ├── database/              SQLAlchemy models + session
+    ├── repositories/          LocalRepository + per-entity sub-repos
+    ├── services/              auth, email, match_state, bracket/, suggestions_worker
+    └── BACKEND.md             FastAPI routes, request lifecycle, how to add an endpoint
 
-products/
-└── scheduler/                 the workspace control plane (the only live product)
-    ├── backend/               FastAPI + persistence + sync service + command log
-    │   ├── alembic/           SQLite + Postgres schema migrations
-    │   ├── api/               route handlers (one APIRouter per resource)
-    │   ├── app/               app, schemas, error codes, auth deps
-    │   ├── database/          SQLAlchemy models + session
-    │   ├── repositories/      LocalRepository + per-entity sub-repos
-    │   └── services/          auth, email, match_state, bracket/, suggestions_worker
-    ├── frontend/              React 19 + Zustand + Vite
-    │   └── src/
-    │       ├── app/           router, AppShell, ModuleOutlet (workspace nav model lives in platform/product-shell)
-    │       ├── products/      one folder per module: hub, meet, bracket, operations, display, settings, workspace
-    │       ├── platform/      cross-module: product-shell, domain (module model), contracts, auth, settings
-    │       ├── components/    shared UI incl. control-plane/ primitives
-    │       └── api / store / hooks / lib …
-    ├── entrant/               the PUBLIC tier: React Router 7 SSR, zero client JS (/e/*)
-    │   ├── app/               routes/ (explicit route table), components/, lib/
-    │   ├── scripts/           measure-page-weight.mjs (the blocking 4 KB gate)
-    │   └── tests/             vitest, incl. source-scan contracts (no truncation, no em dash, no client fee rules)
-    ├── e2e/                   Playwright specs
-    ├── tests/                 backend + solver tests
-    ├── docker-compose*.yml    dev / prod-shape stacks
-    └── README.md · FRONTEND.md · BACKEND.md   product docs (most current source of truth)
+packages/                      shared libraries (npm workspaces + one pip package)
+├── design-system/             shared React components + the Tailwind preset
+├── scheduler-core/            CP-SAT engine distribution (pure Python, no HTTP, no I/O)
+│   └── scheduler_core/        the importable package — domain/, engine/, README.md
+└── shared-contract/           data both tiers read (non-scheduling-keys.json)
 
+infra/                         deployment orchestration (Dockerfiles stay with their apps)
+├── compose/                   six stacks + their .env.*.example files
+└── nginx/                     console.conf · docs.conf · security-headers.conf
+
+tests/
+├── backend/                   API + solver tests (pytest; rootdir is the repo root)
+└── e2e/                       Playwright specs incl. the required interaction smoke
+
+simulator/                     internal full-workflow HTTP simulator (not in CI)
+tools/                         generate_openapi.py · docs-freshness.mjs · audit_input_surface.py · codanna-serve.ps1
+legacy/                        sealed pre-merge deployment files (never edited)
 archive/
 └── tournament-pre-merge/      frozen snapshot of the legacy tournament product
-
-packages/                      shared design-system workspace
 examples/                      engine usage examples (product-agnostic)
 docs/                          this VitePress site + the design archive
-Makefile                       top-level chooser
+Makefile                       every target (the former product Makefile folded in)
+pyproject.toml                 pytest + ruff config for the whole repo
 ```
+
+**The import name did not change.** `packages/scheduler-core/` is the kebab-case
+*distribution* directory; the package inside it is still `scheduler_core` and every
+`import scheduler_core` in the tree is untouched.
 
 ## npm workspaces
 
 The root `package.json` declares the workspaces:
 
 ```json
-"workspaces": ["packages/*", "products/scheduler/frontend", "products/scheduler/entrant"]
+"workspaces": ["packages/*", "apps/console", "apps/entrant"]
 ```
 
 Root scripts (`dev:scheduler`, `build:scheduler`, `docs:dev`, `docs:build`, …) delegate into the
@@ -62,12 +80,12 @@ extension forces ESM loading regardless of the root package type).
 For working in the code, the per-product markdown is the most current authority. This site
 consolidates from them; when in doubt, the code and these files win:
 
-- `products/scheduler/README.md` — features, dev workflow, the proposal pipeline.
-- `products/scheduler/BACKEND.md` — FastAPI routes, request lifecycle, how to add an endpoint or a constraint.
-- `products/scheduler/FRONTEND.md` — shell + tabs, the Zustand store split, theme system.
-- `scheduler_core/README.md` — engine internals: variables, constraints, soft penalties.
+- `docs/SCHEDULER.md` — features, dev workflow, the proposal pipeline.
+- `apps/api/BACKEND.md` — FastAPI routes, request lifecycle, how to add an endpoint or a constraint.
+- `apps/console/FRONTEND.md` — shell + tabs, the Zustand store split, theme system.
+- `packages/scheduler-core/scheduler_core/README.md` — engine internals: variables, constraints, soft penalties.
 
-Each major directory under `frontend/src/` (`store/`, `hooks/`, `api/`, …) also carries its own
+Each major directory under `apps/console/src/` (`store/`, `hooks/`, `api/`, …) also carries its own
 `README.md` for local conventions.
 
 ## Branch strategy
@@ -135,7 +153,7 @@ docs did — the area likely needs a doc update; `--list` shows exactly which co
 docs aren't committed yet), **LOCAL EDITS** (uncommitted doc edits pending). The command **exits 1 if
 any area is BEHIND**, so it can gate CI.
 
-The area → source mapping is the manifest at the top of `scripts/docs-freshness.mjs` — **keep it
+The area → source mapping is the manifest at the top of `tools/docs-freshness.mjs` — **keep it
 honest**: when a page starts documenting a new part of the tree, add that path so drift there is
 caught. Because the check reads git *history*, it reflects **committed** state — commit `docs/` for
 it to track drift (until then every area reads as **NEW**).

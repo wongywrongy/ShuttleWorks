@@ -12,7 +12,7 @@ FastAPI backend that embeds the CP-SAT solver. In **dev mode** the frontend is s
 
 ## The two ways to run
 
-The top-level `Makefile` is the chooser most people use; `products/scheduler/Makefile` holds the
+The top-level `Makefile` is the only one; SP-REORG-1 folded the former product Makefile into it, so it holds the
 product-local targets.
 
 ```bash
@@ -24,7 +24,7 @@ make help               # full target list
 ```
 
 ```bash
-# From products/scheduler/ — product-local targets
+# From the repo root
 make run                # production-shape: build + start → http://localhost
 make dev                # backend in Docker, Vite dev server on :5173
 make logs               # tail the stack
@@ -48,13 +48,13 @@ just as they do in production.
 ## Running both surfaces locally: operator product + public entrant site
 
 There are now two frontends against one backend: the **operator product** (the Vite SPA above,
-`products/scheduler/frontend`) that a tournament director uses, and the **public entrant site**
-(`products/scheduler/entrant`, React Router 7, SSR) that entrants and spectators use. This recipe
+`apps/console`) that a tournament director uses, and the **public entrant site**
+(`apps/entrant`, React Router 7, SSR) that entrants and spectators use. This recipe
 is deliberately **local only** — no nginx, no compose, no tunnel yet.
 
 | Surface | Port | Command |
 | --- | --- | --- |
-| Backend (host uvicorn) | `:8600` | `uvicorn app.main:app --port 8600` from `products/scheduler/backend` |
+| Backend (host uvicorn) | `:8600` | `uvicorn app.main:app --port 8600` from `apps/api` |
 | Operator product (SPA) | `:5173` | `npm run dev:scheduler` |
 | Public entrant site (SSR) | `:5174` | `npm run dev:entrant` |
 
@@ -75,7 +75,7 @@ every API-backed route 500s). `VITE_API_PROXY_TARGET` is read only by the operat
 surface that reads it. Ports are passed as `--port`; a `PORT` env var is ignored by both dev
 servers.
 
-**The trap this exists to warn about.** `products/scheduler/frontend/vite.config.ts` defaults its
+**The trap this exists to warn about.** `apps/console/vite.config.ts` defaults its
 `/api` proxy to `:8000`, which is exactly where the **Docker** backend listens. If the Docker
 stack is still up when you start a host backend, the browser keeps talking to the *container* — a
 possibly weeks-stale baked image, plus its bind-mounted `data/local.db` — while your host
@@ -87,7 +87,7 @@ point at why. Before running a host backend:
 3. Run the host backend on `:8600`, not `:8000`. Port `8000` sits in a Windows-reserved port
    range, so a host `uvicorn` bound to it dies immediately with `PermissionError`.
 
-See `products/scheduler/entrant/README.md` for the entrant app's own copy of this recipe.
+See `apps/entrant/README.md` for the entrant app's own copy of this recipe.
 
 ## Configuration
 
@@ -108,21 +108,21 @@ Drop a `backend/.env` with `ENVIRONMENT=cloud` to flip into the multi-tenant clo
 Postgres instead of SQLite, standalone `python -m worker` containers instead of the embedded
 worker, and real accounts instead of the bootstrap identity. It fails closed at startup without
 Postgres, `AUTH_MODE=cloud`, `SESSION_COOKIE_SECURE=true`, and SMTP — see
-`products/scheduler/docker-compose.cloud.yml` and `backend/README.md`.
+`infra/compose/docker-compose.cloud.yml` and `backend/README.md`.
 
 ## Tests
 
 ```bash
-# Backend + solver unit tests — from products/scheduler/
+# Backend + solver unit tests — from the repo root
 pip install -r backend/requirements-dev.txt    # one-time (pulls in pytest + httpx)
 pytest
 
-# Frontend unit/component tests — from products/scheduler/frontend/
+# Frontend unit/component tests — from apps/console/
 npm run test:run        # vitest + jsdom + React Testing Library
 npx tsc -b              # type gate
 npm run build           # build gate
 
-# End-to-end (Playwright against the compose stack) — from products/scheduler/
+# End-to-end (Playwright against the compose stack) — from the repo root
 make test-e2e-install   # one-time, downloads browsers
 make test-e2e           # boots stack, runs specs, tears down
 make test-e2e-dev       # run against `make dev` on :5173

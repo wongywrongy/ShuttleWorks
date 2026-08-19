@@ -160,7 +160,7 @@ stale browser tab or a raw API client is caught too — not only the in-app UI.
 
 `services/config_lock.py` classifies changes. `changed_scheduling_fields(prior,
 incoming)` returns the changed keys that are **not** in `NON_SCHEDULING_KEYS` —
-a 15-key exempt set loaded from `products/scheduler/shared/non-scheduling-keys.json`
+a 15-key exempt set loaded from `packages/shared-contract/non-scheduling-keys.json`
 (the *single* source of truth; the frontend's copy in `store/tournamentStore.ts`
 is pinned to it by `nonSchedulingKeys.parity.test.ts`). The exempt keys are
 scoring (`scoringFormat`, `setsToWin`, `pointsPerSet`, `deuceEnabled`),

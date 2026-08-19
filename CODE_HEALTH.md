@@ -145,7 +145,7 @@ get these numbers instead of eyeballing it. Record the worst offenders in
 `docs/audits/debt-log.md` with their actual complexity score, not just "this
 file is messy." Re-measure with:
 ```
-python -m radon cc scheduler_core products/scheduler/backend/{app,adapters,services,repositories,api} -nc -s --total-average -e "*/tests/*,*/migrations/*,*/alembic/*"
+python -m radon cc packages/scheduler-core apps/api/{app,adapters,services,repositories,api} -nc -s --total-average -e "*/tests/*,*/migrations/*,*/alembic/*"
 ```
 
 ### 11. Cover before you modify (Feathers' cover-and-modify)

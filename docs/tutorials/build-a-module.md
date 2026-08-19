@@ -14,7 +14,7 @@ as a one-screen checklist. Keep it open beside you as the map; build along here.
 
 ::: info What you need
 - The app running locally ([Running locally](/getting-started/running-locally)).
-- The frontend test runner: `cd products/scheduler/frontend && npx vitest run`.
+- The frontend test runner: `cd apps/console && npx vitest run`.
 - Roughly an hour. Every edit below is small; the lesson is in *why* each one is needed.
 :::
 
@@ -53,7 +53,7 @@ vocabulary — naming `standings` here wires nothing, it only grants you permiss
 to refer to the module everywhere else.
 
 ```ts
-// products/scheduler/frontend/src/platform/product-shell/types.ts
+// apps/console/src/platform/product-shell/types.ts
 export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries' | 'standings';
 ```
 
@@ -66,7 +66,7 @@ in `ModuleId`. You are adding a *user-enableable* module, so `ModuleId` is right
 Now run the compiler — it hands you your next chore:
 
 ```bash
-cd products/scheduler/frontend && npx tsc -b
+cd apps/console && npx tsc -b
 # error: 'MODULE_LABELS' … Property 'standings' is missing
 ```
 
@@ -98,7 +98,7 @@ The backend is the source of truth for *which modules a workspace has*. Add the 
 to `MODULE_IDS` and decide its lazy-seed default in `derive_modules`.
 
 ```python
-# products/scheduler/backend/database/models.py
+# apps/api/database/models.py
 MODULE_IDS = ("meet", "bracket", "display", "standings")   # ~line 619
 
 def derive_modules(kind):                                   # ~line 633
@@ -135,7 +135,7 @@ Every sidebar destination is an `AppTab` literal — the value of `uiStore.activ
 and the URL segment. Add one per surface your module owns: intake and emit.
 
 ```ts
-// products/scheduler/frontend/src/store/uiStore.ts  (the AppTab union, ~line 19)
+// apps/console/src/store/uiStore.ts  (the AppTab union, ~line 19)
 export type AppTab =
   | /* …existing… */
   | 'standings-setup'    // intake — Configuration
@@ -192,7 +192,7 @@ and `products/meet/MeetProduct.tsx`. Keep intake and emit in their own files so 
 anatomy stays legible.
 
 ```tsx
-// products/scheduler/frontend/src/products/standings/StandingsProduct.tsx
+// apps/console/src/products/standings/StandingsProduct.tsx
 import { lazy, Suspense } from 'react';
 import { useUiStore } from '../../store/uiStore';
 import { TabSkeleton } from '../../components/TabSkeleton';
@@ -319,7 +319,7 @@ the invariant."*
 Run the finish-line test:
 
 ```bash
-cd products/scheduler/frontend
+cd apps/console
 npx vitest run src/platform/contracts
 # ✓ moduleContract — descriptor set
 # ✓ moduleContract — ownedSegments match buildWorkspaceNav

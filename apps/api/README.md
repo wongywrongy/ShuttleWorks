@@ -4,7 +4,7 @@
 > workspace-suite control-plane model; its file/route lists below are incomplete
 > and a few names are out of date. For **current** backend architecture + route
 > ownership use the canonical docs: `docs/architecture/backend-structure.md` and
-> `products/scheduler/BACKEND.md`. The local conventions notes below are still useful.
+> `apps/api/BACKEND.md`. The local conventions notes below are still useful.
 
 FastAPI HTTP layer in front of the CP-SAT scheduler. Since SP-CLOUD-1
 the batch solve is a **job**, not a request: `POST
@@ -115,7 +115,6 @@ CP-SAT fingerprint across four different `PYTHONHASHSEED` values.
 ### Run cloud mode locally
 
 ```bash
-cd products/scheduler
 docker compose -f docker-compose.cloud.yml up -d --build
 # API on :8600 (host 8000 is Windows-reserved on some boxes)
 
@@ -295,9 +294,9 @@ import it directly via `from scheduler_core...`.
 ## Tests
 
 ```
-cd products/scheduler && pytest   # rootdir is products/scheduler; uses the repo .venv
+pytest   # rootdir is the repo root; uses the repo .venv
 ```
 
 The HTTP layer has no integration tests of its own — coverage lives
 in `e2e/` (Playwright). Unit + integration tests are under
-`products/scheduler/tests/`.
+`tests/backend/`.

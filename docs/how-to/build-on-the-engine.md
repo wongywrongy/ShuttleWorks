@@ -3,14 +3,14 @@
 **Goal:** build your own scheduling product on `scheduler_core` — the pure
 CP-SAT engine the ShuttleWorks scheduler itself is built on.
 
-`scheduler_core/` has **no HTTP and no I/O**. It takes dataclasses in and returns
+`packages/scheduler-core/scheduler_core/` has **no HTTP and no I/O**. It takes dataclasses in and returns
 a result dataclass out, so any Python application can drive it. The scheduler in
-this repo (`products/scheduler/`) is the worked example; `examples/` holds
+this repo (`apps/`) is the worked example; `examples/` holds
 product-agnostic engine snippets.
 
 ## 1 · Import the domain model
 
-The inputs are plain dataclasses in `scheduler_core/domain/models.py` — `Match`,
+The inputs are plain dataclasses in `packages/scheduler-core/scheduler_core/domain/models.py` — `Match`,
 `Player`, `Assignment`, `ScheduleConfig`, `SolverOptions`. Build a problem from
 your own data by constructing these; no framework, no base classes.
 
@@ -45,7 +45,7 @@ statistics — everything the HTTP layer serialises to `ScheduleDTO`.
 ## Verify
 
 ```bash
-cd products/scheduler && pytest   # rootdir is products/scheduler; uses the repo .venv
+pytest   # rootdir is the repo root; uses the repo .venv
 ```
 
 ::: tip The non-merged match record

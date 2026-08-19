@@ -8,7 +8,7 @@ keeps optimistic updates and rollback in one place.
 
 ## The five stores
 
-Five stores live under `products/scheduler/frontend/src/store/`, each aligned with a persistence
+Five stores live under `apps/console/src/store/`, each aligned with a persistence
 boundary so a mutation can never accidentally cross one.
 
 | Store | File | Persistence | What it owns |
@@ -107,7 +107,7 @@ tournament import/export can never clobber a director's per-device UI choices.
 
 ## The hooks seam
 
-Hooks under `products/scheduler/frontend/src/hooks/` are the only code that talks to the backend
+Hooks under `apps/console/src/hooks/` are the only code that talks to the backend
 and the only code that mutates a store from outside the store file. The convention:
 
 - **Components dispatch intent**, hooks own the round-trip. A component calls `submit('call_to_court', …)`;

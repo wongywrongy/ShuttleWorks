@@ -3,7 +3,7 @@
 The public tournament site — discovery, tournament pages, the entry flow,
 and (since SP-P7) entrant surfaces: My Entries, entrant lists, player
 pages, draws, seeds, and winners. It is a **separate frontend workspace**
-(`products/scheduler/entrant/`), not part of the operator SPA.
+(`apps/entrant/`), not part of the operator SPA.
 
 ## Shape
 

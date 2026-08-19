@@ -82,7 +82,7 @@ Backend + solver unit tests (198 tests as of 2026-05-12):
 
 ```bash
 pip install -r backend/requirements-dev.txt    # one-time, pulls in pytest + httpx
-pytest                                          # run from products/scheduler/
+pytest                                          # run from the repo root
 ```
 
 End-to-end (Playwright against the docker-compose stack):

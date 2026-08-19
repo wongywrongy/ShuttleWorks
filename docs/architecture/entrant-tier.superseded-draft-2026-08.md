@@ -1,15 +1,15 @@
 # The entrant tier (the public site)
 
 ShuttleWorks has **two frontends**, not one. The operator console
-(`products/scheduler/frontend`) is the React + Vite SPA this site mostly describes. The
-**entrant tier** (`products/scheduler/entrant`) is a separate React Router 7 server-rendered
+(`apps/console`) is the React + Vite SPA this site mostly describes. The
+**entrant tier** (`apps/entrant`) is a separate React Router 7 server-rendered
 app that serves the public face of a tournament under `/e/` — discovery, the tournament page,
 and the entry flow. It shipped in SP-PROGRAM-1 Phase 6 (2026-08-10) and its public information
 architecture landed in Phase 6-2 (2026-08-11).
 
 This page is for engineers who have to change it. What the tier is *for* — its users, its
 positioning, and the commitments it is not allowed to break — is stated in
-`products/scheduler/entrant/PRODUCT.md`, which is the product record and outranks this page on
+`apps/entrant/PRODUCT.md`, which is the product record and outranks this page on
 intent.
 
 ::: warning It is a different app with different rules

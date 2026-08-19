@@ -15,9 +15,9 @@ plus a display title — nothing more. Picking one on `/new` pre-fills the
 name, are what the rest of the app reads.
 
 The presets live in one file —
-`products/scheduler/frontend/src/products/hub/newWorkspaceTemplates.ts` — and the
+`apps/console/src/products/hub/newWorkspaceTemplates.ts` — and the
 `/new` surface that renders them is
-`products/scheduler/frontend/src/products/hub/NewWorkspacePage.tsx`.
+`apps/console/src/products/hub/NewWorkspacePage.tsx`.
 
 ```ts
 // newWorkspaceTemplates.ts — the shape every preset carries

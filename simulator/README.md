@@ -17,26 +17,25 @@ the package; even a TYPE_CHECKING import fails). The ephemeral-server mode
 launches uvicorn as a *subprocess*, which keeps the process boundary intact.
 
 Nothing here enters the CI PR gate: the product suite's pytest rootdir is
-`products/scheduler` with `testpaths=["tests"]`, so `simulator/` is
+the repo root with `testpaths=["tests"]`, so `simulator/` is
 structurally outside it, and the sim has its own `requirements.txt`.
 
 ## Quickstart
 
 ```bash
 # one-time: deps into the repo venv (httpx + pytest)
-pip install -r products/scheduler/simulator/requirements.txt
+pip install -r simulator/requirements.txt
 
 # against a backend you already run on :8600 (the local-dev recipe)
-make -C products/scheduler sim SCENARIO=small-meet SEED=42
+make sim SCENARIO=small-meet SEED=42
 
 # fully isolated: boots its own backend (fresh sqlite, free port), tears down after
-make -C products/scheduler sim-ephemeral SCENARIO=bracket FORMAT=de
+make sim-ephemeral SCENARIO=bracket FORMAT=de
 
 # against the Docker stack (backend on :8000)
-make -C products/scheduler sim SIM_URL=http://localhost:8000
+make sim SIM_URL=http://localhost:8000
 
 # raw CLI (equivalent)
-cd products/scheduler
 PYTHONPATH=simulator python -m tournament_sim run --scenario small-meet --seed 42 --base-url http://localhost:8600
 PYTHONPATH=simulator python -m tournament_sim list
 ```
@@ -63,7 +62,7 @@ solve-twice determinism check.
 
 ```bash
 # a fresh database is a precondition, not a nicety — see below
-make -C products/scheduler sim SCENARIO=demo SEED=2026 SIM_URL=http://localhost:8600
+make sim SCENARIO=demo SEED=2026 SIM_URL=http://localhost:8600
 ```
 
 The report's `note:` lines ARE the deliverable: one per workspace with its
@@ -229,7 +228,7 @@ pacing completely.
 ## Testing the tool itself
 
 ```bash
-cd products/scheduler/simulator
+cd simulator
 pytest                      # boundary guard (fast) + ephemeral smoke (slow)
 ```
 

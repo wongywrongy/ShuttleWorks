@@ -1,6 +1,6 @@
 # API reference
 
-The backend is a FastAPI app (`products/scheduler/backend`). The **authoritative,
+The backend is a FastAPI app (`apps/api`). The **authoritative,
 always-current API reference is the Swagger UI** that FastAPI generates from the running app —
 this page documents the thing Swagger does *not* show: the **route-ownership model**, which
 architectural module owns which prefix, and the cross-cutting conventions every route shares.

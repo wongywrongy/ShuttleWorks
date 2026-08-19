@@ -1,7 +1,7 @@
 # scheduler_core/
 
 The CP-SAT scheduling engine. Pure Python, no HTTP — invoked from
-`products/scheduler/backend/api/schedule*.py` and from the unit tests in `products/scheduler/tests/`.
+`apps/api/api/schedule*.py` and from the unit tests in `tests/backend/`.
 
 ## Layout
 
@@ -68,9 +68,9 @@ no migration. Adapters that want a custom plugin set construct
    adapter).
 4. Surface any tunable knobs via `SolverOptions` in
    `domain/models.py`, then through
-   `products/scheduler/backend/app/schemas.py` and
-   `products/scheduler/frontend/src/api/dto.ts`.
-5. Add a unit test under `products/scheduler/tests/` that constructs a
+   `apps/api/app/schemas.py` and
+   `apps/console/src/api/dto.ts`.
+5. Add a unit test under `tests/backend/` that constructs a
    minimal instance and asserts the new behaviour.
 
 ## SolverOptions
@@ -100,5 +100,5 @@ serialised to `ScheduleDTO`.
 ## Tests
 
 ```
-cd products/scheduler && pytest   # rootdir is products/scheduler; uses the repo .venv
+pytest   # rootdir is the repo root; uses the repo .venv
 ```

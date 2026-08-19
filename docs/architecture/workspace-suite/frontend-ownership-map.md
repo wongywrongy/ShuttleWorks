@@ -2,7 +2,7 @@
 
 # Frontend Ownership Map
 
-Maps current `products/scheduler/frontend/src/` files to their future suite owner.
+Maps current `apps/console/src/` files to their future suite owner.
 No files move in Phase 1. "Owner" = which workspace module or platform layer the code
 *belongs to* conceptually, used to enforce import boundaries (see import-boundaries.md).
 

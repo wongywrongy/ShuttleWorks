@@ -43,8 +43,8 @@ an event: the cloud dependency ends at commit, and nothing on event day reads an
 :::
 
 ::: tip There are two frontends
-The operator console (`products/scheduler/frontend`) is the React + Vite SPA. The public
-[**entrant tier**](/architecture/entrant-tier) (`products/scheduler/entrant`) is a separate
+The operator console (`apps/console`) is the React + Vite SPA. The public
+[**entrant tier**](/architecture/entrant-tier) (`apps/entrant`) is a separate
 server-rendered React Router app under `/e/` that ships **zero client JavaScript**. It is not a
 module — it is a delivery tier in front of the Entries module's public data plane.
 :::
@@ -121,9 +121,9 @@ These are the substance of the [module contracts](/contracts/).
 
 Everything sits on two shared layers:
 
-- **`scheduler_core/`** — a pure-Python CP-SAT engine (OR-Tools), no HTTP and no I/O. Both Meet
+- **`packages/scheduler-core/`** — a pure-Python CP-SAT engine (OR-Tools), no HTTP and no I/O. Both Meet
   schedules and Bracket round scheduling call into it. See
-  [ADR 0004](/decisions/0004-ortools-cpsat-engine) and `scheduler_core/README.md`.
+  [ADR 0004](/decisions/0004-ortools-cpsat-engine) and `packages/scheduler-core/scheduler_core/README.md`.
 - **SQLite via SQLAlchemy 2.0** — the canonical persistence, with Alembic migrations, fronted by
   `repositories/local.py` (`LocalRepository`); cloud mode runs the same code against Postgres 16.
   Single-store: there is no replication layer, and identity is self-hosted cookie-session

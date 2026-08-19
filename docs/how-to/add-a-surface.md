@@ -17,7 +17,7 @@ registration.
 ## 1 · Add the segment to `AppTab`
 
 ```ts
-// products/scheduler/frontend/src/store/uiStore.ts  (the AppTab union, ~line 19)
+// apps/console/src/store/uiStore.ts  (the AppTab union, ~line 19)
 export type AppTab =
   | /* …existing… */
   | 'standings';   // a new Meet emit surface
@@ -65,7 +65,7 @@ them. Add an internal surface to `AppTab` only; route to it from its parent.
 ## Verify
 
 ```bash
-cd products/scheduler/frontend
+cd apps/console
 npx vitest run src/platform/contracts   # ownedSegments must match the nav
 npx tsc -b
 ```
