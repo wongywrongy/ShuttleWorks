@@ -27,6 +27,9 @@ const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
 export interface PlanCallListProps {
   blocks: OpsBlock[];
   courtCount: number;
+  /** Courts kept court-tied by per-court override. They are NOT part of the
+   *  queue's capacity, so the feasibility band must exclude them. */
+  pinnedCourts?: number[];
   selectedKey?: string | null;
   onSelect(key: string | null): void;
   formatSlot(slot: number): string;
@@ -35,10 +38,13 @@ export interface PlanCallListProps {
 export function PlanCallList({
   blocks,
   courtCount,
+  pinnedCourts,
   selectedKey,
   onSelect,
   formatSlot,
 }: PlanCallListProps) {
+  const pinned = pinnedCourts ?? [];
+  const poolCount = Math.max(0, courtCount - pinned.length);
   // Scheduled, not-done matches in call order. Unscheduled ones are not IN
   // the call list — the matches list below the board still shows them.
   const ordered = useMemo(
@@ -79,7 +85,10 @@ export function PlanCallList({
       >
         <span className={`${EYEBROW_CLASS} text-ink-3`}>Call order</span>
         <span className="text-xs text-muted-foreground">
-          {ordered.length} matches fit inside {courtCount} courts
+          {ordered.length} matches across {poolCount} court{poolCount === 1 ? '' : 's'}
+          {pinned.length > 0 ? (
+            <> · {pinned.map((c) => `Court ${c}`).join(', ')} kept separate</>
+          ) : null}
           {endsAt ? <> · ends ~{endsAt}</> : null}
         </span>
       </div>

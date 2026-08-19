@@ -56,7 +56,7 @@ export function CandidatesPanel({ schedule, onSelect }: Props) {
   return (
     <div className="flex flex-col gap-1 p-2">
       <div className="px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
+        {candidates.length} alternate schedule{candidates.length === 1 ? '' : 's'}
       </div>
       {candidates.map((c: ScheduleCandidate, i: number) => {
         const isActive = i === activeIndex;
@@ -76,19 +76,23 @@ export function CandidatesPanel({ schedule, onSelect }: Props) {
           >
             <div className="flex items-center justify-between gap-2">
               <div className="font-medium">
-                Candidate #{i + 1}
-                {isActive && <Check className="inline-block h-3 w-3 ml-1" />}
+                Option {i + 1}
+                {isActive && (
+                  <span className="ml-1 inline-flex items-center gap-0.5 text-accent">
+                    <Check className="inline-block h-3 w-3" /> In use
+                  </span>
+                )}
               </div>
-              <div className="text-muted-foreground tabular-nums">
-                score {Math.round(c.objectiveScore)}
-              </div>
-            </div>
-            <div className="mt-0.5 flex items-center justify-between gap-2 text-2xs text-muted-foreground">
-              <span>found at {c.foundAtSeconds.toFixed(1)}s</span>
+              {/* Solver internals (objective score, found-at) stay off this
+                  card: the operator's swap decision is HOW MUCH MOVES. */}
               {!isActive && (
-                <span className={isLowDisruption ? 'text-status-live font-medium' : ''}>
-                  {movedCount} move{movedCount === 1 ? '' : 's'} vs active
-                  {isLowDisruption ? ' · low-disruption' : ''}
+                <span
+                  className={`tabular-nums ${isLowDisruption ? 'text-status-live font-medium' : 'text-muted-foreground'}`}
+                >
+                  {movedCount === 0
+                    ? 'Same courts and times'
+                    : `${movedCount} match${movedCount === 1 ? '' : 'es'} would move`}
+                  {isLowDisruption ? ' · small change' : ''}
                 </span>
               )}
             </div>

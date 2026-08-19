@@ -347,6 +347,10 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                   <PlanCallList
                     blocks={blocks}
                     courtCount={courtCount}
+                    pinnedCourts={Object.entries(config?.courtOverrides ?? {})
+                      .filter(([, v]) => v === 'pinned')
+                      .map(([k]) => Number(k))
+                      .sort((a, b) => a - b)}
                     selectedKey={selectedKey}
                     onSelect={setSelectedKey}
                     formatSlot={formatSlot}

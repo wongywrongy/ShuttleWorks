@@ -114,8 +114,8 @@ describe('BracketScheduleModal — streaming schedule-next', () => {
     await waitFor(() => expect(scheduleNextWithProgress).toHaveBeenCalled());
 
     // Candidates surface for selection.
-    const candidate = await screen.findByRole('button', { name: /Candidate #1/ });
-    expect(screen.getByText(/2 candidates/i)).toBeInTheDocument();
+    const candidate = await screen.findByRole('button', { name: /Option 1/ });
+    expect(screen.getByText(/2 schedule options/i)).toBeInTheDocument();
 
     fireEvent.click(candidate);
 

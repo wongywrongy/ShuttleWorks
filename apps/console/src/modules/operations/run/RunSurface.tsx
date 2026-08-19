@@ -570,13 +570,16 @@ export function RunSurface({
               className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/20 px-4 py-1.5"
             >
               <span className={`${EYEBROW_CLASS} text-ink-3`}>On deck</span>
-              {deck.map((m, i) => (
+              {/* Deliberately UNNUMBERED: the queue below numbers rows by
+                  queue position, and the deck skips anyone whose player is on
+                  court, so a "#2" here would name a different match than "#2"
+                  there. Order is left-to-right; the strip's label says so. */}
+              {deck.map((m) => (
                 <span
                   key={m.key}
                   data-testid={`on-deck-${m.key}`}
                   className="inline-flex items-baseline gap-1.5 text-xs"
                 >
-                  <span className="sw-num text-ink-faint">#{i + 1}</span>
                   <span className="font-semibold sw-num text-2xs text-ink-3">{m.label}</span>
                   <span className="text-muted-foreground">
                     {m.sideA} v {m.sideB}

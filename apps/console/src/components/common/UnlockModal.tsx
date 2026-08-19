@@ -65,8 +65,8 @@ export function UnlockModal({
         <div className="mt-4 rounded border border-border bg-muted p-3 text-sm text-muted-foreground">
           <div className="font-medium text-foreground">This will clear:</div>
           <ul className="mt-1 list-disc pl-5">
-            <li>The committed schedule and any candidates it produced</li>
-            <li>Solver HUD progress + recent log entries</li>
+            <li>The committed schedule and any alternate schedules it produced</li>
+            <li>Scheduling progress and recent log entries</li>
             <li>Any in-flight proposal awaiting review</li>
           </ul>
           <div className="mt-2 text-muted-foreground">

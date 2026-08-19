@@ -127,7 +127,7 @@ describe('<EngineConfigForm /> — shared groups', () => {
       mount(module);
       expect(screen.getByText('Scoring')).toBeInTheDocument();
       expect(screen.getByText('Timing')).toBeInTheDocument();
-      expect(screen.getByText('Advanced solver')).toBeInTheDocument();
+      expect(screen.getByText('Advanced scheduling')).toBeInTheDocument();
       expect(screen.getByText('Optimization goals')).toBeInTheDocument();
     },
   );
@@ -136,8 +136,8 @@ describe('<EngineConfigForm /> — shared groups', () => {
     '%s renders the shared scoring + solver + goal controls',
     (module) => {
       mount(module);
-      expect(screen.getByLabelText('Reproducible solver run')).toBeInTheDocument();
-      expect(screen.getByLabelText('Freeze horizon in slots')).toBeInTheDocument();
+      expect(screen.getByLabelText('Reproducible scheduling run')).toBeInTheDocument();
+      expect(screen.getByLabelText('Freeze window in slots')).toBeInTheDocument();
       expect(screen.getByLabelText('Maximize court utilization')).toBeInTheDocument();
       expect(screen.getByLabelText('Enforce game spacing')).toBeInTheDocument();
       expect(screen.getByLabelText('Compact schedule')).toBeInTheDocument();
@@ -161,17 +161,17 @@ describe('<EngineConfigForm /> — module applicability', () => {
     ).toBeInTheDocument();
   });
 
-  it('meet DOES render Solver time limit', () => {
+  it('meet DOES render Scheduling time limit', () => {
     mount('meet');
     expect(
-      screen.getByLabelText('Solver wall-clock cap in seconds'),
+      screen.getByLabelText('Scheduling time limit in seconds'),
     ).toBeInTheDocument();
   });
 
-  it('bracket does NOT render Solver time limit — it is decorative there (C10 divergence)', () => {
+  it('bracket does NOT render Scheduling time limit — it is decorative there (C10 divergence)', () => {
     mount('bracket');
     expect(
-      screen.queryByLabelText('Solver wall-clock cap in seconds'),
+      screen.queryByLabelText('Scheduling time limit in seconds'),
     ).not.toBeInTheDocument();
   });
 });
@@ -239,7 +239,7 @@ describe('<EngineConfigForm /> — save flow', () => {
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     const { container } = mount('meet');
 
-    fireEvent.click(screen.getByLabelText('Reproducible solver run'));
+    fireEvent.click(screen.getByLabelText('Reproducible scheduling run'));
 
     await act(async () => {
       fireEvent.submit(container.querySelector('form')!);
@@ -265,19 +265,19 @@ describe('<EngineConfigForm /> — collapsible sections', () => {
     );
     expect(screen.getByLabelText('Maximize court utilization')).toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: /Advanced solver/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Advanced scheduling/ })).toHaveAttribute(
       'aria-expanded',
       'false',
     );
-    expect(screen.queryByLabelText('Reproducible solver run')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Reproducible scheduling run')).not.toBeInTheDocument();
   });
 
-  it('opening Advanced solver reveals its controls without touching the others', () => {
+  it('opening Advanced scheduling reveals its controls without touching the others', () => {
     mount('meet', {}, { expandSections: false });
 
-    fireEvent.click(screen.getByRole('button', { name: /Advanced solver/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Advanced scheduling/ }));
 
-    expect(screen.getByLabelText('Reproducible solver run')).toBeInTheDocument();
+    expect(screen.getByLabelText('Reproducible scheduling run')).toBeInTheDocument();
     // Sections are independent, not an accordion.
     expect(screen.getByRole('button', { name: /Scoring/ })).toHaveAttribute(
       'aria-expanded',

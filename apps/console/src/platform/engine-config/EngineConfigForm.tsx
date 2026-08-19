@@ -432,20 +432,20 @@ export function EngineConfigForm({
 
           {/* Solver internals last: the one collapsed group — a director
               changes these rarely, and never during an event. */}
-          <Section title="Advanced solver" defaultOpen={false}>
+          <Section title="Advanced scheduling" defaultOpen={false}>
             <Row
               label="Reproducible run"
               control={
                 <Toggle
                   value={formData.deterministic ?? false}
                   onChange={(v) => set('deterministic', v)}
-                  ariaLabel="Reproducible solver run"
+                  ariaLabel="Reproducible scheduling run"
                 />
               }
             />
             {engineFieldAppliesTo('solverTimeLimitSeconds', module) ? (
               <Row
-                label="Solver time limit"
+                label="Scheduling time limit"
                 control={
                   <NumberWithSuffix
                     value={formData.solverTimeLimitSeconds ?? 30}
@@ -453,13 +453,13 @@ export function EngineConfigForm({
                     suffix="s"
                     min={1}
                     max={600}
-                    ariaLabel="Solver wall-clock cap in seconds"
+                    ariaLabel="Scheduling time limit in seconds"
                   />
                 }
               />
             ) : null}
             <Row
-              label="Freeze horizon"
+              label="Freeze window"
               control={
                 <NumberWithSuffix
                   value={formData.freezeHorizonSlots ?? 0}
@@ -467,7 +467,7 @@ export function EngineConfigForm({
                   suffix="slots"
                   min={0}
                   max={32}
-                  ariaLabel="Freeze horizon in slots"
+                  ariaLabel="Freeze window in slots"
                 />
               }
               last

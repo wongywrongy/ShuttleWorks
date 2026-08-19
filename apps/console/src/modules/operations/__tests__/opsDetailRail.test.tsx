@@ -23,7 +23,7 @@ describe('OpsDetailRail', () => {
     // one unlabelled "Court C2 · slot 3" line in a flat stack.
     expect(screen.getByText('Court')).toBeInTheDocument();
     expect(screen.getByText('C2')).toBeInTheDocument();
-    expect(screen.getByText('Slot')).toBeInTheDocument();
+    expect(screen.getByText('Time slot')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Start match/i }));
     expect(onAction).toHaveBeenCalledWith(meetBlock, { kind: 'start' });

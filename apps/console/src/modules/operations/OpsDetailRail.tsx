@@ -105,7 +105,7 @@ export function OpsDetailRail({ block, data, onBracketChange, onAction, live, on
           }
         />
         <Row pane
-          label="Slot"
+          label="Time slot"
           control={
             <span className="sw-num text-sm text-foreground">
               {block.court != null ? block.slot : 'Not planned'}

@@ -5,7 +5,7 @@
  * first; leaving Bracket's in place is what made the config unification look
  * half-done. Both engines now render a single stack of collapsible sections:
  * Events (the draw facts, read-only) leads, then the shared Scoring / Timing /
- * Optimisation goals / Advanced solver.
+ * Optimisation goals / Advanced scheduling.
  *
  * The load-bearing property these tests hold is that the merge did NOT create
  * a second config writer: Events comes in through `EngineConfigForm`'s
@@ -154,7 +154,7 @@ describe('Bracket Configuration — one merged surface', () => {
     // on this surface has to open the sections first.
     expect(screen.queryByText(/Active disciplines/i)).toBeNull();
 
-    expect(screen.getByRole('button', { name: /Advanced solver/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Advanced scheduling/ })).toHaveAttribute(
       'aria-expanded',
       'false',
     );

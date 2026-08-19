@@ -85,7 +85,7 @@ export function SolveTelemetryPanel() {
 
       {candidates ? (
         <div data-testid="ops-candidates">
-          <div className={`px-4 pt-2 ${EYEBROW_CLASS} text-muted-foreground`}>Candidates</div>
+          <div className={`px-4 pt-2 ${EYEBROW_CLASS} text-muted-foreground`}>Alternate schedules</div>
           <CandidatesPanel
             schedule={schedule}
             onSelect={(i) => useTournamentStore.getState().setActiveCandidateIndex(i)}

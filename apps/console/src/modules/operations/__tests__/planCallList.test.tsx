@@ -41,7 +41,7 @@ describe('PlanCallList', () => {
     ]);
     // feasibility band: count, courts, and the honest end estimate
     expect(screen.getByTestId('plan-feasibility-band').textContent).toMatch(
-      /3 matches fit inside 3 courts.*ends ~T5/,
+      /3 matches across 3 courts.*ends ~T5/,
     );
   });
 
@@ -69,5 +69,24 @@ describe('PlanCallList', () => {
     );
     expect(screen.getByTestId('plan-call-list-empty')).toBeInTheDocument();
     expect(screen.queryByTestId('plan-feasibility-band')).toBeNull();
+  });
+
+  it('the band counts the POOL, not every court: a pinned court is not capacity', () => {
+    render(
+      <PlanCallList
+        blocks={[blk({ id: 'a', slot: 0 })]}
+        courtCount={4}
+        pinnedCourts={[1]}
+        selectedKey={null}
+        onSelect={vi.fn()}
+        formatSlot={fmt}
+      />,
+    );
+    const band = screen.getByTestId('plan-feasibility-band').textContent ?? '';
+    // 4 courts minus 1 kept court-tied = 3 in the queue's capacity
+    expect(band).toMatch(/across 3 courts/);
+    expect(band).toMatch(/Court 1 kept separate/);
+    // NEGATIVE CONTROL: it must not claim the full court count
+    expect(band).not.toMatch(/across 4 courts/);
   });
 });

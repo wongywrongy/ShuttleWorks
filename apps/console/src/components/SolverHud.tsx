@@ -26,7 +26,7 @@ const PHASES: Record<NonNullable<SolverPhase>, PhaseStyle> = {
     loop: true,
   },
   presolve: {
-    label: 'Presolve',
+    label: 'Preparing',
     ring: 'hsl(var(--status-warning-fg) / 0.55)',
     pill: 'bg-status-called-bg text-status-called border-status-called/40',
     dot: 'bg-status-called',
@@ -40,7 +40,7 @@ const PHASES: Record<NonNullable<SolverPhase>, PhaseStyle> = {
     loop: true,
   },
   proving: {
-    label: 'Proving optimal',
+    label: 'Confirming best',
     ring: 'hsl(var(--status-success-fg) / 0.55)',
     pill: 'bg-status-live-bg text-status-live border-status-live/40',
     dot: 'bg-status-live',
@@ -163,16 +163,12 @@ export function SolverHud({ unifiedOps = false }: { unifiedOps?: boolean }) {
           data-testid="solver-hud-model"
           className="tabular-nums motion-safe:animate-[block-in_0.35s_ease-out_backwards]"
         >
-          <span className="text-muted-foreground">Model</span>{' '}
+          {/* Interval / no-overlap counts are CP-SAT internals; the one
+              fact an operator needs here is how much is being scheduled. */}
           <span className="text-foreground font-medium">
             {hud.numMatches}
-          </span>
-          <span className="text-muted-foreground mx-1">·</span>
-          <span className="tabular-nums">{hud.numIntervals ?? '–'}</span>{' '}
-          <span className="text-muted-foreground">intervals</span>
-          <span className="text-muted-foreground mx-1">·</span>
-          <span className="tabular-nums">{hud.numNoOverlap ?? '–'}</span>{' '}
-          <span className="text-muted-foreground">no-overlap</span>
+          </span>{' '}
+          <span className="text-muted-foreground">matches</span>
         </span>
       ) : null}
 
@@ -181,7 +177,7 @@ export function SolverHud({ unifiedOps = false }: { unifiedOps?: boolean }) {
           data-testid="solver-hud-solutions"
           className="inline-flex items-center gap-1.5"
         >
-          <span className="text-muted-foreground">Solutions</span>
+          <span className="text-muted-foreground">Plans found</span>
           <span
             key={hud.solutionCount}
             className="inline-block tabular-nums font-semibold motion-safe:animate-solution-tick"
@@ -193,7 +189,7 @@ export function SolverHud({ unifiedOps = false }: { unifiedOps?: boolean }) {
 
       {animatedObjective !== undefined ? (
         <span data-testid="solver-hud-objective" className="inline-flex items-baseline gap-1.5">
-          <span className="text-muted-foreground">Objective</span>
+          <span className="text-muted-foreground">Score</span>
           <span
             key={objKey}
             className="tabular-nums font-semibold text-status-live motion-safe:animate-obj-flash [text-shadow:0_0_12px_hsla(142,71%,45%,0.35)]"
@@ -202,7 +198,7 @@ export function SolverHud({ unifiedOps = false }: { unifiedOps?: boolean }) {
           </span>
           {animatedBound !== undefined ? (
             <>
-              <span className="text-muted-foreground">bound</span>
+              <span className="text-muted-foreground">best possible</span>
               <span className="tabular-nums text-muted-foreground">{Math.round(animatedBound)}</span>
             </>
           ) : null}

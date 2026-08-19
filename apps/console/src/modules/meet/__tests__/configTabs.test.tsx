@@ -86,7 +86,7 @@ describe('Meet Configuration (one merged surface)', () => {
     // No "Format" section: it collided with the "Match format" row in
     // Scoring, and Meet type is now a row inside Events.
     expect(screen.queryByRole('button', { name: /^Format$/ })).toBeNull();
-    for (const title of ['Events', 'Scoring', 'Timing', 'Optimization goals', 'Advanced solver']) {
+    for (const title of ['Events', 'Scoring', 'Timing', 'Optimization goals', 'Advanced scheduling']) {
       expect(screen.getByRole('button', { name: new RegExp(title) })).toBeInTheDocument();
     }
   });
@@ -146,7 +146,7 @@ describe('Meet Configuration (one merged surface)', () => {
       const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
       renderPage();
     expandConfigSections();
-      fireEvent.click(screen.getByLabelText('Reproducible solver run'));
+      fireEvent.click(screen.getByLabelText('Reproducible scheduling run'));
       fireEvent.click(screen.getByTestId('config-save'));
       await waitFor(() => expect(setConfig).toHaveBeenCalled());
       const last = setConfig.mock.calls[setConfig.mock.calls.length - 1][0] as TournamentConfig;

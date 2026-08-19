@@ -215,7 +215,7 @@ function CandidateList({
   return (
     <div className="flex max-h-72 flex-col gap-1 overflow-y-auto p-2">
       <div className="px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
+        {candidates.length} schedule option{candidates.length === 1 ? '' : 's'}
       </div>
       {candidates.map((c, i) => {
         const moved = moveCounts.get(c.solution_id) ?? 0;
@@ -229,22 +229,20 @@ function CandidateList({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-card-foreground">
-                Candidate #{i + 1}
+                Option {i + 1}
                 {isBest && (
                   <span className="ml-1 inline-flex items-center text-status-live">
-                    <Check className="h-3 w-3" /> best
+                    <Check className="h-3 w-3" /> recommended
                   </span>
                 )}
               </span>
-              <span className="tabular-nums text-muted-foreground">
-                score {Math.round(c.objective_score)}
-              </span>
-            </div>
-            <div className="mt-0.5 flex items-center justify-between gap-2 text-2xs text-muted-foreground">
-              <span>found at {c.found_at_seconds.toFixed(1)}s</span>
+              {/* Solver internals (objective score, found-at) stay off the
+                  card: the pick is about how it differs from the best. */}
               {!isBest && (
-                <span>
-                  {moved} move{moved === 1 ? '' : 's'} vs best
+                <span className="tabular-nums text-muted-foreground">
+                  {moved === 0
+                    ? 'Same courts and times'
+                    : `${moved} match${moved === 1 ? '' : 'es'} placed differently`}
                 </span>
               )}
             </div>

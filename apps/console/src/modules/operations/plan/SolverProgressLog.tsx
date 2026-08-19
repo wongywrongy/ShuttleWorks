@@ -148,7 +148,7 @@ export function SolverProgressLog({
       className="h-full overflow-y-auto text-xs font-mono space-y-0.5"
     >
       {logs.length === 0 ? (
-        <div className="text-muted-foreground italic">Waiting for solver...</div>
+        <div className="text-muted-foreground italic">Waiting for the scheduler…</div>
       ) : (
         logs.map((entry) => (
           <div key={entry.id} className="flex gap-1.5">

@@ -2,7 +2,7 @@
  * Bracket Engine tab — now the shared `EngineConfigForm` (Task 8). Replaces
  * `BracketEngineSection.test.tsx`: the immediate-write pattern it pinned was
  * intentionally retired for Save-on-submit (matching Meet), and the option
- * set now matches Meet's (Scoring + Timing + Advanced solver + Optimisation
+ * set now matches Meet's (Scoring + Timing + Advanced scheduling + Optimisation
  * goals) — that convergence is the point of this task (the two Engine tabs
  * were visibly different surfaces before it).
  *
@@ -138,14 +138,14 @@ describe('bracket engine config (shared form)', () => {
     expect(screen.getByLabelText('Score type')).toBeInTheDocument();
     // Timing
     expect(screen.getByLabelText('Rest between matches')).toBeInTheDocument();
-    // Advanced solver (previously Meet-only)
-    expect(screen.getByLabelText('Reproducible solver run')).toBeInTheDocument();
-    // Solver time limit is meet-only (C10: bracket keeps its own
+    // Advanced scheduling (previously Meet-only)
+    expect(screen.getByLabelText('Reproducible scheduling run')).toBeInTheDocument();
+    // Scheduling time limit is meet-only (C10: bracket keeps its own
     // per-request budget — see EngineConfigForm's ENGINE_CONFIG_FIELDS).
     expect(
-      screen.queryByLabelText('Solver wall-clock cap in seconds'),
+      screen.queryByLabelText('Scheduling time limit in seconds'),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Freeze horizon in slots')).toBeInTheDocument();
+    expect(screen.getByLabelText('Freeze window in slots')).toBeInTheDocument();
     // Optimisation goals (previously Meet-only)
     expect(screen.getByLabelText('Maximize court utilization')).toBeInTheDocument();
     expect(screen.getByLabelText('Enforce game spacing')).toBeInTheDocument();
