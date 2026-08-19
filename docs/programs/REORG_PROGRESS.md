@@ -13,7 +13,7 @@ scope and is a violation.
 | --- | --- | --- |
 | 0 | Audit + baseline | **Complete** 2026-08-19 |
 | 1 | `apps/` + `packages/` + `infra/` | **Complete** 2026-08-19 |
-| 2 | import-linter contracts (before any backend move) | Not started |
+| 2 | import-linter contracts (before any backend move) | **Complete** 2026-08-19 |
 | 3 | Backend vertical slices | Not started |
 | 4 | Console finishing pass (`products`→`modules`, `utils`→`lib`, `settings`→`engine-config`) | Not started |
 | 5 | Docs: Diátaxis quadrants + one history home | Not started |
@@ -215,3 +215,102 @@ contains the old path. They are path *arithmetic*, not path *text*.
 - A host `uvicorn` and the `btp` Docker stack were also stopped for the same
   reason. The API now starts from `apps/api`, and compose needs an explicit
   `-f infra/compose/<file>` (or just use the root `make` targets).
+
+---
+
+## Phase 2 — import-linter contracts (complete)
+
+Written against the **current flat layout**, deliberately before Phase 3 moves
+anything. That ordering is the whole point: a seam map written after the move
+would encode whatever the move produced.
+
+`apps/api/.importlinter` — **11 contracts, 11 kept, 0 broken.**
+Wired into `make check` (before pytest, so a boundary break reports in seconds
+rather than after the ten-minute suite) and blocking in the CI backend job.
+`import-linter>=2.13,<3` pinned in `apps/api/requirements-dev.txt`.
+
+| # | Contract | Judges |
+| --- | --- | --- |
+| 1 | api > services > repositories > database | transitively |
+| 2 | the shared kernel does not import the surfaces | transitively |
+| 3 | `scheduler_core` knows nothing about the application | transitively, no allowances |
+| 4 | **Operations does not reach into Bracket** (pinned absence) | transitively, no allowances |
+| 5–11 | per-domain independence (operations, bracket, meet, entries, identity, display-as-leaf, ops) | directly |
+
+**Direct vs indirect is a deliberate split.** Everything in the tree reaches
+`database`, `repositories` and `app` — that is what a shared kernel is for — so
+every domain is transitively connected to every other through it. A transitive
+domain contract reports that as coupling, which it is not. The three contracts
+where the question genuinely is "what does this drag in behind it" stay
+transitive.
+
+**The gate was falsified, not just run.** Planting
+`from services import bracket` into `services/match_state.py` breaks contract 4
+and nothing else; removing it restores 11/11 with a clean tree. A contract that
+has never failed is not yet known to work.
+
+### (a) Edges the seam map forgot — now documented, not fixed
+
+The graph has 22 cross-domain edges. All are legitimate and named in the file.
+The one that needed a ruling:
+
+- **`api.entries_json -> services.auth` is not Entries depending on Identity.**
+  The three symbols are `entries_key`, `throttle_check` and
+  `throttle_record_entry` — the shared abuse throttle guarding the public submit
+  path against a flood, which has nothing to do with who anyone is. It lives in
+  the identity service only because that is where the first caller needed it.
+
+### (b) Genuine leaks — allowed with `DEBT(REORG-1)`, code untouched
+
+Four allowances, every one explained in the file. There are no unexplained
+ignores.
+
+- **L1 `app.form_csrf -> services.auth`** — the kernel's CSRF check resolves an
+  operator session, opening its own `SessionLocal`. Either the check belongs
+  above the kernel or `resolve_session` belongs below it.
+- **L2 `repositories.local -> services.match_state`** — the repository applies a
+  state transition inside the command transaction. The transaction boundary is
+  genuinely at the repository and the transition table genuinely in the service,
+  so this is not fixed by moving an import.
+- **`services.solve_child -> api.schedule`** — the solve child re-enters the HTTP
+  layer to reach the meet engine entry point, because `api/schedule.py` holds
+  both the router and the problem-building call.
+
+L1 and L2 are **function-local** imports. Deferring an import hides a cycle from
+Python's import machinery, not from the architecture — which is why two edges
+broke eight contracts on the first run, before they were declared.
+
+### A Phase 1 trap this phase caught
+
+`.gitignore` line 73 was `apps/`, commented "Old app folders (legacy)" — a rule
+for a layout that has not existed for a long time. Choosing `apps/` as the new
+application tier walked straight into it.
+
+Nothing looked wrong: `git mv` keeps tracked files tracked, so all 783 moved
+files stayed in the index. But every **new** file under `apps/` was invisible to
+git. It surfaced only because `git add apps/api/.importlinter` refused — that is,
+because this phase happened to create a file there. Had Phase 2 been docs-only,
+the next person to add an API module would have committed a tree that does not
+build, with a clean `git status` the whole way.
+
+Removed, after verifying that `.env`, `data/`, `__pycache__`, `node_modules`,
+`dist` and `*.db*` under `apps/` are each covered by their own rules and were
+not relying on it. Import-linter's graph cache was the one thing that was; it
+has an explicit rule now.
+
+### The Phase 3 finding this phase produced
+
+**Five modules are imported by three or more domains**, and the program's
+Phase 3 target files each of them under exactly one:
+
+| Module | Program files it under | Actually imported by |
+| --- | --- | --- |
+| `adapters/badminton.py` | bracket | meet, bracket, solve_rail |
+| `services/scheduling/params.py` | meet | meet, bracket |
+| `services/email.py` | entries | identity, workspaces |
+| `services/turnstile.py` | entries | identity |
+| the throttle inside `services/auth.py` | identity | identity, entries |
+
+Filing any of them under one domain makes every other consumer violate a
+boundary that is not really there. They want a shared tier. **This is the open
+ruling for the Phase 3 gate.**
