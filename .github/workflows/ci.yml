@@ -138,6 +138,20 @@ jobs:
           pip install -r apps/api/requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check apps/api tests/backend tests/e2e simulator tools packages/scheduler-core
+
+      # The API's architecture contracts (apps/api/.importlinter): the layer
+      # order, the shared kernel's direction, engine purity, and the domain
+      # boundaries -- including the PINNED ABSENCE of the Operations -> Bracket
+      # advancement edge, which is the backend twin of the console's contract
+      # test. Written in SP-REORG-1 Phase 2, deliberately BEFORE Phase 3 moves
+      # any backend file, so the repackaging is machine-checked against the
+      # seams as they are rather than against whatever the move produces.
+      #
+      # Blocking. Every allowance in that file is marked DEBT(REORG-1) and
+      # explained; there are no unexplained ignores.
+      - name: Architecture contracts (import-linter)
+        working-directory: apps/api
+        run: lint-imports
       - name: Unit tests (pytest)
         env:
           TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler

@@ -19,9 +19,9 @@ Monorepo: a CP-SAT scheduling product (meets + bracket draws) plus a shared desi
 - Frontend tests: `npm --prefix apps/console run test:run`  (vitest)
 - Frontend lint: `npm run lint:scheduler` (the npm script names still say `scheduler`; only the workspace paths moved)
 - Backend tests: `pytest`  (rootdir is the repo root; needs the repo .venv active)
-- Architecture boundaries: `npm run depcruise`
+- Architecture boundaries: `npm run depcruise` (console/entrant) + `cd apps/api && lint-imports` (the API's import contracts)
 - Python lint: `ruff check apps/api tests/backend tests/e2e simulator tools packages/scheduler-core`
-- All local checks at once: `make check` — eslint, **`tsc -b` (frontend) + `typecheck:entrant`**, vitest, depcruise, ruff, pytest. The two type gates were added 2026-08-10: `make check` ran no build, so it structurally could not catch a TypeScript error that CI (`npm run build` = `tsc -b && vite build`) fails on.
+- All local checks at once: `make check` — eslint, **`tsc -b` (frontend) + `typecheck:entrant`**, vitest, depcruise, ruff, **import-linter**, pytest. The two type gates were added 2026-08-10: `make check` ran no build, so it structurally could not catch a TypeScript error that CI (`npm run build` = `tsc -b && vite build`) fails on.
 - Regenerate console DTOs after API schema changes: `make generate-api` (root target; then reconcile `apps/console/src/api/dto.ts` by hand)
 - Run the app: `make scheduler` (Docker; console :80, api :8000) or `make scheduler-dev` (Vite :5173 + HMR); `make stop`. Where host :8000 is reserved (some Windows boxes), prefix `BACKEND_HOST_PORT=8600`.
 - Single frontend test: `npm --prefix apps/console run test:run -- src/path/x.test.ts` (filter with `-t "name"`). Type gate `tsc -b` runs inside `build`.
@@ -41,6 +41,8 @@ ShuttleWorks is a **workspace control plane**, not a stack of apps: the Hub (`/`
 - **Display** PROJECTS results (read-only poll). Since SP-CLOUD-2 it owns the public capability-token routes `/display/{token}/*` (strict projection; raw tournament UUIDs are never public keys).
 
 **The module contract is load-bearing.** `src/platform/contracts/moduleContract.ts` declares, per module, what it owns/produces/consumes (segments, `apiClient` endpoints by *reference*, DTOs, seam edges); its test (`__tests__/moduleContract.test.ts`) holds those declarations to the running app. Adding a module touches that contract + its test baselines AND `ModuleId`, backend `MODULE_IDS`/`derive_modules`, `AppTab`, `buildWorkspaceNav`, `moduleModel.ts` (`MODULE_ORDER`/`MODULE_LABELS`/`moduleForTab`), and `ModuleOutlet`.
+
+**The API has the same contract, machine-checked since SP-REORG-1 Phase 2.** `apps/api/.importlinter` holds eleven contracts: the layer order (api > services > repositories > database), the shared kernel's direction, `scheduler_core` purity, per-domain independence, and the **pinned absence** of Operations→Bracket — the backend twin of the console contract test. Run `cd apps/api && lint-imports`; it is in `make check` and blocking in CI. The domain contracts judge DIRECT imports only (everything reaches the kernel; that is what a kernel is for). Every allowance is marked `DEBT(REORG-1)` and explained in that file — there are no unexplained ignores. Note it also records five modules that three or more domains import (`adapters/badminton`, `services/scheduling/*`, `services/email`, `services/turnstile`, and the abuse throttle inside `services/auth`); they are shared infrastructure, not domain-owned.
 
 **Seams** (named cross-module edges): Meet→Operations `scheduleFinalized`, Bracket→Operations `drawGenerated`, Operations→Display `matchStateChanged`; Operations→Bracket *advancement* is deliberately UNWIRED (the contract test pins it). Bracket result recording flows through the command path `POST /bracket/commands` (idempotent), not the legacy `/bracket/results`.
 

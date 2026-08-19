@@ -15,3 +15,8 @@ pytest-cov>=5.0.0
 # radon: cyclomatic-complexity measurement for the code-health practice
 # (CODE_HEALTH.md #10). Local/analysis only — not a CI gate. `python -m radon cc`.
 radon>=6.0,<7
+# import-linter: the API's architecture contracts (.importlinter in this
+# directory). A blocking gate, in `make check` and in the CI backend job.
+# Pinned to a minor series for the same reason ruff is: a new minor can change
+# how contracts are evaluated, and this gate must not redden on an unrelated PR.
+import-linter>=2.13,<3

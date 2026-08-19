@@ -69,8 +69,8 @@ coverage/
 !/SECURITY.md
 !/SEC_PROGRESS.md
 
-# Old app folders (legacy)
-apps/
+# import-linter's graph cache (apps/api/.importlinter). Regenerated per run.
+apps/api/.import_linter_cache/
 
 # Design-system prototype (source spec for the frontend revamp — extracted into
 # .agents/skills/shuttleworks-design/; kept on disk as visual reference, not tracked).

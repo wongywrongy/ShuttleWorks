@@ -260,6 +260,11 @@ check:
 	npm --prefix apps/console run test:run
 	npm run depcruise
 	ruff check $(PY_SOURCES)
+# The API's architecture contracts (apps/api/.importlinter). Run from apps/api
+# because the API is still a set of top-level packages on sys.path rather than
+# one importable root - Phase 3 is what changes that. Placed before pytest so a
+# boundary break reports in seconds instead of after the ten-minute suite.
+	cd apps/api && lint-imports
 	pytest
 	@echo ""
 	@echo "--- docs freshness (advisory — never fails the gate) ---"
