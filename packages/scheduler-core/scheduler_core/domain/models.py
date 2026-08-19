@@ -5,7 +5,7 @@ They mirror the API schemas but are independent of FastAPI.
 """
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class SolverStatus(str, Enum):
@@ -126,6 +126,23 @@ class ScheduleConfig:
     # by the adapter. Kept here so existing tests + callers that
     # construct ``ScheduleConfig`` directly continue to work.
     closed_court_ids: List[int] = field(default_factory=list)
+
+    # Court policy — is a court part of the plan, or just where a match
+    # happens to land? "pinned" is today's behaviour: the solver chooses a
+    # specific court per match and the timetable promises it. "queue" pools
+    # the courts, solving only for TIME, and court identity is assigned
+    # afterwards by colouring — which is how a real desk runs the day.
+    #
+    # Default is "pinned": no existing solve changes until a workspace asks
+    # (ruling CP2). See docs/history/programs/SP-COURT-1.md.
+    court_policy: str = "pinned"  # "pinned" | "queue"
+
+    # Per-court override, court_id -> "pinned" | "pool". A court absent from
+    # this map follows ``court_policy``. This is what lets a real event queue
+    # the body of the draw while Court 1 stays pinned because it is filmed,
+    # rostered or ticketed (ruling CP1). In "pinned" policy the map is
+    # ignored — there is no pool to opt out of.
+    court_overrides: Dict[int, str] = field(default_factory=dict)
 
 
 @dataclass

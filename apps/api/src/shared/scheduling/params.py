@@ -17,7 +17,7 @@ path uses the returned config as-is.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from scheduler_core.domain.models import ScheduleConfig
 
@@ -41,6 +41,10 @@ class SchedulingParams:
     break_slots: List[Tuple[int, int]] = field(default_factory=list)
     closed_court_windows: List[Tuple[int, int, int]] = field(default_factory=list)
     closed_court_ids: List[int] = field(default_factory=list)
+    # Court policy (SP-COURT-1): "pinned" | "queue", plus per-court
+    # "pinned" | "pool" overrides. Defaults preserve today's behaviour.
+    court_policy: str = "pinned"
+    court_overrides: Dict[int, str] = field(default_factory=dict)
 
 
 def build_schedule_config(params: SchedulingParams) -> ScheduleConfig:
@@ -61,4 +65,6 @@ def build_schedule_config(params: SchedulingParams) -> ScheduleConfig:
         break_slots=list(params.break_slots),
         closed_court_windows=list(params.closed_court_windows),
         closed_court_ids=list(params.closed_court_ids),
+        court_policy=params.court_policy,
+        court_overrides=dict(params.court_overrides),
     )

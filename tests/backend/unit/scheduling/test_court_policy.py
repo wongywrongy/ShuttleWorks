@@ -1,0 +1,55 @@
+"""court_policy: the config field, and the promise that `pinned` changes nothing."""
+from scheduler_core.domain.models import (
+    Match,
+    Player,
+    ScheduleConfig,
+    ScheduleRequest,
+    SolverStatus,
+)
+from scheduler_core.schedule import schedule
+
+from shared.scheduling.params import SchedulingParams, build_schedule_config
+
+
+def test_default_policy_is_pinned():
+    assert ScheduleConfig(total_slots=4, court_count=2).court_policy == "pinned"
+    assert ScheduleConfig(total_slots=4, court_count=2).court_overrides == {}
+
+
+def test_params_builder_carries_the_policy():
+    cfg = build_schedule_config(
+        SchedulingParams(
+            court_count=4,
+            total_slots=20,
+            court_policy="queue",
+            court_overrides={1: "pinned"},
+        )
+    )
+    assert cfg.court_policy == "queue"
+    assert cfg.court_overrides == {1: "pinned"}
+
+
+def _request(**cfg_kw) -> ScheduleRequest:
+    cfg = ScheduleConfig(total_slots=8, court_count=2, interval_minutes=30, **cfg_kw)
+    return ScheduleRequest(
+        config=cfg,
+        players=[Player(id=p, name=p) for p in ("a", "b", "c", "d")],
+        matches=[
+            Match(id="m1", event_code="E", side_a=["a"], side_b=["b"]),
+            Match(id="m2", event_code="E", side_a=["c"], side_b=["d"]),
+        ],
+    )
+
+
+def test_pinned_is_byte_identical_to_an_unset_policy():
+    """The CP2 promise: adding the field changes no existing solve.
+
+    Compares the emitted assignments, not just feasibility — a model that
+    solved to a DIFFERENT valid schedule would still be a behaviour change.
+    """
+    baseline = schedule(_request())
+    explicit = schedule(_request(court_policy="pinned"))
+    assert baseline.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE)
+    assert [(a.match_id, a.slot_id, a.court_id) for a in baseline.assignments] == [
+        (a.match_id, a.slot_id, a.court_id) for a in explicit.assignments
+    ]
