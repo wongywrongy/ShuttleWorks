@@ -60,20 +60,42 @@ RUN useradd --create-home --uid 1001 app \
 COPY --from=builder /install /usr/local
 
 # Build context is the repo root (set in infra/compose/docker-compose.yml)
-# so this Dockerfile can COPY the backend tree out of the monorepo.
-# Each top-level package gets its own COPY so a change inside one
-# directory only invalidates that layer (and the ones below it).
-COPY --chown=app:app apps/api/app/          ./app/
-COPY --chown=app:app apps/api/api/          ./api/
-COPY --chown=app:app apps/api/adapters/     ./adapters/
-COPY --chown=app:app apps/api/services/     ./services/
-COPY --chown=app:app apps/api/database/     ./database/
-COPY --chown=app:app apps/api/repositories/ ./repositories/
-COPY --chown=app:app apps/api/alembic/      ./alembic/
-COPY --chown=app:app apps/api/alembic.ini   ./alembic.ini
+# so this Dockerfile can COPY the API tree out of the monorepo.
+#
+# The image MIRRORS the repository: apps/api/src -> /app/src, with alembic.ini
+# beside it at /app/alembic.ini, exactly as they sit on disk. That is not
+# tidiness. `core/paths.py` derives SRC_ROOT and API_ROOT from its own
+# __file__, and the whole point of doing it there is that one expression is
+# correct in both places; flattening the tree here would reintroduce the
+# two-sided coincidence SP-REORG-1 Phase 1 removed from config_lock.
+#
+# WORKDIR stays /app so every CWD-relative path (the ./data volume, a
+# CWD-relative sqlite URL) means what it always meant. PYTHONPATH is what
+# makes `core`, `meet`, `bracket` importable by bare name, since src/ is a
+# sys.path ROOT and not a package (SP-REORG-1 R4).
+#
+# One COPY per domain package, so a change inside one only invalidates that
+# layer and the ones below it.
+COPY --chown=app:app apps/api/src/core/        ./src/core/
+COPY --chown=app:app apps/api/src/shared/      ./src/shared/
+COPY --chown=app:app apps/api/src/db/          ./src/db/
+COPY --chown=app:app apps/api/src/repositories/ ./src/repositories/
+COPY --chown=app:app apps/api/src/workspaces/  ./src/workspaces/
+COPY --chown=app:app apps/api/src/identity/    ./src/identity/
+COPY --chown=app:app apps/api/src/meet/        ./src/meet/
+COPY --chown=app:app apps/api/src/bracket/     ./src/bracket/
+COPY --chown=app:app apps/api/src/operations/  ./src/operations/
+COPY --chown=app:app apps/api/src/display/     ./src/display/
+COPY --chown=app:app apps/api/src/entries/     ./src/entries/
+COPY --chown=app:app apps/api/src/solve_rail/  ./src/solve_rail/
+COPY --chown=app:app apps/api/src/ops/         ./src/ops/
+COPY --chown=app:app apps/api/src/alembic/     ./src/alembic/
+COPY --chown=app:app apps/api/alembic.ini      ./alembic.ini
 # Standalone solve-worker entry (cloud mode: `python -m worker`). The
 # same image serves as API and worker; compose picks the command.
-COPY --chown=app:app apps/api/worker.py     ./worker.py
+COPY --chown=app:app apps/api/src/worker.py    ./src/worker.py
+
+ENV PYTHONPATH=/app/src
 # API/console shared contract data. services/config_lock.py finds this by
 # walking UP from its own file looking for packages/shared-contract, so the
 # image mirrors the repository path rather than inventing a flat /shared.
@@ -95,4 +117,4 @@ EXPOSE 8000
 # to 5 seconds on SIGTERM before uvicorn hard-kills them — the scheduler
 # can finish whatever short synchronous work it's doing without dropping
 # the client's connection.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "5"]
+CMD ["uvicorn", "core.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "5"]

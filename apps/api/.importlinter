@@ -1,136 +1,164 @@
-; Backend architecture contracts (SP-REORG-1 Phase 2).
+; API architecture contracts.
 ;
-; WHY THIS EXISTS, AND WHY IT IS WRITTEN BEFORE ANY BACKEND FILE MOVES.
+; Written in SP-REORG-1 Phase 2 against the FLAT tree, deliberately before any
+; file moved, so that Phase 3's repackaging would be checked against the seams
+; as they were rather than against whatever the repackaging produced. This file
+; is the Phase 3 conversion of that: the module ENUMERATIONS became package
+; names, which is the whole reason the packages exist.
 ;
-; The console has had a machine-checked module contract for months
-; (apps/console/src/platform/contracts/moduleContract.ts and its test). The API
-; has had the same seams, enforced by nothing but review. Phase 3 repackages
-; this tree into domain packages; if the seam map were written AFTER that move
-; it would encode whatever the move happened to produce. Written first, it
-; encodes what is true now, and the move becomes a change the machine can
-; check rather than a change we hope is faithful.
+; Run with `lint-imports --config ../.importlinter` from apps/api/src, or just
+; `make check` from the repo root.
 ;
-; Run with `lint-imports` from apps/api, or `make check` from the repo root.
+; ---------------------------------------------------------------------------
+; THE SHAPE
 ;
-; The layout is still flat - `api`, `services`, `database`, `repositories` and
-; `adapters` are top-level packages on sys.path - so domain membership is
-; enumerated module by module below. Phase 3 replaces every one of these lists
-; with a single package name.
+;   core/         the shared kernel: config, schemas, exceptions, error codes,
+;                 middleware, the CSRF check, the abuse throttle, and main.py -
+;                 which is the composition root and therefore imports everything
+;   shared/       cross-domain DOMAIN logic: sport rules, the ScheduleConfig
+;                 seam. Imported by two or more domains, owned by none (R1)
+;   db/           SQLAlchemy models + session
+;   repositories/ the aggregating repository
+;   <domain>/     workspaces identity meet bracket operations display entries
+;                 solve_rail ops - each owning its routers AND its services
 ;
 ; ---------------------------------------------------------------------------
 ; DIRECT vs INDIRECT
 ;
 ; The domain contracts set `allow_indirect_imports`, so they judge only edges a
-; module declares itself. That is deliberate. Everything in this tree reaches
-; `database`, `repositories` and `app` - that is what a shared kernel is for -
-; so every domain is transitively connected to every other through it, and a
-; transitive contract would report that as coupling between domains. It is not.
-; What a module boundary means is: this domain does not name that one.
+; package declares itself. Everything reaches `core`, `db` and `repositories` -
+; that is what a shared kernel is for - so every domain is transitively
+; connected to every other through it, and a transitive contract would report
+; that as coupling between domains. It is not. What a boundary means here is:
+; this domain does not name that one.
 ;
-; The layers, kernel and engine-purity contracts DO judge transitively, because
-; for those three the whole question is what a module drags in behind it.
+; The direction contracts DO judge transitively, because for those the whole
+; question is what a package drags in behind it.
+;
 ; ---------------------------------------------------------------------------
+; THE ROOT LEAKS - unchanged by Phase 3, because fixing either moves real logic
 ;
-; ---------------------------------------------------------------------------
-; THE TWO ROOT LEAKS
-;
-; Both are function-local imports. Deferring an import hides a cycle from
-; Python's import machinery, not from the architecture, so import-linter is
-; right to count them and this file will not pretend otherwise. Both sit at the
-; bottom of the tree, so anything that touches a repository or reads settings
-; inherits them - which is why two edges broke eight contracts on the first run.
-;
-;   L1  app.form_csrf -> services.auth              (app/form_csrf.py:161)
+;   L1  core.form_csrf -> identity.auth       (core/form_csrf.py)
 ;       The kernel's CSRF check resolves an operator session to decide whether
-;       a cookie proves anything, opening its own SessionLocal to do it. Either
-;       the check belongs above the kernel or `resolve_session` belongs below.
+;       a presented cookie proves anything, opening its own SessionLocal to do
+;       it. Either the check belongs above the kernel or `resolve_session`
+;       belongs below it.
 ;
-;   L2  repositories.local -> services.match_state  (repositories/local.py:1886)
+;   L2  repositories.local -> operations.match_state   (repositories/local.py)
 ;       The repository applies a state transition inside the command
-;       transaction. The transaction boundary is genuinely at the repository and
-;       the transition table is genuinely in the service, so this one is not
-;       fixed by moving an import.
+;       transaction. The transaction boundary is genuinely at the repository
+;       and the transition table genuinely in the service.
 ;
-; Both are recorded in docs/audits/debt-log.md. SP-REORG-1 does not fix them: it
-; is a behaviour-preserving program and either fix moves real logic.
+;   L3  solve_rail.solve_child -> meet.schedule
+;       The solve child reaches the meet engine entry point, which shares a
+;       module with the meet router.
+;
+; Both L1 and L2 are function-local imports. Deferring an import hides a cycle
+; from Python's import machinery, not from the architecture. All three are in
+; docs/audits/debt-log.md.
+;
+; WHAT PHASE 3 DELETED: the Phase 2 report's edge (a), `entries -> identity`
+; for the abuse throttle. Ruling R1 extracted those three symbols into
+; `core.throttle`, so that allowance is gone rather than carried forward.
 ; ---------------------------------------------------------------------------
 
 [importlinter]
 root_packages =
-    api
-    app
-    services
-    database
+    core
+    shared
+    db
     repositories
-    adapters
+    workspaces
+    identity
+    meet
+    bracket
+    operations
+    display
+    entries
+    solve_rail
+    ops
     scheduler_core
 include_external_packages = False
 
 
 ; ---------------------------------------------------------------------------
-; 1. LAYERS - the HTTP surface sits above the services, which sit above
-;    persistence. `app` is deliberately absent from this stack: it is both the
-;    shared kernel (config, schemas, exceptions, error codes) that every layer
-;    reads AND the composition root (`app.main` wires the routers together), so
-;    it has no single position in a linear order. Contract 2 constrains it
-;    instead.
+; 1. Persistence sits at the bottom. Neither the models nor the repository may
+;    reach up into a domain or into shared domain logic.
 ; ---------------------------------------------------------------------------
-[importlinter:contract:layers]
-name = HTTP above services above persistence
-type = layers
-layers =
-    api
-    services
+[importlinter:contract:persistence-direction]
+name = Persistence does not import upward
+type = forbidden
+source_modules =
+    db
     repositories
-    database
+forbidden_modules =
+    shared
+    workspaces
+    identity
+    meet
+    bracket
+    operations
+    display
+    entries
+    solve_rail
+    ops
 ignore_imports =
-    ; DEBT(REORG-1) L1 - see the header.
-    app.form_csrf -> services.auth
     ; DEBT(REORG-1) L2 - see the header.
-    repositories.local -> services.match_state
-    ; DEBT(REORG-1): the solve child re-enters the HTTP layer to reuse the meet
-    ; engine entry point. `api.schedule` holds both the FastAPI router and the
-    ; problem-building call the child needs; the child wants the second and is
-    ; made to import the first. Splitting the engine entry out of the router is
-    ; Phase 3 work, not a path update.
-    services.solve_child -> api.schedule
+    repositories.local -> operations.match_state
+    ; DEBT(REORG-1) L1 - see the header. Persistence reads settings, settings
+    ; reaches the CSRF check, and the CSRF check resolves a session. Neither
+    ; db nor repositories names identity; they inherit it through the kernel.
+    core.form_csrf -> identity.auth
 
 
 ; ---------------------------------------------------------------------------
-; 2. The kernel does not depend on the surfaces it serves. `app.main` and
-;    `app.dependencies` are absent from the source list by construction: a
-;    composition root exists to import everything, and the second is the
-;    FastAPI DI wiring. Everything else under `app/` must stay beneath.
+; 2. The kernel does not depend on the surfaces it serves.
+;
+;    `core.main` and `core.dependencies` are absent from the source list by
+;    construction: a composition root exists to import everything, and the
+;    second is the FastAPI DI wiring. Everything else under core/ must stay
+;    beneath the domains. Importing `db` is fine and deliberate - the throttle
+;    and the session live at the same depth.
 ; ---------------------------------------------------------------------------
 [importlinter:contract:kernel-direction]
 name = The shared kernel does not import the surfaces
 type = forbidden
 source_modules =
-    app.config
-    app.schemas
-    app.exceptions
-    app.error_codes
-    app.constants
-    app.limits
-    app.paths
-    app.time_utils
-    app.body_limit
-    app.client_ip
+    core.config
+    core.schemas
+    core.exceptions
+    core.error_codes
+    core.constants
+    core.limits
+    core.paths
+    core.time_utils
+    core.body_limit
+    core.client_ip
+    core.throttle
+    core.email
 forbidden_modules =
-    api
-    services
+    shared
+    workspaces
+    identity
+    meet
+    bracket
+    operations
+    display
+    entries
+    solve_rail
+    ops
     repositories
 ignore_imports =
     ; DEBT(REORG-1) L1 - see the header. This contract is the one that would
-    ; catch L1 on its own merits, so the ignore is the debt, not a workaround.
-    app.form_csrf -> services.auth
+    ; catch L1 on its own merits, so the ignore IS the debt, not a workaround.
+    core.form_csrf -> identity.auth
 
 
 ; ---------------------------------------------------------------------------
 ; 3. ENGINE PURITY - scheduler_core is a pure CP-SAT library: dataclasses in,
 ;    dataclasses out (ADR 0004, ADR 0006). If it ever imports the application it
 ;    stops being installable on its own and `examples/` stops being honest about
-;    what the engine needs. Judged transitively, and with no allowances.
+;    what the engine needs. Transitive, no allowances.
 ; ---------------------------------------------------------------------------
 [importlinter:contract:engine-purity]
 name = The engine knows nothing about the application
@@ -138,258 +166,243 @@ type = forbidden
 source_modules =
     scheduler_core
 forbidden_modules =
-    api
-    app
-    services
-    database
+    core
+    shared
+    db
     repositories
-    adapters
+    workspaces
+    identity
+    meet
+    bracket
+    operations
+    display
+    entries
+    solve_rail
+    ops
 
 
 ; ---------------------------------------------------------------------------
 ; 4. THE PINNED ABSENCE - Operations must not reach into Bracket.
 ;
-;    This is the backend twin of the console's contract test, which pins the
-;    Operations -> Bracket *advancement* seam as deliberately UNWIRED: bracket
-;    results travel the idempotent command path (POST /bracket/commands), not a
-;    direct call from the operations surface. The edge is absent today. This
-;    contract is what stops "absent" becoming "absent so far".
+;    The backend twin of the console's contract test: the Operations -> Bracket
+;    *advancement* seam is deliberately UNWIRED, because bracket results travel
+;    the idempotent command path (POST /bracket/commands, ADR 0007) rather than
+;    a direct call from the operations surface. The edge is absent today, and
+;    this contract is what stops "absent" becoming "absent so far".
 ;
-;    Judged transitively and with no allowances, because an indirect path would
-;    be just as much a wiring of the seam. See ADR 0007 and moduleContract.ts.
+;    Transitive and unallowanced, because an indirect path would wire the seam
+;    just as effectively as a direct one.
 ; ---------------------------------------------------------------------------
 [importlinter:contract:operations-not-bracket]
 name = Operations does not reach into Bracket (the unwired advancement seam)
 type = forbidden
 source_modules =
-    api.match_state
-    api.commands
-    services.match_state
-    services.conflict_metrics
+    operations
 forbidden_modules =
-    api.brackets
-    services.bracket
+    bracket
 
 
 ; ---------------------------------------------------------------------------
-; 5. DOMAIN INDEPENDENCE - one contract per domain, each forbidding the domains
-;    that domain does not name today. Every edge that DOES exist is listed in
-;    the comment above its contract with the seam it serves. A new edge is
-;    either absent from a forbidden list (and therefore already documented
-;    above it) or the gate reports it.
+; 12. SHARED IS SHARED (SP-REORG-1 ruling R1).
 ;
-;    FOUR MODULES ARE DELIBERATELY UNFILED, because three or more domains
-;    import them and filing them under one would make every other consumer
-;    violate a boundary that is not really there:
+;    `shared/` exists for domain logic that two or more domains import: the
+;    badminton sport rules (meet, bracket, solve_rail) and the one
+;    params -> ScheduleConfig seam (meet, bracket). Filing either under a single
+;    domain would have made every other consumer violate a boundary that is not
+;    really there.
 ;
-;      adapters.badminton      sport adapter    - meet, bracket, solve_rail
-;      services.scheduling.*   the ScheduleConfig seam - meet, bracket
-;      services.email          notification transport  - identity, workspaces
-;      services.turnstile      bot check               - identity
-;      services.auth (throttle) abuse throttle          - identity, entries
+;    That only works while the arrow points one way. `shared` may import `core`,
+;    `db` and `scheduler_core`; the moment it names a domain it stops being
+;    shared and becomes that domain's code with extra steps - and every other
+;    consumer inherits a dependency it never asked for.
 ;
-;    They are shared infrastructure. The program's Phase 3 target files all four
-;    under a single domain; the import graph contradicts that, and the Phase 2
-;    gate asks for a ruling.
+;    Transitive and unallowanced, deliberately: this contract is young, and the
+;    package it guards is the one most likely to be reached for casually.
+; ---------------------------------------------------------------------------
+[importlinter:contract:shared-is-shared]
+name = Shared domain logic names no domain
+type = forbidden
+source_modules =
+    shared
+forbidden_modules =
+    workspaces
+    identity
+    meet
+    bracket
+    operations
+    display
+    entries
+    solve_rail
+    ops
+    repositories
+
+
+; ---------------------------------------------------------------------------
+; 5-13. DOMAIN INDEPENDENCE - one contract per domain, each forbidding the
+;       domains that domain does not name today. The edges that DO exist are
+;       listed above each contract with the seam they serve.
 ; ---------------------------------------------------------------------------
 
-; Operations names nothing outside itself. It is the most self-contained
-; domain in the tree, and the only one with no outgoing edge at all.
-[importlinter:contract:operations-independence]
-name = Operations names no other domain
+; Names: bracket (draw state on the workspace record), identity (membership and
+; invites), meet (pool standings), operations (match signals for the Hub).
+; tournaments.py is the control plane; aggregating is its job.
+[importlinter:contract:workspaces-independence]
+name = Workspaces names only Bracket, Identity, Meet and Operations
 type = forbidden
 allow_indirect_imports = True
 source_modules =
-    api.match_state
-    api.commands
-    services.match_state
-    services.conflict_metrics
+    workspaces
 forbidden_modules =
-    api.schedule
-    api.schedule_proposals
-    api.schedule_director
-    api.display
-    api.entries
-    api.entries_json
-    api.entries_site
-    api.auth
-    api.invites
-    api.entrants
-    api.tournaments
-    services.meet
-    services.entries
-    services.auth
-    services.solve_jobs
+    display
+    entries
+    solve_rail
+    ops
 
-; Bracket names only the shared scheduling seam (services.scheduling.params,
-; unfiled infrastructure - see above). No other domain.
-[importlinter:contract:bracket-independence]
-name = Bracket names no other domain
-type = forbidden
-allow_indirect_imports = True
-source_modules =
-    api.brackets
-    services.bracket
-forbidden_modules =
-    api.match_state
-    api.commands
-    api.display
-    api.entries
-    api.entries_json
-    api.entries_site
-    api.auth
-    api.invites
-    api.entrants
-    api.tournaments
-    api.schedule
-    services.match_state
-    services.entries
-    services.auth
-    services.meet
-
-; Meet names Operations - it reads live match state to build advisories, repair
-; proposals and warm restarts - and the solve rail, to hand off suggestion work.
-; Both are named seams. It names no other domain.
-[importlinter:contract:meet-independence]
-name = Meet names only Operations and the solve rail
-type = forbidden
-allow_indirect_imports = True
-source_modules =
-    api.schedule
-    api.schedule_repair
-    api.schedule_warm_restart
-    api.schedule_advisories
-    api.schedule_proposals
-    api.schedule_director
-    api.schedule_suggestions
-    api._validate
-    services.meet
-    services.schedule_impact
-forbidden_modules =
-    api.display
-    api.entries
-    api.entries_json
-    api.entries_site
-    api.entries_me
-    api.auth
-    api.invites
-    api.entrants
-    api.tournaments
-    services.entries
-    services.auth
-    services.entrants
-
-; Entries names Bracket, because the public site publishes draws, seeds and
-; winners (SP-P7).
-;
-; It also names `services.auth`, which looks like a dependency on Identity and
-; is not: the three symbols it uses are `entries_key`, `throttle_check` and
-; `throttle_record_entry`, the shared ABUSE THROTTLE. That throttle guards the
-; public submit path against a flood, which has nothing to do with who anyone
-; is. It lives in the identity service only because that is where the first
-; caller needed it. Allowed here, and named in the gate as a fifth module that
-; wants extracting into shared infrastructure.
-[importlinter:contract:entries-independence]
-name = Entries names only Bracket (the public draw projection)
-type = forbidden
-allow_indirect_imports = True
-source_modules =
-    api.entries
-    api.entries_json
-    api.entries_me
-    api.entries_public
-    services.entries
-    services.entry_fees
-    services.entry_form
-    services.entry_policy
-    services.submissions
-forbidden_modules =
-    api.schedule
-    api.schedule_proposals
-    api.match_state
-    api.commands
-    api.display
-    api.tournaments
-    api.auth
-    api.invites
-    services.meet
-    services.match_state
-    services.solve_jobs
-
-; Identity serves both principals, operator and entrant. It names Entries for
-; the entrant's own record, plus the unfiled transport modules.
+; Names: entries, for the signed-in entrant's own record.
 [importlinter:contract:identity-independence]
 name = Identity names only Entries
 type = forbidden
 allow_indirect_imports = True
 source_modules =
-    api.auth
-    api.invites
-    api.entrants
-    services.auth
-    services.members
-    services.entrants
+    identity
 forbidden_modules =
-    api.schedule
-    api.schedule_proposals
-    api.brackets
-    api.match_state
-    api.commands
-    api.display
-    api.solve_jobs
-    services.meet
-    services.bracket
-    services.match_state
-    services.solve_jobs
-    services.schedule_impact
+    workspaces
+    meet
+    bracket
+    operations
+    display
+    solve_rail
+    ops
 
-; Display is a strict read-only projection. It reads Bracket, Operations and
-; Workspaces; nobody reads it. The arrow only ever points outward, and this
-; contract holds the other side of that: no domain names Display.
+; Names: operations (reads live match state to build advisories, repair
+; proposals and warm restarts) and solve_rail (hands off suggestion work).
+[importlinter:contract:meet-independence]
+name = Meet names only Operations and the solve rail
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    meet
+forbidden_modules =
+    workspaces
+    identity
+    bracket
+    display
+    entries
+    ops
+
+; Names nothing. Bracket reaches only shared/ and the kernel.
+[importlinter:contract:bracket-independence]
+name = Bracket names no other domain
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    bracket
+forbidden_modules =
+    workspaces
+    identity
+    meet
+    operations
+    display
+    entries
+    solve_rail
+    ops
+
+; Names nothing. Operations is the most self-contained domain in the tree -
+; the only one with no outgoing domain edge at all.
+[importlinter:contract:operations-independence]
+name = Operations names no other domain
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    operations
+forbidden_modules =
+    workspaces
+    identity
+    meet
+    display
+    entries
+    solve_rail
+    ops
+
+; Names: bracket, operations, workspaces - it projects all three. Display is a
+; strict read-only leaf; the arrow only ever points outward, which the
+; nothing-names-display contract holds from the other side.
+[importlinter:contract:display-independence]
+name = Display names only what it projects
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    display
+forbidden_modules =
+    identity
+    meet
+    entries
+    solve_rail
+    ops
+
 [importlinter:contract:nothing-names-display]
 name = Nothing names Display (it is a leaf projection)
 type = forbidden
 allow_indirect_imports = True
 source_modules =
-    api.schedule
-    api.brackets
-    api.match_state
-    api.commands
-    api.entries
-    api.entries_site
-    api.tournaments
-    api.auth
-    api.entrants
-    services.meet
-    services.bracket
-    services.match_state
-    services.entries
-    services.auth
+    workspaces
+    identity
+    meet
+    bracket
+    operations
+    entries
+    solve_rail
+    ops
 forbidden_modules =
-    api.display
+    display
 
-; The health surface is liveness and readiness. /health must answer even when
-; everything behind it is broken, so it names no domain at all.
-[importlinter:contract:ops-independence]
-name = The health surface names no domain
+; Names: bracket, because the public site publishes draws, seeds and winners
+; (SP-P7); and identity, to resolve the signed-in entrant on the public page.
+; It no longer names identity for the abuse throttle - ruling R1 moved that to
+; core.throttle, which is what deleted the Phase 2 allowance.
+[importlinter:contract:entries-independence]
+name = Entries names only Bracket and Identity
 type = forbidden
 allow_indirect_imports = True
 source_modules =
-    api.health
+    entries
 forbidden_modules =
-    api.schedule
-    api.brackets
-    api.match_state
-    api.commands
-    api.display
-    api.entries
-    api.entries_json
-    api.tournaments
-    api.auth
-    api.invites
-    api.entrants
-    services.meet
-    services.bracket
-    services.match_state
-    services.entries
-    services.auth
+    workspaces
+    meet
+    operations
+    display
+    solve_rail
+    ops
+
+; Names: meet, for the engine entry point the child runs.
+[importlinter:contract:solve-rail-independence]
+name = The solve rail names only Meet
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    solve_rail
+forbidden_modules =
+    workspaces
+    identity
+    bracket
+    operations
+    display
+    entries
+    ops
+
+; Names: operations, for the conflict metrics /health/metrics publishes.
+; Nothing else - /health must answer even when everything behind it is broken.
+[importlinter:contract:ops-independence]
+name = The health surface names only Operations
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    ops
+forbidden_modules =
+    workspaces
+    identity
+    meet
+    bracket
+    display
+    entries
+    solve_rail

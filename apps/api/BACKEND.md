@@ -12,36 +12,45 @@ migrations. There is no replication layer — one database is the whole story.
 ## Layout
 
 ```
-backend/
-├── app/
-│   ├── main.py                  # FastAPI app, CORS, lifespan (runs Alembic upgrade on startup), middleware
-│   ├── schemas.py               # Pydantic DTOs (mirror frontend/src/api/dto.ts)
-│   ├── error_codes.py           # ErrorCode enum + http_error() helper
-│   └── …                        # auth deps, paths, time utils
-├── api/                          # route handlers (one APIRouter per file)
-│   ├── tournaments.py            # workspace CRUD + list (with control-plane signals) + /state + state backups
-│   ├── workspace_modules.py      # GET/PATCH per-workspace modules (enable/disable + dependency rules)
-│   ├── workspace_signals.py      # build_signals() — health / readiness / attention / collaboration
-│   ├── invites.py                # collaborator invite links (create / list / revoke / accept)
-│   ├── brackets.py               # bracket draws / advancement / import-export
-│   ├── commands.py               # idempotent operator command queue
-│   ├── match_state.py            # live match status (called / started / finished)
-│   ├── schedule*.py              # /schedule (+ stream / validate / repair / warm-restart / proposals / …)
-│   └── _validate.py              # shared validation utilities
-├── database/
-│   ├── models.py                 # SQLAlchemy models (Tournament, WorkspaceModule, TournamentMember,
-│   │                             #   InviteLink, TournamentBackup, …) + derive/normalize module helpers
-│   └── session.py                # one engine bound to settings.database_url
-├── repositories/
-│   ├── local.py                  # LocalRepository + per-entity sub-repos (members, modules, brackets, backups, …)
-│   └── base.py
-├── alembic/                      # SQLite + Postgres migrations (head: j3e7f9a1b5c8)
-├── services/                     # auth, email, match_state, bracket/, suggestions_worker, csv_importer
-├── Dockerfile
-└── requirements.txt
-
-scheduler_core/   # the solver itself; see scheduler_core/README.md
+apps/api/
+├── alembic.ini            points at src/alembic; prepend_sys_path = src
+├── .importlinter          the architecture contracts (15, all blocking)
+├── Dockerfile             mirrors this tree into the image at /app/src
+└── src/                   the sys.path ROOT - packages import by bare name
+    ├── core/              the shared kernel
+    │   ├── main.py        FastAPI app, CORS, lifespan (Alembic upgrade on startup), middleware
+    │   ├── schemas.py     Pydantic DTOs (mirror apps/console/src/api/dto.ts)
+    │   ├── error_codes.py ErrorCode enum + http_error() helper
+    │   ├── throttle.py    the abuse throttle - a key, a budget, a doubling lock
+    │   ├── paths.py       SRC_ROOT / API_ROOT / ALEMBIC_* - counted once, named
+    │   └── …              config, exceptions, limits, CSRF, middleware, time utils
+    ├── shared/            cross-domain DOMAIN logic, owned by no domain
+    │   ├── sport/         badminton rules (meet, bracket and the solve rail)
+    │   └── scheduling/    params -> ScheduleConfig, the one seam both engines use
+    ├── db/                models.py (+ module helpers) and session.py
+    ├── repositories/      LocalRepository + per-entity sub-repos
+    ├── alembic/           SQLite + Postgres migrations
+    ├── workspaces/        the control plane: tournaments, modules, signals, config lock
+    ├── identity/          both principals: operator accounts, entrants, members, invites
+    ├── meet/              the Meet engine: schedule*, proposals, repair, standings
+    ├── bracket/           draws, advancement, formats/, io/, standings
+    ├── operations/        the match-state machine + the idempotent command log
+    ├── display/           the read-only spectator projection
+    ├── entries/           the public entry page, the desk, and the commit
+    ├── solve_rail/        the async job queue, worker loop and solve subprocess
+    ├── ops/               liveness and readiness
+    └── worker.py          standalone worker entrypoint (`python -m worker`, cloud mode)
 ```
+
+Each domain package owns **its routers and its services together** — the thing
+you change when you change that domain is in one directory. Where a router and
+a service shared a name, the router carries a `_routes` suffix
+(`operations/match_state_routes.py` beside `operations/match_state.py`).
+
+`src/` is a sys.path ROOT rather than a package, so imports read
+`from meet.schedule import ...`, never `from src.meet...`. The boundaries
+between these packages are not a convention: `apps/api/.importlinter` holds 15
+contracts over them and `make check` fails on a violation.
 
 The HTTP layer lives in `backend/`. The solver engine lives under
 `scheduler_core/` and is installed as a regular package via its own
