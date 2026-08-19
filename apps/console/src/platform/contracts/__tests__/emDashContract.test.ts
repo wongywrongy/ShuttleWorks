@@ -148,7 +148,7 @@ describe('the em dash contract has something to scan', () => {
     // A walker that silently returns [] would make every assertion below pass.
     expect(FRONTEND_FILES.length).toBeGreaterThan(200);
     expect(DESIGN_SYSTEM_FILES.length).toBeGreaterThan(5);
-    expect(FILES.some((f) => rel(f) === 'apps/console/src/products/hub/WorkspaceRow.tsx')).toBe(true);
+    expect(FILES.some((f) => rel(f) === 'apps/console/src/modules/hub/WorkspaceRow.tsx')).toBe(true);
     expect(FILES.some((f) => rel(f) === 'packages/design-system/components/Button.tsx')).toBe(true);
     // Markdown is out of scope - proves the design-system walk excludes it
     // rather than just happening not to match the extension filter twice.

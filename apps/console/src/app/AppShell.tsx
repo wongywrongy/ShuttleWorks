@@ -31,7 +31,7 @@ import type {
 } from '../platform/product-shell/types';
 import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
 import { ModuleUnavailablePanel } from './workspace/ModuleUnavailablePanel';
-import { WorkspaceShellSurface } from '../products/workspace/WorkspaceShellSurface';
+import { WorkspaceShellSurface } from '../modules/workspace/WorkspaceShellSurface';
 import { SHELL_SEGMENTS, isAdminSegment } from '../platform/product-shell/workspaceNav';
 
 /** Whether the active module's pane is the normal module outlet or the

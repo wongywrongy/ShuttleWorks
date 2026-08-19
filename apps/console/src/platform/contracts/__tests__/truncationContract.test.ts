@@ -18,7 +18,7 @@
  *   1. wrap at word boundaries (`break-words`) and let the row grow;
  *   2. give the column a `@container/table` priority so a LOW-value column
  *      yields entirely rather than clipping a high-value one — see
- *      `components/control-plane/BandedList.tsx` and `products/hub/
+ *      `components/control-plane/BandedList.tsx` and `modules/hub/
  *      WorkspaceRow.tsx`;
  *   3. shrink the type step, where a box genuinely cannot grow.
  *
@@ -97,7 +97,7 @@ describe('the truncation contract has something to scan', () => {
   it('enumerates the shipped source tree from disk', () => {
     // A walker that silently returns [] would make every assertion below pass.
     expect(FILES.length).toBeGreaterThan(200);
-    expect(FILES.some((f) => rel(f) === 'products/hub/WorkspaceRow.tsx')).toBe(true);
+    expect(FILES.some((f) => rel(f) === 'modules/hub/WorkspaceRow.tsx')).toBe(true);
   });
 });
 

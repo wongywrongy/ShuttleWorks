@@ -97,7 +97,7 @@ keeps optimistic updates and rollback in one place.
   density.
 - `<ThemeToggle />` is the three-state pill (Sun / Monitor / Moon)
   rendered in the header and inside the Setup page.
-- `products/display/PublicDisplayPage.tsx` (the TV view) is **intentionally
+- `modules/display/PublicDisplayPage.tsx` (the TV view) is **intentionally
   dark-only**, audience is gym projection. Don't add a toggle there.
 
 When adding a new surface: prefer semantic tokens. For status colour

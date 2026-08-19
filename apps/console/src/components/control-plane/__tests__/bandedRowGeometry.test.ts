@@ -124,13 +124,13 @@ describe('a row reserves the lines ITS OWN columns need', () => {
     // to keep in step with the first, which is the drift the derivation
     // exists to prevent. No banded surface may pass one.
     const SURFACES = [
-      'products/meet/matches/MatchesSpreadsheet.tsx',
-      'products/bracket/BracketMatchesTab.tsx',
-      'products/bracket/BracketRosterTab.tsx',
-      'products/bracket/BracketDrawsTab.tsx',
-      'products/bracket/StandingsTable.tsx',
-      'products/bracket/standingsColumns.ts',
-      'products/entries/EntriesDesk.tsx',
+      'modules/meet/matches/MatchesSpreadsheet.tsx',
+      'modules/bracket/BracketMatchesTab.tsx',
+      'modules/bracket/BracketRosterTab.tsx',
+      'modules/bracket/BracketDrawsTab.tsx',
+      'modules/bracket/StandingsTable.tsx',
+      'modules/bracket/standingsColumns.ts',
+      'modules/entries/EntriesDesk.tsx',
     ];
     for (const rel of SURFACES) {
       expect(read(rel), rel).not.toMatch(/rowLines=|BANDED_ROW_MIN_H\[/);
@@ -228,9 +228,9 @@ describe('flexible name columns have a real minimum, not `min-w-0`', () => {
     const NAME_COLUMNS: ReadonlyArray<readonly [string, string]> = [
       ['components/control-plane/matchListColumns.ts', "label: 'Side A'"],
       ['components/control-plane/matchListColumns.ts', "label: 'Side B'"],
-      ['products/bracket/BracketRosterTab.tsx', "label: 'Player'"],
-      ['products/bracket/standingsColumns.ts', "label: 'Player'"],
-      ['products/entries/EntriesDesk.tsx', "label: 'Entrant'"],
+      ['modules/bracket/BracketRosterTab.tsx', "label: 'Player'"],
+      ['modules/bracket/standingsColumns.ts', "label: 'Player'"],
+      ['modules/entries/EntriesDesk.tsx', "label: 'Entrant'"],
     ];
     for (const [file, marker] of NAME_COLUMNS) {
       const line = read(file)
@@ -365,10 +365,10 @@ describe('the dock floor is derived from the column set', () => {
 
   it('no banded surface hand-picks its floor any more', () => {
     const SURFACES = [
-      'products/meet/matches/MatchesSpreadsheet.tsx',
-      'products/bracket/BracketMatchesTab.tsx',
-      'products/bracket/BracketRosterTab.tsx',
-      'products/bracket/BracketDrawsTab.tsx',
+      'modules/meet/matches/MatchesSpreadsheet.tsx',
+      'modules/bracket/BracketMatchesTab.tsx',
+      'modules/bracket/BracketRosterTab.tsx',
+      'modules/bracket/BracketDrawsTab.tsx',
     ];
     for (const rel of SURFACES) {
       const src = read(rel);

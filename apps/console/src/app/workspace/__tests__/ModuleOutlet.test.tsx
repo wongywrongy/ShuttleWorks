@@ -3,19 +3,19 @@ import { render, screen } from '@testing-library/react';
 import { ModuleOutlet } from '../ModuleOutlet';
 import { useUiStore } from '../../../store/uiStore';
 
-vi.mock('../../../products/meet/MeetProduct', () => ({
+vi.mock('../../../modules/meet/MeetProduct', () => ({
   MeetProduct: () => <div data-testid="meet-product" />,
 }));
-vi.mock('../../../products/bracket/BracketProduct', () => ({
+vi.mock('../../../modules/bracket/BracketProduct', () => ({
   BracketProduct: () => <div data-testid="bracket-product" />,
 }));
-vi.mock('../../../products/display/DisplayProduct', () => ({
+vi.mock('../../../modules/display/DisplayProduct', () => ({
   DisplayProduct: () => <div data-testid="display-product" />,
 }));
-vi.mock('../../../products/operations/OperationsProduct', () => ({
+vi.mock('../../../modules/operations/OperationsProduct', () => ({
   OperationsProduct: () => <div data-testid="operations-product" />,
 }));
-vi.mock('../../../products/entries/EntriesProduct', () => ({
+vi.mock('../../../modules/entries/EntriesProduct', () => ({
   EntriesProduct: () => <div data-testid="entries-product" />,
 }));
 

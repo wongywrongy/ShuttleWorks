@@ -9,7 +9,7 @@
  * concern, passed through `className` / `style` / spread props / `ref`.
  *
  * Owned by neither product: it lives in the shared `components/` layer and
- * depends only on `lib/eventColors` — it must NOT import from `products/*`.
+ * depends only on `lib/eventColors` — it must NOT import from `modules/*`.
  *
  * Color encoding is per-surface via `tone`:
  *   - `discipline` (Plan): fill = event-type colour; live state = the ring.

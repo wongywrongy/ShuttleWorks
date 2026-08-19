@@ -16,7 +16,7 @@
  *
  * `due` / `late` / `overdue` are the timeliness escalation, not statuses. A
  * match is DUE when its slot arrives, LATE one slot past it, OVERDUE two or
- * more. See `deriveTimeliness` in `products/operations/runtime/runMachine.ts`
+ * more. See `deriveTimeliness` in `modules/operations/runtime/runMachine.ts`
  * for the thresholds and `docs/design/console-naming.md` for the ruling.
  */
 export type StateWord =

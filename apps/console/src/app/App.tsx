@@ -10,16 +10,16 @@ import { AuthedLayout } from './AuthedLayout';
 const ICON_DEFAULTS = { weight: 'light' as const, size: '1em' as const, mirrored: false };
 
 const PublicDisplayPage = lazy(() =>
-  import('../products/display/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
+  import('../modules/display/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
 );
 const HubPage = lazy(() =>
-  import('../products/hub/HubPage').then((m) => ({ default: m.HubPage })),
+  import('../modules/hub/HubPage').then((m) => ({ default: m.HubPage })),
 );
 const NewWorkspacePage = lazy(() =>
-  import('../products/hub/NewWorkspacePage').then((m) => ({ default: m.NewWorkspacePage })),
+  import('../modules/hub/NewWorkspacePage').then((m) => ({ default: m.NewWorkspacePage })),
 );
 const GlobalSettingsPage = lazy(() =>
-  import('../products/settings/GlobalSettingsPage').then((m) => ({
+  import('../modules/settings/GlobalSettingsPage').then((m) => ({
     default: m.GlobalSettingsPage,
   })),
 );

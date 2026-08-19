@@ -1,4 +1,4 @@
-import type { WorkspaceHealth } from '../../products/hub/hubSignals';
+import type { WorkspaceHealth } from '../../modules/hub/hubSignals';
 
 /** Canonical workspace-health → token color. Used by HealthDot and (re-exported)
  *  by hubSignals as the single source for health color. */

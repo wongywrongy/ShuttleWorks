@@ -28,9 +28,9 @@ const readSrc = (p: string) => readFileSync(path.join(SRC, p), 'utf8');
 
 const authedLayout = readSrc('app/AuthedLayout.tsx');
 const appShell = readSrc('app/AppShell.tsx');
-const rosterTab = readSrc('products/meet/roster/RosterTab.tsx');
-const hubPage = readSrc('products/hub/HubPage.tsx');
-const workspaceRow = readSrc('products/hub/WorkspaceRow.tsx');
+const rosterTab = readSrc('modules/meet/roster/RosterTab.tsx');
+const hubPage = readSrc('modules/hub/HubPage.tsx');
+const workspaceRow = readSrc('modules/hub/WorkspaceRow.tsx');
 
 /** Source with comments removed — these files DISCUSS `<main>` in prose, and
  *  a doc comment is not a landmark. */

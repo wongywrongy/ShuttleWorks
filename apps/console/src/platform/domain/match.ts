@@ -6,7 +6,7 @@
  * list, the detail panels) speaks THIS shape. The two engines stay separate at
  * the source (ADR 0006): `MatchDTO` (meet) and `PlayUnitDTO` (bracket) are the
  * engine-native inputs, and a single pair of adapters folds them into `Match`
- * (see `meetToMatch` / `bracketToMatch` in `products/operations/opsBlock.ts`).
+ * (see `meetToMatch` / `bracketToMatch` in `modules/operations/opsBlock.ts`).
  *
  * This formalizes the shape that already existed implicitly as `OpsBlock` — it
  * is now a NAMED, documented, single contract (see ADR 0009), with `OpsBlock`

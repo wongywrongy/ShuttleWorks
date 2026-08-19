@@ -18,7 +18,7 @@
  * happened — the Hub's D11 defect, three more times.
  *
  * The floor is therefore derived from the columns, the way
- * `products/hub/hubDockGeometry.ts` derives the Hub's:
+ * `modules/hub/hubDockGeometry.ts` derives the Hub's:
  *
  *   max( highest priority tier the column set actually uses,
  *        declared column widths + `gap-3` rhythm + the row's `px-5` inset )

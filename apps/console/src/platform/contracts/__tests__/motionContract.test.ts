@@ -111,9 +111,9 @@ describe('animation durations stay inside the MOTION.md §10.8 chrome cap', () =
 
 describe('tab switching stays a hard cut (MOTION.md §2 High, §6, §10.6)', () => {
   const CALL_SITES = [
-    'products/meet/MeetProduct.tsx',
-    'products/bracket/BracketProduct.tsx',
-    'products/bracket/BracketTab.tsx',
+    'modules/meet/MeetProduct.tsx',
+    'modules/bracket/BracketProduct.tsx',
+    'modules/bracket/BracketTab.tsx',
   ];
 
   it.each(CALL_SITES)('%s does not animate its tab-keyed content swap', (file) => {
@@ -123,7 +123,7 @@ describe('tab switching stays a hard cut (MOTION.md §2 High, §6, §10.6)', () 
   it('does not animate route-mounted operator chrome', () => {
     // A workspace overview mount and a sidebar section toggle are URL/keyboard
     // driven state — §10.5 says hard cut.
-    expect(readSrc('products/workspace/WorkspaceOverview.tsx')).not.toMatch(/\bsw-float-in\b/);
+    expect(readSrc('modules/workspace/WorkspaceOverview.tsx')).not.toMatch(/\bsw-float-in\b/);
     expect(readSrc('platform/product-shell/WorkspaceSidebar.tsx')).not.toMatch(
       /className="[^"]*\bsw-rail-expand\b/,
     );
@@ -132,7 +132,7 @@ describe('tab switching stays a hard cut (MOTION.md §2 High, §6, §10.6)', () 
   it('does not repurpose the locked `block-in` solver keyframe for card mounts', () => {
     // MOTION.md §7: `block-in` means "schedule re-flow". The Display board's
     // court cards are not a re-flow.
-    expect(readSrc('products/display/publicDisplay/CourtsView.tsx')).not.toMatch(
+    expect(readSrc('modules/display/publicDisplay/CourtsView.tsx')).not.toMatch(
       /\banimate-block-in\b/,
     );
   });

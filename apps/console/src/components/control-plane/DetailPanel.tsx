@@ -178,7 +178,7 @@ export function DetailPanel({
  *
  * Field layout INSIDE a section stays the settings grammar's job: `Row`
  * (label left, control right) and `FieldRow` (free text) from
- * `platform/settings/SettingsControls`, imported from there. Re-exporting
+ * `platform/engine-config/SettingsControls`, imported from there. Re-exporting
  * them here would give the same two rows two import paths, which is the
  * problem this is fixing, not a convenience.
  */

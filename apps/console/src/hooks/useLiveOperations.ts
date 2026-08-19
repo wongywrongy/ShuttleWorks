@@ -24,7 +24,7 @@ import { useMatchStateStore } from '../store/matchStateStore';
 import { apiClient } from '../api/client';
 import type { MatchStateDTO } from '../api/dto';
 import { useTournamentId } from './useTournamentId';
-import { getMatchPlayerIds as getPlayerIdsFromMatch } from '../utils/trafficLight';
+import { getMatchPlayerIds as getPlayerIdsFromMatch } from '../lib/trafficLight';
 import { timeToSlot, slotToTime } from '../lib/time';
 import { bracketOccupiedWindows } from '../lib/bracketOccupancy';
 

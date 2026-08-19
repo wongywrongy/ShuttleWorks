@@ -16,8 +16,8 @@ const read = (rel: string) => readFileSync(resolve(SRC, rel), 'utf8');
  *  from its own label vocabulary (`matchListColumns.ts`). The instances still
  *  come from the shared module: neither surface may build its own. */
 const SURFACES = [
-  { rel: 'products/meet/matches/MatchesSpreadsheet.tsx', prefix: 'MEET_' },
-  { rel: 'products/bracket/BracketMatchesTab.tsx', prefix: 'BRACKET_' },
+  { rel: 'modules/meet/matches/MatchesSpreadsheet.tsx', prefix: 'MEET_' },
+  { rel: 'modules/bracket/BracketMatchesTab.tsx', prefix: 'BRACKET_' },
 ];
 
 /** The shared names a surface must take from control-plane, never define.
@@ -61,6 +61,6 @@ describe('match-list parity', () => {
   }
 
   it('the old bracket-local vocabulary file is gone', () => {
-    expect(() => read('products/bracket/matchStatus.ts')).toThrow();
+    expect(() => read('modules/bracket/matchStatus.ts')).toThrow();
   });
 });

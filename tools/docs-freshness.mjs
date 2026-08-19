@@ -67,7 +67,7 @@ const AREAS = [
   {
     name: 'Modules',
     docs: ['docs/modules'],
-    src: ['apps/console/src/products'],
+    src: ['apps/console/src/modules'],
   },
   {
     name: 'Extending (how-to guides)',

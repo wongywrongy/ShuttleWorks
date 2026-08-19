@@ -1,6 +1,6 @@
 /**
  * Stable slug for a player name. Lifted out of the legacy
- * `products/bracket/ helpers` so both the new
+ * `modules/bracket/ helpers` so both the new
  * BracketRosterTab and the first-load migration can import it
  * without depending on a feature directory we are deleting.
  */

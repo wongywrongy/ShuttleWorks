@@ -11,7 +11,7 @@
  * One window per bracket assignment, in the wire shape the schedule routes
  * accept: `[court, fromSlot, toSlot)` (half-open). Both engines share the
  * same slot axis (slot k of the day = slot k in both models — see
- * `products/operations/opsBlock.ts`), so no translation is needed.
+ * `modules/operations/opsBlock.ts`), so no translation is needed.
  */
 import type { BracketTournamentDTO } from '../api/bracketDto';
 

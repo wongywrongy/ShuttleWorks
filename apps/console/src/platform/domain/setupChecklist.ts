@@ -53,7 +53,7 @@ const STEP_REASON_CODE: Record<string, string> = {
 };
 
 /** Attention code → the operator's most useful next action. Shared with the
- *  Hub's row CTA (`products/hub/nextAction.ts` imports this) so the control
+ *  Hub's row CTA (`modules/hub/nextAction.ts` imports this) so the control
  *  plane names an action exactly one way. */
 export const REASON_ACTION: Record<string, string> = {
   NO_ROSTER: 'Add players',
