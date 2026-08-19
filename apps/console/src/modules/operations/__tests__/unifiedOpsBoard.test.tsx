@@ -27,7 +27,7 @@ const blocks: OpsBlock[] = [
   {
     key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1',
     court: 1, slot: 2, span: 1, status: 'scheduled',
-    sideA: 'Alice', sideB: 'Bob', done: false, started: false,
+    sideA: 'Alice', sideB: 'Bob', playerIds: [], done: false, started: false,
   },
 ];
 

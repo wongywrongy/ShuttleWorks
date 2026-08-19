@@ -90,6 +90,7 @@ function mkBlock(
     span: 1,
     sideA: 'Alice',
     sideB: 'Bob',
+    playerIds: [],
     done: status === 'finished',
     started: status === 'started' || status === 'finished',
     ...overrides,

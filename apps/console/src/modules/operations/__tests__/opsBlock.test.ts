@@ -17,7 +17,7 @@ const cfg = {
 } as TournamentConfig;
 
 function ob(p: Partial<OpsBlock> & Pick<OpsBlock, 'source' | 'id'>): OpsBlock {
-  return { key: `${p.source}:${p.id}`, label: p.id, span: 1, status: 'scheduled', sideA: 'A', sideB: 'B', done: false, started: false, ...p };
+  return { key: `${p.source}:${p.id}`, label: p.id, span: 1, status: 'scheduled', sideA: 'A', sideB: 'B', playerIds: [], done: false, started: false, ...p };
 }
 
 describe('opsBlock builders', () => {
@@ -262,5 +262,63 @@ describe('a court never renders two matches at once', () => {
     // late, inside the ceiling: a bad morning, not a clock artifact.
     expect(blocks[0].actualStartSlot).toBe(5);
     expect(buildLiveChips(blocks, 12, true)[0].placement.startSlot).toBe(5);
+  });
+});
+
+describe('playerIds — the identity the run desk needs', () => {
+  it('meet: carries the real player ids from both sides, not the display names', () => {
+    const matches = [{ id: 'm1', sideA: ['p1', 'p2'], sideB: ['p3'], durationSlots: 1 }] as unknown as MatchDTO[];
+    const [b] = meetToOpsBlocks(matches, null, {}, { p1: 'Ana', p2: 'Bo', p3: 'Cy' }, cfg);
+    expect(b.sideA).toBe('Ana / Bo'); // display unchanged
+    expect(new Set(b.playerIds)).toEqual(new Set(['p1', 'p2', 'p3']));
+  });
+
+  it('meet: includes sideC for tri-meets and dedupes', () => {
+    const matches = [
+      { id: 'm1', sideA: ['p1'], sideB: ['p2'], sideC: ['p1', 'p3'], durationSlots: 1 },
+    ] as unknown as MatchDTO[];
+    const [b] = meetToOpsBlocks(matches, null, {}, {}, cfg);
+    expect([...b.playerIds].sort()).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('meet: unknown sides yield an empty array, never undefined', () => {
+    const matches = [{ id: 'm1', sideA: [], sideB: undefined, durationSlots: 1 }] as unknown as MatchDTO[];
+    const [b] = meetToOpsBlocks(matches, null, {}, {}, cfg);
+    expect(b.playerIds).toEqual([]);
+  });
+
+  it('bracket: expands a doubles participant into its members', () => {
+    const data = {
+      participants: [
+        { id: 'pair1', name: 'Ana/Bo', members: ['p1', 'p2'] },
+        { id: 'solo', name: 'Cy' },
+      ],
+      play_units: [
+        {
+          id: 'pu1', event_id: 'e1', round_index: 0,
+          slot_a: { participant_id: 'pair1', feeder_play_unit_id: null },
+          slot_b: { participant_id: 'solo', feeder_play_unit_id: null },
+        },
+      ],
+      assignments: [], results: [], events: [{ id: 'e1', discipline: 'MD' }],
+    } as unknown as BracketTournamentDTO;
+    const [b] = bracketToOpsBlocks(data);
+    expect([...b.playerIds].sort()).toEqual(['p1', 'p2', 'solo']);
+  });
+
+  it('bracket: an unresolved feeder slot contributes no identity', () => {
+    const data = {
+      participants: [{ id: 'solo', name: 'Cy' }],
+      play_units: [
+        {
+          id: 'pu1', event_id: 'e1', round_index: 1,
+          slot_a: { participant_id: null, feeder_play_unit_id: 'pu0' },
+          slot_b: { participant_id: 'solo', feeder_play_unit_id: null },
+        },
+      ],
+      assignments: [], results: [], events: [{ id: 'e1', discipline: 'MS' }],
+    } as unknown as BracketTournamentDTO;
+    const [b] = bracketToOpsBlocks(data);
+    expect(b.playerIds).toEqual(['solo']);
   });
 });

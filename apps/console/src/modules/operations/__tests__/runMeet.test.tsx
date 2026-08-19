@@ -316,6 +316,7 @@ describe('RunSurface — meet rail integration', () => {
       span: 1,
       sideA: 'Alice',
       sideB: 'Bob',
+      playerIds: [],
       done: overrides.status === 'finished',
       started: overrides.status === 'started' || overrides.status === 'finished',
       ...overrides,

@@ -11,6 +11,7 @@ function blk(p: Partial<OpsBlock> & Pick<OpsBlock, 'source' | 'id'>): OpsBlock {
     status: 'scheduled',
     sideA: 'A',
     sideB: 'B',
+    playerIds: [],
     done: false,
     started: false,
     ...p,

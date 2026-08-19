@@ -25,6 +25,12 @@ function meetSide(ids: string[] | undefined, nameById: Record<string, string>): 
   return ids.map((id) => nameById[id] ?? id).join(' / ');
 }
 
+/** The identities behind the display sides. `meetSide` joins names for the
+ *  eye; this keeps the ids for the machine. */
+function meetPlayerIds(m: MatchDTO): string[] {
+  return [...new Set([...(m.sideA ?? []), ...(m.sideB ?? []), ...(m.sideC ?? [])])];
+}
+
 function meetLabel(m: MatchDTO): string {
   if (m.eventRank) return m.eventRank;
   if (m.matchNumber) return `M${m.matchNumber}`;
@@ -96,6 +102,7 @@ export function meetToOpsBlocks(
       status,
       sideA: meetSide(m.sideA, nameById),
       sideB: meetSide(m.sideB, nameById),
+      playerIds: meetPlayerIds(m),
       done: status === 'finished',
       started: status === 'started' || status === 'finished',
       actualStartSlot,
@@ -104,9 +111,29 @@ export function meetToOpsBlocks(
   });
 }
 
+/** A bracket slot names a PARTICIPANT, which for doubles is two people.
+ *  Expand it, because both of them are unavailable while it plays. */
+function bracketPlayerIds(
+  pu: { slot_a: { participant_id: string | null }; slot_b: { participant_id: string | null } },
+  membersById: Map<string, string[]>,
+): string[] {
+  const ids: string[] = [];
+  for (const slot of [pu.slot_a, pu.slot_b]) {
+    const pid = slot.participant_id;
+    if (!pid) continue; // unresolved feeder: no identity yet
+    ids.push(...(membersById.get(pid) ?? [pid]));
+  }
+  return [...new Set(ids)];
+}
+
 /** Build OpsBlocks for the bracket engine from its polled snapshot. */
 export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
   const nameById = Object.fromEntries(data.participants.map((p) => [p.id, p.name]));
+  const membersById = new Map(
+    data.participants
+      .filter((p) => p.members && p.members.length > 0)
+      .map((p) => [p.id, p.members as string[]]),
+  );
   const assignByPu = new Map(data.assignments.map((a) => [a.play_unit_id, a]));
   const resultByPu = new Map(data.results.map((r) => [r.play_unit_id, r]));
   const disciplineByEvent = new Map(data.events.map((e) => [e.id, e.discipline]));
@@ -131,6 +158,7 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
       status,
       sideA,
       sideB,
+      playerIds: bracketPlayerIds(pu, membersById),
       done: result != null,
       started,
       actualStartSlot: a?.actual_start_slot ?? undefined,

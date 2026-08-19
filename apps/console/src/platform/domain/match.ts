@@ -47,6 +47,16 @@ export interface Match {
   /** Resolved display names for each side (TBD / feeder / Bye already applied). */
   sideA: string;
   sideB: string;
+  /** Every person physically on court for this match — meet player ids, or a
+   *  bracket participant expanded into its `members` (a doubles pair is two
+   *  people, and both are busy). Deduped; order carries no meaning.
+   *
+   *  Empty when identity is unknown (TBD sides, unresolved feeders) — NEVER
+   *  undefined. The run desk uses this to refuse putting one player on two
+   *  courts, and an optional field would make that check fail open (debt D20).
+   *  `sideA`/`sideB` above stay DISPLAY strings; these are the identities
+   *  behind them. */
+  playerIds: string[];
   /** True once a result exists / the match is finished (no more reschedule). */
   done: boolean;
   /** True once the match has been started on court. */

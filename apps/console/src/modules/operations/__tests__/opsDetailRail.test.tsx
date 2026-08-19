@@ -5,7 +5,7 @@ import type { OpsBlock } from '../opsBlock';
 
 const meetBlock: OpsBlock = {
   source: 'meet', id: 'm1', key: 'meet:m1', label: 'MS1', span: 1,
-  court: 2, slot: 3, status: 'scheduled', sideA: 'Alice', sideB: 'Bob', done: false, started: false,
+  court: 2, slot: 3, status: 'scheduled', sideA: 'Alice', sideB: 'Bob', playerIds: [], done: false, started: false,
 };
 
 describe('OpsDetailRail', () => {
