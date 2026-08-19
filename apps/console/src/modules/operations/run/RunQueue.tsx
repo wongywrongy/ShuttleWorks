@@ -45,13 +45,16 @@ export interface RunQueueProps {
   /** Keys of queue rows held because a player is already on a court (D20).
    *  Distinct from `!eligible`, which means a side is undecided. */
   busyKeys?: ReadonlySet<string>;
+  /** Keys of queue rows whose player is short of rest. ADVISORY: the row
+   *  stays sendable; the desk decides. */
+  restKeys?: ReadonlySet<string>;
   /** Quick "↵ send" affordance on eligible scheduled rows — sends the row's
    *  match to the first free court without opening the inspector. */
   onSend?: (key: string) => void;
 }
 
 // ── component ─────────────────────────────────────────────────────────────
-export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, onSend }: RunQueueProps) {
+export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, restKeys, onSend }: RunQueueProps) {
   // Viewer read-only vocabulary (audit A2) — send is a write.
   const canEdit = useCanEdit();
   if (queue.length === 0) {
@@ -128,6 +131,16 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, onS
                 className={`sw-late-nudge flex-shrink-0 ${EYEBROW_CLASS} text-status-late`}
               >
                 {STATE_WORD.late}
+              </span>
+            )}
+
+            {restKeys?.has(match.key) && (
+              <span
+                data-testid={`queue-rest-${match.key}`}
+                title="A player in this match has just come off court"
+                className={`flex-shrink-0 ${EYEBROW_CLASS} text-ink-faint`}
+              >
+                Short rest
               </span>
             )}
 

@@ -28,6 +28,7 @@ import {
   nextEligible,
   busyPlayers,
   isPlayerBusy,
+  restShortKeys,
   deriveSummary,
   type CourtLane,
   type RunMatch,
@@ -64,6 +65,9 @@ export interface RunSurfaceProps {
   /** Minutes per slot (config.intervalMinutes) — enables the playing-chip
    *  elapsed stamp on the live board. */
   slotMinutes?: number;
+  /** Workspace rest budget in minutes. Converted to slots here so the queue
+   *  can flag a player who has only just come off court. */
+  restMinutes?: number;
   /** Meet-engine seams beyond the OpsBlock model (score entry, undo-finish,
    *  undo-start, check-in/roster edits, impact) — SP-CONSOLE-4 C4. Absent on
    *  bracket-only workspaces; every meet affordance then stays hidden. */
@@ -126,6 +130,7 @@ export function RunSurface({
   planFinalized,
   formatSlot,
   slotMinutes,
+  restMinutes,
   meetOps,
   onAdvisoryReview,
 }: RunSurfaceProps) {
@@ -254,6 +259,12 @@ export function RunSurface({
     () => new Set(queue.filter((m) => isPlayerBusy(m, busy)).map((m) => m.key)),
     [queue, busy],
   );
+  // Advisory, not enforced: the desk may send a flagged row. defaultRestMinutes
+  // is wall-clock; the board counts slots.
+  const restKeys = useMemo(() => {
+    const slots = slotMinutes && slotMinutes > 0 ? Math.ceil((restMinutes ?? 0) / slotMinutes) : 0;
+    return restShortKeys(matches, { currentSlot, restSlots: slots });
+  }, [matches, currentSlot, restMinutes, slotMinutes]);
   // Bracket "called" is Operations-local (no persisted status), overlaid onto
   // `matches` by toRunMatches — but the BOARD renders from raw blocks, so
   // without this overlay a called bracket chip would stay painted 'scheduled'
@@ -553,6 +564,7 @@ export function RunSurface({
               onSelect={setSelectedKey}
               lateKeys={lateKeys}
               busyKeys={busyKeys}
+              restKeys={restKeys}
               onSend={sendFromQueue}
             />
           </div>

@@ -313,6 +313,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
               planFinalized={planFinalized}
               formatSlot={formatSlot}
               slotMinutes={config?.intervalMinutes}
+              restMinutes={config?.defaultRestMinutes}
               meetOps={engines.meet ? meetOps : undefined}
               onAdvisoryReview={engines.meet ? onRunAdvisoryReview : undefined}
             />

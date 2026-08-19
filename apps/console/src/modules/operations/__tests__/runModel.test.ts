@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toRunMatches, deriveCourtLanes, deriveQueue, nextEligible, busyPlayers, deriveSummary } from '../runtime/runModel';
+import { toRunMatches, deriveCourtLanes, deriveQueue, nextEligible, busyPlayers, restShortKeys, deriveSummary } from '../runtime/runModel';
 import { buildLiveChips } from '../runtime/boardPlacements';
 import type { OpsBlock } from '../opsBlock';
 
@@ -195,5 +195,43 @@ describe('player-busy (D20)', () => {
   it('a match with no known players is never blocked by the filter', () => {
     const ms = toRunMatches([onCourt, blk({ id: 'tbd', slot: 1, playerIds: [] })], {});
     expect(nextEligible(deriveQueue(ms), busyPlayers(ms))?.id).toBe('tbd');
+  });
+});
+
+describe('rest flag (soft)', () => {
+  it('flags a queued match whose player finished less than restSlots ago', () => {
+    const ms = toRunMatches([
+      blk({ id: 'just-done', court: 1, status: 'finished', playerIds: ['p1'], actualEndSlot: 9 }),
+      blk({ id: 'next-up', slot: 10, status: 'scheduled', playerIds: ['p1'] }),
+      blk({ id: 'rested', slot: 10, status: 'scheduled', playerIds: ['p2'] }),
+    ], {});
+    const flagged = restShortKeys(ms, { currentSlot: 10, restSlots: 2 });
+    expect(flagged.has('meet:next-up')).toBe(true);
+    expect(flagged.has('meet:rested')).toBe(false);
+  });
+
+  it('NEGATIVE CONTROL: enough elapsed slots clears the flag', () => {
+    const ms = toRunMatches([
+      blk({ id: 'done', court: 1, status: 'finished', playerIds: ['p1'], actualEndSlot: 5 }),
+      blk({ id: 'next', slot: 10, status: 'scheduled', playerIds: ['p1'] }),
+    ], {});
+    expect(restShortKeys(ms, { currentSlot: 10, restSlots: 2 }).size).toBe(0);
+  });
+
+  it('a finished match with no actual end slot cannot flag anything', () => {
+    const ms = toRunMatches([
+      blk({ id: 'done', court: 1, status: 'finished', playerIds: ['p1'] }),
+      blk({ id: 'next', slot: 10, status: 'scheduled', playerIds: ['p1'] }),
+    ], {});
+    expect(restShortKeys(ms, { currentSlot: 10, restSlots: 2 }).size).toBe(0);
+  });
+
+  it('the flag does NOT change what nextEligible returns', () => {
+    const ms = toRunMatches([
+      blk({ id: 'done', court: 1, status: 'finished', playerIds: ['p1'], actualEndSlot: 9 }),
+      blk({ id: 'next', slot: 10, status: 'scheduled', playerIds: ['p1'] }),
+    ], {});
+    // soft means soft: it is surfaced, never enforced.
+    expect(nextEligible(deriveQueue(ms), busyPlayers(ms))?.id).toBe('next');
   });
 });

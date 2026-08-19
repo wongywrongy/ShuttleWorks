@@ -13,6 +13,9 @@ export interface RunMatch {
   /** Everyone physically on court for this match (see `Match.playerIds`).
    *  Empty when identity is unknown; never undefined. */
   playerIds: string[];
+  /** ACTUAL end slot once finished. Carried so the rest flag can tell when a
+   *  player actually came off court, not when the plan said they would. */
+  actualEndSlot?: number;
 }
 
 const TBD = 'TBD';
@@ -46,6 +49,7 @@ export function toRunMatches(
       late: false,
       timeliness: 'ontime' as const,
       eligible,
+      actualEndSlot: b.actualEndSlot,
     };
   });
 }
@@ -168,6 +172,41 @@ export function nextEligible(
   busy: ReadonlySet<string>,
 ): RunMatch | undefined {
   return queue.find((m) => m.eligible && can(m.status, 'assign') && !isPlayerBusy(m, busy));
+}
+
+/**
+ * Queue rows whose player has not had `restSlots` since finishing.
+ *
+ * SOFT by design: this returns keys to paint, and nothing else consumes it.
+ * The desk may send a flagged match. A director looking at the floor knows
+ * things the model does not (a retirement, a walkover, a player who wants to
+ * go straight back on). Compare `busyPlayers`, which IS enforced: one body
+ * cannot be in two places, and no amount of local knowledge changes that.
+ *
+ * A finished match with no `actualEndSlot` flags nothing. We have no evidence
+ * about when the player actually came off, and guessing would cry wolf.
+ */
+export function restShortKeys(
+  matches: RunMatch[],
+  opts: { currentSlot?: number; restSlots: number },
+): ReadonlySet<string> {
+  const { currentSlot, restSlots } = opts;
+  if (currentSlot == null || restSlots <= 0) return new Set();
+
+  const freeAt = new Map<string, number>();      // player -> earliest rested slot
+  for (const m of matches) {
+    if (m.status !== 'done' || m.actualEndSlot == null) continue;
+    for (const p of m.playerIds) {
+      freeAt.set(p, Math.max(freeAt.get(p) ?? 0, m.actualEndSlot + restSlots));
+    }
+  }
+
+  const flagged = new Set<string>();
+  for (const m of matches) {
+    if (m.court != null || m.status === 'done') continue;   // queue rows only
+    if (m.playerIds.some((p) => (freeAt.get(p) ?? 0) > currentSlot)) flagged.add(m.key);
+  }
+  return flagged;
 }
 
 export interface RunSummary { done: number; total: number; playing: number; courtsFree: number; late: number; }

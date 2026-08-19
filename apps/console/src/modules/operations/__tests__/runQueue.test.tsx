@@ -121,4 +121,28 @@ describe('RunQueue — readiness is legible on the row', () => {
     expect(screen.queryByTestId('queue-send-meet:m7')).toBeNull();
     expect(screen.getByTestId('queue-state-meet:m7').textContent).toMatch(/called/i);
   });
+
+  it('a short-rest row is flagged but keeps its send affordance: soft means soft', () => {
+    render(
+      <RunQueue queue={QUEUE} onSelect={vi.fn()} onSend={vi.fn()} restKeys={new Set(['meet:m1'])} />,
+    );
+    expect(screen.getByTestId('queue-rest-meet:m1')).toBeInTheDocument();
+    // The flag annotates; it must not withdraw the control. (Whether the
+    // button is ENABLED is the viewer-role seam, tested at useCanEdit.)
+    expect(screen.getByTestId('queue-send-meet:m1')).toBeInTheDocument();
+    // NEGATIVE CONTROL: an unflagged row looks the same minus the badge, so
+    // the assertion above is about the badge and not about row rendering.
+    expect(screen.queryByTestId('queue-rest-bracket:pu1')).toBeNull();
+    expect(screen.getByTestId('queue-send-bracket:pu1')).toBeInTheDocument();
+  });
+
+  it('a player-busy row says so instead of claiming an undecided side', () => {
+    render(
+      <RunQueue queue={QUEUE} onSelect={vi.fn()} onSend={vi.fn()} busyKeys={new Set(['meet:m1'])} />,
+    );
+    expect(screen.getByTestId('queue-busy-meet:m1')).toBeInTheDocument();
+    // NEGATIVE CONTROL: it must not have been folded into the "sides undecided"
+    // branch, which would tell the desk something false.
+    expect(screen.queryByTestId('queue-blocked-meet:m1')).toBeNull();
+  });
 });
