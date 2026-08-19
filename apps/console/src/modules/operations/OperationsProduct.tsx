@@ -111,7 +111,15 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   // [court, fromSlot, toSlot] windows, so a meet re-solve schedules around
   // them (no double-booking). Passing the polled snapshot's windows keeps
   // the solve in lockstep with what this surface renders.
-  const bracketWindows = useMemo<number[][]>(() => bracketOccupiedWindows(data), [data]);
+  //
+  // NOT-YET-LOADED IS NOT EMPTY (D1's third site): while `data` is null the
+  // snapshot is unknown, and passing `[]` would short-circuit the solve-time
+  // fetch in `resolveClosedWindows` with the positive claim "no occupancy".
+  // Pass undefined so the hook fetches the authoritative snapshot instead.
+  const bracketWindows = useMemo<number[][] | undefined>(
+    () => (data ? bracketOccupiedWindows(data) : undefined),
+    [data],
+  );
   // Bracket play-units ready to schedule: both sides known, no court yet, no
   // result, all feeders resolved (mirrors the single-engine header count).
   const schedulableCount = useMemo(() => {

@@ -58,7 +58,9 @@ export interface PlanToolbarProps {
   meetEnabled: boolean;
   bracketEnabled: boolean;
   /** Courts the bracket occupies, for the meet solve (parent's snapshot). */
-  bracketWindows: number[][];
+  /** Bracket-occupied windows, or undefined while the snapshot has not
+   *  loaded — undefined makes the solve hook fetch its own (D1). */
+  bracketWindows: number[][] | undefined;
   schedulableCount: number;
   onOpenScheduleNext: () => void;
   planFinalized: boolean;

@@ -71,20 +71,31 @@ export function useSchedule() {
    * bracket already occupies (the bracket side coordinates server-side; see
    * `lib/bracketOccupancy.ts`). Callers that already hold a fresh bracket
    * snapshot pass their own windows; otherwise this fetches the snapshot at
-   * solve time. Resolves `[]` on meet-only workspaces (404 → null) or any
-   * fetch failure — a broken bracket poll must never block a meet solve.
+   * solve time.
+   *
+   * Unknown is NOT none (debt D1, ruled 2026-08-19). The legitimate
+   * no-bracket case never reaches the catch — `getBracket` maps 404 to null,
+   * and null-safe `bracketOccupiedWindows` turns that into `[]`: no bracket
+   * really is no occupancy. Every OTHER failure (timeout, 500, expired
+   * session) means occupancy is UNKNOWN, and `[]` is not "unknown" — it is
+   * the positive claim "the bracket is using no courts at no time", which
+   * the solver would happily double-book on. Returns `null` for unknown
+   * (with the operator banner already set); callers must stop the solve.
    */
   const resolveClosedWindows = useCallback(
-    async (provided?: number[][]): Promise<number[][]> => {
+    async (provided?: number[][]): Promise<number[][] | null> => {
       if (provided) return provided;
       if (!tournamentId) return [];
       try {
         return bracketOccupiedWindows(await apiClient.getBracket(tournamentId));
       } catch {
-        return [];
+        setGenerationError(
+          'Could not verify bracket court usage, so the solve was not started. Retry when the connection recovers.',
+        );
+        return null;
       }
     },
-    [tournamentId],
+    [tournamentId, setGenerationError],
   );
 
   /**
@@ -231,6 +242,7 @@ export function useSchedule() {
       throw new Error('No configuration set');
     }
     const windows = await resolveClosedWindows(closedCourtWindows);
+    if (windows === null) return; // occupancy unknown — banner already set (D1)
     await runSolve({
       config,
       players,
@@ -249,6 +261,7 @@ export function useSchedule() {
       throw new Error('No schedule to reoptimize');
     }
     const windows = await resolveClosedWindows();
+    if (windows === null) return; // occupancy unknown — banner already set (D1)
     await runSolve({
       config,
       players,
@@ -293,6 +306,12 @@ export function useSchedule() {
       );
 
       const windows = await resolveClosedWindows();
+      if (windows === null) {
+        // Occupancy unknown — banner already set (D1). Roll back the
+        // optimistic pin so the chip snaps home instead of lying in place.
+        useUiStore.getState().setPendingPin(null);
+        return;
+      }
       await runSolve({
         config,
         players,

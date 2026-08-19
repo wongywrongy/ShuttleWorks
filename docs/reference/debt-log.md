@@ -25,7 +25,6 @@ These are decisions to make, then execute. Nothing here is blocked on effort.
 
 | # | What | The decision owed | Size |
 | --- | --- | --- | --- |
-| D1 | **`resolveClosedWindows` swallows every bracket-occupancy failure** — see the full entry below; it is the one open item with a live correctness cost. | Fail the solve, warn the operator, or distinguish unknown-from-none at the seam | S + a product call |
 | D2 | **`matchStateStore` ownership** (F-ARCH-3) — stays in shared `store/` or moves to Operations. Moving it *creates* new `no-cross-product` violations (Meet + Bracket also consume it). Two reasonable options, no code-driven winner. `01-findings.md §F-ARCH-3`, ADR 0011. | Where it lives | Decision, then S |
 | D3 | **The `no-cross-product` warns — 14 of them, in three clusters** (measured 2026-08-11; the log's older "the last 2" claim was stale). *ops→bracket*: `OpsDetailRail→MatchDetailPanel`, `OperationsProduct→BracketScheduleModal`, `opsBlock→bracketLabels`. *workspace→display*: `displayConfig/DisplayPreview` → `publicDisplay/{CourtsView,displayPresets,courtLayout,tvSizing}` and `DisplayLayoutEditor→courtLayout` — the config board reuses the public board's real renderer for visual fidelity. *workspace→settings*: `WorkspaceShellSurface` → the four settings tabs it hosts, which is an aggregator edge. Same question for all three: accept them as legitimate consumer/aggregator edges, or relocate the shared pieces to a neutral home (the `SourceChip` precedent). Clearing them is the blocker to ratcheting that rule warn→**error**. | Accept or relocate, per cluster | Decision, then S–M |
 | D4 | **The Run nav item is two different surfaces.** Meet-only workspaces get the legacy meet Live page (Director/Disruption/Re-optimize/XLSX, score entry); hybrid workspaces get the SP-G1b unified board (queue/inspector/zoom, no meet tools). Same label, disjoint affordances — an operator moving between workspaces re-learns the page. The F-ARCH-3 neighbourhood. **Sharpened 2026-08-12 by a browser verification:** the split also makes code unreachable. `ModuleOutlet.tsx:52` routes Operations segments to `OperationsProduct` whenever BOTH engines are enabled, so `MeetProduct`'s `live` tab — and with it `meet/control-center/GanttChart.tsx`, the only production consumer of `getRenderSlot`/`isNearPlan` — never executes on a dual-engine workspace. A fix landed in that file reaches single-engine meet workspaces and nothing else, which is not visible from the file. | Converge or keep two | L (decision first) |
@@ -43,41 +42,6 @@ These are decisions to make, then execute. Nothing here is blocked on effort.
 | D16 | **The `ready` / `live` / `complete` Overview panels are minimal.** SP-UI-1 shipped `setup` fully and gave the other three honest versions built only from data that already exists (`signals.matches`, `signals.nextUp`) — structure over faked richness. They want real content: live court occupancy, per-event progress, a results/export summary. | What each phase owes | M |
 | D17 | **An irreversible, backup-less delete of user data runs unattended at startup.** Migration `u5f0b4d7e2a3` purges pre-enforcement orphans from the app lifespan (`_run_migrations`, `app/main.py`), takes no snapshot, and its `downgrade()` is a documented no-op. `e6a4749` bounded it to rows whose violated FK declares `ON DELETE CASCADE` — which removed the *known* bad case (a workspace whose org row vanished is reachable data and was being deleted along with its matches, members and `tournament_backups`) but not the category. Two structural problems remain: `_run_migrations` catches and continues, so the purge has no way to refuse a database it does not like; and a director's laptop runs this with nobody watching. The safe shape is startup *detects and logs* (`PRAGMA foreign_key_check` is cheap and read-only) with deletion operator-invoked behind a `tournament_backups` snapshot. Raised by the agent that bounded it; it declined to move it because that changes the migration chain's semantics. | Leave it in the chain, or split detect-from-delete | S–M |
 
-
-### D1, in full — the double-booking swallow
-
-> **2026-08-11 · A dropped bracket-occupancy fetch tells the meet solver the bracket occupies
-> no courts, and the schedule it returns can double-book them.**
-> `useSchedule.resolveClosedWindows`
-> (`products/scheduler/frontend/src/hooks/useSchedule.ts:83`) catches *every* failure of
-> `apiClient.getBracket` and returns `[]`. The comment defending it is reasonable read on its
-> own — "a broken bracket poll must never block a meet solve" — and it is correct about the
-> case it was written for: a meet-only workspace answers 404, and 404 really does mean no
-> bracket occupancy. It is wrong about every other failure. A timeout, a 500, a dropped
-> connection and an expired session all land in the same `catch` and produce the same `[]`,
-> and `[]` is not "unknown" — it is the positive claim *the bracket is using no courts at no
-> time*. `closedCourtWindows` is the only channel Meet has for bracket occupancy
-> (`lib/bracketOccupancy.ts`), so the engine takes that claim at face value and is free to
-> place meet matches on courts the bracket is already running on. All three meet solve entry
-> points route through it (`useSchedule.ts:233` generate, `:251` warm-restart, `:295` repair),
-> and the same swallow is hand-written a second time at `useLiveOperations.ts:243`, where the
-> stakes are highest: that is the live-day re-solve, running while both engines are actually
-> on court. Nothing in the product distinguishes the two schedules afterwards — a double-booked
-> court looks like a normal solve until two matches are called to it. Three honest options, and
-> picking between them is the reason this was left rather than fixed: **fail the solve** when
-> occupancy cannot be read on a workspace that has a bracket (safest, and turns a degraded
-> network into a blocked solve — exactly what the comment was trying to avoid); **solve and warn
-> the operator** that the schedule was computed without bracket occupancy (keeps the solve
-> unblocked, moves the judgement to the person who can see both boards); or **distinguish "no
-> occupancy" from "unknown occupancy"** at the seam — let `resolveClosedWindows` return `null`
-> for unknown and `[]` only for a genuine 404, and let each of the four call sites decide. The
-> third is the enabling change for either of the first two and is the smallest real fix; on its
-> own it changes nothing. Any of them changes what a solve does when the network is bad, which
-> makes this a design call rather than cleanup. Size S (the `null`/`[]` distinction + threading
-> it through four call sites) + a product decision on the response. *(Found in the closing
-> review of the demo session.)*
-
----
 
 ## Open — genuinely large
 
@@ -203,6 +167,16 @@ Kept so a future reader doesn't rediscover them as bugs.
 ## Closed
 
 Newest first. One line each — the commit carries the detail.
+
+**2026-08-19 — D1, the double-booking swallow** (feat/sp-court-1-queue-mode). Ruled
+distinguish-unknown-from-none: the legitimate no-bracket case never reached the catch
+(`getBracket` maps 404 → null → `[]`), so the catch only ever swallowed real failures.
+`resolveClosedWindows` now returns `null` for unknown (timeout/500/expired session), sets the
+operator banner, and all three solve entry points stop instead of solving on the claim "the
+bracket occupies no courts"; `pinAndResolve` also rolls back its optimistic pin. The third
+site — `OperationsProduct` passing `[]` while the bracket snapshot had not loaded — now passes
+`undefined` so the hook fetches the authoritative snapshot. Negative control: a meet-only
+workspace (404) still solves with zero friction. Prerequisite for SP-COURT-1 Phase 2.
 
 **2026-08-19 — D20, the auto-pull double-booking** (`fea2334`, `44f307f`, plus the rest flag).
 `nextEligible` checked identity and status, never availability, and `computeAutoPull` trusted it
