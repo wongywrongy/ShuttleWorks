@@ -14,7 +14,7 @@ scope and is a violation.
 | 0 | Audit + baseline | **Complete** 2026-08-19 |
 | 1 | `apps/` + `packages/` + `infra/` | **Complete** 2026-08-19 |
 | 2 | import-linter contracts (before any backend move) | **Complete** 2026-08-19 |
-| 3 | Backend vertical slices | Not started |
+| 3 | Backend vertical slices | **Complete** 2026-08-19 |
 | 4 | Console finishing pass (`products`→`modules`, `utils`→`lib`, `settings`→`engine-config`) | Not started |
 | 5 | Docs: Diátaxis quadrants + one history home | Not started |
 | 6 | Vocabulary ADR + program report + CLAUDE.md | Not started |
@@ -38,6 +38,7 @@ These were decided at the gates and override the program prompt where they confl
 | R9 | `docker-compose.release.yml` project name | Pin explicitly as `shuttleworks-release` |
 | R10 | `docs/nginx.conf` | Move to `infra/nginx/` with the other two; rename to say which surface each serves |
 | R11 | Compose project `btp` | Rename to `shuttleworks*` |
+| R1 (Phase 3) | The five modules three or more domains import | File by CONSUMERS, not history. New `shared/` package for cross-domain domain logic; `core/` for infrastructure. `adapters/badminton`→`shared/sport`, `services/scheduling/params`→`shared/scheduling`, `services/email`→`core/email`, `services/turnstile`→`identity/`, the throttle→`core/throttle.py` by sanctioned cut-paste extraction |
 
 ---
 
@@ -314,3 +315,109 @@ Phase 3 target files each of them under exactly one:
 Filing any of them under one domain makes every other consumer violate a
 boundary that is not really there. They want a shared tier. **This is the open
 ruling for the Phase 3 gate.**
+
+---
+
+## Phase 3 — backend vertical slices (complete)
+
+`apps/api/src/` is now one package per domain, each owning **its routers and its
+services together**. `src/` is a sys.path ROOT, not a package (R4), so imports
+read `from meet.schedule import ...` and never `from src.meet...`.
+
+```
+core  shared  db  repositories  alembic
+workspaces  identity  meet  bracket  operations  display  entries  solve_rail  ops
+```
+
+173 files moved. Five files were renamed, and only where a router and a service
+collided inside one package: `auth_routes`, `entrants_routes`, `entries_routes`,
+`match_state_routes`, `solve_jobs_routes`. Nothing else was renamed to match a
+template.
+
+### The oracles
+
+| Oracle | Result |
+| --- | --- |
+| OpenAPI paths / schemas | **99 / 163 — unchanged** |
+| OpenAPI structure ignoring description text | **identical** |
+| OpenAPI description text | 12 lines differ, each explained below |
+| Alembic head | **`v6a1c5e8f3b4`, 25 revisions — unchanged** |
+| import-linter | **15 contracts, 15 kept, 0 broken** |
+| ruff | clean |
+
+**The 12 OpenAPI description diffs are all the same thing**: a docstring that
+named a module this phase moved now names where it is. FastAPI publishes route
+and model docstrings as `description`, so correcting a pointer is visible in the
+schema. Every one:
+
+`services.bracket.player_constraints`, `services.bracket.standings.StandingRow`,
+`services.meet.standings.compute_meet_standings`,
+`services.config_lock.changed_scheduling_fields`, `services/entrants.authenticate`,
+`app/config.py`, `app.form_csrf.form_csrf_proves`, `app.main` (×2),
+`api/tournaments.py`, `api/entries_public.py` (×2), `services/bracket/response_cache.py`.
+
+The alternative was to keep the old text and publish twelve pointers to files
+that no longer exist. Routes, schemas, status codes, parameters and every other
+field are byte-identical.
+
+### The throttle extraction (ruling R1, the one sanctioned code split)
+
+`entries_key`, `throttle_check`, `throttle_record_entry` moved to
+`core/throttle.py`. Two things travelled with them because the moved bodies call
+them and moving them was the only way to keep those bodies unedited:
+
+- `throttle_record_attempt` — the counting engine all five throttle families
+  share. Leaving it in identity would have made `core` import `identity`.
+- `_utcnow` / `_aware` — to `core/time_utils.py`, keeping their leading
+  underscore precisely so no call site inside a moved body changed.
+
+**Verification: all seven moved bodies are byte-identical to their pre-move
+source**, checked by parsing both files and comparing `ast.get_source_segment`
+output. The KEY NAMESPACES stayed in `identity/auth.py`, because what matters
+about them is a property of the SET — every namespace must be disjoint from
+every other — and that is only reviewable where the list is.
+
+The Phase 2 allowed edge (a) is **deleted**, not retained: `entries` no longer
+imports `identity` for throttling.
+
+### Contract 12, and its falsification
+
+`shared/` only works while the arrow points one way. Contract 12 forbids
+`shared` from naming any domain, transitively and with no allowances.
+
+Falsified as required: planting `from bracket import brackets` into
+`shared/scheduling/params.py` breaks **contract 12 alone** (14 kept, 1 broken);
+removing it restores 15/15 on a clean tree.
+
+### What the gates caught that reading would not have
+
+- **`solve_runner` spawns `python -m services.solve_child` as a STRING.** No
+  import rewriter sees that. The program named this trap; it was real.
+- **Two `sys.modules.get("app.exceptions")` runtime lookups** — a dict key, not
+  an import. Behaviour survived either way (a miss falls through to a fresh
+  import) but the key had to name the real module to keep doing its job.
+- **Four modules each counted parent directories to the same two places**, and
+  did not agree on how (`parents[1]` in one, `parent.parent` in another). Every
+  one moved a level deeper, changing what those counts meant without changing
+  the counts. They are now `SRC_ROOT` / `API_ROOT` / `ALEMBIC_*` in
+  `core/paths.py`, counted once. That file previously had **zero importers** and
+  was logged as debt; it is now load-bearing, so that debt entry is closed by
+  use rather than by deletion.
+- **A prose sweep over docstrings over-matched twice** — it rewrote `app.` on
+  the FastAPI *instance* (`app.include_router`) and mangled the ENTRANT tier's
+  own `app/lib/*.server.ts` paths, which never moved. Caught by ruff (113
+  undefined names) and by the OpenAPI oracle respectively. Both reverted
+  precisely; the lesson is that a regex over prose cannot tell a package named
+  `app` from a variable named `app`.
+
+### Still true after Phase 3
+
+The `conftest.py` sys.path insert survives, reduced from two entries to one
+meaningful one. It cannot go to zero while the suite imports the API by bare
+package name — which is exactly what the API does to itself. **The shadow-package
+hazard IS gone**: the API's `app` package became `core`, so `apps/console/src/app`
+is now the only `app` in the tree.
+
+The three root leaks (L1 kernel→identity, L2 repository→operations,
+L3 solve_child→meet) are unchanged and still declared. Fixing any of them moves
+real logic.
