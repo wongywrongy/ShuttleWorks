@@ -52,11 +52,11 @@ pytest   # rootdir is the repo root; uses the repo .venv
 The engine is shared, but each product keeps its own match *record* — Meet stores
 points behind a status/version envelope, Bracket stores a winner fused to its
 advancement cascade. Reuse the *engine*, not a single match model. See
-[ADR 0006](/decisions/0006-unified-scheduling-core).
+[ADR 0006](/explanation/decisions/0006-unified-scheduling-core).
 :::
 
 ## See also
 
 - [How to add a CP-SAT constraint](/how-to/add-a-cpsat-constraint)
-- [Scheduling unification](/architecture/scheduling-unification)
-- [ADR 0004 — OR-Tools CP-SAT engine](/decisions/0004-ortools-cpsat-engine)
+- [Scheduling unification](/explanation/architecture/scheduling-unification)
+- [ADR 0004 — OR-Tools CP-SAT engine](/explanation/decisions/0004-ortools-cpsat-engine)

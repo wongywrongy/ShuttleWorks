@@ -10,7 +10,7 @@
 
   This is the SIMPLE always-on option. The fully hands-off alternative (survives
   terminal closure, auto-starts at logon) is the `codanna-http-mcp` Scheduled Task
-  documented in docs/getting-started/code-intelligence.md.
+  documented in docs/how-to/code-intelligence.md.
 
   Note: codanna keeps its OAuth keys in memory, so each restart invalidates a
   cached token - expect to re-auth via `/mcp` after a restart. This loop only

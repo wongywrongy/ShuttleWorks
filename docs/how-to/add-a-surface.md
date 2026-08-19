@@ -72,5 +72,5 @@ npx tsc -b
 
 ## See also
 
-- [How to add a module](/how-to/add-a-module) · [Module contracts](/contracts/)
-- [System overview](/architecture/system-overview)
+- [How to add a module](/how-to/add-a-module) · [Module contracts](/reference/contracts/)
+- [System overview](/explanation/architecture/system-overview)

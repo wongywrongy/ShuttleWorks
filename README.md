@@ -41,7 +41,7 @@ the module catalog, People & Access, Sharing (public display link vs
 collaborator invites), and Sync & Backups. A module dock switches the running
 module; module status (enabled / available / disabled) drives the chrome and
 routing. The design record for this control-plane redesign lives in
-[`docs/superpowers/specs/`](./docs/superpowers/specs) (the `2026-06-*` specs).
+[`docs/history/superpowers/specs/`](./docs/history/superpowers/specs) (the `2026-06-*` specs).
 
 ### The public tier
 
@@ -50,7 +50,7 @@ finds it, sees the fees and deadlines, and enters it — is a **second frontend*
 ([`apps/entrant/`](./apps/entrant)) served under `/e/`: React
 Router 7, server-rendered, **zero client JavaScript**, held to a blocking 4 KB per-page weight
 budget. It shares `packages/design-system` with the console and nothing else. See
-[the entrant tier](./docs/architecture/entrant-tier.md).
+[the entrant tier](./docs/explanation/architecture/entrant-tier.md).
 
 All modules depend on the shared
 [`packages/scheduler-core/`](./packages/scheduler-core) — a pure-Python CP-SAT engine
@@ -74,14 +74,14 @@ Start here:
 
 | Page | For |
 | ---- | --- |
-| [Quickstart](./docs/getting-started/quickstart.md) | Running it in a couple of minutes |
-| [System overview](./docs/architecture/system-overview.md) | The five-module model (Entries · Meet · Bracket · Operations · Display) |
-| [Module contracts](./docs/contracts/index.md) | The test-enforced seams between modules |
+| [Quickstart](./docs/tutorials/quickstart.md) | Running it in a couple of minutes |
+| [System overview](./docs/explanation/architecture/system-overview.md) | The five-module model (Entries · Meet · Bracket · Operations · Display) |
+| [Module contracts](./docs/reference/contracts/index.md) | The test-enforced seams between modules |
 | [Extending ShuttleWorks](./docs/how-to/index.md) | How to add a module, surface, endpoint, constraint, or seam |
 | [Build a module (tutorial)](./docs/tutorials/build-a-module.md) | A guided, build-it-together walkthrough |
-| [Data flow](./docs/architecture/data-flow.md) | Seams, the match-state machine, the command pipeline, persistence |
-| [Entrant tier](./docs/architecture/entrant-tier.md) | The public site under `/e/` — and the three constraints it is built within |
-| [Progress reports](./docs/progress/index.md) | What has been built, program by program, and what is still open |
+| [Data flow](./docs/explanation/architecture/data-flow.md) | Seams, the match-state machine, the command pipeline, persistence |
+| [Entrant tier](./docs/explanation/architecture/entrant-tier.md) | The public site under `/e/` — and the three constraints it is built within |
+| [Progress reports](./docs/history/progress/index.md) | What has been built, program by program, and what is still open |
 
 ### Code intelligence (codanna)
 
@@ -97,7 +97,7 @@ codanna index                   # rebuild the index after a big pull / refactor
 Auth is per-machine (`/mcp` → authorize once). codanna's OAuth keys are in-memory, so
 re-auth ~once per reboot is expected; if the on-click flow errors, run
 `claude mcp logout codanna` then re-auth. Full setup + reliability notes:
-[Code intelligence](./docs/getting-started/code-intelligence.md).
+[Code intelligence](./docs/how-to/code-intelligence.md).
 
 ---
 
@@ -154,9 +154,9 @@ In-product recovery is `tournament_backups`.
 
 > A Supabase Postgres mirror (`sync_queue` outbox + Realtime) used to sit
 > alongside this. It was removed entirely in SP-CLOUD-3 — see
-> [ADR 0012](./docs/decisions/0012-remove-the-supabase-mirror.md).
+> [ADR 0012](./docs/explanation/decisions/0012-remove-the-supabase-mirror.md).
 
-Full breakdown: [`docs/tech-stack.md`](./docs/tech-stack.md).
+Full breakdown: [`docs/history/tech-stack.md`](./docs/history/tech-stack.md).
 
 ---
 
@@ -240,11 +240,11 @@ pyproject.toml                 pytest + ruff config for the whole repo
 - [`docs/SCHEDULER.md`](./docs/SCHEDULER.md) — scheduler features, dev workflow, proposal pipeline, suggestions inbox
 - [`apps/api/BACKEND.md`](./apps/api/BACKEND.md) — FastAPI routes, request lifecycle, how to add an endpoint or a constraint
 - [`apps/console/FRONTEND.md`](./apps/console/FRONTEND.md) — shell + tabs, store split, theme system
-- [`docs/tech-stack.md`](./docs/tech-stack.md) — full architecture + data model + state machine + command flows + conflict UX
-- **Deploying?** [`docs/how-to/install-local.md`](./docs/how-to/install-local.md) (one machine) or [`docs/how-to/install-selfhost.md`](./docs/how-to/install-selfhost.md) (cloud, Cloudflare Tunnel) — plus [`add-a-worker.md`](./docs/how-to/add-a-worker.md) for a second compute host. `docs/deploy/cloud.md` is now only a tombstone — the Supabase-era guide it held was removed on 2026-08-06 (it documented three surfaces that never existed); the full text remains in git history.
-- [`docs/superpowers/specs/`](./docs/superpowers/specs) — per-slice design record, incl. the workspace-suite control-plane redesign (`2026-06-23-workspace-suite-architecture-design.md` → the SP-A…SP-D specs)
-- [`docs/architectural-roadmap.md`](./docs/architectural-roadmap.md) — the (historical) backend-merge arc roadmap
-- [`docs/changes/`](./docs/changes/) — dated decision log
+- [`docs/history/tech-stack.md`](./docs/history/tech-stack.md) — full architecture + data model + state machine + command flows + conflict UX
+- **Deploying?** [`docs/how-to/install-local.md`](./docs/how-to/install-local.md) (one machine) or [`docs/how-to/install-selfhost.md`](./docs/how-to/install-selfhost.md) (cloud, Cloudflare Tunnel) — plus [`add-a-worker.md`](./docs/how-to/add-a-worker.md) for a second compute host. `docs/history/deploy/cloud.md` is now only a tombstone — the Supabase-era guide it held was removed on 2026-08-06 (it documented three surfaces that never existed); the full text remains in git history.
+- [`docs/history/superpowers/specs/`](./docs/history/superpowers/specs) — per-slice design record, incl. the workspace-suite control-plane redesign (`2026-06-23-workspace-suite-architecture-design.md` → the SP-A…SP-D specs)
+- [`docs/history/architectural-roadmap.md`](./docs/history/architectural-roadmap.md) — the (historical) backend-merge arc roadmap
+- [`docs/history/changes/`](./docs/history/changes/) — dated decision log
 - [`packages/scheduler-core/scheduler_core/README.md`](./packages/scheduler-core/scheduler_core/README.md) — engine internals: variables, constraints, soft penalties
 
 ---
@@ -269,9 +269,9 @@ The **workspace-suite control-plane redesign** (Hub dashboard, workspace +
 module model, New Workspace builder, redesigned per-workspace Settings, and
 the module dock) is built and reviewed on branch `dev/workspace-suite`. The
 full design record + per-slice plans are in
-[`docs/superpowers/`](./docs/superpowers).
+[`docs/history/superpowers/`](./docs/superpowers).
 
 Multi-worker / Postgres-as-primary deployments need additional work
 (check-then-write on `matches.version` would need
 `SELECT … FOR UPDATE` under multi-worker) — flagged in
-[`docs/changes/2026-05-13.md`](./docs/changes/2026-05-13.md).
+[`docs/history/changes/2026-05-13.md`](./docs/history/changes/2026-05-13.md).

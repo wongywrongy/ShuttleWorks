@@ -3,7 +3,7 @@
 > **⚠️ PARTIALLY SUPERSEDED (2026-07-01).** This README predates the
 > workspace-suite control-plane model; its file/route lists below are incomplete
 > and a few names are out of date. For **current** backend architecture + route
-> ownership use the canonical docs: `docs/architecture/backend-structure.md` and
+> ownership use the canonical docs: `docs/explanation/architecture/backend-structure.md` and
 > `apps/api/BACKEND.md`. The local conventions notes below are still useful.
 
 FastAPI HTTP layer in front of the CP-SAT scheduler. Since SP-CLOUD-1

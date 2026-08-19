@@ -79,7 +79,7 @@ cp -r data ~/backups/shuttleworks-$(date +%F)
 
 A copy on a USB stick or a cloud drive is sufficient. There is no in-product
 off-site replication, and adding one has been considered and rejected — see
-[ADR 0012](/decisions/0012-remove-the-supabase-mirror), which removed the last
+[ADR 0012](/explanation/decisions/0012-remove-the-supabase-mirror), which removed the last
 attempt at it (a one-way push with no restore path that was never once
 configured). Off-site durability for a single operator on their own machine is
 that operator's responsibility, and stating so plainly is more useful than

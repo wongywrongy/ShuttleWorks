@@ -20,7 +20,7 @@
  *
  * NOISE FILTER: `console.error` is deliberately NOT fatal on its own. The audit
  * calibrated three benign sources that would otherwise make this suite
- * permanently red (see docs/programs/design-plan/INTERACTION_FINDINGS.md):
+ * permanently red (see docs/history/programs/design-plan/INTERACTION_FINDINGS.md):
  *   - the browser's own resource log for `GET /bracket` 404 (meaning "no bracket
  *     yet"; the client handles it and returns null)
  *   - a stale suggestion Apply (409/410 → handled, dropped, info toast)

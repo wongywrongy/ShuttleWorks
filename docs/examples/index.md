@@ -43,8 +43,8 @@ const bracketBlocks: OpsBlock[] = bracketToOpsBlocks(bracketDto);
 `OpsBlock` is a kept `@deprecated` alias of the cross-module `Match` contract
 (`platform/domain/match.ts`). New code should import `Match`; the adapters and
 `packBlockLanes` still live in `opsBlock.ts`. See
-[ADR 0009 — Universal match contract](/decisions/0009-universal-match-contract)
-and [Unified Operations view](/architecture/unified-operations-view).
+[ADR 0009 — Universal match contract](/explanation/decisions/0009-universal-match-contract)
+and [Unified Operations view](/explanation/architecture/unified-operations-view).
 :::
 
 ## Derive the Run board: Now / Next / Later lanes + queue
@@ -75,7 +75,7 @@ const queue = deriveQueue(runMatches);
 ```
 
 The `late` derivation is lane- and run-state-aware on purpose — see the source
-notes and [Operations](/modules/operations) for why a Next/Later match is never
+notes and [Operations](/reference/modules/operations) for why a Next/Later match is never
 late.
 
 ## Submit an operator command optimistically
@@ -108,7 +108,7 @@ The first argument is a `MatchAction`: `'call_to_court' | 'start_match' |
 'finish_match' | 'retire_match' | 'uncall' | 'assign_court' | 'postpone_match'`.
 The result is a discriminated union: `'ok' | 'staleVersion' | 'conflict' |
 'networkError'`. See
-[the command pipeline](/architecture/data-flow#the-command-pipeline-write-path).
+[the command pipeline](/explanation/architecture/data-flow#the-command-pipeline-write-path).
 
 ## Record a bracket result through the command queue
 
@@ -143,8 +143,8 @@ await submit({
 Pass the `version` you last saw on the play unit. A stale value comes back as a
 `409 stale_version` (recoverable — the hook refetches) versus a hard `conflict`.
 This is what lets two operators record into the same bracket safely. See
-[Bracket result queue](/architecture/bracket-result-queue) and
-[ADR 0007](/decisions/0007-bracket-result-command-queue).
+[Bracket result queue](/explanation/architecture/bracket-result-queue) and
+[ADR 0007](/explanation/decisions/0007-bracket-result-command-queue).
 :::
 
 ## Build a schedule from the engine
@@ -178,13 +178,13 @@ if result.status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE):
 
 For a reproducible solve, pass `options=SolverOptions(deterministic=True,
 random_seed=...)`; `result.solver_seed` echoes the seed actually used. See
-[Scheduling unification](/architecture/scheduling-unification) and
+[Scheduling unification](/explanation/architecture/scheduling-unification) and
 [Build on the engine](/how-to/build-on-the-engine).
 
 ## Pack overlapping blocks into court sub-lanes
 
 Meet and Bracket solve the same physical courts independently
-([ADR 0006](/decisions/0006-unified-scheduling-core)), so they can double-book one
+([ADR 0006](/explanation/decisions/0006-unified-scheduling-core)), so they can double-book one
 `(court, slot)`. `packBlockLanes` (`products/operations/opsBlock.ts`) assigns each
 colliding block a sub-lane so they render side-by-side instead of z-fighting.
 
@@ -199,9 +199,9 @@ const { laneIndex, laneCount } = lanes.get(block.key)!;
 
 ## See also
 
-- [Unified Operations view](/architecture/unified-operations-view) — the full view-model behind these blocks
-- [Operations](/modules/operations) — the module that owns the Run + Plan surfaces
-- [Data flow](/architecture/data-flow#the-command-pipeline-write-path) — the optimistic command pipeline end to end
-- [Bracket result queue](/architecture/bracket-result-queue) · [ADR 0007](/decisions/0007-bracket-result-command-queue)
-- [Build on the engine](/how-to/build-on-the-engine) · [Scheduling unification](/architecture/scheduling-unification)
-- [ADR 0009 — Universal match contract](/decisions/0009-universal-match-contract) · [ADR 0006 — Unified scheduling core](/decisions/0006-unified-scheduling-core)
+- [Unified Operations view](/explanation/architecture/unified-operations-view) — the full view-model behind these blocks
+- [Operations](/reference/modules/operations) — the module that owns the Run + Plan surfaces
+- [Data flow](/explanation/architecture/data-flow#the-command-pipeline-write-path) — the optimistic command pipeline end to end
+- [Bracket result queue](/explanation/architecture/bracket-result-queue) · [ADR 0007](/explanation/decisions/0007-bracket-result-command-queue)
+- [Build on the engine](/how-to/build-on-the-engine) · [Scheduling unification](/explanation/architecture/scheduling-unification)
+- [ADR 0009 — Universal match contract](/explanation/decisions/0009-universal-match-contract) · [ADR 0006 — Unified scheduling core](/explanation/decisions/0006-unified-scheduling-core)

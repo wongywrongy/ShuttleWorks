@@ -51,8 +51,8 @@ keyed on raw tournament UUIDs.
 
 For a **write** that needs optimistic UI + conflict safety, follow the command
 pipeline rather than a bare mutation — carry a client UUID idempotency key and a
-`seen_version`. See [Data flow → the command pipeline](/architecture/data-flow#the-command-pipeline-write-path)
-and [Bracket result command queue](/architecture/bracket-result-queue).
+`seen_version`. See [Data flow → the command pipeline](/explanation/architecture/data-flow#the-command-pipeline-write-path)
+and [Bracket result command queue](/explanation/architecture/bracket-result-queue).
 
 ## 2 · Frontend — DTO twin
 
@@ -98,4 +98,4 @@ Open the live Swagger UI at `http://localhost:8000/docs` to exercise the route.
 ## See also
 
 - [How to wire a seam](/how-to/wire-a-seam) — when the endpoint crosses a module boundary
-- [API reference](/api/) · [Data flow](/architecture/data-flow)
+- [API reference](/reference/api/) · [Data flow](/explanation/architecture/data-flow)

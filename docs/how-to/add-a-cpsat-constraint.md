@@ -78,5 +78,5 @@ constraint automatically applies to live re-solves — but verify it composes wi
 ## See also
 
 - [How to build a product on the engine](/how-to/build-on-the-engine)
-- [ADR 0004 — OR-Tools CP-SAT engine](/decisions/0004-ortools-cpsat-engine)
-- [ADR 0006 — Unified scheduling core](/decisions/0006-unified-scheduling-core)
+- [ADR 0004 — OR-Tools CP-SAT engine](/explanation/decisions/0004-ortools-cpsat-engine)
+- [ADR 0006 — Unified scheduling core](/explanation/decisions/0006-unified-scheduling-core)

@@ -7,7 +7,7 @@ which is where a tournament director runs the event. Both talk to the same FastA
 ## Running it locally
 
 This app is **local-dev only** for now — no nginx, no compose, no tunnel (those land later, see
-`docs/programs/CLOUD_PROGRESS.md`). The port map, kept consistent everywhere it's documented:
+`docs/history/programs/CLOUD_PROGRESS.md`). The port map, kept consistent everywhere it's documented:
 
 | Surface | Port | Command |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ only launch the frontend surfaces. `make local-dev` backgrounds with `&`, so **r
 Bash** (under `cmd.exe` `&` sequences instead of backgrounding and the first server blocks forever).
 
 Stop the Docker stack first: see the Docker-vs-host-backend trap in
-[docs/getting-started/running-locally.md](../../../docs/getting-started/running-locally.md#running-both-surfaces-locally-operator-product--public-entrant-site).
+[docs/how-to/running-locally.md](../../../docs/how-to/running-locally.md#running-both-surfaces-locally-operator-product--public-entrant-site).
 
 ### Which backend variable is which
 

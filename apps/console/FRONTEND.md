@@ -1,7 +1,7 @@
 # Frontend architecture
 
 > Reflects the 2026-06 workspace-suite control-plane redesign. Full per-slice
-> design record: [`../../docs/superpowers/specs/`](../../docs/superpowers/specs).
+> design record: [`../../docs/history/superpowers/specs/`](../../docs/history/superpowers/specs).
 
 React 19 + Vite app organised as a **workspace control plane**. The router
 (`app/App.tsx`) splits the public display and login from the authenticated
@@ -15,7 +15,7 @@ debounced PUTs to a server-side snapshot.
 This file covers the **operator console** only. The public entrant tier is a
 separate app with different rules (no client JavaScript, no stores, no
 `apiClient`) — see [`entrant/README.md`](./entrant/README.md) and
-[the entrant tier](../../docs/architecture/entrant-tier.md).
+[the entrant tier](../../docs/explanation/architecture/entrant-tier.md).
 
 ## Top-level shape
 
@@ -118,7 +118,7 @@ workspace's module status via `platform/domain/moduleModel` (`moduleForTab`,
 - **A new module** is a larger change — add its `ModuleId` + status mapping in
   `platform/product-shell/types` + `moduleModel`, a folder under `products/`,
   and wire it into the dock/outlet. See the SP-B/SP-D specs in
-  `docs/superpowers/specs/` for the module-driven-chrome contract.
+  `docs/history/superpowers/specs/` for the module-driven-chrome contract.
 
 ## Adding a product/module folder
 

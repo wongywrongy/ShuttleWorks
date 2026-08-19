@@ -5,8 +5,8 @@ against the **real** extension points — the same files Meet, Bracket, Operatio
 and Display are built from — and ends with the command that proves it worked.
 
 If you're learning the architecture rather than changing it, start with
-[System overview](/architecture/system-overview) and [Module
-contracts](/contracts/) instead.
+[System overview](/explanation/architecture/system-overview) and [Module
+contracts](/reference/contracts/) instead.
 
 ## The guides
 
@@ -35,5 +35,5 @@ Running ShuttleWorks rather than extending it.
 
 A module is not a registry object — it's a set of **honest declarations** across
 a handful of files, held to the running app by the test-enforced
-[module contract](/contracts/). Every guide here edits one or more of those
+[module contract](/reference/contracts/). Every guide here edits one or more of those
 declarations; the contract test is your proof the change is consistent.

@@ -24,7 +24,7 @@ If you are an LLM agent writing code in this monorepo, treat this file as a hard
 > binding** — those rules were never about the brutalist direction.
 >
 > A full rewrite of this file against the current tokens is logged in
-> `docs/audits/debt-log.md`.
+> `docs/reference/debt-log.md`.
 
 ---
 

@@ -9,7 +9,7 @@ new backlog from forming.
 
 **Before anything else, read `REFACTOR_PROGRESS.md` and `CLAUDE.md`.**
 When you spot debt out of your current scope, log it in
-[`docs/audits/debt-log.md`](docs/audits/debt-log.md) — that file is the
+[`docs/reference/debt-log.md`](docs/reference/debt-log.md) — that file is the
 visible backlog this practice feeds.
 
 ## ABSOLUTE RULE — unchanged
@@ -107,7 +107,7 @@ rather than tightening unilaterally.)
 ### 6. Debt gets logged, not just noticed
 When you spot something wrong outside current scope, don't silently fix it and
 don't silently ignore it either — log it. Add an entry to
-`docs/audits/debt-log.md`: what, where, why it matters, rough size. Visibility
+`docs/reference/debt-log.md`: what, where, why it matters, rough size. Visibility
 is what turns "everyone knows this is bad" into something that actually gets
 prioritized and fixed.
 
@@ -161,7 +161,7 @@ Before treating any function as a refactor target, get a number:
 Use `radon`/`xenon` (Python — `scheduler_core` and backend; `radon` is in
 `requirements-dev.txt`) or an equivalent complexity check on the frontend to
 get these numbers instead of eyeballing it. Record the worst offenders in
-`docs/audits/debt-log.md` with their actual complexity score, not just "this
+`docs/reference/debt-log.md` with their actual complexity score, not just "this
 file is messy." Re-measure with:
 ```
 python -m radon cc packages/scheduler-core apps/api/{app,adapters,services,repositories,api} -nc -s --total-average -e "*/tests/*,*/migrations/*,*/alembic/*"
@@ -242,7 +242,7 @@ principle applied at function level instead of module level.
 ## How this differs from the four-phase program
 SP-REFACTOR-1 through 4 was a deliberate, bounded, paused-development
 debt-paydown effort with formal audits and checkpoints (`REFACTOR_PROGRESS.md`,
-`docs/audits/`). This document is the ongoing discipline that runs *during*
+`docs/history/audits/`). This document is the ongoing discipline that runs *during*
 normal feature work afterward, so the codebase doesn't drift back to needing
 another one. If debt accumulates faster than this steady-state discipline can
 absorb (visible in the debt log growing faster than it shrinks), or if you keep

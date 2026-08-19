@@ -97,7 +97,7 @@ class Result:
     # unaffected. No automatic cross-draw withdrawal — that remains a
     # manual, per-draw operator decision. See
     # ``services.bracket.advancement.loser_cannot_continue`` for the
-    # single predicate that implements this (docs/audits/debt-log.md).
+    # single predicate that implements this (docs/reference/debt-log.md).
     reason: Optional[str] = None
 
 

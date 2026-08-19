@@ -1,7 +1,7 @@
 # Backend architecture
 
 > Reflects the 2026-06 workspace-suite control-plane redesign. Full per-slice
-> design record: [`../../docs/superpowers/specs/`](../../docs/superpowers/specs).
+> design record: [`../../docs/history/superpowers/specs/`](../../docs/history/superpowers/specs).
 
 A FastAPI app that fronts a CP-SAT solver. The solver path is stateless
 per-request (every `POST /schedule` carries the full problem in the body).

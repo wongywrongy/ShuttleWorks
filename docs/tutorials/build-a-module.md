@@ -7,13 +7,13 @@ results — and wire it the same way Meet, Bracket, and Display are wired. The
 payoff at the end is a green module-contract test: the moment the architecture
 itself agrees your module is a first-class citizen.
 
-This page is for a developer who has skimmed the [System overview](/architecture/system-overview)
+This page is for a developer who has skimmed the [System overview](/explanation/architecture/system-overview)
 and wants the model to *click* by doing. It is the narrative twin of
 [How to add a module](/how-to/add-a-module) — that page is these same eight steps
 as a one-screen checklist. Keep it open beside you as the map; build along here.
 
 ::: info What you need
-- The app running locally ([Running locally](/getting-started/running-locally)).
+- The app running locally ([Running locally](/how-to/running-locally)).
 - The frontend test runner: `cd apps/console && npx vitest run`.
 - Roughly an hour. Every edit below is small; the lesson is in *why* each one is needed.
 :::
@@ -32,7 +32,7 @@ Every module also shares one anatomy: **intake → engine → emit** (config/ros
 in, the solve or run in the middle, results out). Standings is *output-shaped* —
 it has no engine of its own. Its intake is a Configuration surface (pick the
 ranking rule); its emit is the board. That makes it the close cousin of
-[Display](/modules/display), which is the simplest existing module to mirror.
+[Display](/reference/modules/display), which is the simplest existing module to mirror.
 
 Two tools will drive us, and noticing *which one* catches each mistake is half
 the lesson:
@@ -373,5 +373,5 @@ cross-module edge, those are deliberate, separate changes — see the how-tos be
 - [How to add a module](/how-to/add-a-module) — the same eight steps as a terse checklist
 - [How to add a surface](/how-to/add-a-surface) — a single new segment on an existing module
 - [How to enable a module](/how-to/enable-a-module) · [How to add an API endpoint](/how-to/add-an-api-endpoint) · [How to wire a seam](/how-to/wire-a-seam)
-- [System overview](/architecture/system-overview) · [Module contracts](/contracts/) · [Display module](/modules/display)
-- [ADR 0001 — Four-module split](/decisions/0001-four-module-split)
+- [System overview](/explanation/architecture/system-overview) · [Module contracts](/reference/contracts/) · [Display module](/reference/modules/display)
+- [ADR 0001 — Four-module split](/explanation/decisions/0001-four-module-split)

@@ -327,7 +327,7 @@ def test_idempotent_replay_returns_current_state_after_third_party_update(client
 # route there dual-writes toward ``matches``. These pin the REVERSE
 # write-through: a command apply must land in ``match_states`` too, or
 # a call/start disappears on reload while the transition guard still
-# holds the canonical status (409 loop — see docs/audits/debt-log.md).
+# holds the canonical status (409 loop — see docs/reference/debt-log.md).
 
 
 def _match_state(client, tid: str, match_id: str = "m1") -> dict:

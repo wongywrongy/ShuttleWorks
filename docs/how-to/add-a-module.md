@@ -10,10 +10,10 @@ seams. Every other "add a …" guide ([a surface](/how-to/add-a-surface),
 subset of the steps below.
 
 ::: info Requirements
-- You can run the app locally ([Quickstart](/getting-started/quickstart)) and
+- You can run the app locally ([Quickstart](/tutorials/quickstart)) and
   the frontend test suite (`cd apps/console && npx vitest run`).
-- You've read [System overview](/architecture/system-overview) for the
-  four-module model and [Module contracts](/contracts/) for what a contract is.
+- You've read [System overview](/explanation/architecture/system-overview) for the
+  four-module model and [Module contracts](/reference/contracts/) for what a contract is.
 - You have a module **id** in mind. This guide adds a fictional `scoreboard`
   module; substitute your own throughout.
 :::
@@ -184,5 +184,5 @@ honest member of the architecture. Enable it on a workspace via
 
 - [How to add a surface](/how-to/add-a-surface) — a single new segment on an existing module
 - [How to wire a seam](/how-to/wire-a-seam) — a typed cross-module edge
-- [Module contracts](/contracts/) · [System overview](/architecture/system-overview)
-- [ADR 0001 — Four-module split](/decisions/0001-four-module-split)
+- [Module contracts](/reference/contracts/) · [System overview](/explanation/architecture/system-overview)
+- [ADR 0001 — Four-module split](/explanation/decisions/0001-four-module-split)

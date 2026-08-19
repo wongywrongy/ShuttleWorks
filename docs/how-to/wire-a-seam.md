@@ -9,8 +9,8 @@ declaration to the real app, so you cannot claim a seam the code doesn't have �
 or ship one the contract doesn't name.
 
 ::: info Requirements
-Read [Module contracts](/contracts/) and [Data flow → the three wired
-seams](/architecture/data-flow#the-three-wired-seams) first. A new seam is a
+Read [Module contracts](/reference/contracts/) and [Data flow → the three wired
+seams](/explanation/architecture/data-flow#the-three-wired-seams) first. A new seam is a
 **behaviour change** — it ships with running code, not just a contract edit.
 :::
 
@@ -55,7 +55,7 @@ The code comment in `useBracketResultQueue.ts` calls the bracket-result **comman
 endpoint** ("SP-G1 Seam C") — that is bracket-owned result recording surfaced
 through the Operations Run UI, **not** the unwired advancement edge above. The
 canonical seam naming (A/B/C/D) lives in
-[Data flow](/architecture/data-flow#the-three-wired-seams).
+[Data flow](/explanation/architecture/data-flow#the-three-wired-seams).
 :::
 
 ## Verify
@@ -67,5 +67,5 @@ npx vitest run src/platform/contracts   # the seam literals must match the hones
 
 ## See also
 
-- [Module contracts](/contracts/) · [Data flow](/architecture/data-flow)
+- [Module contracts](/reference/contracts/) · [Data flow](/explanation/architecture/data-flow)
 - [How to add an API endpoint](/how-to/add-an-api-endpoint)

@@ -29,12 +29,12 @@ import { execFileSync } from 'node:child_process'
 const AREAS = [
   {
     name: 'API reference',
-    docs: ['docs/api'],
+    docs: ['docs/reference/api'],
     src: ['apps/api/api', 'apps/api/app/schemas.py'],
   },
   {
     name: 'Backend structure & data flow',
-    docs: ['docs/architecture/backend-structure.md', 'docs/architecture/data-flow.md'],
+    docs: ['docs/explanation/architecture/backend-structure.md', 'docs/explanation/architecture/data-flow.md'],
     src: [
       'apps/api/database',
       'apps/api/repositories',
@@ -44,7 +44,7 @@ const AREAS = [
   },
   {
     name: 'Workspace model',
-    docs: ['docs/architecture/workspace-model.md'],
+    docs: ['docs/explanation/architecture/workspace-model.md'],
     src: [
       'apps/api/api/workspace_modules.py',
       'apps/api/api/workspace_signals.py',
@@ -53,12 +53,12 @@ const AREAS = [
   },
   {
     name: 'State management',
-    docs: ['docs/architecture/state-management.md'],
+    docs: ['docs/explanation/architecture/state-management.md'],
     src: ['apps/console/src/store', 'apps/console/src/hooks'],
   },
   {
     name: 'Module contracts & overview',
-    docs: ['docs/contracts', 'docs/architecture/system-overview.md'],
+    docs: ['docs/reference/contracts', 'docs/explanation/architecture/system-overview.md'],
     src: [
       'apps/console/src/platform/contracts',
       'apps/console/src/app/workspace/workspaceNav.ts',
@@ -66,7 +66,7 @@ const AREAS = [
   },
   {
     name: 'Modules',
-    docs: ['docs/modules'],
+    docs: ['docs/reference/modules'],
     src: ['apps/console/src/modules'],
   },
   {
@@ -85,7 +85,7 @@ const AREAS = [
   },
   {
     name: 'Engine (ADR 0004)',
-    docs: ['docs/decisions/0004-ortools-cpsat-engine.md'],
+    docs: ['docs/explanation/decisions/0004-ortools-cpsat-engine.md'],
     src: ['scheduler_core'],
   },
   {
@@ -93,12 +93,12 @@ const AREAS = [
     // client JS, the page-weight gate, the route table). It had no area here
     // for its first two months, which is exactly how it stayed undocumented.
     name: 'Entrant tier (the public site)',
-    docs: ['docs/architecture/entrant-tier.md'],
+    docs: ['docs/explanation/architecture/entrant-tier.md'],
     src: ['apps/entrant/app', 'apps/entrant/scripts'],
   },
   {
     name: 'Entries module',
-    docs: ['docs/modules/entries.md'],
+    docs: ['docs/reference/modules/entries.md'],
     src: [
       'apps/api/services/entries.py',
       'apps/api/api/entries.py',
