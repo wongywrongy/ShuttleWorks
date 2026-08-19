@@ -79,6 +79,11 @@ export default defineConfig({
     // SECURITY, CODE_HEALTH, LICENSE).
     'programs/**',
     'architecture/workspace-suite/**',
+    // Superseded drafts kept as record. Each one duplicates a LIVE page
+    // (`architecture/entrant-tier.md`, `modules/entries.md`); rendering both
+    // would put two competing versions of the same subject on the site with
+    // nothing linking to the stale one.
+    '**/*.superseded-draft-*.md',
     'README.md',
   ],
 
