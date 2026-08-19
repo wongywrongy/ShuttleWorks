@@ -8,7 +8,7 @@ originated as separate apps: the one place scheduling parameters become an
 engine ``ScheduleConfig``.
 
 The single batch CP-SAT entry both modules invoke is the engine's own
-``scheduler_core.schedule`` — see ``docs/architecture/scheduling-unification.md``.
+``scheduler_core.schedule`` — see ``docs/explanation/architecture/scheduling-unification.md``.
 """
 from shared.scheduling.params import SchedulingParams, build_schedule_config
 

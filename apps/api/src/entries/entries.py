@@ -1,6 +1,6 @@
 """Seam A — commit confirmed entries onto the workspace roster.
 
-The Entries design spec (`docs/superpowers/specs/2026-08-06-entries-design.md`)
+The Entries design spec (`docs/history/superpowers/specs/2026-08-06-entries-design.md`)
 §5 states the contract; this module is its implementation. In one sentence:
 **every ``confirmed`` entry with no ``committed_player_id`` becomes a roster
 player, exactly once, without disturbing anything already there.**

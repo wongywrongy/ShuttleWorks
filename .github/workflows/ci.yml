@@ -89,7 +89,7 @@ jobs:
       # `<Scripts/>`; the CSP blocked its inline output in every deployed
       # stack anyway). That replaces ruling R8-F's 123 KB, which budgeted for
       # a React Router hydration floor no browser ever downloaded. See
-      # docs/audits/debt-log.md for the record.
+      # docs/reference/debt-log.md for the record.
       - name: Page-weight budget (entry page, HTML + referenced scripts gzipped)
         run: node apps/entrant/scripts/measure-page-weight.mjs
 
@@ -218,7 +218,7 @@ jobs:
     # could not edit anything, Run-view Undo buttons that 409'd on every press,
     # and a rejected roster delete that killed all further saving.
     # See tests/e2e/README.md and
-    # docs/programs/design-plan/INTERACTION_FINDINGS.md.
+    # docs/history/programs/design-plan/INTERACTION_FINDINGS.md.
     #
     # Unlike the older e2e specs this does NOT boot the Docker stack — it runs a
     # preview build against a local uvicorn + SQLite, which is why it can be a

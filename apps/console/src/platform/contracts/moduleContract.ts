@@ -4,7 +4,7 @@
  * This file declares, per architectural module, what it OWNS and CONSUMES
  * today — nothing aspirational. It is the typed, test-enforced spine of the
  * "module-contract modernization" design
- * (docs/superpowers/plans/2026-06-25-module-architecture-modernization-design.md).
+ * (docs/history/superpowers/plans/2026-06-25-module-architecture-modernization-design.md).
  *
  * ## Honesty is the invariant
  *

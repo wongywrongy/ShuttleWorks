@@ -221,7 +221,7 @@ describe('every control on these pages works with no JavaScript', () => {
       // 'self'`), so pressing it did nothing at all — a dead control, which
       // teaches the reader the page is broken. `revealable={false}` deletes
       // it; a JS-backed reveal would need a script budget the tier does not
-      // have, and is logged in `docs/audits/debt-log.md` instead.
+      // have, and is logged in `docs/reference/debt-log.md` instead.
       //
       // **Derived, not spelled.** The finding is not the label: it is that a
       // `type="button"` has no behaviour of its own — unlike submit and reset,

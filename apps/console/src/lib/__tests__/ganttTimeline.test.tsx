@@ -111,7 +111,7 @@ describe('placementBox', () => {
 // row, absolute-from-grid-origin) — but the consumer was nesting
 // each PositionedBlock inside a per-court row container that was
 // already offset by the same amount, doubling the y for courts 1+.
-// Audit finding: docs/audits/2026-05-15_user-audit_meet-vs-bracket.md §2.5
+// Audit finding: docs/history/audits/2026-05-15_user-audit_meet-vs-bracket.md §2.5
 import { render, screen } from '@testing-library/react';
 import { GanttTimeline, type Placement as PlacementType } from '@scheduler/design-system/components';
 

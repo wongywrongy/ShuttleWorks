@@ -327,7 +327,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
               // a credential. Making it work needs a script budget this tier
               // does not have (`root.tsx` renders no `<Scripts/>`; the CSP is
               // `script-src 'self'`), so the affordance is logged in
-              // `docs/audits/debt-log.md` rather than built.
+              // `docs/reference/debt-log.md` rather than built.
               revealable={false}
             />
 

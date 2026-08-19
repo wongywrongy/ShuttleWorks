@@ -6,7 +6,7 @@
  * tables keep saying "tournament". This module is the single place the Hub and
  * shell chrome read the container noun, so a later, deeper rename touches one file.
  *
- * Scope rule (see docs/architecture/workspace-suite/import-boundaries.md, rule 4):
+ * Scope rule (see docs/explanation/architecture/workspace-suite/import-boundaries.md, rule 4):
  * Hub + shell chrome only. Event-*kind* labels ("MEET" / "TOURNAMENT" badge) are a
  * separate concern and are NOT governed here.
  */

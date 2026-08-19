@@ -9,7 +9,7 @@
  *
  * Deliberately excluded: "last backup". It would need a second list fetch on
  * every workspace landing to render a glance-only fact — logged as debt rather
- * than paid for. See docs/audits/debt-log.md.
+ * than paid for. See docs/reference/debt-log.md.
  */
 import type { AppTab } from '../../../store/uiStore';
 import type { TournamentSummaryDTO } from '../../../api/dto';

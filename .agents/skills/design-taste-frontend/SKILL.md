@@ -1050,7 +1050,7 @@ npm install bootstrap
 - https://carbondesignsystem.com/developing/web-components-tutorial/overview/
 
 ### Shopify Polaris
-- https://shopify.dev/docs/api/app-home/web-components
+- https://shopify.dev/docs/reference/api/app-home/web-components
 - https://github.com/Shopify/polaris-react
 - https://polaris-react.shopify.com/components
 

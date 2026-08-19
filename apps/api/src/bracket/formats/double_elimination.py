@@ -1,6 +1,6 @@
 """Double-elimination draw generation.
 
-Three segments over one play-unit DAG (docs/architecture/draw-formats.md):
+Three segments over one play-unit DAG (docs/explanation/architecture/draw-formats.md):
 
 - ``W`` — the winners (main) bracket: the exact single-elimination shape
   (BWF seeding, bye padding), re-built through the generalized knockout

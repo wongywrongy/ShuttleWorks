@@ -37,7 +37,7 @@ help:
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
 	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host API on :8600"
 	@echo "  make local-dev          Both surfaces at once: operator :5173 + entrant :5174"
-	@echo "                          (local only — see docs/getting-started/running-locally)"
+	@echo "                          (local only — see docs/how-to/running-locally)"
 	@echo "  make dev-postgres       Local Postgres + API (exercise the cloud path)"
 	@echo "  make stop               Stop the dev-facing stacks (default, dev, cloud)"
 	@echo "  make logs               Tail container logs"
@@ -114,7 +114,7 @@ dev-postgres-stop:
 # === Entrant tier (public SSR site) ===
 #
 # Local only — no nginx, no compose, no tunnel. See
-# docs/getting-started/running-locally.md for the full recipe and the
+# docs/how-to/running-locally.md for the full recipe and the
 # Docker-stack trap (the SPA's /api proxy defaults to :8000, exactly where
 # the Docker API listens, so a host API on :8600 goes silently unused
 # unless the stack is stopped first).

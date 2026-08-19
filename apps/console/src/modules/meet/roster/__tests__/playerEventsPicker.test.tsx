@@ -17,7 +17,7 @@
  *
  * PICK-4 negative control (CODE_HEALTH 3b): stub the guard to constant
  * `false` and the locked-row tests fail — recorded in
- * docs/programs/CONSOLE3A_PROGRESS.md.
+ * docs/history/programs/CONSOLE3A_PROGRESS.md.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';

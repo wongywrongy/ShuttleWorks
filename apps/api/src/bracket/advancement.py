@@ -289,7 +289,7 @@ def _loser_participant_id(
     consolation bracket — the loser feed is ``None`` (→ BYE), and the
     normal ``_sweep_walkovers`` cascade hollows the plate match. This is
     the documented bye-hazard rule for double elimination / Monrad /
-    compass (docs/architecture/draw-formats.md).
+    compass (docs/explanation/architecture/draw-formats.md).
 
     A ``retired``/``forfeit`` reason gets the SAME BYE treatment for the
     loser feed only (see ``loser_cannot_continue``) — the result itself

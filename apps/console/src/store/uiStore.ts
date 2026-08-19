@@ -337,7 +337,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     // Dedupe: a toast with the same level + message refreshes the existing
     // entry (latest detail wins) instead of stacking a duplicate — repeated
     // failures of one action (e.g. clicking Generate against a full day
-    // plan) produce ONE toast, not a pile (docs/audits/debt-log.md:
+    // plan) produce ONE toast, not a pile (docs/reference/debt-log.md:
     // "Error toasts stack without auto-dismiss").
     const existing = get().toasts.find(
       (t) => t.level === toast.level && t.message === toast.message,

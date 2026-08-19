@@ -30,7 +30,7 @@ proportionate here. Where a finding sits above the target level but had a live
 exploit path, it was remediated anyway — CSV formula injection (`v5.0.0-1.2.10`,
 L3) is the example.
 
-Findings register: `docs/audits/11-sp-sec-1-phase0.md`. Remediation record and
+Findings register: `docs/history/audits/11-sp-sec-1-phase0.md`. Remediation record and
 negative controls: `SEC_PROGRESS.md`.
 
 ## Threat model

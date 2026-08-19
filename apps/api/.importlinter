@@ -55,7 +55,7 @@
 ;
 ; Both L1 and L2 are function-local imports. Deferring an import hides a cycle
 ; from Python's import machinery, not from the architecture. All three are in
-; docs/audits/debt-log.md.
+; docs/reference/debt-log.md.
 ;
 ; WHAT PHASE 3 DELETED: the Phase 2 report's edge (a), `entries -> identity`
 ; for the abuse throttle. Ruling R1 extracted those three symbols into

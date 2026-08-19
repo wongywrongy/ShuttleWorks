@@ -1,7 +1,7 @@
 """Tournament format generators + the format registry.
 
 A draw format is a play-unit DAG generator plus (frontend-side) a renderer —
-NOT an engine change (see docs/architecture/draw-formats.md). The registry is
+NOT an engine change (see docs/explanation/architecture/draw-formats.md). The registry is
 the single seam new formats plug into: the API routes validate ``format``
 against it and dispatch generation through it, so adding a format is one
 ``FormatSpec`` entry + a generator module here, with zero DTO/route churn.

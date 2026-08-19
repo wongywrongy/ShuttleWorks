@@ -281,7 +281,7 @@ def health_metrics(repo: LocalRepository = Depends(get_repository)):
     # It is therefore a full aggregate over a table bounded only by
     # JOB_RETENTION_DAYS. That is fine at present volumes; if solve_jobs
     # ever grows enough for the scrape to show up, the fix is an index on
-    # ``status``, not a narrower WHERE. Logged in docs/audits/debt-log.md.
+    # ``status``, not a narrower WHERE. Logged in docs/reference/debt-log.md.
     counts = {
         row[0]: row[1]
         for row in repo.session.execute(

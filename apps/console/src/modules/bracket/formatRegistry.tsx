@@ -9,7 +9,7 @@
  *
  * `implemented: false` formats stay visible in the picker as disabled
  * "Planned" cards — the roadmap affordance from
- * docs/architecture/draw-formats.md §UI direction.
+ * docs/explanation/architecture/draw-formats.md §UI direction.
  *
  * Field `target` decides where a value lands in the upsert/patch body:
  * 'column' → a top-level DTO key (seeded_count / bracket_size / rr_rounds),

@@ -9,7 +9,7 @@ route boundary translates the exception into HTTP 409.
 The legacy ``operations/match_state_routes.py`` module holds route handlers + DTOs
 for the existing ``match_states`` table; this services module is the
 new state-machine layer the architecture-adjustment arc adds. They
-coexist intentionally — see ``docs/changes/2026-05-13.md``.
+coexist intentionally — see ``docs/history/changes/2026-05-13.md``.
 
 ConflictError resolution
 ------------------------
