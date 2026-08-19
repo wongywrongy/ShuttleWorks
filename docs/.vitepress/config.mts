@@ -235,6 +235,7 @@ export default defineConfig({
           { text: '0011 - Cross-product boundary policy', link: '/explanation/decisions/0011-cross-product-boundary-policy' },
           { text: '0012 - Remove the Supabase mirror', link: '/explanation/decisions/0012-remove-the-supabase-mirror' },
           { text: '0013 - Shared-UI promotion policy', link: '/explanation/decisions/0013-shared-ui-promotion-policy' },
+          { text: '0014 - Workspace vs tournament vocabulary', link: '/explanation/decisions/0014-workspace-vs-tournament-vocabulary' },
         ],
       },
     ],

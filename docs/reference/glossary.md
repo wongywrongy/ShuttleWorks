@@ -1,5 +1,16 @@
 # Glossary
 
+::: tip Workspace and tournament are the same thing at different altitudes
+**workspace** (product) ⟷ a `tournaments` row (schema) ⟷
+`/tournaments/{tournament_id}` (wire) ⟷ `tournamentStore` (console state).
+
+New code says **workspace**. The `tournament` spelling is a fenced legacy
+stratum in the schema, the route prefix and the generated DTOs — see
+[ADR 0014](/explanation/decisions/0014-workspace-vs-tournament-vocabulary).
+A *tournament* in the sporting sense — a draw, a meet, an event — is a real
+domain noun and is not fenced.
+:::
+
 The single canonical definition of ShuttleWorks vocabulary. Every term below is
 grounded in the code that implements it; where a concept has a deeper page, this
 entry is the one-line definition and links out rather than re-explaining. Other

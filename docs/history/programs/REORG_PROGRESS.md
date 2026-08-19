@@ -17,7 +17,7 @@ scope and is a violation.
 | 3 | Backend vertical slices | **Complete** 2026-08-19 |
 | 4 | Console finishing pass (`products`→`modules`, `utils`→`lib`, `settings`→`engine-config`) | **Complete** 2026-08-19 |
 | 5 | Docs: Diátaxis quadrants + one history home | **Complete** 2026-08-19 |
-| 6 | Vocabulary ADR + program report + CLAUDE.md | Not started |
+| 6 | Vocabulary ADR + program report + CLAUDE.md | **Complete** 2026-08-19 |
 
 ---
 
@@ -576,3 +576,140 @@ saw is worth less than no record.
 both app READMEs, the e2e specs, and four source comments citing the debt log.
 
 `docs/README.md` states both rules where the next session will find them.
+
+---
+
+## Phase 6 — vocabulary ADR + program report (complete)
+
+### ADR 0014 — workspace vs tournament
+
+Numbered **0014**, not 0013: Phase 4 took 0013 for the shared-UI promotion
+policy.
+
+The product model says **workspace**; the schema, the wire and the console store
+say **tournament**. Measured, not assumed: 3 tables, 70 route paths under
+`/tournaments`, a `tournament_id` path parameter that `require_tournament_access`
+resolves **by name**, and `tournamentStore` + the generated DTOs.
+
+The decision is to **fence, not rename**. New identifiers say workspace; the
+three legacy sites keep their spelling; the translation
+(`workspace ⟷ tournaments row ⟷ /tournaments/{tournament_id} ⟷ tournamentStore`)
+is written in the ADR and repeated at the top of the glossary, which is where a
+reader actually looks a word up.
+
+A *tournament* in the sporting sense — a draw, a meet, an event — is a real
+domain noun and is explicitly **not** fenced. That distinction is the whole
+value: a reader meeting the word can now tell which one it is from the layer it
+appears in.
+
+Renaming is a wire-contract change, not a refactor: it touches the tenancy guard
+on 70 routes, the public API the entrant tier and display links consume, the
+generated DTOs, and three tables with foreign keys. Its own program, with its
+own gates, if it is wanted at all.
+
+---
+
+# SP-REORG-1 — final program report
+
+## The whole move, old → new
+
+| New | Old |
+| --- | --- |
+| `apps/console/` | `products/scheduler/frontend/` |
+| `apps/entrant/` | `products/scheduler/entrant/` |
+| `apps/api/src/{core,shared,db,repositories,alembic,workspaces,identity,meet,bracket,operations,display,entries,solve_rail,ops}/` | `products/scheduler/backend/{app,api,services,database,repositories,adapters,alembic}/` |
+| `packages/scheduler-core/scheduler_core/` | `scheduler_core/` |
+| `packages/shared-contract/` | `products/scheduler/shared/` |
+| `infra/compose/` | `products/scheduler/docker-compose*.yml` + `.env.*.example` |
+| `infra/nginx/{console,docs,security-headers}.conf` | `frontend/nginx.conf`, `docs/nginx.conf`, `frontend/security-headers.conf` |
+| `tests/backend/`, `tests/e2e/` | `products/scheduler/{tests,e2e}/` |
+| `simulator/`, `tools/`, `legacy/` | `products/scheduler/*` + root `scripts/` |
+| `Makefile`, `pyproject.toml`, `uv.lock` | `products/scheduler/*` |
+| `apps/console/src/modules/` | `…/frontend/src/products/` |
+| `apps/console/src/lib/` (merged) | `…/frontend/src/utils/` |
+| `apps/console/src/platform/engine-config/` | `…/frontend/src/platform/settings/` |
+| `docs/{tutorials,how-to,reference,explanation,history}/` | `docs/{getting-started,api,modules,contracts,architecture,decisions,audits,programs,progress,superpowers,changes,design,deploy}/` |
+
+`products/` does not exist. Neither does `src/utils/`, `src/products/`,
+`platform/settings/`, or the flat `api/`+`services/`+`app/` backend split.
+
+## Residue (rule 9)
+
+`products/scheduler` survives in **95 files under `docs/history/`** — never
+rewritten, because a dated record describing the tree as it was is correct — and
+in **1 frozen file** under `legacy/`.
+
+**Twelve live occurrences remain, and every one is deliberate**: a comment
+explaining what moved and why (`.gitignore`, `Makefile`, `pyproject.toml`,
+`docker-compose.release.yml`, the entrant depcruise rule, `tests/__init__.py`,
+both e2e stack files, both console contract tests) or documentation of the move
+itself (`repo-layout.md`, `debt-log.md`).
+
+## The DEBT(REORG-1) ledger
+
+**Backend import boundaries** — 3 allowances in `apps/api/.importlinter`, each
+explained in the file and logged in `reference/debt-log.md`:
+
+| # | Edge | Why it is not fixed here |
+| --- | --- | --- |
+| L1 | `core.form_csrf → identity.auth` | The kernel's CSRF check resolves an operator session. Either the check moves above the kernel or `resolve_session` moves below it — real logic either way. |
+| L2 | `repositories.local → operations.match_state` | The repository applies a transition inside the command transaction. The transaction boundary is genuinely at the repository, the transition table genuinely in the service. |
+| L3 | `solve_rail.solve_child → meet.schedule` | The solve child reaches the meet engine entry, which shares a module with the meet router. |
+
+L1 and L2 are **function-local** imports. Deferring an import hides a cycle from
+Python, not from the architecture — which is why two edges broke eight of eleven
+contracts on the first run, before they were declared.
+
+**Console cross-module edges** — 16, in 3 clusters, enumerated by source in
+`KNOWN_CROSS_MODULE`. They warn; anything new is an error.
+
+**Logged, not fixed** (in `reference/debt-log.md`): the orphan `uv.lock`; the
+`docs-freshness` mapping that predates this program; the conftest `pythonpath`
+demotion, tried and reverted unverified.
+
+**Closed by use:** `core/paths.py` had zero importers and now holds the five
+roots four modules were each counting to separately.
+
+## Final gates
+
+| Check | Phase 0 baseline | Now |
+| --- | --- | --- |
+| eslint | 0 errors, 115 warnings | **identical** |
+| vitest console / entrant | 1756 / 644 | **identical** |
+| depcruise console | 16 warnings | **16 warnings, 0 errors** — and new edges now ERROR |
+| depcruise entrant | 0 violations | **0 violations** |
+| import-linter | *(did not exist)* | **15 contracts, 15 kept** |
+| ruff | pass | pass |
+| pytest | 1648 passed, 66 skipped | **identical** |
+| OpenAPI | 99 paths, 163 schemas | **identical** (12 description lines, each explained) |
+| Alembic head | `v6a1c5e8f3b4`, 25 revisions | **unchanged** |
+| compose config | 6 parse | **6 parse, 6 distinct project names** |
+| docs:build | pass | pass |
+
+Plus: full Docker stack booted and verified end to end, and a real CP-SAT
+simulator solve with **violations: none**.
+
+## What this program actually cost, honestly
+
+Three classes of mistake recurred, and all three were caught by gates rather
+than by reading:
+
+1. **Path arithmetic.** Four separate rounds of it — `parents[N]` and `../../..`
+   counts that contain none of the old path and so survive every grep. Twenty-six
+   backend tests, two console contract tests, six entrant tests, the e2e stack
+   directory, the simulator spawn, and one cross-tier Python test that reads
+   TypeScript. The fix that stuck was to stop counting: `core/paths.py` names the
+   roots once.
+2. **Regex over prose.** A docstring sweep rewrote `app.` on the FastAPI
+   *instance* and mangled the entrant tier's own `app/lib/*.server.ts` paths.
+   Caught by ruff (113 undefined names) and by the OpenAPI oracle. A regex cannot
+   tell a package named `app` from a variable named `app`.
+3. **Directory-wide `git add`.** Three times it staged files that were untracked
+   on purpose. Caught each time, but three occurrences is a pattern: stage
+   explicit paths.
+
+The gates that earned their place: the **OpenAPI byte-oracle** (caught the prose
+sweep), **ruff** (caught the instance rewrite), the **dead-link gate** (the only
+thing that could police a 240-file docs move), and every **source-scanning
+contract test** — which failed loudly with ENOENT instead of passing vacuously,
+exactly the property that makes them worth having.

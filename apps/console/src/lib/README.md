@@ -1,36 +1,39 @@
-# utils/
+# lib/
 
-Pure helpers — no React, no store, no axios. If a function reads from
-the store or calls an API, it belongs in `../hooks/` or `../api/`
-instead.
+Pure helpers — no React, no store, no axios. If a function reads from the
+store or calls an API, it belongs in `../hooks/` or `../api/` instead. If it
+renders anything, it belongs in `../components/`. If it is cross-module DOMAIN
+logic (the module model, the match contract), it belongs in
+`../platform/domain/`.
+
+The sorting rule is a table in `CODE_HEALTH.md` §1b, keyed on how many consumers
+a thing has. SP-REORG-1 Phase 4 merged the old `utils/` in here: two drawers
+with no rule for which one to open is worse than one drawer.
 
 ## Index
 
 | File | Purpose |
 |---|---|
-| `dateUtils.ts` | Date helpers (same-day comparison, day diffs, formatters). |
-| `matchUtils.ts` | `getMatchLabel()` and other formatting helpers that depend only on the match DTO. |
-| `matchGenerator.ts` | Auto-generate matches from a roster + a generation rule (all-vs-all, etc.). Frontend-only — no round-trip. |
-| `trafficLight.ts` | Per-match readiness light (green/amber/red) given roster + schedule + live state. `computeAllTrafficLights()` is the entry point. |
-| `constraintChecker.ts` | Mirrors a subset of the backend hard rules so the frontend can reject obviously-invalid drags before `/schedule/validate`. Keep aligned with `backend/api/_validate.py`. |
-| `scheduleProgress.ts` | Smooth solver progress events into a percent + label for the HUD. |
-
-## What lives elsewhere
-
-- **Slot ↔ HH:mm conversion**, overnight wrap, current-slot math —
-  `frontend/src/lib/time.ts` (config-aware).
-- **Duration / status timestamps** — `frontend/src/lib/timeFormatters.ts`.
-- **`cn()` + `INTERACTIVE_BASE`** — `frontend/src/lib/utils.ts`.
-- **Active-assignment derivation** — `frontend/src/lib/getActiveAssignments.ts`.
-
-## Conventions
-
-- Pure functions only. If you find yourself reaching for
-  `useTournamentStore` / `useMatchStateStore` / `useUiStore` inside a
-  util, the function probably wants to be a hook.
-- Time/slot math: read `lib/time.ts`'s docstrings — overnight
-  schedules and the live play-head have non-obvious edge cases that
-  are already encoded.
-- Constraint logic: the backend is the source of truth. Frontend
-  duplication exists only for fast pre-validation; the solver still
-  re-checks everything.
+| `bracketCommandQueue.ts` | Idempotent bracket-result command queue (the ADR 0007 path). |
+| `bracketOccupancy.ts` | Court/time occupancy for bracket scheduling. |
+| `bracketTabs.ts` | Live tab-id and view helpers for the Bracket module. |
+| `commandQueue.ts` | The generic idempotent operator command queue, IndexedDB-backed. |
+| `constraintChecker.ts` | Client-side constraint pre-checks before a solve is requested. |
+| `courtClosures.ts` | Closed-court windows and the arithmetic over them. |
+| `disciplineNames.ts` | Discipline code to display name. |
+| `eventColors.ts` | Per-event colour assignment, shared by chips and boards. |
+| `getActiveAssignments.ts` | The currently-active assignment set for a match list. |
+| `indexById.ts` | Index an array by id. |
+| `matchUtils.ts` | `getMatchLabel()` and formatting that depends only on the match DTO. |
+| `names.ts` | Person and school name formatting. |
+| `pageVisibility.ts` | Page-visibility helper for pause-when-hidden polling. |
+| `playerSlug.ts` | The stable player slug both tiers derive. |
+| `pollPolicy.ts` | Poll intervals and backoff policy. |
+| `schoolAccent.ts` | Per-school accent colour. |
+| `selectableRow.ts` | Shared selectable-row behaviour for banded lists. |
+| `stateWords.ts` | The one state vocabulary (SP-CONSOLE-2 X1). |
+| `time.ts` | Time parsing/formatting; mirror of the API's time utils. |
+| `timeFormatters.ts` | Display formatters for times and durations. |
+| `trafficLight.ts` | Per-match readiness light given roster + schedule + live state. |
+| `utils.ts` | `cn()` classname merge and small generic helpers. |
+| `xlsxExportShared.ts` | Shared XLSX export helpers (formula-injection safe by construction). |
