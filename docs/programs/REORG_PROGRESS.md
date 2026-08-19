@@ -15,7 +15,7 @@ scope and is a violation.
 | 1 | `apps/` + `packages/` + `infra/` | **Complete** 2026-08-19 |
 | 2 | import-linter contracts (before any backend move) | **Complete** 2026-08-19 |
 | 3 | Backend vertical slices | **Complete** 2026-08-19 |
-| 4 | Console finishing pass (`products`→`modules`, `utils`→`lib`, `settings`→`engine-config`) | Not started |
+| 4 | Console finishing pass (`products`→`modules`, `utils`→`lib`, `settings`→`engine-config`) | **Complete** 2026-08-19 |
 | 5 | Docs: Diátaxis quadrants + one history home | Not started |
 | 6 | Vocabulary ADR + program report + CLAUDE.md | Not started |
 
@@ -421,3 +421,87 @@ is now the only `app` in the tree.
 The three root leaks (L1 kernel→identity, L2 repository→operations,
 L3 solve_child→meet) are unchanged and still declared. Fixing any of them moves
 real logic.
+
+---
+
+## Phase 4 — console finishing pass (complete)
+
+Three renames and one ratchet. No structural rethink: the console already had
+the Bulletproof-React shape the industry converged on, and this finished it.
+
+| New | Old | Files |
+| --- | --- | --- |
+| `src/modules/` | `src/products/` | 286 |
+| `src/lib/{constraintChecker,matchUtils,trafficLight}` | `src/utils/*` | 7 |
+| `src/platform/engine-config/` | `src/platform/settings/` | 8 |
+
+**`modules/` is the product's own word.** ADR 0001 calls them modules; so do
+`ModuleId`, `moduleContract.ts`, `buildWorkspaceNav`, `MODULE_ORDER` and the
+backend's `MODULE_IDS`. `products/` was the last survivor of a layout that had
+two products in it, and it had been contradicting every other layer for months.
+
+**`utils/` merged into `lib/`** because two drawers with no rule for which one to
+open is worse than one drawer. The rule is now written down in `CODE_HEALTH.md`
+§1b as a four-row table keyed on consumer count, so "where does this go" stops
+being a judgment call.
+
+**`platform/settings/` became `platform/engine-config/`.** There were two things
+called settings — the engine configuration form and the `settings` MODULE (the
+workspace's Settings tabs) — and nothing named which was which. There turned out
+to be no written gotcha note to delete: the ambiguity lived in the names, and
+renaming is what removes it.
+
+### The depcruise ratchet
+
+The old rule warned on every cross-module edge, which meant a coupling
+introduced today looked exactly like a two-year-old one nobody had ruled on. A
+warning that cannot tell those apart is a number, not a signal.
+
+Two rules over one boundary now:
+
+| Rule | Severity | Scope |
+| --- | --- | --- |
+| `no-cross-module` | **ERROR** | any edge from a file not named in `KNOWN_CROSS_MODULE` |
+| `no-cross-module-debt` | WARN | the three known clusters, enumerated by source |
+
+The sixteen existing edges are unchanged and still warn — clearing them is a
+design decision (debt-log D3, ADR 0011), not a path update. Retiring a cluster
+means fixing its edges and deleting its line; **the list is the ratchet and it
+only shortens.**
+
+**Falsified:** planting `meet -> display/publicDisplay/courtLanes` into
+`MeetProduct.tsx` produces `1 error, 16 warnings`; removing it restores
+`0 errors, 16 warnings` on a clean tree.
+
+One bug caught in the ratchet itself: written without a capture group in
+`KNOWN_CROSS_MODULE`, the debt rule's `^src/modules/$1/` exclusion had nothing to
+bind to, so it reported every INTERNAL import those six files make — 51 warnings
+instead of 16. A boundary rule that over-reports is as useless as one that
+under-reports; the module name is captured in every entry now, and the comment
+says why.
+
+### ADR 0013 — shared-UI promotion policy
+
+Drafted (Proposed). A component lives at the lowest tier that has all its
+consumers: one module, then the app's shared layer, then
+`packages/design-system` once a second APP needs it. Promote by MOVING, never by
+copying; promote on the second consumer, not in anticipation of one; demote when
+consumers disappear; no new barrel files.
+
+The enforcement is the ratchet above plus `entrant-no-operator-frontend`, which
+holds the app-level half — the entrant tier may not reach into the console at
+all, so `design-system` is the only thing the two tiers can share.
+
+### Entrant re-verification (Phase 1 boundaries still hold)
+
+| Check | Result |
+| --- | --- |
+| `depcruise:entrant` | **0 violations** (83 modules, 190 dependencies) |
+| entrant suite | **35 files / 644 tests** |
+| server-only boundary (`react-router build`) | builds; 1 server asset cleaned |
+| page-weight budget | **PASS** — 2.1 / 2.2 / 3.4 / 3.9 KB against a 4 KB ceiling, **zero client JS** |
+
+### Gates
+
+eslint **0 errors, 115 warnings** · tsc clean · vitest **196 files / 1756 tests** ·
+depcruise **0 errors, 16 warnings** · docs:build green. All baseline.

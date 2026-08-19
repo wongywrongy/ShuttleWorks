@@ -4,7 +4,7 @@ The Bracket module speaks six draw formats — single elimination (`se`), round 
 (`rr`), double elimination (`de`), Monrad (`monrad`), compass (`compass`), and Swiss
 (`swiss`) — dispatched through a format registry on both sides of the wire
 (`FORMAT_REGISTRY` in `backend/services/bracket/formats/`, `DRAW_FORMATS` in
-`frontend/src/products/bracket/formatRegistry.tsx`). This page catalogs the format
+`frontend/src/modules/bracket/formatRegistry.tsx`). This page catalogs the format
 vocabulary, records how each maps onto the data model, and tracks the remaining
 roadmap (group stage, qualifying, ladder).
 

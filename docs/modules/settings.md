@@ -32,7 +32,7 @@ browser-scoped, not workspace-scoped, and is out of scope here.
 ## The admin surfaces
 
 Every surface below is rendered by the shell, not by a module router:
-`products/workspace/WorkspaceShellSurface.tsx` switches on the URL segment
+`modules/workspace/WorkspaceShellSurface.tsx` switches on the URL segment
 (`uiStore.activeTab`) and mounts the matching component. The set of shell-owned
 segments is fixed in `platform/product-shell/workspaceNav.ts` (`SHELL_SEGMENTS` =
 `overview`, `display-config`, plus the six `ADMIN_SEGMENTS`).
@@ -56,13 +56,13 @@ always-present `nav.overview` item), and the six `ws-*` segments form the
 
 :::tip Overview is `WorkspaceOverview`
 The live Overview is the readiness-checklist `WorkspaceOverview` in
-`products/workspace/`. (A superseded, counts-oriented `settings/OverviewTab.tsx`
+`modules/workspace/`. (A superseded, counts-oriented `settings/OverviewTab.tsx`
 variant was removed in the 2026-06 debt-paydown cleanup.)
 :::
 
 ## Venue and schedule — a shared surface worth noting
 
-`VenueScheduleTab` (`products/workspace/VenueScheduleTab.tsx`) is a
+`VenueScheduleTab` (`modules/workspace/VenueScheduleTab.tsx`) is a
 workspace-level surface that hoists the venue + day-window fields that were
 previously duplicated in both the Meet and Bracket Configuration tabs:
 
@@ -83,7 +83,7 @@ workspace's module catalog. Each row's status chip and Enable/Disable action go
 through the `useWorkspaceModules` hook, which reads
 `GET /tournaments/{id}/modules` and PATCHes a status change. The catalog the tab
 shows is the frontend `ModuleId` set — **Meet**, **Bracket**, **Display** — with
-capability/dependency copy from `products/settings/moduleCatalog.ts`.
+capability/dependency copy from `modules/settings/moduleCatalog.ts`.
 
 Enablement is **not** a Settings concept; it is first-class state in the
 `workspace_modules` table, and every rule (allowed transitions, the Display

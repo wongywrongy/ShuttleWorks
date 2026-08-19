@@ -47,7 +47,7 @@ call no-ops and the page shows a "missing parameter" message rather than crashin
 | **Nav surfaces** | Preview (`tv`) · Configuration (`display-config`) — both declared in `displayContract.ownedSegments` and rendered by the workspace shell |
 | **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`api/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist (the meet projection omits operator material like `scheduleHistory`); plus the owner-side `GET·POST /tournaments/{id}/display-token(/rotate)` |
 | **`apiClient` methods** | owned: `getDisplaySummary`, `getDisplayState`, `getDisplayMatchStates`, `getDisplayBracket` (`displayContract.ownedEndpoints`); it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
-| **Frontend code** | `products/display/` — `DisplayProduct.tsx`, `PublicDisplayPage.tsx` (the kind-router), `MeetDisplayPage.tsx`, `bracketDisplay/`, the `publicDisplay/` view components + `useDisplaySync`, and the TV presets (`publicDisplay/displayPresets.ts`) |
+| **Frontend code** | `modules/display/` — `DisplayProduct.tsx`, `PublicDisplayPage.tsx` (the kind-router), `MeetDisplayPage.tsx`, `bracketDisplay/`, the `publicDisplay/` view components + `useDisplaySync`, and the TV presets (`publicDisplay/displayPresets.ts`) |
 
 The single source of truth for these claims is `platform/contracts/moduleContract.ts` (`displayContract`),
 which is pinned by a colocated test. Its `produces` and `emits` are both `[]` — Display is the
@@ -142,7 +142,7 @@ preset-driven, not theme-locked.
   (~10 s) each run on their own timer. This is simple and robust but makes freshness poll-bounded:
   the `matchStateChanged` seam is named without a push transport.
 - **`matchStateStore` is shared infra.** The store the meet display hydrates lives in the global
-  `src/store/`, not under `products/operations/`. Display reads it as a mirror; see
+  `src/store/`, not under `modules/operations/`. Display reads it as a mirror; see
   [State management](/architecture/state-management) for the ownership nuance.
 
 ## See also

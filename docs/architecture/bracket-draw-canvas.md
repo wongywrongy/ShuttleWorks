@@ -6,7 +6,7 @@ a right wing. It is a pure CSS-transform canvas — wheel-zoom, drag-pan,
 fit-on-mount, round-jump chips — over an absolutely-positioned bracket whose
 geometry is computed up front. This page describes that geometry and the
 viewport that frames it. Both live in
-`frontend/src/products/bracket/` (`DrawView.tsx`, `PanZoomCanvas.tsx`).
+`frontend/src/modules/bracket/` (`DrawView.tsx`, `PanZoomCanvas.tsx`).
 
 ::: info Single-elimination only
 Only single-elimination draws (`event.format === "se"`) use this canvas.

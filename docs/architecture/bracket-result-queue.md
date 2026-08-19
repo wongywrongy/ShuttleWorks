@@ -114,7 +114,7 @@ authoritative tokens, and the next client write starts from a fresh
 
 ## Optimistic UI and conflict surfacing
 
-`applyOptimisticResult` (`frontend/src/products/bracket/optimisticResult.ts`)
+`applyOptimisticResult` (`frontend/src/modules/bracket/optimisticResult.ts`)
 splices a provisional `ResultDTO` into the tournament DTO so the operator
 sees the result land instantly, replacing the old poll. It deliberately
 does **not** simulate advancement — downstream slot resolution stays

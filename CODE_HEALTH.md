@@ -29,6 +29,25 @@ general improvement partial. If you genuinely believe the existing pattern is
 wrong, propose changing it everywhere (a real refactor task), not just in the
 file you're touching.
 
+### 1b. Where shared code goes — one sentence, so it stops being a judgment call
+When something is used by more than one module, it leaves `modules/` and lands
+in exactly one of four places:
+
+| Destination | For |
+| --- | --- |
+| `platform/domain/` | cross-module DOMAIN logic — the module model, the match contract, anything that knows what a tournament *is* |
+| `lib/` | any other pure, React-free helper — dates, slugs, formatting, queues |
+| `components/` | React-touching shared UI (the `SourceChip` precedent: three consumers, so it lives here) |
+| `packages/design-system` | a component used by more than one APP, not just more than one module |
+
+Two rules keep it honest. **Promote, never copy** — a second consumer means the
+code moves, and the first consumer's import changes with it. And **the boundary
+is enforced, not encouraged**: `apps/console/.dependency-cruiser.cjs` makes a new
+cross-module import an ERROR, so the choice above is the only way through.
+
+SP-REORG-1 Phase 4 merged the old `utils/` into `lib/` for exactly this reason —
+two drawers with no rule for which one to open is worse than one drawer.
+
 ### 2. The Boy Scout Rule, bounded
 Leave code you touch better than you found it — but only the code you're
 already touching for the actual task. Do not scope-creep a feature PR into an

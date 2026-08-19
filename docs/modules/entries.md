@@ -52,8 +52,8 @@ clubs and player pages to draw participants.
   `api/entries_site.py` (public draws/seeds/winners/player pages),
   `api/entrants.py` (entrant accounts), `api/entries_public.py`
   (shared projection helpers, no routes).
-- Operator UI: `products/entries/EntriesDesk.tsx`; publication card on
-  `products/settings/SharingTab.tsx`.
+- Operator UI: `modules/entries/EntriesDesk.tsx`; publication card on
+  `modules/settings/SharingTab.tsx`.
 - Program ledgers: `docs/programs/ENTRIES_PROGRESS.md` (SP-PROGRAM-1)
   and `docs/programs/P7_PROGRESS.md` (SP-P7) — working records in the
   repo, deliberately outside this site.

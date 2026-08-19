@@ -187,12 +187,12 @@ is wired; the mount is not. That gap is the next two milestones.
 ## Milestone 5 · Build the product component
 
 Add `products/standings/StandingsProduct.tsx`. It reads `activeTab` and renders the
-surface that owns it — exactly the shape of `products/display/DisplayProduct.tsx`
-and `products/meet/MeetProduct.tsx`. Keep intake and emit in their own files so the
+surface that owns it — exactly the shape of `modules/display/DisplayProduct.tsx`
+and `modules/meet/MeetProduct.tsx`. Keep intake and emit in their own files so the
 anatomy stays legible.
 
 ```tsx
-// apps/console/src/products/standings/StandingsProduct.tsx
+// apps/console/src/modules/standings/StandingsProduct.tsx
 import { lazy, Suspense } from 'react';
 import { useUiStore } from '../../store/uiStore';
 import { TabSkeleton } from '../../components/TabSkeleton';

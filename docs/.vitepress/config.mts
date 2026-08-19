@@ -261,6 +261,7 @@ export default defineConfig({
           { text: '0010 · Nav model in platform', link: '/decisions/0010-nav-model-in-platform' },
           { text: '0011 · Cross-product boundary policy', link: '/decisions/0011-cross-product-boundary-policy' },
           { text: '0012 · Remove the Supabase mirror', link: '/decisions/0012-remove-the-supabase-mirror' },
+          { text: '0013 · Shared-UI promotion policy', link: '/decisions/0013-shared-ui-promotion-policy' },
         ],
       },
     ],

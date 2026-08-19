@@ -41,7 +41,7 @@ items: [
 ## 3 · Render it in the product
 
 The product component switches on `activeTab` and renders the surface that owns
-it. Add the branch (see `products/meet/MeetProduct.tsx` for the pattern).
+it. Add the branch (see `modules/meet/MeetProduct.tsx` for the pattern).
 
 ## 4 · Update the contract
 

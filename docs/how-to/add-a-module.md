@@ -29,7 +29,7 @@ in dependency order.
 
 A module also shares one anatomy — **intake → engine → emit** (roster/config in,
 the solve/run in the middle, matches/results out). Mirror an existing product
-folder (`products/meet/`, `products/bracket/`) when you lay yours out.
+folder (`modules/meet/`, `modules/bracket/`) when you lay yours out.
 
 ## 1 · Add the module id
 
@@ -103,7 +103,7 @@ The section `id` **must equal** the `ModuleId` — the contract test asserts it.
 ## 5 · Build the product component
 
 Add `products/scoreboard/ScoreboardProduct.tsx`. It reads `activeTab` and renders
-the surface that owns it — copy the shape of `products/meet/MeetProduct.tsx`. Keep
+the surface that owns it — copy the shape of `modules/meet/MeetProduct.tsx`. Keep
 intake/engine/emit in their own subfolders so the anatomy stays legible.
 
 ## 6 · Mount it and register it in the dock

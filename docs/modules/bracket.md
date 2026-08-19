@@ -46,7 +46,7 @@ replay guard, `seen_version` check, then bracket-owned advancement — is docume
 
 The success response is the **full `BracketTournamentDTO`** (every play-unit, assignment, and result
 post-write), because a single result can cascade advancement across the draw.
-`applyOptimisticResult` (`products/bracket/optimisticResult.ts`) splices a provisional `ResultDTO`
+`applyOptimisticResult` (`modules/bracket/optimisticResult.ts`) splices a provisional `ResultDTO`
 into the snapshot so the result lands instantly, but it deliberately does **not** simulate
 advancement — downstream slot resolution stays bracket-owned and arrives with the committed DTO.
 
@@ -58,7 +58,7 @@ advancement — downstream slot resolution stays bracket-owned and arrives with 
 | **Backend routes** | everything under `/tournaments/{id}/bracket`: create (`POST ""`) / read (`GET ""`) / delete (`DELETE ""`); `schedule-next`(+`/stream`, `/commit`); `commands` (record result) and legacy `results`; `match-action`; `validate`; `pin`; `assign` / `unassign`; `import`(+`.csv`); `export.{json,csv,ics}`; `events/{id}`(+`/generate`, delete) |
 | **`apiClient` methods** | `getBracket`, `createBracket`, `deleteBracket`, `scheduleNextBracketRound`, `recordBracketResult`, `bracketMatchAction`, `validateBracketMove`, `pinBracketMatch`, `importBracketJson`, `importBracketCsv`, `bracketEventUpsert`, `bracketEventGenerate`, `bracketEventDelete` |
 | **Store slices** | the isolated `bracketPlayers` roster (+ `bracketRosterMigrated`) in `tournamentStore`; bracket UI state in `uiStore` (`bracketDataReady`, `bracketSelectedMatchId`, `bracketScheduleEventFilter`) |
-| **Frontend code** | `products/bracket/` — draw canvas (`DrawView`, `PanZoomCanvas`, `bwf.ts`), Draws/Roster/Matches tabs, schedule/live views, score entry, and the result queue (`hooks/useBracketResultQueue.ts` + `lib/bracketCommandQueue.ts`) |
+| **Frontend code** | `modules/bracket/` — draw canvas (`DrawView`, `PanZoomCanvas`, `bwf.ts`), Draws/Roster/Matches tabs, schedule/live views, score entry, and the result queue (`hooks/useBracketResultQueue.ts` + `lib/bracketCommandQueue.ts`) |
 | **Backend** | `api/brackets.py` + `services/bracket/` (draws + advancement + I/O); tables `bracket_events`, `bracket_participants`, `bracket_matches`, `bracket_results` |
 
 The `apiClient` cell mirrors the test-enforced `bracketContract.ownedEndpoints`
@@ -82,7 +82,7 @@ Roster · Draws · Matches · Configuration. See [Operations](/modules/operation
 (double-elim / Monrad / compass), Swiss-round, and standings views for the other registry formats.
 Each play-unit side resolves to a confirmed participant, a feeder reference ("Winner of MS QF2")
 while the upstream match is unplayed, or "Bye" — via `sideLabel` in
-`products/bracket/bracketLabels.ts`.
+`modules/bracket/bracketLabels.ts`.
 
 Seeding is **BWF-conformant.** `bwf.ts::bwfPositions(size)` is the client-side mirror of the
 backend's `_bwf_positions` (`services/bracket/formats/single_elimination`): it maps each bracket

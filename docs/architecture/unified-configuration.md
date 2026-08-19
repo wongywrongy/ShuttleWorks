@@ -13,7 +13,7 @@ config edit that would invalidate it.
 
 Both Configuration pages mount a segmented switcher (`Seg`) over a `section`
 search param and render one section at a time. Both Engine tabs render the same
-component — `platform/settings/EngineConfigForm.tsx` — passed a `module` prop:
+component — `platform/engine-config/EngineConfigForm.tsx` — passed a `module` prop:
 
 | Module | Tab 1 (Engine) | Tab 2 |
 |---|---|---|
@@ -72,7 +72,7 @@ Only two fields are asymmetric:
 
 ### The shared scoring field set
 
-`platform/settings/ScoringFields.tsx` is the single source of the four scoring
+`platform/engine-config/ScoringFields.tsx` is the single source of the four scoring
 inputs the schema declares for both modules. The component is controlled: the
 parent owns a `ScoringValue` and applies the emitted `Partial<ScoringValue>`
 patch. How the UI labels map to stored values:
@@ -207,7 +207,7 @@ guards the roster, not the schedule.
   schedule) and **hard** (neutral, "Results in play" — settings are read-only
   until the started draws finish or reset). When no `locked` prop is passed it
   falls back to the meet store's `isScheduleLocked`.
-- **`LockedFieldset`** (`platform/settings/ConfigSurface.tsx`) wraps a
+- **`LockedFieldset`** (`platform/engine-config/ConfigSurface.tsx`) wraps a
   hard-locked form in `<fieldset disabled className="sw-readonly">` — native
   disabled cascade is the enforcement; `sw-readonly` keeps full contrast so it
   reads as *read-only*, not greyed-out-broken.

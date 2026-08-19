@@ -22,7 +22,7 @@ Meet produces.
 Meet owns the **intake** information architecture — Roster, Matches, and Configuration. The
 day-of **Plan** and **Run** boards (formerly *Courts* / *Live*) are owned by the
 [Operations module](/modules/operations), not Meet, even though their single-engine rendering
-still physically resides under `products/meet/`. See [Where Meet physically lives](#where-meet-physically-lives)
+still physically resides under `modules/meet/`. See [Where Meet physically lives](#where-meet-physically-lives)
 below.
 :::
 
@@ -111,7 +111,7 @@ Two read-only feeds sit alongside the proposal flow:
 | **Backend routes** | `/tournaments/{id}/solve-jobs*` (submit / list / get / cancel — the async solve rail), `/schedule/validate`, `/schedule/warm-restart` (`/schedule` + `/schedule/stream` are `410 Gone`); and under `/tournaments/{id}/schedule/`: `advisories`, `proposals/*`, `suggestions/*`, `director-action` |
 | **`apiClient` methods** | `submitSolveJob`, `getSolveJob`, `listSolveJobs`, `cancelSolveJob`, `runSolveJob`, `validateMove`, `createWarmRestartProposal`, `createRepairProposal`, `createManualEditProposal`, `createDirectorActionProposal`, `commitProposal`, `cancelProposal`, `getProposal`, `getAdvisories`, `getSuggestions`, `applySuggestion`, `dismissSuggestion` |
 | **Store slices** | the editable document in `tournamentStore` (config, roster, matches, schedule, `scheduleVersion` + history); the review pipeline in `uiStore` (`activeProposal`, `advisories`, `suggestions`) |
-| **Frontend code** | `products/meet/` — `roster/`, `matches/`, `TournamentSetupPage` (Configuration), `exports/` (roster + matches XLSX). The Plan/Run surfaces are Operations-owned code since SP-CONSOLE-4 (`products/operations/`); the meet-resident `SchedulePage` / `MatchControlCenterPage` were deleted at its B4 |
+| **Frontend code** | `modules/meet/` — `roster/`, `matches/`, `TournamentSetupPage` (Configuration), `exports/` (roster + matches XLSX). The Plan/Run surfaces are Operations-owned code since SP-CONSOLE-4 (`modules/operations/`); the meet-resident `SchedulePage` / `MatchControlCenterPage` were deleted at its B4 |
 | **Backend services** | `adapters/badminton.py` (DTO ↔ engine boundary), `services/solve_jobs.py` + `solve_worker.py` + `solve_runner.py` + `solve_child.py` (the job rail), `services/suggestions_worker.py` (background re-optimisation), `services/schedule_impact.py` (impact scoring) |
 
 These owned facts are pinned by the `meetContract` descriptor in

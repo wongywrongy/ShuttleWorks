@@ -26,7 +26,7 @@ flag and no `workspace_modules` row** — it is the `'operations'` arm of
 
 ## The Run surface
 
-The live surface is `products/operations/run/RunSurface.tsx`, driven by an
+The live surface is `modules/operations/run/RunSurface.tsx`, driven by an
 **Operations-owned state machine** in `runtime/`:
 
 - `runMachine.ts` — a `RunStatus` view-machine `scheduled → called → playing →
@@ -56,12 +56,12 @@ schedule XLSX export lives in `exports/scheduleXlsx.ts`.
 | **Backend routes** | `/tournaments/{id}/match-states*` (get/put with `ETag`/`If-Match`, reset, export/import) and `/tournaments/{id}/commands` |
 | **`apiClient` methods** | `getMatchStates`, `getMatchState`, `getMatchVersion`, `updateMatchState`, `resetMatchStates`, `submitCommand`, `exportMatchStates`, `importMatchStates`, `importMatchStatesBulk` |
 | **Store slice** | `matchStateStore` (match states, optimistic command state, conflict records, canonical versions) |
-| **Frontend code** | `products/operations/` — `opsBlock.ts` (the uniform block), `run/` + `runtime/` (the Run surface + its machine), `UnifiedOpsBoard.tsx` / `UnifiedOpsList.tsx` (the Plan board), `OpsDetailRail.tsx`, and `operationalWriteback.ts`. The shared `SourceChip.tsx` provenance badge lives in `components/` (used by 3 products), not here. |
+| **Frontend code** | `modules/operations/` — `opsBlock.ts` (the uniform block), `run/` + `runtime/` (the Run surface + its machine), `UnifiedOpsBoard.tsx` / `UnifiedOpsList.tsx` (the Plan board), `OpsDetailRail.tsx`, and `operationalWriteback.ts`. The shared `SourceChip.tsx` provenance badge lives in `components/` (used by 3 products), not here. |
 | **Backend** | `services/match_state.py`; tables `match_states`, `commands` |
 
 ## The uniform block
 
-`products/operations/opsBlock.ts` defines `OpsBlock` — the engine-agnostic
+`modules/operations/opsBlock.ts` defines `OpsBlock` — the engine-agnostic
 interactive row both surfaces speak — with `meetToOpsBlocks` /
 `bracketToOpsBlocks` adapters folding each engine's native shape. `SourceChip`
 renders an engine-tinted provenance badge (Meet vs Bracket). See
@@ -83,12 +83,12 @@ view-model.
 
 ## Status & notes
 
-- **A first-class product.** Operations now has its own `products/operations/`
+- **A first-class product.** Operations now has its own `modules/operations/`
   home (the Run surface, runtime machine, Plan board, and uniform block all live
   there) — the earlier "extract Operations as a first-class product" structural
   bet is done. It remains **Tier-2 by design**: always-on, `enableable: false`,
   no `WorkspaceModule` row — the answer to "separate installable module, or
   always-on cross-cutting concern?" is the latter.
 - **`matchStateStore` location.** The store lives in the global `src/store/`
-  rather than under `products/operations/`, though only Operations-driving hooks
+  rather than under `modules/operations/`, though only Operations-driving hooks
   write it — see [State management](/architecture/state-management#known-debt-matchstatestore).
