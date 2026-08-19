@@ -21,8 +21,8 @@ from scheduler_core.domain.tournament import (
     WinnerSide,
 )
 
-from services.bracket.advancement import auto_walkover_byes, record_result
-from services.bracket.formats.compass import generate_compass
+from bracket.advancement import auto_walkover_byes, record_result
+from bracket.formats.compass import generate_compass
 
 
 def _participants(n: int) -> list[Participant]:
@@ -184,7 +184,7 @@ def test_compass_n8_plays_out_completely():
 
 
 def test_compass_registry_entry():
-    from services.bracket.formats import FORMAT_REGISTRY
+    from bracket.formats import FORMAT_REGISTRY
 
     spec = FORMAT_REGISTRY["compass"]
     assert spec.label == "Compass"

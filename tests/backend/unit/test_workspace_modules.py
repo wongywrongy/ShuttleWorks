@@ -30,13 +30,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from _helpers import isolate_test_database, seed_tournament
-from database.models import normalize_module_seed
+from db.models import normalize_module_seed
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import tournaments, workspace_modules
+    from workspaces import tournaments, workspace_modules
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -107,7 +107,7 @@ def _by_id(modules: list[dict]) -> dict[str, dict]:
 
 
 def test_derive_modules_status_maps(client):
-    from database.models import derive_modules
+    from db.models import derive_modules
 
     assert derive_modules("meet") == {
         "meet": "enabled",
@@ -322,7 +322,7 @@ def test_ensure_modules_backfills_existing_tournament(client):
 
 
 def test_display_dependency_satisfied_rule():
-    from database.models import display_dependency_satisfied
+    from db.models import display_dependency_satisfied
 
     # Display not enabled → always satisfied.
     assert display_dependency_satisfied({"meet": "available", "display": "available"}) is True

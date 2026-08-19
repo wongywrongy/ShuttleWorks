@@ -11,14 +11,14 @@ from _helpers import isolate_test_database
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     return LocalRepository(SessionLocal())
 
 
 def test_hydrated_session_config_reads_shared_fields(repo):
-    from api.brackets import _hydrate_session
+    from bracket.brackets import _hydrate_session
 
     tid = uuid.uuid4()
     repo.tournaments.create(name="W")  # returns a row; use its id instead
@@ -58,7 +58,7 @@ def test_hydrated_session_config_reads_shared_fields(repo):
 def test_hydrated_session_config_preserves_rest_between_rounds_distinction(repo):
     """restBetweenRounds (round spacing, session-level) must remain
     distinct from defaultRestMinutes -> default_rest_slots (match rest)."""
-    from api.brackets import _hydrate_session
+    from bracket.brackets import _hydrate_session
 
     row = repo.tournaments.create(name="RestDistinct")
     tid = row.id
@@ -92,7 +92,7 @@ def test_hydrated_session_config_preserves_rest_between_rounds_distinction(repo)
 def test_hydrated_session_config_defaults_are_unchanged_when_unset(repo):
     """A bracket session with no engine-config overrides gets the same
     defaults as before the wiring (rest=0, freeze=0, no breaks)."""
-    from api.brackets import _hydrate_session
+    from bracket.brackets import _hydrate_session
 
     row = repo.tournaments.create(name="Defaults")
     tid = row.id
@@ -118,7 +118,7 @@ def test_hydrated_session_config_keeps_meet_occupied_windows_override(repo):
     meet-occupied courts, computed by _meet_occupied_windows) must win
     over whatever schedule_config_from_dto would compute on its own —
     breaking this would let meet and bracket double-book a court."""
-    from api.brackets import _hydrate_session
+    from bracket.brackets import _hydrate_session
 
     row = repo.tournaments.create(name="MeetCoexist")
     tid = row.id
@@ -153,7 +153,7 @@ def test_hydrated_session_config_keeps_meet_occupied_windows_override(repo):
 def test_bracket_solver_options_deterministic_flows_through(repo):
     """config.deterministic + config.randomSeed must reach SolverOptions
     (single worker, seeded, deterministic=True) via the shared helper."""
-    from api.brackets import _bracket_solver_options
+    from bracket.brackets import _bracket_solver_options
 
     opts = _bracket_solver_options(
         5.0, {"deterministic": True, "randomSeed": 777}
@@ -177,7 +177,7 @@ def test_bracket_solver_options_ignores_config_time_limit(repo):
     regression test flagged in the debt log (2026-07-14 entry): setting
     the config field must leave ``SolverOptions.time_limit_seconds`` at
     the passed-in session/request value, not the config override."""
-    from api.brackets import _bracket_solver_options
+    from bracket.brackets import _bracket_solver_options
 
     opts = _bracket_solver_options(5.0, {"solverTimeLimitSeconds": 999})
     assert opts.time_limit_seconds == 5.0

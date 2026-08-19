@@ -41,7 +41,7 @@ def _valid_config() -> dict:
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -67,7 +67,7 @@ class TestRegistrationVolume:
         self, client, monkeypatch
     ):
         """The point of SEC-03: success must cost budget, not just failure."""
-        from app.config import settings
+        from core.config import settings
 
         monkeypatch.setattr(settings, "registration_max_per_ip", 3)
 
@@ -83,7 +83,7 @@ class TestRegistrationVolume:
 
     def test_failed_registrations_also_count(self, client, monkeypatch):
         """Otherwise EMAIL_TAKEN probing is an unbounded enumeration oracle."""
-        from app.config import settings
+        from core.config import settings
 
         monkeypatch.setattr(settings, "registration_max_per_ip", 2)
 
@@ -107,7 +107,7 @@ class TestRegistrationVolume:
         log in. Sharing one bucket would mean a burst of signups locks the
         same IP out of the credential endpoints it needs next.
         """
-        from app.config import settings
+        from core.config import settings
 
         monkeypatch.setattr(settings, "registration_max_per_ip", 1)
 
@@ -126,10 +126,10 @@ class TestSolveQuotaHTTP:
     def test_submitting_over_the_cap_is_429_with_its_own_code(
         self, client, monkeypatch
     ):
-        from app.config import settings
-        from database.models import SolveJob, Tournament, TournamentMember
-        from database.session import SessionLocal
-        from services import solve_jobs
+        from core.config import settings
+        from db.models import SolveJob, Tournament, TournamentMember
+        from db.session import SessionLocal
+        from solve_rail import solve_jobs
 
         monkeypatch.setattr(settings, "max_active_solve_jobs_per_user", 1)
 

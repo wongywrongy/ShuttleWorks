@@ -13,23 +13,39 @@ from typing import Iterable
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_BACKEND_ROOT = str(_REPO_ROOT / "apps" / "api")
+# apps/api/src is the sys.path root (SP-REORG-1 R4: src is a ROOT, not a
+# package), which is what makes `core`, `meet`, `bracket` import by bare name.
+_BACKEND_ROOT = str(_REPO_ROOT / "apps" / "api" / "src")
 
 _BACKEND_PACKAGE_PREFIXES = (
-    "app.",
-    "api.",
-    "services.",
-    "adapters.",
-    "database.",
+    "core.",
+    "shared.",
+    "db.",
     "repositories.",
+    "workspaces.",
+    "identity.",
+    "meet.",
+    "bracket.",
+    "operations.",
+    "display.",
+    "entries.",
+    "solve_rail.",
+    "ops.",
 )
 _BACKEND_PACKAGE_NAMES = {
-    "app",
-    "api",
-    "services",
-    "adapters",
-    "database",
+    "core",
+    "shared",
+    "db",
     "repositories",
+    "workspaces",
+    "identity",
+    "meet",
+    "bracket",
+    "operations",
+    "display",
+    "entries",
+    "solve_rail",
+    "ops",
 }
 
 
@@ -39,7 +55,7 @@ _BACKEND_PACKAGE_NAMES = {
 # raised by code that imported the same class after a different test's
 # fixture reset ``sys.modules``.
 _PURGE_EXEMPT = frozenset({
-    "app.exceptions",
+    "core.exceptions",
 })
 
 
@@ -71,8 +87,8 @@ def isolate_test_database(tmp_path, monkeypatch) -> Path:
         sys.path.remove(_BACKEND_ROOT)
     sys.path.insert(0, _BACKEND_ROOT)
     purge_backend_modules()
-    from database.models import Base
-    from database.session import engine
+    from db.models import Base
+    from db.session import engine
     Base.metadata.create_all(engine)
     return db_path
 
@@ -83,7 +99,7 @@ def seed_tournament(client, name: str = "Test") -> str:
     Most route tests need an existing tournament in the DB before the
     scoped endpoints (match-states, schedule/*) accept writes. Use this
     helper from a fixture so the boilerplate stays out of test bodies.
-    The ``client`` must already include the ``api.tournaments`` router.
+    The ``client`` must already include the ``workspaces.tournaments`` router.
     """
     r = client.post("/tournaments", json={"name": name})
     assert r.status_code == 201, r.text

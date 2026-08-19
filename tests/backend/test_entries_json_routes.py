@@ -1,7 +1,7 @@
 """The entrant tier's JSON surface (Phase 6, spec §4).
 
 The RR7 app renders; **this** is what it renders. Every route here is the
-JSON counterpart of something ``api/entries_public.py`` used to emit as
+JSON counterpart of something ``entries/entries_public.py`` used to emit as
 f-string HTML, and the fixtures are lifted from
 ``tests/test_entries_public_routes.py`` on purpose: the incumbent's
 behaviour is the contract, so the two files must be exercising the same
@@ -31,7 +31,7 @@ GOOD_PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -40,7 +40,7 @@ def client(tmp_path, monkeypatch):
 def turnstile(client, monkeypatch):
     """Cloudflare's dummy-key semantics, without Cloudflare — the entrant
     fixture below signs up for real, and signup is where the challenge is."""
-    from services import turnstile as service
+    from identity import turnstile as service
 
     def fake_post(url, fields, timeout):
         if fields.get("secret", "").startswith("2x"):
@@ -64,8 +64,8 @@ def page(client):
         "/tournaments", json={"name": "Spring Open"}, headers=CSRF
     ).json()["id"]
 
-    from database.models import EntryEvent, EntryPage, Tournament
-    from database.session import SessionLocal
+    from db.models import EntryEvent, EntryPage, Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -176,8 +176,8 @@ def _confirm_all(page):
     """
     import uuid as _uuid
 
-    from database.models import Entry
-    from database.session import SessionLocal
+    from db.models import Entry
+    from db.session import SessionLocal
     from sqlalchemy import update
 
     session = SessionLocal()
@@ -236,8 +236,8 @@ def test_every_event_moment_ships_iso_beside_its_display_string(client, page):
 
     from sqlalchemy import select
 
-    from database.models import EntryEvent
-    from database.session import SessionLocal
+    from db.models import EntryEvent
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -456,7 +456,7 @@ def test_the_config_route_publishes_the_site_key_and_the_auth_mode(client):
     r = client.get("/e/api/config")
     assert r.status_code == 200, r.text
     assert r.json() == {
-        # Cloudflare's documented always-pass dummy sitekey (app/config.py:248).
+        # Cloudflare's documented always-pass dummy sitekey (core/config.py:248).
         "turnstileSiteKey": "1x00000000000000000000AA",
         "authMode": "local",
     }
@@ -471,7 +471,7 @@ def test_the_config_route_never_publishes_the_turnstile_secret(client, monkeypat
     To prove this is not vacuous: change the route to return
     ``settings.turnstile_secret_key`` and this goes red. Put it back.
     """
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "turnstile_secret_key", "2xSECRET-do-not-publish")
     r = client.get("/e/api/config")
@@ -483,7 +483,7 @@ def test_the_config_route_never_publishes_the_turnstile_secret(client, monkeypat
 def test_the_config_route_reports_the_deployed_auth_mode(client, monkeypatch):
     """Non-vacuity for the field above: it reads the setting, it is not a
     literal. Cloud mode is the deployed posture the entrant app renders for."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "auth_mode", "cloud")
     assert client.get("/e/api/config").json()["authMode"] == "cloud"
@@ -504,8 +504,8 @@ def closed_page(client):
     tid = client.post(
         "/tournaments", json={"name": "Not Yet Open"}, headers=CSRF
     ).json()["id"]
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -526,8 +526,8 @@ def second_open_page(client):
     tid = client.post(
         "/tournaments", json={"name": "Early Alphabet"}, headers=CSRF
     ).json()["id"]
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -567,7 +567,7 @@ def test_the_list_is_ordered_by_slug(client, page, second_open_page):
 def test_the_route_is_registered(client):
     """Route existence via the schema, not ``app.routes`` — newer FastAPI
     keeps ``include_router`` as a nested ``_IncludedRouter``."""
-    from app.main import app
+    from core.main import app
 
     assert "get" in app.openapi()["paths"]["/e/api/pages"]
 
@@ -575,7 +575,7 @@ def test_the_route_is_registered(client):
 # ---- POST /e/api/quote/{slug} -------------------------------------------
 #
 # R8-C: session-gated, matching the incumbent's "Update events and total"
-# (api/entries_public.py:1119, the "action=filter" branch). A public fee
+# (entries/entries_public.py:1119, the "action=filter" branch). A public fee
 # oracle on an unauthenticated route was rejected — the quote reads a
 # director's price list against a caller-chosen basket, and that is the
 # shape of a scraper.
@@ -637,8 +637,8 @@ def test_the_quoted_total_is_the_total_recorded(client, page, entrant):
     )
     assert r.status_code == 303, r.text
 
-    from database.models import Submission
-    from database.session import SessionLocal
+    from db.models import Submission
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
@@ -655,8 +655,8 @@ def test_a_quote_reports_a_policy_refusal_with_the_rule_stated(
 ):
     """``check_policy`` is the write's function, not a preview of it. A
     refusal that arrived only at submit would make the quote a lie."""
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -726,7 +726,7 @@ def test_a_quote_carrying_another_sessions_form_token_is_refused(
 # ---- POST /e/api/submit/{slug} ------------------------------------------
 #
 # The guard order is the contract, and it is the incumbent's verbatim
-# (api/entries_public.py's ``submit_entry``): session, slug, form CSRF,
+# (entries/entries_public.py's ``submit_entry``): session, slug, form CSRF,
 # per-IP throttle, acknowledgment, parse, events-open, policy, fee, write.
 # What changes is only the answer shape — 303 to an RR7 receipt route, so a
 # reload never re-posts.
@@ -758,8 +758,8 @@ def _submit(client, page, **overrides):
 
 
 def _submissions():
-    from database.models import Submission
-    from database.session import SessionLocal
+    from db.models import Submission
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
@@ -914,7 +914,7 @@ def test_a_cheap_refusal_short_circuits_before_the_write(
     green path — move ``require_form_csrf`` below ``create_submission`` and
     this goes red (500, not 403).
     """
-    from api import entries_json
+    from entries import entries_json
 
     def explode(*args, **kwargs):  # pragma: no cover - must never be reached
         raise AssertionError("the write ran before the CSRF guard refused")
@@ -940,8 +940,8 @@ def test_an_unacknowledged_submission_is_refused_and_writes_nothing(
 def test_a_policy_breach_is_refused_with_the_rule_stated(client, page, entrant):
     """Guard 6, R14 §4: never a silent drop of the selections that did not
     fit, and the refusal carries the number that produced it."""
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -1190,8 +1190,8 @@ def test_a_browser_quote_echoes_a_policy_refusal_as_a_code_not_prose(
     a stranger can render on the official entry page by sending someone a
     URL. The client maps the code to fixed copy (``app/lib/echo.ts``).
     """
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -1244,12 +1244,12 @@ def test_a_refusal_names_the_block_that_breached_it_not_the_one_that_survived(
     see the problem in.
 
     To prove it is not vacuous: number ``grouped`` with ``enumerate``
-    (``api/entries_json.py``) instead of the parsed block index and this goes
+    (``entries/entries_json.py``) instead of the parsed block index and this goes
     red with ``["0"]`` — while the single-player refusal test above, where
     the two numberings agree, stays green.
     """
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -1298,7 +1298,7 @@ def test_a_dropped_block_does_not_misprice_the_players_that_survive_it(
     """The other half of the same numbering, on the write path.
 
     The player keys are also what ``compute_fee_total`` labels its per-player
-    basis rows with, and ``services/submissions._write`` splits each person's
+    basis rows with, and ``entries/submissions._write`` splits each person's
     price across their entries from that basis. Numbering the keys by the
     posted block rather than by position in the surviving list must not cost
     the entrant their per-entry fee: one dropped block, and every share after
@@ -1317,8 +1317,8 @@ def test_a_dropped_block_does_not_misprice_the_players_that_survive_it(
     )
     assert r.status_code == 303, r.text
 
-    from database.models import Entry, Submission
-    from database.session import SessionLocal
+    from db.models import Entry, Submission
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
@@ -1518,7 +1518,7 @@ def test_a_non_401_from_the_identity_dependency_is_not_dressed_as_signed_out(
     """
     from fastapi import HTTPException
 
-    import api.entries_json as mod
+    import entries.entries_json as mod
 
     def locked(_request, _repo):
         raise HTTPException(status_code=403, detail={"code": "AUTH_ACCOUNT_LOCKED"})

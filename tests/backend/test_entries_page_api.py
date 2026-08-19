@@ -42,7 +42,7 @@ GOOD_PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -51,7 +51,7 @@ def client(tmp_path, monkeypatch):
 def turnstile(client, monkeypatch):
     """Cloudflare's dummy-key semantics, without Cloudflare — the entrant
     fixture signs up for real and signup is where the challenge lives."""
-    from services import turnstile as service
+    from identity import turnstile as service
 
     def fake_post(url, fields, timeout):
         return json.dumps({"success": True})
@@ -66,8 +66,8 @@ def page(client):
         "/tournaments", json={"name": "Spring Open"}, headers=CSRF
     ).json()["id"]
 
-    from database.models import EntryEvent, EntryPage, Tournament
-    from database.session import SessionLocal
+    from db.models import EntryEvent, EntryPage, Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -155,8 +155,8 @@ def _set_fee_schedule(page, schedule):
     to survive a column whose contents it did not choose (hand-edited JSON,
     an older row, a restored backup). The config route's own validation is
     asserted in ``test_entries_config_routes.py``."""
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -168,8 +168,8 @@ def _set_fee_schedule(page, schedule):
 
 def _add_entry(tid, event_id, **kwargs):
     """Seed an entry with its player, at the level boundary R13 drew."""
-    from database.models import EntrantAccount, Entry, EntryPlayer, Submission
-    from database.session import SessionLocal
+    from db.models import EntrantAccount, Entry, EntryPlayer, Submission
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
@@ -358,8 +358,8 @@ def test_the_list_never_reveals_entry_state(client, page):
 
 
 def _set_entrants_published(page, value):
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -436,8 +436,8 @@ def test_the_projection_carries_no_markup_at_all(client, page):
     that these strings reach the DOM as text — is pinned where the render
     happens, in ``entrant/tests/entry.meta.test.ts``.
     """
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -460,8 +460,8 @@ def test_the_projection_carries_no_markup_at_all(client, page):
 
 
 def test_an_unknown_slug_and_a_closed_page_answer_identically(client, page):
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     unknown = client.get("/e/api/page/no-such-page-anywhere")
     session = SessionLocal()
@@ -514,8 +514,8 @@ def test_a_signed_in_viewer_carries_an_email_and_a_form_csrf_token(
 
 
 def _set_dates(page, *, event="ws", **columns):
-    from database.models import EntryEvent
-    from database.session import SessionLocal
+    from db.models import EntryEvent
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -584,8 +584,8 @@ def test_one_shared_deadline_is_projected_on_every_event(client, page):
 def test_the_projection_names_the_organisation_running_the_tournament(client, page):
     """R14 §6's organisation card. The org name is the only field behind
     it — the audit found the tree carries nothing else."""
-    from database.models import Org, Tournament
-    from database.session import SessionLocal
+    from db.models import Org, Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -602,8 +602,8 @@ def test_the_projection_names_the_organisation_running_the_tournament(client, pa
 
 def test_a_workspace_with_no_org_projects_no_organiser(client, page):
     """Negative control: the card is data, not decoration."""
-    from database.models import Tournament
-    from database.session import SessionLocal
+    from db.models import Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -661,8 +661,8 @@ def test_no_event_is_flagged_age_bracketed_when_none_is(client, page):
 
 def test_an_age_bracketed_event_is_flagged_in_the_projection(client, page):
     """Negative control, and the case the field exists for."""
-    from database.models import EntryEvent
-    from database.session import SessionLocal
+    from db.models import EntryEvent
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -689,7 +689,7 @@ def test_the_entrant_json_routes_are_registered(client):
     """Newer FastAPI keeps each ``include_router`` as a nested
     ``_IncludedRouter``, so the OpenAPI document is the assertion surface,
     not ``app.routes``."""
-    from app.main import app
+    from core.main import app
 
     paths = app.openapi()["paths"]
     assert "get" in paths["/e/api/page/{slug}"]
@@ -701,14 +701,14 @@ def test_the_entrant_json_routes_are_registered(client):
 def test_the_entrant_json_module_mints_no_capability_material_at_all(client):
     """The deletion guard for the manage-token path (R10 / Q13 §6),
     retargeted from the retired HTML module onto the module that replaced
-    it — ``api/entries_json``, because a guard that reads
-    ``api/entries_public`` is deleted along with it in the cut-over and
+    it — ``entries/entries_json/``, because a guard that reads
+    ``entries/entries_public/`` is deleted along with it in the cut-over and
     stops guarding anything. A capability that is never minted cannot be
     leaked by a renderer added later. ``secrets`` itself stays imported —
     for ``compare_digest``, which is a comparison, not a credential."""
     import inspect
 
-    from api import entries_json
+    from entries import entries_json
 
     source = inspect.getsource(entries_json)
     assert "token_urlsafe" not in source

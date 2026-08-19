@@ -1,6 +1,6 @@
 """Tests for the bracket interactive-scheduling backend — the
 ``/tournaments/{tid}/bracket/validate`` + ``/pin`` routes, the
-``services/bracket/validation.py`` feasibility check, and
+``bracket/validation.py`` feasibility check, and
 ``TournamentDriver.repin_and_resolve``.
 
 Sub-project #1 of the bracket court×time decomposition. Mirrors the
@@ -20,9 +20,10 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -72,7 +73,7 @@ def _se_4_body(time_limit: float = 1.0) -> dict:
 def test_build_problem_emits_previous_assignments():
     """build_problem accepts a previous_assignments list and threads it
     into the ScheduleRequest; omitting it preserves the legacy [] shape."""
-    from services.bracket.adapter import build_problem
+    from bracket.adapter import build_problem
     from scheduler_core.domain.models import PreviousAssignment, ScheduleConfig
     from scheduler_core.domain.tournament import (
         Participant,
@@ -99,7 +100,7 @@ def test_build_problem_emits_previous_assignments():
     assert pinned.previous_assignments == prev
 
 
-# ---- services/bracket/validation.py ---------------------------------------
+# ---- bracket/validation.py ---------------------------------------
 
 
 def _two_player_state():
@@ -141,7 +142,7 @@ def _two_player_state():
 
 def test_validate_move_feasible():
     from scheduler_core.domain.models import ScheduleConfig
-    from services.bracket.validation import validate_bracket_move
+    from bracket.validation import validate_bracket_move
 
     state = _two_player_state()
     config = ScheduleConfig(total_slots=64, court_count=2)
@@ -154,7 +155,7 @@ def test_validate_move_feasible():
 
 def test_validate_move_court_overlap():
     from scheduler_core.domain.models import ScheduleConfig
-    from services.bracket.validation import validate_bracket_move
+    from bracket.validation import validate_bracket_move
 
     state = _two_player_state()
     config = ScheduleConfig(total_slots=64, court_count=2)
@@ -168,7 +169,7 @@ def test_validate_move_court_overlap():
 def test_validate_move_player_double_booking():
     from scheduler_core.domain.models import ScheduleConfig
     from scheduler_core.domain.tournament import TournamentAssignment
-    from services.bracket.validation import validate_bracket_move
+    from bracket.validation import validate_bracket_move
 
     state = _two_player_state()
     # Schedule M3 (P1 vs P3) at (slot=2, court=1).
@@ -186,7 +187,7 @@ def test_validate_move_player_double_booking():
 def test_validate_move_player_rest():
     from scheduler_core.domain.models import ScheduleConfig
     from scheduler_core.domain.tournament import TournamentAssignment
-    from services.bracket.validation import validate_bracket_move
+    from bracket.validation import validate_bracket_move
 
     state = _two_player_state()
     # M3 (P1 vs P3) at (slot=5, court=1).
@@ -205,7 +206,7 @@ def test_validate_move_player_rest():
 def test_validate_move_dependency_ordering():
     from scheduler_core.domain.models import ScheduleConfig
     from scheduler_core.domain.tournament import TournamentAssignment
-    from services.bracket.validation import validate_bracket_move
+    from bracket.validation import validate_bracket_move
 
     state = _two_player_state()
     # M3 depends on M1; M1 is at slot 0 (ends at 1). M3 currently
@@ -231,8 +232,8 @@ def test_validate_move_respects_roster_availability():
     is flagged (``type="availability"``) once roster ``player_extras`` are
     threaded — the same channel the pin re-solve honors (SP-D7 debt)."""
     from scheduler_core.domain.models import ScheduleConfig
-    from services.bracket.player_constraints import PlayerExtras
-    from services.bracket.validation import validate_bracket_move
+    from bracket.player_constraints import PlayerExtras
+    from bracket.validation import validate_bracket_move
 
     state = _two_player_state()
     config = ScheduleConfig(total_slots=64, court_count=2)
@@ -303,7 +304,7 @@ def test_repin_pins_target_and_reoptimises_free():
         SolverOptions,
         SolverStatus,
     )
-    from services.bracket.scheduler import TournamentDriver
+    from bracket.scheduler import TournamentDriver
 
     state = _driver_state_two_assigned()
     driver = TournamentDriver(
@@ -329,7 +330,7 @@ def test_repin_keeps_locked_match_fixed():
         SolverStatus,
     )
     from scheduler_core.domain.tournament import Result, WinnerSide
-    from services.bracket.scheduler import TournamentDriver
+    from bracket.scheduler import TournamentDriver
 
     state = _driver_state_two_assigned()
     # M1 has a result → locked. Its (slot, court) must not move.
@@ -353,7 +354,7 @@ def test_repin_keeps_locked_match_fixed():
 def test_repin_rejects_locked_play_unit():
     from scheduler_core.domain.models import ScheduleConfig, SolverOptions
     from scheduler_core.domain.tournament import Result, WinnerSide
-    from services.bracket.scheduler import TournamentDriver
+    from bracket.scheduler import TournamentDriver
 
     state = _driver_state_two_assigned()
     state.results["M1"] = Result(winner_side=WinnerSide.A)  # M1 locked

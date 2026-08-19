@@ -33,9 +33,11 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import commands, match_state, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from operations import commands
+    from operations import match_state_routes as match_state
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)

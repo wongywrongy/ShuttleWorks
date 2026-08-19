@@ -39,7 +39,7 @@ PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -102,8 +102,8 @@ def _page_row(tid):
     """The stored row, read directly — the routes return a projection and a
     round-trip through the DTO could agree with itself while persisting
     nothing."""
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -437,7 +437,7 @@ def test_a_refused_schedule_leaves_an_existing_page_untouched(client, workspace)
 
 @pytest.mark.parametrize("caps", [{"MS": "1"}, {"MS": -1}, {"MS": True}])
 def test_an_unusable_discipline_cap_is_refused(client, workspace, caps):
-    """``services/entry_policy`` skips a cap that is not an ``int``, so an
+    """``entries/entry_policy/`` skips a cap that is not an ``int``, so an
     unusable one here is a limit the director believes they set and the
     form does not enforce. (``True`` is an ``int`` in Python and is not a
     cap of one.)"""
@@ -490,8 +490,8 @@ def _post_event(client, tid, **body):
 
 
 def _events(tid):
-    from database.models import EntryEvent
-    from database.session import SessionLocal
+    from db.models import EntryEvent
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
@@ -598,7 +598,7 @@ def test_a_gender_constraint_outside_the_vocabulary_is_refused(
     client, workspace, value
 ):
     """``entryType``'s reason, for the same kind of field. The vocabulary
-    is closed — ``services/entry_policy`` folds a constraint onto
+    is closed — ``entries/entry_policy/`` folds a constraint onto
     'M' / 'F' / 'mixed' — and an unrecognised one does not refuse anything
     at submit time, it silently flags every entrant who chose the event.
     Refusing here is the only place it can be caught."""
@@ -647,7 +647,7 @@ def test_an_operator_can_create_the_same_entry_event(client, workspace):
 
 
 def test_both_config_routes_are_registered(client):
-    from app.main import app
+    from core.main import app
 
     paths = app.openapi()["paths"]
     assert "put" in paths["/tournaments/{tournament_id}/entry-page"]

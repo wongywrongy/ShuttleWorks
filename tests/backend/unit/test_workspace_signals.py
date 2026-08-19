@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from api.workspace_signals import RowCounts, build_signals
-from app.schemas import WorkspaceModuleDTO
+from workspaces.workspace_signals import RowCounts, build_signals
+from core.schemas import WorkspaceModuleDTO
 
 
 def _mod(module_id: str, status: str) -> WorkspaceModuleDTO:

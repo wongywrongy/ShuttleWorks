@@ -10,7 +10,7 @@ must render ``_csrf`` for a page it server-renders, and node cannot ask the
 backend for a token derived from a nonce node itself just minted. So the
 derivation now exists in **two languages**:
 
-  * ``backend/app/form_csrf.py``          — ``form_csrf_token`` (the verifier)
+  * ``backend/core/form_csrf.py``          — ``form_csrf_token`` (the verifier)
   * ``entrant/app/lib/formCsrf.server.ts`` — ``formCsrfToken`` (the renderer)
 
 **Two derivations drift, and the one that drifts is the one the middleware
@@ -128,7 +128,7 @@ def test_the_two_tiers_share_one_domain_separator():
     form a browser currently holds is invalidated — which is a deliberate
     act when done on purpose and an outage when done by accident.
     """
-    from app.form_csrf import _FORM_CSRF_PREFIX
+    from core.form_csrf import _FORM_CSRF_PREFIX
 
     assert _ts_constant("FORM_CSRF_PREFIX") == _FORM_CSRF_PREFIX
 
@@ -147,7 +147,7 @@ def test_the_node_prefix_reproduces_the_python_digests_exactly():
     So the chain is closed: node's code → node's golden → this golden →
     Python's function. Break any link and one of the two runners goes red.
     """
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     prefix = _ts_constant("FORM_CSRF_PREFIX")
     for secret, golden in _GOLDEN.items():
@@ -181,13 +181,13 @@ def test_the_two_tiers_share_one_cookie_name():
     ``require_form_csrf`` refuses every post — while node cheerfully sets a
     cookie nobody looks for.
     """
-    from app.form_csrf import PLAY_CSRF_COOKIE
+    from core.form_csrf import PLAY_CSRF_COOKIE
 
     assert _ts_constant("PLAY_CSRF_COOKIE") == PLAY_CSRF_COOKIE
 
 
 def test_the_two_tiers_share_one_hidden_field_name():
-    from app.form_csrf import FORM_FIELD
+    from core.form_csrf import FORM_FIELD
 
     assert _ts_constant("FORM_FIELD", _TS_FIELD_PATH) == FORM_FIELD
 
@@ -218,7 +218,7 @@ def test_no_secret_is_no_token_on_both_sides(candidate):
     ``formCsrfToken`` has the identical early return, asserted as source
     here and behaviourally in the vitest suite.
     """
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     assert form_csrf_token(candidate) == ""
     assert "if (!secret) return '';" in _ts_source()
@@ -228,7 +228,7 @@ def test_the_two_tiers_share_one_next_allowlist():
     """The second primitive implemented twice, pinned the same way.
 
     ``nextTarget.ts``'s ``SAFE_NEXT`` docstring claims it is byte-identical to
-    ``_SAFE_NEXT`` in ``api/entrants.py``, and it is — but a claim in a
+    ``_SAFE_NEXT`` in ``identity/entrants_routes.py``, and it is — but a claim in a
     comment is not a control. The two validate the same value for the same
     reason at two tiers, and drift here is worse than drift in the CSRF
     separator: a node side that *widens* renders a crafted destination into
@@ -246,7 +246,7 @@ def test_the_two_tiers_share_one_next_allowlist():
     spelled for two parsers. Nothing else is normalised; a real difference
     survives.
     """
-    from api.entrants import _SAFE_NEXT
+    from identity.entrants_routes import _SAFE_NEXT
 
     matches = re.findall(
         r"^const SAFE_NEXT = /(.*)/;$", _ts_source(_TS_NEXT_PATH), re.MULTILINE

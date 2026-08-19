@@ -15,7 +15,7 @@ no such column to forget.
 
 What is *reused* is everything cryptographic: ``hash_password`` /
 ``verify_password`` / ``validate_password`` / ``_hash_token`` are
-principal-agnostic module functions in ``services/auth.py`` and are called
+principal-agnostic module functions in ``identity/auth.py`` and are called
 directly. What is **not** reused is the ~40 lines of session plumbing, which
 is ``User``-bound at the type level (``create_session`` writes a ``user_id``
 FK; ``resolve_session`` returns a ``User``). That duplication is deliberate
@@ -32,7 +32,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import (
+from db.models import (
     Base,
     EntrantAccount,
     EntrantSession,
@@ -40,9 +40,9 @@ from database.models import (
     TournamentMember,
     User,
 )
-from services import auth as auth_service
-from services import entrants as entrant_service
-from services.auth import AuthError
+from identity import auth as auth_service
+from identity import entrants as entrant_service
+from identity.auth import AuthError
 
 
 @pytest.fixture

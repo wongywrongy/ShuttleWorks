@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [
     k for k in list(sys.modules)
@@ -28,9 +28,9 @@ from fastapi.testclient import TestClient
 # Import the heuristics + schemas at module load time, while backend/ is
 # the first entry on sys.path. Pytest re-prepends src/ between module
 # load and fixture execution, so a deferred import inside a test
-# function would resolve `app.schemas` to src/app/schemas.py (the legacy
+# function would resolve `core.schemas` to src/core/schemas.py (the legacy
 # module that lacks Advisory / Impact / Proposal).
-from app.schemas import (
+from core.schemas import (
     MatchDTO,
     ScheduleAssignment,
     ScheduleDTO,
@@ -38,7 +38,7 @@ from app.schemas import (
     TournamentConfig,
     TournamentStateDTO,
 )
-from api.schedule_advisories import (
+from meet.schedule_advisories import (
     collect_advisories,
     detect_approaching_blackout,
     detect_no_shows,
@@ -394,15 +394,17 @@ def client(tmp_path, monkeypatch):
     from _helpers import isolate_test_database
     isolate_test_database(tmp_path, monkeypatch)
 
-    from api import schedule_advisories, match_state, tournaments
-    from app.exceptions import ConflictError, PreconditionFailedError
-    from app.main import _conflict_error_handler, _precondition_failed_handler
+    from meet import schedule_advisories
+    from operations import match_state_routes as match_state
+    from workspaces import tournaments
+    from core.exceptions import ConflictError, PreconditionFailedError
+    from core.main import _conflict_error_handler, _precondition_failed_handler
 
     app_ = FastAPI()
     app_.include_router(schedule_advisories.router)
     app_.include_router(match_state.router)
     app_.include_router(tournaments.router)
-    # Audit-pass fix: register the same exception handlers app.main does,
+    # Audit-pass fix: register the same exception handlers core.main does,
     # so 409 ConflictError and 412 PreconditionFailedError surface as
     # the flat structured body the production app emits — not the
     # default 500.

@@ -21,7 +21,7 @@ RR7 posts to a JSON route. Every test here names the test it supersedes in
 a header, so until this phase the column was NULL for every real entrant
 and ``UNIQUE (tournament_id, account_id, idempotency_key)`` guarded nothing
 anyone could hit. The loader mints the key and the form carries it, which
-is what makes the account scope on ``services.submissions.replay`` load
+is what makes the account scope on ``entries.submissions.replay`` load
 bearing rather than theoretical.
 
 **Three deviations from the task brief, all because the brief described a
@@ -72,6 +72,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from core import throttle
 from tests.backend._helpers import isolate_test_database
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
@@ -82,7 +83,7 @@ GOOD_PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -91,7 +92,7 @@ def client(tmp_path, monkeypatch):
 def turnstile(client, monkeypatch):
     """Cloudflare's dummy-key semantics, without Cloudflare — the entrant
     fixture signs up for real and signup is where the challenge lives."""
-    from services import turnstile as service
+    from identity import turnstile as service
 
     def fake_post(url, fields, timeout):
         return json.dumps({"success": True})
@@ -106,8 +107,8 @@ def page(client):
         "/tournaments", json={"name": "Spring Open"}, headers=CSRF
     ).json()["id"]
 
-    from database.models import EntryEvent, EntryPage, Tournament
-    from database.session import SessionLocal
+    from db.models import EntryEvent, EntryPage, Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -263,8 +264,8 @@ def _receipt_id(response):
 
 
 def _entries(tid=None):
-    from database.models import Entry
-    from database.session import SessionLocal
+    from db.models import Entry
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
@@ -278,8 +279,8 @@ def _entries(tid=None):
 
 
 def _submissions(tid=None):
-    from database.models import Submission
-    from database.session import SessionLocal
+    from db.models import Submission
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
@@ -316,7 +317,7 @@ def test_the_quote_is_computed_server_side(client, page, entrant):
 
 def test_the_total_shown_is_the_total_recorded(client, page, entrant):
     """**Seam B's invariant, asserted end to end.** The quote is a *display*
-    of ``services.entry_fees`` and never a second implementation of it: the
+    of ``entries.entry_fees`` and never a second implementation of it: the
     number the entrant agreed to is the number stored on the submission."""
     selection = [f"0:{page['ws']}", f"0:{page['ms']}"]
     shown = _quote(client, page, events=selection).json()["totalCents"]
@@ -402,7 +403,7 @@ def test_an_operator_session_does_not_authorize_a_submit(client, page):
         ).status_code
         == 200
     )
-    from app.config import settings
+    from core.config import settings
 
     assert settings.session_cookie_name in client.cookies
 
@@ -419,7 +420,7 @@ def test_a_garbage_entrant_cookie_does_not_authorize_a_submit(client, page):
     the test would pass on a 403 that says nothing about whether the
     session lookup rejects an unknown token.
     """
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.set(settings.entrant_session_cookie_name, "not-a-real-token")
     assert _submit(client, page, headers=CSRF).status_code == 401
@@ -438,7 +439,7 @@ def test_a_submit_without_the_form_csrf_token_is_refused(client, page, entrant):
     wrong about which.** It claimed deleting ``csrf_middleware``'s
     ``form_csrf_proves`` clause makes this return 303. It does not:
     executed, that mutation leaves this green, because
-    ``api/entries_json.require_form_csrf`` refuses the same request at the
+    ``entries/entries_json.require_form_csrf`` refuses the same request at the
     route with the same status and the same code. Deleting the route guard
     alone leaves it green for the mirror-image reason. Only removing
     **both** returns 303 — which is what was actually run, and is the
@@ -492,7 +493,7 @@ def test_the_header_satisfies_the_middleware_but_not_the_route_guard(
     one on this route.
 
     Channel one satisfies ``csrf_middleware``, so the request reaches the
-    route; ``api/entries_json.require_form_csrf`` then demands the field
+    route; ``entries/entries_json.require_form_csrf`` then demands the field
     anyway. Every other CSRF test in this file is answered by the middleware
     before the route runs, so without this the route guard could be deleted
     outright and the suite would stay green.
@@ -545,8 +546,8 @@ def test_a_large_multi_player_body_still_parses_after_the_middleware(
     replay from ``form_csrf_proves`` and this fails with zero entries
     written rather than with an error.
     """
-    from database.models import EntryPlayer
-    from database.session import SessionLocal
+    from db.models import EntryPlayer
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     r = _submit(
@@ -606,8 +607,8 @@ def test_a_valid_submission_lands_a_pending_entry_under_a_submission(
 
 def test_the_player_carries_the_name_gender_and_remarks(client, page, entrant):
     """R12's field set, at the level R13 put it on."""
-    from database.models import EntryPlayer
-    from database.session import SessionLocal
+    from db.models import EntryPlayer
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     _submit(client, page, club="Riverside BC", birthYear="2011")
@@ -717,7 +718,7 @@ def test_the_same_submission_with_the_box_ticked_succeeds(client, page, entrant)
 
 
 def test_a_flood_from_one_ip_is_locked_out(client, page, entrant, monkeypatch):
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "entries_max_per_ip", 3)
     for _ in range(3):
@@ -729,7 +730,7 @@ def test_a_flood_from_one_ip_is_locked_out(client, page, entrant, monkeypatch):
 
 def test_under_the_budget_nothing_is_locked(client, page, entrant, monkeypatch):
     """Negative control for the lockout."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "entries_max_per_ip", 50)
     for _ in range(4):
@@ -738,14 +739,14 @@ def test_under_the_budget_nothing_is_locked(client, page, entrant, monkeypatch):
 
 def test_the_throttle_bucket_is_its_own_namespace():
     """An entry flood must not lock a venue out of *signing in*."""
-    from services import auth as auth_service
+    from identity import auth as auth_service
 
-    assert auth_service.entries_key("1.2.3.4").startswith("entry:")
+    assert throttle.entries_key("1.2.3.4").startswith("entry:")
     assert auth_service.registration_key("1.2.3.4").startswith("reg:")
     assert auth_service.entrant_signup_key("1.2.3.4").startswith("esignup:")
     assert (
         len({
-            auth_service.entries_key("1.2.3.4"),
+            throttle.entries_key("1.2.3.4"),
             auth_service.registration_key("1.2.3.4"),
             auth_service.entrant_signup_key("1.2.3.4"),
         })
@@ -864,8 +865,8 @@ def test_a_key_is_scoped_to_the_tournament_the_slug_resolves_to(client, page, en
     """Ruling D4, one level up. A key used in another workspace must not
     resolve here — a global lookup on a route anyone with a poster URL can
     reach is a cross-tenant disclosure vector."""
-    from database.models import EntrantAccount, EntryPage, Submission
-    from database.session import SessionLocal
+    from db.models import EntrantAccount, EntryPage, Submission
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     other_tid = client.post(
@@ -897,7 +898,7 @@ def test_a_foreign_idempotency_key_does_not_resolve_to_someone_elses_receipt(
     client, page, entrant, turnstile
 ):
     """**The disclosure this phase makes live** (spec §4).
-    ``services.submissions.replay`` scoped by ``(tournament_id, key)`` only,
+    ``entries.submissions.replay`` scoped by ``(tournament_id, key)`` only,
     so a *guessed* key returned another entrant's submission — its
     reference, its entries, its total. Latent while real keys were always
     NULL; Phase 6 mints them, so it is live now.
@@ -1006,8 +1007,8 @@ def test_over_the_per_person_cap_is_refused_with_the_rule_stated(
     client, page, entrant
 ):
     """Never a silent drop of the selections that did not fit."""
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -1025,8 +1026,8 @@ def test_over_the_per_person_cap_is_refused_with_the_rule_stated(
 
 def test_under_the_cap_is_accepted(client, page, entrant):
     """Negative control for the refusal above."""
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -1046,8 +1047,8 @@ def test_under_the_cap_is_accepted(client, page, entrant):
 def test_an_event_from_another_workspace_is_refused_and_leaks_nothing(
     client, page, entrant
 ):
-    from database.models import EntryEvent
-    from database.session import SessionLocal
+    from db.models import EntryEvent
+    from db.session import SessionLocal
 
     other_tid = client.post(
         "/tournaments", json={"name": "Autumn Open"}, headers=CSRF
@@ -1080,8 +1081,8 @@ def test_an_event_of_this_workspace_is_the_negative_control(client, page, entran
 def test_a_closed_event_is_refused(client, page, entrant):
     from datetime import datetime, timedelta, timezone
 
-    from database.models import EntryEvent
-    from database.session import SessionLocal
+    from db.models import EntryEvent
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -1100,8 +1101,8 @@ def test_a_closed_event_is_refused(client, page, entrant):
 def test_an_event_that_has_not_opened_yet_is_refused(client, page, entrant):
     from datetime import datetime, timedelta, timezone
 
-    from database.models import EntryEvent
-    from database.session import SessionLocal
+    from db.models import EntryEvent
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:

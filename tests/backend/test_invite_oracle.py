@@ -33,7 +33,7 @@ GOOD_PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -53,8 +53,8 @@ def _mint(client, tournament_id, role="viewer"):
 
 def _expire(token: str):
     """Age an invite out of its TTL, directly in the DB."""
-    from database.models import InviteLink
-    from database.session import SessionLocal
+    from db.models import InviteLink
+    from db.session import SessionLocal
 
     s = SessionLocal()
     try:
@@ -170,7 +170,7 @@ def test_missing_and_revoked_do_the_same_database_work(client):
     tournament lookup and return measurably sooner.
     """
     from sqlalchemy import event
-    from database.session import engine
+    from db.session import engine
 
     tid = _owner_workspace(client)
     revoked = _mint(client, tid)

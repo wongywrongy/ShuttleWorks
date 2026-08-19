@@ -3,7 +3,7 @@
 **Why this file exists (SP-E1-2 rule 5).** The E1-2 slice adds a *second
 principal type* — an entrant account with its own session table, its own
 cookie and its own throttle namespaces — by **reusing** the primitives in
-``services/auth.py`` rather than forking them (Phase A ruling D-A2). That
+``identity/auth.py`` rather than forking them (Phase A ruling D-A2). That
 makes every one of those primitives load-bearing for two callers instead
 of one, and this file pins what they do **today**, before the first edit.
 
@@ -11,7 +11,7 @@ It is a characterization test, not a specification: if a behaviour below
 changes, the change is either a bug or a decision that needs to be named.
 Two halves, matching the two seams the entrant work touches:
 
-1. **The session create/resolve path** (``services/auth.py`` — ``_hash_token``,
+1. **The session create/resolve path** (``identity/auth.py`` — ``_hash_token``,
    ``create_session``, ``resolve_session``, ``revoke_session``). The entrant
    session plumbing is written *alongside* this, deliberately not shared:
    ``create_session``/``resolve_session`` are ``User``-bound (they return a
@@ -43,8 +43,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import AuthSession, AuthThrottle, Base, User
-from services import auth as auth_service
+from db.models import AuthSession, AuthThrottle, Base, User
+from core import throttle
+from identity import auth as auth_service
 
 
 @pytest.fixture
@@ -132,7 +133,7 @@ def test_an_expired_session_stops_resolving(session, user):
 
 
 def test_expiry_is_the_configured_ttl(session, user):
-    from app.config import settings
+    from core.config import settings
 
     before = _utcnow()
     _, row = auth_service.create_session(session, user.id)
@@ -174,12 +175,12 @@ def test_revoke_all_can_keep_the_current_session(session, user):
 
 
 def test_an_unknown_key_is_not_locked(session):
-    assert auth_service.throttle_check(session, "ip:198.51.100.7") is None
+    assert throttle.throttle_check(session, "ip:198.51.100.7") is None
 
 
 def _charge(session, key, times, *, max_attempts=3, window=900.0, lock=60.0):
     for _ in range(times):
-        auth_service.throttle_record_attempt(
+        throttle.throttle_record_attempt(
             session,
             key,
             max_attempts=max_attempts,
@@ -192,10 +193,10 @@ def test_the_budget_locks_exactly_at_max_attempts(session):
     key = "ip:198.51.100.8"
 
     _charge(session, key, 2)
-    assert auth_service.throttle_check(session, key) is None
+    assert throttle.throttle_check(session, key) is None
 
     _charge(session, key, 1)  # the third attempt spends the budget
-    remaining = auth_service.throttle_check(session, key)
+    remaining = throttle.throttle_check(session, key)
     assert remaining is not None
     assert 0 < remaining <= 60.0
 
@@ -203,10 +204,10 @@ def test_the_budget_locks_exactly_at_max_attempts(session):
 def test_the_backoff_doubles_per_further_attempt(session):
     key = "ip:198.51.100.9"
     _charge(session, key, 3)
-    first = auth_service.throttle_check(session, key)
+    first = throttle.throttle_check(session, key)
 
     _charge(session, key, 1)
-    second = auth_service.throttle_check(session, key)
+    second = throttle.throttle_check(session, key)
 
     assert second > first
     assert second == pytest.approx(first * 2, rel=0.05)
@@ -217,7 +218,7 @@ def test_the_lock_is_capped_at_fifteen_minutes(session):
     key = "ip:198.51.100.10"
     _charge(session, key, 30)
 
-    remaining = auth_service.throttle_check(session, key)
+    remaining = throttle.throttle_check(session, key)
     assert remaining is not None
     assert remaining <= 900.0
 
@@ -225,25 +226,25 @@ def test_the_lock_is_capped_at_fifteen_minutes(session):
 def test_a_stale_window_resets_the_count(session):
     key = "ip:198.51.100.11"
     _charge(session, key, 3, window=900.0)
-    assert auth_service.throttle_check(session, key) is not None
+    assert throttle.throttle_check(session, key) is not None
 
     row = session.get(AuthThrottle, key)
     row.window_started_at = _utcnow() - timedelta(seconds=901)
     session.flush()
 
     _charge(session, key, 1, window=900.0)
-    assert auth_service.throttle_check(session, key) is None
+    assert throttle.throttle_check(session, key) is None
     assert session.get(AuthThrottle, key).failures == 1
 
 
 def test_success_clears_the_counter(session):
     key = "account:director@example.com"
     _charge(session, key, 3)
-    assert auth_service.throttle_check(session, key) is not None
+    assert throttle.throttle_check(session, key) is not None
 
     auth_service.throttle_record_success(session, key)
 
-    assert auth_service.throttle_check(session, key) is None
+    assert throttle.throttle_check(session, key) is None
     assert session.get(AuthThrottle, key).failures == 0
 
 
@@ -254,10 +255,10 @@ def test_keys_are_independent_budgets(session):
     SP-E1-2 adds exist because of it."""
     _charge(session, "ip:203.0.113.1", 5)
 
-    assert auth_service.throttle_check(session, "ip:203.0.113.1") is not None
-    assert auth_service.throttle_check(session, "ip:203.0.113.2") is None
-    assert auth_service.throttle_check(session, "reg:203.0.113.1") is None
-    assert auth_service.throttle_check(session, "entry:203.0.113.1") is None
+    assert throttle.throttle_check(session, "ip:203.0.113.1") is not None
+    assert throttle.throttle_check(session, "ip:203.0.113.2") is None
+    assert throttle.throttle_check(session, "reg:203.0.113.1") is None
+    assert throttle.throttle_check(session, "entry:203.0.113.1") is None
 
 
 def test_the_shipped_namespace_helpers_are_distinct_strings(session):
@@ -265,4 +266,4 @@ def test_the_shipped_namespace_helpers_are_distinct_strings(session):
     entrant namespaces follow. Pinned as strings because the *format* is
     what keeps the buckets apart."""
     assert auth_service.registration_key("198.51.100.1") == "reg:198.51.100.1"
-    assert auth_service.entries_key("198.51.100.1") == "entry:198.51.100.1"
+    assert throttle.entries_key("198.51.100.1") == "entry:198.51.100.1"

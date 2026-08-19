@@ -4,7 +4,7 @@ SP-CLOUD-3 Phase 3.4. The scenario is the deployment's real failure
 mode: the worker runs on a different site from Postgres, joined by a
 tailnet, and that link can drop while a solve is in flight.
 
-**Why the obvious test proves nothing.** `database/session.py` already
+**Why the obvious test proves nothing.** `db/session.py` already
 sets `pool_pre_ping=True`, so a connection that died *at checkout* is
 transparently replaced. Killing connectivity *between* jobs therefore
 passes without exercising anything. The interesting window is narrow and
@@ -48,10 +48,10 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import Base, SolveJob, Tournament
-from services import solve_jobs
-from services.solve_runner import RunnerOutcome
-from services.solve_worker import SolveWorker
+from db.models import Base, SolveJob, Tournament
+from solve_rail import solve_jobs
+from solve_rail.solve_runner import RunnerOutcome
+from solve_rail.solve_worker import SolveWorker
 
 POSTGRES_URL = os.environ.get("TEST_POSTGRES_URL", "")
 
@@ -68,7 +68,7 @@ def db(request):
     if request.param == "postgres":
         if not POSTGRES_URL:
             pytest.skip("TEST_POSTGRES_URL not set")
-        from database.session import normalize_database_url
+        from db.session import normalize_database_url
 
         engine = create_engine(normalize_database_url(POSTGRES_URL), future=True)
     else:

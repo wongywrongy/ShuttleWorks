@@ -29,9 +29,9 @@ import pytest
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
-from database.models import Base, Org, Tournament, TournamentMember, User
-from services import members as members_service
-from services.members import LastOwnerError, MemberNotFoundError
+from db.models import Base, Org, Tournament, TournamentMember, User
+from identity import members as members_service
+from identity.members import LastOwnerError, MemberNotFoundError
 
 POSTGRES_URL = os.environ.get("TEST_POSTGRES_URL", "")
 
@@ -42,7 +42,7 @@ def _make_engine(dialect: str, tmp_path):
         return create_engine(
             f"sqlite:///{(tmp_path / 'members.db').as_posix()}", future=True
         )
-    from database.session import normalize_database_url
+    from db.session import normalize_database_url
 
     return create_engine(normalize_database_url(POSTGRES_URL), future=True)
 

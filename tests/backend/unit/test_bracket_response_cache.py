@@ -23,7 +23,7 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def cache_module(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from services.bracket import response_cache
+    from bracket import response_cache
 
     response_cache.clear_all()
     yield response_cache
@@ -72,10 +72,11 @@ def test_clear_all_clears_every_entry(cache_module):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
-    from services.bracket import response_cache
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
+    from bracket import response_cache
 
     response_cache.clear_all()
 
@@ -141,8 +142,8 @@ def _command_body(play_unit_id: str, **overrides) -> dict:
 
 
 def _spy_hydrate(monkeypatch):
-    """Wrap ``api.brackets._hydrate_session`` with a call counter."""
-    from api import brackets
+    """Wrap ``bracket.brackets._hydrate_session`` with a call counter."""
+    from bracket import brackets
 
     calls = {"n": 0}
     original = brackets._hydrate_session
@@ -227,7 +228,7 @@ def test_generate_event_invalidates_cache(client, tid):
 
 
 def test_ttl_expiry_rebuilds_after_cached_window(client, tid, monkeypatch):
-    from services.bracket import response_cache
+    from bracket import response_cache
 
     client.post(_bracket_url(tid), json=_se_4_body())
 

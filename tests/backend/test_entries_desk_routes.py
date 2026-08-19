@@ -32,7 +32,7 @@ PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -85,14 +85,14 @@ def _seed_entries(tid, specs):
     boundary.
     """
     import uuid as _uuid
-    from database.models import (
+    from db.models import (
         EntrantAccount,
         Entry,
         EntryEvent,
         EntryPlayer,
         Submission,
     )
-    from database.session import SessionLocal
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -216,7 +216,7 @@ def test_the_desk_list_never_leaks_entrant_credential_material(client, workspace
     for leak in ("password", "token", "hash", "secret"):
         assert leak not in serialized, f"the desk row mentions {leak!r}"
     # And the retired column is gone rather than merely hidden.
-    from database.models import Entry
+    from db.models import Entry
 
     assert not hasattr(Entry, "manage_token_hash")
 
@@ -316,7 +316,7 @@ def test_the_grouping_costs_no_extra_query_per_row(client, workspace):
     """
     from sqlalchemy import event
 
-    from database.session import engine
+    from db.session import engine
 
     tid = workspace
     _seed_entries(
@@ -539,7 +539,7 @@ def test_the_routes_are_registered_on_the_app(client):
     ``include_router`` as a nested ``_IncludedRouter`` rather than
     flattening onto ``app.routes``, so the route table is the wrong thing
     to read."""
-    from app.main import app
+    from core.main import app
 
     paths = app.openapi()["paths"]
     assert "/tournaments/{tournament_id}/entries" in paths

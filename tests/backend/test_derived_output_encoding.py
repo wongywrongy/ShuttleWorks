@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.bracket.io.export_schedule import _csv_safe, _ics_escape, to_csv, to_ics
+from bracket.io.export_schedule import _csv_safe, _ics_escape, to_csv, to_ics
 
 
 # --------------------------------------------------------------------
@@ -139,7 +139,7 @@ class TestEmailHeaderSafety:
     ``ValueError`` that used to surface as a 500."""
 
     def test_header_breaks_are_flattened(self):
-        from services.email import _header_safe
+        from core.email import _header_safe
 
         assert "\n" not in _header_safe("Spring\nBcc: attacker@evil.test")
         assert "\r" not in _header_safe("Spring\r\nBcc: attacker@evil.test")
@@ -155,7 +155,7 @@ class TestEmailHeaderSafety:
         """
         from email.message import EmailMessage
 
-        from services import email as email_module
+        from core import email as email_module
 
         sent: dict = {}
 
@@ -186,12 +186,12 @@ class TestEmailHeaderSafety:
         assert header_block.count("Subject:") == 1
 
     def test_overlong_subject_is_truncated(self):
-        from services.email import _MAX_SUBJECT, _header_safe
+        from core.email import _MAX_SUBJECT, _header_safe
 
         assert len(_header_safe("x" * (_MAX_SUBJECT * 3))) <= _MAX_SUBJECT
 
     def test_ordinary_subject_is_unchanged(self):
-        from services.email import _header_safe
+        from core.email import _header_safe
 
         assert _header_safe("You're invited to Spring Championship 2026") == (
             "You're invited to Spring Championship 2026"

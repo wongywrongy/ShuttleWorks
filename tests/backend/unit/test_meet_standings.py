@@ -3,12 +3,12 @@
 Ports the client-side ``groupScores`` useMemo previously in
 ``MeetDisplayPage.tsx`` (lines ~170-206) into a pure, session-free
 function so the backend can serve it on ``TournamentStateDTO.standings``.
-See ``services/meet/standings.py`` for the implementation and
+See ``meet/standings.py`` for the implementation and
 ``.superpowers/sdd/display/task-2-brief.md`` for the task spec.
 """
 from __future__ import annotations
 
-from services.meet.standings import compute_meet_standings, StandingRow
+from meet.standings import compute_meet_standings, StandingRow
 
 
 def test_basic_wins_losses():

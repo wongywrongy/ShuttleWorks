@@ -92,9 +92,9 @@ def client(tmp_path, monkeypatch):
     from tests.backend._helpers import isolate_test_database
 
     isolate_test_database(tmp_path, monkeypatch)
-    from services import turnstile as service
+    from identity import turnstile as service
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     monkeypatch.setattr(
         service, "_post", lambda url, fields, timeout: json.dumps({"success": True})
@@ -104,7 +104,7 @@ def client(tmp_path, monkeypatch):
 
 def _operator_cookie(client) -> str:
     """A real operator session, minted through the real route."""
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.clear()
     r = client.post(
@@ -118,7 +118,7 @@ def _operator_cookie(client) -> str:
 
 def _entrant_cookie(client) -> str:
     """A real entrant session, minted through the real routes."""
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.clear()
     r = client.post(
@@ -152,7 +152,7 @@ def _only(client, name: str, value: str) -> None:
 def test_an_operator_session_does_not_authorize_the_entrant_surface(client):
     """The operator cookie is real — it opens `/auth/me` in the same test —
     and it opens nothing on the entrant side."""
-    from app.config import settings
+    from core.config import settings
 
     operator = _operator_cookie(client)
 
@@ -168,7 +168,7 @@ def test_an_operator_token_under_the_entrant_cookie_name_resolves_to_nothing(
     credential must not carry it across, which is the whole difference
     between "two tables" and "one table with a discriminator someone
     remembers to check"."""
-    from app.config import settings
+    from core.config import settings
 
     operator = _operator_cookie(client)
 
@@ -184,7 +184,7 @@ def test_an_entrant_session_cannot_create_a_workspace(client):
     """`POST /tournaments` carries no `{tournament_id}`, so it sits outside
     the OpenAPI-derived tenancy test. An entrant reaching it would not
     merely see a workspace — they would *own* one."""
-    from app.config import settings
+    from core.config import settings
 
     entrant = _entrant_cookie(client)
 
@@ -198,7 +198,7 @@ def test_an_entrant_session_cannot_create_a_workspace(client):
 def test_an_entrant_session_cannot_accept_an_invite(client):
     """The escalation the Phase A audit named. A leaked invite link plus an
     entrant account must not equal membership of someone's event."""
-    from app.config import settings
+    from core.config import settings
 
     _operator_cookie(client)
     tid = client.post(
@@ -219,7 +219,7 @@ def test_the_invite_was_acceptable_all_along(client):
     """Negative control for the test above: the same token, presented by an
     operator session, is accepted. Otherwise the 401 might be an expired
     invite, a revoked one, or a typo in the URL."""
-    from app.config import settings
+    from core.config import settings
 
     operator = _operator_cookie(client)
     tid = client.post(
@@ -239,9 +239,9 @@ def test_an_entrant_never_becomes_a_tournament_members_principal(client):
     """The property stated at the level it actually holds: not "the entrant
     was refused", but "there is no membership row anywhere, and the
     workspace answers the uniform 404 rather than any part of itself"."""
-    from app.config import settings
-    from database.models import EntrantAccount, TournamentMember
-    from database.session import SessionLocal
+    from core.config import settings
+    from db.models import EntrantAccount, TournamentMember
+    from db.session import SessionLocal
     from sqlalchemy import func, select
 
     _operator_cookie(client)
@@ -275,7 +275,7 @@ def test_an_entrant_token_under_the_operator_cookie_name_resolves_to_nothing(
     client,
 ):
     """The mirror of the rename test above, and the more dangerous one."""
-    from app.config import settings
+    from core.config import settings
 
     entrant = _entrant_cookie(client)
 
@@ -300,8 +300,8 @@ def test_no_route_outside_the_public_surface_answers_an_entrant_cookie(client):
     `test_auth_surface.py`, with the anonymous caller replaced by a
     *wrongly-authenticated* one — which is the case that file cannot see.
     """
-    from app.config import settings
-    from app.main import app
+    from core.config import settings
+    from core.main import app
 
     entrant = _entrant_cookie(client)
     _only(client, settings.entrant_session_cookie_name, entrant)
@@ -337,8 +337,8 @@ def test_the_sweep_is_not_vacuous(client):
     loop finds plenty of reachable routes. Without this, a sweep that
     refused everything for an unrelated reason — a broken app, an empty
     route list — would look identical to a passing one."""
-    from app.config import settings
-    from app.main import app
+    from core.config import settings
+    from core.main import app
 
     operator = _operator_cookie(client)
     _only(client, settings.session_cookie_name, operator)
@@ -384,8 +384,8 @@ def test_a_relayed_operator_cookie_without_the_header_reaches_no_write(client):
     outright the moment the operator cookie is in the jar, so no entrant-
     minted proof can rescue this request either.
     """
-    from app.config import settings
-    from app.main import app
+    from core.config import settings
+    from core.main import app
 
     operator = _operator_cookie(client)
     _only(client, settings.session_cookie_name, operator)
@@ -420,8 +420,8 @@ def test_the_relay_sweep_is_not_vacuous(client):
     the identical loop, with the header restored, finds reachable writes.
     Without it a sweep that refused everything for an unrelated reason
     would be indistinguishable from a passing one."""
-    from app.config import settings
-    from app.main import app
+    from core.config import settings
+    from core.main import app
 
     operator = _operator_cookie(client)
     _only(client, settings.session_cookie_name, operator)

@@ -2,8 +2,8 @@
 
 Shapes mirror the backend wire contracts exactly:
 
-- meet blob  -> ``TournamentStateDTO``  (backend/app/schemas.py)
-- bracket    -> ``CreateTournamentIn`` / ``EventIn`` (backend/api/brackets.py)
+- meet blob  -> ``TournamentStateDTO``  (backend/core/schemas.py)
+- bracket    -> ``CreateTournamentIn`` / ``EventIn`` (backend/bracket/brackets.py)
 
 The meet blob is cribbed from the canonical minimal example the e2e suite
 uses (``e2e/fixtures/seed.ts`` — note that file wraps the blob as

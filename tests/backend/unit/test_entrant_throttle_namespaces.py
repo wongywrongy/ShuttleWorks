@@ -10,7 +10,7 @@ already serves ``ip:``, ``account:``, ``reg:`` and ``entry:``.
 *separate budgets*, in both directions:
 
 - a flood of entrant signups from a venue's shared address must not lock
-  that venue's **director out of signing in** — ``api/auth.py:157`` guards
+  that venue's **director out of signing in** — ``identity/auth_routes.py:157`` guards
   operator login with ``ip:<ip>``, and if an entrant surface charged that
   key, anyone on the internet could lock an operator out of their own
   event from the public form;
@@ -30,9 +30,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.config import settings
-from database.models import Base
-from services import auth as auth_service
+from core.config import settings
+from db.models import Base
+from core import throttle
+from identity import auth as auth_service
 
 IP = "203.0.113.9"
 EMAIL = "Parent.Chen@Example.COM"
@@ -65,7 +66,7 @@ def _operator_keys() -> tuple[str, ...]:
         f"ip:{IP}",
         f"account:{EMAIL.lower()}",
         auth_service.registration_key(IP),
-        auth_service.entries_key(IP),
+        throttle.entries_key(IP),
     )
 
 
@@ -116,7 +117,7 @@ def test_a_signup_flood_locks_the_signup_bucket(session):
         settings.entrant_signup_max_per_ip,
     )
 
-    assert auth_service.throttle_check(session, key) is not None
+    assert throttle.throttle_check(session, key) is not None
 
 
 def test_a_signup_flood_leaves_every_operator_bucket_open(session):
@@ -132,7 +133,7 @@ def test_a_signup_flood_leaves_every_operator_bucket_open(session):
     )
 
     for key in _operator_keys():
-        assert auth_service.throttle_check(session, key) is None, key
+        assert throttle.throttle_check(session, key) is None, key
 
 
 def test_those_operator_buckets_do_lock_when_charged_their_own_way(session):
@@ -143,10 +144,10 @@ def test_those_operator_buckets_do_lock_when_charged_their_own_way(session):
         (f"ip:{IP}", auth_service.throttle_record_failure),
         (f"account:{EMAIL.lower()}", auth_service.throttle_record_failure),
         (auth_service.registration_key(IP), auth_service.throttle_record_registration),
-        (auth_service.entries_key(IP), auth_service.throttle_record_entry),
+        (throttle.entries_key(IP), throttle.throttle_record_entry),
     ):
         _flood(session, record, key, 60)
-        assert auth_service.throttle_check(session, key) is not None, key
+        assert throttle.throttle_check(session, key) is not None, key
 
 
 def test_an_operator_login_flood_leaves_the_entrant_buckets_open(session):
@@ -165,7 +166,7 @@ def test_an_operator_login_flood_leaves_the_entrant_buckets_open(session):
         auth_service.entrant_ip_key(IP),
         auth_service.entrant_account_key(EMAIL),
     ):
-        assert auth_service.throttle_check(session, key) is None, key
+        assert throttle.throttle_check(session, key) is None, key
 
 
 # ---- Entrant credentials ---------------------------------------------
@@ -179,10 +180,10 @@ def test_an_entrant_credential_flood_locks_only_the_entrant_credential_buckets(
         auth_service.entrant_ip_key(IP),
     ):
         _flood(session, auth_service.throttle_record_failure, key, 60)
-        assert auth_service.throttle_check(session, key) is not None, key
+        assert throttle.throttle_check(session, key) is not None, key
 
     for key in _operator_keys():
-        assert auth_service.throttle_check(session, key) is None, key
+        assert throttle.throttle_check(session, key) is None, key
 
 
 def test_one_entrant_account_lockout_does_not_lock_another(session):
@@ -192,8 +193,8 @@ def test_one_entrant_account_lockout_does_not_lock_another(session):
     bystander = auth_service.entrant_account_key("bystander@example.com")
     _flood(session, auth_service.throttle_record_failure, victim, 60)
 
-    assert auth_service.throttle_check(session, victim) is not None
-    assert auth_service.throttle_check(session, bystander) is None
+    assert throttle.throttle_check(session, victim) is not None
+    assert throttle.throttle_check(session, bystander) is None
 
 
 # ---- The settings triple ---------------------------------------------
@@ -208,10 +209,10 @@ def test_the_signup_budget_reads_its_own_settings_triple(session, monkeypatch):
     key = auth_service.entrant_signup_key(IP)
 
     auth_service.throttle_record_entrant_signup(session, key)
-    assert auth_service.throttle_check(session, key) is None
+    assert throttle.throttle_check(session, key) is None
     auth_service.throttle_record_entrant_signup(session, key)
 
-    remaining = auth_service.throttle_check(session, key)
+    remaining = throttle.throttle_check(session, key)
     assert remaining is not None
     assert 60.0 < remaining <= 120.0
 
@@ -227,7 +228,7 @@ def test_the_registration_budget_does_not_govern_entrant_signups(
 
     _flood(session, auth_service.throttle_record_entrant_signup, key, 5)
 
-    assert auth_service.throttle_check(session, key) is None
+    assert throttle.throttle_check(session, key) is None
 
 
 def test_the_triple_has_defaults_and_they_are_a_public_form_shape():

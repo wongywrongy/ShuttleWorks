@@ -1,10 +1,10 @@
 """The cookie-derived double-submit token, as a unit.
 
 SP-PROGRAM-1 Phase 6 (ruling R8-B). ``_form_csrf`` was a private helper of
-``api/entries_public.py`` and every assertion about it reached it through a
+``entries/entries_public.py`` and every assertion about it reached it through a
 rendered page, which is not coverage of the primitive — it is coverage of
 the page that happened to call it. Phase 6 promotes it into
-``app/form_csrf.py`` because the CSRF middleware has to call it too, so it
+``core/form_csrf.py`` because the CSRF middleware has to call it too, so it
 gets characterized first (CODE_HEALTH 11): the digests below are the
 incumbent's actual output, captured before the move, so a move that
 changed the derivation fails on an equality rather than on a route
@@ -23,7 +23,7 @@ again.
 """
 from __future__ import annotations
 
-# Captured from api/entries_public._form_csrf before the promotion.
+# Captured from entries/entries_public._form_csrf before the promotion.
 # sha256("sw-play-form-csrf:" + token).hexdigest()
 _GOLDEN = {
     "tok-123": "a7ce0306886041690f40c7c52244e594ceda3785f5db849bb25f7cdc36f4276e",
@@ -36,7 +36,7 @@ _GOLDEN = {
 
 
 def test_the_promoted_token_matches_the_captured_digests():
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     for token, digest in _GOLDEN.items():
         assert form_csrf_token(token) == digest
@@ -46,14 +46,14 @@ def test_an_absent_session_yields_an_empty_token():
     """The pre-session gap, pinned as behaviour rather than as prose: with
     no secret the function returns ``""``, which the callers must treat as
     "no proof available" and never as "proof matched"."""
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     assert form_csrf_token(None) == ""
     assert form_csrf_token("") == ""
 
 
 def test_two_different_sessions_do_not_share_a_token():
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     assert form_csrf_token("tok-123") != form_csrf_token("tok-124")
 
@@ -61,11 +61,11 @@ def test_two_different_sessions_do_not_share_a_token():
 def test_no_route_module_re_exports_the_derivation_under_another_name():
     """**The alias is gone, and this is what keeps it gone.**
 
-    ``api/entries_public`` kept ``form_csrf_token`` bound to the incumbent
+    ``entries/entries_public/`` kept ``form_csrf_token`` bound to the incumbent
     name ``_form_csrf`` so that the submit route and the ~90 tests in
     ``test_entries_public_routes.py`` were untouched by the promotion. The
     Phase 6 cut-over deleted both, so the alias had no callers left and
-    went with them; ``api/entries_json`` imports from ``app/form_csrf``
+    went with them; ``entries/entries_json/`` imports from ``core/form_csrf/``
     directly, which is the whole point of promoting it.
 
     Asserted rather than left implicit because a re-export is how a second
@@ -76,12 +76,12 @@ def test_no_route_module_re_exports_the_derivation_under_another_name():
     the stronger property — one sha256 — and this holds the weaker one it
     cannot see: one importable name.
     """
-    import api.entries_json
-    import api.entries_public
+    import entries.entries_json
+    import entries.entries_public
 
-    assert not hasattr(api.entries_public, "_form_csrf")
+    assert not hasattr(entries.entries_public, "_form_csrf")
     # Negative control: the module that DOES use it names it from its owner.
-    assert api.entries_json._form_csrf.__module__ == "app.form_csrf"
+    assert entries.entries_json._form_csrf.__module__ == "core.form_csrf"
 
 
 def test_there_is_exactly_one_derivation_in_the_backend():
@@ -93,8 +93,8 @@ def test_there_is_exactly_one_derivation_in_the_backend():
     """
     from pathlib import Path
 
-    backend = Path(__file__).resolve().parents[3] / "apps" / "api"
-    owner = backend / "app" / "form_csrf.py"
+    backend = Path(__file__).resolve().parents[3] / "apps" / "api" / "src"
+    owner = backend / "core" / "form_csrf.py"
 
     offenders = [
         str(path.relative_to(backend))
@@ -103,13 +103,13 @@ def test_there_is_exactly_one_derivation_in_the_backend():
     ]
 
     assert not offenders, (
-        "The form CSRF domain separator appears outside app/form_csrf.py, "
+        "The form CSRF domain separator appears outside core/form_csrf.py, "
         "which means there is a second derivation of the token: " + ", ".join(offenders)
     )
 
 
 def test_the_form_field_name_is_the_one_the_page_emits():
-    from app.form_csrf import FORM_FIELD
+    from core.form_csrf import FORM_FIELD
 
     assert FORM_FIELD == "_csrf"
 
@@ -148,8 +148,8 @@ def test_the_nonce_cookie_authenticates_nothing():
     signed in, and, worse, would dress a value that identifies nobody as a
     credential. Add it to the registry and this fails.
     """
-    from app.config import settings
-    from app.form_csrf import PLAY_CSRF_COOKIE
+    from core.config import settings
+    from core.form_csrf import PLAY_CSRF_COOKIE
 
     assert PLAY_CSRF_COOKIE == "sw_play_csrf"
     assert PLAY_CSRF_COOKIE not in settings.session_cookie_names
@@ -168,8 +168,8 @@ def test_the_nonce_is_nevertheless_inside_the_csrf_trigger():
     be a hole: the one write with no session behind it - login, signup -
     would trigger no CSRF check on either channel.
     """
-    from app.config import settings
-    from app.form_csrf import PLAY_CSRF_COOKIE
+    from core.config import settings
+    from core.form_csrf import PLAY_CSRF_COOKIE
 
     assert PLAY_CSRF_COOKIE in settings.csrf_relevant_cookie_names
     for name in settings.session_cookie_names:
@@ -183,8 +183,8 @@ def test_the_trigger_list_is_the_registry_plus_the_nonce_and_nothing_else():
     ``test_a_non_session_cookie_still_does_not_trigger_the_check`` guards
     behaviourally, pinned here at the definition.
     """
-    from app.config import settings
-    from app.form_csrf import PLAY_CSRF_COOKIE
+    from core.config import settings
+    from core.form_csrf import PLAY_CSRF_COOKIE
 
     assert settings.csrf_relevant_cookie_names == (
         *settings.session_cookie_names,
@@ -211,7 +211,7 @@ def test_the_backend_no_longer_mints_the_nonce_itself():
     # AST, not a substring pair: ``config.py`` legitimately says both
     # "set_cookie" and "sw_play_csrf" in prose, and a guard that a docstring
     # can trip is a guard someone eventually silences.
-    backend = Path(__file__).resolve().parents[3] / "apps" / "api"
+    backend = Path(__file__).resolve().parents[3] / "apps" / "api" / "src"
     offenders = []
     for path in backend.rglob("*.py"):
         source = path.read_text(encoding="utf-8")
@@ -235,7 +235,7 @@ def test_the_backend_no_longer_mints_the_nonce_itself():
 
 # The two places the backend is allowed to say ``issue_play_csrf`` out loud.
 # Both are obituaries: prose explaining that the function is gone and why.
-_ISSUE_PLAY_CSRF_OBITUARIES = {"api/entries_json.py", "app/form_csrf.py"}
+_ISSUE_PLAY_CSRF_OBITUARIES = {"entries/entries_json.py", "core/form_csrf.py"}
 
 
 def test_the_deleted_minter_is_named_only_in_its_own_obituaries():
@@ -255,7 +255,7 @@ def test_the_deleted_minter_is_named_only_in_its_own_obituaries():
     """
     from pathlib import Path
 
-    backend = Path(__file__).resolve().parents[3] / "apps" / "api"
+    backend = Path(__file__).resolve().parents[3] / "apps" / "api" / "src"
     hits = [
         f"{path.relative_to(backend).as_posix()}:{n}"
         for path in sorted(backend.rglob("*.py"))
@@ -284,7 +284,7 @@ def test_the_trigger_list_reads_the_cookie_name_from_its_owner():
     import ast
     from pathlib import Path
 
-    path = Path(__file__).resolve().parents[3] / "apps" / "api" / "app" / "config.py"
+    path = Path(__file__).resolve().parents[3] / "apps" / "api" / "src" / "core" / "config.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
     # Docstrings are excluded on purpose: naming the cookie in prose is how
@@ -312,5 +312,5 @@ def test_the_trigger_list_reads_the_cookie_name_from_its_owner():
 
     assert not literals, (
         f"config.py carries its own copy of the nonce cookie name at line(s) "
-        f"{literals}; it must read app.form_csrf.PLAY_CSRF_COOKIE instead"
+        f"{literals}; it must read core.form_csrf.PLAY_CSRF_COOKIE instead"
     )

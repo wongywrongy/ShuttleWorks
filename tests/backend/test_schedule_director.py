@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [
     k for k in list(sys.modules)
@@ -32,15 +32,13 @@ def client(tmp_path, monkeypatch):
     from _helpers import isolate_test_database
     isolate_test_database(tmp_path, monkeypatch)
 
-    from api import (
-        match_state,
-        schedule_advisories,
-        schedule_director,
-        schedule_proposals,
-        schedule_repair,
-        schedule_warm_restart,
-        tournaments,
-    )
+    from operations import match_state_routes as match_state
+    from meet import schedule_advisories
+    from meet import schedule_director
+    from meet import schedule_proposals
+    from meet import schedule_repair
+    from meet import schedule_warm_restart
+    from workspaces import tournaments
     app_ = FastAPI()
     app_.include_router(schedule_warm_restart.router)
     app_.include_router(schedule_repair.router)

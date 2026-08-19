@@ -15,10 +15,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import Base, SolveJob, Tournament
-from services import solve_jobs
-from services.solve_runner import RunnerOutcome
-from services.solve_worker import SolveWorker
+from db.models import Base, SolveJob, Tournament
+from solve_rail import solve_jobs
+from solve_rail.solve_runner import RunnerOutcome
+from solve_rail.solve_worker import SolveWorker
 
 SETTINGS = SimpleNamespace(
     job_poll_interval_seconds=0.01,

@@ -17,11 +17,11 @@ def _reload_with_env(monkeypatch, **env):
     """Reload config + session modules with a fresh env mapping."""
     for key, value in env.items():
         monkeypatch.setenv(key, value)
-    import app.config
-    importlib.reload(app.config)
-    import database.session
-    importlib.reload(database.session)
-    return app.config.Settings(), database.session.engine
+    import core.config
+    importlib.reload(core.config)
+    import db.session
+    importlib.reload(db.session)
+    return core.config.Settings(), db.session.engine
 
 
 def test_settings_defaults_sqlite(monkeypatch):
@@ -92,16 +92,16 @@ def _restore_modules():
     """Reload back to clean defaults after each test so DB-touching tests
     in the rest of the suite don't see this file's env shim."""
     yield
-    import app.config
-    importlib.reload(app.config)
-    import database.session
-    importlib.reload(database.session)
+    import core.config
+    importlib.reload(core.config)
+    import db.session
+    importlib.reload(db.session)
 
 
 def test_cloud_mode_refuses_console_email_backend(monkeypatch):
     """SP-CLOUD-2: the console backend logs raw reset/invite tokens --
     cloud startup must fail closed without SMTP delivery."""
-    from app.config import Settings
+    from core.config import Settings
 
     with pytest.raises(Exception) as e:
         Settings(

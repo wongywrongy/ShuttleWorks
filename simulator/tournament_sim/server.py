@@ -1,11 +1,11 @@
 """EphemeralServer — boot an isolated backend for one simulation run.
 
-Launches ``uvicorn app.main:app`` as a SUBPROCESS (never an import — the
+Launches ``uvicorn core.main:app`` as a SUBPROCESS (never an import — the
 HTTP-only boundary holds even here) with a fresh SQLite file in a temp
 dir. The backend's lifespan runs Alembic ``upgrade head`` on startup, so
 the schema self-provisions.
 
-The subprocess runs with ``cwd=apps/api/``, so it reads ``apps/api/.env``
+The subprocess runs with ``cwd=apps/api/src/``, so it reads ``apps/api/src.env``
 like any other local API — a machine configured for ``AUTH_MODE=cloud``
 gets an ephemeral server that requires real accounts too. ``ScenarioRunner``
 handles both by asking ``/auth/me`` rather than assuming the bootstrap
@@ -27,7 +27,7 @@ from pathlib import Path
 import httpx
 
 #: repo-relative location of the API package (cwd for the subprocess)
-_BACKEND_DIR = Path(__file__).resolve().parents[2] / "apps" / "api"
+_BACKEND_DIR = Path(__file__).resolve().parents[2] / "apps" / "api" / "src"
 
 
 def _free_port() -> int:
@@ -66,7 +66,7 @@ class EphemeralServer:
             self._log_handle = open(self.log_to, "w", encoding="utf-8")
             stdout = self._log_handle
         self._proc = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "app.main:app",
+            [sys.executable, "-m", "uvicorn", "core.main:app",
              "--host", "127.0.0.1", "--port", str(self.port), "--log-level", "warning"],
             cwd=str(_BACKEND_DIR),
             env=env,

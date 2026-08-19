@@ -10,7 +10,7 @@ Run from the repo root: .venv/Scripts/python.exe tools/audit_input_surface.py
 import os
 import sys
 
-BACKEND = os.path.join(os.getcwd(), "apps", "api")
+BACKEND = os.path.join(os.getcwd(), "apps", "api", "src")
 sys.path.insert(0, BACKEND)
 os.environ.setdefault("DATABASE_URL", "sqlite:///./_audit_tmp.db")
 

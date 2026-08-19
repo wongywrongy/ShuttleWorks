@@ -5,7 +5,7 @@ service-level primitives. This file pins the two seams that only exist as
 behaviour of the running app, and that the entrant principal is about to
 run through (SP-E1-2 rule 5):
 
-1. **The CSRF middleware's trigger condition** (``app/main.py``). Today it
+1. **The CSRF middleware's trigger condition** (``core/main.py``). Today it
    fires on one cookie name. The entrant cookie arrives under a *different*
    name, and a middleware keyed to a single name would let every entrant
    write fall silently outside CSRF enforcement — the trap spec Q13 §2 names
@@ -14,7 +14,7 @@ run through (SP-E1-2 rule 5):
    reads never do; writes carrying no session cookie never do. The fix
    widens "the session cookie" from one name to a registry of names; it does
    not change any assertion here.
-2. **``require_tournament_access``'s uniform 404** (``app/dependencies.py``).
+2. **``require_tournament_access``'s uniform 404** (``core/dependencies.py``).
    An entrant principal must be *provably outside* this seam. That proof is
    only meaningful against a pinned statement of what the seam does for the
    principals it already knows — a non-member gets 404 (never 403, never
@@ -38,7 +38,7 @@ GOOD_PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -115,7 +115,7 @@ def test_a_cookie_that_is_not_a_session_cookie_does_not_trigger_csrf(client):
 def test_the_trigger_reads_the_configured_cookie_name(client, monkeypatch):
     """Pinned because the fix edits exactly this line: the middleware asks
     configuration for the name(s), never a literal."""
-    from app.config import settings
+    from core.config import settings
 
     assert settings.session_cookie_name == "sw_session"
     client.cookies.clear()
@@ -191,8 +191,8 @@ def test_an_insufficient_role_is_403_because_membership_is_already_known(
     """403 is reserved for a caller who already knows the workspace exists.
     Pinned so the entrant work cannot quietly turn a 404 into a 403 by
     introducing a principal the role lookup half-recognizes."""
-    from database.models import TournamentMember, User
-    from database.session import SessionLocal
+    from db.models import TournamentMember, User
+    from db.session import SessionLocal
     from sqlalchemy import select
     import uuid as _uuid
 

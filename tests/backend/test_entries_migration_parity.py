@@ -1,7 +1,7 @@
 """The migration ledger for ``tests/test_entries_public_routes.py``.
 
 SP-PROGRAM-1 Phase 6 retires the f-string HTML entry surface
-(``api/entries_public.py``'s ``GET /e/{slug}`` and ``POST
+(``entries/entries_public.py``'s ``GET /e/{slug}`` and ``POST
 /e/{slug}/submit``) and serves the same product from React Router 7 plus a
 JSON API. **Submission behaviour is unchanged; only the serving context
 moves.** So the ~90 tests that pinned that behaviour are *migrated*, not
@@ -139,7 +139,7 @@ SUPERSEDED: dict[str, tuple[str, str]] = {
         _SUBMIT, "test_the_token_is_bound_to_the_session_that_rendered_the_form"),
     # Not in the task brief's 47 rows, and a real gap without it: this is
     # the ONLY test of the route-owned ``require_form_csrf`` in
-    # ``api/entries_json.py`` (every other CSRF row is answered by the
+    # ``entries/entries_json.py`` (every other CSRF row is answered by the
     # middleware before the route runs). Deleting the old file without a
     # successor would leave that guard's TypeError hazard unpinned.
     "test_a_non_ascii_form_token_is_a_refusal_and_not_a_500": (

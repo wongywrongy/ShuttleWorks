@@ -26,8 +26,8 @@ from scheduler_core.domain.tournament import (
     WinnerSide,
 )
 
-from services.bracket.advancement import auto_walkover_byes, record_result
-from services.bracket.formats.monrad import generate_monrad
+from bracket.advancement import auto_walkover_byes, record_result
+from bracket.formats.monrad import generate_monrad
 
 
 def _participants(n: int) -> list[Participant]:
@@ -228,7 +228,7 @@ def test_monrad_full_n6_byes():
 
 
 def test_monrad_registry_config():
-    from services.bracket.formats import FORMAT_REGISTRY
+    from bracket.formats import FORMAT_REGISTRY
 
     spec = FORMAT_REGISTRY["monrad"]
     assert spec.label == "Monrad"

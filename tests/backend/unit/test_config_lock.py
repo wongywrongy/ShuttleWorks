@@ -3,7 +3,7 @@
 The classifier is fail-closed: any config key NOT in the shared
 non-scheduling-keys JSON is scheduling-relevant.
 """
-from services.config_lock import NON_SCHEDULING_KEYS, changed_scheduling_fields
+from workspaces.config_lock import NON_SCHEDULING_KEYS, changed_scheduling_fields
 
 
 def test_exempt_keys_do_not_classify():
@@ -43,7 +43,7 @@ def test_json_is_the_source():
 
 
 def test_http_error_extra_payload():
-    from app.error_codes import ErrorCode, http_error
+    from core.error_codes import ErrorCode, http_error
 
     exc = http_error(
         409,
@@ -58,7 +58,7 @@ def test_http_error_extra_payload():
 
 
 def test_draw_started_code_exists():
-    from app.error_codes import ErrorCode
+    from core.error_codes import ErrorCode
 
     assert ErrorCode.DRAW_STARTED.value == "DRAW_STARTED"
 
@@ -67,7 +67,7 @@ def test_http_error_without_extra_is_unchanged():
     """Backward compatibility: omitting ``extra`` must keep the exact
     two-key wire shape existing callers (and the frontend interceptor)
     already depend on."""
-    from app.error_codes import ErrorCode, http_error
+    from core.error_codes import ErrorCode, http_error
 
     exc = http_error(409, ErrorCode.CONFIG_LOCKED, "locked")
     assert exc.status_code == 409

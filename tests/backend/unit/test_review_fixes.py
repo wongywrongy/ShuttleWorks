@@ -22,8 +22,8 @@ def test_ops_token_guard_rejects_non_ascii_without_crashing(monkeypatch):
     """
     from fastapi import HTTPException
 
-    from api import health
-    from app.config import settings
+    from ops import health
+    from core.config import settings
 
     monkeypatch.setattr(settings, "ops_token", "correct-horse", raising=False)
 
@@ -37,8 +37,8 @@ def test_ops_token_guard_rejects_non_ascii_without_crashing(monkeypatch):
 
 def test_ops_token_guard_still_accepts_the_right_token(monkeypatch):
     """The encode() must not break the happy path."""
-    from api import health
-    from app.config import settings
+    from ops import health
+    from core.config import settings
 
     monkeypatch.setattr(settings, "ops_token", "correct-horse", raising=False)
 
@@ -51,8 +51,8 @@ def test_ops_token_guard_still_accepts_the_right_token(monkeypatch):
 def test_ops_token_guard_rejects_a_wrong_token(monkeypatch):
     from fastapi import HTTPException
 
-    from api import health
-    from app.config import settings
+    from ops import health
+    from core.config import settings
 
     monkeypatch.setattr(settings, "ops_token", "correct-horse", raising=False)
 
@@ -68,8 +68,8 @@ def test_ops_token_guard_rejects_a_wrong_token(monkeypatch):
 
 
 def _client_ip_with(monkeypatch, trusted, peer, header=None):
-    from app import client_ip as mod
-    from app.config import settings
+    from core import client_ip as mod
+    from core.config import settings
 
     monkeypatch.setattr(settings, "trusted_proxy_ips", trusted, raising=False)
     mod._parse_trusted.cache_clear()

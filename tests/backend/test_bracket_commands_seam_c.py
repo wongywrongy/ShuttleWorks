@@ -31,9 +31,10 @@ from _helpers import isolate_test_database, seed_tournament
 def bracket_client(tmp_path, monkeypatch):
     """In-memory SQLite + FastAPI app with tournaments + brackets routers."""
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -150,8 +151,8 @@ def test_seam_c_is_idempotent_on_command_id(bracket_client, seeded_bracket):
     # POST — this is the mechanism that makes re-hydration on the replay see
     # the id and short-circuit instead of double-advancing.
     from sqlalchemy import select
-    from database.models import Tournament
-    from database.session import SessionLocal
+    from db.models import Tournament
+    from db.session import SessionLocal
 
     with SessionLocal() as s:
         row = s.scalar(select(Tournament).where(Tournament.id == uuid.UUID(tid)))

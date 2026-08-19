@@ -25,9 +25,10 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -96,8 +97,8 @@ def _upsert_body(participants=None) -> dict:
 
 def _get_event_status(client, tid: str, event_id: str) -> str:
     """Read the event status directly from the DB (not just from route response)."""
-    from database.session import SessionLocal
-    from database.models import BracketEvent
+    from db.session import SessionLocal
+    from db.models import BracketEvent
     from sqlalchemy.orm import Session
     session: Session = SessionLocal()
     try:
@@ -346,8 +347,8 @@ def test_generate_infeasible_returns_409(client, tid):
     # With only 1 total slot and a match needing 2 slots, it's infeasible.
     assert rg.status_code == 409
     # DB must have rolled back — no bracket_matches rows for MS.
-    from database.session import SessionLocal
-    from database.models import BracketMatch
+    from db.session import SessionLocal
+    from db.models import BracketMatch
     import uuid as _uuid
     _s = SessionLocal()
     try:
@@ -505,8 +506,8 @@ def test_generate_bye_result_persisted(client, tid):
     assert rg.status_code == 200, rg.text
 
     # Query the DB directly for walkover result rows for this event.
-    from database.session import SessionLocal
-    from database.models import BracketResult
+    from db.session import SessionLocal
+    from db.models import BracketResult
     import uuid as _uuid
 
     _s = SessionLocal()

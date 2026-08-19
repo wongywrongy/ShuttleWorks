@@ -5,7 +5,7 @@
 ``disable_existing_loggers`` to True: every logger that already exists and
 is not named in the ini gets ``disabled = True`` — permanently, for the
 life of the process. The app runs its migrations from its own lifespan
-(``app.main._run_migrations``), long after uvicorn has created
+(``core.main._run_migrations``), long after uvicorn has created
 ``uvicorn``, ``uvicorn.error`` and ``uvicorn.access``. So a few hundred
 milliseconds into startup the server's entire log went dark.
 
@@ -78,9 +78,9 @@ def test_alembic_env_leaves_existing_loggers_enabled(tmp_path, monkeypatch, _res
     url = f"sqlite:///{tmp_path / 'logging.db'}"
     monkeypatch.setenv("DATABASE_URL", url)
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    if str(_BACKEND) in sys.path:
-        sys.path.remove(str(_BACKEND))
-    sys.path.insert(0, str(_BACKEND))
+    if str(_BACKEND / "src") in sys.path:
+        sys.path.remove(str(_BACKEND / "src"))
+    sys.path.insert(0, str(_BACKEND / "src"))
     purge_backend_modules()
 
     from alembic import command
@@ -92,7 +92,7 @@ def test_alembic_env_leaves_existing_loggers_enabled(tmp_path, monkeypatch, _res
 
     # The shipped ini, exactly as the application's lifespan loads it.
     cfg = Config(str(_BACKEND / "alembic.ini"))
-    cfg.set_main_option("script_location", str(_BACKEND / "alembic"))
+    cfg.set_main_option("script_location", str(_BACKEND / "src" / "alembic"))
     try:
         command.current(cfg)
     finally:
@@ -111,7 +111,7 @@ def test_app_startup_migrations_do_not_lower_the_root_log_level(
     enabled, ``fileConfig`` still reconfigures the ROOT logger from the
     ini's ``[logger_root] level = WARNING`` — so the application's own
     ``scheduler.*`` INFO records were dropped from a moment after startup
-    onwards, for the life of the process. ``app.main._run_migrations``
+    onwards, for the life of the process. ``core.main._run_migrations``
     now builds its Alembic ``Config`` without the ini for that reason;
     the ini configures the ``alembic`` CLI and has no business setting a
     running API's log level.
@@ -125,14 +125,14 @@ def test_app_startup_migrations_do_not_lower_the_root_log_level(
     # would collide with them.
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'startup.db'}")
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    if str(_BACKEND) in sys.path:
-        sys.path.remove(str(_BACKEND))
-    sys.path.insert(0, str(_BACKEND))
+    if str(_BACKEND / "src") in sys.path:
+        sys.path.remove(str(_BACKEND / "src"))
+    sys.path.insert(0, str(_BACKEND / "src"))
     purge_backend_modules()
 
     logging.getLogger().setLevel(logging.INFO)
 
-    from app.main import _run_migrations
+    from core.main import _run_migrations
 
     _run_migrations()
 

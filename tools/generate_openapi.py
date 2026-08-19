@@ -2,7 +2,7 @@
 
 Used by ``make generate-api`` to feed openapi-typescript without needing
 the backend to be running. Imports the production FastAPI app directly
-from ``apps/api/app/main.py`` and writes the OpenAPI 3.1 document to the
+from ``apps/api/src/core/main.py`` and writes the OpenAPI 3.1 document to the
 file path passed on argv.
 """
 from __future__ import annotations
@@ -11,11 +11,13 @@ import json
 import sys
 from pathlib import Path
 
-_API = Path(__file__).resolve().parents[1] / "apps" / "api"
-if str(_API) not in sys.path:
-    sys.path.insert(0, str(_API))
+# apps/api/src is the API's sys.path root (SP-REORG-1 R4: src is a ROOT, not
+# a package), so `core`, `meet`, `bracket` and friends import by bare name.
+_API_SRC = Path(__file__).resolve().parents[1] / "apps" / "api" / "src"
+if str(_API_SRC) not in sys.path:
+    sys.path.insert(0, str(_API_SRC))
 
-from app.main import app  # noqa: E402  -- after sys.path setup
+from core.main import app  # noqa: E402  -- after sys.path setup
 
 
 def main() -> int:

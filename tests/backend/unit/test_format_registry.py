@@ -24,9 +24,10 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -81,8 +82,8 @@ def _create_session(client, tid: str) -> None:
 
 
 def test_registry_dispatch_matches_direct_generators():
-    from services.bracket.formats import FORMAT_REGISTRY
-    from services.bracket.formats import (
+    from bracket.formats import FORMAT_REGISTRY
+    from bracket.formats import (
         generate_round_robin,
         generate_single_elimination,
     )

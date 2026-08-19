@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from scheduler_core.domain.models import ScheduleConfig
 from scheduler_core.domain.tournament import Participant, ParticipantType, TournamentState, WinnerSide
-from services.bracket import (
+from bracket import (
     TournamentDriver,
     generate_single_elimination,
     record_result,
 )
-from services.bracket.state import register_draw
+from bracket.state import register_draw
 
 
 def _make_state(num_p_ms: int = 4, num_p_ws: int = 4):

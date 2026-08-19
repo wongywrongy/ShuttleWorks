@@ -14,14 +14,14 @@ import pytest
 
 
 def _import_fastapi_app():
-    backend_root = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+    backend_root = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
     sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
     for k in [m for m in list(sys.modules)
               if m in ("app", "adapters")
               or m.startswith("app.") or m.startswith("adapters.")
               or m.startswith("api.")]:
         del sys.modules[k]
-    from app.main import app
+    from core.main import app
     return app
 
 

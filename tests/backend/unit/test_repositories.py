@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # conftest.py adds backend/ to sys.path before this module is collected.
-from database.models import (
+from db.models import (
     Base,
     InviteLink,
     MatchState,
@@ -498,7 +498,7 @@ def test_count_by_tournament_helpers(repo, session):
     from datetime import timedelta, timezone
     from datetime import datetime as _dt
 
-    from database.models import BracketEvent
+    from db.models import BracketEvent
 
     now = _dt.now(timezone.utc)
     t1 = repo.tournaments.create(

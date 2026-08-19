@@ -21,7 +21,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import (
+from db.models import (
     Base,
     EntrantAccount,
     Entry,
@@ -31,7 +31,7 @@ from database.models import (
     Submission,
     Tournament,
 )
-from services.submissions import (
+from entries.submissions import (
     PlayerInput,
     create_submission,
     entries_for,
@@ -322,7 +322,7 @@ def test_a_lost_race_on_the_unique_index_returns_the_winner_not_a_conflict(
         key="racy",
     )
 
-    from services import submissions as service
+    from entries import submissions as service
 
     real = service.find_by_idempotency_key
     calls = {"n": 0}

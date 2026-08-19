@@ -22,8 +22,8 @@ from scheduler_core.domain.tournament import (
     WinnerSide,
 )
 
-from services.bracket.advancement import record_result
-from services.bracket.draw import BYE, BracketSlot, Draw
+from bracket.advancement import record_result
+from bracket.draw import BYE, BracketSlot, Draw
 
 
 def _participant(pid: str) -> Participant:
@@ -178,7 +178,7 @@ def test_double_walkover_feeds_bye_to_both_takes():
 
 
 def test_slot_dict_back_compat_and_round_trip():
-    from api.brackets import _dict_to_slot, _slot_to_dict
+    from bracket.brackets import _dict_to_slot, _slot_to_dict
 
     # Winner-take feeder: EXACT historical dict (no feeder_take key).
     winner_slot = BracketSlot.of_feeder("M0")

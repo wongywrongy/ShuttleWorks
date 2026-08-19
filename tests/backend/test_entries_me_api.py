@@ -30,14 +30,14 @@ GOOD_PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
 
 @pytest.fixture
 def turnstile(client, monkeypatch):
-    from services import turnstile as service
+    from identity import turnstile as service
 
     def fake_post(url, fields, timeout):
         return json.dumps({"success": True})
@@ -53,8 +53,8 @@ def page(client):
         "/tournaments", json={"name": "Winter Cup"}, headers=CSRF
     ).json()["id"]
 
-    from database.models import EntryEvent, EntryPage, Tournament
-    from database.session import SessionLocal
+    from db.models import EntryEvent, EntryPage, Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -109,8 +109,8 @@ def _seed_submission(page, email, player_name="Robin Seeded", state="pending",
     """A submission + entry for the account holding ``email``, seeded at the
     R13 levels directly (the submit form's own behaviour has its own suite).
     """
-    from database.models import EntrantAccount, Entry, EntryPlayer, Submission
-    from database.session import SessionLocal
+    from db.models import EntrantAccount, Entry, EntryPlayer, Submission
+    from db.session import SessionLocal
     from sqlalchemy import func, select
 
     session = SessionLocal()
@@ -148,8 +148,8 @@ def _seed_submission(page, email, player_name="Robin Seeded", state="pending",
 
 
 def _set_tournament_date(page, date_iso):
-    from database.models import Tournament
-    from database.session import SessionLocal
+    from db.models import Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -362,8 +362,8 @@ def test_result_badges_respect_results_published(client, page, turnstile):
 
     assert badge() is None  # results unpublished
 
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:

@@ -1,7 +1,7 @@
 """The shared scheduling-parameter builder used by Meet and Bracket."""
 from scheduler_core.domain.models import ScheduleConfig
 
-from services.scheduling.params import SchedulingParams, build_schedule_config
+from shared.scheduling.params import SchedulingParams, build_schedule_config
 
 
 def test_build_minimal_bracket_shaped_config():

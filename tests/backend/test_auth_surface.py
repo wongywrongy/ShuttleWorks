@@ -197,7 +197,7 @@ def cloud_client(tmp_path, monkeypatch):
 
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app), app
 
@@ -309,7 +309,7 @@ def turnstile(cloud_client, monkeypatch):
     drives the verdict exactly as the real keys will."""
     import json
 
-    from services import turnstile as service
+    from identity import turnstile as service
 
     def fake_post(url, fields, timeout):
         if fields.get("secret", "").startswith("2x"):
@@ -325,8 +325,8 @@ def turnstile(cloud_client, monkeypatch):
 def entry_page(cloud_client):
     """Two workspaces, each with an open entry page — seeded directly,
     since an anonymous caller has no route that could create one."""
-    from database.models import EntryEvent, EntryPage, Tournament
-    from database.session import SessionLocal
+    from db.models import EntryEvent, EntryPage, Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -361,8 +361,8 @@ def entry_page(cloud_client):
 def _entry_count(tid=None) -> int:
     import uuid as _uuid
 
-    from database.models import Entry
-    from database.session import SessionLocal
+    from db.models import Entry
+    from db.session import SessionLocal
     from sqlalchemy import func, select
 
     session = SessionLocal()

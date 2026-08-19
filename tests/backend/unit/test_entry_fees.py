@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from services.entry_fees import PlayerSelection, compute_fee_total
+from entries.entry_fees import PlayerSelection, compute_fee_total
 
 
 def _event(code, fee_cents=None, discipline=None):

@@ -29,7 +29,7 @@ import socket
 
 import pytest
 
-from services import turnstile
+from identity import turnstile
 
 
 @pytest.fixture
@@ -95,7 +95,7 @@ def test_the_secret_defaults_to_configuration_not_to_a_literal(transport):
 
     turnstile.verify_turnstile("a-real-token")
 
-    from app.config import settings
+    from core.config import settings
 
     assert calls[0]["fields"]["secret"] == settings.turnstile_secret_key
 
@@ -248,7 +248,7 @@ def test_the_dummy_keypair_is_the_default():
     """Cloudflare's documented always-pass test pair. Real keys are Phase 2
     deployment configuration, and a default that is a real key is a key in
     a git repository."""
-    from app.config import settings
+    from core.config import settings
 
     assert settings.turnstile_site_key == "1x00000000000000000000AA"
     assert settings.turnstile_secret_key == "1x0000000000000000000000000000000AA"
@@ -257,7 +257,7 @@ def test_the_dummy_keypair_is_the_default():
 def test_the_entries_throttle_triple_exists_and_is_its_own_bucket():
     """A separate budget from the credential and registration triples: an
     entry surge at a venue must not lock that venue out of signing in."""
-    from app.config import settings
+    from core.config import settings
 
     assert settings.entries_max_per_ip > 0
     assert settings.entries_window_seconds > 0

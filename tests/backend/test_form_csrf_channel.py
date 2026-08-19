@@ -5,7 +5,7 @@ SP-PROGRAM-1 Phase 6, ruling R8-B. Until now a write proved it was sent
 deliberately in exactly one way — the ``X-ShuttleWorks-CSRF`` header — and
 the one surface that cannot send a header (a native ``<form method=post>``
 on a page with no script) was let through by a path regex in
-``app/main.py`` and made to prove itself inside the route. A path-based
+``core/main.py`` and made to prove itself inside the route. A path-based
 exemption is a hole that grows; a second **enumerated** channel is a
 property every write is measured against. This file asserts the channel,
 in both directions and on both secrets:
@@ -44,14 +44,14 @@ GOOD_PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
 
 @pytest.fixture
 def turnstile(client, monkeypatch):
-    from services import turnstile as service
+    from identity import turnstile as service
 
     monkeypatch.setattr(
         service, "_post", lambda url, fields, timeout: json.dumps({"success": True})
@@ -62,7 +62,7 @@ def turnstile(client, monkeypatch):
 def entrant(client, turnstile):
     """A signed-in entrant, through the real routes — the session cookie
     this file derives tokens from has to be a real one."""
-    from app.config import settings
+    from core.config import settings
 
     assert (
         client.post(
@@ -86,7 +86,7 @@ def entrant(client, turnstile):
 
 
 def _token_for(secret: str) -> str:
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     return form_csrf_token(secret)
 
@@ -153,7 +153,7 @@ def test_a_json_body_cannot_carry_the_second_channel(client, entrant):
 
 # ---- the pre-session channel (the gap R8-B closes) ---------------------
 
-# A nonce exactly as the SSR tier mints it (``entrant/app/lib/formCsrf.
+# A nonce exactly as the SSR tier mints it (``entrant/app/lib/formCsrf/.
 # server.ts``): 32 random bytes, base64url. A literal here rather than a
 # call, because after ruling R8-D the backend does not mint this cookie at
 # all — node does, on the SSR document response — and ``issue_play_csrf``
@@ -167,7 +167,7 @@ def test_a_login_post_carrying_the_nonce_and_no_token_is_refused(client):
     """The pre-session gap, now closed. Before this, a login post carried
     no session, so ``form_csrf_token`` had nothing to derive from and the
     middleware never even looked at the request."""
-    from app.form_csrf import PLAY_CSRF_COOKIE
+    from core.form_csrf import PLAY_CSRF_COOKIE
 
     client.cookies.set(PLAY_CSRF_COOKIE, _NONCE)
 
@@ -195,7 +195,7 @@ def test_a_login_post_with_the_nonce_token_reaches_the_route(client):
     A 401 is a *stronger* witness than the 422 was — it proves the request
     reached the credential check, not merely the body parser.
     """
-    from app.form_csrf import PLAY_CSRF_COOKIE, form_csrf_token
+    from core.form_csrf import PLAY_CSRF_COOKIE, form_csrf_token
 
     client.cookies.set(PLAY_CSRF_COOKIE, _NONCE)
     token = form_csrf_token(_NONCE)
@@ -217,7 +217,7 @@ def _sign_in_an_operator(client) -> None:
     """A REAL operator session, minted through the real routes, left in the
     same jar as the entrant's — the R8-A same-origin collision, built rather
     than imagined."""
-    from app.config import settings
+    from core.config import settings
 
     assert (
         client.post(
@@ -273,7 +273,7 @@ def test_a_dead_operator_cookie_does_not_lock_the_entrant_out(client, entrant):
     it. So it names no operator, bounds no blast radius, and must not be
     allowed to speak for one.
     """
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.set(settings.session_cookie_name, "not-a-session-anybody-holds")
 
@@ -313,7 +313,7 @@ def test_a_cookieless_write_is_still_never_checked(client):
 # for a token without replaying it and every urlencoded route downstream
 # gets an empty form — no exception, no log, just a submission with nobody
 # in it. The assertion is therefore on the *stored rows*, not on a status
-# code: a truncated body reaches ``services.entry_form.parse_players`` as
+# code: a truncated body reaches ``entries.entry_form.parse_players`` as
 # zero players and comes back as a 400, which a status-only test would read
 # as "refused for a business reason" and shrug at.
 
@@ -324,8 +324,8 @@ def page(client):
     created = client.post("/tournaments", json={"name": "Spring Open"}, headers=CSRF)
     tid = created.json()["id"]
 
-    from database.models import EntryEvent, EntryPage, Tournament
-    from database.session import SessionLocal
+    from db.models import EntryEvent, EntryPage, Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -388,8 +388,8 @@ def test_a_large_multi_player_submission_survives_the_middleware_body_read(
     is a body that arrives *partially*: the first fields present, the tail
     gone.
     """
-    from database.models import EntryPlayer
-    from database.session import SessionLocal
+    from db.models import EntryPlayer
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     token = _rendered_csrf(client, page)

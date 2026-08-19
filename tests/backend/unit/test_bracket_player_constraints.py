@@ -2,15 +2,15 @@
 
 Covers the three layers of the new plumbing:
 
-  - ``services.bracket.player_constraints`` pure helpers: overnight-aware
+  - ``bracket.player_constraints`` pure helpers: overnight-aware
     HH:mm → slot conversion, window clamping, extras building (start_time
     None ⇒ no slot windows; restSlots explicit vs session default).
-  - ``services.bracket.adapter.build_players``: extras=None stays
+  - ``bracket.adapter.build_players``: extras=None stays
     byte-identical to the pre-extras output (pin), per-player windows
     INTERSECT the round window (never replace it), TEAM aggregation
     (window intersection + max rest), and the empty-intersection guard
     (fallback to the round window + warning, never infeasible).
-  - ``api.brackets._load_bracket_player_extras``: blob → extras incl. the
+  - ``bracket.brackets._load_bracket_player_extras``: blob → extras incl. the
     ``defaultRestSlots`` config pick and malformed-entry tolerance.
 """
 from __future__ import annotations
@@ -20,12 +20,12 @@ from datetime import datetime
 
 import pytest
 
-from app.schemas import AvailabilityWindow, BracketPlayerDTO
+from core.schemas import AvailabilityWindow, BracketPlayerDTO
 from scheduler_core.domain.models import Player
 from scheduler_core.domain.tournament import Participant, ParticipantType
 
-from services.bracket.adapter import build_players
-from services.bracket.player_constraints import (
+from bracket.adapter import build_players
+from bracket.player_constraints import (
     PlayerExtras,
     build_player_extras,
     intersect_window_lists,
@@ -299,12 +299,12 @@ def test_build_players_team_disjoint_members_fall_back_with_warning(caplog):
 
 
 # ---------------------------------------------------------------------------
-# api.brackets._load_bracket_player_extras — blob → extras + config pick
+# bracket.brackets._load_bracket_player_extras — blob → extras + config pick
 # ---------------------------------------------------------------------------
 
 
 def test_load_extras_from_blob_with_default_rest_pick():
-    from api.brackets import _load_bracket_player_extras
+    from bracket.brackets import _load_bracket_player_extras
 
     blob = {
         "config": {"defaultRestSlots": 3},
@@ -332,7 +332,7 @@ def test_load_extras_from_blob_with_default_rest_pick():
 
 
 def test_load_extras_empty_blob_is_empty():
-    from api.brackets import _load_bracket_player_extras
+    from bracket.brackets import _load_bracket_player_extras
 
     assert (
         _load_bracket_player_extras(

@@ -31,8 +31,8 @@ from scheduler_core.domain.tournament import (
     WinnerSide,
 )
 
-from services.bracket.advancement import auto_walkover_byes, record_result
-from services.bracket.formats.double_elimination import (
+from bracket.advancement import auto_walkover_byes, record_result
+from bracket.formats.double_elimination import (
     _drop_order,
     generate_double_elimination,
 )
@@ -252,7 +252,7 @@ def test_n5_byes_hollow_losers_bracket():
 
 
 def test_de_registry_config():
-    from services.bracket.formats import FORMAT_REGISTRY
+    from bracket.formats import FORMAT_REGISTRY
 
     spec = FORMAT_REGISTRY["de"]
     assert spec.label == "Double elimination"
@@ -271,9 +271,10 @@ def test_de_registry_config():
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)

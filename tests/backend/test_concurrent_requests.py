@@ -50,11 +50,11 @@ ROUNDS = 4
 def client(tmp_path, monkeypatch):
     """The **whole** application over a file-backed SQLite database.
 
-    ``app.main:app``, not a bare ``FastAPI()`` with one router mounted —
+    ``core.main:app``, not a bare ``FastAPI()`` with one router mounted —
     and that is the single most important line in this file. The
     per-request database session is opened by the ``get_repository``
     dependency and returned to the pool by ``close_repository_middleware``
-    in ``app.main``; a test app assembled from routers alone has the
+    in ``core.main``; a test app assembled from routers alone has the
     dependency but not the middleware, so it leaks a connection per
     request and exhausts the pool no matter what the code under test
     does. Concurrency here has to be measured against the object that
@@ -66,8 +66,8 @@ def client(tmp_path, monkeypatch):
     """
     isolate_test_database(tmp_path, monkeypatch)
 
-    from database.session import SessionLocal
-    from services.auth import ensure_bootstrap_user
+    from db.session import SessionLocal
+    from identity.auth import ensure_bootstrap_user
 
     # The lifespan normally materializes the local bootstrap operator,
     # and ``tournament_members.user_id`` is an FK to ``users``. TestClient
@@ -77,7 +77,7 @@ def client(tmp_path, monkeypatch):
         ensure_bootstrap_user(boot)
         boot.commit()
 
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -211,7 +211,7 @@ def test_the_burst_fixture_is_actually_concurrent(client):
        testing nothing.
     """
     from sqlalchemy.pool import StaticPool
-    from database.session import engine
+    from db.session import engine
 
     assert not isinstance(engine.pool, StaticPool), (
         "the test database went in-memory; StaticPool shares one connection "

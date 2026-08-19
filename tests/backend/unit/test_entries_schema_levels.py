@@ -32,7 +32,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import (
+from db.models import (
     Base,
     EntrantAccount,
     Entry,
@@ -68,7 +68,7 @@ def session(engine):
 
 
 def _tournament(session, name="Spring Open"):
-    from database.models import Tournament
+    from db.models import Tournament
 
     row = Tournament(name=name, status="draft", schema_version=1, data={})
     session.add(row)
@@ -482,7 +482,7 @@ def test_deleting_the_workspace_actually_removes_the_entry_rows(session):
     workspace kept ``entry_pages.slug`` — a globally unique index — taken
     forever, so the address could never be reused.
     """
-    from database.models import Tournament
+    from db.models import Tournament
 
     tid = _tournament(session)
     account = _account(session)

@@ -37,7 +37,7 @@ CSRF = {"X-ShuttleWorks-CSRF": "1"}
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import tournaments
+    from workspaces import tournaments
 
     app_ = FastAPI()
     app_.include_router(tournaments.router)
@@ -269,7 +269,7 @@ def test_conflicts_are_counted_for_observability(client, tid):
     A conflict is an event, not a column, so it cannot be derived from the
     schema the way the rest of /health/metrics is. Counted in-process.
     """
-    from services import conflict_metrics
+    from operations import conflict_metrics
 
     conflict_metrics.reset()
     _seed(client, tid)
@@ -338,8 +338,8 @@ def test_the_write_is_a_compare_and_swap_not_just_a_precheck(client, tid):
     Driven at the repository layer because the interleaving happens INSIDE a
     request and cannot be produced by ordering two HTTP calls.
     """
-    from app.exceptions import ConflictError
-    from database.session import SessionLocal
+    from core.exceptions import ConflictError
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     _seed(client, tid)
@@ -379,7 +379,7 @@ def test_the_write_is_a_compare_and_swap_not_just_a_precheck(client, tid):
 
 def _repo_session():
     """A second, independent session — the seam's own unit of work."""
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -397,7 +397,7 @@ def test_conflict_error_carries_the_versions_a_retry_loop_needs(client, tid):
     """
     import uuid as _uuid
 
-    from app.exceptions import ConflictError
+    from core.exceptions import ConflictError
 
     _seed(client, tid)
     session, repo = _repo_session()
@@ -499,7 +499,7 @@ def test_a_stale_session_snapshot_defeats_the_cas_entirely(client, tid):
     """Property 3 — THE TRAP, and it is worse than "the retry spins".
 
     ``SessionLocal`` sets ``expire_on_commit=False``
-    (``database/session.py``), and ``get_by_id`` is ``session.get`` — which
+    (``db/session.py``), and ``get_by_id`` is ``session.get`` — which
     answers from the identity map without touching the database. So the
     compare-and-swap inside ``upsert_data`` compares against **the version
     this session last saw**, not the version in the row.
@@ -568,7 +568,7 @@ def test_expiring_the_snapshot_is_what_makes_the_cas_fire(client, tid):
     """
     import uuid as _uuid
 
-    from app.exceptions import ConflictError
+    from core.exceptions import ConflictError
 
     _seed(client, tid)
     tid_uuid = _uuid.UUID(tid)
@@ -621,7 +621,7 @@ def test_conflicts_are_visible_on_the_metrics_endpoint(client, tid):
     snapshot() directly, which passed while /health/metrics never exposed it
     — a test certifying something it did not check (CODE_HEALTH 3b).
     """
-    from services import conflict_metrics
+    from operations import conflict_metrics
 
     conflict_metrics.reset()
     _seed(client, tid)
@@ -630,7 +630,7 @@ def test_conflicts_are_visible_on_the_metrics_endpoint(client, tid):
     assert _save(client, tid, _writable(state), shared).status_code == 409
 
     from fastapi.testclient import TestClient as _TC
-    from app.main import app as _full_app
+    from core.main import app as _full_app
 
     metrics = _TC(_full_app).get("/health/metrics")
     assert metrics.status_code == 200, metrics.text
@@ -643,7 +643,7 @@ def test_if_match_parsing_matches_the_sibling_route(client, tid):
     """A malformed weak-validator must be refused, not leniently accepted.
 
     str.strip("W/") takes a CHARACTER SET, so the old parser accepted
-    W/W/"3" where api/match_state.py's prefix-based parser rejects it.
+    W/W/"3" where operations/match_state_routes.py's prefix-based parser rejects it.
     """
     _seed(client, tid)
     state, etag = _load(client, tid)

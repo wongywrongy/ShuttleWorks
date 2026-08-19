@@ -18,7 +18,7 @@ Seven tests:
 
 Driven through a FastAPI TestClient so the route → service →
 repository pipeline is exercised end-to-end, including the
-``ConflictError`` → 409 exception handler installed in ``app.main``.
+``ConflictError`` → 409 exception handler installed in ``core.main``.
 """
 from __future__ import annotations
 
@@ -36,10 +36,12 @@ from _helpers import isolate_test_database, seed_tournament
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     # Register the exception handler so ConflictError → 409 (the
-    # production wiring lives in app.main; tests build minimal apps).
-    from api import commands, match_state, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    # production wiring lives in core.main; tests build minimal apps).
+    from operations import commands
+    from operations import match_state_routes as match_state
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -229,8 +231,8 @@ def test_mid_transaction_failure_rolls_back_match_update(client, tid, monkeypatc
 
     # Snapshot pre-attempt state in a *fresh* session so we read what's
     # actually on disk, not whatever an active session is caching.
-    from database.models import Match
-    from database.session import SessionLocal
+    from db.models import Match
+    from db.session import SessionLocal
     with SessionLocal() as s:
         rows = s.query(Match).all()
         assert len(rows) == 1
@@ -269,7 +271,7 @@ def test_mid_transaction_failure_rolls_back_match_update(client, tid, monkeypatc
         assert after.status == before_status
         assert after.version == before_version
         # No commands row should have landed either.
-        from database.models import Command
+        from db.models import Command
         assert s.query(Command).count() == 0
 
 

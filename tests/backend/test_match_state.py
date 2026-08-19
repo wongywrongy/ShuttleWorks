@@ -18,9 +18,10 @@ def _detail_msg(r) -> str:
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import match_state, tournaments
-    from app.exceptions import PreconditionFailedError
-    from app.main import _precondition_failed_handler
+    from operations import match_state_routes as match_state
+    from workspaces import tournaments
+    from core.exceptions import PreconditionFailedError
+    from core.main import _precondition_failed_handler
 
     app_ = FastAPI()
     app_.include_router(tournaments.router)

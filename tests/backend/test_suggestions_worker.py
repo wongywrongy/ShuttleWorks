@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [k for k in list(sys.modules) if k == "app" or k.startswith("app.")]:
     del sys.modules[_cached]
@@ -27,7 +27,7 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock
 
-from services.suggestions_worker import (
+from solve_rail.suggestions_worker import (
     SuggestionsWorker,
     TriggerEvent,
     TriggerKind,

@@ -18,9 +18,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import Base, SolveJob, SolveJobStatus, Tournament
-from services import solve_jobs
-from services.solve_jobs import (
+from db.models import Base, SolveJob, SolveJobStatus, Tournament
+from solve_rail import solve_jobs
+from solve_rail.solve_jobs import (
     ActiveSolveJobConflict,
     UserSolveQuotaExceeded,
     SolveJobTransitionError,
@@ -38,7 +38,7 @@ def _make_engine(dialect: str):
             poolclass=StaticPool,
             future=True,
         )
-    from database.session import normalize_database_url
+    from db.session import normalize_database_url
 
     return create_engine(normalize_database_url(POSTGRES_URL), future=True)
 
@@ -498,7 +498,7 @@ def test_get_job_scopes_by_tournament(session, tournament_id):
 
 
 def _user(session, email="quota@example.com"):
-    from database.models import User
+    from db.models import User
 
     u = User(email=email)
     session.add(u)
@@ -509,7 +509,7 @@ def _user(session, email="quota@example.com"):
 def _member_tournament(session, user, name="quota-t"):
     """A tournament the user is a member of — membership, not ownership,
     is what the cap counts."""
-    from database.models import TournamentMember
+    from db.models import TournamentMember
 
     t = Tournament(name=name)
     session.add(t)

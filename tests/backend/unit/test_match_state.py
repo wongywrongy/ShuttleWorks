@@ -1,7 +1,7 @@
 """Unit tests for the architecture-adjustment arc's Step A:
 
 - ``MatchStatus`` enum + transition table
-- ``services.match_state.assert_valid_transition`` + ``is_locked``
+- ``operations.match_state.assert_valid_transition`` + ``is_locked``
 - ``ConflictError`` shape (transition flavour vs. stale-version flavour)
 - ``MatchRepository.upsert`` / ``set_status`` version semantics
 - Optimistic-concurrency check via ``expected_version``
@@ -20,9 +20,9 @@ from sqlalchemy.pool import StaticPool
 import sys
 
 # conftest.py adds backend/ to sys.path before this module is collected.
-from database.models import Base, MatchStatus
+from db.models import Base, MatchStatus
 from repositories.local import LocalRepository
-from services.match_state import (
+from operations.match_state import (
     LOCKED_STATUSES,
     VALID_TRANSITIONS,
     all_valid_transitions_for,
@@ -39,7 +39,7 @@ def _ce():
     ``test_suggestions_worker.py``, …) run a module-level
     ``del sys.modules[k for k in ... 'app.*']`` at import time, which
     races against pytest's collection of *this* module. The net effect
-    is that a module-level ``from app.exceptions import ConflictError``
+    is that a module-level ``from core.exceptions import ConflictError``
     here can bind to a *stale* class object that is no longer the one
     in ``sys.modules`` by the time tests execute. ``pytest.raises``
     then fails on class identity even though the raise is correct.
@@ -49,9 +49,9 @@ def _ce():
     the same lookup pattern), so ``pytest.raises(_ce())`` always
     matches.
     """
-    mod = sys.modules.get("app.exceptions")
+    mod = sys.modules.get("core.exceptions")
     if mod is None:
-        from app import exceptions as mod  # noqa: F811
+        from core import exceptions as mod  # noqa: F811
     return mod.ConflictError
 
 
@@ -161,7 +161,7 @@ def test_same_state_is_rejected_by_the_strict_guard():
 
     ``VALID_TRANSITIONS`` contains no ``current → current`` entries, so
     every same-state call raises. The route boundary (see
-    ``api/match_state.py::update_match_state``) short-circuits before
+    ``operations/match_state_routes.py::update_match_state``) short-circuits before
     calling this function when the PUT re-asserts the current status,
     keeping the operator UX forgiving without weakening the guard.
     """

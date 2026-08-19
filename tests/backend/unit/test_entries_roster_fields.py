@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.schemas import (
+from core.schemas import (
     BracketPlayerDTO,
     PlayerDTO,
     TournamentStateDTO,

@@ -1,7 +1,7 @@
 """``u5f0b4d7e2a3`` — the one-time sweep of rows orphaned before ``ad58940``.
 
 That commit turned ``PRAGMA foreign_keys`` ON for SQLite, which is why every
-``ondelete="CASCADE"`` in ``database/models.py`` now fires. SQLite does not
+``ondelete="CASCADE"`` in ``db/models.py`` now fires. SQLite does not
 revalidate rows that already exist, so a database created before it still
 carries whatever the inert cascades left behind — and an ``UPDATE`` touching
 one of those rows raises ``IntegrityError`` today where it succeeded
@@ -53,7 +53,7 @@ def _revision_reached(url: str, revision: str) -> bool:
 
     api = Path(__file__).resolve().parents[3] / "apps" / "api"
     cfg = _Cfg(str(api / "alembic.ini"))
-    cfg.set_main_option("script_location", str(api / "alembic"))
+    cfg.set_main_option("script_location", str(api / "src" / "alembic"))
     script = ScriptDirectory.from_config(cfg)
     head = _head_revision(url)
     return any(
@@ -64,6 +64,7 @@ PREVIOUS_REVISION = "t4e9a3c6d1f2"
 
 _MIGRATION = (
     Path(__file__).resolve().parents[3] / "apps" / "api"
+    / "src"
     / "alembic"
     / "versions"
     / "u5f0b4d7e2a3_purge_pre_enforcement_orphans.py"

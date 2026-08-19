@@ -19,7 +19,7 @@ CSRF = {"X-ShuttleWorks-CSRF": "1"}
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -196,7 +196,7 @@ def test_display_state_is_served_from_a_short_ttl_cache(
     on every call; a leaked capability URL could drive that as fast as it
     liked. Asserted by counting rebuilds, not by timing.
     """
-    from services.bracket import response_cache
+    from bracket import response_cache
 
     response_cache.clear_all()
     tid, token = workspace
@@ -215,7 +215,7 @@ def test_display_state_is_served_from_a_short_ttl_cache(
     client.cookies.clear()
 
     calls = {"n": 0}
-    import api.tournaments as tournaments_api
+    import workspaces.tournaments as tournaments_api
 
     real = tournaments_api._meet_standings_for
 
@@ -233,7 +233,7 @@ def test_display_state_is_served_from_a_short_ttl_cache(
 def test_display_state_and_bracket_caches_do_not_collide(client):
     """Both cache per tournament id; without a namespace one would serve
     the other's payload."""
-    from services.bracket import response_cache
+    from bracket import response_cache
 
     response_cache.clear_all()
     tid = __import__("uuid").uuid4()
@@ -246,7 +246,7 @@ def test_display_state_and_bracket_caches_do_not_collide(client):
 
 def test_invalidate_clears_every_namespace(client):
     """A bracket write changes standings the display board also renders."""
-    from services.bracket import response_cache
+    from bracket import response_cache
 
     response_cache.clear_all()
     tid = __import__("uuid").uuid4()

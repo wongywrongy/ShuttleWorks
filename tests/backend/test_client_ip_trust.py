@@ -36,7 +36,7 @@ def make_client(tmp_path, monkeypatch):
     """Build a TestClient whose socket peer is ``CONNECTOR``."""
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     def _make():
         return TestClient(app, client=(CONNECTOR, 51000))
@@ -64,7 +64,7 @@ def test_spoofed_client_ip_is_ignored_from_an_untrusted_peer(make_client, monkey
     Asserted behaviourally: attempts arriving with *different* spoofed
     IPs still share one bucket, so the budget is spent collectively.
     """
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "auth_throttle_max_failures", 3)
     monkeypatch.setattr(settings, "trusted_proxy_ips", [])  # trust nothing
@@ -94,7 +94,7 @@ def test_trusted_proxy_gives_each_real_client_its_own_bucket(make_client, monkey
     With the connector trusted, exhausting one real client's budget must
     NOT lock out a different real client behind the same connector.
     """
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "auth_throttle_max_failures", 3)
     monkeypatch.setattr(settings, "trusted_proxy_ips", [CONNECTOR])
@@ -124,8 +124,8 @@ def test_trusted_proxy_gives_each_real_client_its_own_bucket(make_client, monkey
 def test_header_is_inert_when_no_proxy_is_configured(make_client, monkeypatch):
     """Default config trusts nothing, so local mode behaves exactly as
     it did before this seam existed."""
-    from app.config import settings
-    from app.client_ip import client_ip
+    from core.config import settings
+    from core.client_ip import client_ip
 
     monkeypatch.setattr(settings, "trusted_proxy_ips", [])
 
@@ -140,8 +140,8 @@ def test_header_is_inert_when_no_proxy_is_configured(make_client, monkeypatch):
 
 def test_header_is_honoured_only_from_a_trusted_peer(monkeypatch):
     """Unit-level statement of the trust boundary."""
-    from app.config import settings
-    from app.client_ip import client_ip
+    from core.config import settings
+    from core.client_ip import client_ip
 
     class _Req:
         def __init__(self, peer, header=None):

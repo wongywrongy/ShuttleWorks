@@ -8,7 +8,7 @@ would resurrect exactly the state ADR 0005 deleted. So local mode never
 renders Entries at all.
 
 **The predicate is ``AUTH_MODE``, not ``ENVIRONMENT`` (ruling D2)** — see
-``app.config.cloud_modules_enabled``. Every test here flips
+``core.config.cloud_modules_enabled``. Every test here flips
 ``settings.auth_mode`` on the live settings object, the pattern
 ``tests/unit/test_dependencies.py`` and ``tests/test_client_ip_trust.py``
 already use, which is only possible because the predicate reads the
@@ -46,8 +46,8 @@ def client(tmp_path, monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from api import tournaments, workspace_modules
-    from app.dependencies import LOCAL_DEV_USER_UUID, AuthUser, get_current_user
+    from workspaces import tournaments, workspace_modules
+    from core.dependencies import LOCAL_DEV_USER_UUID, AuthUser, get_current_user
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -63,7 +63,7 @@ def mode(client, monkeypatch):
     """Set the deployment mode the module system keys off (ruling D2)."""
 
     def _set(value: str) -> None:
-        from app.config import settings
+        from core.config import settings
 
         monkeypatch.setattr(settings, "auth_mode", value)
 
@@ -103,7 +103,7 @@ def _smuggle_entries_row(tid: str, status: str = "enabled", config=None) -> None
     Models the real case R6 is about: a database restored from a cloud
     backup, or copied from the cloud deployment onto a laptop.
     """
-    from database.models import WorkspaceModule
+    from db.models import WorkspaceModule
     from repositories import open_repository
 
     with open_repository() as repo:
@@ -123,7 +123,7 @@ def _smuggle_entries_row(tid: str, status: str = "enabled", config=None) -> None
 
 def test_derive_modules_omits_cloud_only_unless_asked():
     """The model layer stays settings-free — the caller supplies the mode."""
-    from database.models import CLOUD_ONLY_MODULES, derive_modules
+    from db.models import CLOUD_ONLY_MODULES, derive_modules
 
     assert CLOUD_ONLY_MODULES == ("entries",)
     for kind in ("meet", "bracket", None):
@@ -134,7 +134,7 @@ def test_derive_modules_omits_cloud_only_unless_asked():
 
 
 def test_normalize_module_seed_backfill_respects_the_mode():
-    from database.models import normalize_module_seed
+    from db.models import normalize_module_seed
 
     local = {r["module_id"] for r in normalize_module_seed([])}
     assert "entries" not in local
@@ -148,7 +148,7 @@ def test_normalize_module_seed_backfill_respects_the_mode():
 def test_normalize_module_seed_refuses_an_explicit_cloud_only_seed_in_local_mode():
     """A named ``entries`` seed must not silently persist a row the read
     path would then hide."""
-    from database.models import normalize_module_seed
+    from db.models import normalize_module_seed
 
     seed = [{"moduleId": "entries", "status": "available"}]
     with pytest.raises(ValueError):
@@ -341,7 +341,7 @@ def _raw_module_ids(tid: str) -> list[str]:
     the routes cannot tell "row inserted" from "row rendered", which is the
     exact distinction the backfill and the local-mode control turn on.
     """
-    from database.models import WorkspaceModule
+    from db.models import WorkspaceModule
     from repositories import open_repository
     from sqlalchemy import select
 
@@ -404,7 +404,7 @@ def test_local_mode_backfills_nothing_onto_the_same_workspace(client, mode):
 def test_the_backfilled_row_carries_the_derived_status_and_then_filters(client, mode):
     """The row the backfill writes is the row ``derive_modules`` describes,
     and it is filtered — not deleted — when the deployment goes local."""
-    from database.models import derive_modules
+    from db.models import derive_modules
 
     tid = _legacy_workspace(client, mode, "Round Trip WS")
 

@@ -7,7 +7,7 @@ form the cloud and self-host topologies ever run it in
 (``EMBEDDED_WORKER=false`` + a worker container).
 
 The gap that leaves is specific and has bitten before. ``worker.py``
-must set ``PROCESS_ROLE`` before anything imports ``app.config``,
+must set ``PROCESS_ROLE`` before anything imports ``core.config``,
 because that module runs the cloud validator at import time. A unit test
 pins the *source order* by reading the file; only starting the real
 process proves the ordering holds once Python's import machinery, the
@@ -37,7 +37,7 @@ pytestmark = pytest.mark.skipif(
     reason="TEST_POSTGRES_URL not set (the worker refuses SQLite in cloud mode)",
 )
 
-BACKEND_DIR = Path(__file__).resolve().parents[2] / "apps" / "api"
+BACKEND_DIR = Path(__file__).resolve().parents[2] / "apps" / "api" / "src"
 BOOT_DEADLINE_SECONDS = 60.0
 STARTUP_MARKER = "solve worker up"
 
@@ -53,8 +53,8 @@ def schema():
     sys.path.insert(0, str(BACKEND_DIR))
     from sqlalchemy import create_engine
 
-    from database.models import Base
-    from database.session import normalize_database_url
+    from db.models import Base
+    from db.session import normalize_database_url
 
     engine = create_engine(normalize_database_url(POSTGRES_URL), future=True)
     Base.metadata.create_all(engine)

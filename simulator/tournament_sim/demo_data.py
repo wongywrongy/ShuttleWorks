@@ -637,7 +637,7 @@ def slug_of(name: str) -> str:
 
     It is also the *identity* the bracket engine schedules on. A doubles
     participant carries ``members: [slug, slug]`` and the adapter expands
-    teams to their member ids (``services/bracket/adapter.expand_side``),
+    teams to their member ids (``bracket/adapter.expand_side``),
     so a person entered in both singles and doubles is ONE engine player
     and cannot be put on two courts at once. That only holds because both
     events derive the id from the same name.
@@ -1226,7 +1226,7 @@ WORKSPACES: tuple[dict, ...] = (
 # The eight workspaces above belong to SIX organisations, and an organisation
 # in this product is not a label on a tournament — it is a real ``orgs`` row
 # that owns workspaces (``tournaments.org_id``), created for a user the moment
-# they register (``services/auth.ensure_personal_org``). So the way to seed
+# they register (``identity/auth.ensure_personal_org``). So the way to seed
 # six organisations is to register six operators and have each of them create
 # their own events: a director then signs in and the Hub shows exactly the
 # workspaces their org owns, because that is the only set the API will return.
@@ -1279,7 +1279,7 @@ OPERATORS: dict[str, dict] = {
 # addresses, and the budget is sized for the family or club secretary who
 # creates several accounts from one venue. So the seeder submits the way those
 # people do: eight accounts, each carrying a squad of up to twelve players on
-# one form (``services/entry_form.parse_players`` exists for exactly that),
+# one form (``entries/entry_form.parse_players`` exists for exactly that),
 # which keeps the whole demo inside ``entries_max_per_ip`` as well.
 
 ENTRANT_PASSWORD = "DemoEntrant2026!"

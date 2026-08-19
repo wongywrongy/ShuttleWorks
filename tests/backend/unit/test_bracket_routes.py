@@ -33,9 +33,10 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -282,8 +283,8 @@ def test_record_result_replay_does_not_duplicate_or_corrupt_advancement(client, 
     )
     assert r1.status_code == 200, r1.text
 
-    from database.models import BracketEvent, BracketMatch
-    from database.session import SessionLocal
+    from db.models import BracketEvent, BracketMatch
+    from db.session import SessionLocal
 
     tournament_id = uuid.UUID(tid)
     with SessionLocal() as session:
@@ -674,8 +675,8 @@ def test_meet_side_put_state_preserves_bracket_session(client, tid):
     solver finding a solution within a time limit.
     """
     from sqlalchemy import select
-    from database.models import Tournament
-    from database.session import SessionLocal
+    from db.models import Tournament
+    from db.session import SessionLocal
 
     # 1. Create a bracket — this writes bracket_session into tournaments.data.
     r = client.post(_bracket_url(tid), json=_se_4_body())

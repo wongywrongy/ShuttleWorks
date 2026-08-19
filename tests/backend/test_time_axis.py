@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [
     k for k in list(sys.modules)
@@ -40,7 +40,7 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import tournaments
+    from workspaces import tournaments
 
     app_ = FastAPI()
     app_.include_router(tournaments.router)

@@ -24,7 +24,7 @@ from _helpers import isolate_test_database, seed_tournament
 
 from scheduler_core.domain.tournament import PlayUnit, Result, WinnerSide
 
-from services.bracket.standings import compute_standings
+from bracket.standings import compute_standings
 
 
 def _pu(pu_id: str, a: str | None, b: str | None) -> PlayUnit:
@@ -245,9 +245,10 @@ def test_three_way_dead_tie_orders_by_id():
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)

@@ -1,4 +1,4 @@
-from app.schemas import TournamentConfig
+from core.schemas import TournamentConfig
 
 
 def test_display_layout_fields_roundtrip():

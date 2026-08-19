@@ -6,8 +6,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import Base, BracketEvent, BracketMatch, BracketResult, Tournament
-from services.bracket.state import is_event_started
+from db.models import Base, BracketEvent, BracketMatch, BracketResult, Tournament
+from bracket.state import is_event_started
 
 
 @pytest.fixture()

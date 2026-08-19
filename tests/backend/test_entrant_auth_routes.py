@@ -53,7 +53,7 @@ def client(tmp_path, monkeypatch):
 
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -70,9 +70,9 @@ def proxied_client(tmp_path, monkeypatch):
     from tests.backend._helpers import isolate_test_database
 
     isolate_test_database(tmp_path, monkeypatch)
-    from app.config import settings
+    from core.config import settings
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     monkeypatch.setattr(settings, "trusted_proxy_ips", [connector])
     return TestClient(app, client=(connector, 51000))
@@ -83,7 +83,7 @@ def turnstile(client, monkeypatch):
     """Cloudflare's dummy-key semantics without Cloudflare, and a call
     counter — the ordering assertions need to know whether the outbound
     request happened at all."""
-    from services import turnstile as service
+    from identity import turnstile as service
 
     calls: list[dict] = []
 
@@ -110,8 +110,8 @@ def _signup(client, email="parent@example.com", password=GOOD_PW, **overrides):
 
 
 def _accounts(email=None) -> int:
-    from database.models import EntrantAccount
-    from database.session import SessionLocal
+    from db.models import EntrantAccount
+    from db.session import SessionLocal
     from sqlalchemy import func, select
 
     session = SessionLocal()
@@ -125,8 +125,8 @@ def _accounts(email=None) -> int:
 
 
 def _account(email):
-    from database.models import EntrantAccount
-    from database.session import SessionLocal
+    from db.models import EntrantAccount
+    from db.session import SessionLocal
     from sqlalchemy import func, select
 
     session = SessionLocal()
@@ -214,7 +214,7 @@ def test_the_uniform_answer_is_not_a_route_that_always_refuses(client, turnstile
 
 
 def test_a_failed_challenge_refuses_the_signup(client, turnstile):
-    from app.config import settings
+    from core.config import settings
 
     settings.turnstile_secret_key = ALWAYS_FAIL_SECRET
     try:
@@ -247,7 +247,7 @@ def test_an_unreachable_verifier_refuses_the_signup(client, turnstile, monkeypat
     submit route carried before ruling R10 moved the challenge here.
 
     The failure being simulated is ours, not Cloudflare's verdict: the
-    transport never completes. ``services/turnstile`` answers every such
+    transport never completes. ``identity/turnstile/`` answers every such
     failure with ``success=False``, and the property that matters is what
     this *route* does with it — refuse, and write nothing. "The verifier is
     unreachable, so let accounts through" would turn somebody else's outage
@@ -257,7 +257,7 @@ def test_an_unreachable_verifier_refuses_the_signup(client, turnstile, monkeypat
     The negative control is ``test_the_always_pass_secret_writes_the_account``
     above: same request, same route, a reachable verifier, and a row.
     """
-    from services import turnstile as service
+    from identity import turnstile as service
 
     def unreachable(url, fields, timeout):
         raise OSError("connection refused")
@@ -276,14 +276,14 @@ def test_an_unreachable_verifier_says_it_could_not_check_rather_than_you_failed(
     """The ``verdict.retryable`` branch of the refusal, which exists so a
     transport failure reads as "try again" rather than as an accusation.
 
-    Retryable never means accepted (``services/turnstile``'s docstring): the
+    Retryable never means accepted (``identity/turnstile/``'s docstring): the
     status code and the empty table are identical to the branch below, and
     only the sentence differs. Asserted against the *other* branch rather
     than against a literal, so the two cannot drift into the same string
     without this failing.
     """
-    from app.config import settings
-    from services import turnstile as service
+    from core.config import settings
+    from identity import turnstile as service
 
     # The verdict branch first, through the dummy always-FAIL secret — the
     # same code path Phase 2's real keys will take.
@@ -323,8 +323,8 @@ def test_a_challenge_refusal_leaks_nothing_an_attacker_can_use(
       to the refusal for one that is not, so a refused challenge cannot be
       turned into the enumeration oracle the 202 path is written to avoid.
     """
-    from app.config import settings
-    from services import turnstile as service
+    from core.config import settings
+    from identity import turnstile as service
 
     _signup(client)  # a registered address, through the passing path
     assert _accounts("parent@example.com") == 1
@@ -368,7 +368,7 @@ def test_a_challenge_refusal_leaks_nothing_an_attacker_can_use(
 def test_a_signup_flood_from_one_address_is_locked_out(
     client, turnstile, monkeypatch
 ):
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "entrant_signup_max_per_ip", 2)
     codes = [
@@ -384,7 +384,7 @@ def test_under_the_budget_the_same_flood_goes_through(
     client, turnstile, monkeypatch
 ):
     """Negative control: the lockout is the budget, not the route."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "entrant_signup_max_per_ip", 50)
     codes = [
@@ -406,7 +406,7 @@ def test_the_throttle_is_read_before_the_outbound_call(
 
     Asserted by watching the seam, because an ordering is not visible in a
     result: after the lockout, siteverify sees nothing more."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "entrant_signup_max_per_ip", 1)
     _signup(client, email="first@example.com")
@@ -421,7 +421,7 @@ def test_the_throttle_is_read_before_the_outbound_call(
 def test_a_refused_challenge_still_costs_the_budget(client, turnstile, monkeypatch):
     """A bot that fails the challenge every time is exactly what the
     budget is for. Charging only successes would leave it unbounded."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "entrant_signup_max_per_ip", 2)
     settings.turnstile_secret_key = ALWAYS_FAIL_SECRET
@@ -448,7 +448,7 @@ def test_a_signup_flood_does_not_lock_the_director_out(
 
     Same client, therefore the same IP, and the operator login answers its
     ordinary 401 — not a 429."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "entrant_signup_max_per_ip", 1)
     for i in range(6):
@@ -488,7 +488,7 @@ def test_an_unusable_address_is_refused(client, turnstile):
 def test_the_policy_runs_after_the_challenge(client, turnstile):
     """Ordering again: a bot must not be able to use the password-policy
     response as a free oracle without solving a challenge first."""
-    from app.config import settings
+    from core.config import settings
 
     settings.turnstile_secret_key = ALWAYS_FAIL_SECRET
     try:
@@ -526,8 +526,8 @@ def account(client, turnstile):
 
 
 def _sessions(account_email=None):
-    from database.models import EntrantAccount, EntrantSession
-    from database.session import SessionLocal
+    from db.models import EntrantAccount, EntrantSession
+    from db.session import SessionLocal
     from sqlalchemy import func, select
 
     session = SessionLocal()
@@ -543,7 +543,7 @@ def _sessions(account_email=None):
 
 
 def test_correct_credentials_hand_out_the_play_session_cookie(client, account):
-    from app.config import settings
+    from core.config import settings
 
     r = _login(client)
 
@@ -554,7 +554,7 @@ def test_correct_credentials_hand_out_the_play_session_cookie(client, account):
 
 
 def test_the_cookie_carries_the_shipped_session_attributes(client, account):
-    """Mirrors ``api/auth.py``'s operator cookie: httponly (so script cannot
+    """Mirrors ``identity/auth_routes.py``'s operator cookie: httponly (so script cannot
     read it), lax (so a cross-site form post never carries it), host-only
     path=/. ``secure`` follows ``session_cookie_secure``, which the cloud
     validator forces true — off here because the fixture runs plain HTTP."""
@@ -569,7 +569,7 @@ def test_the_cookie_carries_the_shipped_session_attributes(client, account):
 def test_the_raw_token_is_not_what_the_database_stores(client, account):
     import hashlib
 
-    from app.config import settings
+    from core.config import settings
 
     token = _login(client).cookies[settings.entrant_session_cookie_name]
     rows = _sessions(account)
@@ -589,7 +589,7 @@ def test_the_session_resolves_on_the_entrant_whoami(client, account):
 
 
 def test_a_wrong_password_is_refused_and_hands_out_nothing(client, account):
-    from app.config import settings
+    from core.config import settings
 
     r = _login(client, password="the wrong passphrase entirely")
 
@@ -613,7 +613,7 @@ def test_an_unknown_address_is_refused_identically(client, account):
 def test_a_flood_of_bad_passwords_locks_that_address_out(
     client, account, monkeypatch
 ):
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "auth_throttle_max_failures", 2)
     codes = [_login(client, password=f"wrong one {i}").status_code for i in range(4)]
@@ -629,7 +629,7 @@ def test_the_lockout_does_not_stop_the_operator_signing_in(
     failures charge ``eacct:``/``eip:``. If they charged ``account:``/``ip:``,
     guessing at a director's *entrant* password would lock their operator
     account — from a public form, with no credential required to try."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "auth_throttle_max_failures", 2)
     for i in range(6):
@@ -651,7 +651,7 @@ def test_guessing_at_many_addresses_from_one_place_is_also_bounded(
     """Two keys, not one. The address bucket bounds guessing at *an*
     account; the ``eip:`` bucket bounds guessing at *many*, which a
     per-address budget alone would leave completely open."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "auth_throttle_max_failures", 2)
     for i in range(4):
@@ -668,8 +668,8 @@ def test_a_different_client_is_not_caught_by_someone_elses_lockout(
     configured here so the two callers have genuinely different addresses
     — behind a tunnel the socket peer is the connector for everyone, and
     without this seam the assertion below would be testing nothing."""
-    from app.config import settings
-    from services import turnstile as service
+    from core.config import settings
+    from identity import turnstile as service
 
     monkeypatch.setattr(
         service, "_post", lambda url, fields, timeout: json.dumps({"success": True})
@@ -706,7 +706,7 @@ def test_a_different_client_is_not_caught_by_someone_elses_lockout(
 def test_a_successful_login_clears_the_address_budget(client, account, monkeypatch):
     """The shipped credential behaviour, reused: getting it right resets the
     count, so a typo does not accumulate toward a lockout across weeks."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "auth_throttle_max_failures", 3)
     _login(client, password="wrong once")
@@ -752,7 +752,7 @@ def test_logout_without_a_session_is_a_no_op(client, account):
 def test_logout_revokes_only_the_presented_session(client, account):
     """Logging out of a library computer must not log the entrant out of
     their phone. Only the token in the request is revoked."""
-    from app.config import settings
+    from core.config import settings
 
     phone = _login(client).cookies[settings.entrant_session_cookie_name]
     client.cookies.clear()
@@ -767,7 +767,7 @@ def test_logout_revokes_only_the_presented_session(client, account):
 def test_a_revoked_token_replayed_resolves_to_nothing(client, account):
     """Negative control for the test above: the revoked one really is dead,
     so "the other session survived" is not "revocation does nothing"."""
-    from app.config import settings
+    from core.config import settings
 
     token = _login(client).cookies[settings.entrant_session_cookie_name]
     client.post(LOGOUT, headers=CSRF)
@@ -788,7 +788,7 @@ def test_whoami_refuses_an_anonymous_caller(client):
 
 
 def test_a_garbage_entrant_cookie_resolves_to_nothing(client, account):
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.set(settings.entrant_session_cookie_name, "not-a-real-token")
 
@@ -798,7 +798,7 @@ def test_a_garbage_entrant_cookie_resolves_to_nothing(client, account):
 def test_a_dead_cookie_does_not_stop_a_fresh_login(client, account):
     """Browsers keep stale cookies across database resets. Presenting one
     must be indistinguishable from presenting none."""
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.set(settings.entrant_session_cookie_name, "stale-token")
 
@@ -813,7 +813,7 @@ def local_client(tmp_path, monkeypatch):
 
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -864,8 +864,8 @@ def test_a_form_signup_maps_cloudflares_field_name_and_redirects(
 
     Deviation from the task brief: the brief's ``_csrf`` value here is the
     RAW cookie value ("a-minted-opaque-value") rather than the digest
-    ``app.form_csrf.form_csrf_token`` derives from it. That is not what the
-    middleware (``app/main.py``'s ``csrf_middleware`` -> ``form_csrf_proves``)
+    ``core.form_csrf.form_csrf_token`` derives from it. That is not what the
+    middleware (``core/main.py``'s ``csrf_middleware`` -> ``form_csrf_proves``)
     or the route-level ``require_form_csrf`` check for — both compare
     against the HASHED token, never the secret itself, which is the whole
     double-submit property (an attacker's page can make the browser send
@@ -877,7 +877,7 @@ def test_a_form_signup_maps_cloudflares_field_name_and_redirects(
     file's own ``test_a_form_logout_proves_itself_with_the_session_derived_token``
     already use.
     """
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     client.cookies.set(PLAY_CSRF, "a-minted-opaque-value")
     r = client.post(
@@ -943,8 +943,8 @@ def test_a_form_login_with_a_mismatched_play_csrf_token_is_refused(
     [
         "https://evil.example/harvest",
         "//evil.example/harvest",
-        "/api/tournaments",
-        "/e/../../api/tournaments",
+        "/workspaces/tournaments/",
+        "/e/../../workspaces/tournaments/",
         "",
     ],
 )
@@ -969,7 +969,7 @@ def test_a_form_login_never_redirects_off_the_entrant_tier(
     cookie, not the raw cookie value the brief's snippet posted (which
     403s at the CSRF middleware before this route is reached).
     """
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     client.cookies.set(PLAY_CSRF, "v")
     assert (
@@ -1009,7 +1009,7 @@ def test_a_form_login_honours_a_same_tier_next(client, turnstile):
     Deviation from the task brief: same fix as the two tests above —
     ``_csrf`` is the derived token, not the raw cookie value.
     """
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     client.cookies.set(PLAY_CSRF, "v")
     assert (
@@ -1050,7 +1050,7 @@ _BROWSER = {
 def _form_login(client, email, password, next_value=None, headers=_BROWSER):
     """A scriptless browser's sign-in: urlencoded body, `_csrf` in it, and the
     Accept a navigation carries."""
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     client.cookies.set(PLAY_CSRF, "v")
     body = {"email": email, "password": password, "_csrf": form_csrf_token("v")}
@@ -1071,7 +1071,7 @@ def test_a_refused_form_login_is_a_page_and_not_a_json_blob(client, account):
     just typed a credential and needs to know what to do next.
 
     Same wrapper argument as ``entrant_or_back_to_form``
-    (``api/entries_json.py``): the identity decision is unchanged, only the
+    (``entries/entries_json.py``): the identity decision is unchanged, only the
     shape of the refusal for a caller that cannot read JSON.
     """
     r = _form_login(client, account, "the wrong passphrase entirely")
@@ -1166,12 +1166,12 @@ def test_a_form_logout_proves_itself_with_the_session_derived_token(
     ``check_form_csrf`` wins whenever a session is present.
 
     Deviation from the task brief: the brief's snippet imports ``form_csrf``
-    from ``services.entry_form`` — that module holds only ``parse_players``
+    from ``entries.entry_form`` — that module holds only ``parse_players``
     and ``parse_year`` (see its own module docstring on why the CSRF
     derivation was NOT duplicated there). The one derivation lives in
-    ``app.form_csrf.form_csrf_token``, imported under the same local name.
+    ``core.form_csrf.form_csrf_token``, imported under the same local name.
     """
-    from app.form_csrf import form_csrf_token as form_csrf
+    from core.form_csrf import form_csrf_token as form_csrf
 
     assert (
         client.post(
@@ -1267,7 +1267,7 @@ def test_a_form_signup_is_not_an_enumeration_oracle(client, turnstile):
     falls through to ``SignupResponse()`` and this goes red on the status
     line. Put it back.
     """
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     client.cookies.set(PLAY_CSRF, "v")
     body = {
@@ -1326,7 +1326,7 @@ def test_a_form_signup_still_needs_the_challenge(client, turnstile):
     locally rather than spending an outbound request — the ordering claim
     of ``test_the_throttle_is_read_before_the_outbound_call``, restated on
     the path where the field arrives under Cloudflare's own spelling."""
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     client.cookies.set(PLAY_CSRF, "v")
     r = client.post(
@@ -1379,8 +1379,8 @@ def test_a_form_logout_kills_the_session_and_lands_on_a_node_owned_get(
     ``next_target``'s fallback at the token check instead and the ``Location``
     assertion is the one that moves.
     """
-    from app.config import settings
-    from app.form_csrf import form_csrf_token
+    from core.config import settings
+    from core.form_csrf import form_csrf_token
 
     token = _login(client).cookies[settings.entrant_session_cookie_name]
 
@@ -1434,7 +1434,7 @@ def test_a_form_post_with_no_next_never_lands_on_a_post_only_route(
     To prove it is not vacuous: point any of the three fallbacks back at
     ``/e/account/login`` and that case goes red on both assertions.
     """
-    from app.form_csrf import form_csrf_token
+    from core.form_csrf import form_csrf_token
 
     client.cookies.set(PLAY_CSRF, "v")
     body = {"_csrf": form_csrf_token("v")}
@@ -1498,8 +1498,8 @@ def test_a_non_ascii_form_token_is_a_refusal_and_not_a_500(client, turnstile):
 
     ``secrets.compare_digest`` is a bytes-or-ASCII-str API: it raises
     ``TypeError`` on a ``str`` carrying one accented character. The
-    middleware channel (``app.form_csrf.form_csrf_proves``) was taught to
-    encode both sides for exactly that reason; ``api.entries_json``'s
+    middleware channel (``core.form_csrf.form_csrf_proves``) was taught to
+    encode both sides for exactly that reason; ``entries.entries_json``'s
     ``require_form_csrf`` — the route-level check these public account
     routes now go through — was not, and Task 12 made it reachable
     pre-session by anyone with the poster URL.
@@ -1536,7 +1536,7 @@ def test_the_openapi_document_still_describes_both_form_and_json_answers(client)
     FastAPI keeps included routers nested rather than flattened onto
     ``app.routes``.
     """
-    from app.main import app
+    from core.main import app
 
     paths = app.openapi()["paths"]
     login = paths["/e/account/login"]["post"]["responses"]

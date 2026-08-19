@@ -4,7 +4,7 @@
 - ``CPSATScheduler._add_locked_constraints`` pinning court + time
 - ``CPSATBackend.solve`` plumbing the locked list through
 - ``solve_repair`` / ``solve_warm_start`` honouring locked_assignments
-- ``services.match_state.build_locked_assignments`` returning the right shape
+- ``operations.match_state.build_locked_assignments`` returning the right shape
 - Coexistence with the legacy ``PreviousAssignment.locked`` mechanism
 
 Run at the scheduler_core layer (no HTTP). Builds tiny fixtures
@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # conftest adds backend/ + scheduler_core/ to sys.path.
-from database.models import Base, MatchStatus
+from db.models import Base, MatchStatus
 from repositories.local import LocalRepository
 from scheduler_core.domain.models import (
     Assignment,
@@ -36,7 +36,7 @@ from scheduler_core.domain.models import (
 from scheduler_core.engine import CPSATBackend
 from scheduler_core.engine.repair import RepairSpec, solve_repair
 from scheduler_core.engine.warm_start import solve_warm_start
-from services.match_state import LOCKED_STATUSES, build_locked_assignments
+from operations.match_state import LOCKED_STATUSES, build_locked_assignments
 
 
 # ---- Fixtures ----------------------------------------------------------

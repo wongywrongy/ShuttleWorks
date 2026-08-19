@@ -16,7 +16,7 @@ from _helpers import isolate_test_database
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import tournaments
+    from workspaces import tournaments
 
     app_ = FastAPI()
     app_.include_router(tournaments.router)

@@ -47,8 +47,8 @@ def client(tmp_path, monkeypatch):
     """
     isolate_test_database(tmp_path, monkeypatch)
     from sqlalchemy import text
-    from database.session import engine
-    from api.health import _expected_revision
+    from db.session import engine
+    from ops.health import _expected_revision
 
     head = _expected_revision()
     with engine.begin() as conn:
@@ -61,7 +61,7 @@ def client(tmp_path, monkeypatch):
         )
 
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -72,7 +72,7 @@ def test_readiness_refuses_an_unmigrated_database(tmp_path, monkeypatch):
     over, so it gets its own test rather than being lost."""
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     r = TestClient(app).get("/health/ready")
     assert r.status_code == 503
@@ -120,7 +120,7 @@ def test_readiness_fails_when_the_database_is_genuinely_down(client, monkeypatch
     that cannot be opened — rather than patching the health handler to
     return False. Mocking the failure would only prove the mock works.
     """
-    import database.session as db_session
+    import db.session as db_session
     from sqlalchemy import create_engine
 
     dead = create_engine("sqlite:////nonexistent-dir/definitely-not-here.db")
@@ -151,7 +151,7 @@ def test_readiness_fails_when_the_database_is_genuinely_down(client, monkeypatch
 def test_readiness_fails_when_the_schema_is_behind(client, monkeypatch):
     """Reachable but stale is still not ready — a deploy that skipped
     migrations answers queries and then fails on the first new column."""
-    import api.health as health_api
+    import ops.health as health_api
 
     monkeypatch.setattr(health_api, "_expected_revision", lambda: "zz_future_head")
     r = client.get("/health/ready")
@@ -192,8 +192,8 @@ def test_metrics_surfaces_a_queued_job_and_its_age(client):
     """The numbers behind the alert that matters: work arriving with
     nothing claiming it."""
     from datetime import datetime, timedelta, timezone
-    from database.models import SolveJob, Tournament
-    from database.session import SessionLocal
+    from db.models import SolveJob, Tournament
+    from db.session import SessionLocal
 
     s = SessionLocal()
     try:
@@ -229,7 +229,7 @@ OPS_PATHS = ("/health/ready", "/health/deep", "/health/metrics")
 @pytest.fixture
 def ops_token(monkeypatch):
     """Turn the guard on, the way a cloud deployment does."""
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "ops_token", "s3kr3t-ops-token")
     return "s3kr3t-ops-token"
@@ -283,7 +283,7 @@ def test_a_blank_ops_token_disables_the_guard(client, path):
     Explicit rather than implied by the other tests, because "the guard
     is off by default" is the assumption every one of them rests on.
     """
-    from app.config import settings
+    from core.config import settings
 
     assert settings.ops_token == ""
     assert client.get(path).status_code == 200
@@ -293,7 +293,7 @@ def test_a_blank_ops_token_disables_the_guard(client, path):
 
 
 def _settings(**overrides):
-    from app.config import Settings
+    from core.config import Settings
 
     base = dict(
         environment="cloud",
@@ -355,15 +355,15 @@ def test_worker_still_refuses_sqlite_in_cloud_mode():
 
 def test_worker_entrypoint_declares_its_role_before_config_import():
     """`worker.py` must set PROCESS_ROLE at module import, because
-    ``app.config`` runs the validator at *its* import — if the worker
+    ``core.config`` runs the validator at *its* import — if the worker
     imported config first, the cloud validator would already have
     demanded SMTP."""
     import pathlib
 
-    src = pathlib.Path(__file__).resolve().parents[2] / "apps" / "api" / "worker.py"
+    src = pathlib.Path(__file__).resolve().parents[2] / "apps" / "api" / "src" / "worker.py"
     text = src.read_text(encoding="utf-8")
     role_at = text.index('os.environ.setdefault("PROCESS_ROLE"')
-    # No app/services import may appear before it.
+    # No core/services/ import may appear before it.
     head = text[:role_at]
     for forbidden in ("from app", "import app", "from services", "from database"):
         assert forbidden not in head, (

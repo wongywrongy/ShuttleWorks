@@ -23,7 +23,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # conftest.py adds backend/ to sys.path before this module is collected.
-from database.models import Base
+from db.models import Base
 from repositories.local import LocalRepository
 
 
@@ -32,13 +32,13 @@ def _ce():
 
     Mirrors the helper in ``test_match_state.py`` — other test modules
     in this suite ``del sys.modules['app.*']`` at import time, so a
-    module-level ``from app.exceptions import ConflictError`` here can
+    module-level ``from core.exceptions import ConflictError`` here can
     bind to a stale class. The repository uses the same lookup pattern
     when raising, so ``pytest.raises(_ce())`` always matches.
     """
-    mod = sys.modules.get("app.exceptions")
+    mod = sys.modules.get("core.exceptions")
     if mod is None:
-        from app import exceptions as mod  # noqa: F811
+        from core import exceptions as mod  # noqa: F811
     return mod.ConflictError
 
 
@@ -632,7 +632,7 @@ def test_deleting_tournament_cascades_brackets(repo, tournament_id):
 
     # Bracket rows are reachable two ways: the mapped relationship cascade
     # ("all, delete-orphan") and the FK's own ON DELETE CASCADE. Only the
-    # first used to fire here — ``database.session`` now sets PRAGMA
+    # first used to fire here — ``db.session`` now sets PRAGMA
     # foreign_keys=ON for every SQLite connection, so both do.
     repo.tournaments.delete(tournament_id)
 

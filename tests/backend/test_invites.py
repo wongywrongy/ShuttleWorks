@@ -23,7 +23,8 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import invites, tournaments
+    from identity import invites
+    from workspaces import tournaments
 
     app_ = FastAPI()
     app_.include_router(tournaments.router)
@@ -38,8 +39,8 @@ def tid(client) -> str:
 
 def _set_role(role: str, tid_str: str) -> None:
     """Demote (or promote) the local-dev caller for role-matrix tests."""
-    from app.dependencies import LOCAL_DEV_USER_UUID
-    from database.session import SessionLocal
+    from core.dependencies import LOCAL_DEV_USER_UUID
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -51,8 +52,8 @@ def _set_role(role: str, tid_str: str) -> None:
 
 
 def _remove_membership(tid_str: str) -> None:
-    from app.dependencies import LOCAL_DEV_USER_UUID
-    from database.session import SessionLocal
+    from core.dependencies import LOCAL_DEV_USER_UUID
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -170,8 +171,8 @@ def test_resolve_expired_is_not_resolvable(client, tid):
         f"/tournaments/{tid}/invites", json={"role": "viewer"},
     ).json()["token"]
 
-    from database.models import InviteLink
-    from database.session import SessionLocal
+    from db.models import InviteLink
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:

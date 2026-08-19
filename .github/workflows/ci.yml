@@ -150,8 +150,10 @@ jobs:
       # Blocking. Every allowance in that file is marked DEBT(REORG-1) and
       # explained; there are no unexplained ignores.
       - name: Architecture contracts (import-linter)
-        working-directory: apps/api
-        run: lint-imports
+        # apps/api/src is the sys.path root the packages import from; the
+        # config file stays beside the app one level up.
+        working-directory: apps/api/src
+        run: lint-imports --config ../.importlinter
       - name: Unit tests (pytest)
         env:
           TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler
@@ -239,11 +241,13 @@ jobs:
           pip install -r apps/api/requirements.txt
 
       - name: Start backend
-        working-directory: apps/api
+        # apps/api/src is the sys.path root; alembic.ini resolves from
+        # core/paths.py relative to it, so the API still finds its migrations.
+        working-directory: apps/api/src
         env:
           DATABASE_URL: sqlite:///./smoke.db
         run: |
-          python -m uvicorn app.main:app --host 127.0.0.1 --port 8600 --log-level warning &
+          python -m uvicorn core.main:app --host 127.0.0.1 --port 8600 --log-level warning &
           # The loop must FAIL when the service never arrives. Written as a
           # bare `break` loop it exits 0 after the last sleep whether or not
           # anything came up, so a dead backend reaches the next step
@@ -269,7 +273,7 @@ jobs:
       - name: Demote the viewer workspace
         run: |
           python tests/e2e/interaction-sweep/make-viewer.py \
-            apps/api/smoke.db \
+            apps/api/src/smoke.db \
             "${{ steps.seed.outputs.viewerTid }}"
 
       # The suite asserts on the error harness, so it must be compiled in — that

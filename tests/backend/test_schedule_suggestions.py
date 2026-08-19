@@ -15,7 +15,7 @@ import sys
 import uuid
 from pathlib import Path
 
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [k for k in list(sys.modules) if k == "app" or k.startswith("app.")]:
     del sys.modules[_cached]
@@ -24,8 +24,8 @@ import pytest
 from fastapi import FastAPI
 from pydantic import ValidationError
 
-from app.schemas import Suggestion
-from api.schedule_proposals import (
+from core.schemas import Suggestion
+from meet.schedule_proposals import (
     _get_suggestion_store,
     _evict_expired_suggestions,
 )
@@ -151,18 +151,18 @@ def endpoint_app(tmp_path, monkeypatch):
     the suggestion data; only the auth check touches the DB.
     """
     isolate_test_database(tmp_path, monkeypatch)
-    from api.schedule_suggestions import router as suggestions_router
-    from app.dependencies import LOCAL_DEV_USER_UUID
-    from database.models import Tournament
-    from database.session import SessionLocal
+    from meet.schedule_suggestions import router as suggestions_router
+    from core.dependencies import LOCAL_DEV_USER_UUID
+    from db.models import Tournament
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
-    from services.auth import ensure_bootstrap_user
+    from identity.auth import ensure_bootstrap_user
 
     session = SessionLocal()
     try:
         # ``tournament_members.user_id`` is an FK to ``users``, so the
         # bootstrap operator needs its real row before it can own anything
-        # — the same call ``app.main``'s lifespan makes at startup, which
+        # — the same call ``core.main``'s lifespan makes at startup, which
         # this fixture skips by building the router itself.
         ensure_bootstrap_user(session)
         session.add(Tournament(id=_TID, data={}))
@@ -246,7 +246,7 @@ def test_dismiss_returns_410_for_unknown(endpoint_app):
 def test_dismiss_also_drops_underlying_proposal(endpoint_app):
     """Dismiss is destructive — the proposal it referenced is also
     removed so an orphaned proposal can't be applied later."""
-    from api.schedule_proposals import _get_store
+    from meet.schedule_proposals import _get_store
     sug = _seed_suggestion(endpoint_app, proposalId="prop-to-drop")
     proposal_store = _get_store(endpoint_app, _TID)
     proposal_store["prop-to-drop"] = "stub"
@@ -260,7 +260,7 @@ def test_dismiss_also_drops_underlying_proposal(endpoint_app):
 
 
 def test_repair_title_for_known_disruption_types():
-    from api.schedule_suggestions import _repair_title
+    from meet.schedule_suggestions import _repair_title
     assert "Repair: court 3 closed" in _repair_title("court_closed", {"courtId": 3})
     assert "Repair: player p1 withdrew" in _repair_title("withdrawal", {"playerId": "p1"})
     assert "Repair: match m1 overrun" in _repair_title("overrun", {"matchId": "m1"})
@@ -268,5 +268,5 @@ def test_repair_title_for_known_disruption_types():
 
 
 def test_repair_title_fallback_for_unknown_type():
-    from api.schedule_suggestions import _repair_title
+    from meet.schedule_suggestions import _repair_title
     assert _repair_title("no_show", {}) == "Repair: no_show"

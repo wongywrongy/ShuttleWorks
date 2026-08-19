@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [
     k for k in list(sys.modules)
@@ -39,18 +39,16 @@ def client(tmp_path, monkeypatch):
     from _helpers import isolate_test_database
     isolate_test_database(tmp_path, monkeypatch)
 
-    from api import (
-        match_state,
-        schedule_advisories,
-        schedule_director,
-        schedule_proposals,
-        schedule_repair,
-        schedule_warm_restart,
-        tournaments,
-    )
+    from operations import match_state_routes as match_state
+    from meet import schedule_advisories
+    from meet import schedule_director
+    from meet import schedule_proposals
+    from meet import schedule_repair
+    from meet import schedule_warm_restart
+    from workspaces import tournaments
 
-    from app.exceptions import ConflictError, PreconditionFailedError
-    from app.main import _conflict_error_handler, _precondition_failed_handler
+    from core.exceptions import ConflictError, PreconditionFailedError
+    from core.main import _conflict_error_handler, _precondition_failed_handler
 
     app_ = FastAPI()
     app_.include_router(schedule_warm_restart.router)
@@ -335,7 +333,7 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
     import logging
     # ---- env setup: fresh backend modules against tmp_path ----
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    backend_root = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+    backend_root = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
     sys.path[:] = [backend_root] + [p for p in sys.path if p != backend_root]
     for _cached in [
         k for k in list(sys.modules)
@@ -346,16 +344,14 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
     ]:
         del sys.modules[_cached]
 
-    from api import (
-        match_state,
-        schedule_proposals,
-        schedule_warm_restart,
-        tournaments,
-    )
-    from api.schedule_suggestions import build_handler
-    from app.exceptions import ConflictError, PreconditionFailedError
-    from app.main import _conflict_error_handler, _precondition_failed_handler
-    from services.suggestions_worker import SuggestionsWorker, TriggerEvent, TriggerKind
+    from operations import match_state_routes as match_state
+    from meet import schedule_proposals
+    from meet import schedule_warm_restart
+    from workspaces import tournaments
+    from meet.schedule_suggestions import build_handler
+    from core.exceptions import ConflictError, PreconditionFailedError
+    from core.main import _conflict_error_handler, _precondition_failed_handler
+    from solve_rail.suggestions_worker import SuggestionsWorker, TriggerEvent, TriggerKind
 
     # Build an isolated FastAPI app (same pattern as the `client` fixture).
     app_ = FastAPI()
@@ -415,7 +411,7 @@ async def test_worker_stamps_optimize_suggestion_for_persisted_schedule(
         # If a suggestion WAS stamped, validate its shape. Reading
         # via _get_suggestion_store ensures we get the dict the
         # handler actually populated.
-        from api.schedule_proposals import _get_suggestion_store
+        from meet.schedule_proposals import _get_suggestion_store
         suggestion_store = _get_suggestion_store(app_, tournament_uuid)
         if suggestion_store:
             sug = next(iter(suggestion_store.values()))

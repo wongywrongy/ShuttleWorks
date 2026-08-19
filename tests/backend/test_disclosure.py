@@ -33,7 +33,7 @@ def _client(tmp_path, monkeypatch, environment: str = "local"):
     monkeypatch.setenv("ENVIRONMENT", environment)
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -54,7 +54,7 @@ class TestApiDocsExposure:
         are verified against cayde in Phase 4 (Rule 6).
         """
         _client(tmp_path, monkeypatch, "local")
-        from app.main import docs_urls
+        from core.main import docs_urls
 
         assert docs_urls("cloud") == (None, None, None)
         assert docs_urls("local") == ("/docs", "/redoc", "/openapi.json")
@@ -68,7 +68,7 @@ class TestApiDocsExposure:
         start checking nothing.
         """
         _client(tmp_path, monkeypatch, "local")
-        from app.main import app
+        from core.main import app
 
         assert len(app.openapi()["paths"]) > 50
 

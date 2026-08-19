@@ -20,7 +20,7 @@ GOOD_PW = "a perfectly fine passphrase"
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -89,7 +89,7 @@ def test_login_logout_me_roundtrip(client):
 
 
 def test_login_failure_is_uniform_and_throttled(client, monkeypatch):
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "auth_throttle_max_failures", 3)
     _register(client)

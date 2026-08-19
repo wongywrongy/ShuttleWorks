@@ -45,7 +45,7 @@ _PARAM_FILLERS = {
 def harness(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     client = TestClient(app)
     # Tenant A (the victim): a registered account owning one workspace.

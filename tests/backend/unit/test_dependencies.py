@@ -16,7 +16,7 @@ from tests.backend._helpers import isolate_test_database
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -47,7 +47,7 @@ def test_dead_cookie_falls_through_to_bootstrap_in_local_mode(client):
 
 
 def test_cloud_mode_401_without_session(client, monkeypatch):
-    import app.dependencies as deps
+    import core.dependencies as deps
 
     monkeypatch.setattr(deps.settings, "auth_mode", "cloud")
     assert client.get("/auth/me").status_code == 401
@@ -64,7 +64,7 @@ def test_cloud_mode_401_without_session(client, monkeypatch):
 
 
 def test_cloud_mode_dead_cookie_is_401(client, monkeypatch):
-    import app.dependencies as deps
+    import core.dependencies as deps
 
     monkeypatch.setattr(deps.settings, "auth_mode", "cloud")
     client.cookies.set("sw_session", "stale-token-from-old-db")

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from services.entry_policy import (
+from entries.entry_policy import (
     GENDER_MISMATCH,
     NEEDS_REVIEW,
     PolicyRefusal,

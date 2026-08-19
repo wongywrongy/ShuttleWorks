@@ -24,7 +24,7 @@ from pydantic import ValidationError
 
 from _helpers import isolate_test_database, seed_tournament
 
-from app.schemas import BracketCommandRequest
+from core.schemas import BracketCommandRequest
 
 
 def _body(**overrides):
@@ -67,9 +67,10 @@ def test_walkover_reason_forces_walkover_flag():
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api")
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "src")
 sys.path = [_BACKEND_ROOT] + [p for p in sys.path if p != _BACKEND_ROOT]
 for _cached in [k for k in list(sys.modules) if k == "app" or k.startswith("app.")]:
     del sys.modules[_cached]
@@ -26,22 +26,20 @@ from _helpers import seed_tournament
 def client(tmp_path, monkeypatch):
     """Build a TestClient pointed at a fresh tmp data dir.
 
-    The whole chain `schedule_proposals → services.schedule_impact →
-    app.schemas` must be re-imported together — otherwise `compute_impact`
+    The whole chain `schedule_proposals → meet.schedule_impact →
+    core.schemas` must be re-imported together — otherwise `compute_impact`
     returns instances of the *previous* `Impact` class while `Proposal`
     expects the *current* one (Pydantic class identity is strict).
     """
     from _helpers import isolate_test_database
     isolate_test_database(tmp_path, monkeypatch)
 
-    from api import (
-        match_state,
-        schedule_advisories,
-        schedule_proposals,
-        schedule_repair,
-        schedule_warm_restart,
-        tournaments,
-    )
+    from operations import match_state_routes as match_state
+    from meet import schedule_advisories
+    from meet import schedule_proposals
+    from meet import schedule_repair
+    from meet import schedule_warm_restart
+    from workspaces import tournaments
 
     app_ = FastAPI()
     app_.include_router(schedule_warm_restart.router)

@@ -9,7 +9,7 @@ whose test still passes with the control removed is not a control
 
 Three groups:
 
-- ``TestBodySizeLimit``   — the transport ceiling (``app/body_limit.py``)
+- ``TestBodySizeLimit``   — the transport ceiling (``core/body_limit.py``)
 - ``TestFieldBounds``     — per-field limits and ``extra="forbid"``
 - ``TestServerManagedFields`` — the mass-assignment closure (SEC-12)
 """
@@ -29,7 +29,7 @@ def client(tmp_path, monkeypatch):
     router-only app would exercise none of it.
     """
     isolate_test_database(tmp_path, monkeypatch)
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -65,11 +65,11 @@ def _make_tournament(client: TestClient, name: str = "Limits") -> str:
 
 class TestBodySizeLimit:
     """``BodyLimitMiddleware``. Negative control: raise ``max_bytes`` to a
-    huge value in ``app/main.py`` (or delete the ``add_middleware`` call)
+    huge value in ``core/main.py`` (or delete the ``add_middleware`` call)
     and every test in this class fails."""
 
     def test_oversized_body_is_refused_with_413(self, client):
-        from app.limits import MAX_REQUEST_BODY_BYTES
+        from core.limits import MAX_REQUEST_BODY_BYTES
 
         # One byte over, as raw bytes: this must be refused on the
         # declared Content-Length alone, before any JSON parsing.
@@ -89,7 +89,7 @@ class TestBodySizeLimit:
         read ``Content-Length`` would wave this straight through. httpx
         sends a generator body with ``Transfer-Encoding: chunked``.
         """
-        from app.limits import MAX_REQUEST_BODY_BYTES
+        from core.limits import MAX_REQUEST_BODY_BYTES
 
         def chunks():
             sent = 0
@@ -121,7 +121,7 @@ class TestBodySizeLimit:
 
 
 class TestFieldBounds:
-    """Per-field limits from ``app/limits.py``. Negative control: change
+    """Per-field limits from ``core/limits.py``. Negative control: change
     ``StrictModel``'s config to ``extra="ignore"`` and the unknown-field
     tests fail; drop a field's ``max_length`` and its test fails."""
 
@@ -150,7 +150,7 @@ class TestFieldBounds:
         assert res.status_code == 422, res.text
 
     def test_overlong_player_name_is_rejected(self, client):
-        from app.limits import MAX_NAME
+        from core.limits import MAX_NAME
 
         tid = _make_tournament(client)
         player = {
@@ -167,7 +167,7 @@ class TestFieldBounds:
         Every element here passes its own field validation; only the
         collection bound stops it. This is the shape that reaches CP-SAT.
         """
-        from app.limits import MAX_PLAYERS
+        from core.limits import MAX_PLAYERS
 
         tid = _make_tournament(client)
         players = [
@@ -179,7 +179,7 @@ class TestFieldBounds:
 
     def test_overlong_display_name_is_rejected(self, client):
         """SEC-15."""
-        from app.limits import MAX_NAME
+        from core.limits import MAX_NAME
 
         res = client.post(
             "/auth/register",
@@ -223,7 +223,7 @@ class TestFieldBounds:
 
 
 class TestServerManagedFields:
-    """``_SERVER_MANAGED_STATE_FIELDS`` in ``api/tournaments.py``.
+    """``_SERVER_MANAGED_STATE_FIELDS`` in ``workspaces/tournaments.py``.
     Negative control: delete the preserve loop in ``put_tournament_state``
     and ``test_client_cannot_forge_schedule_version`` fails."""
 
@@ -278,8 +278,8 @@ class TestServerManagedFields:
         client.put(f"/tournaments/{tid}/state", json=_state())
 
         # Advance the stored version the way the commit path does.
-        from database.session import SessionLocal
-        from database.models import Tournament
+        from db.session import SessionLocal
+        from db.models import Tournament
         import uuid as _uuid
 
         with SessionLocal() as s:

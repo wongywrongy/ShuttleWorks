@@ -64,7 +64,7 @@ R2_TABLES = ("entry_events", "entries", "entry_pages")
 def alembic_cfg(tmp_path, monkeypatch):
     """An Alembic config bound to a fresh, empty SQLite file.
 
-    ``alembic/env.py`` reads ``app.config.settings.database_url``, so the env
+    ``alembic/env.py`` reads ``core.config.settings.database_url``, so the env
     var must be set *and* the backend modules purged before the first import
     — otherwise a settings object cached by an earlier test points the
     migration at that test's database.
@@ -73,9 +73,9 @@ def alembic_cfg(tmp_path, monkeypatch):
     url = f"sqlite:///{db_path}"
     monkeypatch.setenv("DATABASE_URL", url)
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))
-    if str(_BACKEND) in sys.path:
-        sys.path.remove(str(_BACKEND))
-    sys.path.insert(0, str(_BACKEND))
+    if str(_BACKEND / "src") in sys.path:
+        sys.path.remove(str(_BACKEND / "src"))
+    sys.path.insert(0, str(_BACKEND / "src"))
     purge_backend_modules()
 
     from alembic.config import Config
@@ -84,7 +84,7 @@ def alembic_cfg(tmp_path, monkeypatch):
     # when ``config_file_name`` is None, so running migrations in-process
     # does not reconfigure pytest's logging.
     cfg = Config()
-    cfg.set_main_option("script_location", str(_BACKEND / "alembic"))
+    cfg.set_main_option("script_location", str(_BACKEND / "src" / "alembic"))
     cfg.set_main_option("sqlalchemy.url", url)
     try:
         yield cfg, url
@@ -289,7 +289,7 @@ def test_migration_matches_the_models_column_for_column(alembic_cfg):
     command.upgrade(cfg, "head")
     inspector, _ = _inspector(url)
 
-    from database.models import Base
+    from db.models import Base
 
     for table in ENTRIES_TABLES:
         migrated = {c["name"] for c in inspector.get_columns(table)}

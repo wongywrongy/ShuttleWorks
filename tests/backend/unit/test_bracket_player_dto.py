@@ -2,7 +2,7 @@
 from __future__ import annotations
 import pytest
 
-from app.schemas import BracketPlayerDTO, TournamentStateDTO, TournamentConfig
+from core.schemas import BracketPlayerDTO, TournamentStateDTO, TournamentConfig
 
 
 def test_bracket_player_dto_round_trip():
@@ -47,7 +47,7 @@ def test_tournament_config_carries_rest_between_rounds():
 @pytest.fixture(autouse=False)
 def pick():
     """Import _pick from the bracket API module."""
-    from api.brackets import _pick
+    from bracket.brackets import _pick
     return _pick
 
 

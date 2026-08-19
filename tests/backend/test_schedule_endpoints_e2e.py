@@ -20,14 +20,14 @@ from tests.backend._helpers import isolate_test_database, seed_tournament
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
 
 def _run_worker_once() -> bool:
     """Drive the embedded worker loop synchronously (no thread)."""
-    from services.solve_worker import SolveWorker
+    from solve_rail.solve_worker import SolveWorker
 
     return SolveWorker(worker_id="pytest-worker").run_once()
 

@@ -2,7 +2,7 @@
 
 SP-E1-2 Phase B, task B2 (ruling D-A3; the trap is named in spec Q13 §2).
 
-The middleware in ``app/main.py`` decides whether a write is
+The middleware in ``core/main.py`` decides whether a write is
 cookie-authenticated, and until the entrant principal arrived it decided it
 by comparing against **one** cookie name. That is correct exactly as long as
 the system has one session cookie, and it fails *open* the moment it does
@@ -37,12 +37,12 @@ from tests.backend._helpers import isolate_test_database
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 GOOD_PW = "a perfectly fine passphrase"
 
-_BACKEND = Path(__file__).resolve().parents[2] / "apps" / "api"
+_BACKEND = Path(__file__).resolve().parents[2] / "apps" / "api" / "src"
 
 # **Every directory where a cookie can be set, not every directory where one
 # happened to be set when this guard was written.** The scan covered ``api/``
 # alone until SP-PROGRAM-1 Phase 6 put a real ``set_cookie`` in
-# ``app/form_csrf.py``, where the glob never looked. (Ruling R8-D has since
+# ``core/form_csrf.py``, where the glob never looked. (Ruling R8-D has since
 # moved that mint to the SSR tier and deleted the function, so ``app/`` is
 # clean again — the widened scan stays, because the lesson was about the
 # unasked question, not about the one file that raised it.) That
@@ -50,7 +50,15 @@ _BACKEND = Path(__file__).resolve().parents[2] / "apps" / "api"
 # file exists about: not a wrong answer, an unasked question. A cookie set from
 # a directory outside this list is invisible to the gate, so adding a layer
 # that sets cookies means adding it here.
-_SCANNED_DIRS = (_BACKEND / "api", _BACKEND / "app")
+# Every domain package plus the kernel: SP-REORG-1 Phase 3 replaced the
+# flat api/ + app/ split with one package per domain, so the scan follows.
+_SCANNED_DIRS = tuple(
+    _BACKEND / name
+    for name in (
+        "core", "workspaces", "identity", "meet", "bracket",
+        "operations", "display", "entries", "solve_rail", "ops",
+    )
+)
 
 # Cookies that are deliberately NOT credentials — a locale or theme
 # preference, say. An addition here is a claim that the cookie cannot
@@ -61,7 +69,7 @@ _SCANNED_DIRS = (_BACKEND / "api", _BACKEND / "app")
 # ``sw_play_csrf`` (SP-PROGRAM-1 Phase 6, R8-B) is the pre-session
 # double-submit nonce minted by the SSR tier (R8-D,
 # ``entrant/app/lib/formCsrf.server.ts``) and verified against
-# ``app/form_csrf.py::PLAY_CSRF_COOKIE``. It
+# ``core/form_csrf.py::PLAY_CSRF_COOKIE``. It
 # is a random value handed to an *anonymous* visitor so that a login or
 # signup form has something unreadable to derive a token from; it names no
 # principal and grants no access. Registering it would be actively wrong,
@@ -77,7 +85,7 @@ _NON_SESSION_COOKIES: set[str] = {"sw_play_csrf"}
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -88,7 +96,7 @@ def client(tmp_path, monkeypatch):
 def test_the_entrant_cookie_is_inside_csrf_enforcement(client):
     """The headline: a write carrying the entrant session cookie needs the
     custom header, exactly as an operator write does."""
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.clear()
     client.cookies.set(settings.entrant_session_cookie_name, "an-entrant-token")
@@ -105,7 +113,7 @@ def test_the_same_write_with_the_header_is_accepted(client):
     """Negative control (CODE_HEALTH 3b): same cookie, same route, only the
     header differs. Without this, the assertion above would also pass
     against a route that refuses everything."""
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.clear()
     client.cookies.set(settings.entrant_session_cookie_name, "an-entrant-token")
@@ -131,7 +139,7 @@ def test_inversion_proof_a_cookie_outside_the_registry_is_not_covered(
     the property that was missing while the middleware compared against one
     hard-wired name.
     """
-    from app.config import settings
+    from core.config import settings
 
     monkeypatch.setattr(settings, "entrant_session_cookie_name", "sw_not_registered")
     client.cookies.clear()
@@ -177,7 +185,7 @@ def test_a_non_session_cookie_still_does_not_trigger_the_check(client):
 def _module_constants(tree: ast.Module) -> dict[str, str]:
     """The module's top-level ``NAME = "literal"`` bindings.
 
-    ``app/form_csrf.py`` sets its cookie as ``key=PLAY_CSRF_COOKIE`` — a
+    ``core/form_csrf.py`` sets its cookie as ``key=PLAY_CSRF_COOKIE`` — a
     named constant, because the middleware and the pages read the same name
     and a literal repeated three times is how they drift apart. The guard
     resolves that from the module's own source rather than importing it, so
@@ -233,7 +241,7 @@ def _resolve(expr: ast.AST, constants: dict[str, str] | None = None) -> str:
     computed cookie name is a thing this guard genuinely cannot check, and
     silently skipping it would make the guard a decoration.
     """
-    from app.config import settings
+    from core.config import settings
 
     if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
         return expr.value
@@ -255,7 +263,7 @@ def _resolve(expr: ast.AST, constants: dict[str, str] | None = None) -> str:
 def test_every_api_set_cookie_names_a_registered_session_cookie(client):
     """The structural gate. A new cookie that authenticates a request and is
     not in ``settings.session_cookie_names`` fails here, by file and line."""
-    from app.config import settings
+    from core.config import settings
 
     registry = set(settings.session_cookie_names) | _NON_SESSION_COOKIES
     calls = _cookie_key_expressions()
@@ -289,7 +297,7 @@ def test_the_scan_reaches_every_directory_that_sets_a_cookie(client):
     ``app/`` to the SSR tier and deleted the dead function that held it, so
     there is no live call site outside ``api/`` left to point at. The
     previous version of this test papered over that by asserting
-    ``_BACKEND / "app" in _SCANNED_DIRS`` — a module constant compared to
+    ``_BACKEND / "core" in _SCANNED_DIRS`` — a module constant compared to
     itself, three lines below its own definition, reddened by no mutation
     except editing that constant in this same file. A green tautology reads
     as coverage the scan does not have, which is the failure this whole file
@@ -304,12 +312,12 @@ def test_the_scan_reaches_every_directory_that_sets_a_cookie(client):
     """
     seen = {name for name, _line, _expr, _constants in _cookie_key_expressions()}
 
-    assert "api/auth.py" in seen
-    assert "api/entrants.py" in seen
+    assert "identity/auth_routes.py" in seen
+    assert "identity/entrants_routes.py" in seen
 
 
 def test_the_registry_names_both_principals(client):
-    from app.config import settings
+    from core.config import settings
 
     assert settings.session_cookie_names == ("sw_session", "sw_play_session")
 
@@ -324,7 +332,7 @@ def test_the_pre_session_nonce_is_carved_out_and_not_registered(client):
     exclusion is a carve-out and not a hole — the pre-session login post is
     still measured by the CSRF check).
     """
-    from app.config import settings
+    from core.config import settings
 
     assert "sw_play_csrf" in _NON_SESSION_COOKIES
     assert "sw_play_csrf" not in settings.session_cookie_names
@@ -342,7 +350,7 @@ def test_the_pre_session_nonce_is_carved_out_and_not_registered(client):
 # proof it substituted — a double-submit token derived from a cookie the
 # attacker's page can make the browser send but never read — was promoted
 # out of the route into a second enumerated channel the middleware checks
-# itself (``app/form_csrf.form_csrf_proves``).
+# itself (``core/form_csrf.form_csrf_proves``).
 #
 # The difference is the whole point. A path-based exemption is a list that
 # grows, and every entry on it is a route the middleware does not look at.
@@ -356,17 +364,17 @@ def test_the_pre_session_nonce_is_carved_out_and_not_registered(client):
 
 
 def test_the_app_declares_zero_path_based_csrf_exemptions():
-    """**The inverted control.** Derived from ``app/main.py``'s source:
+    """**The inverted control.** Derived from ``core/main.py``'s source:
     the CSRF middleware may not skip a write because of its path.
 
     Break it to prove it is not vacuous: re-add
     ``_SOMETHING = re.compile(r"^/e/[^/]+/submit$")`` at module scope in
-    ``app/main.py`` and this fails by line.
+    ``core/main.py`` and this fails by line.
     """
     import ast
     import inspect
 
-    from app import main as app_main
+    from core import main as app_main
 
     source = inspect.getsource(app_main)
     tree = ast.parse(source)
@@ -383,7 +391,7 @@ def test_the_app_declares_zero_path_based_csrf_exemptions():
         and node.value.func.attr == "compile"
     ]
     assert not patterns, (
-        "app/main.py declares path patterns next to the CSRF middleware. "
+        "core/main.py declares path patterns next to the CSRF middleware. "
         "Phase 6 deleted the last path-based exemption; a write proves "
         "itself by header or by cookie-derived token, never by URL:\n  "
         + "\n  ".join(patterns)
@@ -398,7 +406,7 @@ def test_a_cookie_carrying_write_with_no_proof_at_all_is_still_refused(client):
     refused. It is now the *middleware* that refuses it rather than the
     route, which is what deleting the exemption bought.
     """
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.clear()
     client.cookies.set(settings.entrant_session_cookie_name, "an-entrant-token")
@@ -416,7 +424,7 @@ def test_the_retired_html_routes_are_gone(client):
     ``_IncludedRouter`` rather than flattening onto ``app.routes``, so the
     OpenAPI document is the assertion surface (CLAUDE.md, known hazards).
     """
-    from app.main import app
+    from core.main import app
 
     paths = app.openapi()["paths"]
     assert "/e/{slug}" not in paths
@@ -429,7 +437,7 @@ def test_the_retired_html_routes_are_gone(client):
 def test_every_other_cookie_carrying_write_is_still_covered(client):
     """Negative control: a write with no proof at all is refused wherever it
     lands, not only on the entrant surface."""
-    from app.config import settings
+    from core.config import settings
 
     client.cookies.clear()
     client.cookies.set(settings.entrant_session_cookie_name, "an-entrant-token")

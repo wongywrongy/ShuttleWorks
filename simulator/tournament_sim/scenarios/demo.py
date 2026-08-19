@@ -65,13 +65,13 @@ TURNSTILE_DUMMY = "XXXX.DUMMY.TOKEN.XXXX"
 SEEDED = 4
 
 #: Players per public submission. A club secretary enters a squad on one
-#: form (``services/entry_form.parse_players`` is built for exactly that
+#: form (``entries/entry_form.parse_players`` is built for exactly that
 #: 1-N shape), which is both the realistic act and what keeps ~130 entry
 #: players inside ``entries_max_per_ip`` — 20 submissions per 10 minutes
 #: from one address. Nothing here goes around that budget.
 SQUAD = 12
 
-#: Mirrors ``database.models.CLOUD_ONLY_MODULES``. Duplicated rather than
+#: Mirrors ``db.models.CLOUD_ONLY_MODULES``. Duplicated rather than
 #: imported because the simulator's hard boundary forbids importing backend
 #: packages at all (``tests/test_import_boundary.py`` ast-walks for it), and
 #: the value is discovered from the API's own refusal anyway — this constant
@@ -425,7 +425,7 @@ def _submit(
     The flat, repeated-key body is the form the unhydrated page posts —
     ``playerName`` once per person and ``events`` as ``"<index>:<event id>"``
     — so this exercises the same parser a browser with JavaScript disabled
-    reaches (``services/entry_form.parse_players``).
+    reaches (``entries/entry_form.parse_players``).
     """
     fields: list[tuple[str, str]] = [("acknowledged", "on")]
     for index, (name, gender, year, club) in enumerate(people):

@@ -38,7 +38,7 @@ def _boom_on_commit(self, *args, **kwargs):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import tournaments
+    from workspaces import tournaments
 
     app_ = FastAPI()
     app_.include_router(tournaments.router)
@@ -290,7 +290,7 @@ def test_state_put_rejects_zero_interval(client):
 # ---- Meet standings (Task 2) --------------------------------------------
 #
 # Authoritative pool (school-vs-school) standings, computed fresh on every
-# GET /state from services.meet.standings.compute_meet_standings — see
+# GET /state from meet.standings.compute_meet_standings — see
 # .superpowers/sdd/display/task-2-brief.md. matches/groups/players come
 # from the persisted state blob (PUT below); finished/score data lives in
 # the separate match_states table, seeded here directly through the repo
@@ -298,7 +298,7 @@ def test_state_put_rejects_zero_interval(client):
 
 
 def _seed_match_state(tid: str, match_id: str, *, status: str, score_a=None, score_b=None) -> None:
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -371,8 +371,8 @@ def test_state_standings_not_persisted_by_put(client):
     # Assert that standings were excluded from the persisted blob itself.
     # This guards the real exclusion point (the PUT handler's
     # model_dump(exclude={"standings"})), not just a recomputed GET.
-    from database.session import SessionLocal
-    from database.models import Tournament
+    from db.session import SessionLocal
+    from db.models import Tournament
     session = SessionLocal()
     try:
         row = session.query(Tournament).filter(Tournament.id == uuid.UUID(tid)).one()
@@ -479,8 +479,8 @@ def test_delete_cascades_backups(client):
 def _set_role(role: str, tid: str) -> None:
     """Demote (or promote) the local-dev caller to the given role for
     direct manipulation of the membership table in role-matrix tests."""
-    from app.dependencies import LOCAL_DEV_USER_UUID
-    from database.session import SessionLocal
+    from core.dependencies import LOCAL_DEV_USER_UUID
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -494,8 +494,8 @@ def _set_role(role: str, tid: str) -> None:
 def _remove_membership(tid: str) -> None:
     """Drop the local-dev member row entirely — simulates a request from
     someone who has zero access to the tournament."""
-    from app.dependencies import LOCAL_DEV_USER_UUID
-    from database.session import SessionLocal
+    from core.dependencies import LOCAL_DEV_USER_UUID
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -576,8 +576,8 @@ def test_list_tournaments_returns_only_user_memberships(client):
     # Create a second tournament that the local-dev user is NOT a member
     # of (simulating a tournament owned by a different user).
     other_uuid = uuid.uuid4()
-    from database.session import SessionLocal
-    from database.models import Tournament
+    from db.session import SessionLocal
+    from db.models import Tournament
     session = SessionLocal()
     try:
         session.add(Tournament(id=other_uuid, data={}, name="Other"))
@@ -637,10 +637,10 @@ def test_shared_row_keeps_original_owner_name(client):
     """A tournament owned by someone else (here: a manually seeded row
     with a different owner_email) still reports that original owner
     even when the caller has a non-owner role on it."""
-    from database.models import Tournament, TournamentMember
-    from database.session import SessionLocal
-    from app.dependencies import LOCAL_DEV_USER_UUID
-    from services.auth import ensure_bootstrap_user
+    from db.models import Tournament, TournamentMember
+    from db.session import SessionLocal
+    from core.dependencies import LOCAL_DEV_USER_UUID
+    from identity.auth import ensure_bootstrap_user
 
     other_owner_uuid = uuid.uuid4()
     shared_id = uuid.uuid4()
@@ -801,7 +801,7 @@ def _seed_bracket_schedule(tid: str, *, started: bool = False) -> None:
     directly through the repository (the bracket routers aren't mounted
     in this module's ``app``).
 
-    Uses ``database.session.SessionLocal`` directly — the same pattern
+    Uses ``db.session.SessionLocal`` directly — the same pattern
     ``test_shared_row_keeps_original_owner_name`` uses above — rather
     than a nonexistent ``get_repository_factory`` seam, so the write
     lands in the same per-test SQLite file the ``client`` fixture bound
@@ -809,7 +809,7 @@ def _seed_bracket_schedule(tid: str, *, started: bool = False) -> None:
     """
     import uuid as _uuid
 
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -891,7 +891,7 @@ def test_clear_schedule_flag_clears_both_when_both_committed(client):
 
     import uuid as _uuid
 
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -916,7 +916,7 @@ def test_clear_schedule_strips_bracket_assignments(client):
 
     import uuid as _uuid
 
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -941,7 +941,7 @@ def test_started_draw_does_not_block_meet_only_clear(client):
 
     import uuid as _uuid
 
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -1003,7 +1003,7 @@ def test_bracket_clear_atomic_rollback_on_write_failure(client, monkeypatch):
 
     import uuid as _uuid
 
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from repositories.local import LocalRepository
 
     session = SessionLocal()
@@ -1050,8 +1050,8 @@ def test_automatic_backups_thin_to_one_per_hour_beyond_the_keep_window(client):
     something from the morning to go back to."""
     import datetime as _dt
 
-    from database.session import SessionLocal
-    from database.models import TournamentBackup
+    from db.session import SessionLocal
+    from db.models import TournamentBackup
 
     created = client.post("/tournaments", json={"name": "A"}).json()
     tid = created["id"]

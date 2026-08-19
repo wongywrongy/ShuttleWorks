@@ -31,7 +31,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import (
+from db.models import (
     Base,
     EntrantAccount,
     Entry,
@@ -39,7 +39,7 @@ from database.models import (
     EntryPlayer,
 )
 from repositories.local import LocalRepository
-from services.entries import SkipReason, commit_entries
+from entries.entries import SkipReason, commit_entries
 
 
 @pytest.fixture
@@ -163,7 +163,7 @@ def _entry(
     **This helper is the only thing in this file that SP-E1-2 changed.**
     ``player_name`` and ``remarks`` used to be columns on ``entries`` and
     are now columns on ``entry_players``; the seam reads them through
-    association proxies, so ``services/entries.py`` is byte-for-byte
+    association proxies, so ``entries/entries.py`` is byte-for-byte
     unedited and every assertion below is untouched. ``gender`` is new
     fixture data (R12 makes the field required) rather than a backfill —
     there is no old value it could have come from, which is exactly why

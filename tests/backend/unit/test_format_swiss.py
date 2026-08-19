@@ -21,8 +21,8 @@ import pytest
 
 from scheduler_core.domain.tournament import Participant, ParticipantType
 
-from services.bracket.formats import FORMAT_REGISTRY
-from services.bracket.formats.swiss import (
+from bracket.formats import FORMAT_REGISTRY
+from bracket.formats.swiss import (
     generate_swiss,
     normalize_swiss_config,
 )

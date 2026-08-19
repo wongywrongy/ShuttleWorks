@@ -22,9 +22,10 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -81,7 +82,7 @@ def test_unlock_flow_clearing_schedule_passes(client, tid):
 
 
 def test_non_scheduling_config_change_under_schedule_passes(client, tid):
-    """Fields on the fail-closed exempt list (services.config_lock /
+    """Fields on the fail-closed exempt list (workspaces.config_lock /
     shared/non-scheduling-keys.json) stay freely writable under a
     committed schedule, and the schedule itself is retained untouched —
     not merely a 200, but no silent clear."""

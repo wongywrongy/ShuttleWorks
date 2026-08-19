@@ -1,4 +1,4 @@
-"""services/auth — identity/session/throttle logic, both dialects.
+"""identity/auth/ — identity/session/throttle logic, both dialects.
 
 Same dual-dialect harness as test_solve_jobs.py: sqlite always, the
 postgres leg when TEST_POSTGRES_URL is set (CI provides it).
@@ -13,9 +13,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import AuthSession, Base, User
-from services import auth as auth_service
-from services.auth import AuthError
+from db.models import AuthSession, Base, User
+from core import throttle
+from identity import auth as auth_service
+from identity.auth import AuthError
 
 POSTGRES_URL = os.environ.get("TEST_POSTGRES_URL", "")
 
@@ -28,7 +29,7 @@ def _make_engine(dialect: str):
             poolclass=StaticPool,
             future=True,
         )
-    from database.session import normalize_database_url
+    from db.session import normalize_database_url
 
     return create_engine(normalize_database_url(POSTGRES_URL), future=True)
 
@@ -193,20 +194,20 @@ def test_reset_token_expiry(session):
 
 def test_throttle_locks_after_budget_and_backs_off(session, monkeypatch):
     # Patch through the service's own settings binding — module purges
-    # in the full suite can leave tests holding a different app.config
-    # instance than the one services.auth imported.
+    # in the full suite can leave tests holding a different core.config
+    # instance than the one identity.auth imported.
     monkeypatch.setattr(
         auth_service.settings, "auth_throttle_max_failures", 3
     )
     key = f"account:throttle-{uuid.uuid4()}@example.com"
     for _ in range(2):
         auth_service.throttle_record_failure(session, key)
-    assert auth_service.throttle_check(session, key) is None  # under budget
+    assert throttle.throttle_check(session, key) is None  # under budget
     auth_service.throttle_record_failure(session, key)  # 3rd → locked
-    first_lock = auth_service.throttle_check(session, key)
+    first_lock = throttle.throttle_check(session, key)
     assert first_lock is not None and first_lock > 0
     auth_service.throttle_record_failure(session, key)  # 4th → doubled
-    second_lock = auth_service.throttle_check(session, key)
+    second_lock = throttle.throttle_check(session, key)
     assert second_lock > first_lock
 
 
@@ -217,9 +218,9 @@ def test_throttle_success_resets(session, monkeypatch):
     key = "ip:203.0.113.9"
     auth_service.throttle_record_failure(session, key)
     auth_service.throttle_record_failure(session, key)
-    assert auth_service.throttle_check(session, key) is not None
+    assert throttle.throttle_check(session, key) is not None
     auth_service.throttle_record_success(session, key)
-    assert auth_service.throttle_check(session, key) is None
+    assert throttle.throttle_check(session, key) is None
 
 
 # ---- Breached-password blocklist (SP-SEC-1 Phase 3, SEC-07) ----------
@@ -232,7 +233,7 @@ def test_blocklist_meets_the_asvs_l1_floor():
     only checked "some passwords are rejected" would have passed against the
     15-entry list this replaced.
     """
-    from services.auth import _WORST_PASSWORDS
+    from identity.auth import _WORST_PASSWORDS
 
     assert len(_WORST_PASSWORDS) >= 3000
 
@@ -240,8 +241,8 @@ def test_blocklist_meets_the_asvs_l1_floor():
 def test_blocklist_holds_only_policy_eligible_entries():
     """Entries below the length minimum would be dead weight — already
     refused by the length rule before the blocklist is consulted."""
-    from app.config import settings
-    from services.auth import _WORST_PASSWORDS
+    from core.config import settings
+    from identity.auth import _WORST_PASSWORDS
 
     too_short = [w for w in _WORST_PASSWORDS if len(w) < settings.password_min_length]
     assert too_short == []
@@ -257,7 +258,7 @@ def test_blocklist_holds_only_policy_eligible_entries():
     ],
 )
 def test_common_passwords_are_refused(password):
-    from services.auth import AuthError, validate_password
+    from identity.auth import AuthError, validate_password
 
     with pytest.raises(AuthError) as exc:
         validate_password(password)
@@ -266,6 +267,6 @@ def test_common_passwords_are_refused(password):
 
 def test_a_long_passphrase_is_still_accepted():
     """The blocklist must not become a de-facto composition rule."""
-    from services.auth import validate_password
+    from identity.auth import validate_password
 
     validate_password("correct horse battery staple")

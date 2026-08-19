@@ -30,7 +30,7 @@ CSRF = {"X-ShuttleWorks-CSRF": "1"}
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
     from fastapi.testclient import TestClient
-    from app.main import app
+    from core.main import app
 
     return TestClient(app)
 
@@ -41,8 +41,8 @@ def client(tmp_path, monkeypatch):
 def _make_workspace(client, name="Draws Open", slug="draws-open", **flags):
     tid = client.post("/tournaments", json={"name": name}, headers=CSRF).json()["id"]
 
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -64,14 +64,14 @@ def _seed_person(tid, full_name="Ada Chen", club="Riverside BC", state="confirme
                  event_code="MS"):
     """A person with an entry (default confirmed) + the event it names.
     Returns the person id — ``entry-{id}`` is their roster/participant key."""
-    from database.models import (
+    from db.models import (
         EntrantAccount,
         Entry,
         EntryEvent,
         EntryPlayer,
         Submission,
     )
-    from database.session import SessionLocal
+    from db.session import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
@@ -124,8 +124,8 @@ def _seed_person(tid, full_name="Ada Chen", club="Riverside BC", state="confirme
 
 
 def _set_flags(tid, **flags):
-    from database.models import EntryPage
-    from database.session import SessionLocal
+    from db.models import EntryPage
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:
@@ -486,8 +486,8 @@ def test_meet_matches_reach_the_player_page_with_gated_scores(client):
     person = _seed_person(tid, "Ada Chen", "Riverside BC", event_code="MS1")
     roster_id = f"entry-{person}"
 
-    from database.models import MatchState, Tournament
-    from database.session import SessionLocal
+    from db.models import MatchState, Tournament
+    from db.session import SessionLocal
 
     session = SessionLocal()
     try:

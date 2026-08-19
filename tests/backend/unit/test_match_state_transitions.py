@@ -8,8 +8,8 @@ are relative to that root (no 'backend.' prefix).
 """
 from __future__ import annotations
 
-from services.match_state import assert_valid_transition, VALID_TRANSITIONS
-from database.models import MatchStatus
+from operations.match_state import assert_valid_transition, VALID_TRANSITIONS
+from db.models import MatchStatus
 
 
 def test_playing_can_return_to_scheduled_for_postpone():

@@ -1,8 +1,8 @@
 """schedule_config_for_bracket — bracket consumes the shared config
 assembly (rest / freeze / breaks / objective weights) with its
 session-owned structural overrides on top."""
-from adapters.badminton import schedule_config_for_bracket
-from app.schemas import TournamentConfig
+from shared.sport.badminton import schedule_config_for_bracket
+from core.schemas import TournamentConfig
 
 
 def _cfg(**over) -> TournamentConfig:

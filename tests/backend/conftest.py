@@ -1,18 +1,16 @@
 """Shared pytest setup for the backend test suite.
 
-Pytest's rootdir is the repository root. The FastAPI app and its
-adapter / api / services packages live under ``apps/api/``; we insert
-that directory at the front of ``sys.path`` at conftest load time so
-every test can do ``from app.X import Y`` and friends without local
-sys.path manipulation. We also add this directory to ``sys.path`` so
-test modules can ``from _helpers import isolate_test_database``.
+Pytest's rootdir is the repository root. The API's domain packages live
+under ``apps/api/src``, which is a sys.path ROOT rather than a package
+(SP-REORG-1 R4), so we insert it at conftest load time and every test can
+``from meet.schedule import ...`` or ``from core.config import ...`` by bare
+name. We also add this directory, so test modules can
+``from _helpers import isolate_test_database``.
 
-The insert is still required after SP-REORG-1. It exists because the API
-is a set of top-level packages (``app``, ``api``, ``services``, ...) that
-are imported by those bare names, not because the old tree was ambiguous,
-so moving the tree did not remove the need for it. Phase 3 is what can
-retire it: once the API is one importable root, this becomes a single
-path entry or nothing at all.
+Phase 3 reduced this from two entries to one meaningful one: there is now a
+single API root instead of six sibling top-level packages. It cannot go to
+zero while the suite imports the API by bare package name, which is the
+same thing the API does to itself.
 
 ``scheduler_core`` is installed as a regular package via its own
 ``pyproject.toml`` and reaches every test through site-packages.
@@ -27,7 +25,7 @@ import pytest
 
 _TESTS_DIR = Path(__file__).resolve().parent          # tests/backend
 _REPO_ROOT = _TESTS_DIR.parents[1]                    # the repository root
-_API_ROOT = str(_REPO_ROOT / "apps" / "api")
+_API_ROOT = str(_REPO_ROOT / "apps" / "api" / "src")
 
 for entry in (str(_TESTS_DIR), _API_ROOT):
     if entry not in sys.path:
@@ -49,7 +47,7 @@ def backend_env(tmp_path, monkeypatch):
 
     Sets up a fresh per-test SQLite database, rebinds the backend
     engine, and creates the schema. Tests using this fixture can
-    `from api.<module> import router` immediately afterwards.
+    `from <domain>.<module> import router` immediately afterwards.
     """
     yield isolate_test_database(tmp_path, monkeypatch)
 

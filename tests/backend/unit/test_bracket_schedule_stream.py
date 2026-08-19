@@ -27,9 +27,10 @@ from _helpers import isolate_test_database, seed_tournament
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     isolate_test_database(tmp_path, monkeypatch)
-    from api import brackets, tournaments
-    from app.exceptions import ConflictError
-    from app.main import _conflict_error_handler
+    from bracket import brackets
+    from workspaces import tournaments
+    from core.exceptions import ConflictError
+    from core.main import _conflict_error_handler
 
     app = FastAPI()
     app.include_router(tournaments.router)
@@ -161,7 +162,7 @@ def test_driver_schedule_next_round_threads_candidate_pool_size():
         PlayUnit,
         TournamentState,
     )
-    from services.bracket.scheduler import TournamentDriver
+    from bracket.scheduler import TournamentDriver
 
     state = TournamentState()
     for pid in ("P1", "P2", "P3", "P4"):
