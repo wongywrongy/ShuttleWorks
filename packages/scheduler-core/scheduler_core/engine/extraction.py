@@ -12,6 +12,7 @@ from scheduler_core.domain.models import (
     SoftViolation,
     SolverStatus,
 )
+from scheduler_core.engine.court_pool import colour_left_edge, sort_key
 from scheduler_core.engine.variables import SchedulingVars
 
 
@@ -35,9 +36,28 @@ def extract_solution(
     soft_violations: List[SoftViolation] = []
     moved_count = 0
 
+    # Pooled matches have no court variable — the model never chose one.
+    # Recover court identity by deterministic left-edge colouring so the
+    # emitted Assignment still carries a court_id and the wire contract does
+    # not change shape (SP-COURT-1 §7). Order = sort_key, the one definition.
+    coloured: Dict[str, int] = {}
+    if svars.pool:
+        order = sorted(
+            (
+                (solver.Value(svars.start[m]), matches[m].duration_slots, m)
+                for m in svars.pool
+            ),
+            key=lambda t: sort_key(t[0], t[2]),
+        )
+        coloured = colour_left_edge(order, svars.pool_courts)
+
     for match_id, match in matches.items():
         slot = solver.Value(svars.start[match_id])
-        court = solver.Value(svars.court[match_id])
+        court = (
+            coloured[match_id]
+            if match_id in coloured
+            else solver.Value(svars.court[match_id])
+        )
 
         prev = previous_assignments.get(match_id)
         moved = False

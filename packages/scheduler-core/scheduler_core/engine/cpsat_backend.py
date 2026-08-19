@@ -83,6 +83,7 @@ from scheduler_core.engine.constraints import (  # noqa: F401  -- side effect: r
 from scheduler_core.engine.diagnostics import diagnose_infeasibility, get_player_ids
 from scheduler_core.engine.extraction import extract_solution
 from scheduler_core.engine.validation import verify_schedule
+from scheduler_core.engine.court_pool import colour_left_edge, sort_key
 from scheduler_core.engine.variables import SchedulingVars, create_variables
 
 
@@ -140,9 +141,25 @@ class ProgressCallback(cp_model.CpSolverSolutionCallback):
 
         current_assignments: List[dict] = []
         if self.svars is not None:
+            # Same colouring rule as extraction (sort_key -> left edge), so a
+            # candidate snapshot and the final result agree about courts.
+            coloured: Dict[str, int] = {}
+            if self.svars.pool:
+                order = sorted(
+                    (
+                        (self.Value(self.svars.start[m]), self.matches[m].duration_slots, m)
+                        for m in self.svars.pool
+                    ),
+                    key=lambda t: sort_key(t[0], t[2]),
+                )
+                coloured = colour_left_edge(order, self.svars.pool_courts)
             for match_id, match in self.matches.items():
                 start = self.Value(self.svars.start[match_id])
-                court = self.Value(self.svars.court[match_id])
+                court = (
+                    coloured[match_id]
+                    if match_id in coloured
+                    else self.Value(self.svars.court[match_id])
+                )
                 current_assignments.append(
                     {
                         "matchId": match_id,
@@ -481,7 +498,13 @@ class CPSATScheduler:
             self.config.court_count,
         )
 
-        self.svars = create_variables(self.model, self.matches, self.config)
+        self.svars = create_variables(
+            self.model,
+            self.matches,
+            self.config,
+            self.previous_assignments,
+            self.locked_matches,
+        )
         self._num_intervals = len(self.svars.interval) + len(self.svars.court_interval)
 
         # Court closures — a list of (court_id, from_slot, to_slot)
@@ -502,6 +525,17 @@ class CPSATScheduler:
             (cid, fs, ts) for (cid, fs, ts) in windows
             if 1 <= cid <= self.config.court_count and ts > fs
         ]
+        # Reachable only with per-court variables by construction — plan_pool
+        # (via create_variables above) forces pinned whenever this list is
+        # non-empty (CP8-v1), so ``is_on_court`` exists for every match here.
+        # Asserted rather than assumed: if the fallback is ever weakened,
+        # this block would otherwise silently become a no-op and double-book
+        # the closed court.
+        if windows:
+            assert not self.svars.pool, (
+                "closed-court windows require per-court variables; "
+                "plan_pool must have forced pinned mode"
+            )
         for match_id, match in self.matches.items():
             d = match.duration_slots
             for cid, from_slot, to_slot in windows:
@@ -716,6 +750,7 @@ class CPSATScheduler:
                 locked_count=len(self.locked_matches),
                 solver_seed=effective_seed,
                 candidates=callback.candidates if callback else [],
+                effective_policy=self.svars.effective_policy,
             )
 
         infeasible_reasons = diagnose_infeasibility(

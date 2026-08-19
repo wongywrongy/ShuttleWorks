@@ -97,7 +97,11 @@ class Objective:
                     ctx.model.AddAbsEquality(abs_diff, ctx.svars.start[match_id] - prev.slot_id)
                     terms.append(int(self.disruption_penalty * 10) * abs_diff)
 
-                if self.court_change_penalty > 0:
+                # A pooled match has no court variable — queue mode solves
+                # for time only and colours courts afterwards, so "did it
+                # change court" is not a question the model can be asked.
+                # Skip rather than KeyError (SP-COURT-1 Phase 2).
+                if self.court_change_penalty > 0 and match_id not in ctx.svars.pool:
                     same_court = ctx.model.NewBoolVar(f"same_court_{match_id}")
                     ctx.model.Add(ctx.svars.court[match_id] == prev.court_id).OnlyEnforceIf(same_court)
                     ctx.model.Add(ctx.svars.court[match_id] != prev.court_id).OnlyEnforceIf(same_court.Not())

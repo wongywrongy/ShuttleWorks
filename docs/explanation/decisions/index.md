@@ -25,6 +25,9 @@ references a longer source, it names the file rather than duplicating it.
 | [0010](/explanation/decisions/0010-nav-model-in-platform) | Nav model in the platform layer; `platform ↛ app` enforced as error | Accepted |
 | [0011](/explanation/decisions/0011-cross-product-boundary-policy) | Cross-product boundary policy (accept legit edges, relocate misplaced code, defer debt) | Accepted |
 | [0012](/explanation/decisions/0012-remove-the-supabase-mirror) | Remove the Supabase mirror | Accepted |
+| [0013](/explanation/decisions/0013-shared-ui-promotion-policy) | Shared-UI promotion policy | Accepted |
+| [0014](/explanation/decisions/0014-workspace-vs-tournament-vocabulary) | Workspace is the product word; tournament is the storage word | Accepted |
+| [0015](/explanation/decisions/0015-court-policy) | Court policy: queue-run vs court-tied scheduling | Accepted |
 
 ## Format
 

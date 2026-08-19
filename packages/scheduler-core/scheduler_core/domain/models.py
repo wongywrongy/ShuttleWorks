@@ -225,6 +225,12 @@ class ScheduleResult:
     # ``assignments`` above is always equivalent to ``candidates[0]``
     # when the pool is non-empty; older callers ignore this field.
     candidates: List[ScheduleSnapshot] = field(default_factory=list)
+    # What the engine actually did, which is not always what was asked: a
+    # queue-mode solve with closed court windows (or a lock on a pool court)
+    # falls back to pinned (ruling CP8-v1 + the soundness rule in
+    # engine/court_pool.py). Reported so the UI can explain the timetable
+    # rather than leave the operator to notice.
+    effective_policy: str = "pinned"
 
 
 @dataclass
