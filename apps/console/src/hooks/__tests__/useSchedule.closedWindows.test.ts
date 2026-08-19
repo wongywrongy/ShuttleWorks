@@ -63,7 +63,7 @@ describe('resolveClosedWindows — D1', () => {
 
     expect(apiClient.runSolveJob).toHaveBeenCalledTimes(1);
     // and it did not smuggle a closedCourtWindows claim into the body
-    const body = vi.mocked(apiClient.runSolveJob).mock.calls[0][1] as Record<string, unknown>;
+    const body = vi.mocked(apiClient.runSolveJob).mock.calls[0][1] as unknown as Record<string, unknown>;
     expect(body.closedCourtWindows).toBeUndefined();
     expect(useUiStore.getState().generationError).toBeNull();
   });
@@ -76,7 +76,7 @@ describe('resolveClosedWindows — D1', () => {
     });
 
     expect(apiClient.getBracket).not.toHaveBeenCalled();
-    const body = vi.mocked(apiClient.runSolveJob).mock.calls[0][1] as Record<string, unknown>;
+    const body = vi.mocked(apiClient.runSolveJob).mock.calls[0][1] as unknown as Record<string, unknown>;
     expect(body.closedCourtWindows).toEqual([[1, 0, 3]]);
   });
 });

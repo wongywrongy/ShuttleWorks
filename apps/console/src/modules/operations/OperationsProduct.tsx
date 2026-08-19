@@ -48,6 +48,7 @@ import { PlanToolbar } from './plan/PlanToolbar';
 import { PlanDialogHost } from './plan/PlanDialogHost';
 import { SolveTelemetryPanel } from './plan/SolveTelemetryPanel';
 import { ClosedCourtsStrip } from './plan/ClosedCourtsStrip';
+import { PlanCallList } from './plan/PlanCallList';
 import { StaleBanner } from './plan/StaleBanner';
 import { SuggestionsRail } from './plan/SuggestionsRail';
 import { dialogForAdvisory, type PlanDialog } from './plan/planDialogs';
@@ -322,6 +323,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
               formatSlot={formatSlot}
               slotMinutes={config?.intervalMinutes}
               restMinutes={config?.defaultRestMinutes}
+              onDeckCount={config?.onDeckCount}
               meetOps={engines.meet ? meetOps : undefined}
               onAdvisoryReview={engines.meet ? onRunAdvisoryReview : undefined}
             />
@@ -335,16 +337,44 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                 {engines.meet ? (
                   <ClosedCourtsStrip onOpenDirector={() => setPlanDialog({ kind: 'director' })} />
                 ) : null}
-                <UnifiedOpsBoard
-                  blocks={blocks}
-                  courtCount={courtCount}
-                  currentSlot={currentSlot}
-                  selectedKey={selectedKey}
-                  onSelect={setSelectedKey}
-                  meet={{ config, matches, schedule }}
-                  onBracketData={setData}
-                  formatSlot={formatSlot}
-                />
+                {/* CP4 (ADR 0015): in queue mode Plan shows the solve's real
+                    output — an ordered call list — because a court x time grid
+                    drawn from a queue solve is a fiction the day contradicts
+                    within one match. If the solve FELL BACK to pinned
+                    (closed-court windows, CP8-v1), the grid is the honest
+                    view again, with a banner saying why. */}
+                {config?.courtPolicy === 'queue' && schedule?.effectivePolicy !== 'pinned' ? (
+                  <PlanCallList
+                    blocks={blocks}
+                    courtCount={courtCount}
+                    selectedKey={selectedKey}
+                    onSelect={setSelectedKey}
+                    formatSlot={formatSlot}
+                  />
+                ) : (
+                  <>
+                    {config?.courtPolicy === 'queue' && schedule?.effectivePolicy === 'pinned' ? (
+                      <div
+                        data-testid="plan-policy-fallback"
+                        className="border-b border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground"
+                      >
+                        Closed-court windows made this solve court-tied, so the
+                        grid below is the real plan. Queue mode resumes once the
+                        closures clear.
+                      </div>
+                    ) : null}
+                    <UnifiedOpsBoard
+                      blocks={blocks}
+                      courtCount={courtCount}
+                      currentSlot={currentSlot}
+                      selectedKey={selectedKey}
+                      onSelect={setSelectedKey}
+                      meet={{ config, matches, schedule }}
+                      onBracketData={setData}
+                      formatSlot={formatSlot}
+                    />
+                  </>
+                )}
                 {engines.meet ? <SolveTelemetryPanel /> : null}
                 <UnifiedOpsList
                   blocks={blocks}

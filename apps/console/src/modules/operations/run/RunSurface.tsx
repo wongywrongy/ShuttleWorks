@@ -26,6 +26,7 @@ import {
   deriveCourtLanes,
   deriveQueue,
   nextEligible,
+  onDeck,
   busyPlayers,
   isPlayerBusy,
   restShortKeys,
@@ -68,6 +69,8 @@ export interface RunSurfaceProps {
   /** Workspace rest budget in minutes. Converted to slots here so the queue
    *  can flag a player who has only just come off court. */
   restMinutes?: number;
+  /** CP5 lookahead: how many on-deck matches the strip shows (1-5, default 3). */
+  onDeckCount?: number;
   /** Meet-engine seams beyond the OpsBlock model (score entry, undo-finish,
    *  undo-start, check-in/roster edits, impact) — SP-CONSOLE-4 C4. Absent on
    *  bracket-only workspaces; every meet affordance then stays hidden. */
@@ -131,6 +134,7 @@ export function RunSurface({
   formatSlot,
   slotMinutes,
   restMinutes,
+  onDeckCount,
   meetOps,
   onAdvisoryReview,
 }: RunSurfaceProps) {
@@ -265,6 +269,12 @@ export function RunSurface({
     const slots = slotMinutes && slotMinutes > 0 ? Math.ceil((restMinutes ?? 0) / slotMinutes) : 0;
     return restShortKeys(matches, { currentSlot, restSlots: slots });
   }, [matches, currentSlot, restMinutes, slotMinutes]);
+  // CP5: the desk's lookahead — what auto-pull will actually send next.
+  // Count is a workspace setting, clamped 1-5, default 3.
+  const deck = useMemo(
+    () => onDeck(queue, busy, Math.min(5, Math.max(1, onDeckCount ?? 3))),
+    [queue, busy, onDeckCount],
+  );
   // Bracket "called" is Operations-local (no persisted status), overlaid onto
   // `matches` by toRunMatches — but the BOARD renders from raw blocks, so
   // without this overlay a called bracket chip would stay painted 'scheduled'
@@ -550,6 +560,31 @@ export function RunSurface({
               fireAssign(head, court, slotForAssign(court, matches, currentSlot ?? 0));
             }}
           />
+
+          {/* On deck (CP5) — the next callable matches in queue order, so
+              the caller can warm players up ~10 minutes early. Read-only
+              labels; the queue rows below carry the actions. */}
+          {deck.length > 0 && (
+            <div
+              data-testid="run-on-deck"
+              className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/20 px-4 py-1.5"
+            >
+              <span className={`${EYEBROW_CLASS} text-ink-3`}>On deck</span>
+              {deck.map((m, i) => (
+                <span
+                  key={m.key}
+                  data-testid={`on-deck-${m.key}`}
+                  className="inline-flex items-baseline gap-1.5 text-xs"
+                >
+                  <span className="sw-num text-ink-faint">#{i + 1}</span>
+                  <span className="font-semibold sw-num text-2xs text-ink-3">{m.label}</span>
+                  <span className="text-muted-foreground">
+                    {m.sideA} v {m.sideB}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Queue — below the board. No border-t here: the board's own
               border-b IS the board→queue seam (seamed, not gapped — one

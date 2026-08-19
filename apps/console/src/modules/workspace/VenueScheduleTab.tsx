@@ -25,6 +25,7 @@ import { LockedFieldset } from '../../platform/engine-config/ConfigSurface';
 import {
   Row,
   Section,
+  Seg,
   NumberWithSuffix,
   TimeInput,
   UnitSlot,
@@ -164,6 +165,90 @@ export function VenueScheduleTab() {
             }
             last
           />
+        </Section>
+
+        <Section title="Court policy">
+          {/* SP-COURT-1 (ADR 0015). Court-tied = today's promise-a-court
+              timetable. Queue = the solver plans the ORDER under a court-count
+              capacity and the desk sends matches to whichever court frees —
+              how a real event actually runs. Per-court pins below let a show
+              court stay court-tied inside a queue-mode venue. */}
+          <Row
+            label="Mode"
+            control={
+              <Seg
+                options={[
+                  { value: 'pinned', label: 'Court-tied' },
+                  { value: 'queue', label: 'Queue' },
+                ]}
+                value={config?.courtPolicy ?? 'pinned'}
+                onChange={(v) => set('courtPolicy', v)}
+                ariaLabel="Court policy"
+              />
+            }
+            last={config?.courtPolicy !== 'queue'}
+          />
+          {config?.courtPolicy === 'queue' ? (
+            <>
+              <Row
+                label="On deck"
+                control={
+                  <NumberWithSuffix
+                    value={config?.onDeckCount ?? 3}
+                    onChange={(v) => set('onDeckCount', Math.min(5, Math.max(1, v)))}
+                    suffix="matches"
+                    min={1}
+                    max={5}
+                    ariaLabel="On deck count"
+                  />
+                }
+              />
+              <Row
+                label="Court-tied courts"
+                control={
+                  // One chip per court. A pressed chip is PINNED (kept
+                  // court-tied — filmed, rostered, hour-rented); the rest
+                  // pool. Stored as exceptions in `courtOverrides`.
+                  <div
+                    role="group"
+                    aria-label="Per-court policy overrides"
+                    className="flex flex-wrap gap-1.5"
+                  >
+                    {Array.from({ length: config?.courtCount ?? 4 }, (_, i) => i + 1).map(
+                      (c) => {
+                        const pinned = config?.courtOverrides?.[c] === 'pinned';
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            aria-pressed={pinned}
+                            data-testid={`court-override-${c}`}
+                            onClick={() => {
+                              const next: Record<number, 'pinned' | 'pool'> = {
+                                ...(config?.courtOverrides ?? {}),
+                              };
+                              if (pinned) delete next[c];
+                              else next[c] = 'pinned';
+                              set('courtOverrides', next);
+                            }}
+                            className={[
+                              'border px-2.5 py-1 text-xs font-medium sw-num transition-colors duration-fast ease-brand',
+                              pinned
+                                ? 'border-accent/40 bg-accent/15 text-accent'
+                                : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                            ].join(' ')}
+                          >
+                            C{c}
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
+                }
+                last
+              />
+            </>
+          ) : null}
         </Section>
 
         <Section title="Day window">

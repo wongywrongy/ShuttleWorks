@@ -128,6 +128,16 @@ export interface TournamentConfig {
   // bound omitted means open-ended on that side; both omitted is
   // equivalent to a legacy ``closedCourts`` entry (full-day).
   courtClosures?: CourtClosure[];
+  // Court policy (SP-COURT-1, ADR 0015). "pinned" (default) = the solver
+  // promises a specific court per match; "queue" = the solver pools the
+  // courts and solves for time only, courts assigned by colouring — how a
+  // real desk runs the day. Per-court overrides let a show court stay
+  // pinned inside a queue-mode venue. Keys are 1-indexed court ids.
+  courtPolicy?: 'pinned' | 'queue';
+  courtOverrides?: Record<number, 'pinned' | 'pool'>;
+  // How many "on deck" matches the Run desk highlights (CP5, 1-5).
+  // Default 3 — research says call the next 2-3 about ten minutes early.
+  onDeckCount?: number;
   // How many near-optimal alternative schedules the solver keeps
   // alongside the chosen one. Operator can swap to a candidate in a
   // click when reality (overrun, withdrawal, court closure) makes
@@ -172,6 +182,11 @@ export interface ScheduleDTO {
   /** Random seed the solver used. Pair with the Reproducible-run
    *  toggle to regenerate a byte-identical schedule. */
   solverSeed?: number;
+  /** What the engine actually did (SP-COURT-1 CP8-v1): a queue-mode solve
+   *  with closed-court windows falls back to "pinned" and says so here, so
+   *  the Plan board can explain the grid instead of showing a call list the
+   *  solve did not produce. Absent on pre-policy schedules = pinned. */
+  effectivePolicy?: 'pinned' | 'queue';
   /** Top-N near-optimal alternatives the solver found while
    *  improving. ``assignments`` above mirrors
    *  ``candidates[activeCandidateIndex].assignments`` when set;

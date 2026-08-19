@@ -171,7 +171,27 @@ export function nextEligible(
   queue: RunMatch[],
   busy: ReadonlySet<string>,
 ): RunMatch | undefined {
-  return queue.find((m) => m.eligible && can(m.status, 'assign') && !isPlayerBusy(m, busy));
+  return onDeck(queue, busy, 1)[0];
+}
+
+/**
+ * The next `count` callable matches, in queue order — the CP5 "on deck"
+ * lookahead (research: call the next 2-3 about ten minutes early). Same
+ * predicate as `nextEligible` (which IS `onDeck(..., 1)[0]`): eligible,
+ * assignable, players off court. All entries are callable against the
+ * CURRENT floor — the desk calls them to warm up, not to a specific court.
+ */
+export function onDeck(
+  queue: RunMatch[],
+  busy: ReadonlySet<string>,
+  count: number,
+): RunMatch[] {
+  const out: RunMatch[] = [];
+  for (const m of queue) {
+    if (out.length >= count) break;
+    if (m.eligible && can(m.status, 'assign') && !isPlayerBusy(m, busy)) out.push(m);
+  }
+  return out;
 }
 
 /**

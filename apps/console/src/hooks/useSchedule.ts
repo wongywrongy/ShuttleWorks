@@ -242,7 +242,7 @@ export function useSchedule() {
       throw new Error('No configuration set');
     }
     const windows = await resolveClosedWindows(closedCourtWindows);
-    if (windows === null) return; // occupancy unknown — banner already set (D1)
+    if (windows === null) return; // occupancy unknown: banner already set (D1)
     await runSolve({
       config,
       players,
@@ -261,7 +261,7 @@ export function useSchedule() {
       throw new Error('No schedule to reoptimize');
     }
     const windows = await resolveClosedWindows();
-    if (windows === null) return; // occupancy unknown — banner already set (D1)
+    if (windows === null) return; // occupancy unknown: banner already set (D1)
     await runSolve({
       config,
       players,

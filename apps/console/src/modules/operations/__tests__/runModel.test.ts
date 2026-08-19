@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toRunMatches, deriveCourtLanes, deriveQueue, nextEligible, busyPlayers, restShortKeys, deriveSummary } from '../runtime/runModel';
+import { toRunMatches, deriveCourtLanes, deriveQueue, nextEligible, onDeck, busyPlayers, restShortKeys, deriveSummary } from '../runtime/runModel';
 import { buildLiveChips } from '../runtime/boardPlacements';
 import type { OpsBlock } from '../opsBlock';
 
@@ -233,5 +233,31 @@ describe('rest flag (soft)', () => {
     ], {});
     // soft means soft: it is surfaced, never enforced.
     expect(nextEligible(deriveQueue(ms), busyPlayers(ms))?.id).toBe('next');
+  });
+});
+
+describe('onDeck (CP5)', () => {
+  const mk = (id: string, slot: number, players: string[]) =>
+    blk({ id, slot, status: 'scheduled', playerIds: players });
+
+  it('returns the next N callable matches in queue order, skipping the busy', () => {
+    const ms = toRunMatches([
+      blk({ id: 'live', court: 1, slot: 0, status: 'started', playerIds: ['p1'] }),
+      mk('q1', 1, ['p1']),          // busy - skipped
+      mk('q2', 2, ['p2']),
+      mk('q3', 3, ['p3']),
+      mk('q4', 4, ['p4']),
+    ], {});
+    const q = deriveQueue(ms);
+    const busy = busyPlayers(ms);
+    expect(onDeck(q, busy, 3).map((m) => m.id)).toEqual(['q2', 'q3', 'q4']);
+    // the head IS nextEligible - one predicate, one order
+    expect(nextEligible(q, busy)?.id).toBe('q2');
+  });
+
+  it('NEGATIVE CONTROL: count bounds the deck, and an empty queue decks nothing', () => {
+    const ms = toRunMatches([mk('a', 0, []), mk('b', 1, [])], {});
+    expect(onDeck(deriveQueue(ms), new Set(), 1)).toHaveLength(1);
+    expect(onDeck([], new Set(), 3)).toEqual([]);
   });
 });

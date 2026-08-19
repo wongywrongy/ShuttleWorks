@@ -149,3 +149,44 @@ describe('VenueScheduleTab — the results lock the read-only banner promised (D
     );
   });
 });
+
+describe('court policy (SP-COURT-1, ADR 0015)', () => {
+  it('defaults to Court-tied; switching to Queue reveals on-deck + per-court pins', async () => {
+    mount();
+    const tied = screen.getByRole('radio', { name: 'Court-tied' });
+    expect(tied).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByLabelText('On deck count')).toBeNull();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Queue' }));
+    await waitFor(() =>
+      expect(useTournamentStore.getState().config?.courtPolicy).toBe('queue'),
+    );
+  });
+
+  it('per-court chips store ONLY the exceptions, and toggle off cleanly', async () => {
+    useTournamentStore.setState({
+      config: { ...useTournamentStore.getState().config!, courtPolicy: 'queue' },
+    });
+    mount();
+    fireEvent.click(screen.getByTestId('court-override-1'));
+    await waitFor(() =>
+      expect(useTournamentStore.getState().config?.courtOverrides).toEqual({ 1: 'pinned' }),
+    );
+    fireEvent.click(screen.getByTestId('court-override-1'));
+    await waitFor(() =>
+      expect(useTournamentStore.getState().config?.courtOverrides).toEqual({}),
+    );
+  });
+
+  it('on-deck count is clamped to CP5 range 1-5', async () => {
+    useTournamentStore.setState({
+      config: { ...useTournamentStore.getState().config!, courtPolicy: 'queue' },
+    });
+    mount();
+    const deck = screen.getByLabelText('On deck count');
+    fireEvent.change(deck, { target: { value: '9' } });
+    await waitFor(() =>
+      expect(useTournamentStore.getState().config?.onDeckCount).toBe(5),
+    );
+  });
+});
