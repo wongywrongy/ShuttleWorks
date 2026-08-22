@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useAction } from '../../hooks/useAction';
 import { Button, Modal } from '@scheduler/design-system';
-import { EmptyState, OverflowMenu } from '../../components/control-plane';
+import { EmptyState, OverflowMenu, PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useTournamentBackups } from '../../hooks/useTournamentBackups';
 
 /** Human-readable file size: B / KB / MB. */
@@ -89,11 +89,11 @@ export function SyncBackupsTab() {
   const target = entries.find((e) => e.filename === restoreTarget);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-6">
+    <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-foreground">Backups</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
             A backup is a full snapshot of this workspace. Restoring replaces the
             current state with the snapshot.
           </p>

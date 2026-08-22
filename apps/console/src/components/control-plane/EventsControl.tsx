@@ -106,7 +106,11 @@ const entryType = (e: string | EventsEntry) =>
 export function EventBadge({ code, seed }: { code: string; seed?: number | null }) {
   return (
     <span
-      className="rounded-sm border border-accent/30 bg-accent/10 px-1 py-px text-3xs font-semibold text-accent sw-num"
+      // ACC-N1: a neutral chip, not an accent one. An entered event code is
+      // an identifier, and in accent — border, fill and ink all three — a
+      // roster row of four entries read as four buttons. The chip stays (it
+      // separates one code from the next); the colour goes.
+      className="rounded-sm border border-border bg-surface-chip px-1 py-px text-3xs font-semibold text-foreground sw-num"
       // `[n]` is the badminton draw-sheet seed convention (BRST-N1) — the
       // old `(n)` parenthetical read as a count on owner review, and the
       // BRST-2 tooltip alone wasn't enough to correct it.

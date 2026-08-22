@@ -93,7 +93,15 @@ export function ModuleCatalogRow({
             Disable
           </Button>
         ) : isModuleEnableable(module.status) ? (
+          // SIG-6: `outline`, not the accent-filled primary. Weight follows
+          // operator need, and turning ON a module this workspace is not using
+          // is not the page's most-wanted action — yet Enable was the largest,
+          // bluest control on the surface (the primary glow button, one per
+          // unused module) while every module actually in use carried a grey
+          // ghost link. The catalog read as a shop. Same size, same position,
+          // same action; secondary weight.
           <Button
+            variant="outline"
             onClick={() => void toggle.run()}
             disabled={toggle.pending || blockedReason !== undefined}
             aria-busy={toggle.pending}

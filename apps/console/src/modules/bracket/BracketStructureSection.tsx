@@ -1,8 +1,8 @@
 /**
  * BracketStructureSection — the "Events" section of bracket Configuration.
  *
- * Read-only summary of the bracket's draw structure: the active
- * disciplines, and per draw its type (single elimination / round robin),
+ * Read-only summary of the bracket's draw structure: per draw its type
+ * (single elimination / round robin),
  * size, and seeded count — rendered as the same Row-stack "Events"
  * grammar Meet Configuration uses, not a table. Seeding and the draw
  * structure itself are owned by the Draw surface (Edit seeding) and the
@@ -41,17 +41,15 @@ export function BracketStructureSection() {
     navigate(`/tournaments/${tid}/${segment}`, { replace: true });
 
   const events = data?.events ?? [];
-  const disciplines = Array.from(
-    new Set(events.map((e) => disciplineLabel(e.discipline)).filter(Boolean)),
-  );
 
   return (
     <Section title="Events">
-      <Row
-        readOnly
-        label="Active disciplines"
-        control={disciplines.length > 0 ? disciplines.join(', ') : 'None yet'}
-      />
+      {/* COPY-3: the "Active disciplines" row was a wrapped comma list of
+          exactly the disciplines named on the rows beneath it — a summary of
+          the nine lines it sat on top of, which is a second reading of the
+          same data and the first thing to go stale if one ever drifted. The
+          rows are the list. */}
+      {events.length === 0 ? <Row readOnly label="Events" control="None yet" /> : null}
 
       {events.map((ev) => (
         <Row
@@ -60,7 +58,7 @@ export function BracketStructureSection() {
           label={
             <span className="inline-flex items-baseline gap-2">
               {disciplineLabel(ev.discipline)}
-              <span className="text-xs font-semibold text-accent sw-num">
+              <span className="text-xs font-semibold text-foreground sw-num">
                 {ev.id}
               </span>
             </span>

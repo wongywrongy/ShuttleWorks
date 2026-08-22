@@ -16,6 +16,7 @@
  * SP-CONSOLE-4 routing flip; actions render per engine.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
@@ -75,6 +76,11 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   const phase = useUiStore((s) => s.activeTournamentPhase);
   const isLive = isLiveSegment(activeTab);
   const review = opsPlanMode(phase) === 'plan-review';
+  // The Plan segment paired with whichever Live segment is active — the two
+  // Operations segments come in per-engine pairs (`live`/`schedule`,
+  // `bracket-live`/`bracket-schedule`), so the SIG-2 blocker routes back to
+  // the Plan the operator actually came from.
+  const planSegment = activeTab === 'bracket-live' ? 'bracket-schedule' : 'schedule';
 
   // Meet live-day seams for the Run surface (C4) — mounting useMeetRunOps
   // ALSO keeps the meet match-states converged with the backend while any
@@ -240,18 +246,21 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   );
 
   const title = isLive ? 'Live day' : 'Plan';
-  const subtitle = isLive
-    ? 'Run the floor: by court, then the queue'
-    : review
-      ? 'The day is complete: review how it ran'
-      : 'Plan the day: drag to reschedule, generate, schedule rounds';
+  // COPY-2: only the subtitle that VARIES survives. "Run the floor: by court,
+  // then the queue" and "Plan the day: drag to reschedule, generate, schedule
+  // rounds" were permanent chrome — they said the same thing on every visit
+  // for the life of the workspace, which is a caption on the nav label the
+  // operator already read. The review line stays: it appears only once the
+  // day is complete, so it is state, not decoration. The one drag hint the
+  // product keeps lives next to the grid it describes (UnifiedOpsBoard).
+  const subtitle = !isLive && review ? 'The day is complete: review how it ran' : null;
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-card">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`${EYEBROW_CLASS} text-muted-foreground`}>{title}</span>
-          <span className="text-xs text-muted-foreground">{subtitle}</span>
+          {subtitle ? <span className="text-xs text-muted-foreground">{subtitle}</span> : null}
         </div>
         {/* Plan is the planning surface: build / adjust the plan. Run runs
             what Plan produced — no scheduling actions there. */}
@@ -280,8 +289,26 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                 Plan finalized · ready for live day
               </span>
             ) : (
-              <span data-testid="run-plan-pending" className="text-xs text-muted-foreground">
+              /* SIG-2: this is the blocker that stops the day running — until
+                 the plan is marked ready nothing is late, the board is not
+                 "running", and the floor has no authority behind it. It used
+                 to be the quietest thing on the screen: muted grey text in the
+                 top-right, while the RESOLVED state above it got a full tinted
+                 pill. Weight follows consequence now, and it carries the route
+                 to the existing Plan control rather than inventing a second
+                 way to finalize. */
+              <span
+                data-testid="run-plan-pending"
+                className="inline-flex items-center gap-2 rounded-full border border-status-warning/40 bg-status-warning/10 px-2.5 py-0.5 text-xs font-medium text-status-warning"
+              >
                 Plan not finalized
+                <Link
+                  to={`/tournaments/${tid}/${planSegment}`}
+                  data-testid="run-plan-pending-link"
+                  className="font-semibold underline underline-offset-2 hover:no-underline"
+                >
+                  Open Plan
+                </Link>
               </span>
             )}
           </div>

@@ -386,7 +386,7 @@ const MatchRow = memo(function MatchRow({
       </span>
       <span
         role="cell"
-        className={`${MEET_MATCH_CELL.event} text-2sm font-semibold text-accent sw-num`}
+        className={`${MEET_MATCH_CELL.event} text-2sm font-semibold text-foreground sw-num`}
       >
         {match.eventRank?.trim() || (
           <span className="text-xs font-normal italic text-muted-foreground">

@@ -162,7 +162,7 @@ describe('BracketDrawsTab — draw rows', () => {
     expect(screen.getByText('No draws yet')).toBeInTheDocument();
   });
 
-  it('shows the DONE/LIVE/READY/PENDING progress strip when the draw has matches', () => {
+  it('the progress bar tracks done/total only, proportionally from zero (SIG-4)', () => {
     mockBracketData = makeBracketData({
       status: 'started',
       playUnits: [
@@ -189,10 +189,39 @@ describe('BracketDrawsTab — draw rows', () => {
       'title',
       '1 done · 1 live · 1 ready · 1 pending',
     );
-    // Painted segments in worked-through order: done, live, ready — the
-    // unpainted track is pending.
-    const bar = progress.querySelector('.rounded-full');
-    expect(bar?.children).toHaveLength(3);
+    // SIG-4: ONE metric, one segment. The bar used to stack done + live +
+    // ready, so the fill and the `done/total` numeral beside it described
+    // different quantities — a `0/7` draw with three matches assigned drew a
+    // ~40%-full bar. The breakdown lives on the tooltip asserted above.
+    const bar = progress.querySelector('[role="progressbar"]');
+    expect(bar?.children).toHaveLength(1);
+    expect(bar).toHaveAttribute('aria-valuenow', '1');
+    expect(bar).toHaveAttribute('aria-valuemax', '4');
+    expect((bar?.firstElementChild as HTMLElement).style.width).toBe('25%');
+  });
+
+  it('SIG-4: nothing played renders an EMPTY bar, whatever is assigned', () => {
+    // The exact shape the 2026-08-19 report caught: a GENERATED draw with
+    // assignments but no results, reading `0/4` beside a partly filled bar.
+    mockBracketData = makeBracketData({
+      status: 'generated',
+      playUnits: [
+        makePlayUnit('pu-1'),
+        makePlayUnit('pu-2'),
+        makePlayUnit('pu-3'),
+        makePlayUnit('pu-4'),
+      ],
+      assignments: [
+        { play_unit_id: 'pu-1', slot_id: 1, court_id: 1, duration_slots: 1, actual_start_slot: null, actual_end_slot: null, started: false, finished: false },
+        { play_unit_id: 'pu-2', slot_id: 2, court_id: 2, duration_slots: 1, actual_start_slot: null, actual_end_slot: null, started: false, finished: false },
+      ],
+      results: [],
+    });
+    renderDraws();
+    const progress = within(screen.getByTestId('bracket-draw-row-MS')).getByTestId('draw-progress');
+    expect(progress).toHaveTextContent('0/4');
+    expect(progress.querySelector('[role="progressbar"]')?.children).toHaveLength(0);
+    expect(within(progress as HTMLElement).queryByTestId('draw-progress-fill')).toBeNull();
   });
 
   it('shows a placeholder instead of the strip while the draw has no matches', () => {

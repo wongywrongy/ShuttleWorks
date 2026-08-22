@@ -27,7 +27,11 @@ export function TabSkeleton({ tab }: { tab: AppTab }) {
       role="status"
       aria-label={`Loading ${tab}`}
       data-testid={`skeleton-${tab}`}
-      className="mx-auto h-full max-w-[1400px] animate-pulse px-4 py-4"
+      // Full-bleed with the page gutter, matching `PageBody`'s `data` variant
+      // (LAY-1). It used to centre a 1400px column — a fifth anchor, and one
+      // no real surface uses, so the skeleton settled to a different left edge
+      // than the surface that replaced it.
+      className="h-full w-full animate-pulse px-6 py-6"
     >
       {tab === 'setup' && <SetupShape />}
       {tab === 'roster' && <RosterShape />}

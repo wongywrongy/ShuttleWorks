@@ -1,14 +1,14 @@
 /**
  * Venue & schedule: the two lock problems this surface carried.
  *
- * D15 — it saves on change with NO Save button, under a ribbon warning that
- * "saving these settings will clear" the committed schedule. That copy is
- * shared with the two engine Configuration surfaces, which DO have a Save, so
- * it is right there and wrong here: on this page there is no saving to avoid.
- * An operator looking for the Save they were warned about concludes the fields
- * are safe to touch. They are not. Each one applies immediately, and under the
- * lock the FIRST change opens the confirm-unlock modal whose OK clears the
- * schedule.
+ * D15 — it used to save on change with NO Save button, under a ribbon warning
+ * that "saving these settings will clear" the committed schedule: copy shared
+ * with the two engine Configuration surfaces, which DO have a Save. The first
+ * fix shipped a paragraph explaining the discrepancy; R-K removed the
+ * discrepancy instead. The page now edits a local draft and commits on Save,
+ * like every other settings surface, and the explanatory note is gone with it.
+ * The schedule-unlock confirm moved with the commit, from first keystroke to
+ * Save - which is what the shared ribbon copy always described.
  *
  * D5, from the other end — Meet Configuration announces "Settings are
  * read-only while matches are in play" and enforces it with a disabled
@@ -60,28 +60,79 @@ beforeEach(() => {
   });
 });
 
-describe('VenueScheduleTab — autosave without a Save (D15)', () => {
-  it('has no Save control, and says so', () => {
+describe('VenueScheduleTab — explicit save (R-K)', () => {
+  it('has a Save, and no longer explains why it does not', () => {
     mount();
-    expect(screen.queryByRole('button', { name: /save/i })).toBeNull();
-    expect(screen.getByTestId('venue-save-note')).toHaveTextContent(/no Save on this page/i);
+    expect(screen.getByTestId('venue-save')).toHaveTextContent('Save changes');
+    // The note existed only to explain the inconsistency, which is gone.
+    expect(screen.queryByTestId('venue-save-note')).toBeNull();
   });
 
-  it('under a committed schedule, names when the clear actually fires', () => {
+  it('Save is inert until something actually changed', () => {
+    mount();
+    expect(screen.getByTestId('venue-save')).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Court count'), { target: { value: '6' } });
+    expect(screen.getByTestId('venue-save')).not.toBeDisabled();
+  });
+
+  it('Save stays inert while the config HYDRATES underneath it', async () => {
+    // The bug this catches, found in the browser: the draft was seeded from
+    // `config` on mount, but the store holds a DEFAULT config until
+    // `useTournamentState` hydrates. So the draft captured the default, the
+    // arriving server config differed from it, and the page loaded with Save
+    // live over a stale snapshot — one click from overwriting the real venue
+    // settings with the defaults.
+    mount();
+    expect(screen.getByTestId('venue-save')).toBeDisabled();
+
+    // Hydration lands: a different config arrives with no operator input.
+    useTournamentStore.setState({
+      config: {
+        intervalMinutes: 20,
+        dayStart: '08:00',
+        dayEnd: '20:00',
+        breaks: [],
+        courtCount: 12,
+        defaultRestMinutes: 15,
+        freezeHorizonSlots: 0,
+      },
+    });
+    await waitFor(() => expect(screen.getByLabelText('Court count')).toHaveValue(12));
+    expect(screen.getByTestId('venue-save')).toBeDisabled();
+  });
+
+  it('Save releases the page back to the server copy', async () => {
+    mount();
+    fireEvent.change(screen.getByLabelText('Court count'), { target: { value: '6' } });
+    fireEvent.click(screen.getByTestId('venue-save'));
+    await waitFor(() => expect(screen.getByTestId('venue-save')).toBeDisabled());
+    // A later server-side change now flows through instead of being held off
+    // by a draft nobody is editing.
+    useTournamentStore.setState({
+      config: { ...useTournamentStore.getState().config!, courtCount: 9 },
+    });
+    await waitFor(() => expect(screen.getByLabelText('Court count')).toHaveValue(9));
+  });
+
+  it('an edit does NOT reach the store until Save', async () => {
+    // The behaviour the ruling turns on: this page used to commit on keystroke
+    // while the SAME fields, reached from Configuration, waited for a button.
+    mount();
+    fireEvent.change(screen.getByLabelText('Court count'), { target: { value: '6' } });
+    expect(useTournamentStore.getState().config?.courtCount).toBe(4);
+
+    fireEvent.click(screen.getByTestId('venue-save'));
+    await waitFor(() =>
+      expect(useTournamentStore.getState().config?.courtCount).toBe(6),
+    );
+  });
+
+  it('under a committed schedule an edit alone commits nothing', () => {
     useTournamentStore.setState({ isScheduleLocked: true });
     mount();
-    // The ribbon states the condition; this states the trigger the ribbon's
-    // shared copy gets wrong here.
     expect(screen.getByTestId('lock-ribbon').dataset.tier).toBe('schedule');
-    const note = screen.getByTestId('venue-save-note');
-    expect(note).toHaveTextContent(/next change asks you to confirm/i);
-    expect(note).toHaveTextContent(/confirming clears that schedule/i);
-  });
-
-  it('says nothing about clearing when there is no schedule to clear', () => {
-    mount();
-    expect(screen.queryByTestId('lock-ribbon')).toBeNull();
-    expect(screen.getByTestId('venue-save-note')).not.toHaveTextContent(/clears/i);
+    fireEvent.change(screen.getByLabelText('Court count'), { target: { value: '6' } });
+    expect(useTournamentStore.getState().config?.courtCount).toBe(4);
   });
 });
 
@@ -114,9 +165,10 @@ describe('VenueScheduleTab — the results lock the read-only banner promised (D
       'href',
       '/tournaments/t1/matches',
     );
-    // One lock message, one place (A1.1): the ribbon carries the lock; the
-    // no-Save note is GONE under the results lock rather than restating it.
+    // One lock message, one place (A1.1): the ribbon carries the lock. Under
+    // it there is nothing to save, so the Save control is absent too.
     expect(screen.queryByTestId('venue-save-note')).toBeNull();
+    expect(screen.queryByTestId('venue-save')).toBeNull();
   });
 
   it('the results lock supersedes the schedule ribbon rather than stacking', () => {
@@ -142,8 +194,9 @@ describe('VenueScheduleTab — the results lock the read-only banner promised (D
     const courts = screen.getByLabelText('Court count');
     expect(courts).not.toBeDisabled();
     fireEvent.change(courts, { target: { value: '6' } });
-    // `set` routes through confirmUnlock, which resolves immediately when
+    // Save routes through confirmUnlock, which resolves immediately when
     // nothing is locked but is still a promise.
+    fireEvent.click(screen.getByTestId('venue-save'));
     await waitFor(() =>
       expect(useTournamentStore.getState().config?.courtCount).toBe(6),
     );
@@ -158,6 +211,9 @@ describe('court policy (SP-COURT-1, ADR 0015)', () => {
     expect(screen.queryByLabelText('On deck count')).toBeNull();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Queue' }));
+    // The dependent controls appear from the DRAFT, before any save.
+    expect(screen.getByLabelText('On deck count')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('venue-save'));
     await waitFor(() =>
       expect(useTournamentStore.getState().config?.courtPolicy).toBe('queue'),
     );
@@ -169,10 +225,12 @@ describe('court policy (SP-COURT-1, ADR 0015)', () => {
     });
     mount();
     fireEvent.click(screen.getByTestId('court-override-1'));
+    fireEvent.click(screen.getByTestId('venue-save'));
     await waitFor(() =>
       expect(useTournamentStore.getState().config?.courtOverrides).toEqual({ 1: 'pinned' }),
     );
     fireEvent.click(screen.getByTestId('court-override-1'));
+    fireEvent.click(screen.getByTestId('venue-save'));
     await waitFor(() =>
       expect(useTournamentStore.getState().config?.courtOverrides).toEqual({}),
     );
@@ -185,6 +243,7 @@ describe('court policy (SP-COURT-1, ADR 0015)', () => {
     mount();
     const deck = screen.getByLabelText('On deck count');
     fireEvent.change(deck, { target: { value: '9' } });
+    fireEvent.click(screen.getByTestId('venue-save'));
     await waitFor(() =>
       expect(useTournamentStore.getState().config?.onDeckCount).toBe(5),
     );

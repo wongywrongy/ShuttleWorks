@@ -53,7 +53,12 @@ export function ConfigSurface({
         {actions}
       </ActionsBar>
       {ribbons}
-      <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 pt-3">{children}</div>
+      {/* Gutter-free (LAY-1): the scroll region owns scrolling, `PageBody`
+          owns the width and the gutter. This carried its own `px-4 pb-6 pt-3`
+          while the form inside centred a `max-w-3xl` column with `p-6`, so
+          Configuration's text started 8px inside where every settings page's
+          did — the "two anchors" the surface report measured. */}
+      <div className="min-h-0 flex-1 overflow-auto">{children}</div>
     </div>
   );
 }

@@ -63,7 +63,7 @@ export function PositionGrid({
   if (events.length === 0) {
     return (
       <div className="bg-card px-6 py-10 text-center text-xs text-muted-foreground">
-        No events configured. Set <strong>Event Categories</strong> in the Setup tab to enable the roster grid.
+        No events configured. Set <strong>Event Categories</strong> in Configuration to enable the roster grid.
       </div>
     );
   }

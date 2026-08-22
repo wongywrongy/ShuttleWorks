@@ -45,9 +45,13 @@ const ROSTER_COLUMNS: BandedTableColumn[] = [
   // Player carries a person name, so it floors at NAME_COL_MIN rather than
   // collapsing to zero. Events is text codes, which wrap on their own.
   { label: 'Player', className: `${NAME_COL_MIN} flex-1` },
-  // The header carries the seed legend (BRST-N1): `[n]` is the badminton
-  // draw-sheet convention, and a tooltip alone already failed one reader.
-  { label: 'Events · [n] seed', className: 'min-w-0 flex-1' },
+  // COPY-4: the header is the column's NAME, not a legend. It read
+  // "Events · [n] seed" — explaining a notation that is absent from every
+  // row until somebody is actually seeded, so on most rosters it annotated
+  // nothing. The `[n]` convention is now stated in a footnote that appears
+  // only when a seeded entry is on screen (BRST-N1's reader problem is still
+  // answered; it is answered next to the thing it describes).
+  { label: 'Events', className: 'min-w-0 flex-1' },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
@@ -106,6 +110,12 @@ function BracketRosterTabCore({
   const badgesById = useMemo(() => badgesByPlayerId(bracketData), [bracketData]);
   // Players a GENERATED draw is using: the server won't let them be deleted.
   const locked = useMemo(() => lockedPlayerIds(bracketData), [bracketData]);
+  // Whether the `[n]` seed notation appears anywhere in the table — the
+  // footnote that explains it is shown only then (COPY-4).
+  const anySeeded = useMemo(
+    () => [...badgesById.values()].some((bs) => bs.some((b) => b.seed != null)),
+    [badgesById],
+  );
 
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
@@ -305,6 +315,15 @@ function BracketRosterTabCore({
               {players.length === 0
                 ? 'No players yet. Add the first one.'
                 : 'No players match the search.'}
+            </p>
+          )}
+          {/* COPY-4: the seed legend, shown only when a seeded entry is
+              actually on screen. One footnote for the whole table, not a
+              per-row repetition and not a permanent header annotation. */}
+          {anySeeded && (
+            <p className="px-5 pb-4 pt-2 text-3xs text-muted-foreground">
+              <span className="sw-num">[n]</span> after an event code is that
+              player&rsquo;s seed in the draw.
             </p>
           )}
         </div>

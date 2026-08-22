@@ -604,6 +604,9 @@ export function RunSurface({
               busyKeys={busyKeys}
               restKeys={restKeys}
               onSend={sendFromQueue}
+              // Same predicate `sendFromQueue` uses to pick a lane, so the
+              // button is enabled exactly when pressing it does something.
+              canAssign={lanes.some((l) => l.now == null)}
             />
           </div>
 

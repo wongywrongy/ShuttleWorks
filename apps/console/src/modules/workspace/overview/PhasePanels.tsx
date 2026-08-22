@@ -141,7 +141,7 @@ function LivePanel({ summary }: PanelProps) {
   return (
     <section className="space-y-5">
       <div>
-        <SectionLabel>In progress</SectionLabel>
+        <SectionLabel>Progress</SectionLabel>
         {/* Played / Remaining / Total (W1.2): "matches" and "scheduled"
             duplicated whenever everything was scheduled. Remaining counts
             down as played counts up; total anchors both. The Hub inspector

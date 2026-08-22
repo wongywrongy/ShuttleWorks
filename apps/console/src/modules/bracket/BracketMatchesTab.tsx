@@ -323,7 +323,10 @@ export function BracketMatchesTab({
           {total === 0 ? (
             <EmptyState
               title="No matches yet"
-              body="Matches come from the draws. Add events and generate draws in the Events and Draw tabs; they’ll appear here and feed Operations."
+              // "the Events and Draw tabs" named a nav that stopped existing
+              // when Events folded into Draws (2026-06-26). Bracket has
+              // Roster / Draws / Matches / Configuration.
+              body="Matches come from the draws. Create and generate a draw in Bracket → Draws; its matches appear here and feed Operations."
             />
           ) : (
             <>
@@ -369,7 +372,7 @@ export function BracketMatchesTab({
                           row rather than spilling into Side A. */}
                       <span
                         role="cell"
-                        className={`${BRACKET_MATCH_CELL.event} break-words px-1.5 text-2sm font-semibold text-accent sw-num`}
+                        className={`${BRACKET_MATCH_CELL.event} break-words px-1.5 text-2sm font-semibold text-foreground sw-num`}
                         title={pu.id}
                       >
                         {shortLabelById.get(pu.id) ?? pu.id}

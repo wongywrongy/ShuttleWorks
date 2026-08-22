@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
+import { PageBody, PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { AppearanceSettings } from './AppearanceSettings';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
@@ -63,7 +64,11 @@ function PageHead({
     <div className="mb-5 flex items-start justify-between gap-4">
       <div>
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
+        {subtitle ? (
+          <p className={`mt-0.5 text-sm text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
+            {subtitle}
+          </p>
+        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
@@ -88,7 +93,7 @@ function ProfilePage() {
   const displayName = user?.displayName ?? '';
   const initials = (displayName || email).trim().charAt(0).toUpperCase() || 'L';
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <PageBody variant="form" className="space-y-6">
       <PageHead
         title="Profile"
         subtitle="Your name and how you appear across the app."
@@ -125,7 +130,7 @@ function ProfilePage() {
       </Section>
 
       {locked ? <Note>Profile editing unlocks once you sign in with an account.</Note> : null}
-    </div>
+    </PageBody>
   );
 }
 
@@ -168,7 +173,7 @@ function SecurityPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <PageBody variant="form" className="space-y-6">
       <PageHead
         title="Security"
         subtitle="Manage your password and account security."
@@ -233,7 +238,7 @@ function SecurityPage() {
           {feedback.message}
         </p>
       ) : null}
-    </div>
+    </PageBody>
   );
 }
 
@@ -250,7 +255,7 @@ function SessionsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mx-auto max-w-3xl flex-1 space-y-6 p-6">
+      <PageBody variant="form" className="flex-1 space-y-6">
         <PageHead title="Sessions" subtitle="Devices and browsers signed in to your account." />
 
         <div className="rounded-md border border-border p-4">
@@ -269,7 +274,7 @@ function SessionsPage() {
           This install keeps a single local session. Once you sign in to the cloud, your
           other active sessions appear here and can be revoked individually.
         </Note>
-      </div>
+      </PageBody>
 
       {/* Destructive action, separated, at the bottom of the page. */}
       <div className="border-t border-border p-6">
@@ -289,10 +294,10 @@ function SessionsPage() {
 
 function AppearancePage() {
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-6">
+    <PageBody variant="form" className="space-y-5">
       <PageHead title="Appearance" subtitle="Theme and density for this browser." />
       <AppearanceSettings />
-    </div>
+    </PageBody>
   );
 }
 

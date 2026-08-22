@@ -6,14 +6,18 @@
  *
  * They read and write the SAME `tournamentStore.config` fields the two
  * engines already use (`courtCount`, `intervalMinutes`, `dayStart`,
- * `dayEnd`) — no data-model change. Writes go through `setConfig`, which
- * the AppShell-mounted `useTournamentState` debounces into a PUT, so this
- * surface persists exactly like the engine Configuration forms.
+ * `dayEnd`) — no data-model change. Edits land in a local draft and Save
+ * commits them through `setConfig`, which the AppShell-mounted
+ * `useTournamentState` debounces into a PUT — the same explicit-save model,
+ * and the same transport, as the engine Configuration forms (R-K).
  *
  * Engine-specific timing (rest between matches / rounds, breaks) stays in
  * each engine's Configuration.
  */
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Button } from '@scheduler/design-system';
+import { PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useTournamentStore } from '../../store/tournamentStore';
 import type { TournamentConfig } from '../../api/dto';
 import { useLockGuard } from '../../hooks/useLockGuard';
@@ -31,6 +35,14 @@ import {
   UnitSlot,
 } from '../../platform/engine-config/SettingsControls';
 
+/** Dirty check for the draft. `TournamentConfig` holds an array (`breaks`) and
+ *  a record (`courtOverrides`), so a key-by-key `===` sweep would call an
+ *  untouched config dirty on every re-render; a structural compare is both
+ *  correct and shorter. The object is a handful of scalars plus those two — it
+ *  is not a hot path. */
+const configEqual = (a: TournamentConfig, b: TournamentConfig): boolean =>
+  JSON.stringify(a) === JSON.stringify(b);
+
 const FALLBACK_CONFIG: TournamentConfig = {
   intervalMinutes: 30,
   dayStart: '09:00',
@@ -44,7 +56,7 @@ const FALLBACK_CONFIG: TournamentConfig = {
 export function VenueScheduleTab() {
   const config = useTournamentStore((s) => s.config);
   const setConfig = useTournamentStore((s) => s.setConfig);
-  const { isLocked, confirmUnlock } = useLockGuard();
+  const { confirmUnlock } = useLockGuard();
 
   // Defect D5, found from the other end. Meet Configuration announces
   // "Settings are read-only while matches are in play" and means it: it wraps
@@ -64,28 +76,77 @@ export function VenueScheduleTab() {
   useMatchStateSync(tid);
   const resultsLocked = useMeetResultsLock();
 
-  // These fields autosave per edit — no Save step to guard — so the FIRST
-  // edit under a meet schedule lock routes through the confirm-unlock modal
-  // (same flow as the engine Configuration forms; on confirm the schedule
-  // clears and later edits flow freely). Without this, the ribbon promised
-  // a confirmation the surface never gave.
+  /**
+   * R-K: explicit save, like every other settings and configuration surface.
+   *
+   * This page used to autosave every field the instant it changed, which made
+   * it the one place in the product where a control committed without being
+   * asked — and it wrote the SAME config blob the two engine Configuration
+   * forms write behind a Save button. So the same fields had two save models
+   * depending on which page you reached them from, and this page had to carry
+   * a paragraph explaining that it was the odd one out.
+   *
+   * Edits land in a local draft; Save commits. The schedule-unlock confirm
+   * moves with it, from first-keystroke to save-time — the same `guardSave`
+   * shape `TournamentSetupPage` passes to `EngineConfigForm`, and the reading
+   * the ribbon's own copy ("saving these settings will clear…") always had.
+   *
+   * The draft is `null` until the operator touches something — NOT seeded from `config` on
+   * mount. Seeding looked tidier and was wrong twice over: the store holds a
+   * default config before `useTournamentState` hydrates, so the draft captured
+   * the DEFAULT, the arriving server config then differed from it, and the
+   * page loaded with Save already live over a stale snapshot that would have
+   * overwritten the real settings on a single click.
+   *
+   * Null-until-edited also gives the dirty-check for free: a pending draft is
+   * the only thing a poll must not overwrite, and there is no pending draft
+   * until there is an edit.
+   */
+  const [draft, setDraft] = useState<TournamentConfig | null>(null);
+
+  const current = draft ?? config ?? FALLBACK_CONFIG;
+  const dirty = draft !== null && !configEqual(draft, config ?? FALLBACK_CONFIG);
+
   const set = <K extends keyof TournamentConfig>(
     key: K,
     value: TournamentConfig[K],
   ) => {
-    void confirmUnlock('change venue or day-window settings').then((ok) => {
-      if (ok) setConfig({ ...(config ?? FALLBACK_CONFIG), [key]: value });
+    setDraft({ ...current, [key]: value });
+  };
+
+  const save = () => {
+    if (!dirty || draft === null) return;
+    void confirmUnlock('save venue and schedule settings').then((ok) => {
+      if (!ok) return; // Declined: the draft stays, the edits are not thrown away.
+      setConfig(draft);
+      // Hand the page back to the server copy, so later polls flow through.
+      setDraft(null);
     });
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Venue and schedule</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          The courts and day window for this workspace. Both Meet and Bracket
-          schedule against these.
-        </p>
+    <div className="space-y-4">
+      {/* Save sits on the page-header row (ACC-1 / WSSET-2) — the position
+          every other primary action on every other surface uses. */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Venue and schedule</h2>
+          <p className={`mt-0.5 text-sm text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
+            The courts and day window for this workspace. Both Meet and Bracket
+            schedule against these.
+          </p>
+        </div>
+        {resultsLocked ? null : (
+          <Button
+            size="sm"
+            onClick={save}
+            disabled={!dirty}
+            data-testid="venue-save"
+            className="shrink-0"
+          >
+            Save changes
+          </Button>
+        )}
       </div>
 
       {/* These are the MOST scheduling-structural fields in the product —
@@ -114,27 +175,12 @@ export function VenueScheduleTab() {
         <LockRibbon tier="schedule" variant="inline" />
       )}
 
-      {/* Defect D15: this surface has NO Save button, and the schedule ribbon
-          warns that "saving these settings will clear" the committed schedule.
-          It names an action that does not exist here, so an operator reading it
-          looks for a Save to avoid pressing and concludes the fields are safe
-          to touch. They are not: each one autosaves, and under the lock the
-          FIRST change opens the confirm-unlock modal whose OK clears the
-          schedule.
-          Saying when it actually fires is the fix. The ribbon copy itself is
-          shared with both engine Configuration surfaces, which DO have a Save,
-          so it stays right for them and gets its local caveat here. */}
-      {/* One lock message, one place (A1.1): under the results lock the
-          ribbon above already says everything — repeating it here made the
-          page state the same fact twice. The note survives only for its
-          no-Save explanation, which the ribbon does not carry. */}
-      {resultsLocked ? null : (
-        <p className="text-xs text-muted-foreground" data-testid="venue-save-note">
-          {isLocked
-            ? 'There is no Save on this page: each field applies as you change it. Because a schedule is committed, the next change asks you to confirm first, and confirming clears that schedule.'
-            : 'There is no Save on this page: each field applies as you change it.'}
-        </p>
-      )}
+      {/* Defect D15's note is GONE (R-K / COPY-3). It existed to explain that
+          this page had no Save while the schedule ribbon above it warned about
+          "saving these settings" — an explanation for an inconsistency, which
+          is the cheapest kind of copy to delete once the inconsistency is
+          fixed. The ribbon's wording is now literally true here, exactly as it
+          already was on both engine Configuration surfaces that share it. */}
 
       <LockedFieldset locked={resultsLocked}>
         <Section title="Venue">
@@ -142,7 +188,7 @@ export function VenueScheduleTab() {
             label="Courts"
             control={
               <NumberWithSuffix
-                value={config?.courtCount ?? 4}
+                value={current.courtCount ?? 4}
                 onChange={(v) => set('courtCount', v)}
                 suffix="courts"
                 min={1}
@@ -155,7 +201,7 @@ export function VenueScheduleTab() {
             label="Slot duration"
             control={
               <NumberWithSuffix
-                value={config?.intervalMinutes ?? 30}
+                value={current.intervalMinutes ?? 30}
                 onChange={(v) => set('intervalMinutes', v)}
                 suffix="min"
                 min={5}
@@ -181,20 +227,20 @@ export function VenueScheduleTab() {
                   { value: 'pinned', label: 'Court-tied' },
                   { value: 'queue', label: 'Queue' },
                 ]}
-                value={config?.courtPolicy ?? 'pinned'}
+                value={current.courtPolicy ?? 'pinned'}
                 onChange={(v) => set('courtPolicy', v)}
                 ariaLabel="Court policy"
               />
             }
-            last={config?.courtPolicy !== 'queue'}
+            last={current.courtPolicy !== 'queue'}
           />
-          {config?.courtPolicy === 'queue' ? (
+          {current.courtPolicy === 'queue' ? (
             <>
               <Row
                 label="On deck"
                 control={
                   <NumberWithSuffix
-                    value={config?.onDeckCount ?? 3}
+                    value={current.onDeckCount ?? 3}
                     onChange={(v) => set('onDeckCount', Math.min(5, Math.max(1, v)))}
                     suffix="matches"
                     min={1}
@@ -214,9 +260,9 @@ export function VenueScheduleTab() {
                     aria-label="Per-court policy overrides"
                     className="flex flex-wrap gap-1.5"
                   >
-                    {Array.from({ length: config?.courtCount ?? 4 }, (_, i) => i + 1).map(
+                    {Array.from({ length: current.courtCount ?? 4 }, (_, i) => i + 1).map(
                       (c) => {
-                        const pinned = config?.courtOverrides?.[c] === 'pinned';
+                        const pinned = current.courtOverrides?.[c] === 'pinned';
                         return (
                           <button
                             key={c}
@@ -225,7 +271,7 @@ export function VenueScheduleTab() {
                             data-testid={`court-override-${c}`}
                             onClick={() => {
                               const next: Record<number, 'pinned' | 'pool'> = {
-                                ...(config?.courtOverrides ?? {}),
+                                ...(current.courtOverrides ?? {}),
                               };
                               if (pinned) delete next[c];
                               else next[c] = 'pinned';
@@ -259,7 +305,7 @@ export function VenueScheduleTab() {
               // ends where the Courts and Slot-duration boxes end.
               <span className="inline-flex items-baseline gap-2">
                 <TimeInput
-                  value={config?.dayStart ?? '09:00'}
+                  value={current.dayStart ?? '09:00'}
                   onChange={(v) => set('dayStart', v)}
                   ariaLabel="Day start"
                 />
@@ -272,7 +318,7 @@ export function VenueScheduleTab() {
             control={
               <span className="inline-flex items-baseline gap-2">
                 <TimeInput
-                  value={config?.dayEnd ?? '18:00'}
+                  value={current.dayEnd ?? '18:00'}
                   onChange={(v) => set('dayEnd', v)}
                   ariaLabel="Day end"
                 />

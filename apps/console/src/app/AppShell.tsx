@@ -78,9 +78,12 @@ export function resolveActivePane(
     // An absent module has no row to read a label off, so fall back to the
     // canonical label table rather than showing the operator a raw id.
     label: active?.label ?? MODULE_LABELS[activeModule] ?? activeModule,
-    note:
-      active?.note ??
-      `${MODULE_LABELS[activeModule] ?? activeModule} is not available in this workspace.`,
+    // No fallback note (COPY-1). The fallback restated the panel's own title
+    // uncontracted — "Entries isn't available in this workspace" over
+    // "Entries is not available in this workspace." — so the surface said the
+    // same sentence twice whenever the catalog had no real reason to give.
+    // A note only appears now when it says something the title does not.
+    note: active?.note,
     primary,
     primaryLabel: primaryWm?.label ?? primary,
     canOpenSettings: active?.status === 'disabled',

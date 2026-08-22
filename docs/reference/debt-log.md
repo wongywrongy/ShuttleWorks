@@ -106,7 +106,7 @@ Mechanical, each independently shippable. Grouped only so the list stays scannab
 - **Engine coverage tail**: `scheduler_core/engine/live_ops.py` 40%, `extraction.py` 68%. Light characterization wins when touched. S.
 - **Frontend complexity is unmeasured** — `radon` is Python-only. Add ESLint `complexity` as a report-only `warn`, or run `npx ts-complex` ad-hoc, and record the FE tail here.
 - **The operator SPA autosaves the state blob and re-normalizes seam-written data** through Meet's domain rules (observed as `state_version` bumps v3/v4 after the seam's v2). Any future seam-written roster field needs either a snapshot round-trip test (as `sourceEntryId`/`remarks` have) or a shape that survives normalization. One characterization test in E2. S.
-- **The workspace identity bar collides with the surface header at 390px** (verified 2026-08-12). The bar's title wraps to a second line without the bar growing, so "Aug 10, 2026 LIVE" overlaps "Plan the day…" beneath it, and the meet Schedule tab's "COURTS / ALERTS / ME" overlap each other. Same class as the Plan header buttons fixed in `4e92c84` (a fixed-height box holding text that needs two lines) but a different component, and it predates that work. **Below the ruled floor:** the owner ruled the operator console must work at tablet width, and 768px is clean — 390px was never ruled a requirement for the console. Fix when the console gets a phone story, or rule that it does not have one. S.
+- **`packages/design-system/scripts/check-classes.mjs` scans a path that no longer exists** — `products/scheduler/frontend/src`, retired by SP-REORG-1 — so it crashes with `ENOENT` on `scandir`. Nothing caught it because the script is wired into no gate (`make check`, CI and every `package.json` are clear of it). Either repoint it at `apps/console/src` and gate it, or delete it; a lint script nobody runs is worse than no script, because its existence reads as coverage. Found during SP-CONSOLE-5. S.
 - **The public display board overflows 390px horizontally by ~143px** (verified 2026-08-12). It is a TV surface and nobody is meant to read it on a phone, so this is logged rather than fixed — but a director checking the board from their pocket is not an exotic case, and R11's dual-width rule is stated for the entrant tier only, never ruled on for Display. Either give the board a phone layout or write down that it has no phone story. S.
 
 **`auth_throttle` grows without bound and retains raw addresses** (found by the SP-REORG-1 review pass, 2026-08-19; pre-existing — the extraction to `core/throttle.py` moved the code verbatim and changed none of this)
@@ -167,6 +167,14 @@ Kept so a future reader doesn't rediscover them as bugs.
 ## Closed
 
 Newest first. One line each — the commit carries the detail.
+
+**2026-08-21 — the 390px identity-bar collision** (design/console-5, R-J Option A).
+Logged 2026-08-12 as "below the ruled floor" and left; the 2026-08-19 surface report
+showed it on every workspace-scoped mobile capture, and the diagnosis made the ruling
+easy: not a squeeze and not z-index, just `h-12` — a fixed-height flex row with no
+`overflow-hidden` around a wrapping identity block, so the wrapped lines painted over
+the surface. `min-h-12`, one class. A responsive posture for the console is still
+unruled; this only stops the header lying on top of the page.
 
 **2026-08-19 — D1, the double-booking swallow** (feat/sp-court-1-queue-mode). Ruled
 distinguish-unknown-from-none: the legitimate no-bracket case never reached the catch

@@ -85,7 +85,7 @@ export function MatchPlayerPicker({
   if (players.length === 0) {
     return (
       <p className="px-1 py-2 text-xs text-muted-foreground">
-        No players. Add some in the Roster tab.
+        No players. Add some on Roster.
       </p>
     );
   }

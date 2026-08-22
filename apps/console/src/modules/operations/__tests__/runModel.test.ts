@@ -151,13 +151,68 @@ describe('runModel', () => {
     // gated on running: only `lateNow` is a court-assigned scheduled chip past
     // its planned slot.
     const s = deriveSummary(ms, lanes, buildLiveChips(blocks, 9, true));
-    expect(s).toMatchObject({ done: 1, total: 4, playing: 1, courtsFree: 1, late: 1 });
+    // courtsFree = 2 under R-L Option B: C1 is playing, C2 only has a
+    // SCHEDULED match on it (not in progress) and C3 is empty, so two of the
+    // three courts are free right now. This asserted 1 before the ruling,
+    // when "free" meant "nothing assigned" — the definition that made the band
+    // read "0 COURTS FREE" beside four cards saying "SCHEDULED · 14:00".
+    expect(s).toMatchObject({ done: 1, total: 4, playing: 1, courtsFree: 2, late: 1 });
 
     // NOT running (plan not finalized) → zero late, even past the slots — this
     // is the fix for the "wall of LATE badges" on an un-started plan.
     expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 9, false)).late).toBe(0);
     // Running but before the planned slot → not yet late.
     expect(deriveSummary(ms, lanes, buildLiveChips(blocks, 0, true)).late).toBe(0);
+  });
+
+  /**
+   * SIG-1 — the band and the floor must agree.
+   *
+   * Under R-L Option B a court is free exactly when nothing is in progress on
+   * it, so `courtsFree + (courts with a playing match) === courtCount` has to
+   * hold for EVERY arrangement of matches, not just the tidy ones. The states
+   * that broke the old definition are the mixed ones: a court holding only a
+   * scheduled match, and a court holding a called-but-not-started match.
+   */
+  it('SIG-1: courts free + courts in play always equals the court count', () => {
+    const arrangements: { name: string; blocks: OpsBlock[]; courts: number }[] = [
+      { name: 'empty floor', blocks: [], courts: 4 },
+      {
+        name: 'every court scheduled, nothing started (the captured workspace)',
+        blocks: [1, 2, 3, 4].map((c) => blk({ id: `s${c}`, court: c, slot: 5 })),
+        courts: 4,
+      },
+      {
+        name: 'mixed: playing, called, scheduled, empty',
+        blocks: [
+          blk({ id: 'a', court: 1, slot: 0, status: 'started' }),
+          blk({ id: 'b', court: 2, slot: 0, status: 'called' }),
+          blk({ id: 'c', court: 3, slot: 5 }),
+        ],
+        courts: 4,
+      },
+      {
+        name: 'a done match does not hold its court',
+        blocks: [blk({ id: 'd', court: 1, slot: 0, status: 'finished', done: true })],
+        courts: 2,
+      },
+      {
+        name: 'two matches stacked on one court, the later one playing',
+        blocks: [
+          blk({ id: 'early', court: 1, slot: 0 }),
+          blk({ id: 'live', court: 1, slot: 4, status: 'started' }),
+        ],
+        courts: 2,
+      },
+    ];
+
+    for (const { name, blocks: bs, courts } of arrangements) {
+      const ms = toRunMatches(bs, {});
+      const lanes = deriveCourtLanes(ms, courts, { running: true, currentSlot: 6 });
+      const s = deriveSummary(ms, lanes, buildLiveChips(bs, 6, true));
+      const inPlay = lanes.filter((l) => l.now?.status === 'playing').length;
+      expect(s.courtsFree + inPlay, `${name}: band disagrees with the floor`).toBe(courts);
+    }
   });
 });
 

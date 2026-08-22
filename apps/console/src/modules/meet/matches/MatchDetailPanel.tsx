@@ -344,7 +344,7 @@ function EventField({
             aria-expanded={open}
             aria-label="Event"
             data-testid="match-event-trigger"
-            className="h-7 min-w-[7rem] rounded-sm border border-border bg-bg-elev px-2 text-left text-sm font-semibold text-accent sw-num transition-colors duration-fast ease-brand hover:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-7 min-w-[7rem] rounded-sm border border-border bg-bg-elev px-2 text-left text-sm font-semibold text-foreground sw-num transition-colors duration-fast ease-brand hover:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {value || 'Choose event'}
           </button>

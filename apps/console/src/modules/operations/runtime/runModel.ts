@@ -240,7 +240,18 @@ export function deriveSummary(
     done: matches.filter((m) => m.status === 'done').length,
     total: matches.length,
     playing: matches.filter((m) => m.status === 'playing').length,
-    courtsFree: lanes.filter((l) => l.now == null).length,
+    // R-L, Option B: a court is FREE when nothing is in progress on it.
+    //
+    // This used to be `l.now == null` — no match ASSIGNED — which made a court
+    // holding a 14:00 match unfree at 09:00, and produced the 2026-08-19
+    // report's headline contradiction: the band read "0 PLAYING · 0 COURTS
+    // FREE" beside four cards that each said "SCHEDULED · 14:00". Worse, it
+    // was the second definition of one metric: `workspace_signals.py` computes
+    // `courtCount - |courts with a playing match|` for the Hub inspector and
+    // the Overview, so the same workspace was 0 free here and 4 free there.
+    // One definition now, and it is the server's — which is also what a caller
+    // looking for somewhere to send players means by the word.
+    courtsFree: lanes.filter((l) => l.now?.status !== 'playing').length,
     // Late now MIRRORS the live board exactly (Task 2 `buildLiveChips`): every
     // court-assigned scheduled/called chip past its planned slot, NOT the old
     // Now-only/running-gated lane rule. The time axis shows lateness directly,

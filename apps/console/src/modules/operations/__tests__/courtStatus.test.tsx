@@ -11,7 +11,13 @@
  * internals of those components (which have their own test files).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+
+// The Live header's "Plan not finalized" blocker carries a <Link> to Plan
+// (SIG-2), so these bare mounts now need a router. Environment only — no
+// assertion changed.
+const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 // ── 1. Hoist mutable tab so vi.mock factories close over it ───────────────
 

@@ -48,14 +48,18 @@ export interface RunQueueProps {
   /** Keys of queue rows whose player is short of rest. ADVISORY: the row
    *  stays sendable; the desk decides. */
   restKeys?: ReadonlySet<string>;
-  /** Quick "↵ send" affordance on eligible scheduled rows — sends the row's
-   *  match to the first free court without opening the inspector. */
+  /** Quick assign affordance on eligible scheduled rows — puts the row's
+   *  match on the first open court without opening the inspector. */
   onSend?: (key: string) => void;
+  /** Whether any court can take an assignment right now. False disables the
+   *  row action with a reason instead of leaving a live-looking button that
+   *  silently does nothing (`sendFromQueue` returns early with no court). */
+  canAssign?: boolean;
 }
 
 // ── component ─────────────────────────────────────────────────────────────
-export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, restKeys, onSend }: RunQueueProps) {
-  // Viewer read-only vocabulary (audit A2) — send is a write.
+export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, restKeys, onSend, canAssign = true }: RunQueueProps) {
+  // Viewer read-only vocabulary (audit A2) — assigning is a write.
   const canEdit = useCanEdit();
   if (queue.length === 0) {
     return (
@@ -80,7 +84,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
             data-testid={`run-queue-row-${match.key}`}
             data-source={match.source}
             style={{ '--i': i } as CSSProperties}
-            className={`cursor-pointer px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
+            className={`group cursor-pointer px-4 py-1.5 hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS} ${
               isSelected ? 'bg-muted/40' : ''
             }`}
             {...selectableRowProps(() => onSelect(match.key), isSelected)}
@@ -144,10 +148,19 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
               </span>
             )}
 
-            {/* Readiness — every row says which of the three it is. The send
+            {/* Readiness — every row says which of the three it is. The action
                 affordance used to be the only marker, so a row blocked on an
                 earlier result and a row already called to a court both read as
-                a plain, unexplained absence. */}
+                a plain, unexplained absence.
+
+                SIG-3: this slot used to mix STATES (Pending / On court /
+                Called) with an ACTION ("↵ send") depending on the row, and
+                because "ready to go" is the normal condition of a queue, the
+                action won on nearly every row — a bordered button down the
+                whole list, which is the X6 ink budget spent on the least
+                exceptional thing on the screen. States render here per the
+                ladder; the action lives in its own slot after them, revealed
+                on hover or selection. */}
             {busyKeys?.has(match.key) ? (
               <span
                 data-testid={`queue-busy-${match.key}`}
@@ -171,19 +184,36 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
               >
                 {RUN_STATUS_LABEL[match.status]}
               </span>
-            ) : onSend ? (
+            ) : null}
+
+            {/* The row's ONE action. "Assign", not "send": `sendFromQueue`
+                puts the match on the first open court — assigning it — and
+                "send" is not a word the desk uses for that. Quiet until the
+                pointer or the keyboard reaches the row, so a queue at rest
+                shows states only. Disabled with a reason when there is no
+                open court: it used to stay live and return early, so the
+                press did nothing and said nothing. */}
+            {onSend && match.status === 'scheduled' && !busyKeys?.has(match.key) && match.eligible ? (
               <button
                 type="button"
                 data-testid={`queue-send-${match.key}`}
-                disabled={!canEdit}
-                title={canEdit ? undefined : READ_ONLY_MESSAGE}
+                disabled={!canEdit || !canAssign}
+                title={
+                  !canEdit
+                    ? READ_ONLY_MESSAGE
+                    : !canAssign
+                      ? 'Every court is occupied. Finish or clear a match first.'
+                      : 'Put this match on the first open court'
+                }
                 onClick={(e) => {
                   e.stopPropagation();
                   onSend(match.key);
                 }}
-                className="flex-shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs text-muted-foreground hover:border-accent hover:text-accent"
+                className={`flex-shrink-0 rounded-sm px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-opacity duration-fast ease-brand hover:text-accent focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:text-ink-faint ${
+                  isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                }`}
               >
-                ↵ send
+                Assign
               </button>
             ) : null}
             </div>

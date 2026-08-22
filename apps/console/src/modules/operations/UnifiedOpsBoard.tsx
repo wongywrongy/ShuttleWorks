@@ -374,7 +374,10 @@ export function UnifiedOpsBoard({
     // No border-b: the list below opens with a section band that carries its
     // own border-t — one hairline per seam (seamed, not gapped), never two
     // adjacent 1px borders.
-    <div data-testid="unified-ops-board" data-mode="courts" className="shrink-0 overflow-x-auto">
+    // No `overflow-x-auto` here: GanttTimeline owns the scroller now, and it
+    // carries the edge affordance + sticky COURT column (LAY-3). Two nested
+    // scrollers would have put the shadow on the wrong box.
+    <div data-testid="unified-ops-board" data-mode="courts" className="shrink-0">
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         {grid}
         {zoomBar}

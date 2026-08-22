@@ -1,3 +1,4 @@
+import { PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useWorkspaceModules } from '../../platform/domain/useWorkspaceModules';
 import { ModuleCatalogRow } from './ModuleCatalogRow';
 
@@ -34,13 +35,17 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-6">
+    <div className="space-y-4">
       <div>
         <h2 className="text-base font-semibold tracking-tight text-foreground">Module catalog</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Each module is a product system inside this workspace. Display needs an
-          enabled Meet or Bracket; a workspace keeps at least one operational module
-          enabled, and a module with data can&rsquo;t be disabled.
+        {/* COPY-3: the rules used to be listed here AND stated per row by
+            `blockedReason` — which is the version that says them at the
+            moment they bite, about the module they bite. A header that
+            recites every rule in advance asks the operator to hold three
+            conditions in their head to read a list that will tell them
+            anyway. Kept: what a module IS, which no row says. */}
+        <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
+          Each module is a product system inside this workspace.
         </p>
       </div>
       <ul className="divide-y divide-border rounded border border-border">

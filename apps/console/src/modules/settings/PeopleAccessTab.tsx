@@ -205,7 +205,7 @@ export function PeopleAccessTab({
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-6">
+    <div className="space-y-5">
       <div>
         <h2 className="text-base font-semibold tracking-tight text-foreground">Members and roles</h2>
         {summary?.ownerName && (

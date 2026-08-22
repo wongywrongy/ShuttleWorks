@@ -16,6 +16,7 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
 import {
+  HEALTH_LEGEND,
   EmptyState,
   Skeleton,
   Eyebrow,
@@ -418,6 +419,12 @@ export function HubPage() {
                 ) : null}
                 {footerCounts.archived > 0 ? `  ·  ${footerCounts.archived} archived` : null}
               </span>
+              {/* SIG-7: the lifecycle/attention dot leading every row carried
+                  meaning with nothing on the page to decode it, and its only
+                  explanation was a tooltip that printed the raw enum
+                  ("Health: good"). One legend line, in the meta row that
+                  already exists, next to the list it describes. */}
+              <span data-testid="hub-dot-legend">{HEALTH_LEGEND}</span>
               {updatedLabel ? <span>Updated {updatedLabel}</span> : null}
             </div>
           ) : null}

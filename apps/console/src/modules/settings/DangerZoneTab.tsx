@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useNavigate } from 'react-router-dom';
 import { Button, Modal } from '@scheduler/design-system';
 import { apiClient } from '../../api/client';
@@ -44,7 +45,7 @@ export function DangerZoneTab({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-6">
+    <div className="space-y-4">
       <div>
         <h2 className="text-base font-semibold tracking-tight text-foreground">Archive or delete</h2>
       </div>
@@ -82,7 +83,7 @@ export function DangerZoneTab({
             <h2 id="ws-delete-heading" className="text-base font-semibold text-foreground">
               Delete &ldquo;{summary?.name || 'Untitled'}&rdquo;?
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
               This permanently removes the {isBracket ? 'tournament' : 'meet'}, its members,
               invites, and all data. Can&rsquo;t be undone.
             </p>

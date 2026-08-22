@@ -241,7 +241,7 @@ export function GroupBandHeader({
         ].join(' ')}
       />
       {code ? (
-        <span className="text-2xs font-semibold uppercase text-accent sw-num">
+        <span className="text-2xs font-semibold uppercase text-foreground sw-num">
           {code}
         </span>
       ) : null}

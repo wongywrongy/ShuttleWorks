@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@scheduler/design-system';
 import { Select } from '@scheduler/design-system/components';
-import { SectionCard } from '../../components/control-plane';
+import { SectionCard, PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { apiClient } from '../../api/client';
 import type { EntryPageDTO, InviteRole, InviteSummaryDTO } from '../../api/dto';
@@ -186,10 +186,10 @@ export function SharingTab({ tid }: { tid: string }) {
   const now = Date.now();
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <div>
       <div className="pb-4">
         <h2 className="text-base font-semibold tracking-tight text-foreground">Sharing</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
           The public display link is view-only; collaborator invites let people sign in
           and operate this workspace. They are separate. Share each deliberately.
         </p>

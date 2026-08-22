@@ -57,7 +57,7 @@ export function GeneralSettingsTab({
     : null;
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <div>
       {/* H1 echoes the nav label verbatim (G1); the workspace name already
           lives in the header chrome, so it is not repeated here.
 

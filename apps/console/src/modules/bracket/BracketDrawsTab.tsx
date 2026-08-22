@@ -371,6 +371,9 @@ export function BracketDrawsTab() {
                   >
                     <ActionCell
                       status={row.status}
+                      // WSMOD-2 has-data pattern: a draw that has already been
+                      // played cannot be re-generated away (SIG-4).
+                      hasResults={(row.counts?.done ?? 0) + (row.counts?.live ?? 0) > 0}
                       eventReady={row.partCount > 0 && row.partCount === row.targetSize}
                       onGenerate={() => handleGenerate(row.ev.id, false)}
                       onRegenerate={() => handleGenerate(row.ev.id, true)}
@@ -519,20 +522,24 @@ function drawCountsByEvent(data: BracketTournamentDTO): Map<string, DrawCounts> 
 }
 
 /**
- * DRW-N1: the Progress cell — `done/total` in tabular figures plus a thin
- * single-line segmented bar (done · live · ready painted in that order;
- * the unpainted track is pending). Never wraps by construction — the old
- * four-chip tally line-wrapped at three digits. Exact breakdown lives on
- * the title tooltip.
+ * DRW-N1 / SIG-4: the Progress cell — `done/total` in tabular figures plus a
+ * thin bar showing **that same fraction and nothing else**.
+ *
+ * It used to stack three segments (done · live · ready) over an unpainted
+ * pending track. The segments did sum to the total, so the arithmetic was
+ * right — but the numeral beside the bar said `done/total` while the bar
+ * showed a different quantity, and the two disagreed the moment anything was
+ * merely assigned. In the 2026-08-19 report that produced two `GENERATED`
+ * rows reading `0/7` and `0/15` next to bars filled ~40%: three of seven
+ * assigned, nothing played. A reader with no legend has no way to recover
+ * that; what they see is a bar claiming progress a draw has not made.
+ *
+ * One metric per bar, filled proportionally from zero. "Entered vs size"
+ * already has the ENTERED column; the full breakdown stays on the tooltip.
  */
 function DrawProgressCell({ counts }: { counts: DrawCounts }) {
   const total = counts.done + counts.live + counts.ready + counts.pending;
   if (total === 0) return <span className="text-xs text-muted-foreground">–</span>;
-  const segments = [
-    { key: 'done', count: counts.done, cls: 'bg-status-success-fg' },
-    { key: 'live', count: counts.live, cls: 'bg-status-live-solid' },
-    { key: 'ready', count: counts.ready, cls: 'bg-status-started' },
-  ];
   return (
     <span
       className="flex min-w-0 items-center gap-2"
@@ -542,16 +549,21 @@ function DrawProgressCell({ counts }: { counts: DrawCounts }) {
       <span className="shrink-0 text-xs text-foreground sw-num">
         {counts.done}/{total}
       </span>
-      <span className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-sunken">
-        {segments
-          .filter((s) => s.count > 0)
-          .map((s) => (
-            <span
-              key={s.key}
-              className={s.cls}
-              style={{ width: `${(s.count / total) * 100}%` }}
-            />
-          ))}
+      <span
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={counts.done}
+        aria-label="Matches played"
+        className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-sunken"
+      >
+        {counts.done > 0 ? (
+          <span
+            data-testid="draw-progress-fill"
+            className="bg-status-success-fg"
+            style={{ width: `${(counts.done / total) * 100}%` }}
+          />
+        ) : null}
       </span>
     </span>
   );
@@ -583,11 +595,14 @@ function DrawStatusCell({ status }: { status: BracketEventStatus }) {
 
 function ActionCell({
   status,
+  hasResults,
   eventReady,
   onGenerate,
   onRegenerate,
 }: {
   status: BracketEventStatus;
+  /** A result has been recorded (or a match is live) in this draw. */
+  hasResults: boolean;
   eventReady: boolean;
   onGenerate: () => void;
   onRegenerate: () => void;
@@ -608,16 +623,24 @@ function ActionCell({
     );
   }
   if (status === 'generated') {
+    // Disabled WITH THE REASON, not hidden (SIG-4, WSMOD-2 has-data pattern).
+    // The arm-to-confirm below already stops an accidental press, but arming
+    // is the wrong answer when the action must not happen at all: a draw with
+    // a recorded result cannot be thrown away, and a control that vanishes
+    // teaches nothing about why.
     return (
       <Button
         variant={confirmRegen.armed ? 'destructive' : 'outline'}
         size="xs"
+        disabled={hasResults}
         onClick={confirmRegen.press}
         onBlur={confirmRegen.reset}
         title={
-          confirmRegen.armed
-            ? 'Click again to discard the existing draws and re-generate'
-            : 'Re-generate this draw'
+          hasResults
+            ? 'This draw has results. Clear them before re-generating it.'
+            : confirmRegen.armed
+              ? 'Click again to discard the existing draws and re-generate'
+              : 'Re-generate this draw'
         }
       >
         {confirmRegen.armed ? 'Discard draws?' : 'Re-generate'}
@@ -1043,7 +1066,7 @@ function DrawConfigModal({
 
       <div className="space-y-4 px-4 py-4">
         <div className="text-xs text-muted-foreground">
-          <span className="font-semibold text-accent sw-num">{ev.id}</span>
+          <span className="font-semibold text-foreground sw-num">{ev.id}</span>
           {' · '}
           <span>{disciplineLabel(ev.discipline)}</span>
           {' · '}

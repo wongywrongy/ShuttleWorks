@@ -126,7 +126,9 @@ describe('Bracket Configuration — one merged surface', () => {
     expandConfigSections();
 
     // Formerly the Events tab: per-draw facts, read from the existing draws.
-    expect(screen.getByText(/Active disciplines/i)).toBeInTheDocument();
+    // COPY-3: the "Active disciplines" summary row is GONE — it restated, as
+    // a wrapped comma list, exactly the disciplines the rows below name.
+    expect(screen.queryByText(/Active disciplines/i)).toBeNull();
     expect(screen.getByText("Men's Singles")).toBeInTheDocument();
     expect(screen.getByText('MS-1')).toBeInTheDocument();
     expect(screen.getByText(/Single elimination · 8 · 6 seeded/)).toBeInTheDocument();
@@ -146,13 +148,13 @@ describe('Bracket Configuration — one merged surface', () => {
     renderBracketTab();
     const events = screen.getByRole('button', { name: /^Events$/ });
     expect(events).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText(/Active disciplines/i)).toBeInTheDocument();
+    expect(screen.getByText('MS-1')).toBeInTheDocument();
 
     fireEvent.click(events);
     expect(events).toHaveAttribute('aria-expanded', 'false');
     // Collapsed content leaves the DOM — the reason every negative assertion
     // on this surface has to open the sections first.
-    expect(screen.queryByText(/Active disciplines/i)).toBeNull();
+    expect(screen.queryByText('MS-1')).toBeNull();
 
     expect(screen.getByRole('button', { name: /Advanced scheduling/ })).toHaveAttribute(
       'aria-expanded',

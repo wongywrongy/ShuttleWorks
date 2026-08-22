@@ -86,11 +86,27 @@ export function WorkspaceShell({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="sticky top-0 z-chrome flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
+      {/* `min-h-12`, NOT `h-12` (R-J). The identity block wraps by design —
+          a long workspace name + date + status pill do not fit 390px on one
+          line — and a fixed-height flex row with no `overflow-hidden` does
+          not clip the overflow, it PAINTS it over the surface below. Every
+          workspace-scoped mobile capture in the 2026-08-19 report showed the
+          header title lying across the page content for exactly this reason.
+          A minimum lets the bar grow the one or two rows it needs; the shell
+          is a flex column, so the surface reflows under it.
+
+          `flex-wrap` + a floor on the identity group is the other half. With
+          both groups locked to one row, a long workspace name got whatever
+          the gear and the status pill left over — about 120px at 390, which
+          wrapped "2026 YONEX DFW Badminton Lewisville South Open Regional
+          Championships" into eleven lines. Now the groups wrap instead: the
+          name takes the full row and the actions drop beneath it. At any
+          width where both fit, nothing moves. */}
+      <div className="sticky top-0 z-chrome flex min-h-12 flex-shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border bg-card px-4 py-1.5">
         {/* One group, so `justify-between` splits identity from actions —
             not trigger from identity from actions, which would strand the
             workspace name in the middle of the bar. */}
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-[16rem] flex-1 items-center gap-2">
           {compact ? (
             <button
               type="button"

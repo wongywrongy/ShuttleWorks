@@ -112,7 +112,7 @@ export function MeetEventsSection({
           label={
             <span className="inline-flex items-baseline gap-2">
               {eventLabel(code)}
-              <span className="text-xs font-semibold text-accent sw-num">{code}</span>
+              <span className="text-xs font-semibold text-foreground sw-num">{code}</span>
             </span>
           }
           control={

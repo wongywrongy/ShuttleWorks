@@ -1,12 +1,13 @@
 export { Eyebrow } from './Eyebrow';
 export { MetricStat } from './MetricStat';
-export { HealthDot, healthColorClass } from './HealthDot';
+export { HealthDot, healthColorClass, HEALTH_WORD, HEALTH_LEGEND } from './HealthDot';
 export { EmptyState } from './EmptyState';
 export { Skeleton } from './Skeleton';
 export { SectionCard } from './SectionCard';
 export { OverflowMenu, type OverflowItem } from './OverflowMenu';
 export { PickerPopover } from './PickerPopover';
 export { ActionsBar } from './ActionsBar';
+export { PageBody, PAGE_BODY_WIDTH, type PageBodyVariant } from './PageBody';
 export {
   ColumnHeaderRow,
   GroupBandHeader,

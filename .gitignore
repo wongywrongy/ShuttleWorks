@@ -169,3 +169,6 @@ docs/.vitepress/cache/
 # Self-host secrets + Postgres bind mount (docker-compose.selfhost.yml).
 secrets/
 data/postgres/
+
+# Local dev-server logs (.local-testing/compose.datavolume.yml is tracked).
+.local-testing/logs/

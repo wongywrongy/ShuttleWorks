@@ -270,7 +270,7 @@ function EventTypeEditor({
             data-testid={`event-entry-${ev.id}`}
           >
             <div className="flex items-center gap-2">
-              <span className="w-9 shrink-0 text-2xs font-semibold text-accent sw-num">
+              <span className="w-9 shrink-0 text-2xs font-semibold text-foreground sw-num">
                 {ev.id}
               </span>
               <span className="min-w-0 flex-1 break-words text-xs text-muted-foreground">

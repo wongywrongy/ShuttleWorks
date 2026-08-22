@@ -22,7 +22,7 @@
  * `renderCell` references and identity-stable `placements` (e.g. via
  * `useMemo` on the consumer side), or the memo busts every render.
  */
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cn } from '../lib/utils';
 
 // --- geometry --------------------------------------------------------------
@@ -275,6 +275,36 @@ export function GanttTimeline({
   // (placement, minSlot, tier), which is what lets `PositionedBlock`'s
   // `React.memo` bail out — the default shallow compare sees the same
   // `box` reference across renders.
+  /**
+   * Which sides currently hide content. Measured rather than inferred: the
+   * grid's width depends on the zoom, the density tier and the slot count, and
+   * the scrollport's on the surrounding layout (a docked detail pane changes
+   * it without changing any of those), so nothing here can be derived.
+   */
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [edges, setEdges] = useState({ right: false });
+  const syncEdges = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    // 1px slack: sub-pixel layout leaves a permanent ~0.5px "more to the
+    // right" on a grid that fits exactly.
+    setEdges((prev) => {
+      const right = el.scrollLeft < max - 1;
+      return prev.right === right ? prev : { right };
+    });
+  }, []);
+  // Layout effect, not effect: the shadow must be right on the first paint,
+  // not one frame after it. Re-runs whenever the grid's own width can change.
+  useLayoutEffect(syncEdges, [syncEdges, gridWidth, bodyHeight]);
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(syncEdges);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [syncEdges]);
+
   const placementsWithBoxes = useMemo(
     () =>
       placements.map((p) => ({
@@ -285,13 +315,29 @@ export function GanttTimeline({
   );
 
   return (
-    <div className={cn('overflow-x-auto', className)} {...rest}>
+    /* LAY-3: the overflow was always scrollable, but a column clipped
+       mid-cell with no edge affordance reads as a grid that simply ends —
+       the Plan board lost its 12:00 column that way in the 2026-08-19
+       report, and the scrollbar sits below the fold of the panel around it.
+       The shadows are painted OVER the grid, not behind it: this scroller's
+       children carry their own backgrounds (court rows, cell fills, the
+       sticky label column), so a CSS background-attachment shadow would be
+       occluded on every row it mattered on. `relative` anchors them; the
+       scroller itself is the inner element so the overlays stay put while
+       the content moves under them. */
+    <div className={cn('relative', className)} {...rest}>
+      <div ref={scrollerRef} onScroll={syncEdges} className="overflow-x-auto">
       <div style={{ width: gridWidth }}>
         {/* Time-header row */}
         <div className="flex border-b border-border/60 bg-muted/40">
+          {/* Sticky corner + sticky court column below (LAY-3): scrolling to a
+              later time used to carry the court labels off the left edge, so
+              the operator was reading a wall of chips with no way to tell
+              which court a row was. `bg-card` (not the row's translucent
+              wash) because a sticky cell has live content sliding under it. */}
           <div
             style={{ width: tier.label }}
-            className="flex-shrink-0 px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
+            className="sticky left-0 z-20 flex-shrink-0 border-r border-border bg-card px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
           >
             {headerLabel}
           </div>
@@ -329,7 +375,7 @@ export function GanttTimeline({
               {/* Left court-label column */}
               <div
                 style={{ width: tier.label, height: tier.row }}
-                className="flex-shrink-0 bg-muted/30"
+                className="sticky left-0 z-20 flex-shrink-0 border-r border-border bg-card"
               >
                 {renderCourtLabel(courtId)}
               </div>
@@ -397,6 +443,18 @@ export function GanttTimeline({
           </div>
         </div>
       </div>
+      </div>
+      {/* Right edge only, and only while something is hidden there. No left
+          twin: the sticky COURT column occupies that edge and already proves
+          the grid has been scrolled, so a shadow there would sit on top of a
+          label instead of marking hidden content. */}
+      {edges.right ? (
+        <div
+          aria-hidden
+          data-testid="gantt-edge-right"
+          className="pointer-events-none absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-ink/25 to-transparent"
+        />
+      ) : null}
     </div>
   );
 }

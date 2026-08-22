@@ -22,6 +22,7 @@ import type { TournamentConfig, BreakWindow } from '../../api/dto';
 import { useTournament } from '../../hooks/useTournament';
 import { useSuccessFlash } from '../../hooks/useSuccessFlash';
 import { Button, IconDone } from '@scheduler/design-system';
+import { PageBody } from '../../components/control-plane/PageBody';
 import {
   Row,
   Seg,
@@ -248,7 +249,7 @@ export function EngineConfigForm({
           column off these same primitives. Order is now operator-first:
           what the matches are, then when they run, then what the solver
           optimizes for, with the solver's own internals last. */}
-      <div className="mx-auto max-w-3xl space-y-2">
+      <PageBody variant="form" className="space-y-2">
           {/* The module's own sections lead — Meet's inline Events below,
               Bracket's via the `leadingSections` slot. Both engines put
               "what is being contested" above "how it is scored". */}
@@ -473,7 +474,6 @@ export function EngineConfigForm({
               last
             />
           </Section>
-      </div>
 
       {saveError && (
         <div className="motion-enter mt-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -501,6 +501,7 @@ export function EngineConfigForm({
           </Button>
         </div>
       ) : null}
+      </PageBody>
     </form>
   );
 }

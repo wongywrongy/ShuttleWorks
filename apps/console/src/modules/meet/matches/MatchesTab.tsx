@@ -146,7 +146,11 @@ export function MatchesTab() {
           <div className="min-h-0 flex-1 overflow-auto">
             <EmptyState
               title="No matches yet"
-              body="Matches are generated from the position grid. Use Regenerate from roster in the bar above to build them, then schedule in Operations → Courts. You can also add a custom match by hand."
+              // COPY-1: was four sentences, and the third named
+              // "Operations → Courts" — a destination that has never existed
+              // in this nav. Operations has exactly two: Plan and Live day.
+              // One why-line, then the one action below.
+              body="Matches come from the position grid on Roster. Build them with Regenerate from roster in the bar above, then lay them out in Operations → Plan."
               action={
                 <button
                   type="button"

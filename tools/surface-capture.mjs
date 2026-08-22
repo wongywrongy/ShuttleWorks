@@ -26,7 +26,10 @@ if (!tier || !base || !outPath) {
 }
 
 // Workspace + tournament seeded for review (see the session that produced this).
-const WS = process.env.WS_ID ?? '678379de-7eec-4582-8fea-3b3237a72dcee4';
+// The default was a MALFORMED uuid (`…-8fea-3b3237a72dcee4` — a 13-char final
+// group), so every run without an explicit WS_ID 422'd on the API and captured
+// error surfaces. Corrected to the real id of the seeded review workspace.
+const WS = process.env.WS_ID ?? '678379de-7eec-4582-8feb-3237a72dcee4';
 const SLUG = process.env.SLUG ?? 'dfw-lewisville-2026';
 
 const CONSOLE_SURFACES = [

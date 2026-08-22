@@ -114,6 +114,58 @@ Each rule has a **why** and a **what to do instead**.
 - Focus rings: `focus:ring-ring` resolves to `--ring → var(--accent)` = Signal Orange. Use `ring-ring`, not `ring-accent`, in focus contexts so the semantic name reads correctly.
 - Surface hover gray previously called `bg-accent` is now `bg-muted/40`. Don't reintroduce the old meaning.
 
+### 1.12 Accent reservation — the accent means "act" (SP-CONSOLE-5 ACC-N1)
+
+**Resting accent ink is reserved for exactly four things: a primary action,
+active nav, a genuine navigation link, and selected state. An identifier is
+never accent-inked.**
+
+The accent had drifted into carrying seven jobs at once — nav state, links,
+primary buttons, event codes, draw codes, segmented-control selection and
+progress bars. On Bracket Matches that rendered 110 blue event codes down one
+column, which reads as 110 actions on a surface where the codes do nothing.
+
+- Event / draw / match **codes** render in body ink (`text-foreground`). The
+  row is the affordance. Ruled first on the draws list as DRW-2 and generalised
+  here.
+- **Progress bars** use status tokens (§4), never the accent.
+- Interaction states (`hover:border-accent`, `focus:ring-ring`) are not ink and
+  are unaffected — colouring a control's response to the pointer is what the
+  accent is for.
+
+Held by `platform/contracts/__tests__/accentContract.test.ts`, which scans
+`className` values carrying `sw-num` (the class every code slot uses) for
+resting `text-accent`, with a documented allowlist for selection state.
+
+---
+
+## 1.13 Page containers — one anchor, one gutter (SP-CONSOLE-5 LAY-1)
+
+`components/control-plane/PageBody.tsx` is the console's only content
+container. Before it there were four families and three gutter values, and the
+two that looked most alike were the same box measured twice: Configuration and
+the workspace settings pages both centred a `max-w-3xl` column, but one spent
+its gutter outside the scroll region (`px-4`) and the other inside the column
+(`p-6`), so their text started 24px apart.
+
+| Variant | Bound | Use |
+|---|---|---|
+| `data` | full width, page gutter | tables, grids, boards — bounding them hides columns to no purpose |
+| `form` | `max-w-[900px]`, centred, page gutter | every settings and configuration surface |
+| `prose` | `max-w-[68ch]` | descriptive paragraphs **inside** a `form` body |
+
+`prose` is measured in characters, not pixels: the readable band is 45–75
+characters (WCAG 1.4.8 caps non-CJK at 80), which is a property of the text —
+a px bound silently leaves that band the moment the type scale moves. A lone
+`<p>` takes `PAGE_BODY_WIDTH.prose` directly rather than gaining a wrapper
+element; the bound comes from the same table either way.
+
+Held by `platform/contracts/__tests__/pageContainerContract.test.tsx`: the DOM
+half asserts the component renders what it declares, and the source half fails
+on any surface that pairs `mx-auto` with `max-w-*` outside a reasoned
+allowlist — which is the half that catches the regression, because the drift
+arrived as eight files each centring their own column.
+
 ---
 
 ## 2. Consumption pattern (how products import this)

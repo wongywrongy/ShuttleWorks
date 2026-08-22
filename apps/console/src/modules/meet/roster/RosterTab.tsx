@@ -47,7 +47,7 @@ import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { DetailDrawer } from './PlayerDetailPanel';
 import { EYEBROW_CLASS } from '../../../lib/utils';
-import { DetailDock, PickerPopover } from '../../../components/control-plane';
+import { DetailDock, EmptyState, PickerPopover } from '../../../components/control-plane';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
@@ -316,6 +316,21 @@ export function RosterTab() {
         </div>
 
         {/* ───── CONTENT — school tabs above the three-pane body ─────── */}
+        {/* COPY-1: one state, one message. An empty roster used to mount all
+            three panes and each said its own thing at once — "No schools yet.
+            Add one from the actions bar above." in the tab strip, "Select a
+            school above." in the player list (naming a school that cannot
+            exist yet), and "Add a school from the actions bar to start
+            rostering." in the grid. Three messages, two of them pointing at
+            the same button. Now the whole content area is one empty state
+            until there is a school to show, and the two per-pane messages
+            below only ever speak about a school that exists. */}
+        {groups.length === 0 ? (
+          <EmptyState
+            title="No schools yet"
+            body="A school is a roster of players; their positions are what matches get built from. Add a school from the actions bar to start."
+          />
+        ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <SchoolTabs
             groups={groups}
@@ -393,8 +408,12 @@ export function RosterTab() {
                     }}
                   />
                 ) : (
+                  // Reached only with schools present and none selected — the
+                  // tab strip is right above. It used to say "Add a school
+                  // from the actions bar", which was the no-schools message
+                  // shown in a state where schools exist.
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    Add a school from the actions bar to start rostering.
+                    Select a school above to place its players.
                   </div>
                 )}
               </div>
@@ -438,6 +457,7 @@ export function RosterTab() {
             </DetailDock>
           </div>
         </div>
+        )}
       </div>
       <DragOverlay dropAnimation={null}>
         {activeDragName ? <DragOverlayChip name={activeDragName} /> : null}
@@ -463,13 +483,9 @@ function SchoolTabs({
   activeSchoolId: string | null;
   onSelect: (id: string) => void;
 }) {
-  if (groups.length === 0) {
-    return (
-      <div className="shrink-0 border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">
-        No schools yet. Add one from the actions bar above.
-      </div>
-    );
-  }
+  // No zero-state of its own (COPY-1): the whole content area is replaced by
+  // one empty state before this ever mounts with an empty list.
+  if (groups.length === 0) return null;
   return (
     <div
       data-testid="school-tabs"

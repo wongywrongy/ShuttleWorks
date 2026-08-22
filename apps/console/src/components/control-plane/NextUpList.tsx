@@ -32,7 +32,25 @@ export function NextUpList({
       {items.map((n, i) => {
         const body = (
           <>
-            <span className="w-9 shrink-0 text-xs font-semibold sw-num text-foreground">{n.code}</span>
+            {/* LAY-2: the slot was a flat `w-9` (36px), sized for a meet rank
+                ("MS1"). The bracket branch of `nextUp` emits the raw
+                play_unit_id (`workspace_signals.py`) — `{drawId}-R{n}-{i}`
+                over an operator-supplied draw id — so `u17-gs-R0-0` wrapped
+                to THREE lines inside 36px while the rest of the row sat
+                empty. There is no length to size to: the id is unbounded, so
+                the slot grows to a readable ceiling and truncates past it,
+                with the full code on `title`. `min-w-9` keeps short meet
+                codes column-aligned down the list.
+
+                NOT truncate + title, which is what the directive asked for:
+                `truncationContract.test.ts` bans hidden characters site-wide
+                and names "wrap at word boundaries and let the row grow" as the
+                first replacement. So the slot has a MINIMUM and no maximum —
+                a long code takes the width it needs and wraps at its hyphens
+                if the row ever runs out. */}
+            <span className="min-w-9 shrink-0 break-words text-xs font-semibold sw-num text-foreground">
+              {n.code}
+            </span>
             <span className="min-w-0 flex-1 break-words text-2xs sw-num text-muted-foreground">
               {[n.timeLabel, n.courtLabel].filter(Boolean).join(' · ')}
             </span>
