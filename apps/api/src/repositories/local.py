@@ -60,6 +60,9 @@ from core.time_utils import now_iso
 from db.models import (
     CLOUD_ONLY_MODULES,
     BracketEvent,
+    Entry,
+    EntryEvent,
+    EntryPage,
     BracketMatch,
     BracketParticipant,
     BracketResult,
@@ -1459,6 +1462,75 @@ def is_invite_valid(invite: InviteLink, *, now: Optional[datetime] = None) -> bo
     return True
 
 
+
+class _LocalEntriesSignalRepo:
+    """Grouped reads of the Entries family, for the control plane (E4).
+
+    **Rows out, no derivation.** This layer fetches and returns; the counting
+    lives in ``shared/entries_facts`` and the caller performs it. That split
+    is not stylistic — the import-linter contract "Persistence does not import
+    upward" puts ``shared`` above ``repositories``, and a repository that
+    built a domain record would be reaching up through it. Every other grouped
+    query here has the same shape for the same reason: they answer counts and
+    dicts, never derived records.
+
+    **Why the entries rows are fetched HERE rather than in ``entries/``.** The
+    consumer is ``workspaces/``, and "Workspaces names only Bracket, Identity,
+    Meet and Operations" forbids a ``workspaces -> entries`` edge. The
+    persistence layer is below every domain, so reading these tables through
+    it lets the control plane see the *shape* of a workspace's entries without
+    either module naming the other.
+
+    **Grouped, never per-row.** ``build_signals`` runs over every workspace on
+    the Hub, so a per-workspace query would be an N+1 on the product's front
+    page — the property ``_counts_for`` exists to protect, and the one a tenth
+    input is most likely to break.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def rows_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, tuple]:
+        """``{tournament_id: (page, events, entries)}`` from three queries.
+
+        Sparse: an entry appears only for a workspace that HAS an entry page.
+        A workspace with no page has no entries phase and no entries
+        attention, and the caller's ``.get(tid)`` default says so without this
+        having to invent an empty record for every workspace in the database.
+        """
+        if not tournament_ids:
+            return {}
+
+        pages = {
+            page.tournament_id: page
+            for page in self.session.scalars(
+                select(EntryPage).where(EntryPage.tournament_id.in_(tournament_ids))
+            )
+        }
+        if not pages:
+            return {}
+
+        wanted = list(pages.keys())
+        events: dict[uuid.UUID, list] = {}
+        for event in self.session.scalars(
+            select(EntryEvent).where(EntryEvent.tournament_id.in_(wanted))
+        ):
+            events.setdefault(event.tournament_id, []).append(event)
+
+        entries: dict[uuid.UUID, list] = {}
+        for entry in self.session.scalars(
+            select(Entry).where(Entry.tournament_id.in_(wanted))
+        ):
+            entries.setdefault(entry.tournament_id, []).append(entry)
+
+        return {
+            tid: (page, events.get(tid, []), entries.get(tid, []))
+            for tid, page in pages.items()
+        }
+
+
 class _LocalModuleRepo:
     """Per-workspace module persistence (workspace-modules sub-project #1).
 
@@ -1724,6 +1796,8 @@ class LocalRepository:
         self.members = _LocalMemberRepo(session)
         self.invite_links = _LocalInviteLinkRepo(session)
         self.modules = _LocalModuleRepo(session)
+        # E4 (Phase 9): the control plane's read of the Entries family.
+        self.entry_signals = _LocalEntriesSignalRepo(session)
 
     # ---- High-level orchestration (id-explicit, Step 2+) ----------------
 

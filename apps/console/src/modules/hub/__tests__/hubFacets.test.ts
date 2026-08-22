@@ -38,6 +38,9 @@ describe('hubFacets', () => {
   it('the strip lists the lifecycle facets in travel order, then the cross-cutting ones', () => {
     expect(HUB_FACETS.map((f) => f.id)).toEqual([
       'all',
+      // E4: one facet for all three entries phases, and it sits FIRST in
+      // travel order because entries happen before setup does.
+      'entries',
       'setup',
       'ready',
       'live',

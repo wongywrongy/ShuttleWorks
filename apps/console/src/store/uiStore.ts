@@ -8,6 +8,7 @@
  * operator on a clean ephemeral slate.
  */
 import { create } from 'zustand';
+import type { WorkspacePhase } from '../platform/domain/lifecycle';
 import type {
   Advisory,
   Proposal,
@@ -169,14 +170,14 @@ interface UiState {
   activeTournamentRole: TournamentRole | null;
   setActiveTournamentRole: (role: TournamentRole | null) => void;
 
-  // Active tournament's derived lifecycle phase (setup → ready → live →
-  // complete) from ``signals.phase`` — real play state, unlike the
-  // operator-managed ``status`` above. The Workspace Shell prefers this
+  // Active tournament's derived lifecycle phase from ``signals.phase`` —
+  // real play state, unlike the operator-managed ``status`` above. Seven
+  // values since E4 (three entries phases in front of the four play ones);
+  // the type is imported rather than restated so the store cannot drift
+  // from the vocabulary the backend emits. The Workspace Shell prefers this
   // for its badge so a mid-day/finished tournament never reads "draft".
-  activeTournamentPhase: 'setup' | 'ready' | 'live' | 'complete' | null;
-  setActiveTournamentPhase: (
-    phase: 'setup' | 'ready' | 'live' | 'complete' | null,
-  ) => void;
+  activeTournamentPhase: WorkspacePhase | null;
+  setActiveTournamentPhase: (phase: WorkspacePhase | null) => void;
 
   // Whether the active bracket-kind tournament has a generated draw.
   // Written by ``BracketTab`` from ``useBracket().data``; ``null`` when

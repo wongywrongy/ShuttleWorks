@@ -20,7 +20,7 @@ program brief — that file is the plan; deviation is a STOP).
 | 6 | play.* scaffold + email | **steps 1/2/4 COMPLETE 2026-08-10**; step 3 (email) deferred entirely | **SHIPPABLE.** The one BLOCKING defect (the signup page's Turnstile script blocked by our own CSP → *every* signup 403) is **RESOLVED**: the CSP now admits `challenges.cloudflare.com` in `script-src`/`frame-src` on `/e/signup` only, verified end to end in a browser (see the Phase 6 entry, "The ship blocker — resolved"). Exit gate's "a real verification-class email lands in a real inbox" clause stays **OPEN by ruling** |
 | 7 | E2 lifecycle | **COMPLETE 2026-08-22** on `dev/prog1-p7-e2-lifecycle` (unmerged, awaiting [USER SIGN-OFF] per program rule 7) | `make check` exit 0 — pytest 1735/66 skipped (baseline 1671), vitest 1806 + entrant 674, depcruise 0 errors, import-linter 15 kept. Owner ruling D7 taken at the gate. **Email DELIVERY still owed by Phase 6 step 3** — the code rides the shipped SMTP seam and needs no edit when a provider lands |
 | 8 | E3 doubles | **COMPLETE 2026-08-22** on `dev/prog1-p8-e3-doubles` (unmerged, awaiting [USER SIGN-OFF]) | `make check` exit 0 — pytest 1752/66 skipped, vitest 1806 + entrant 680, import-linter 15 kept. The anonymous sweep caught a real dependency-ordering defect on the accept route (422 before 401) |
-| 9 | E4 signals/phases | not started | — |
+| 9 | E4 signals/phases | **COMPLETE 2026-08-22** on `dev/prog1-p9-e4-signals` (unmerged, awaiting [USER SIGN-OFF]) | `make check` exit 0 — pytest 1787/66 skipped, vitest 1808 + entrant 680, import-linter 15 kept. The persistence contract caught the first cut's layering |
 | 10 | E5 money/retention | not started | — |
 | 11 | Cutover + marketing | not started | — |
 
@@ -1836,3 +1836,140 @@ real entry states") is now met twice over: E2 produced the lifecycle and E3
 produced `awaiting_partner` and `pair_conflict`. It also inherits a concrete
 input from E2 — `lifecycle.committed_and_withdrawn` is already derived and
 waiting for the `COMMITTED_ENTRY_WITHDREW` attention code to read it.
+
+---
+
+## Phase 9 — E4: signals, phases, public reads. **COMPLETE** (2026-08-22)
+
+Branch `dev/prog1-p9-e4-signals`, off `dev/prog1-p8-e3-doubles` @ `e687a55`.
+Spec Q9 plus §7's public-read row. Entry condition ("needs real entry states")
+was met twice over by the two phases before it.
+
+### The architectural knot, and how it was untied
+
+`workspace_signals.py` had to learn about entries, and the import-linter
+contract **"Workspaces names only Bracket, Identity, Meet and Operations"**
+forbids `workspaces -> entries`. That contract is not an obstacle here, it is
+a description of the right answer, and the shape follows from taking it
+seriously:
+
+- **`repositories/local._LocalEntriesSignalRepo`** fetches ROWS, in three
+  grouped queries, and derives nothing. Grouped, because `build_signals` runs
+  over every workspace on the Hub and a per-workspace read here would be an
+  N+1 on the product's front page — the exact property `_counts_for` was built
+  to protect and the one a tenth input is most likely to break.
+- **`shared/entries_facts.py`** counts, called by `_counts_for`. Pure,
+  structural (`getattr`), naming no domain — the *shape of a workspace's
+  entries* is a fact about the workspace, not a claim about the entry
+  lifecycle.
+- **`workspace_signals`** judges: the phase and the six codes, from the
+  counted record.
+
+That the counting sits in the CALLER rather than in the repository is the
+second contract's doing — see the gates section: the first cut had the
+repository build the record, which is `repositories -> shared`, upward and
+forbidden.
+
+Net effect: no new cross-domain edge, import-linter still 15 kept / 0 broken,
+and the whole Q9 vocabulary is unit-testable against literals instead of
+against a database.
+
+### What landed
+
+- **Three phases at the FRONT** — `announced → entries_open → entries_review`
+  — and the four play phases keep their exact meanings. The three are a
+  **prefix**, and `_entries_phase` returns `None` once the desk is clear so
+  the workspace becomes an ordinary one again. Without that fall-through a
+  workspace would sit in `entries_review` through its own event.
+- **The six attention codes**, each from a counted fact, each naming
+  something only a human can do (invariant I4 read from the reporting side).
+  Two carry deliberate conditions: `UNRESOLVED_PAIRS` fires on a pair
+  conflict immediately but on an unaccepted invite only **after the close** —
+  before then it is just an entrant waiting for their partner, which is the
+  normal state of the flow; `COMMITTED_ENTRY_WITHDREW` fires whenever it is
+  true, because ruling R3 leaves the roster deliberately un-rewound and only
+  a human can decide what happens to the matches.
+- **The entries codes are ordered FIRST** in the attention list. A workspace
+  still taking entries has no roster and no schedule, so `NO_ROSTER` /
+  `NOT_SCHEDULED` would otherwise be the loudest thing on a card whose real
+  next action is "close entries and review them" — true statements in the
+  wrong order, and order is what an operator reads as priority.
+- **The Overview seam collected exactly what it promised.** `overviewPhase.ts`
+  said, in a comment written by SP-UI-1: *"The planned Entries capability adds
+  phases to the LEFT of `setup`. When it lands, its phase names join
+  `KNOWN_PHASES`, `visiblePhases` learns the module test that gates them, and
+  the panel map gains entries — no redesign."* That is precisely what it cost.
+- **`EntriesMetricsDTO`** — counts only, so the panels show real figures
+  rather than structure. Nothing on it could identify a person: it rides a
+  summary the Hub renders for every workspace at once.
+- **One Hub facet, not three.** A director filtering the Hub asks "which
+  events are in the entries stage"; announced-vs-open-vs-review is the state
+  of one workspace, which its own card says. Three more chips on an
+  eight-chip strip would cost more attention than the distinction is worth
+  from the outside.
+
+### The public read: the reserve list (spec §7)
+
+The **accepted** half of "acceptance and reserve lists in order" has shipped
+since SP-P7 — `_entrants` publishes the confirmed, per event, opt-outs
+honoured. What was missing was the queue behind it, and a queue is only worth
+publishing **with its order attached**: "you are on the waitlist" is
+unanswerable, "you are second reserve in MS" is something a person can plan
+around.
+
+Three properties, each with a test:
+
+1. **Order is arrival order and it is stable** — `submitted_at` then `id`,
+   because a family's entries land in the same tick and an unstable tiebreak
+   would swap two reserves between reads of the same page.
+2. **Published only after the close**, and only where the entrant list itself
+   is published — a reserve list is part of the entrant list, not a second
+   disclosure with a gate of its own.
+3. **An opted-out reserve holds their place and is not printed**, so the
+   printed numbers can skip one. A dense rank would be the subtler lie: it
+   would tell the next person they are second when they are third.
+
+### Negative controls
+
+- The waitlist not counting toward the cap, on the *reporting* side → adding
+  `waitlisted` to `_HOLDING` makes a capped-at-2 event with one confirmed and
+  one queued report itself full.
+- `ENTRIES_CLOSING_SOON`'s lower bound → dropping `0 <=` makes a close two
+  days in the PAST also "within 3", so the card warns entries are about to
+  close for the rest of the tournament.
+- `UNRESOLVED_PAIRS`' deadline half → without it, every workspace with a
+  doubles entry raises a flag the moment somebody nominates a partner.
+- The reserve list's two gates, separately: the close, and publication.
+- The entries-phase gate on `visiblePhases` → without the module status test,
+  every cloud workspace acquires three lifecycle steps it does not take.
+
+### Gates at close
+
+`make check` **exit 0** — pytest **1787 passed / 66 skipped** (baseline 1752;
+the 35 added are `unit/test_entries_signals.py` and `test_reserve_list.py`),
+vitest console **1808** (baseline 1806), entrant **680**, eslint 0 errors,
+depcruise 0 errors / 16 warnings, import-linter **15 kept, 0 broken**.
+
+**The import contract caught the layering, and it was right.** The first cut
+built `EntriesFacts` inside the repository, which is `repositories -> shared`
+— upward, and forbidden by "Persistence does not import upward". The fix is
+better than the thing it replaced: the repository returns ROWS, like every
+other grouped query in that file, and `_counts_for` does the counting. A
+review would have passed the original; the contract did not.
+
+Two ruff findings (unused imports) also fired on the way.
+
+### Exactly next
+
+**Phase 10 — E5: money, retention, compliance.** Entry condition met. Its
+three parts are independent: manual paid/unpaid at the submission level (the
+columns exist — `submissions.paid_at` / `payment_note` — and
+`awaiting_payment` is already in the reason vocabulary and already read by
+`UNPAID_ENTRIES`); the retention/anonymization job (`entry_events.
+retention_days` exists; `lifecycle.erase_player` is the scrub it should
+reuse); and the GDPR pass covering account deletion and export.
+
+**Carry this forward:** the debt log's D7 entry says account deletion **must
+not be a bare `DELETE`** on `entrant_accounts` — that is the call that reaches
+the CASCADE, and it would erase a director's confirmed entries. Build it as an
+account-level scrub over `erase_player`'s seam, or narrow the FKs first.

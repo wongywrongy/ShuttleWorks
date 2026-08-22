@@ -61,6 +61,16 @@ export const REASON_ACTION: Record<string, string> = {
   NO_BRACKET: 'Build the bracket',
   NO_MODULES_ENABLED: 'Enable a module',
   DISPLAY_NO_SOURCE: 'Enable an operator',
+  // E4 (spec Q9). Every one is a VERB the operator can act on at the desk,
+  // not a restatement of the condition: "Entries close soon" is what the
+  // signal says, "Review entries" is what to do about it. The one exception
+  // is ENTRIES_CLOSING_SOON, where the useful action really is just to look.
+  ENTRIES_CLOSING_SOON: 'Check the entries desk',
+  UNRESOLVED_PAIRS: 'Resolve pairs',
+  AT_CAP_WITH_WAITLIST: 'Review the waitlist',
+  ENTRIES_NOT_COMMITTED: 'Commit entries to the roster',
+  COMMITTED_ENTRY_WITHDREW: 'Review a withdrawal',
+  UNPAID_ENTRIES: 'Mark payments',
 };
 
 /** Human label for a `signals.setup` key. The backend emits camelCase

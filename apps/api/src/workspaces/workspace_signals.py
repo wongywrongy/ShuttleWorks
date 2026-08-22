@@ -11,12 +11,13 @@ endpoint free of per-row queries (see the SP-A spec's N+1 guardrail).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 from db.models import display_dependency_satisfied
+from shared.entries_facts import EntriesFacts
 
 
 @dataclass
@@ -42,6 +43,13 @@ class RowCounts:
     # the raw result/match count comparison from reading an inter-round lull
     # as "complete" (see ``swiss_pending_by_tournament``).
     swiss_pending: bool = False
+    # E4 (Phase 9): one workspace's entries, counted — or None where the
+    # workspace has no entry page, which is most of them and every local-mode
+    # one. **None is a meaningful value, not a missing one**: no page means
+    # no entries phase and no entries attention, and defaulting it to an
+    # empty record would make every workspace in the product look like one
+    # with an entry page and zero entries.
+    entries: Optional[EntriesFacts] = None
 
 
 class AttentionReasonDTO(BaseModel):
@@ -110,13 +118,43 @@ class NextMatchDTO(BaseModel):
     source: Optional[Literal["meet", "bracket"]] = None
 
 
+class EntriesMetricsDTO(BaseModel):
+    """The entries desk, in numbers, for the Overview and the Hub (E4).
+
+    **Counts only, and only counts an operator would act on.** No names, no
+    addresses, no per-entry anything: this rides on a workspace summary that
+    the Hub renders for every workspace at once, and a control-plane payload
+    that carried entrant data would be a disclosure surface with no route of
+    its own to review.
+
+    Absent (``None`` on the signals) for a workspace with no entry page,
+    which is every local-mode one — the same sparseness the phase and the
+    codes have, for the same reason (invariant I3).
+    """
+
+    total: int = 0
+    pending: int = 0
+    waitlisted: int = 0
+    confirmed: int = 0
+    #: ``confirmed`` and not yet written to the roster by the commit seam —
+    #: the number the ENTRIES_NOT_COMMITTED code is counting, exposed so the
+    #: panel can say how many rather than only that there are some.
+    uncommitted: int = 0
+    #: True once every dated event's window has passed. The panels key on
+    #: this rather than re-deriving it from dates they would have to be sent.
+    closed: bool = False
+
+
 class WorkspaceSignalsDTO(BaseModel):
     """Control-plane signals for one workspace (see ``build_signals``).
 
     Vocabulary the frontend can rely on:
     - ``health``: ``"archived" | "draft" | "attention" | "good"``.
     - ``attention[].code``: ``NO_MODULES_ENABLED | DISPLAY_NO_SOURCE | NO_BRACKET |
-      NO_ROSTER | NOT_SCHEDULED``.
+      NO_ROSTER | NOT_SCHEDULED``, plus E4's six entries codes
+      (``ENTRIES_CLOSING_SOON | UNRESOLVED_PAIRS | AT_CAP_WITH_WAITLIST |
+      ENTRIES_NOT_COMMITTED | COMMITTED_ENTRY_WITHDREW | UNPAID_ENTRIES``),
+      which appear only on a workspace that has an entry page.
     - ``setup``: a ``dict[str, bool]`` readiness checklist whose keys vary by kind.
     """
 
@@ -134,6 +172,8 @@ class WorkspaceSignalsDTO(BaseModel):
     #   live     — at least one match has been called/started/finished
     #   complete — every engine with matches has fully resolved them
     phase: str = "setup"
+    # E4: the entries desk in numbers, or absent where there is no entry page.
+    entries: Optional[EntriesMetricsDTO] = None
 
 
 def _module_counts(modules) -> ModuleCountsDTO:
@@ -359,6 +399,145 @@ _TERMINAL = frozenset({"finished", "retired"})
 _IN_PLAY = frozenset({"started", "playing"})
 
 
+# ---- E4 (Phase 9): the entries half of the vocabulary (spec Q9) ---------
+#
+# The phase gains three values AT THE FRONT and the four that existed keep
+# their meanings exactly:
+#
+#   announced -> entries_open -> entries_review -> setup -> ready -> live
+#   -> complete
+#
+# A workspace with no entry page never reaches any of the three, so nothing
+# a local-mode director sees changes — which is invariant I3 showing up in
+# the phase model rather than being restated as a rule.
+
+#: How near a close counts as "soon". Days, and a constant rather than a
+#: setting until somebody asks: three is the spec's number, and the useful
+#: property is that the warning arrives while there is still a weekend left
+#: to act in.
+ENTRIES_CLOSING_SOON_DAYS = 3
+
+
+def _entries_phase(entries: Optional[EntriesFacts]) -> Optional[str]:
+    """The entries-side phase, or None to fall through to play state.
+
+    Three values, in the order a director lives them:
+
+    - ``announced`` — the page is open, nothing has been entered, no window
+      has opened yet. The tournament has been declared and nobody can enter.
+    - ``entries_open`` — at least one event is inside its window.
+    - ``entries_review`` — entries have closed and there is still work on the
+      desk: something undecided, or something confirmed that has not reached
+      the roster.
+
+    Returns ``None`` once the desk is clear, and the workspace then reads as
+    whatever its play state says. That fall-through is the whole reason this
+    is a separate function: the entries phases are a PREFIX, not a
+    replacement, and a workspace whose entries are done is an ordinary
+    workspace again.
+    """
+    if entries is None or not entries.page_open:
+        return None
+    if entries.any_event_open:
+        return "entries_open"
+    if not entries.entries_closed:
+        return "announced" if entries.total == 0 else "entries_open"
+    outstanding = (
+        entries.pending + entries.waitlisted + entries.uncommitted_confirmed
+    )
+    return "entries_review" if outstanding > 0 else None
+
+
+def _entries_attention(
+    entries: Optional[EntriesFacts], now: Optional[datetime] = None
+) -> List[AttentionReasonDTO]:
+    """Spec Q9's six codes, each from a counted fact.
+
+    Every one names something a human has to do, and none fires for a state
+    the software could resolve on its own — invariant I4, read from the
+    reporting side. ``UNRESOLVED_PAIRS`` is the one with two triggers,
+    because an unaccepted invite past the deadline and an ambiguous pairing
+    are the same job on the desk even though they arrive by different routes.
+    """
+    if entries is None:
+        return []
+
+    moment = now or datetime.now(timezone.utc)
+    out: List[AttentionReasonDTO] = []
+
+    if entries.any_event_open and entries.next_close_at is not None:
+        days = (entries.next_close_at - moment).total_seconds() / 86400
+        if 0 <= days <= ENTRIES_CLOSING_SOON_DAYS:
+            out.append(
+                AttentionReasonDTO(
+                    code="ENTRIES_CLOSING_SOON", label="Entries close soon"
+                )
+            )
+
+    # Past the close an unaccepted invite is not going to resolve itself; a
+    # pair conflict never was. BEFORE the close, an awaiting-partner entry is
+    # just an entrant waiting for their partner, which is not a problem and
+    # must not be reported as one.
+    if entries.pair_conflicts > 0 or (
+        entries.entries_closed and entries.awaiting_partner > 0
+    ):
+        out.append(
+            AttentionReasonDTO(code="UNRESOLVED_PAIRS", label="Pairs need resolving")
+        )
+
+    if entries.at_cap_with_waitlist:
+        out.append(
+            AttentionReasonDTO(
+                code="AT_CAP_WITH_WAITLIST", label="An event is full with a waitlist"
+            )
+        )
+
+    if entries.entries_closed and entries.uncommitted_confirmed > 0:
+        out.append(
+            AttentionReasonDTO(
+                code="ENTRIES_NOT_COMMITTED",
+                label="Confirmed entries not on the roster",
+            )
+        )
+
+    # Ruling R3: the seam is never rewound automatically, so a player can be
+    # on a roster and in a draw while no longer entered. Only a human can
+    # decide what happens to their matches.
+    if entries.committed_then_withdrawn > 0:
+        out.append(
+            AttentionReasonDTO(
+                code="COMMITTED_ENTRY_WITHDREW",
+                label="Someone withdrew after being added",
+            )
+        )
+
+    if entries.entries_closed and entries.unpaid_confirmed > 0:
+        out.append(
+            AttentionReasonDTO(code="UNPAID_ENTRIES", label="Entries not marked paid")
+        )
+
+    return out
+
+
+def _entries_metrics(entries: Optional[EntriesFacts]) -> Optional[EntriesMetricsDTO]:
+    """Project the counted facts onto the wire, or answer None.
+
+    A straight projection with no arithmetic: every number here was counted
+    in ``shared/entries_facts``, and a total re-derived at the boundary is a
+    second answer waiting to disagree with the first.
+    """
+    if entries is None:
+        return None
+    return EntriesMetricsDTO(
+        total=entries.total,
+        pending=entries.pending,
+        waitlisted=entries.waitlisted,
+        confirmed=entries.confirmed,
+        uncommitted=entries.uncommitted_confirmed,
+        closed=entries.entries_closed,
+    )
+
+
 def _derive_phase(data: dict, counts: RowCounts) -> str:
     """Lifecycle phase from real play state (pure; see WorkspaceSignalsDTO).
 
@@ -429,6 +608,12 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
         setup = _meet_setup(getattr(row, "data", None) or {}, counts)
 
     attention: List[AttentionReasonDTO] = []
+    # E4: the entries codes come FIRST. A workspace still taking entries has
+    # not built a roster or a schedule yet, so NO_ROSTER / NOT_SCHEDULED
+    # would otherwise be the loudest thing on a card whose actual next action
+    # is "close entries and review them" — true statements in the wrong
+    # order, and order is what an operator reads as priority.
+    attention.extend(_entries_attention(counts.entries))
     if module_counts.enabled == 0:
         attention.append(AttentionReasonDTO(code="NO_MODULES_ENABLED", label="No modules enabled"))
     if not display_dependency_satisfied(statuses):
@@ -475,5 +660,9 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
         collaboration=collaboration,
         matches=matches_metrics,
         nextUp=next_up,
-        phase=_derive_phase(data_blob, counts),
+        # E4: the entries phases are a PREFIX on the existing four, so the
+        # play-state derivation is untouched and is what answers once the
+        # desk is clear.
+        phase=_entries_phase(counts.entries) or _derive_phase(data_blob, counts),
+        entries=_entries_metrics(counts.entries),
     )

@@ -230,11 +230,89 @@ function CompletePanel({ summary, onNavigate }: PanelProps) {
 }
 
 /**
+ * The three entries phases (E4, program Phase 9).
+ *
+ * One panel rather than three components, because the three phases are one
+ * surface at three moments and the difference between them is which numbers
+ * are worth showing and what the next action is. Splitting them would give
+ * three files that had to be kept saying the same thing.
+ *
+ * **Every figure is a count the server already made.** Nothing here derives
+ * a number from another number: the panel that computed `total - confirmed`
+ * would be a second definition of "outstanding" living one layer away from
+ * the one the attention codes use.
+ */
+function EntriesPanel({
+  summary,
+  onNavigate,
+  phase,
+}: PanelProps & { phase: WorkspacePhase }) {
+  const e = summary.signals?.entries;
+
+  // `announced` is the honest empty state: the page is public, the window
+  // has not opened, and there is nothing to count. Figures of zero would be
+  // three noughts pretending to be information.
+  if (phase === 'announced') {
+    return (
+      <section className="space-y-5">
+        <div>
+          <SectionLabel>Entries</SectionLabel>
+          <p className="text-sm text-muted-foreground">
+            The entry page is published and not open yet. Nobody can enter
+            until an event&rsquo;s window opens.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => onNavigate('ws-sharing')}>
+            Entry page settings
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  const figures =
+    phase === 'entries_review'
+      ? [
+          { value: e ? e.total : '–', label: 'entries' },
+          { value: e ? e.pending + e.waitlisted : '–', label: 'to decide' },
+          { value: e ? e.uncommitted : '–', label: 'to commit' },
+        ]
+      : [
+          { value: e ? e.total : '–', label: 'entries' },
+          { value: e ? e.confirmed : '–', label: 'confirmed' },
+          { value: e ? e.waitlisted : '–', label: 'waitlisted' },
+        ];
+
+  return (
+    <section className="space-y-5">
+      <div>
+        <SectionLabel>Entries</SectionLabel>
+        <Figures items={figures} />
+        <p className="mt-2 text-xs text-muted-foreground">
+          {phase === 'entries_review'
+            ? 'Entries have closed. Confirm what you are keeping, then commit it to the roster.'
+            : 'Entries are open. Confirmed entries reach the roster when you commit them.'}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <Button onClick={() => onNavigate('entries')}>Open the entries desk</Button>
+      </div>
+    </section>
+  );
+}
+
+/**
  * The panel map. Keyed on the phase string; the default branch is the
  * unknown-phase safety net.
  */
 export function PhasePanels({ phase, ...props }: PanelProps & { phase: WorkspacePhase }) {
   switch (phase) {
+    // E4: the three entries phases share one panel — see its own note.
+    case 'announced':
+    case 'entries_open':
+    case 'entries_review':
+      return <EntriesPanel {...props} phase={phase} />;
     case 'ready':
       return <ReadyPanel {...props} />;
     case 'live':

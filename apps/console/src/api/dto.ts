@@ -821,7 +821,33 @@ export interface WorkspaceSignalsDTO {
   nextUp?: NextMatchDTO[];
   /** Lifecycle phase derived from real play state (2026-07-09 audit):
    *  setup → ready → live → complete. Optional for older payloads. */
-  phase?: 'setup' | 'ready' | 'live' | 'complete';
+  /** E4: the entries desk in numbers. Absent where there is no entry page,
+   *  which is every local-mode workspace (invariant I3). Counts only — this
+   *  rides on a summary the Hub renders for every workspace at once, and a
+   *  control-plane payload carrying entrant data would be a disclosure
+   *  surface with no route of its own to review. */
+  entries?: {
+    total: number;
+    pending: number;
+    waitlisted: number;
+    confirmed: number;
+    /** `confirmed` and not yet on the roster — what ENTRIES_NOT_COMMITTED
+     *  counts, so the panel can say how many rather than only that there
+     *  are some. */
+    uncommitted: number;
+    closed: boolean;
+  } | null;
+  // E4 (program Phase 9): three entries phases at the FRONT; the four play
+  // phases keep their exact meanings. A workspace with no entry page never
+  // reaches the first three.
+  phase?:
+    | 'announced'
+    | 'entries_open'
+    | 'entries_review'
+    | 'setup'
+    | 'ready'
+    | 'live'
+    | 'complete';
 }
 
 export interface TournamentSummaryDTO {

@@ -268,6 +268,78 @@ def _moment_iso(value: datetime) -> str:
     return _aware(value).astimezone(timezone.utc).isoformat()
 
 
+
+def _reserves(
+    repo: LocalRepository, tournament_id: uuid.UUID
+) -> List[Tuple[str, int, str, Optional[str]]]:
+    """The post-close reserve list: ``(event code, position, name, club)``.
+
+    E4 / spec §7's "post-close acceptance and reserve lists in order". The
+    accepted half is already published — that IS ``_entrants``, which lists
+    ``confirmed`` — so what was missing is the queue behind it, and the queue
+    is only meaningful with its ORDER attached: "you are on the waitlist" is
+    an unanswerable message, "you are second reserve in MS" is one somebody
+    can plan around.
+
+    **Position is derived from the order entries arrived**, per event, and
+    that ordering is the promise. ``submitted_at`` alone ties
+    non-deterministically across SQLite and Postgres — a family's entries
+    land in the same tick by definition — so ``id`` is the tiebreaker, per
+    the house rule. Without it two reserves would swap places between two
+    reads of the same page, which is exactly the kind of thing a person
+    reading a reserve list notices.
+
+    **Same strict projection as ``_entrants``**: name, club, event code, and
+    nothing else. ``list_opt_out`` is honoured identically — the flag governs
+    publication and never participation, so an opted-out reserve holds their
+    place and is simply not printed. That does mean the printed positions can
+    skip a number relative to the real queue; publishing a dense rank instead
+    would be a subtler lie (it would say somebody is third when they are
+    fourth), and the honest answer is the real position with a row missing.
+
+    Callers gate on the entries being CLOSED. Before then the queue is still
+    moving and publishing it invites an entrant to plan around a number that
+    changes under them.
+    """
+    rows = repo.session.execute(
+        select(
+            EntryEvent.code,
+            EntryPlayer.full_name,
+            EntryPlayer.club,
+            Entry.list_opt_out,
+            Entry.id,
+        )
+        .select_from(Entry)
+        .join(
+            EntryPlayer,
+            (EntryPlayer.tournament_id == Entry.tournament_id)
+            & (EntryPlayer.id == Entry.entry_player_id),
+        )
+        .join(
+            EntryEvent,
+            (EntryEvent.tournament_id == Entry.tournament_id)
+            & (EntryEvent.id == Entry.entry_event_id),
+        )
+        .where(
+            Entry.tournament_id == tournament_id,
+            Entry.state == "waitlisted",
+        )
+        .order_by(EntryEvent.code, Entry.submitted_at, Entry.id)
+    ).all()
+
+    out: List[Tuple[str, int, str, Optional[str]]] = []
+    position_by_code: dict = {}
+    for code, name, club, opted_out, _entry_id in rows:
+        # The position advances for EVERY reserve, printed or not — see the
+        # docstring: a dense rank would misstate where an opted-out
+        # entrant's neighbours actually stand.
+        position_by_code[code] = position_by_code.get(code, 0) + 1
+        if opted_out:
+            continue
+        out.append((str(code), position_by_code[code], str(name), club))
+    return out
+
+
 def _entry_counts(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
     """``entry_event_id`` to published entry count (R14 §6's entry counts).
 

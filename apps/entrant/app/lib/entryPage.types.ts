@@ -58,6 +58,17 @@ export interface EntrantListRowDTO {
   eventCodes: string[];
 }
 
+export interface ReserveRowDTO {
+  eventCode: string;
+  /** The entrant's REAL place in the queue, which is not their index in
+   *  this array: somebody who opted out of publication still holds their
+   *  place, so the printed numbers can skip one. Render the number, never
+   *  the position in the list. */
+  position: number;
+  name: string;
+  club: string | null;
+}
+
 export interface EntryPageContentDTO {
   slug: string;
   introText: string | null;
@@ -120,5 +131,10 @@ export interface EntryPageDTO {
   publication: EntryPublicationDTO;
   events: EntryEventDTO[];
   entrants: EntrantListRowDTO[];
+  /** E4: the queue behind the accepted list, per event, in arrival order.
+   *  Empty until entries have closed and empty where the entrant list is
+   *  unpublished — a reserve list is part of the entrant list, not a
+   *  separate disclosure. */
+  reserves?: ReserveRowDTO[];
   viewer: EntryPageViewerDTO;
 }

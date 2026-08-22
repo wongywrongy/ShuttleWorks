@@ -33,7 +33,7 @@ import type {
   WinnersDTO,
 } from '../lib/draws.types';
 import { kindLabel } from '../lib/draws.types';
-import type { EntryPageDTO } from '../lib/entryPage.types';
+import type { EntryPageDTO, ReserveRowDTO } from '../lib/entryPage.types';
 import { dateOfIso, formatDateLong } from '../lib/format';
 import {
   activeTab,
@@ -411,6 +411,7 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
               // desk has confirmed nobody yet.
               <p className="text-muted-foreground">No confirmed entries yet.</p>
             )}
+            <ReserveList reserves={page.reserves ?? []} />
           </>
         ) : null}
         {active === 'draws' && loaderData.draws ? (
@@ -455,5 +456,67 @@ export function ErrorBoundary() {
 
   return (
     <MessagePage heading="Something went wrong" body="Please try again in a moment." />
+  );
+}
+
+/**
+ * The post-close reserve list, grouped by event (E4).
+ *
+ * **The number rendered is the server's `position`, never the index in this
+ * array.** An entrant who opted out of publication still holds their place,
+ * so a printed list can legitimately read 1, 3, 4 — and a component that
+ * numbered its own rows would tell the person at 3 that they are second.
+ * That is a subtler and worse error than a gap in the numbering, which at
+ * least reads as what it is.
+ *
+ * Renders nothing at all when the list is empty. Before entries close the
+ * server sends none, and "no reserves" is not a fact worth a heading: it is
+ * the ordinary state of most events.
+ */
+function ReserveList({ reserves }: { reserves: ReserveRowDTO[] }) {
+  if (reserves.length === 0) return null;
+
+  const byEvent = new Map<string, ReserveRowDTO[]>();
+  for (const row of reserves) {
+    const list = byEvent.get(row.eventCode) ?? [];
+    list.push(row);
+    byEvent.set(row.eventCode, list);
+  }
+
+  return (
+    <section className="mt-8 grid gap-4">
+      <div className="grid gap-1">
+        <h3 className="font-display text-base font-bold tracking-tight text-foreground">
+          Reserves
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Entries have closed. If a place opens, the organizer offers it in
+          this order.
+        </p>
+      </div>
+      {[...byEvent.entries()].map(([code, rows]) => (
+        <div key={code} className="grid gap-1.5">
+          <h4 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+            {code}
+          </h4>
+          <ol className="grid gap-1">
+            {rows.map((row) => (
+              <li
+                key={`${code}-${row.position}-${row.name}`}
+                className="flex items-baseline gap-2 text-sm text-foreground"
+              >
+                <span className="w-6 shrink-0 tabular-nums text-muted-foreground">
+                  {row.position}
+                </span>
+                <span>{row.name}</span>
+                {row.club ? (
+                  <span className="text-xs text-muted-foreground">{row.club}</span>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ))}
+    </section>
   );
 }

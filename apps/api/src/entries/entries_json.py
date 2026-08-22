@@ -56,6 +56,7 @@ from entries.entries_public import (
     _is_age_bracketed,
     _lookup_event,
     _moment,
+    _reserves,
     _moment_iso,
     _optional_entrant,
     _resolve,
@@ -96,6 +97,28 @@ router = APIRouter(prefix="/e/api", tags=["entries-public"])
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
+
+
+def _entries_have_closed(events, now) -> bool:
+    """Has every dated event's window passed?
+
+    Takes the ORM rows and asks ``_event_is_open`` — the SAME predicate that
+    builds each event's ``isOpen`` two lines below in the projection — rather
+    than growing a second piece of date arithmetic. Two readings of "closed"
+    on one page is how the events list and the reserve list would end up
+    disagreeing about whether entries are over.
+
+    Deliberately the same rule ``shared/entries_facts`` applies for the
+    control plane: an UNDATED event never closes, so a page holding one never
+    publishes a reserve list. The director has not said when entries stop,
+    and the software does not decide that for them.
+    """
+    if not events:
+        return False
+    dated = [ev for ev in events if getattr(ev, "closes_at", None) is not None]
+    if len(dated) != len(events):
+        return False
+    return not any(_event_is_open(ev, now) for ev in events)
 
 
 def _play_origin() -> str:
@@ -292,6 +315,22 @@ class VenueDTO(BaseModel):
     address: Optional[str] = None
 
 
+class ReserveRowDTO(BaseModel):
+    """One place in an event's queue (E4).
+
+    Position is the entrant's REAL place in the queue, not their index in
+    this list: an entrant who opted out of publication still holds their
+    place, so the printed numbers can skip one. Publishing a dense rank
+    would be the subtler lie — it would tell somebody they are third when
+    they are fourth.
+    """
+
+    eventCode: str
+    position: int
+    name: str
+    club: Optional[str] = None
+
+
 class EntryPageProjection(BaseModel):
     """One loader, one call. The RR7 loader renders a whole entry page from
     this and makes no second request — meta and OG tags included (spec §7)."""
@@ -304,6 +343,11 @@ class EntryPageProjection(BaseModel):
     publication: PublicationDTO
     events: List[EventDTO]
     entrants: List[EntrantRowDTO]
+    # E4: the queue behind the accepted list, published only once entries
+    # have closed. Empty before then, and empty where the entrant list is
+    # unpublished — a reserve list is part of the entrant list, not a
+    # separate disclosure with a gate of its own.
+    reserves: List[ReserveRowDTO] = []
     viewer: ViewerDTO
 
 
@@ -442,6 +486,20 @@ def entry_page_projection(
                 for person_id, name, club, codes in _entrants(repo, tournament.id)
             ]
             if page.entrants_published
+            else []
+        ),
+        # Gated at the QUERY like the entrant list above, and on TWO
+        # conditions: the list has to be published, and entries have to have
+        # closed. The second is not caution — a queue that is still moving is
+        # a number an entrant would plan around and then find changed.
+        reserves=(
+            [
+                ReserveRowDTO(
+                    eventCode=code, position=position, name=name, club=club
+                )
+                for code, position, name, club in _reserves(repo, tournament.id)
+            ]
+            if page.entrants_published and _entries_have_closed(events, now)
             else []
         ),
         viewer=ViewerDTO(

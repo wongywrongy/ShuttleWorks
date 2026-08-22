@@ -16,7 +16,23 @@
  * shows the raw status pill; the Hub inspector shows Ready/Needs setup).
  */
 
-export type WorkspacePhase = 'setup' | 'ready' | 'live' | 'complete';
+/**
+ * The lifecycle vocabulary, in order.
+ *
+ * E4 (program Phase 9) added the three entries phases AT THE FRONT; the four
+ * that follow keep their exact meanings, which is what let the Overview's
+ * phase seam absorb them as data rather than as a redesign. A workspace with
+ * no entry page never reaches any of the first three, so a local-mode
+ * director sees the same four they always did (invariant I3).
+ */
+export type WorkspacePhase =
+  | 'announced'
+  | 'entries_open'
+  | 'entries_review'
+  | 'setup'
+  | 'ready'
+  | 'live'
+  | 'complete';
 export type WorkspaceStatus = 'draft' | 'active' | 'archived';
 
 export interface LifecycleBadge {

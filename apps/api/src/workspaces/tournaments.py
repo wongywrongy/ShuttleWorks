@@ -51,6 +51,7 @@ from identity.invites import (
     InviteSummaryDTO,
     _to_summary as _invite_summary,
 )
+from shared.entries_facts import build_entries_facts
 from workspaces.workspace_signals import RowCounts, WorkspaceSignalsDTO, build_signals
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
@@ -253,6 +254,18 @@ def _counts_for(
     # Swiss rounds-still-pending flag (9th — two small queries internally).
     bresolved = repo.brackets.resolved_unit_ids_by_tournament(ids)
     swiss_pending = repo.brackets.swiss_pending_by_tournament(ids)
+    # E4 (Phase 9): the entries rows, as a 10th grouped read, counted HERE
+    # rather than in the repository — ``shared`` sits above persistence, so a
+    # repository that built the record would be importing upward (caught by
+    # the import contract, not by review). Sparse: only workspaces that HAVE
+    # an entry page appear, so the ``.get`` below leaves every other
+    # workspace's ``entries`` at None, which is what keeps the entries phases
+    # and codes off a local-mode card entirely (invariant I3).
+    entry_rows = repo.entry_signals.rows_by_tournament(ids)
+    entry_facts = {
+        tid: build_entries_facts(page=page, events=events, entries=entries)
+        for tid, (page, events, entries) in entry_rows.items()
+    }
     return {
         tid: RowCounts(
             members=members.get(tid, 0),
@@ -264,6 +277,7 @@ def _counts_for(
             match_status_by_id=mstatuses.get(tid, {}),
             bracket_resolved_ids=bresolved.get(tid, set()),
             swiss_pending=swiss_pending.get(tid, False),
+            entries=entry_facts.get(tid),
         )
         for tid in ids
     }

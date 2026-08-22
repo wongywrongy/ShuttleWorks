@@ -42,6 +42,15 @@ import { needsAttention } from './hubSignals';
 
 export type HubFacetId =
   | 'all'
+  // E4: ONE facet for all three entries phases, not three.
+  //
+  // A director filtering the Hub is asking "which of my events are in the
+  // entries stage" — announced vs open vs review is the state of one
+  // workspace, which its own card already says, and three more chips on a
+  // strip that already holds eight would cost more attention than the
+  // distinction is worth from the outside. The phase model keeps all three;
+  // this is a filter over it, not a mirror of it.
+  | 'entries'
   | 'setup'
   | 'ready'
   | 'live'
@@ -59,6 +68,7 @@ export interface HubFacet {
  *  order an event actually travels, then the cross-cutting facets. */
 export const HUB_FACETS: HubFacet[] = [
   { id: 'all', label: 'All' },
+  { id: 'entries', label: 'Entries' },
   { id: 'setup', label: 'Setup' },
   { id: 'ready', label: 'Ready' },
   { id: 'live', label: 'Live' },
@@ -70,6 +80,9 @@ export const HUB_FACETS: HubFacet[] = [
 
 /** The facet ids that name a lifecycle phase, keyed by phase. */
 const PHASE_FACET: Record<WorkspacePhase, HubFacetId> = {
+  announced: 'entries',
+  entries_open: 'entries',
+  entries_review: 'entries',
   setup: 'setup',
   ready: 'ready',
   live: 'live',
@@ -111,6 +124,7 @@ export function matchesFacet(t: TournamentSummaryDTO, facet: HubFacetId): boolea
 export function facetCounts(list: TournamentSummaryDTO[]): Record<HubFacetId, number> {
   const counts = {
     all: 0,
+    entries: 0,
     setup: 0,
     ready: 0,
     live: 0,

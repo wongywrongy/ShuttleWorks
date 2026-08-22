@@ -68,8 +68,41 @@ describe('visiblePhases', () => {
     expect(visiblePhases(noEngine)).toEqual([]);
   });
 
-  it('falls back to the full lifecycle when the payload carries no module catalog', () => {
-    expect(visiblePhases(ws({ modules: undefined }))).toEqual([...KNOWN_PHASES]);
+  it('falls back to the four PLAY phases when the payload carries no module catalog', () => {
+    // Unchanged in substance: this always meant "assume the engine, show the
+    // lifecycle". E4 added three phases that exist only where Entries does,
+    // and a catalog we cannot read is not evidence that it does — so the
+    // fallback is the four, not the seven. The alternative would put three
+    // steps in the stepper that the workspace may never be able to reach.
+    expect(visiblePhases(ws({ modules: undefined }))).toEqual([
+      'setup',
+      'ready',
+      'live',
+      'complete',
+    ]);
+  });
+
+  it('shows the entries phases only where the Entries module is enabled', () => {
+    const withEntries = ws({
+      modules: [
+        { moduleId: 'meet', status: 'enabled', config: null },
+        { moduleId: 'entries', status: 'enabled', config: null },
+      ],
+    });
+    expect(visiblePhases(withEntries)).toEqual([...KNOWN_PHASES]);
+  });
+
+  it('hides them again when Entries is present but not enabled', () => {
+    // NEGATIVE CONTROL for the gate. Without the status test, a workspace
+    // that merely has Entries in its catalog — every cloud workspace —
+    // acquires three lifecycle steps it does not take.
+    const available = ws({
+      modules: [
+        { moduleId: 'meet', status: 'enabled', config: null },
+        { moduleId: 'entries', status: 'available', config: null },
+      ],
+    });
+    expect(visiblePhases(available)).toEqual(['setup', 'ready', 'live', 'complete']);
   });
 
   it('returns nothing for a null summary', () => {
@@ -79,7 +112,10 @@ describe('visiblePhases', () => {
 
 describe('phaseIndex', () => {
   it('locates a phase for the stepper done/current split', () => {
-    expect(phaseIndex(KNOWN_PHASES, 'live')).toBe(2);
+    // 5, not 2: E4 put three entries phases in front of `setup`. The
+    // stepper reads this index against the phases it was GIVEN, which is
+    // why the assertion moves rather than the function.
+    expect(phaseIndex(KNOWN_PHASES, 'live')).toBe(5);
   });
 
   it('returns -1 when the phase is not shown', () => {

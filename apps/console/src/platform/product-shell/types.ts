@@ -1,3 +1,4 @@
+import type { WorkspacePhase } from '../domain/lifecycle';
 /** The suite modules that can be enabled inside an open workspace.
  *
  *  `entries` is CLOUD-ONLY (SP-E1-1 ruling D2): the backend seeds and returns
@@ -40,6 +41,6 @@ export interface WorkspaceIdentity {
   /** Derived lifecycle phase (signals.phase) — real play state. When it says
    *  live/complete the shell badge prefers it over the operator-managed
    *  `status`, so a mid-day tournament never reads "draft". */
-  phase?: 'setup' | 'ready' | 'live' | 'complete' | null;
+  phase?: WorkspacePhase | null;
   kind: 'meet' | 'bracket' | null;
 }
