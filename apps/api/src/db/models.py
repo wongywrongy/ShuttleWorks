@@ -1147,6 +1147,14 @@ class EntrantAccount(Base):
     reset_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # E2: the mailed double-opt-in credential. A SEPARATE pair from the reset
+    # tokens above, not a reuse of them — one column whose meaning depended on
+    # which route wrote it last would make a verification link replayable as a
+    # password reset, which is a privilege escalation by column-sharing.
+    verify_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    verify_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -1355,6 +1363,15 @@ class EntryPlayer(Base):
     # constraint would be the worst kind of automatic decision (I4). It
     # lives HERE and not on the entry because it describes a human.
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # E2 / ruling D7: withdraw-and-erase scrubs the three fields above and
+    # stamps this. The row survives — the submission it belongs to, its
+    # entries, their states and the fee history are the director's records
+    # and are not the entrant's to delete. What is erased is the human.
+    # NULL is the normal state; a stamped row renders as "details erased"
+    # rather than as somebody who typed their name badly.
+    erased_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

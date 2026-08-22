@@ -40,7 +40,9 @@ _BACKEND = Path(__file__).resolve().parents[3] / "apps" / "api"
 # The revision that creates the entries family, the one that narrows its
 # idempotency scope (the new head), and the one the family must follow.
 ENTRIES_REVISION = "s3d8f2b5c0e1"
-HEAD_REVISION = "v6a1c5e8f3b4"
+# The head moves with every migration; E2 (Phase 7) added the entrant
+# verification token pair and the ``entry_players.erased_at`` tombstone.
+HEAD_REVISION = "w7c2d8e0f5a6"
 PREVIOUS_REVISION = "r2c7e1f4a9b3"
 
 # Every table the Entries family owns after the R13 reshape. The account

@@ -319,7 +319,87 @@ describe('EntriesDesk — the confirm action (ruling D1)', () => {
     expect(await screen.findByText('Confirmed')).toBeInTheDocument();
   });
 
-  it('ships no reject / promote / withdraw affordance (E2 scope line)', async () => {
+  // The test that used to sit here asserted the ABSENCE of reject / promote /
+  // withdraw — E1's scope line, made visible on purpose. E2 (program Phase 7)
+  // ships all three, so the assertion is inverted rather than deleted: the
+  // scope line moved, and these are what it moved to.
+
+  it('offers each transition only from a state it is legal in', async () => {
+    // The desk draws from `state` alone. The SERVER refuses regardless (the
+    // 409 carries its own reason) — this only avoids offering a control
+    // whose one possible outcome is a toast.
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
+      entry({ id: 'e-pending', state: 'pending' }),
+      entry({ id: 'e-queued', state: 'waitlisted' }),
+      entry({ id: 'e-done', state: 'confirmed' }),
+      entry({ id: 'e-gone', state: 'withdrawn' }),
+    ]);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-pending');
+
+    const actions = (id: string) =>
+      within(screen.getByTestId(`entry-row-${id}`))
+        .queryAllByRole('button')
+        .map((b) => b.textContent);
+
+    expect(actions('e-pending')).toEqual(['Confirm', 'Reject', 'Withdraw']);
+    // Promote first on a queued row: it is what an operator is looking for
+    // there, and confirm is refused until it happens.
+    expect(actions('e-queued')).toEqual(['Promote', 'Reject', 'Withdraw']);
+    // A confirmed entry may be on a roster and in a draw — withdrawing says
+    // what happens to the player; rejecting would pretend it was never taken.
+    expect(actions('e-done')).toEqual(['Withdraw']);
+    // Terminal. Nothing to offer.
+    expect(actions('e-gone')).toEqual([]);
+  });
+
+  it('arms the terminal actions before running them', async () => {
+    // `window.confirm` is banned product-wide (2026-07-11 interaction audit).
+    // The canon replacement is the two-click arm, and this asserts a single
+    // press does NOT reject — the defect the arm exists to prevent.
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
+      entry({ id: 'e-1', state: 'pending' }),
+    ]);
+    const reject = vi
+      .spyOn(apiClient, 'rejectEntry')
+      .mockResolvedValue(entry({ id: 'e-1', state: 'rejected' }));
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-1');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    expect(reject).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Reject?' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reject?' }));
+    await waitFor(() => expect(reject).toHaveBeenCalledWith('t-1', 'e-1'));
+  });
+
+  it('promotes through the API and re-reads', async () => {
+    const list = vi
+      .spyOn(apiClient, 'listEntries')
+      .mockResolvedValueOnce([entry({ id: 'e-1', state: 'waitlisted' })])
+      .mockResolvedValueOnce([entry({ id: 'e-1', state: 'pending' })]);
+    const promote = vi
+      .spyOn(apiClient, 'promoteEntry')
+      .mockResolvedValue(entry({ id: 'e-1', state: 'pending' }));
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-1');
+
+    // Not armed: promotion opens a place, it destroys nothing.
+    await userEvent.click(screen.getByRole('button', { name: 'Promote' }));
+
+    await waitFor(() => expect(promote).toHaveBeenCalledWith('t-1', 'e-1'));
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Pending')).toBeInTheDocument();
+  });
+
+  it('a viewer is offered none of them', async () => {
+    // NEGATIVE CONTROL — the read role decides nothing. `useCanEdit` gates
+    // every one of these, and the seam fails closed on an unknown role.
+    useUiStore.setState({ activeTournamentRole: 'viewer' });
     vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
       entry({ id: 'e-1', state: 'pending' }),
     ]);
@@ -327,9 +407,9 @@ describe('EntriesDesk — the confirm action (ruling D1)', () => {
     render(<EntriesDesk tid="t-1" />);
     await screen.findByTestId('entry-row-e-1');
 
-    for (const name of [/reject/i, /promote/i, /withdraw/i]) {
-      expect(screen.queryByRole('button', { name })).toBeNull();
-    }
+    expect(
+      within(screen.getByTestId('entry-row-e-1')).queryAllByRole('button'),
+    ).toEqual([]);
   });
 });
 

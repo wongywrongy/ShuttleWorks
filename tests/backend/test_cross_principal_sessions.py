@@ -79,6 +79,23 @@ ENTRANT_REACHABLE = (
     # design** rather than by oversight — an entrant pricing their own
     # basket is the same credential doing the same job one step earlier.
     | {("POST", "/e/api/submit/{slug}"), ("POST", "/e/api/quote/{slug}")}
+    # E2 (Phase 7): the two entrant-credentialed writes the lifecycle added.
+    #
+    # ``resend-verification`` takes NO address and reads the caller's own
+    # account off the session — that is precisely why it is session-gated
+    # rather than public, and why an entrant reaching it is the whole point
+    # rather than an escalation. An operator cookie on it is refused by
+    # ``get_current_entrant``, the same two-seams construction as above.
+    #
+    # ``withdraw`` is the transition ruling R10 moved off the retired
+    # capability link and onto the account. It resolves the entry through
+    # the caller's own submissions, so the concrete id this sweep sends
+    # answers 404 either way; it is listed because it is entrant-reachable
+    # BY DESIGN and a reader should not have to infer that from a 404.
+    | {
+        ("POST", "/e/account/resend-verification"),
+        ("POST", "/e/api/me/entries/{entry_id}/withdraw"),
+    }
 )
 
 

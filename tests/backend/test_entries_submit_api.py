@@ -151,14 +151,27 @@ def page(client):
         session.close()
 
 
-@pytest.fixture
-def entrant(client, turnstile):
-    """A signed-in entrant, created and logged in through the real routes."""
+def verify_through_the_mailed_link(client, monkeypatch, email):
+    """Run the real double-opt-in loop and return the token that did it.
+
+    Reads the token out of the message the signup actually sent rather than
+    minting one: a helper that wrote ``email_verified = True`` directly would
+    keep passing after the mail stopped carrying a usable link, which is the
+    one failure this loop exists to make impossible.
+    """
+    sent: list[str] = []
+    import core.email
+
+    monkeypatch.setattr(
+        core.email,
+        "send_email",
+        lambda *, to, subject, body: sent.append(body),
+    )
     assert (
         client.post(
             "/e/account/signup",
             json={
-                "email": "parent@example.com",
+                "email": email,
                 "password": GOOD_PW,
                 "turnstileToken": "a-solved-token",
             },
@@ -166,6 +179,26 @@ def entrant(client, turnstile):
         ).status_code
         == 202
     )
+    assert sent, "signup sent no verification mail"
+    token = sent[0].split("token=")[1].split()[0]
+    assert (
+        client.post("/e/account/verify", json={"token": token}, headers=CSRF).status_code
+        == 204
+    )
+    return token
+
+
+@pytest.fixture
+def entrant(client, turnstile, monkeypatch):
+    """A signed-in, VERIFIED entrant, all of it through the real routes.
+
+    Verified because that is the ordinary state of somebody submitting an
+    entry once E2 ships, and because it keeps every test in this module
+    asserting what it was written to assert: a submission from a verified
+    account lands in ``pending``. The unverified landing state has its own
+    test below rather than being smuggled into every other one.
+    """
+    verify_through_the_mailed_link(client, monkeypatch, "parent@example.com")
     assert (
         client.post(
             "/e/account/login",

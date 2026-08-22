@@ -63,16 +63,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db.models import Entry, EntryPlayer, Submission
+from entries import lifecycle
 from entries.entry_policy import NEEDS_REVIEW, gender_flags
 
 log = logging.getLogger("scheduler.entries")
 
-# Ruling D1, unamended by R10–R14. While no verification machinery exists,
-# a submission lands directly in ``pending``: ``unverified`` has exactly one
-# exit (automatic, on account verification), so an entry parked there in
-# this slice could never be confirmed and Seam A commits only ``confirmed``.
-# The slice would ship a pipe that cannot reach the roster.
-LANDING_STATE = "pending"
+# Ruling D1's condition has flipped as of E2 (program Phase 7). It read:
+# *while no verification machinery exists*, land in ``pending``, because
+# ``unverified``'s only exit is the verification transition and an entry
+# parked there could never reach the roster. The machinery exists now —
+# ``entries.lifecycle.promote_verified_entries`` is that exit — so the
+# landing state is a function of the account rather than a constant.
+#
+# Kept as a name for the verified case, because the shipped callers and
+# tests that assert "a submission lands in pending" are asserting something
+# that is still true for a verified account, which is the normal one.
+LANDING_STATE = lifecycle.PENDING
 
 # States a prior entry must be in to raise the soft duplicate flag. A
 # resubmission after a withdrawal is a correction, not a double-submit.
@@ -259,6 +265,7 @@ def create_submission(
     fee_total_cents: Optional[int],
     fee_basis: Optional[dict],
     idempotency_key: Optional[str] = None,
+    email_verified: bool = True,
 ) -> SubmissionResult:
     """Record one act: a submission, its players, and one entry per event.
 
@@ -285,6 +292,7 @@ def create_submission(
             fee_total_cents=fee_total_cents,
             fee_basis=fee_basis,
             idempotency_key=idempotency_key,
+            email_verified=email_verified,
         )
     except IntegrityError:
         # The other half of the retry race — see the module docstring. The
@@ -313,6 +321,7 @@ def _write(
     fee_total_cents: Optional[int],
     fee_basis: Optional[dict],
     idempotency_key: Optional[str],
+    email_verified: bool = True,
 ) -> SubmissionResult:
     now = _utcnow()
     submission = Submission(
@@ -349,20 +358,35 @@ def _write(
         events = _distinct(spec.events)
         priced = per_player_fee[index] if index < len(per_player_fee) else None
         shares = _split(priced, len(events))
+        landing = lifecycle.landing_state(email_verified=email_verified)
         for share, event in zip(shares, events):
             reasons = list(gender_flags(spec.gender, event))
             if looks_duplicate(session, tournament_id, event.id, spec.full_name):
                 reasons.append(NEEDS_REVIEW)
+            # The cap is read PER ENTRY and inside the loop, not once for
+            # the act: a family entering three children into a draw with two
+            # places left must fill both and queue the third, and a count
+            # taken before the loop would either take all three or none.
+            # ``session.flush()`` below each add is what makes the next
+            # iteration's count include the row just written.
+            state = landing
+            if lifecycle.at_cap(session, tournament_id, event):
+                # I4: a queue position, not a decision. Nobody is refused,
+                # the entry is not rejected, and an operator can promote it
+                # the moment somebody withdraws.
+                state = lifecycle.WAITLISTED
+                reasons.append(lifecycle.OVER_CAP)
             entry = Entry(
                 tournament_id=tournament_id,
                 entry_event_id=event.id,
                 submission_id=submission.id,
                 entry_player_id=player.id,
-                state=LANDING_STATE,
+                state=state,
                 pending_reasons=reasons,
                 fee_cents=share,
             )
             session.add(entry)
+            session.flush()
             created_entries.append(entry)
 
     session.commit()

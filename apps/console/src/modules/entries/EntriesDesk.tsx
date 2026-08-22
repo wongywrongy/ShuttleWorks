@@ -1,11 +1,16 @@
 /**
  * The Entries desk — the operator's half of the E1 walking skeleton.
  *
- * Deliberately small. It does three things: show what the public form
- * produced, let an operator confirm a pending entry (ruling D1 — the ONLY
- * lifecycle transition E1 ships), and run Seam A, reporting per-entry what
- * happened. Reject / promote / withdraw are E2 and are absent on purpose; a
- * colocated test asserts their absence so the scope line stays visible.
+ * Small, and now complete. It shows what the public form produced, runs Seam
+ * A reporting per-entry what happened, and carries the operator's whole half
+ * of the spec's §6 state machine: confirm, reject, promote, withdraw.
+ *
+ * **E2 (program Phase 7) added the last three, and the rule that decides
+ * which of them a row offers lives on the SERVER.** The desk renders from
+ * `state` alone and each action re-reads afterwards; every refusal is the
+ * backend's 409 carrying its own reason. A desk that predicted the machine's
+ * answers locally would be a second copy of the state machine, and the copy
+ * would be the one that went stale.
  *
  * Two choices worth stating:
  *
@@ -42,6 +47,7 @@ import { apiClient } from '../../api/client';
 import type { EntryCommitResultDTO, EntryDTO } from '../../api/dto';
 import { useAction } from '../../hooks/useAction';
 import { useCanEdit } from '../../hooks/useCanEdit';
+import { useConfirmClick } from '../../hooks/useConfirmClick';
 import {
   ENTRY_STATE_LABEL,
   ENTRY_STATE_TONE,
@@ -53,8 +59,22 @@ import {
 } from './entryDisplay';
 
 /** Ruling D1: `pending` is the only state a confirm may start from. Mirrors
- *  `_CONFIRMABLE_FROM` in `api/entries.py`, which answers 409 otherwise. */
+ *  `_CONFIRMABLE_FROM` in `entries/entries_routes.py`, which answers 409
+ *  otherwise. */
 const CONFIRMABLE_FROM = 'pending';
+
+/** The states each E2 action starts from — `entries.lifecycle`'s guards,
+ *  mirrored for the sole purpose of deciding whether to DRAW a control. The
+ *  server refuses regardless; this only avoids offering a button whose one
+ *  outcome is a toast. */
+const REJECTABLE_FROM: readonly string[] = ['pending', 'waitlisted', 'unverified'];
+const PROMOTABLE_FROM: readonly string[] = ['waitlisted'];
+const WITHDRAWABLE_FROM: readonly string[] = [
+  'unverified',
+  'pending',
+  'waitlisted',
+  'confirmed',
+];
 
 const COLUMNS: BandedTableColumn[] = [
   // Entrant carries a person name — it floors at NAME_COL_MIN, not zero.
@@ -63,7 +83,9 @@ const COLUMNS: BandedTableColumn[] = [
   { label: 'State', className: 'w-28' },
   { label: 'Attention', className: 'w-32', priority: 2 },
   { label: 'Remarks', className: 'min-w-0 flex-[2]', priority: 3 },
-  { label: '', className: 'w-20 text-right' },
+  // Wider since E2: a row can offer up to three actions. Still last, still
+  // right-aligned, still unlabelled.
+  { label: '', className: 'w-56 text-right' },
 ];
 
 export function EntriesDesk({ tid }: { tid: string }) {
@@ -116,6 +138,42 @@ export function EntriesDesk({ tid }: { tid: string }) {
       [tid, load],
     ),
     { errorMessage: 'Could not confirm that entry' },
+  );
+
+  // The other three transitions (E2). Same shape as `confirm`: act, then
+  // re-read, because the server's row is the authoritative one and a
+  // transition can change more than the state field.
+  const reject = useAction(
+    useCallback(
+      async (id: string) => {
+        await apiClient.rejectEntry(tid, id);
+        await load();
+      },
+      [tid, load],
+    ),
+    { errorMessage: 'Could not reject that entry' },
+  );
+
+  const promote = useAction(
+    useCallback(
+      async (id: string) => {
+        await apiClient.promoteEntry(tid, id);
+        await load();
+      },
+      [tid, load],
+    ),
+    { errorMessage: 'Could not promote that entry' },
+  );
+
+  const withdraw = useAction(
+    useCallback(
+      async (id: string) => {
+        await apiClient.withdrawEntry(tid, id);
+        await load();
+      },
+      [tid, load],
+    ),
+    { errorMessage: 'Could not withdraw that entry' },
   );
 
   // Safe to press twice — Seam A is idempotent by design (spec §5), which is
@@ -248,7 +306,10 @@ export function EntriesDesk({ tid }: { tid: string }) {
                 >
                   {e.remarks ?? ''}
                 </span>
-                <span role="cell" className={`${colClass(COLUMNS[5])}`}>
+                <span
+                  role="cell"
+                  className={`${colClass(COLUMNS[5])} flex items-center justify-end gap-1`}
+                >
                   {canEdit && e.state === CONFIRMABLE_FROM ? (
                     <Button
                       size="xs"
@@ -259,6 +320,41 @@ export function EntriesDesk({ tid }: { tid: string }) {
                       Confirm
                     </Button>
                   ) : null}
+                  {/* Promote reads first on a waitlisted row: it is the
+                      action an operator is looking for there, and confirm
+                      is refused until it happens. */}
+                  {canEdit && PROMOTABLE_FROM.includes(e.state) ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      disabled={promote.pending}
+                      onClick={() => void promote.run(e.id)}
+                    >
+                      Promote
+                    </Button>
+                  ) : null}
+                  {/* Both of the terminal moves are two-click armed. They
+                      are not catastrophic enough for a modal (nothing is
+                      deleted and an operator can re-enter a player at the
+                      desk), and they are far too easy to hit by accident on
+                      a dense list to be one press. `window.confirm` is
+                      banned product-wide. */}
+                  {canEdit && REJECTABLE_FROM.includes(e.state) ? (
+                    <ArmedAction
+                      label="Reject"
+                      armedLabel="Reject?"
+                      pending={reject.pending}
+                      onConfirm={() => void reject.run(e.id)}
+                    />
+                  ) : null}
+                  {canEdit && WITHDRAWABLE_FROM.includes(e.state) ? (
+                    <ArmedAction
+                      label="Withdraw"
+                      armedLabel="Withdraw?"
+                      pending={withdraw.pending}
+                      onConfirm={() => void withdraw.run(e.id)}
+                    />
+                  ) : null}
                 </span>
               </>
             )}
@@ -266,6 +362,39 @@ export function EntriesDesk({ tid }: { tid: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * A destructive desk action behind the canon two-click arm.
+ *
+ * Its own component because `useConfirmClick` is a hook and the desk renders
+ * one of these per row — a hook cannot be called inside the row callback, and
+ * hoisting the arm state to the table would arm every row at once.
+ */
+function ArmedAction({
+  label,
+  armedLabel,
+  pending,
+  onConfirm,
+}: {
+  label: string;
+  armedLabel: string;
+  pending: boolean;
+  onConfirm: () => void;
+}) {
+  const arm = useConfirmClick(onConfirm);
+  return (
+    <Button
+      size="xs"
+      variant="ghost"
+      disabled={pending}
+      onClick={arm.press}
+      onBlur={arm.reset}
+      className={arm.armed ? 'text-status-warning-fg' : undefined}
+    >
+      {arm.armed ? armedLabel : label}
+    </Button>
   );
 }
 

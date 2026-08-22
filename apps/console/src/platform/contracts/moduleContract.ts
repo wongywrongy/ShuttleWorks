@@ -302,6 +302,12 @@ export const entriesContract: ModuleContract = {
   ownedEndpoints: [
     apiClient.listEntries,
     apiClient.confirmEntry,
+    // E2 (program Phase 7): the rest of the operator's half of the §6 state
+    // machine. Owned by Entries and reachable from nowhere else — the desk
+    // is the only surface that decides an entry's fate.
+    apiClient.rejectEntry,
+    apiClient.promoteEntry,
+    apiClient.withdrawEntry,
     apiClient.commitEntries,
   ],
   consumedEndpoints: [],

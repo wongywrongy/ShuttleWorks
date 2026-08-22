@@ -279,6 +279,22 @@ class Settings(BaseSettings):
     entrant_signup_max_per_ip: int = 8
     entrant_signup_window_seconds: float = 3600.0
     entrant_signup_lock_seconds: float = 300.0
+    # ---- Entrant verification (E2, Phase 7) ---------------------------
+    # DAYS, not the reset token's minutes, and the difference is the use.
+    # A reset token is requested by someone sitting at the form and used
+    # within the minute; a short life is a security property with no cost.
+    # A verification link is mailed unprompted at signup and opened when
+    # the entrant next checks mail — an hour later it is a support ticket
+    # ("the link doesn't work"), and the mitigation for an expired one is
+    # to mail another identical link, so a tight expiry buys nothing and
+    # costs the entrant their evening. Two days spans a weekend.
+    verify_token_ttl_days: float = 2.0
+    # Public origin of the ENTRANT tier, used to build absolute links in
+    # entrant mail. Program invariant I1: domain is configuration. Blank
+    # falls back to ``public_app_origin`` and then to relative links, so
+    # local mode needs no configuration at all — the two hostnames are one
+    # in development and split only where a deployment splits them.
+    public_play_origin: str = ""
     # Entrant LOGIN failures reuse the credential triple above
     # (``auth_throttle_*``) — the same budget for the same kind of event —
     # but in their own key namespaces (``eacct:`` / ``eip:``). Same

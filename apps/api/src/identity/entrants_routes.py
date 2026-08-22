@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from typing import Optional, Type
 from urllib.parse import urlencode
 
@@ -51,6 +52,8 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import IntegrityError
 
+from db.models import EntrantAccount
+from entries import lifecycle
 from entries.entries_json import require_form_csrf
 from core.client_ip import client_ip
 from core.config import settings
@@ -105,6 +108,26 @@ class SignupResponse(BaseModel):
 class LoginRequest(StrictModel):
     email: Email
     password: Password
+
+
+class VerifyRequest(StrictModel):
+    """The mailed double-opt-in token, posted back.
+
+    ``Name`` bounds it the way ``Password`` bounds a password: the value is
+    a 43-character base64url string and an unbounded one must never reach a
+    hash function or a LIKE-free equality scan on a public route.
+    """
+
+    token: Name
+
+
+class RequestResetRequest(StrictModel):
+    email: Email
+
+
+class ResetRequest(StrictModel):
+    token: Name
+    newPassword: Password
 
 
 class EntrantDTO(BaseModel):
@@ -181,6 +204,22 @@ def is_form_post(request: Request) -> bool:
 _LOGIN_PAGE = "/e/login"
 _ACCOUNT_READY_PAGE = "/e/login/created"
 _SIGNED_IN_PAGE = "/e/login/signed-in"
+
+# E2's four outcome pages, on the same one-page-per-outcome principle as the
+# three above: the page says what happened, because a native form post
+# renders whatever it is handed as the whole document.
+#
+# ``_VERIFY_FAILED_PAGE`` is reached by an expired or already-used link, and
+# it does NOT say which — an attacker holding a leaked link must not be able
+# to learn that it was valid once (see ``consume_verification_token``).
+_VERIFIED_PAGE = "/e/verify/done"
+_VERIFY_FAILED_PAGE = "/e/verify/failed"
+# One target whether or not the address is registered. This is the reset
+# flow's whole non-enumeration property and it is the same shape signup
+# already uses: the page states that mail *would* have been sent.
+_RESET_SENT_PAGE = "/e/reset/sent"
+_RESET_DONE_PAGE = "/e/reset/done"
+_RESET_FAILED_PAGE = "/e/reset/failed"
 
 # Where a form sign-in that did not work sends the browser back to, which is
 # what makes the refusal a PAGE rather than the
@@ -295,6 +334,24 @@ async def login_body(request: Request) -> LoginRequest:
     return _build(await _payload(request), LoginRequest)
 
 
+async def verify_body(request: Request) -> VerifyRequest:
+    if is_form_post(request):
+        require_form_csrf(request, await request.form())
+    return _build(await _payload(request), VerifyRequest)
+
+
+async def request_reset_body(request: Request) -> RequestResetRequest:
+    if is_form_post(request):
+        require_form_csrf(request, await request.form())
+    return _build(await _payload(request), RequestResetRequest)
+
+
+async def reset_body(request: Request) -> ResetRequest:
+    if is_form_post(request):
+        require_form_csrf(request, await request.form())
+    return _build(await _payload(request), ResetRequest)
+
+
 async def form_next(request: Request) -> str:
     """The raw ``next`` field, unvalidated. ``next_target`` validates it at
     the point of use, so this stays a dumb reader and there is exactly one
@@ -400,6 +457,54 @@ def _auth_error(exc: AuthError):
     return http_error(status.HTTP_400_BAD_REQUEST, code, exc.message)
 
 
+def _play_origin() -> str:
+    """Absolute origin for links in entrant mail — program invariant I1.
+
+    Falls back through ``public_app_origin`` to the empty string, which
+    yields a relative link. That is the local-mode answer and it is a
+    working one: the console backend's email backend *logs* the message, and
+    a developer following a relative path against their own dev server gets
+    where they are going.
+    """
+    return (settings.public_play_origin or settings.public_app_origin).rstrip("/")
+
+
+def _mail(to: str, subject: str, body: str) -> None:
+    """Send, and never let the outcome reach the caller's response.
+
+    Delivery failure must not become an oracle — neither for account
+    existence (a 500 on the found branch and a 202 on the other is the same
+    leak the uniform body exists to prevent) nor for infrastructure. The
+    exception is logged, which is where an operator can act on it.
+
+    Imported inside the function, matching ``identity/auth_routes.py``: the
+    email seam pulls ``smtplib`` and this module is imported at app start.
+    """
+    from core.email import send_email
+
+    try:
+        send_email(to=to, subject=subject, body=body)
+    except Exception:
+        log.exception("entrant mail delivery failed (%s)", subject)
+
+
+def _send_verification(account, token: str) -> None:
+    origin = _play_origin()
+    _mail(
+        account.email,
+        "Confirm your email for ShuttleWorks entries",
+        (
+            "Welcome to ShuttleWorks.\n\n"
+            "Confirm this address so tournament organisers can accept your "
+            "entries:\n\n"
+            f"{origin}/e/verify?token={token}\n\n"
+            f"The link is good for {int(settings.verify_token_ttl_days)} days. "
+            "If you did not create an account, ignore this message — nothing "
+            "will happen without this confirmation."
+        ),
+    )
+
+
 # ---- Endpoints -------------------------------------------------------
 
 
@@ -474,13 +579,24 @@ def signup(
 
     if entrant_service.get_account_by_email(repo.session, email) is None:
         try:
-            entrant_service.create_account(
+            account = entrant_service.create_account(
                 repo.session,
                 email=email,
                 password=body.password,
                 display_name=body.displayName,
                 phone=body.phone,
             )
+            # E2: the double-opt-in link, minted before the commit so the
+            # hash and the row land together — a mailed token whose hash was
+            # rolled back is a link that can never work.
+            verify_token = entrant_service.issue_verification_token(
+                repo.session, account
+            )
+            repo.session.commit()
+            # Mailed AFTER the commit, deliberately: a link that arrives
+            # before the row it names is a race an entrant can lose by being
+            # fast, and re-sending is cheap while un-sending is impossible.
+            _send_verification(account, verify_token)
         except (AuthError, IntegrityError):
             # The case-insensitive unique index winning a race with the
             # check above. Same answer as the found branch — the outcome
@@ -647,6 +763,227 @@ def logout(
         return redirect
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
+
+
+@router.post(
+    "/verify",
+    response_model=None,
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={303: {"description": "Form post: redirect to the outcome page"}},
+)
+def verify(
+    request: Request,
+    body: VerifyRequest = Depends(verify_body),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Consume a mailed verification token (spec §6, R10).
+
+    **A POST, and the mailed link is a GET that renders a button.** A
+    verification link that mutated on GET would be consumed by every mail
+    scanner and link-preview bot between us and the entrant — the entrant
+    then clicks a dead link and cannot verify at all. The node route
+    ``/e/verify`` renders the token into a one-button form that posts here.
+
+    **The promotion is the point.** Verifying does not only flip a flag: it
+    moves every entry this account has parked in ``unverified`` to
+    ``pending``, which is the transition that makes them reachable by the
+    operator's confirm and therefore by the commit seam. R10's "one
+    verification covers every entry that account ever makes", executed in
+    one place.
+
+    No throttle key of its own. The token is 256 bits of ``secrets`` entropy
+    and the response is uniform, so there is nothing here to guess at
+    cheaply; the per-IP body cap and the nginx zone still apply.
+    """
+    account = entrant_service.consume_verification_token(repo.session, body.token)
+    if account is None:
+        repo.session.rollback()
+        if is_form_post(request):
+            return RedirectResponse(
+                url=_VERIFY_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+            )
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            ErrorCode.AUTH_RESET_INVALID,
+            "That confirmation link is not valid. Ask for a new one.",
+        )
+
+    promoted = lifecycle.promote_verified_entries(repo.session, account.id)
+    repo.session.commit()
+    log.info(
+        "entrants: account %s verified, %d entries promoted", account.id, promoted
+    )
+    if is_form_post(request):
+        return RedirectResponse(
+            url=_VERIFIED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/resend-verification",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={303: {"description": "Form post: redirect to the sign-in page"}},
+)
+def resend_verification(
+    request: Request,
+    response: Response,
+    entrant: AuthEntrant = Depends(get_current_entrant),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Mail a fresh confirmation link to the signed-in entrant's own address.
+
+    **Session-gated, and that is what keeps it from being a mail cannon.**
+    An address-taking resend route would let anyone send our mail to anyone
+    else's inbox as often as they liked; requiring the cookie means the only
+    address reachable is the caller's own, which also makes the route
+    incapable of confirming that some *other* address is registered.
+
+    An already-verified account gets 202 and no mail. Same answer either
+    way — the caller learns nothing they did not already know about their
+    own account, and an entrant who clicks twice is not shown an error for
+    succeeding.
+    """
+    account = repo.session.get(EntrantAccount, uuid.UUID(entrant.id))
+    if account is not None and not account.email_verified:
+        token = entrant_service.issue_verification_token(repo.session, account)
+        repo.session.commit()
+        _send_verification(account, token)
+    if is_form_post(request):
+        return RedirectResponse(
+            url=_LOGIN_PAGE, status_code=status.HTTP_303_SEE_OTHER
+        )
+    response.status_code = status.HTTP_202_ACCEPTED
+    return {"status": "accepted"}
+
+
+@router.post(
+    "/request-password-reset",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={303: {"description": "Form post: redirect to the sent page"}},
+)
+def request_entrant_password_reset(
+    request: Request,
+    response: Response,
+    body: RequestResetRequest = Depends(request_reset_body),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Mail a reset link. **Always 202, always the same page** (R10, I5).
+
+    R10 explicitly extends the non-enumeration rule to reset: this route
+    must not become the account-existence oracle that signup pays an Argon2
+    hash to avoid being. So an unknown address takes the same status, the
+    same body and the same redirect as a known one — and charges the
+    throttle, so an attacker walking an address list pays for it.
+
+    ``eip:`` rather than the operator ``ip:`` namespace, for the reason the
+    module docstring gives: a public form must not be able to lock a
+    director out of their own console.
+    """
+    ip_key = auth_service.entrant_ip_key(client_ip(request))
+    remaining = throttle.throttle_check(repo.session, ip_key)
+    if remaining is not None:
+        raise _throttled(remaining, "Too many attempts. Try again later.")
+
+    try:
+        email = auth_service.normalize_email(body.email)
+    except AuthError:
+        # A malformed address is answered exactly like an unknown one. It is
+        # still an address someone typed, and telling them the grammar was
+        # wrong is one bit more than telling them nothing.
+        email = None
+
+    if email is not None:
+        account = entrant_service.get_account_by_email(repo.session, email)
+        if account is not None:
+            token = entrant_service.issue_reset_token(repo.session, account)
+            repo.session.commit()
+            origin = _play_origin()
+            _mail(
+                account.email,
+                "Reset your ShuttleWorks entry password",
+                (
+                    "A password reset was requested for this address.\n\n"
+                    f"{origin}/e/reset?token={token}\n\n"
+                    f"The link expires in "
+                    f"{int(settings.reset_token_ttl_minutes)} minutes. "
+                    "If you didn't ask for this, ignore this message — your "
+                    "password has not changed."
+                ),
+            )
+        else:
+            auth_service.throttle_record_failure(repo.session, ip_key)
+            repo.session.commit()
+
+    if is_form_post(request):
+        return RedirectResponse(
+            url=_RESET_SENT_PAGE, status_code=status.HTTP_303_SEE_OTHER
+        )
+    response.status_code = status.HTTP_202_ACCEPTED
+    return {"status": "accepted"}
+
+
+@router.post(
+    "/reset-password",
+    response_model=None,
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={303: {"description": "Form post: redirect to the outcome page"}},
+)
+def reset_entrant_password(
+    request: Request,
+    body: ResetRequest = Depends(reset_body),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Consume a reset token and set a new password.
+
+    Every live session for the account is revoked by
+    ``consume_reset_token`` — OWASP's rule, and not optional here: a reset
+    is what someone does when they believe another party has their
+    password, and leaving that party's session alive makes the reset
+    theatre.
+
+    A weak new password is a 400 the entrant can act on
+    (``AUTH_WEAK_PASSWORD``), distinct from an invalid token, because those
+    are different problems with different fixes and neither reveals anything
+    about an account: you cannot reach either branch without already holding
+    a mailed token.
+    """
+    ip_key = auth_service.entrant_ip_key(client_ip(request))
+    remaining = throttle.throttle_check(repo.session, ip_key)
+    if remaining is not None:
+        raise _throttled(remaining, "Too many attempts. Try again later.")
+
+    try:
+        account = entrant_service.consume_reset_token(
+            repo.session, body.token, body.newPassword
+        )
+    except AuthError as exc:
+        repo.session.rollback()
+        if is_form_post(request):
+            return RedirectResponse(
+                url=_RESET_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+            )
+        raise _auth_error(exc)
+
+    if account is None:
+        auth_service.throttle_record_failure(repo.session, ip_key)
+        repo.session.commit()
+        if is_form_post(request):
+            return RedirectResponse(
+                url=_RESET_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+            )
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            ErrorCode.AUTH_RESET_INVALID,
+            "Invalid or expired reset link",
+        )
+
+    repo.session.commit()
+    if is_form_post(request):
+        return RedirectResponse(
+            url=_RESET_DONE_PAGE, status_code=status.HTTP_303_SEE_OTHER
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=EntrantDTO)

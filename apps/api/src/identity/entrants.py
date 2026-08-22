@@ -152,6 +152,109 @@ def authenticate(
     return account
 
 
+# ---- Verification and reset tokens (E2) -------------------------------
+#
+# Twins of ``identity/auth.issue_reset_token`` / ``consume_reset_token``, and
+# copied for the reason the session trio above is copied: those are ``User``-
+# bound at the type level. What is NOT copied is the token grammar — same
+# ``secrets.token_urlsafe``, same SHA-256-at-rest, same expiry comparison —
+# because a second token grammar is a second thing to get subtly wrong.
+#
+# **Neither consumer tells the caller why it failed.** Unknown token, expired
+# token and already-used token all return ``None``. A caller that could
+# distinguish them would be able to confirm that a token *was* valid once,
+# which is exactly what an attacker replaying a leaked link wants to know.
+
+
+def issue_verification_token(session: Session, account: EntrantAccount) -> str:
+    """Mint (and store the hash of) a double-opt-in token for this account.
+
+    Overwrites any outstanding one: a re-send must invalidate the link in
+    the older mail, or "I clicked the link in the first email" stays a
+    working path long after the entrant asked for a new one.
+    """
+    token = secrets.token_urlsafe(_SESSION_TOKEN_BYTES)
+    account.verify_token_hash = _hash_token(token)
+    account.verify_token_expires_at = _utcnow() + timedelta(
+        days=settings.verify_token_ttl_days
+    )
+    return token
+
+
+def consume_verification_token(
+    session: Session, token: str
+) -> Optional[EntrantAccount]:
+    """Valid token → mark the account verified and burn the token.
+
+    **Idempotent for the entrant, once per token.** Clicking a mailed link
+    twice is normal (mail clients prefetch, people double-tap), and the
+    second click finds a cleared hash and returns ``None`` — so the ROUTE,
+    not this function, is what decides that an already-verified account
+    seeing an expired link is a success page rather than an error. That
+    split is deliberate: the service reports what the token did, the route
+    decides what the human is told.
+    """
+    if not token:
+        return None
+    row = session.execute(
+        select(EntrantAccount).where(
+            EntrantAccount.verify_token_hash == _hash_token(token)
+        )
+    ).scalar_one_or_none()
+    if row is None or row.verify_token_expires_at is None:
+        return None
+    if _aware(row.verify_token_expires_at) <= _utcnow():
+        return None
+    row.email_verified = True
+    row.email_verified_at = _utcnow()
+    row.verify_token_hash = None
+    row.verify_token_expires_at = None
+    return row
+
+
+def issue_reset_token(session: Session, account: EntrantAccount) -> str:
+    """Mint a password-reset token. Minutes, not days — see the config note."""
+    token = secrets.token_urlsafe(_SESSION_TOKEN_BYTES)
+    account.reset_token_hash = _hash_token(token)
+    account.reset_token_expires_at = _utcnow() + timedelta(
+        minutes=settings.reset_token_ttl_minutes
+    )
+    return token
+
+
+def consume_reset_token(
+    session: Session, token: str, new_password: str
+) -> Optional[EntrantAccount]:
+    """Valid token → set the password, burn the token, revoke every session.
+
+    The session revocation is OWASP's rule and it is not optional here: a
+    reset is what an entrant does when they believe someone else has their
+    password, and leaving the attacker's existing session live would make
+    the reset theatre.
+
+    The new password is validated by the same ``validate_password`` an
+    entrant signup runs, so a reset cannot become the back door around the
+    policy the front door enforces.
+    """
+    if not token:
+        return None
+    row = session.execute(
+        select(EntrantAccount).where(
+            EntrantAccount.reset_token_hash == _hash_token(token)
+        )
+    ).scalar_one_or_none()
+    if row is None or row.reset_token_expires_at is None:
+        return None
+    if _aware(row.reset_token_expires_at) <= _utcnow():
+        return None
+    validate_password(new_password)
+    row.password_hash = hash_password(new_password)
+    row.reset_token_hash = None
+    row.reset_token_expires_at = None
+    revoke_all_sessions(session, row.id)
+    return row
+
+
 # ---- Sessions ---------------------------------------------------------
 
 

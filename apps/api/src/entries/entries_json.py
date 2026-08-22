@@ -967,6 +967,11 @@ async def submit_entry_json(
         fee_total_cents=total,
         fee_basis=basis,
         idempotency_key=key,
+        # E2 / spec §6: an unverified account's entries land in
+        # ``unverified`` and are promoted the moment the account verifies.
+        # Read from the resolved session rather than re-queried — the
+        # entrant dependency already has it.
+        email_verified=bool(entrant.email_verified),
     )
 
     throttle.throttle_record_entry(repo.session, throttle_key)

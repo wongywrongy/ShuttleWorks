@@ -727,6 +727,39 @@ class ApiClient {
     return r.data;
   }
 
+  /** `pending | waitlisted | unverified → rejected` (E2). Terminal, and
+   *  deliberately unreachable from `confirmed`: a confirmed entry may be on
+   *  a roster and in a draw, so the honest operation there is `withdrawEntry`
+   *  below. The 409 says so. */
+  async rejectEntry(tid: string, entryId: string): Promise<EntryDTO> {
+    const r = await this.client.post<EntryDTO>(
+      `/tournaments/${tid}/entries/${entryId}/reject`,
+    );
+    return r.data;
+  }
+
+  /** `waitlisted → pending` (E2). A place opened; it is not yet a decision,
+   *  which is why the entry lands back in `pending` and still has to be
+   *  confirmed through the same button and the same rules as any other. */
+  async promoteEntry(tid: string, entryId: string): Promise<EntryDTO> {
+    const r = await this.client.post<EntryDTO>(
+      `/tournaments/${tid}/entries/${entryId}/promote`,
+    );
+    return r.data;
+  }
+
+  /** Any live state → `withdrawn`, at the desk (E2). This is the withdrawal
+   *  deadline's escape hatch: past `withdraws_until` the entrant is told to
+   *  contact the organiser, and this is what the organiser then does. It does
+   *  NOT erase the player — erasure is the entrant's own right, exercised
+   *  from their account. */
+  async withdrawEntry(tid: string, entryId: string): Promise<EntryDTO> {
+    const r = await this.client.post<EntryDTO>(
+      `/tournaments/${tid}/entries/${entryId}/withdraw`,
+    );
+    return r.data;
+  }
+
   /** Run Seam A: materialize every confirmed, uncommitted entry as a roster
    *  player. Idempotent by design (spec §5) — pressing it twice commits
    *  nothing twice — so the caller may re-run it freely as late entries

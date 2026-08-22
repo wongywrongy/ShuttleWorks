@@ -56,13 +56,17 @@ from core.schemas import (
 )
 from db.models import Entry, EntryEvent, EntryPage
 from repositories import LocalRepository, get_repository
+from entries import lifecycle
 from entries.entries import commit_entries
 from entries.entry_fees import normalize_fee_schedule
 
 router = APIRouter(prefix="/tournaments", tags=["entries"])
 
-# The only lifecycle transition E1 ships (ruling D1).
-_CONFIRMABLE_FROM = "pending"
+# E1 shipped one transition (ruling D1) and this named its source state.
+# E2 gave the machine its remaining edges and moved every rule into
+# ``entries.lifecycle``; the name survives because the desk DTO and its
+# tests read it, and it still says the same true thing.
+_CONFIRMABLE_FROM = lifecycle.PENDING
 
 # The slug alphabet, deliberately narrower than a URL path segment allows.
 #
@@ -85,7 +89,13 @@ _SLUG_RE = re.compile(r"^[a-z0-9-]{3,60}$")
 # never reaches node at all. (`sitemap.xml` and `robots.txt` are two more
 # static routes node owns, but the `.` in each already fails `_SLUG_RE`
 # above, so they cannot collide and are not listed here.)
-_RESERVED_SLUGS = frozenset({"api", "account", "health", "signup", "login", "me"})
+_RESERVED_SLUGS = frozenset({
+    "api", "account", "health", "signup", "login", "me",
+    # E2 (Phase 7): the account-flow pages node now owns. A workspace called
+    # "verify" would be unreachable behind them, and — worse — a director
+    # could claim the slug an entrant's confirmation link points at.
+    "verify", "forgot", "reset",
+})
 
 
 def _event_codes(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
@@ -210,17 +220,127 @@ def confirm_entry(
     answering 200 would leave them believing they had just done something.
     """
     row = _get_entry(repo, tournament_id, entry_id)
-    if row.state != _CONFIRMABLE_FROM:
-        raise http_error(
-            409,
-            ErrorCode.ENTRY_INVALID_STATE,
-            f"entry is {row.state!r}; only {_CONFIRMABLE_FROM!r} entries "
-            "can be confirmed",
-        )
-    row.state = "confirmed"
+    try:
+        lifecycle.assert_confirmable(row)
+    except lifecycle.LifecycleError as exc:
+        raise _lifecycle_conflict(exc, row)
+    row.state = lifecycle.CONFIRMED
     repo.session.commit()
+    return _desk_row(repo, tournament_id, row)
+
+
+# ---- the operator's other two decisions (E2, program Phase 7) ------------
+#
+# Reject and promote complete the operator's half of spec §6. Both are
+# thin: they resolve the entry inside the workspace, hand it to
+# ``entries.lifecycle``, and translate a refusal. **No rule lives here** —
+# the machine holds them all, so the desk and any future caller (a bulk
+# action, a script) cannot diverge about what "promote" means.
+
+
+def _lifecycle_conflict(exc: "lifecycle.LifecycleError", row: Entry):
+    """A refused transition, as the desk's 409.
+
+    ``reason`` carries the machine's own code beside the operator-facing
+    sentence, so a client can branch (offer "promote first" next to a
+    refused confirm) without parsing prose.
+    """
+    return http_error(
+        409,
+        ErrorCode.ENTRY_INVALID_STATE,
+        exc.message,
+        extra={"reason": exc.code, "state": row.state},
+    )
+
+
+def _desk_row(repo: LocalRepository, tournament_id: uuid.UUID, row: Entry):
     codes = _event_codes(repo, tournament_id)
     return EntryDeskRowDTO.from_row(row, event_code=codes.get(row.entry_event_id))
+
+
+@router.post(
+    "/{tournament_id}/entries/{entry_id}/reject",
+    response_model=EntryDeskRowDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def reject_entry(
+    tournament_id: uuid.UUID = Path(...),
+    entry_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """``pending | waitlisted | unverified → rejected`` — operator only.
+
+    Terminal, and deliberately not reachable from ``confirmed``: an entry
+    that has been confirmed may already be on a roster and in a draw, and
+    the honest operation there is a withdrawal, which describes what
+    actually happens to the player. The refusal says so.
+    """
+    row = _get_entry(repo, tournament_id, entry_id)
+    try:
+        lifecycle.reject(row)
+    except lifecycle.LifecycleError as exc:
+        raise _lifecycle_conflict(exc, row)
+    repo.session.commit()
+    return _desk_row(repo, tournament_id, row)
+
+
+@router.post(
+    "/{tournament_id}/entries/{entry_id}/promote",
+    response_model=EntryDeskRowDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def promote_entry(
+    tournament_id: uuid.UUID = Path(...),
+    entry_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """``waitlisted → pending`` — a place opened, not a decision made.
+
+    Lands in ``pending`` rather than jumping to ``confirmed`` (see
+    ``lifecycle.promote``): promoting says a place came free, confirming
+    says this entry is accepted, and collapsing the two would confirm an
+    entry past whatever pending reasons it is still carrying.
+    """
+    row = _get_entry(repo, tournament_id, entry_id)
+    try:
+        lifecycle.promote(row)
+    except lifecycle.LifecycleError as exc:
+        raise _lifecycle_conflict(exc, row)
+    repo.session.commit()
+    return _desk_row(repo, tournament_id, row)
+
+
+@router.post(
+    "/{tournament_id}/entries/{entry_id}/withdraw",
+    response_model=EntryDeskRowDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def withdraw_entry_at_the_desk(
+    tournament_id: uuid.UUID = Path(...),
+    entry_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Any live state → ``withdrawn``, at the desk.
+
+    **The withdrawal deadline's stated escape hatch** (R14 §3). When an
+    entrant misses ``withdraws_until``, the public route tells them to
+    contact the organiser — this is what the organiser then does, and it is
+    the shape invariant I4 asks for: the software prevents the entrant's
+    accident, the operator decides the exception.
+
+    No erase flag. Erasure is the entrant's right exercised on their own
+    behalf; an operator scrubbing somebody's name from their own records is
+    a different act with different consequences, and Phase 10's account-level
+    deletion is where it belongs if it belongs anywhere.
+    """
+    row = _get_entry(repo, tournament_id, entry_id)
+    event = repo.session.get(EntryEvent, (tournament_id, row.entry_event_id))
+    try:
+        lifecycle.withdraw(repo.session, row, event, by_operator=True)
+    except lifecycle.LifecycleError as exc:
+        raise _lifecycle_conflict(exc, row)
+    repo.session.commit()
+    return _desk_row(repo, tournament_id, row)
 
 
 # ---- configuration: the entry page and its events -----------------------

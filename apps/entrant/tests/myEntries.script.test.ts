@@ -21,6 +21,7 @@ import {
   priceLine,
   render,
   resultsHref,
+  withdrawAffordance,
   yearGroups,
 } from '../public/assets/my-entries.js';
 
@@ -31,6 +32,8 @@ function line(over: Record<string, unknown> = {}) {
     playerName: 'Ada Chen',
     personKey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     state: 'entered',
+    entryId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    canWithdraw: true,
     resultBadge: null,
     ...over,
   };
@@ -167,5 +170,75 @@ describe('the DOM render', () => {
     expect(root.querySelector('script')).toBeNull();
     expect(root.textContent).toContain('<img src=x onerror=alert(1)>');
     expect(root.textContent).toContain('<script>alert(2)</script>');
+  });
+});
+
+describe('withdrawAffordance (E2)', () => {
+  function mount() {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    return root;
+  }
+
+  it('offers both actions on a withdrawable line', () => {
+    expect(withdrawAffordance(line(), true)).toEqual({
+      kind: 'actions',
+      entryId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+  });
+
+  it('gives a reason instead of a button when the account is unverified', () => {
+    // The route 403s an unverified account, so a button here would be a
+    // control that always fails — which teaches the reader to distrust the
+    // ones that work.
+    expect(withdrawAffordance(line(), false)).toEqual({
+      kind: 'reason',
+      text: 'Confirm your email to change entries',
+    });
+  });
+
+  it('offers nothing once the server says the line is closed', () => {
+    // `canWithdraw` is the backend's own `assert_withdrawable`, so this
+    // covers already-withdrawn, decided, AND past the withdrawal deadline
+    // without this file holding a second copy of any of those rules.
+    expect(withdrawAffordance(line({ canWithdraw: false }), true)).toBeNull();
+  });
+
+  it('offers nothing for a line with no id', () => {
+    expect(withdrawAffordance(line({ entryId: '' }), true)).toBeNull();
+  });
+
+  it('renders the controls only for a verified account', () => {
+    const withControls = mount();
+    render(withControls, { tournaments: [card()], emailVerified: true });
+    const labels = [...withControls.querySelectorAll('button')].map((b) => b.textContent);
+    expect(labels).toContain('Withdraw');
+    expect(labels).toContain('Withdraw and erase');
+
+    const withReason = mount();
+    render(withReason, { tournaments: [card()], emailVerified: false });
+    expect(withReason.querySelectorAll('button')).toHaveLength(0);
+    expect(withReason.textContent).toContain('Confirm your email to change entries');
+  });
+
+  it('arms before it acts, and Keep it backs out', () => {
+    // window.confirm is banned product-wide (2026-07-11 interaction audit):
+    // it blocks the event loop and deadlocks an automated browser. The
+    // two-click arm is its replacement everywhere, so the arm must actually
+    // be there — a single-press destructive control is the defect.
+    const root = mount();
+    render(root, { tournaments: [card()], emailVerified: true });
+    const first = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Withdraw',
+    );
+    first?.click();
+
+    expect(root.textContent).toContain('Withdraw this entry?');
+    const keep = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Keep it',
+    );
+    expect(keep).toBeTruthy();
+    keep?.click();
+    expect(root.textContent).not.toContain('Withdraw this entry?');
   });
 });

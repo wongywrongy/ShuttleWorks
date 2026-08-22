@@ -37,7 +37,9 @@ from sqlalchemy import select
 
 from entries.entries_public import _moment_iso
 from core.dependencies import AuthEntrant, get_current_entrant
+from core.error_codes import ErrorCode, http_error
 from db.models import Entry, EntryEvent, EntryPage, Org, Submission, Tournament
+from entries import lifecycle
 from repositories import LocalRepository, get_repository
 
 router = APIRouter(prefix="/e/api/me", tags=["entries-me"])
@@ -60,6 +62,14 @@ class MyEntryLineDTO(BaseModel):
     # line on this card is a player this account entered.
     personKey: str
     state: str
+    # E2: the id the withdraw route takes, and whether the entrant may use
+    # it right now. Both are needed on the READ because the surface renders
+    # from this projection alone — a client that had to derive "can I still
+    # withdraw" from a deadline it was not given would either guess or ask,
+    # and a second copy of the rule is how the button and the route end up
+    # disagreeing about whether entries are still open.
+    entryId: str
+    canWithdraw: bool = False
     # "Winner" | "Runner-up" | "Semifinalist" — the §3.1 carve-out's one
     # publication-gated field: present only while the workspace has
     # ``results_published`` on, absent again the moment it goes off.
@@ -91,6 +101,9 @@ class MyTournamentCardDTO(BaseModel):
 
 class MyEntriesDTO(BaseModel):
     tournaments: List[MyTournamentCardDTO]
+    # E2: the account's own verification state, so the page can say why the
+    # withdraw controls are inert instead of rendering buttons that 403.
+    emailVerified: bool = False
 
 
 # ---- pure derivations (unit-tested directly) ------------------------------
@@ -152,6 +165,21 @@ def _badges_for(repo: LocalRepository, tournament_id) -> Dict[str, Dict[str, str
     return out
 
 
+def _can_withdraw(entry, event) -> bool:
+    """Would the withdraw route accept this entry right now?
+
+    Asks the state machine instead of restating its two rules. The value is
+    advisory — the route checks again, because a projection rendered a
+    minute ago is not authorization — but it has to agree, or the page grows
+    buttons that always fail and an entrant learns to distrust them.
+    """
+    try:
+        lifecycle.assert_withdrawable(entry, event)
+    except lifecycle.LifecycleError:
+        return False
+    return True
+
+
 def _card_status(entry_states: List[str], date_iso: Optional[str], today_iso: str) -> str:
     """The §3.1 lifecycle: Played beats Entered beats Awaiting.
 
@@ -203,7 +231,12 @@ def my_entries(
         )
     )
     if not submissions:
-        return MyEntriesDTO(tournaments=[])
+        # Verified is still reported on the empty answer: an entrant who has
+        # signed up but not entered yet is exactly who needs to be told to
+        # confirm their address.
+        return MyEntriesDTO(
+            tournaments=[], emailVerified=bool(entrant.email_verified)
+        )
 
     tids = {s.tournament_id for s in submissions}
     sub_ids = {s.id for s in submissions}
@@ -268,6 +301,12 @@ def my_entries(
                     playerName=entry.player_name or "",
                     personKey=str(entry.entry_player_id or ""),
                     state=_entry_state(entry.state),
+                    entryId=str(entry.id),
+                    # The route's own predicate, asked rather than
+                    # re-implemented: ``assert_withdrawable`` holds the live-
+                    # state rule AND the ``withdraws_until`` deadline, so a
+                    # button that renders here is one the route will accept.
+                    canWithdraw=_can_withdraw(entry, event),
                     resultBadge=event_badges.get(f"entry-{entry.entry_player_id}"),
                 )
             )
@@ -309,4 +348,119 @@ def my_entries(
     # Newest first: by tournament date (ISO strings order lexically; a
     # dateless workspace sorts last), then by the act's own recency.
     cards.sort(key=lambda c: (c.date or "", c.submittedAt), reverse=True)
-    return MyEntriesDTO(tournaments=cards)
+    return MyEntriesDTO(tournaments=cards, emailVerified=bool(entrant.email_verified))
+
+
+# ---- the entrant's own writes (E2, program Phase 7) -----------------------
+#
+# The transitions R10 moved off the retired capability link and onto the
+# account. Both of them are ONE route: withdrawing and withdrawing-and-erasing
+# differ by a flag, not by an endpoint, because they are the same transition
+# with a second act attached — and two endpoints would be two places to get
+# the ownership check right.
+
+
+class WithdrawRequest(BaseModel):
+    """``erase`` is the GDPR half and it defaults OFF.
+
+    Not a StrictModel and not required: the form posts ``erase=on`` or omits
+    the field entirely, and a JSON caller may send neither. What matters is
+    the default — a withdrawal that erased by accident would destroy the
+    entrant's name on a routine "I can't make it", and the desk would lose
+    who withdrew.
+    """
+
+    erase: bool = False
+
+
+class WithdrawResultDTO(BaseModel):
+    state: str
+    erased: bool
+
+
+def _own_entry(repo: LocalRepository, entrant: AuthEntrant, entry_id: str) -> Entry:
+    """Resolve one entry, or answer the uniform 404.
+
+    **Scoped by the account's own submissions**, not by a tournament id the
+    caller supplies. That is the important half: taking a workspace id from
+    the request would make this route probe-able across tenants, and the
+    ownership check would be doing all the work. Here a stranger's entry id
+    simply is not in the result set, so the failure is a lookup miss rather
+    than a permission decision.
+
+    404 rather than 403 on a foreign entry, matching
+    ``require_tournament_access``'s uniform answer: "not yours" and "not
+    there" must be indistinguishable, or the route confirms the existence of
+    entries the caller cannot see.
+    """
+    try:
+        wanted = uuid.UUID(entry_id)
+    except (ValueError, TypeError):
+        raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such entry")
+
+    account_id = uuid.UUID(entrant.id)
+    submission_ids = list(
+        repo.session.scalars(
+            select(Submission.id).where(Submission.account_id == account_id)
+        )
+    )
+    entry = (
+        repo.session.scalars(
+            select(Entry).where(
+                Entry.id == wanted, Entry.submission_id.in_(submission_ids)
+            )
+        ).first()
+        if submission_ids
+        else None
+    )
+    if entry is None:
+        raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such entry")
+    return entry
+
+
+@router.post("/entries/{entry_id}/withdraw", response_model=WithdrawResultDTO)
+def withdraw_entry(
+    entry_id: str,
+    body: WithdrawRequest = WithdrawRequest(),
+    entrant: AuthEntrant = Depends(get_current_entrant),
+    repo: LocalRepository = Depends(get_repository),
+) -> WithdrawResultDTO:
+    """The entrant withdraws their own entry; optionally erases the player.
+
+    **A verified account is required** (spec §6's account-requirement
+    column). Withdrawal and erasure are the two irreversible things an
+    entrant can do, and an unverified account is one that has not yet shown
+    it controls the address it claims — so anyone who guessed an address
+    during signup could otherwise cancel the real owner's entries.
+
+    The deadline, the live-state rule and the erasure scrub all live in
+    ``entries.lifecycle``; this route resolves the entry, checks the
+    principal, and turns a ``LifecycleError`` into an HTTP answer. It
+    deliberately holds no rule of its own — a second copy of the withdrawal
+    deadline is how the desk and the public surface end up disagreeing about
+    when entries closed.
+    """
+    if not entrant.email_verified:
+        raise http_error(
+            403,
+            ErrorCode.ENTRY_ACCOUNT_UNVERIFIED,
+            "Confirm your email address before changing your entries.",
+        )
+
+    entry = _own_entry(repo, entrant, entry_id)
+    event = repo.session.get(
+        EntryEvent, (entry.tournament_id, entry.entry_event_id)
+    )
+    try:
+        lifecycle.withdraw(repo.session, entry, event, erase=bool(body.erase))
+    except lifecycle.LifecycleError as exc:
+        repo.session.rollback()
+        raise http_error(
+            409,
+            ErrorCode.ENTRY_INVALID_STATE,
+            exc.message,
+            extra={"reason": exc.code},
+        )
+
+    repo.session.commit()
+    return WithdrawResultDTO(state=entry.state, erased=bool(body.erase))

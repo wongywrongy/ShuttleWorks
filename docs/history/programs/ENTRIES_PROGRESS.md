@@ -18,7 +18,7 @@ program brief — that file is the plan; deviation is a STOP).
 | 4 | Dogfood (floating) | not started | — |
 | 5 | E1 walking skeleton | **E1 SHIPPED 2026-08-06** (merged `86182af`, under Amendment A1); **delta slice E1-2 SHIPPED 2026-08-07** (phases A–E below; this row said "not started" until 2026-08-12, when the docs pass caught it); **phase open** | public-exposure [USER SIGN-OFF] gate still owed, after Phase 2 |
 | 6 | play.* scaffold + email | **steps 1/2/4 COMPLETE 2026-08-10**; step 3 (email) deferred entirely | **SHIPPABLE.** The one BLOCKING defect (the signup page's Turnstile script blocked by our own CSP → *every* signup 403) is **RESOLVED**: the CSP now admits `challenges.cloudflare.com` in `script-src`/`frame-src` on `/e/signup` only, verified end to end in a browser (see the Phase 6 entry, "The ship blocker — resolved"). Exit gate's "a real verification-class email lands in a real inbox" clause stays **OPEN by ruling** |
-| 7 | E2 lifecycle | not started | — |
+| 7 | E2 lifecycle | **COMPLETE 2026-08-22** on `dev/prog1-p7-e2-lifecycle` (unmerged, awaiting [USER SIGN-OFF] per program rule 7) | `make check` exit 0 — pytest 1735/66 skipped (baseline 1671), vitest 1806 + entrant 674, depcruise 0 errors, import-linter 15 kept. Owner ruling D7 taken at the gate. **Email DELIVERY still owed by Phase 6 step 3** — the code rides the shipped SMTP seam and needs no edit when a provider lands |
 | 8 | E3 doubles | not started | — |
 | 9 | E4 signals/phases | not started | — |
 | 10 | E5 money/retention | not started | — |
@@ -1555,3 +1555,158 @@ resolves). No source file was touched, so no test gate applies; `make check` was
 `npm run docs:freshness` compares **committed** history, so the eight BEHIND areas clear only once
 these edits are committed; two of them (API reference, State management) were read and found
 already accurate, so their BEHIND flag was a timestamp artifact rather than drift.
+
+---
+
+## Phase 7 — E2: lifecycle. **COMPLETE** (2026-08-21/22)
+
+Branch `dev/prog1-p7-e2-lifecycle`, off `main` at `c5489db`. Spec §6's state
+machine, which until this phase existed as *one* implemented transition and a
+vocabulary of states nothing could reach.
+
+### Entry conditions, stated honestly
+
+Phase 6 is **complete except step 3** (the transactional-email provider), and
+its exit clause "a real verification-class email lands in a real inbox" is
+**still open by ruling**. This phase was executed against that gap rather than
+around it: everything E2 needs from email is built on the shipped seam
+(`core/email.send_email`, `EMAIL_BACKEND=console|smtp`), the message bodies and
+their links are asserted end to end in tests that read what the app actually
+sent, and **no new dependency on a provider was introduced**. What remains owed
+is delivery, not code — when a provider and SPF/DKIM land in Phase 6 step 3,
+these routes send through it with no edit.
+
+Phases 2, 4 and 11 remain blocked on the owner (deployment host, a real event,
+the production domain) and are untouched.
+
+### Owner ruling taken at the gate
+
+**D7 — entrant erasure: scrub the PII, keep the rows.** (Recorded in the debt
+log as owed *before* E2; asked and answered 2026-08-21.) The alternatives and
+why they lost are in the migration docstring. Two consequences:
+
+- `withdraw(..., erase=True)` overwrites the player's name, club, remarks and
+  birth year and stamps `entry_players.erased_at`; the submission, its entries,
+  their states and the fee history survive. The entrant's right is to stop
+  being a *person* in the director's records; the record of what happened is
+  not theirs to delete.
+- **The `ON DELETE CASCADE` that made D7 a question is deliberately left in
+  place.** The ruling routes erasure through a scrub, so no delete of an
+  `entrant_accounts` row happens on the entrant's behalf and the cascade is
+  never reached. Rebuilding two SQLite tables to alter a path the product no
+  longer takes is cost without a property. **Phase 10's account deletion is
+  where the cascade actually bites, and it must not be built on a bare
+  `DELETE`** — logged in the debt log rather than left as a surprise.
+
+### What landed
+
+**The state machine, in one file.** `apps/api/src/entries/lifecycle.py` holds
+every transition and every guard: landing state, cap/waitlist, withdraw, erase,
+reject, promote, confirmability, and the ownership predicate. The routes
+resolve a row, call it, and translate a `LifecycleError` into HTTP. **No route
+holds a rule** — a second copy of the withdrawal deadline is how a desk and a
+public page end up disagreeing about when entries closed.
+
+- **Verification (R10).** Signup mails a double-opt-in link;
+  `POST /e/account/verify` consumes it; `resend-verification` is session-gated
+  and takes no address, which is what stops it being a mail cannon. The mailed
+  URL is a **node GET that renders a button**, never a mutating GET: a
+  prefetching mail scanner would otherwise spend the entrant's one-time link
+  before they clicked it.
+- **Ruling D1's condition flipped, as D1 itself specified.** The machinery that
+  exits `unverified` now exists, so an unverified account's entries land there,
+  and verifying promotes **every** entry that account ever made in one act
+  (R10's "one verification covers every entry").
+- **Password reset**, twin of the operator flow, in the `eip:` namespace.
+  Always 202, one body, one redirect target, and the unknown branch **charges
+  the throttle** — R10 extends non-enumeration to reset explicitly, and a route
+  is exactly where that gets lost.
+- **Caps and the waitlist.** Read per entry inside the write loop, not once per
+  act: a family entering three children into a draw with two places left fills
+  both and queues the third. A waitlisted entry does **not** count toward the
+  cap, so the queue never raises its own bar.
+- **Withdraw / withdraw-and-erase** on the entrant's own account, replacing the
+  capability-link manage path E1-2 retired. A verified account is required —
+  anyone can type anyone's address at signup, so an unverified session that
+  could withdraw would let a guessed address cancel the real owner's entries.
+  Checked against `withdraws_until` (R14 §3), with the operator desk as the
+  stated escape hatch past the deadline (I4).
+- **A committed entry is not un-committed** (R3): `committed_player_id`
+  survives the withdrawal and the pair becomes a signal
+  (`committed_and_withdrawn`, derived — not a stored flag) for E4's
+  `COMMITTED_ENTRY_WITHDREW`. A machine pulling a player out of a built draw is
+  the consequential automatic decision I4 forbids.
+- **Desk: reject, promote, withdraw** beside the shipped confirm. Promote lands
+  in `pending`, never straight to `confirmed` — a place opening is not the same
+  act as accepting an entry. Both terminal actions are behind the canon
+  two-click arm (`window.confirm` is banned product-wide).
+- **Surfaces.** Entrant: `/e/verify`, `/e/forgot`, `/e/reset` and their five
+  outcome paths, each an outcome PAGE rather than a `?status=` (a path carries
+  no attacker-chosen value). My-entries grew the withdraw affordance, armed,
+  and says *why* when the account is unverified instead of drawing a button
+  that would 403.
+
+### Schema
+
+One additive migration, `w7c2d8e0f5a6`: `entrant_accounts.verify_token_hash` +
+`verify_token_expires_at`, and `entry_players.erased_at`. The verification
+token is a **separate pair** from the reset pair on purpose — one column whose
+meaning depended on which route wrote it last would make a mailed verification
+link replayable as a password reset, and
+`test_a_verification_token_cannot_be_replayed_as_a_reset` is the assertion that
+says so.
+
+### Auth surface
+
+Three new `PUBLIC_BY_DESIGN` entries, each with its written reason:
+`/e/account/verify`, `/e/account/request-password-reset`,
+`/e/account/reset-password`. All three are session-free **by nature** — each
+exists to be reached by someone who cannot present a session — and each carries
+a 256-bit mailed token stored only as its SHA-256 (I5's `auth_sessions`
+precedent). `resend-verification` is deliberately NOT on the list; it is
+session-gated and answers the anonymous caller's 401.
+`test_cross_principal_sessions` gained the two entrant-credentialed writes.
+
+### Negative controls — demonstrated, not asserted
+
+Every one below was run against a deliberately loosened implementation, and the
+loosening is named in the test's own comment.
+
+- Verification gate on withdraw → removed the `email_verified` branch: an
+  unverified session cancels an entry. **Caught.**
+- Ownership scope → resolved the entry by id alone: a stranger cancels a real
+  entry. **Caught — but only after the test was fixed.** Written first without
+  giving the stranger an entry of their own, it passed anyway: an account with
+  no submissions hits the empty-list short-circuit and 404s for a reason that
+  has nothing to do with ownership. This is the phase's most useful finding
+  about its own tests, and it is why the demonstration is not optional.
+- Account scope on verification promotion, single-use tokens, the weak-password
+  policy through the reset door, reject-from-confirmed, and the two-click arm
+  are each covered the same way.
+
+### Gates at close
+
+`make check` **exit 0** — eslint, `tsc -b` + `typecheck:entrant`, vitest,
+depcruise, ruff, import-linter, pytest.
+
+- pytest **1735 passed / 66 skipped**, against a **1671** baseline carried in
+  from SP-CONSOLE-5 — the 64 added are this phase's two new modules
+  (`unit/test_entry_lifecycle.py`, `test_entrant_lifecycle_routes.py`). The two
+  failures seen mid-phase were this phase's own gates firing correctly and are
+  both resolved: the migration head pin (`w7c2d8e0f5a6`) and the
+  cross-principal allowlist.
+- vitest console **1806 / 201 files** (baseline 1803). The entrant suite is
+  **not in `make check`** — the gate typechecks that app but does not run its
+  tests — so it was run separately: **674 passed / 35 files**, baseline 663.
+  Worth noting as a gate gap rather than a result: an entrant-tier regression
+  is invisible to `make check` today. CI runs it; a local `make check` does
+  not.
+- eslint **0 errors**; depcruise **0 errors / 16 warnings** — the same
+  pre-ratchet cross-module edges, no new one; import-linter **15 kept, 0
+  broken**.
+
+### Exactly next
+
+**Phase 8 — E3: doubles.** Entry conditions are met by this phase. Its one
+external dependency is the invite-token flow, whose precedent (`invite_links`,
+hashed) already ships.

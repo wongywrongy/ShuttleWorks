@@ -82,6 +82,25 @@ export default [
   // nothing — indistinguishable from a post that had quietly done nothing.
   route('login/failed', 'routes/login.tsx', { id: 'login-failed' }),
   route('login/signed-in', 'routes/login.tsx', { id: 'login-signed-in' }),
+  // The account-confirmation page and its two outcomes (E2, Phase 7). The
+  // MAILED link is `/e/verify?token=…`, a node GET that renders a button —
+  // the POST that actually consumes the token is FastAPI's
+  // `/e/account/verify`, so a prefetching mail scanner cannot spend the
+  // entrant's one-time link before they click it. Same module-at-several-
+  // paths shape as `login`, and static, so no workspace can be called
+  // "verify".
+  route('verify', 'routes/verify.tsx'),
+  route('verify/done', 'routes/verify.tsx', { id: 'verify-done' }),
+  route('verify/failed', 'routes/verify.tsx', { id: 'verify-failed' }),
+  // Password reset (E2, Phase 7): ask at `/e/forgot`, set at `/e/reset`, and
+  // three outcome paths. `/e/reset/sent` is reached whether or not the
+  // address is registered — the non-enumeration property lives in that
+  // page's copy as much as in the backend's uniform 202.
+  route('forgot', 'routes/resetPassword.tsx'),
+  route('reset', 'routes/resetPassword.tsx', { id: 'reset' }),
+  route('reset/sent', 'routes/resetPassword.tsx', { id: 'reset-sent' }),
+  route('reset/done', 'routes/resetPassword.tsx', { id: 'reset-done' }),
+  route('reset/failed', 'routes/resetPassword.tsx', { id: 'reset-failed' }),
   // `/e/me/entries` — the signed-in entrant's home (SP-P7 §3.1). Static, so
   // it ranks above `:slug`, and `me` is in the backend's `_RESERVED_SLUGS`
   // so no workspace can ever claim the segment. The document is an

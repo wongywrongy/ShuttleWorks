@@ -102,10 +102,21 @@ class ErrorCode(str, Enum):
     # what went wrong. ENTRY_NOT_FOUND is scoped to the workspace in the
     # path: an id belonging to another workspace is simply not here.
     ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND"
-    # A lifecycle action attempted from a state that does not allow it —
-    # today only ``pending → confirmed`` (ruling D1). Almost always a stale
-    # desk screen, so the answer names the state it actually found.
+    # A lifecycle action attempted from a state that does not allow it.
+    # Was ``pending → confirmed`` alone (ruling D1); E2 gave the machine its
+    # other edges (withdraw, reject, promote) and they all refuse through
+    # here. Almost always a stale screen — a desk left open while somebody
+    # else acted, or an entrant's second tab — so the answer names the state
+    # it actually found and, for the entrant-facing refusals, what to do
+    # about it. The machine's own ``LifecycleError.code`` rides along in
+    # ``detail.reason``.
     ENTRY_INVALID_STATE = "ENTRY_INVALID_STATE"
+    # The entrant holds a session but has not confirmed their address, and
+    # the act they are attempting is irreversible (withdraw, erase). Its own
+    # code rather than a bare 403: the fix is one specific thing — click the
+    # link in the confirmation mail, or ask for a new one — and a client
+    # that can recognise the code can offer that action directly.
+    ENTRY_ACCOUNT_UNVERIFIED = "ENTRY_ACCOUNT_UNVERIFIED"
     # The entry page's slug is globally unique — it is the public address
     # a player types off a poster, so two workspaces cannot share one. The
     # bare integrity error would surface as a 500; this names the field so

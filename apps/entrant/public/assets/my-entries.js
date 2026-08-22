@@ -99,6 +99,30 @@ export function resultsHref(card, line) {
   return `/e/${encodeURIComponent(card.slug)}/players/${encodeURIComponent(line.personKey)}`;
 }
 
+/**
+ * The withdraw affordance for one line, or `null` for none (E2).
+ *
+ * Pure, and exported, because it is the page's one piece of judgement about
+ * an irreversible act and it deserves a test rather than a read-through of
+ * the DOM builder. Three inputs, three outcomes:
+ *
+ * - the account is unverified -> a REASON, not a button. The route would
+ *   403, and a control that always fails teaches the reader to distrust
+ *   every other control on the page.
+ * - the line is not withdrawable (already withdrawn, decided, or past the
+ *   organiser's deadline) -> nothing at all. `canWithdraw` is the server's
+ *   own predicate, so this never disagrees with the route.
+ * - otherwise -> the two actions, withdraw and withdraw-and-erase.
+ */
+export function withdrawAffordance(line, emailVerified) {
+  if (!line?.entryId) return null;
+  if (!emailVerified) {
+    return { kind: 'reason', text: 'Confirm your email to change entries' };
+  }
+  if (!line.canWithdraw) return null;
+  return { kind: 'actions', entryId: line.entryId };
+}
+
 // ---- DOM ------------------------------------------------------------------
 
 const CHIP_TONE_CLASS = {
@@ -123,7 +147,7 @@ function chipEl(doc, label, tone) {
   );
 }
 
-function cardEl(doc, card) {
+function cardEl(doc, card, emailVerified) {
   const article = el(
     doc,
     'article',
@@ -187,6 +211,14 @@ function cardEl(doc, card) {
       view.href = href;
       row.appendChild(view);
     }
+    const affordance = withdrawAffordance(line, emailVerified);
+    if (affordance?.kind === 'reason') {
+      row.appendChild(
+        el(doc, 'span', 'text-xs text-muted-foreground', affordance.text),
+      );
+    } else if (affordance?.kind === 'actions') {
+      row.appendChild(withdrawControls(doc, affordance.entryId, row));
+    }
     lines.appendChild(row);
   }
   article.appendChild(lines);
@@ -196,6 +228,125 @@ function cardEl(doc, card) {
     article.appendChild(el(doc, 'p', 'mt-3 text-sm text-muted-foreground', price));
   }
   return article;
+}
+
+/**
+ * The two-click arm for an irreversible act (E2).
+ *
+ * **`window.confirm` is banned product-wide** — the 2026-07-11 interaction
+ * audit removed the last call site, because a native modal blocks the whole
+ * event loop and, in an automated browser, silently deadlocks the page. The
+ * replacement everywhere else is the same shape as this: the first press
+ * ARMS and states exactly what is about to happen, the second press does it,
+ * and Cancel is always the wider target.
+ *
+ * Withdraw and erase are separate armed actions rather than a button with a
+ * checkbox: they have different consequences, and a tickbox next to a
+ * destructive button is read after the click at least as often as before it.
+ */
+function withdrawControls(doc, entryId, row) {
+  const wrap = el(doc, 'span', 'ml-auto flex items-center gap-2');
+  const linkClass =
+    'text-xs font-medium text-muted-foreground underline-offset-4 hover:underline';
+
+  const arm = (label, prompt, erase) => {
+    const button = el(doc, 'button', linkClass, label);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      wrap.textContent = '';
+      wrap.appendChild(el(doc, 'span', 'text-xs text-muted-foreground', prompt));
+
+      const go = el(
+        doc,
+        'button',
+        'text-xs font-medium text-status-attention underline-offset-4 hover:underline',
+        erase ? 'Withdraw and erase' : 'Withdraw',
+      );
+      go.type = 'button';
+      go.addEventListener('click', () => {
+        go.disabled = true;
+        void submitWithdraw(doc, entryId, erase, row, wrap);
+      });
+
+      const cancel = el(doc, 'button', linkClass, 'Keep it');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => {
+        wrap.textContent = '';
+        build();
+      });
+
+      wrap.appendChild(go);
+      wrap.appendChild(cancel);
+    });
+    return button;
+  };
+
+  function build() {
+    wrap.appendChild(arm('Withdraw', 'Withdraw this entry?', false));
+    wrap.appendChild(
+      arm(
+        'Withdraw and erase',
+        'Withdraw and erase this player’s details? This cannot be undone.',
+        true,
+      ),
+    );
+  }
+  build();
+  return wrap;
+}
+
+/**
+ * POST the withdrawal and rewrite the row in place.
+ *
+ * Carries `X-ShuttleWorks-CSRF` because the middleware requires it of every
+ * cookie-carrying write; a native form could not send it, which is why this
+ * one control on this one already-scripted page is a fetch rather than the
+ * `<form>` every other entrant write uses.
+ *
+ * The row is rewritten from the ANSWER, not optimistically: a 409 (somebody
+ * else moved it, the deadline passed while the page sat open) has to read as
+ * "that did not happen", and an optimistic update would have already said it
+ * did.
+ */
+async function submitWithdraw(doc, entryId, erase, row, wrap) {
+  let response;
+  try {
+    response = await fetch(
+      `/e/api/me/entries/${encodeURIComponent(entryId)}/withdraw`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          'X-ShuttleWorks-CSRF': '1',
+        },
+        body: JSON.stringify({ erase }),
+      },
+    );
+  } catch {
+    wrap.textContent = '';
+    wrap.appendChild(
+      el(doc, 'span', 'text-xs text-status-attention', 'Could not reach the server. Try again.'),
+    );
+    return;
+  }
+  if (!response.ok) {
+    let message = 'That could not be withdrawn. Reload and try again.';
+    try {
+      const body = await response.json();
+      if (typeof body?.detail?.message === 'string') message = body.detail.message;
+    } catch {
+      /* keep the default — a body we cannot read is not a message. */
+    }
+    wrap.textContent = '';
+    wrap.appendChild(el(doc, 'span', 'text-xs text-status-attention', message));
+    return;
+  }
+  wrap.textContent = '';
+  wrap.appendChild(
+    el(doc, 'span', 'text-xs text-muted-foreground', erase ? 'Withdrawn and erased' : 'Withdrawn'),
+  );
+  row.classList.add('opacity-60');
 }
 
 /** Render the whole answer into `root` (exported for the test suite). */
@@ -216,7 +367,9 @@ export function render(root, data) {
       el(doc, 'h2', 'mt-2 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground',
         group.year),
     );
-    for (const card of group.cards) section.appendChild(cardEl(doc, card));
+    for (const card of group.cards) {
+      section.appendChild(cardEl(doc, card, data?.emailVerified === true));
+    }
     root.appendChild(section);
   }
 }

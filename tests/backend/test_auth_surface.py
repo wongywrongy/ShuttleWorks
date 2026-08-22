@@ -153,6 +153,44 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "precedent. It revokes only the token presented, so a caller with "
         "no cookie can end nobody else's session"
     ),
+    # ---- E2 / program Phase 7 (spec §6, ruling R10) --------------------
+    #
+    # All three are session-free BY NATURE for the same structural reason:
+    # each exists to be reached by someone who cannot present a session. An
+    # unverified entrant has one but it proves nothing yet; a locked-out one
+    # has none at all and is asking for the way back in. The credential each
+    # carries instead is a 256-bit token from ``secrets``, mailed to the
+    # address on the account and stored only as its SHA-256 — the
+    # ``auth_sessions`` precedent, not the display-token plaintext one (I5).
+    #
+    # ``POST /e/account/resend-verification`` is deliberately NOT here: it
+    # takes no address and reads the caller's own account off the session,
+    # which is what stops it being a mail cannon aimed at other people's
+    # inboxes. It answers this gate's 401 like any other guarded route.
+    ("POST", "/e/account/verify"): (
+        "double-opt-in confirmation — session-free by nature: the entrant "
+        "may not be signed in when they open their mail, and requiring a "
+        "session would make verification depend on the state it exists to "
+        "establish. A POST, not the mailed GET, so link-prefetching mail "
+        "scanners cannot consume the token before the human clicks. Uniform "
+        "refusal on unknown/expired/already-used, so a leaked link cannot be "
+        "used to learn that it was once valid; guards asserted in "
+        "tests/test_entrant_lifecycle_routes.py"
+    ),
+    ("POST", "/e/account/request-password-reset"): (
+        "reset request — cannot require a session for the obvious reason. "
+        "R10 extends the non-enumeration rule here explicitly: always 202, "
+        "one body and one redirect target whether or not the address is "
+        "registered, and the unknown branch CHARGES the eip: throttle so "
+        "walking an address list is not free"
+    ),
+    ("POST", "/e/account/reset-password"): (
+        "reset completion — the mailed token IS the credential, which is "
+        "the whole point of the flow. Consuming it revokes every live "
+        "session on the account (OWASP: a reset with the attacker's session "
+        "still alive is theatre), and an invalid token is refused without "
+        "revealing whether it ever existed"
+    ),
 }
 
 # Note on the entry that is NO LONGER here, kept because its absence is the

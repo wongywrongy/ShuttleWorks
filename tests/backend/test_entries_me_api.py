@@ -182,7 +182,9 @@ def test_each_account_sees_its_own_acts_and_nothing_else(client, page, turnstile
 
     _sign_in(client, "stranger@example.com")
     body = client.get("/e/api/me/entries").json()
-    assert body == {"tournaments": []}
+    # E2 added the account-level verification flag; a stranger with no
+    # acts still learns nothing about anyone else from it.
+    assert body == {"tournaments": [], "emailVerified": False}
     client.cookies.clear()
 
     _sign_in(client, "parent@example.com")
@@ -231,6 +233,11 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
             "playerName",
             "personKey",
             "state",
+            # E2: the withdraw affordance's two fields. The id is this
+            # account's own entry and the flag is the route's own predicate,
+            # so neither widens what the projection discloses.
+            "entryId",
+            "canWithdraw",
             "resultBadge",
         }
         for line in card["events"]
