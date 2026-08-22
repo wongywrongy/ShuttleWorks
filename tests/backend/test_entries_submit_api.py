@@ -75,6 +75,14 @@ import pytest
 from core import throttle
 from tests.backend._helpers import isolate_test_database
 
+# The two operator-judgement flags this file asserts the absence of. Named
+# rather than compared against an empty list: E5 (Phase 10) made
+# `awaiting_payment` producible at submit, so an entry on a priced page
+# legitimately carries a reason that has nothing to do with duplicates or
+# gender.
+NEEDS_REVIEW = "needs_review"
+GENDER_MISMATCH = "gender_mismatch"
+
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 GOOD_PW = "a perfectly fine passphrase"
 
@@ -999,7 +1007,9 @@ def test_a_repeat_of_the_same_player_and_event_flags_the_new_entry(
     _submit(client, page)
 
     entries = _entries(page["tid"])
-    assert entries[0].pending_reasons == []
+    # The ABSENCE of the duplicate flag is the claim, not an empty list: E5
+    # made `awaiting_payment` producible, and this page carries a fee.
+    assert NEEDS_REVIEW not in entries[0].pending_reasons
     assert "needs_review" in entries[1].pending_reasons
 
 
@@ -1008,13 +1018,13 @@ def test_a_second_player_under_one_account_is_not_flagged(client, page, entrant)
     one parent, two children."""
     _submit(client, page)
     _submit(client, page, playerName="Cleo Chen")
-    assert _entries(page["tid"])[1].pending_reasons == []
+    assert NEEDS_REVIEW not in _entries(page["tid"])[1].pending_reasons
 
 
 def test_the_same_player_in_a_different_event_is_not_flagged(client, page, entrant):
     _submit(client, page)
     _submit(client, page, gender="M", events=[f"0:{page['ms']}"])
-    assert _entries(page["tid"])[1].pending_reasons == []
+    assert NEEDS_REVIEW not in _entries(page["tid"])[1].pending_reasons
 
 
 def test_a_gender_mismatch_is_accepted_with_a_flag(client, page, entrant):
@@ -1030,7 +1040,7 @@ def test_a_gender_mismatch_is_accepted_with_a_flag(client, page, entrant):
 def test_a_matching_gender_is_unflagged(client, page, entrant):
     """Negative control."""
     _submit(client, page)
-    assert _entries(page["tid"])[0].pending_reasons == []
+    assert GENDER_MISMATCH not in _entries(page["tid"])[0].pending_reasons
 
 
 # ---- submit: entry policy (R14 §4) --------------------------------------

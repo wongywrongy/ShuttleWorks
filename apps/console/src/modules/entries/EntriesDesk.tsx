@@ -48,6 +48,7 @@ import type { EntryCommitResultDTO, EntryDTO } from '../../api/dto';
 import { useAction } from '../../hooks/useAction';
 import { useCanEdit } from '../../hooks/useCanEdit';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
+import type { EntryGroup } from './entryDisplay';
 import {
   ENTRY_STATE_LABEL,
   ENTRY_STATE_TONE,
@@ -165,6 +166,32 @@ export function EntriesDesk({ tid }: { tid: string }) {
     { errorMessage: 'Could not promote that entry' },
   );
 
+  // E5: the payment record, at the ACT level — the band, not the row.
+  // Putting it on a row would offer to mark one entry of a three-event act
+  // paid, which is not a thing that can happen: one form act is one
+  // transfer.
+  const setPaid = useAction(
+    useCallback(
+      async (id: string) => {
+        await apiClient.markSubmissionPaid(tid, id);
+        await load();
+      },
+      [tid, load],
+    ),
+    { errorMessage: 'Could not record that payment' },
+  );
+
+  const setUnpaid = useAction(
+    useCallback(
+      async (id: string) => {
+        await apiClient.markSubmissionUnpaid(tid, id);
+        await load();
+      },
+      [tid, load],
+    ),
+    { errorMessage: 'Could not undo that payment' },
+  );
+
   const withdraw = useAction(
     useCallback(
       async (id: string) => {
@@ -258,6 +285,18 @@ export function EntriesDesk({ tid }: { tid: string }) {
                 .join(' · '),
               items: g.entries,
               testId: `entry-act-${g.key}`,
+              // The payment control rides the BAND because the act is what
+              // was paid. `owesMoney` gates it: an act with no quote has not
+              // been declared free, so offering to mark it paid would be
+              // offering to record a transfer of an unknown amount.
+              action:
+                canEdit && owesMoney(g)
+                  ? paymentControl(g, {
+                      pending: setPaid.pending || setUnpaid.pending,
+                      onPaid: () => void setPaid.run(g.key),
+                      onUnpaid: () => void setUnpaid.run(g.key),
+                    })
+                  : null,
             }))}
             rowId={(e) => e.id}
             rowTestId={(e) => `entry-row-${e.id}`}
@@ -362,6 +401,56 @@ export function EntriesDesk({ tid }: { tid: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+
+/** Does this act owe money? `null` is not zero: a tournament that priced
+ *  nothing has not declared its entries free, and offering to mark such an
+ *  act paid would be offering to record a transfer of an unknown amount.
+ *  Mirrors `entries/money.owes_payment`. */
+function owesMoney(group: EntryGroup): boolean {
+  return !!group.feeTotalCents;
+}
+
+/** Has this act been paid? Derived from the entries' reasons rather than
+ *  from a `paidAt` the desk row does not carry — `awaiting_payment` is set
+ *  and cleared by the same service call, so the two cannot disagree, and
+ *  reading the reason is what the operator is looking at anyway. */
+function isPaid(group: EntryGroup): boolean {
+  return !group.entries.some((e) => e.pendingReasons.includes('awaiting_payment'));
+}
+
+/** The band's payment affordance: a state and its inverse action.
+ *
+ *  "Paid" is a STATEMENT with a quiet undo beside it, not a toggle: the
+ *  common case is recording a payment once, and a control that reads as a
+ *  switch invites a press to see what happens. Marking paid is not armed —
+ *  it destroys nothing and its own undo sits next to it. */
+function paymentControl(
+  group: EntryGroup,
+  {
+    pending,
+    onPaid,
+    onUnpaid,
+  }: { pending: boolean; onPaid: () => void; onUnpaid: () => void },
+) {
+  if (isPaid(group)) {
+    return (
+      <span className="flex items-center gap-2">
+        <StatusPill tone="green" dot>
+          Paid
+        </StatusPill>
+        <Button size="xs" variant="ghost" disabled={pending} onClick={onUnpaid}>
+          Undo
+        </Button>
+      </span>
+    );
+  }
+  return (
+    <Button size="xs" variant="outline" disabled={pending} onClick={onPaid}>
+      Mark paid
+    </Button>
   );
 }
 

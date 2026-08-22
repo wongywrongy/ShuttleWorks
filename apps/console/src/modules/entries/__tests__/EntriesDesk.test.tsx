@@ -506,3 +506,72 @@ describe('EntriesDesk — the write gate', () => {
     expect(screen.queryByRole('button', { name: /commit to roster/i })).toBeNull();
   });
 });
+
+describe('EntriesDesk — the payment record (E5)', () => {
+  const paid = { submissionId: 'sub-1', paidAt: '2026-08-22T09:00:00Z', entriesUpdated: 1 };
+
+  function pricedAct(over: Partial<EntryDTO> = {}) {
+    return entry({
+      id: 'e-1',
+      submission: submission({ feeTotalCents: 4000 }),
+      pendingReasons: ['awaiting_payment'],
+      ...over,
+    });
+  }
+
+  it('offers the control on the BAND, not on the row', async () => {
+    // The submission is what was paid: a form act covering three events is
+    // one agreement and one transfer, so a per-row control would offer to
+    // mark one third of a payment received.
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([pricedAct()]);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-1');
+
+    expect(
+      within(row('e-1')).queryByRole('button', { name: /paid/i }),
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mark paid' })).toBeInTheDocument();
+  });
+
+  it('records a payment against the act and re-reads', async () => {
+    const list = vi
+      .spyOn(apiClient, 'listEntries')
+      .mockResolvedValueOnce([pricedAct()])
+      .mockResolvedValueOnce([pricedAct({ pendingReasons: [] })]);
+    const mark = vi.spyOn(apiClient, 'markSubmissionPaid').mockResolvedValue(paid);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Mark paid' }));
+
+    await waitFor(() => expect(mark).toHaveBeenCalledWith('t-1', 'sub-1'));
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Paid')).toBeInTheDocument();
+  });
+
+  it('offers nothing where the act owes nothing', async () => {
+    // NEGATIVE CONTROL — `null` is not zero. A tournament that priced
+    // nothing has not declared its entries free, so offering to mark this
+    // act paid would offer to record a transfer of an unknown amount.
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
+      entry({ id: 'e-1', submission: submission({ feeTotalCents: null }) }),
+    ]);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-1');
+
+    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull();
+    expect(screen.queryByText('Paid')).toBeNull();
+  });
+
+  it('a viewer is offered no payment control', async () => {
+    useUiStore.setState({ activeTournamentRole: 'viewer' });
+    vi.spyOn(apiClient, 'listEntries').mockResolvedValue([pricedAct()]);
+
+    render(<EntriesDesk tid="t-1" />);
+    await screen.findByTestId('entry-row-e-1');
+
+    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull();
+  });
+});

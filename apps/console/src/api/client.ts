@@ -760,6 +760,38 @@ class ApiClient {
     return r.data;
   }
 
+  /** Record that this ACT was paid (E5). The submission is the unit
+   *  because a form act covering three events is one agreement, one total
+   *  and one transfer — marking three entries paid would invent three
+   *  payments that never happened.
+   *
+   *  Clears exactly one pending reason and never confirms an entry
+   *  (invariant I4). Idempotent: a second press is not an error. */
+  async markSubmissionPaid(
+    tid: string,
+    submissionId: string,
+    note?: string,
+  ): Promise<{ submissionId: string; paidAt: string | null; entriesUpdated: number }> {
+    const r = await this.client.post(
+      `/tournaments/${tid}/submissions/${submissionId}/paid`,
+      note === undefined ? {} : { note },
+    );
+    return r.data;
+  }
+
+  /** Take a payment record back — the operator marked the wrong act. The
+   *  reason returns only where the act OWES money, and a confirmed entry
+   *  stays confirmed. */
+  async markSubmissionUnpaid(
+    tid: string,
+    submissionId: string,
+  ): Promise<{ submissionId: string; paidAt: string | null; entriesUpdated: number }> {
+    const r = await this.client.post(
+      `/tournaments/${tid}/submissions/${submissionId}/unpaid`,
+    );
+    return r.data;
+  }
+
   /** Run Seam A: materialize every confirmed, uncommitted entry as a roster
    *  player. Idempotent by design (spec §5) — pressing it twice commits
    *  nothing twice — so the caller may re-run it freely as late entries

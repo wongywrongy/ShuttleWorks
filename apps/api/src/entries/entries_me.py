@@ -38,8 +38,17 @@ from sqlalchemy import select
 from entries.entries_public import _moment_iso
 from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
-from db.models import Entry, EntryEvent, EntryPage, Org, Submission, Tournament
-from entries import lifecycle
+from db.models import (
+    EntrantAccount,
+    Entry,
+    EntryEvent,
+    EntryPage,
+    EntryPlayer,
+    Org,
+    Submission,
+    Tournament,
+)
+from entries import lifecycle, retention
 from repositories import LocalRepository, get_repository
 
 router = APIRouter(prefix="/e/api/me", tags=["entries-me"])
@@ -464,3 +473,230 @@ def withdraw_entry(
 
     repo.session.commit()
     return WithdrawResultDTO(state=entry.state, erased=bool(body.erase))
+
+
+# ---- the account's own data (E5, program Phase 10 — spec Q10) -------------
+#
+# **Both rights ride the account, which is R10's single largest practical
+# benefit.** R1's model had no accounts, so "export my data" and "delete my
+# account" had nothing to hang on and the erasure path was a capability link
+# the entrant had to still possess. One login now serves both, and serves the
+# entry and the person with one mechanism.
+
+
+class ExportedPlayerDTO(BaseModel):
+    """A person this account entered, as they are stored."""
+
+    fullName: str
+    gender: str
+    club: Optional[str] = None
+    birthYear: Optional[int] = None
+    remarks: Optional[str] = None
+    erasedAt: Optional[str] = None
+
+
+class ExportedEntryDTO(BaseModel):
+    tournamentName: Optional[str] = None
+    eventCode: str
+    playerName: str
+    state: str
+    submittedAt: str
+    withdrawnAt: Optional[str] = None
+
+
+class ExportedSubmissionDTO(BaseModel):
+    tournamentName: Optional[str] = None
+    submittedAt: str
+    feeTotalCents: Optional[int] = None
+    paidAt: Optional[str] = None
+    regulationsAcceptedAt: Optional[str] = None
+    regulationsVersionAccepted: Optional[int] = None
+
+
+class AccountExportDTO(BaseModel):
+    """Everything this account holds, in one document (Q10).
+
+    **A projection of what is stored, not a summary of it.** An export whose
+    author decided what was interesting would be answering a different
+    question than the one the right to portability asks. What is deliberately
+    absent is what is not the entrant's: other people's entries, the
+    director's notes, and anything derived about the tournament rather than
+    about them.
+
+    The password hash and the session tokens are absent for the obvious
+    reason — they are credentials, not personal data, and exporting them
+    would hand a copy of the account to whoever reads the file.
+    """
+
+    email: str
+    displayName: Optional[str] = None
+    phone: Optional[str] = None
+    emailVerified: bool = False
+    createdAt: str
+    players: List[ExportedPlayerDTO] = []
+    submissions: List[ExportedSubmissionDTO] = []
+    entries: List[ExportedEntryDTO] = []
+
+
+class AccountErasedDTO(BaseModel):
+    """What erasure did, stated so the entrant can check it.
+
+    Both numbers, always. "Your data was erased" is not an answer somebody
+    can verify; "3 player records erased, 2 submissions kept without your
+    details" says exactly what happened to what.
+    """
+
+    playersErased: int
+    submissionsKept: int
+
+
+@router.get("/export", response_model=AccountExportDTO)
+def export_my_account(
+    response: Response,
+    entrant: AuthEntrant = Depends(get_current_entrant),
+    repo: LocalRepository = Depends(get_repository),
+) -> AccountExportDTO:
+    """Everything this account holds (Q10 — the portability half).
+
+    Session-gated and scoped to the caller's own account, by construction:
+    every query below filters on ``account_id`` and there is no parameter
+    through which another account could be named.
+    """
+    response.headers["Cache-Control"] = "private, no-store"
+    session = repo.session
+    account_id = uuid.UUID(entrant.id)
+
+    account = session.get(EntrantAccount, account_id)
+    if account is None:
+        raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such account")
+
+    players = list(
+        session.scalars(
+            select(EntryPlayer).where(EntryPlayer.account_id == account_id)
+        )
+    )
+    submissions = list(
+        session.scalars(
+            select(Submission).where(Submission.account_id == account_id)
+        )
+    )
+    sub_ids = {s.id for s in submissions}
+    entries = (
+        list(
+            session.scalars(
+                select(Entry).where(Entry.submission_id.in_(sub_ids))
+            )
+        )
+        if sub_ids
+        else []
+    )
+
+    tids = {s.tournament_id for s in submissions}
+    names = (
+        {
+            t.id: t.name
+            for t in session.scalars(select(Tournament).where(Tournament.id.in_(tids)))
+        }
+        if tids
+        else {}
+    )
+    events = (
+        {
+            (ev.tournament_id, ev.id): ev
+            for ev in session.scalars(
+                select(EntryEvent).where(EntryEvent.tournament_id.in_(tids))
+            )
+        }
+        if tids
+        else {}
+    )
+
+    return AccountExportDTO(
+        email=account.email,
+        displayName=account.display_name,
+        phone=account.phone,
+        emailVerified=bool(account.email_verified),
+        createdAt=_moment_iso(account.created_at),
+        players=[
+            ExportedPlayerDTO(
+                fullName=p.full_name,
+                gender=p.gender,
+                club=p.club,
+                birthYear=p.birth_year,
+                remarks=p.remarks,
+                erasedAt=_moment_iso(p.erased_at) if p.erased_at else None,
+            )
+            for p in players
+        ],
+        submissions=[
+            ExportedSubmissionDTO(
+                tournamentName=names.get(s.tournament_id),
+                submittedAt=_moment_iso(s.submitted_at),
+                feeTotalCents=s.fee_total_cents,
+                paidAt=_moment_iso(s.paid_at) if s.paid_at else None,
+                regulationsAcceptedAt=(
+                    _moment_iso(s.regulations_accepted_at)
+                    if s.regulations_accepted_at
+                    else None
+                ),
+                regulationsVersionAccepted=s.regulations_version_accepted,
+            )
+            for s in submissions
+        ],
+        entries=[
+            ExportedEntryDTO(
+                tournamentName=names.get(e.tournament_id),
+                eventCode=(
+                    events[(e.tournament_id, e.entry_event_id)].code
+                    if (e.tournament_id, e.entry_event_id) in events
+                    else "?"
+                ),
+                playerName=e.player_name or "",
+                state=e.state,
+                submittedAt=_moment_iso(e.submitted_at),
+                withdrawnAt=_moment_iso(e.withdrawn_at) if e.withdrawn_at else None,
+            )
+            for e in entries
+        ],
+    )
+
+
+@router.post("/erase", response_model=AccountErasedDTO)
+def erase_my_account(
+    entrant: AuthEntrant = Depends(get_current_entrant),
+    repo: LocalRepository = Depends(get_repository),
+) -> AccountErasedDTO:
+    """Erase this person: their account's PII and every player they entered.
+
+    **A scrub, not a DELETE** — owner ruling D7. ``submissions.account_id``
+    and ``entry_players.account_id`` cascade from ``entrant_accounts``, so
+    deleting the row would take every submission and entry with it, including
+    entries a director confirmed, put on a roster and built a draw around. The
+    right being exercised is to stop being a person in those records; the
+    record of what happened is the director's.
+
+    A **verified** account is required, on E2's reasoning: this is the most
+    irreversible thing the surface offers, and an unverified account has not
+    shown it controls the address it claims — so a guessed address must not be
+    able to erase the real owner.
+
+    The session is destroyed by the scrub (every session is revoked), so the
+    caller is signed out by the act itself. There is no way back in: the
+    password hash is cleared, and the address that would receive a reset link
+    is gone.
+    """
+    if not entrant.email_verified:
+        raise http_error(
+            403,
+            ErrorCode.ENTRY_ACCOUNT_UNVERIFIED,
+            "Confirm your email address before erasing your account.",
+        )
+
+    account = repo.session.get(EntrantAccount, uuid.UUID(entrant.id))
+    if account is None:
+        raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such account")
+
+    erased, kept = retention.erase_account_data(repo.session, account)
+    repo.session.commit()
+    return AccountErasedDTO(playersErased=erased, submissionsKept=kept)
+

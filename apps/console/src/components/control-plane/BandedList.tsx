@@ -27,6 +27,8 @@
  *     `px-5` gutter, `gap-3` column rhythm, hairline border, hover wash)
  *     so every banded surface's rows measure identically.
  */
+import type { ReactNode } from 'react';
+
 import { CaretRight } from '@phosphor-icons/react';
 import { EYEBROW_CLASS } from '../../lib/utils';
 
@@ -194,6 +196,7 @@ export function GroupBandHeader({
   count,
   collapsed,
   onToggle,
+  action,
   'data-testid': testid,
 }: {
   /** Long name for the band. Rendered as the eyebrow AFTER `code`, and
@@ -222,9 +225,23 @@ export function GroupBandHeader({
   count: number;
   collapsed: boolean;
   onToggle: () => void;
+  /** An action belonging to the BAND rather than to any row in it — a
+   *  payment recorded against the act the band groups, say.
+   *
+   *  **Rendered as a SIBLING of the toggle, never inside it.** The header
+   *  is a `<button>`, and a button inside a button is invalid HTML: the
+   *  inner control's clicks are unreliable and screen readers disagree
+   *  about what they are looking at. So the band becomes a flex row that
+   *  HOLDS the toggle and the action side by side, and the toggle keeps
+   *  filling the space so collapsing still has a large target.
+   *
+   *  Distinct from `detail`, which stays a string on purpose (see its own
+   *  note) — this is the slot for a control, and having exactly one means
+   *  the label slot never becomes it. */
+  action?: ReactNode;
   'data-testid'?: string;
 }) {
-  return (
+  const toggle = (
     <button
       type="button"
       onClick={onToggle}
@@ -259,5 +276,16 @@ export function GroupBandHeader({
       ) : null}
       <span className="text-2xs sw-num text-muted-foreground">{count}</span>
     </button>
+  );
+
+  if (!action) return toggle;
+  return (
+    <div className="flex items-center gap-2 border-b border-border bg-muted/40 pr-5">
+      {/* `flex-1` on the wrapper's first child rather than on the button's
+          own class list: the button already carries `w-full`, which is what
+          it needs when it IS the band. */}
+      <span className="min-w-0 flex-1 [&>button]:border-b-0">{toggle}</span>
+      {action}
+    </div>
   );
 }

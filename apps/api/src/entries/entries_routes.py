@@ -36,10 +36,11 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Path, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -54,9 +55,9 @@ from core.schemas import (
     EntryPagePublicationPatchDTO,
     EntryPageUpsertDTO,
 )
-from db.models import Entry, EntryEvent, EntryPage
+from db.models import Entry, EntryEvent, EntryPage, Submission, Tournament
 from repositories import LocalRepository, get_repository
-from entries import lifecycle
+from entries import lifecycle, money, retention
 from entries.entries import commit_entries
 from entries.entry_fees import normalize_fee_schedule
 
@@ -343,6 +344,172 @@ def withdraw_entry_at_the_desk(
         raise _lifecycle_conflict(exc, row)
     repo.session.commit()
     return _desk_row(repo, tournament_id, row)
+
+
+
+# ---- money: the operator records a payment made elsewhere (E5, Phase 10) --
+#
+# v1 processes nothing (spec Q8's boundary, untouched): a director is told
+# money arrived and says so here. When Stripe eventually lands, its webhook
+# clears the same reason through the same service function and nothing
+# downstream changes.
+
+
+class SubmissionPaymentDTO(BaseModel):
+    """What the desk is told after marking a payment.
+
+    Deliberately small, and deliberately NOT the entry rows: the caller
+    re-reads the list, which is the same posture every other desk action
+    takes, and a partial row set here would be a second projection of the
+    desk that could disagree with the first.
+    """
+
+    submissionId: str
+    paidAt: Optional[str] = None
+    #: Entries whose ``awaiting_payment`` reason changed. The number, not the
+    #: ids: the desk re-reads, and the count is what makes the toast honest
+    #: ("4 entries updated") rather than a claim the operator cannot check.
+    entriesUpdated: int = 0
+
+
+class MarkPaidRequest(BaseModel):
+    """``note`` is free text for the director's own record — "Zelle, ref
+    4412", "cash at the desk". Never rendered publicly."""
+
+    note: Optional[str] = None
+
+
+def _get_submission(
+    repo: LocalRepository, tournament_id: uuid.UUID, submission_id: uuid.UUID
+) -> Submission:
+    row = repo.session.get(Submission, (tournament_id, submission_id))
+    if row is None:
+        raise http_error(
+            404, ErrorCode.ENTRY_NOT_FOUND, f"submission not found: {submission_id}"
+        )
+    return row
+
+
+@router.post(
+    "/{tournament_id}/submissions/{submission_id}/paid",
+    response_model=SubmissionPaymentDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def mark_submission_paid(
+    body: MarkPaidRequest = MarkPaidRequest(),
+    tournament_id: uuid.UUID = Path(...),
+    submission_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Record that this act was paid. **Clears one reason; confirms nothing.**
+
+    Invariant I4, and the one most likely to erode: an operator marking a
+    payment obviously wants the entry to go through, and a helpful edit that
+    also confirmed it would make payment a consequential automatic decision.
+    Confirmation stays a separate press.
+
+    Idempotent — a second call finds the timestamp already there and is not
+    an error. Two operators on a busy desk is a thing that happens.
+    """
+    submission = _get_submission(repo, tournament_id, submission_id)
+    cleared = money.mark_paid(repo.session, submission, note=body.note)
+    repo.session.commit()
+    return SubmissionPaymentDTO(
+        submissionId=str(submission.id),
+        paidAt=submission.paid_at.isoformat() if submission.paid_at else None,
+        entriesUpdated=len(cleared),
+    )
+
+
+@router.post(
+    "/{tournament_id}/submissions/{submission_id}/unpaid",
+    response_model=SubmissionPaymentDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def mark_submission_unpaid(
+    tournament_id: uuid.UUID = Path(...),
+    submission_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Take a payment record back — the operator marked the wrong act.
+
+    The reason returns only where the act OWES money: un-marking a free act
+    must not invent a debt that never existed. A confirmed entry stays
+    confirmed; whether to un-confirm has consequences on a roster and belongs
+    to the ordinary desk actions, not to correcting a note.
+    """
+    submission = _get_submission(repo, tournament_id, submission_id)
+    flagged = money.mark_unpaid(repo.session, submission)
+    repo.session.commit()
+    return SubmissionPaymentDTO(
+        submissionId=str(submission.id),
+        paidAt=None,
+        entriesUpdated=len(flagged),
+    )
+
+
+
+class RetentionSweepDTO(BaseModel):
+    """What one retention run did, in counts an operator can read back."""
+
+    scanned: int
+    erased: int
+    skippedNoPolicy: int
+    skippedNotDue: int
+
+
+@router.post(
+    "/{tournament_id}/entries/retention-sweep",
+    response_model=RetentionSweepDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def run_retention_sweep(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Anonymize this workspace's due entries (E5, spec Q10).
+
+    **Operator-invoked, per workspace, and deliberately NOT a background
+    job that deletes unattended.** The debt log's D17 names the failure this
+    avoids: an irreversible, backup-less delete of user data running at
+    startup with nobody watching. Retention is the same category of act, and
+    the same reasoning applies — a director presses this, and can take a
+    ``tournament_backups`` snapshot first if they want one.
+
+    **Idempotent**, so pressing it twice is safe and a scheduled caller needs
+    no cursor: the second pass reports ``erased: 0`` because the state it
+    reads is already on the rows.
+
+    Nothing happens where the director set no ``retention_days``. A default
+    deletion date the operator never chose would be exactly the consequential
+    automatic decision invariant I4 rules out, so "no policy" means "not
+    swept" and the answer says how many events that covered.
+    """
+    tournament = repo.session.get(Tournament, tournament_id)
+    if tournament is None:
+        raise http_error(
+            404, ErrorCode.TOURNAMENT_NOT_FOUND, "workspace not found"
+        )
+    raw_date = getattr(tournament, "tournament_date", None)
+    event_date = None
+    if raw_date:
+        try:
+            event_date = date.fromisoformat(str(raw_date))
+        except ValueError:
+            # A date the store cannot parse is not a date to count from, and
+            # guessing one would set a deletion clock nobody chose.
+            event_date = None
+
+    result = retention.sweep_workspace(
+        repo.session, tournament_id=tournament_id, event_date=event_date
+    )
+    repo.session.commit()
+    return RetentionSweepDTO(
+        scanned=result.scanned,
+        erased=result.erased,
+        skippedNoPolicy=result.skipped_no_policy,
+        skippedNotDue=result.skipped_not_due,
+    )
 
 
 # ---- configuration: the entry page and its events -----------------------

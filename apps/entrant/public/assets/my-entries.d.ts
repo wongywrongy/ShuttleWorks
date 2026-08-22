@@ -55,4 +55,8 @@ export function withdrawAffordance(
   line: MyEntryLine,
   emailVerified: boolean,
 ): WithdrawAffordance | null;
+export function accountPanel(
+  doc: Document,
+  handlers: { onExport: () => unknown; onErase: () => unknown },
+): HTMLElement;
 export function render(root: HTMLElement, data: MyEntries): void;

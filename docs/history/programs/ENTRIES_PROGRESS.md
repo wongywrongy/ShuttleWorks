@@ -21,7 +21,7 @@ program brief — that file is the plan; deviation is a STOP).
 | 7 | E2 lifecycle | **COMPLETE 2026-08-22** on `dev/prog1-p7-e2-lifecycle` (unmerged, awaiting [USER SIGN-OFF] per program rule 7) | `make check` exit 0 — pytest 1735/66 skipped (baseline 1671), vitest 1806 + entrant 674, depcruise 0 errors, import-linter 15 kept. Owner ruling D7 taken at the gate. **Email DELIVERY still owed by Phase 6 step 3** — the code rides the shipped SMTP seam and needs no edit when a provider lands |
 | 8 | E3 doubles | **COMPLETE 2026-08-22** on `dev/prog1-p8-e3-doubles` (unmerged, awaiting [USER SIGN-OFF]) | `make check` exit 0 — pytest 1752/66 skipped, vitest 1806 + entrant 680, import-linter 15 kept. The anonymous sweep caught a real dependency-ordering defect on the accept route (422 before 401) |
 | 9 | E4 signals/phases | **COMPLETE 2026-08-22** on `dev/prog1-p9-e4-signals` (unmerged, awaiting [USER SIGN-OFF]) | `make check` exit 0 — pytest 1787/66 skipped, vitest 1808 + entrant 680, import-linter 15 kept. The persistence contract caught the first cut's layering |
-| 10 | E5 money/retention | not started | — |
+| 10 | E5 money/retention | **COMPLETE 2026-08-22** on `dev/prog1-p10-e5-money` (unmerged, awaiting [USER SIGN-OFF]) | `make check` exit 0 — pytest 1807/66 skipped, vitest 1812 + entrant 683, import-linter 15 kept. Debt-log L1 narrowed to the operator half |
 | 11 | Cutover + marketing | not started | — |
 
 ## Phase 0 — Consolidate and baseline: DONE (2026-08-06)
@@ -1973,3 +1973,150 @@ reuse); and the GDPR pass covering account deletion and export.
 not be a bare `DELETE`** on `entrant_accounts` — that is the call that reaches
 the CASCADE, and it would erase a director's confirmed entries. Build it as an
 account-level scrub over `erase_player`'s seam, or narrow the FKs first.
+
+---
+
+## Phase 10 — E5: money, retention, compliance. **COMPLETE** (2026-08-22)
+
+Branch `dev/prog1-p10-e5-money`, off `dev/prog1-p9-e4-signals` @ `63f2f42`.
+Spec Q8's boundary and Q10's GDPR delta. The last of the program's code
+phases.
+
+### Money — recorded at the level that was actually paid
+
+**The submission is the unit** (R13/R14), and that is not a convenience. A
+form act covering three events for two children is one agreement, one
+computed total and one transfer: the entrant pays once and the director sees
+one amount arrive. Marking three entries paid individually would invent three
+payments that never happened, and "did they pay?" would acquire three answers.
+
+**Payment clears exactly one pending reason and never confirms an entry**
+(invariant I4). This is the invariant most likely to erode, because an
+operator recording a payment obviously *wants* the entry to go through — so it
+is structural: nothing in `entries/money.py` writes `state`, and the negative
+control demonstrates what happens when something does.
+
+Two asymmetries worth stating because both look like bugs until you see why:
+
+- `None` is not zero. A tournament that priced nothing has not declared its
+  entries free, so an act with no quote is never flagged unpaid — otherwise
+  every entry on an unpriced page carries a permanent `UNPAID_ENTRIES` nobody
+  can clear.
+- Un-marking a payment restores the reason **only where the act owes money**,
+  and never un-confirms. Correcting a note must not invent a debt, and
+  un-confirming has consequences on a roster that belong to the desk's own
+  actions.
+
+**`awaiting_payment` is now produced.** Before this phase it was vocabulary
+nothing wrote, which is why E4's `UNPAID_ENTRIES` code could never fire — the
+signal shipped one phase ahead of the fact it reports, and this closes that.
+
+Q8's boundary is untouched: v1 records a payment made elsewhere. When Stripe
+lands, its webhook clears the same reason through the same function.
+
+### Retention — two lifetimes, deliberately not one
+
+An **entry** describes a person who played in one tournament and stops being
+needed shortly after it. An **account** is a live relationship the person may
+use next season and is deleted only when they ask. Conflating them would be a
+mistake in both directions, and the negative control covers the direction that
+would hurt most: an entrant who entered one tournament last year silently
+losing their login.
+
+`entries/retention.py` reuses `lifecycle.erase_player` — withdraw-and-erase
+(E2) and retention (E5) are the same act with different triggers, one a person
+asking and one a clock, and two scrub implementations would be two answers to
+"what counts as erased".
+
+**Operator-invoked, per workspace, not a background job.** The debt log's D17
+names exactly the failure being avoided: an irreversible, backup-less delete of
+user data running unattended at startup. Retention is that category of act, so
+a director presses `POST /tournaments/{id}/entries/retention-sweep` and can
+snapshot first. It is idempotent, so a scheduled caller needs no cursor: the
+state it reads is on the rows.
+
+Nothing is swept where the director set no `retention_days`. A default deletion
+date the operator never chose is precisely the consequential automatic decision
+invariant I4 rules out, and the answer reports how many events that covered
+rather than silently doing nothing.
+
+### The two GDPR rights, both riding the account
+
+R10's single largest practical benefit, collected. R1 had no accounts, so
+"export my data" and "delete my account" had nothing to hang on and erasure was
+a capability link the entrant had to still possess.
+
+- `GET /e/api/me/export` — everything the account holds, as a projection of
+  what is STORED rather than a summary somebody curated. The password hash and
+  the session tokens are absent: they are credentials, not personal data, and
+  exporting them would hand a copy of the account to whoever reads the file.
+- `POST /e/api/me/erase` — **a scrub, not a DELETE, and that is owner ruling
+  D7 executed.** `session.delete(account)` would cascade through
+  `submissions.account_id` and `entry_players.account_id` and take every entry
+  the account ever made, including ones a director confirmed, put on a roster
+  and built a draw around. So: the account row survives with its identity
+  overwritten and its password cleared (nobody logs in again), every session is
+  revoked, every player it entered is scrubbed, and the submissions stay. The
+  answer states both numbers, because "your data was erased" is not something
+  a person can check.
+
+Both require a **verified** account, on E2's reasoning: anyone can type
+anyone's address at signup, and these are the most irreversible and the most
+disclosing acts on the surface.
+
+The address is replaced with `erased+{id}@invalid` rather than blanked —
+`email` is NOT NULL and uniquely indexed, so a blank would collide on the
+second erasure, and the id keeps it unique without being a fact about anybody.
+
+### Surfaces
+
+- **Desk:** the payment control rides the BAND, not the row, because the act is
+  what was paid. That needed a band-level action slot, and `GroupBandHeader` is
+  a `<button>` — so the action is rendered as its SIBLING inside a flex row
+  rather than nested, since a button inside a button has unreliable clicks and
+  ambiguous semantics.
+- **Entrant:** an account panel under the cards with both rights, erasure
+  behind the canon two-click arm. Its copy states what actually happens —
+  details go, entries stay as the organisers' records — because D7 is a product
+  promise as much as a schema decision, and "your data will be deleted" would
+  describe a different product.
+
+### Debt log
+
+**L1 narrowed, not closed.** The entrant half of GDPR tooling is done; the
+operator half is not — a director asking for their data or their deletion still
+has no path, and the PII carried on workspace state blobs (rosters are full of
+names) is out of the retention job's reach. Re-sized L → M and re-stated.
+
+### Gates at close
+
+`make check` **exit 0** — pytest **1807 passed / 66 skipped** (baseline 1787;
+the 20 added are `test_money_and_retention.py`), vitest console **1812**
+(baseline 1808), entrant **683** (baseline 680), eslint 0 errors, depcruise 0
+errors / 16 warnings, import-linter **15 kept, 0 broken**.
+
+**Six tests had to change, and every one for the same reason**, recorded
+because it is a real behaviour change rather than a test edit: E5 made
+`awaiting_payment` producible at submit, so entries on a priced page now
+legitimately carry a reason. The six asserted `pending_reasons == []` while
+meaning "no duplicate flag" or "no gender flag" — they now assert the absence
+of the specific flag each was written about, which is what they always meant
+and is a stronger claim besides.
+
+### Where the program stands
+
+Phases 7, 8, 9 and 10 are complete and unmerged, one branch each, awaiting
+[USER SIGN-OFF] per program rule 7. **Every remaining phase is blocked on
+something only the owner can provide**, and none of them is code:
+
+- **Phase 2** — deploy on `wongworks.dev`: the deployment host, the DNS zone,
+  the tunnel and the Access policy.
+- **Phase 4** — dogfood: a real event on a real calendar.
+- **Phase 6 step 3** — email DELIVERY: a transactional provider and SPF/DKIM.
+  Every E2/E3 mail path is built on the shipped SMTP seam and needs no edit
+  when it lands; what is owed is the proof that a real message reaches a real
+  inbox, which is Phase 6's own exit clause.
+- **Phase 11** — cutover: the production domain, and the owner declaring
+  prototyping done.
+- **Phase 5's public-exposure [USER SIGN-OFF]** — sits after Phase 2 by
+  Amendment A1.

@@ -349,6 +349,114 @@ async function submitWithdraw(doc, entryId, erase, row, wrap) {
   row.classList.add('opacity-60');
 }
 
+
+/**
+ * The account's own two rights, rendered under the cards (E5, spec Q10).
+ *
+ * **Both ride the account** (R10), which is why they can live on one page
+ * behind one login rather than needing a link the entrant must still
+ * possess. Export is a plain read the browser saves; erasure is behind the
+ * same two-click arm every destructive control in the product uses, because
+ * `window.confirm` is banned and because this is the least reversible thing
+ * on the surface.
+ *
+ * The erasure copy states what actually happens, in the entrant's terms and
+ * without softening it: the personal details go, the entries stay as records
+ * belonging to the organisers. Ruling D7 is a product promise as much as a
+ * schema decision, and a page that said "your data will be deleted" would be
+ * describing a different product.
+ */
+export function accountPanel(doc, { onExport, onErase }) {
+  const panel = el(
+    doc,
+    'section',
+    'mt-8 grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-4',
+  );
+  panel.appendChild(
+    el(doc, 'h2', 'font-display text-base font-bold tracking-tight text-foreground', 'Your account'),
+  );
+
+  const actions = el(doc, 'div', 'flex flex-wrap items-center gap-3');
+  const linkClass =
+    'text-sm font-medium text-accent underline-offset-4 hover:underline';
+
+  const exportButton = el(doc, 'button', linkClass, 'Download my data');
+  exportButton.type = 'button';
+  exportButton.addEventListener('click', () => void onExport());
+  actions.appendChild(exportButton);
+
+  const eraseSlot = el(doc, 'span', 'flex items-center gap-3');
+  const armErase = () => {
+    eraseSlot.textContent = '';
+    eraseSlot.appendChild(
+      el(
+        doc,
+        'span',
+        'text-sm text-muted-foreground',
+        'Erase your details from every entry? Your entries stay as the organizers\u2019 records. This cannot be undone.',
+      ),
+    );
+    const go = el(
+      doc,
+      'button',
+      'text-sm font-medium text-status-attention underline-offset-4 hover:underline',
+      'Erase my details',
+    );
+    go.type = 'button';
+    go.addEventListener('click', () => {
+      go.disabled = true;
+      void onErase();
+    });
+    const cancel = el(doc, 'button', linkClass, 'Keep them');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => {
+      eraseSlot.textContent = '';
+      buildErase();
+    });
+    eraseSlot.appendChild(go);
+    eraseSlot.appendChild(cancel);
+  };
+  function buildErase() {
+    const start = el(
+      doc,
+      'button',
+      'text-sm font-medium text-muted-foreground underline-offset-4 hover:underline',
+      'Erase my details',
+    );
+    start.type = 'button';
+    start.addEventListener('click', armErase);
+    eraseSlot.appendChild(start);
+  }
+  buildErase();
+  actions.appendChild(eraseSlot);
+
+  panel.appendChild(actions);
+  return panel;
+}
+
+async function downloadExport(doc) {
+  const response = await fetch('/e/api/me/export', {
+    headers: { accept: 'application/json' },
+  });
+  if (!response.ok) return false;
+  const data = await response.json();
+  // A Blob URL and a synthetic click: the tier ships no library and the
+  // document is the entrant's own. Revoked immediately — the object URL is
+  // a handle to their personal data and there is no reason for it to
+  // outlive the save dialog.
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+  );
+  const link = doc.createElement('a');
+  link.href = url;
+  link.download = 'shuttleworks-my-data.json';
+  doc.body.appendChild(link);
+  link.click();
+  doc.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  return true;
+}
+
 /** Render the whole answer into `root` (exported for the test suite). */
 export function render(root, data) {
   const doc = root.ownerDocument;
@@ -360,6 +468,23 @@ export function render(root, data) {
         'No entries yet. When you enter a tournament, it appears here.'),
     );
     return;
+  }
+  if (data?.emailVerified === true) {
+    // Only for a verified account: both rights are irreversible or
+    // disclosing, and E2's reasoning applies — an unverified account has
+    // not shown it controls the address it claims.
+    root.appendChild(
+      accountPanel(doc, {
+        onExport: () => downloadExport(doc),
+        onErase: async () => {
+          const response = await fetch('/e/api/me/erase', {
+            method: 'POST',
+            headers: { accept: 'application/json', 'X-ShuttleWorks-CSRF': '1' },
+          });
+          if (response.ok) window.location.assign('/e/login');
+        },
+      }),
+    );
   }
   for (const group of yearGroups(cards)) {
     const section = el(doc, 'section', 'grid gap-3');

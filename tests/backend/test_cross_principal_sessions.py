@@ -102,6 +102,12 @@ ENTRANT_REACHABLE = (
     # not a real one, so it answers the uniform 404 either way; listed
     # because it is entrant-reachable by design.
     | {("POST", "/e/api/partner-invites/{token}/accept")}
+    # E5 (Phase 10): the two GDPR rights, both session-gated and both scoped
+    # to the caller's own account by construction — every query filters on
+    # ``account_id`` and neither takes a parameter through which another
+    # account could be named. An operator cookie is refused by
+    # ``get_current_entrant`` like everything else on this surface.
+    | {("GET", "/e/api/me/export"), ("POST", "/e/api/me/erase")}
 )
 
 

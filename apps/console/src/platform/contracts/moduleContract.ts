@@ -308,6 +308,11 @@ export const entriesContract: ModuleContract = {
     apiClient.rejectEntry,
     apiClient.promoteEntry,
     apiClient.withdrawEntry,
+    // E5 (program Phase 10): the payment record. Owned by Entries — the
+    // desk is the only surface that records a payment, and the submission
+    // is the level that was actually paid.
+    apiClient.markSubmissionPaid,
+    apiClient.markSubmissionUnpaid,
     apiClient.commitEntries,
   ],
   consumedEndpoints: [],

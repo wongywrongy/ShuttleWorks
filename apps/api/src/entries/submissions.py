@@ -63,7 +63,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db.models import Entry, EntryPlayer, Submission
-from entries import lifecycle, partners
+from entries import lifecycle, money, partners
 from entries.entry_policy import NEEDS_REVIEW, gender_flags
 
 log = logging.getLogger("scheduler.entries")
@@ -370,8 +370,13 @@ def _write(
         priced = per_player_fee[index] if index < len(per_player_fee) else None
         shares = _split(priced, len(events))
         landing = lifecycle.landing_state(email_verified=email_verified)
+        # E5: an act that owes money says so from the moment it exists.
+        # Before this the reason was vocabulary nothing produced, which is
+        # why E4's UNPAID_ENTRIES could never fire. Computed once per act,
+        # not per entry: the debt is a property of the submission.
+        owed = money.initial_reasons(fee_total_cents)
         for share, event in zip(shares, events):
-            reasons = list(gender_flags(spec.gender, event))
+            reasons = [*owed, *gender_flags(spec.gender, event)]
             if looks_duplicate(session, tournament_id, event.id, spec.full_name):
                 reasons.append(NEEDS_REVIEW)
             # The cap is read PER ENTRY and inside the loop, not once for

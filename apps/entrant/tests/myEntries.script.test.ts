@@ -242,3 +242,52 @@ describe('withdrawAffordance (E2)', () => {
     expect(root.textContent).not.toContain('Withdraw this entry?');
   });
 });
+
+describe('the account panel (E5)', () => {
+  function mount() {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    return root;
+  }
+
+  it('appears only for a verified account', () => {
+    // Both rights are irreversible or disclosing, and E2's reasoning
+    // applies: an unverified account has not shown it controls the address
+    // it claims, and the routes 403 it anyway.
+    const verified = mount();
+    render(verified, { tournaments: [card()], emailVerified: true });
+    expect(verified.textContent).toContain('Your account');
+
+    const unverified = mount();
+    render(unverified, { tournaments: [card()], emailVerified: false });
+    expect(unverified.textContent).not.toContain('Your account');
+  });
+
+  it('arms erasure and says what actually happens', () => {
+    // Ruling D7 is a product promise as much as a schema decision: the
+    // details go, the entries stay as the organizers' records. Copy that
+    // said "your data will be deleted" would describe a different product.
+    const root = mount();
+    render(root, { tournaments: [card()], emailVerified: true });
+
+    const start = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Erase my details',
+    );
+    start?.click();
+
+    expect(root.textContent).toContain('stay as the organizers');
+    expect(
+      [...root.querySelectorAll('button')].some((b) => b.textContent === 'Keep them'),
+    ).toBe(true);
+  });
+
+  it('offers the export as a plain read', () => {
+    const root = mount();
+    render(root, { tournaments: [card()], emailVerified: true });
+    expect(
+      [...root.querySelectorAll('button')].some(
+        (b) => b.textContent === 'Download my data',
+      ),
+    ).toBe(true);
+  });
+});

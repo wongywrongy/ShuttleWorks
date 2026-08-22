@@ -45,6 +45,9 @@ export interface BandedTableGroup<T> {
   detail?: string;
   items: T[];
   testId?: string;
+  /** A control belonging to the band rather than to a row in it — see
+   *  `GroupBandHeader`'s `action`. */
+  action?: ReactNode;
 }
 
 export function BandedTable<T>({
@@ -173,6 +176,7 @@ export function BandedTable<T>({
                       label={g.label}
                       code={g.code}
                       detail={g.detail}
+                      action={g.action}
                       count={g.items.length}
                       collapsed={isCollapsed}
                       onToggle={() => toggle(g.key)}

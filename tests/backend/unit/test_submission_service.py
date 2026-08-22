@@ -518,7 +518,10 @@ def test_a_matching_gender_is_unflagged(session, world):
         world,
         [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])],
     )
-    assert result.entries[0].pending_reasons == []
+    # The ABSENCE of the gender flag is the claim, not an empty list: E5
+    # (Phase 10) made `awaiting_payment` producible at submit, and this
+    # fixture's page carries a fee schedule.
+    assert "gender_mismatch" not in result.entries[0].pending_reasons
 
 
 def test_the_same_player_and_event_across_acts_raises_needs_review(session, world):
@@ -540,7 +543,7 @@ def test_a_different_player_under_the_same_account_is_not_flagged(session, world
     second = _create(
         session, world, [PlayerInput("Cleo Chen", "F", events=[world["events"]["WS"]])]
     )
-    assert second.entries[0].pending_reasons == []
+    assert "needs_review" not in second.entries[0].pending_reasons
 
 
 def test_the_same_player_in_a_different_event_is_not_flagged(session, world):
@@ -550,7 +553,7 @@ def test_the_same_player_in_a_different_event_is_not_flagged(session, world):
     second = _create(
         session, world, [PlayerInput("Alice Chen", "F", events=[world["events"]["XD"]])]
     )
-    assert second.entries[0].pending_reasons == []
+    assert "needs_review" not in second.entries[0].pending_reasons
 
 
 def test_a_withdrawn_entry_does_not_raise_the_flag(session, world):
