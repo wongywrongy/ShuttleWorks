@@ -30,6 +30,12 @@ export const NEEDS_REVIEW = 'needs_review';
  *  of the workspace attention codes. */
 export const GENDER_MISMATCH = 'gender_mismatch';
 
+/** E3 / spec Q6: the named partner is already spoken for in this event, so
+ *  BOTH halves of the ambiguity carry this. The software cannot know which
+ *  pairing is the mistake — guessing would silently break a pair that had
+ *  already agreed — so it flags and an operator decides (invariant I4). */
+export const PAIR_CONFLICT = 'pair_conflict';
+
 export const ENTRY_STATE_LABEL: Record<EntryState, string> = {
   unverified: 'Unverified',
   pending: 'Pending',
@@ -54,6 +60,7 @@ export const ENTRY_STATE_TONE: Record<EntryState, PillTone> = {
 const REASON_LABEL: Record<string, string> = {
   [NEEDS_REVIEW]: 'Needs review',
   [GENDER_MISMATCH]: 'Gender mismatch',
+  [PAIR_CONFLICT]: 'Pair conflict',
   awaiting_partner: 'Awaiting partner',
   awaiting_payment: 'Awaiting payment',
   over_cap: 'Over cap',
@@ -68,8 +75,12 @@ export function reasonLabel(code: string): string {
  *  the world. Both of these mean "the software noticed something and
  *  refused to decide it" (invariant I4), which is exactly what deserves the
  *  warning treatment; `awaiting_payment` and `awaiting_partner` are things
- *  waiting to happen and are not. */
-const ATTENTION = new Set([NEEDS_REVIEW, GENDER_MISMATCH]);
+ *  waiting to happen and are not.
+ *
+ *  `pair_conflict` (E3) joined them for the same reason: two entrants have
+ *  named the same partner, nothing about that resolves on its own, and the
+ *  entry sits there until a human picks. */
+const ATTENTION = new Set([NEEDS_REVIEW, GENDER_MISMATCH, PAIR_CONFLICT]);
 
 /** Does this entry carry a flag an operator must resolve? */
 export function hasAttention(pendingReasons: readonly string[]): boolean {

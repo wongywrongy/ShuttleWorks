@@ -1500,9 +1500,28 @@ class Entry(Base):
     state: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     pending_reasons: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
-    # ---- doubles (created now, unused in E1 — doubles is E3) ----------
+    # ---- doubles (E3, program Phase 8) --------------------------------
+    # ``partner_entry_id`` is set on BOTH halves at acceptance and points at
+    # the other one. Mutual rather than one-directional because either half
+    # can be the row a reader has in hand.
     partner_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    # Who was named, in the nominator's own typing. Kept after acceptance:
+    # it is what the invite was addressed to, and the accepting account's
+    # address may differ (people forward mail).
     partner_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+    # SHA-256 of the mailed invite token — never the token (invariant I5).
+    partner_invite_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
+    partner_invite_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When the invited principal accepted. The reasons list loses
+    # ``awaiting_partner`` at that moment, so without this stamp the fact
+    # that a human agreed would survive only as a missing string.
+    partner_accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # ---- publication ---------------------------------------------------
     # Absent from the public entrant list; still fully entered (Q4/I6). The
@@ -1546,6 +1565,8 @@ class Entry(Base):
         # than a 409 a database returns.
         Index("ix_entries_event_player", "entry_event_id", "entry_player_id"),
         Index("ix_entries_submission", "submission_id"),
+        # The public, unauthenticated preview resolves a token through this.
+        Index("ix_entries_partner_invite", "partner_invite_hash"),
     )
 
     # ---- read-through to the levels above and below ------------------

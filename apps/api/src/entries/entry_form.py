@@ -60,6 +60,8 @@ def parse_players(form: Any) -> List[dict]:
             continue
         chosen.setdefault(int(index), []).append(event_id[:100])
 
+    partners = parse_partners(form)
+
     out: List[dict] = []
     for index, name in enumerate(names):
         gender = str(genders[index] if index < len(genders) else "").strip()
@@ -79,8 +81,45 @@ def parse_players(form: Any) -> List[dict]:
                 ).strip()[:2000]
                 or None,
                 "events": events,
+                # E3: only the partners for events this block actually
+                # selected. A stale field left in the DOM for an unticked
+                # doubles event must not nominate anybody.
+                "partners": {
+                    event_id: email
+                    for (block, event_id), email in partners.items()
+                    if block == index and event_id in events
+                },
             }
         )
+    return out
+
+
+def parse_partners(form: Any) -> dict:
+    """``{(player index, event id): email}`` from the flat post (E3).
+
+    **The key is in the field NAME, not in the value**:
+    ``partner:<player index>:<event id>`` carries the email as its value.
+    The events checkbox encodes its key in the value (``"0:<uuid>"``) and
+    could not do otherwise — a checkbox's value IS its payload — but an
+    email in a delimited value would put a user-controlled string on the
+    wrong side of a ``split``. Names are ours; values are theirs.
+
+    A malformed name is skipped rather than refused: a hand-crafted post is
+    not worth a 422 that a real entrant can never trigger, and the entry
+    simply lands unpartnered, which is a state the flow already handles.
+    """
+    out: dict = {}
+    for key in form.keys():
+        name = str(key)
+        if not name.startswith("partner:"):
+            continue
+        _, _, rest = name.partition(":")
+        index, _, event_id = rest.partition(":")
+        if not index.isdigit() or not event_id:
+            continue
+        email = str(form.get(key) or "").strip()[:320]
+        if email:
+            out[(int(index), event_id[:100])] = email
     return out
 
 

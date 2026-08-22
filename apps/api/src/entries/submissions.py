@@ -63,7 +63,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db.models import Entry, EntryPlayer, Submission
-from entries import lifecycle
+from entries import lifecycle, partners
 from entries.entry_policy import NEEDS_REVIEW, gender_flags
 
 log = logging.getLogger("scheduler.entries")
@@ -105,6 +105,11 @@ class PlayerInput:
     birth_year: Optional[int] = None
     remarks: Optional[str] = None
     events: Sequence[Any] = ()
+    # E3: ``{event id: partner email}`` for this person's doubles
+    # selections. Keyed by event because one person can enter two doubles
+    # events with two different partners, which is ordinary and which a
+    # single ``partner_email`` on the person would make unsayable.
+    partners: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -112,6 +117,11 @@ class SubmissionResult:
     submission: Submission
     entries: list[Entry] = field(default_factory=list)
     players: list[EntryPlayer] = field(default_factory=list)
+    # E3: ``(entry, raw invite token)`` for every partner nominated by this
+    # act. Handed OUT rather than mailed here — this module writes rows and
+    # owns no transaction, and a service that sent mail inside a write would
+    # send it for a transaction that can still roll back.
+    invites: list = field(default_factory=list)
     # True when this call returned an existing act rather than creating one.
     # The caller renders the same success page either way — a replay that
     # looked different would tell a retrying client it had failed.
@@ -339,6 +349,7 @@ def _write(
 
     created_players: list[EntryPlayer] = []
     created_entries: list[Entry] = []
+    created_invites: list = []
     per_player_fee = _per_player_fee(fee_basis)
 
     for index, spec in enumerate(players):
@@ -389,9 +400,30 @@ def _write(
             session.flush()
             created_entries.append(entry)
 
+            # E3: a doubles event with a named partner mints an invite. The
+            # nomination is recorded on the entry and the raw token is handed
+            # back for the ROUTE to mail — this module owns no transaction,
+            # and mail sent from inside a write goes out for writes that can
+            # still roll back.
+            named = spec.partners.get(str(event.id)) if spec.partners else None
+            if named and partners.is_doubles(event):
+                token = partners.nominate(session, entry, named)
+                if token is not None:
+                    # A conflict at nomination time: the address is already
+                    # spoken for in this event. Both halves are flagged and
+                    # neither is refused (invariant I4) — the software cannot
+                    # know which pairing is the mistake.
+                    clashes = partners.conflicting(session, entry, named)
+                    if clashes:
+                        partners.flag_conflict(entry, *clashes)
+                    created_invites.append((entry, token))
+
     session.commit()
     return SubmissionResult(
-        submission=submission, entries=created_entries, players=created_players
+        submission=submission,
+        entries=created_entries,
+        players=created_players,
+        invites=created_invites,
     )
 
 

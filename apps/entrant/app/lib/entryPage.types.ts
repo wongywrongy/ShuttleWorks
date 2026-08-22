@@ -25,6 +25,9 @@ export interface EntryEventDTO {
   discipline: string;
   feeCents: number | null;
   genderConstraint: string | null;
+  /** E3: 'singles' | 'doubles'. The server's answer, not a guess from the
+   *  discipline string — "Mixed Doubles" is a name a director typed. */
+  entryType?: string;
   /** Display strings, stated in UTC and saying so (`_moment`, pinned wire
    * format `"%Y-%m-%d %H:%M UTC"` — `parseMoment` parses exactly this). */
   opensAt: string | null;

@@ -97,6 +97,46 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+
+def _play_origin() -> str:
+    """Absolute origin for links in entrant mail (program invariant I1)."""
+    return (settings.public_play_origin or settings.public_app_origin).rstrip("/")
+
+
+def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: str) -> None:
+    """Mail one doubles invite.
+
+    **The body names the inviter and the event and nothing else.** It goes to
+    an address a stranger typed into a form, so it must not disclose anything
+    the recipient did not already have a right to know: no other entrants, no
+    fee, no roster. If the address was mistyped, the worst it reveals is that
+    somebody they may not know entered a tournament they may not care about.
+
+    Delivery failure is logged, never raised: a submission that succeeded
+    must not 500 because a mail server was slow, and the desk can re-send.
+    """
+    from core.email import send_email
+
+    origin = _play_origin()
+    try:
+        send_email(
+            to=entry.partner_email,
+            subject=f"{inviter} entered you as their partner",
+            body=(
+                f"{inviter} has entered you as their doubles partner at "
+                f"{tournament_name}.\n\n"
+                f"See the invitation: {origin}/e/partner?token={token}\n\n"
+                "You will need a ShuttleWorks entrant account to accept - the "
+                "page will walk you through it. Nothing is entered in your "
+                "name until you do.\n\n"
+                "If you were not expecting this, ignore this message. The "
+                "invitation expires on its own."
+            ),
+        )
+    except Exception:
+        log.exception("entries: partner invite delivery failed")
+
+
 # ---- DTOs ----------------------------------------------------------------
 
 
@@ -139,6 +179,10 @@ class EventDTO(BaseModel):
     discipline: str
     feeCents: Optional[int] = None
     genderConstraint: Optional[str] = None
+    # E3: 'singles' | 'doubles'. The form needs it to know whether to offer a
+    # partner field, and it is the SERVER's answer rather than a guess from
+    # the discipline string — "Mixed Doubles" is a name a director typed.
+    entryType: str = "singles"
     # Stated in UTC and saying so — an entry deadline read in the wrong
     # zone is a missed entry (``_moment``).
     opensAt: Optional[str] = None
@@ -354,6 +398,7 @@ def entry_page_projection(
                 discipline=ev.discipline,
                 feeCents=ev.fee_cents,
                 genderConstraint=ev.gender_constraint,
+                entryType=ev.entry_type or "singles",
                 opensAt=_moment(ev.opens_at) if ev.opens_at is not None else None,
                 closesAt=_moment(ev.closes_at) if ev.closes_at is not None else None,
                 withdrawsUntil=(
@@ -961,6 +1006,9 @@ async def submit_entry_json(
                 birth_year=spec["birthYear"],
                 remarks=spec["remarks"],
                 events=events,
+                # E3: only the partners this block named for events it
+                # actually selected (``parse_partners`` already filtered).
+                partners=spec.get("partners") or {},
             )
             for spec, events in resolved
         ],
@@ -976,6 +1024,18 @@ async def submit_entry_json(
 
     throttle.throttle_record_entry(repo.session, throttle_key)
     repo.session.commit()
+
+    # E3: the partner invites this act minted, mailed AFTER the commit. An
+    # invite that arrives before the row it names is a race an entrant can
+    # lose by being fast; re-sending is cheap and un-sending is impossible.
+    # A replay mints nothing, so a retried post does not re-mail anybody.
+    for entry, token in result.invites:
+        _send_partner_invite(
+            entry=entry,
+            token=token,
+            tournament_name=tournament.name,
+            inviter=entrant.display_name or entrant.email,
+        )
     # 303, not 302: the browser must re-issue as GET. A replay redirects to
     # the SAME receipt — a retrying client that saw a different answer would
     # conclude its first attempt had failed.

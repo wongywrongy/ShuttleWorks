@@ -73,6 +73,10 @@ describe('parseEcho', () => {
       birthYear: '1990',
       remarks: 'no Saturdays',
       events: [`0:${WD}`],
+      // E3: absent from this post, so an empty map rather than undefined —
+      // the render reads it by event id and a missing key must mean "not
+      // typed", never "this block has no partners object".
+      partners: {},
     });
     expect(echo.players[1].events).toEqual([`1:${MS}`]);
   });
@@ -211,5 +215,44 @@ describe('the not-signed-in outcome (R8-E)', () => {
     const copy = parseEcho(new URLSearchParams('refusalCode=NOT_SIGNED_IN')).refusal;
 
     expect(copy).not.toContain('/e/account');
+  });
+});
+
+describe('parseEcho — partner addresses (E3)', () => {
+  it('reads the address out of the field NAME, per block and per event', () => {
+    const params = new URLSearchParams();
+    for (const name of ['Ada', 'Grace']) params.append('playerName', name);
+    for (const g of ['F', 'F']) params.append('gender', g);
+    params.append(`partner:0:${WD}`, 'sam@example.com');
+    params.append(`partner:1:${MS}`, 'jo@example.com');
+
+    const echo = parseEcho(params);
+
+    expect(echo.players[0].partners).toEqual({ [WD]: 'sam@example.com' });
+    expect(echo.players[1].partners).toEqual({ [MS]: 'jo@example.com' });
+  });
+
+  it('does not let block 1 claim block 10 partners on a prefix match', () => {
+    // `startsWith` is only safe because the prefix ends in the delimiter.
+    // This is the same trap the events split has, checked from the other
+    // side, because the two parsers use different techniques.
+    const params = new URLSearchParams();
+    for (const name of ['a', 'b']) params.append('playerName', name);
+    for (const g of ['M', 'M']) params.append('gender', g);
+    params.append(`partner:10:${WD}`, 'tenth@example.com');
+    params.append(`partner:1:${MS}`, 'first@example.com');
+
+    const echo = parseEcho(params);
+
+    expect(echo.players[1].partners).toEqual({ [MS]: 'first@example.com' });
+  });
+
+  it('drops a blank address rather than echoing an empty value', () => {
+    const params = new URLSearchParams();
+    params.append('playerName', 'Ada');
+    params.append('gender', 'F');
+    params.append(`partner:0:${WD}`, '');
+
+    expect(parseEcho(params).players[0].partners).toEqual({});
   });
 });

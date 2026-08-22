@@ -45,6 +45,21 @@ export interface PlayerEcho {
   remarks: string;
   /** Raw `"<index>:<eventId>"` values, exactly as posted. */
   events: string[];
+  /**
+   * E3: `{event id: partner email}` for this block, exactly as typed.
+   *
+   * Echoed for the same reason every field above is: "Update events and
+   * total" round-trips through the server, and a field that did not survive
+   * it would silently empty itself the moment an entrant pressed the button
+   * that recalculates their price.
+   *
+   * **Optional on the type, always set by `parseEcho`.** The parser fills it
+   * for every block, so a reader never meets `undefined` in practice; the
+   * `?` is for the fixtures and future call sites that construct an echo
+   * describing a form with no doubles event on it, where writing `{}` would
+   * be ceremony rather than information.
+   */
+  partners?: Record<string, string>;
 }
 
 export interface FormEcho {
@@ -159,11 +174,30 @@ export function parseEcho(params: URLSearchParams): FormEcho {
       // hand player 1 a tenth player's selections the day a third block
       // lands.
       events: chosen.filter((value) => value.slice(0, value.indexOf(':')) === String(index)),
+      // The key is in the NAME (`partner:<index>:<event id>`), so this reads
+      // parameter names rather than values — see the field's own comment in
+      // `enter.tsx` for why the address is kept off the delimited side.
+      partners: partnersFor(params, index),
     })),
     showAllEvents: params.get('showAllEvents') !== null,
     totalCents: readCents(params.get('totalCents')),
     refusal: refusalText(params.get('refusalCode'), params.get('refusalSubjects')),
   };
+}
+
+/** `{event id: email}` for one block, off the query string. */
+function partnersFor(params: URLSearchParams, index: number): Record<string, string> {
+  const out: Record<string, string> = {};
+  const wanted = `partner:${index}:`;
+  for (const [key, value] of params.entries()) {
+    // `startsWith` is safe HERE where it is not for the events list: the
+    // prefix ends in the delimiter, so `partner:1:` cannot match
+    // `partner:10:`.
+    if (!key.startsWith(wanted)) continue;
+    const eventId = key.slice(wanted.length);
+    if (eventId && value) out[eventId] = value;
+  }
+  return out;
 }
 
 export function narrowEvents(

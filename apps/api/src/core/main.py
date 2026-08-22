@@ -18,6 +18,7 @@ from entries import entries_json as entries_json_api  # SP-PROGRAM-1 Phase 6 —
 from entries import entries_me as entries_me_api  # SP-P7 — the signed-in entrant's own record
 from entries import entries_routes as entries_api  # SP-E1-1 — the operator's Entries desk
 from entries import entries_site as entries_site_api  # SP-P7 — public draws/seeds/winners/player pages
+from entries import partner_routes as partner_invites_api  # E3 (Phase 8) — the doubles partner invite
 from identity import auth_routes as auth_api  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
 from identity import entrants_routes as entrants_api  # SP-E1-2 — the entrant principal's auth surface
 from identity import invites  # Step 7 — invite-link generate / resolve / accept / revoke
@@ -466,6 +467,12 @@ app.include_router(entries_me_api.router)
 # gated, strictly projected reads. Anonymous like the page projection; the
 # publication flags are the gate, not a session.
 app.include_router(entries_site_api.router)
+# E3 (program Phase 8): the doubles partner invite. Two routes with two
+# different postures on purpose — a PUBLIC preview (a partner has no account
+# when the mail arrives) and an acceptance that declares
+# ``get_current_entrant``. The preview is named in tests/test_auth_surface.py
+# with its reason; the acceptance answers a bare request's 401.
+app.include_router(partner_invites_api.router)
 # Entrant auth (SP-E1-2, ruling R10): the second principal's front door,
 # registered WITHOUT ``_AUTH_DEP`` for the same reason ``auth_api`` below
 # is — signup and login are how a session is *obtained*, so requiring one

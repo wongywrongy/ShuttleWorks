@@ -19,7 +19,7 @@ program brief — that file is the plan; deviation is a STOP).
 | 5 | E1 walking skeleton | **E1 SHIPPED 2026-08-06** (merged `86182af`, under Amendment A1); **delta slice E1-2 SHIPPED 2026-08-07** (phases A–E below; this row said "not started" until 2026-08-12, when the docs pass caught it); **phase open** | public-exposure [USER SIGN-OFF] gate still owed, after Phase 2 |
 | 6 | play.* scaffold + email | **steps 1/2/4 COMPLETE 2026-08-10**; step 3 (email) deferred entirely | **SHIPPABLE.** The one BLOCKING defect (the signup page's Turnstile script blocked by our own CSP → *every* signup 403) is **RESOLVED**: the CSP now admits `challenges.cloudflare.com` in `script-src`/`frame-src` on `/e/signup` only, verified end to end in a browser (see the Phase 6 entry, "The ship blocker — resolved"). Exit gate's "a real verification-class email lands in a real inbox" clause stays **OPEN by ruling** |
 | 7 | E2 lifecycle | **COMPLETE 2026-08-22** on `dev/prog1-p7-e2-lifecycle` (unmerged, awaiting [USER SIGN-OFF] per program rule 7) | `make check` exit 0 — pytest 1735/66 skipped (baseline 1671), vitest 1806 + entrant 674, depcruise 0 errors, import-linter 15 kept. Owner ruling D7 taken at the gate. **Email DELIVERY still owed by Phase 6 step 3** — the code rides the shipped SMTP seam and needs no edit when a provider lands |
-| 8 | E3 doubles | not started | — |
+| 8 | E3 doubles | **COMPLETE 2026-08-22** on `dev/prog1-p8-e3-doubles` (unmerged, awaiting [USER SIGN-OFF]) | `make check` exit 0 — pytest 1752/66 skipped, vitest 1806 + entrant 680, import-linter 15 kept. The anonymous sweep caught a real dependency-ordering defect on the accept route (422 before 401) |
 | 9 | E4 signals/phases | not started | — |
 | 10 | E5 money/retention | not started | — |
 | 11 | Cutover + marketing | not started | — |
@@ -1710,3 +1710,129 @@ depcruise, ruff, import-linter, pytest.
 **Phase 8 — E3: doubles.** Entry conditions are met by this phase. Its one
 external dependency is the invite-token flow, whose precedent (`invite_links`,
 hashed) already ships.
+
+---
+
+## Phase 8 — E3: doubles. **COMPLETE** (2026-08-22)
+
+Branch `dev/prog1-p8-e3-doubles`, off `dev/prog1-p7-e2-lifecycle` @ `27de6ba`.
+Spec Q6 as amended by R10. Until this phase `entry_type` was a column the
+schema stored, the config route accepted and **nothing acted on**: every event
+was treated as singles by the form, the write and the desk alike.
+
+### The one sentence everything follows from
+
+**An invite is not a capability.** R1 gave the partner "their own capability
+link", which made a mailed URL an authenticator for mutating somebody's entry;
+R10 retired that pattern product-wide, and this phase is where the replacement
+lands for the public. The shape is the one the tree already runs for operators
+(`identity/invites.py`): a **public preview** — because a person who has just
+been mailed a link has no account, and starting the flow with an unexplained
+sign-up wall would be worse than useless — and an **acceptance that requires a
+signed-in, verified entrant**. Forwarding your invite mail gives away the right
+to be asked, never the right to act.
+
+### What landed
+
+- **`entries/partners.py`** — nomination, resolution, acceptance and the
+  conflict flag, with the same "nothing here commits" posture as
+  `lifecycle.py`. `is_doubles` is the one place `entry_type` is compared.
+- **Nomination rides the existing write.** `PlayerInput` gained
+  `partners: {event id: email}`, keyed by event because one person entering two
+  doubles events with two different partners is ordinary and a single
+  `partner_email` per person would make it unsayable. The raw token is handed
+  back on `SubmissionResult.invites` and mailed **by the route, after the
+  commit** — a service that sent mail inside a write would send it for
+  transactions that can still roll back.
+- **Acceptance builds the partner's OWN record**: their player, their
+  submission, their `regulations_accepted_at`, linked to the nominator's entry
+  in **both directions** so either half can find the other. Their name and
+  gender come from them — the nominator would be guessing, and R12 makes gender
+  required precisely because eligibility depends on it. `entry_players.
+  account_id` is then honestly theirs, so E2's withdraw path works for them
+  with no special case.
+- **Unpartnered is `pending` + `awaiting_partner`; over-cap is `waitlisted` +
+  `over_cap`.** Kept apart deliberately: Pickleball Brackets auto-parks
+  unpartnered teams on the waitlist, and an entrant then cannot tell whether
+  they need to find a partner or wait for a place. An entry may carry both, and
+  each says what to do about itself.
+- **Conflicts flag both halves and refuse nobody** (invariant I4), at
+  nomination *and* at acceptance — somebody else can accept first, or the named
+  address can enter on their own in the meantime.
+- **Surfaces.** `/e/partner` previews anonymously and posts a native form
+  (plus `/accepted` and `/failed`); the entry form grows a partner field per
+  doubles event; the desk speaks `Pair conflict` and treats it as attention,
+  beside `awaiting_partner`, which is not.
+
+### Schema
+
+`x8d3e9f1a6b7`: `entries.partner_invite_hash` + `partner_invite_expires_at` +
+`partner_accepted_at`, and an index for the public token lookup. No new table —
+`partner_email` and `partner_entry_id` have been sitting on `entries` unused
+since `s3d8f2b5c0e1`.
+
+**The token is stored hashed, and that is a deliberate departure from the
+operator invite it is otherwise modelled on.** `invite_links` uses its own row
+id as the token, in plaintext; tolerable for a link a director pastes into a
+chat, not tolerable for a credential mailed to a member of the public.
+Invariant I5 names this case explicitly and points at the `auth_sessions`
+precedent, which is what this follows.
+
+### Auth surface
+
+One new `PUBLIC_BY_DESIGN` entry — `GET /e/api/partner-invites/{token}` — with
+its reason. The acceptance beside it is session-gated and is deliberately
+absent from that list; `test_cross_principal_sessions` names it instead.
+
+The preview discloses the inviter, the tournament and the event: the three
+things the recipient needs to decide, all three of which the inviter already
+knew and chose to share. It does **not** echo the invited address —
+an unauthenticated echo would let anyone holding a forwarded link confirm who
+it went to, and that is asserted with a negative control.
+
+### Negative controls
+
+- **Doubles gate** → dropped the `is_doubles` branch: a singles entry acquires
+  an `awaiting_partner` reason it can never clear, so it can never be confirmed
+  and Seam A never sees it.
+- **The preview's disclosure line** → added `invitedEmail` to the DTO.
+- **Single use, and it is guarded TWICE.** `accept` spends the hash and
+  `resolve` refuses an entry carrying `partner_accepted_at`. Loosening either
+  one alone still refuses — demonstrated both ways, which is why the test's own
+  comment says so rather than claiming a control it does not have. Red only
+  with both removed.
+- **Invite-vs-capability** → dropping `get_current_entrant` from the accept
+  route makes possession of a forwarded URL the authority to enter somebody
+  into a tournament under a name of the holder's choosing.
+
+### Gates at close
+
+`make check` **exit 0** — pytest **1752 passed / 66 skipped** (baseline 1735;
+the 17 added are `test_partner_invites.py`), vitest console **1806**, entrant
+**680** (baseline 677; run separately, it is not in `make check`), eslint 0
+errors, depcruise 0 errors / 16 warnings, import-linter **15 kept, 0 broken**.
+
+**Three gates fired on the way and each caught something real**, which is
+worth recording because none was noise:
+
+1. **`tsc -b`** — `PlayerEcho.partners` was declared required, so every test
+   fixture constructing an echo broke. Made optional: `parseEcho` always sets
+   it, and a fixture describing a form with no doubles event on it should not
+   have to write `{}`.
+2. **ruff** — an unused import left behind when the mailer moved to a helper.
+3. **`test_auth_surface`'s anonymous sweep — a genuine defect.** The accept
+   route answered an anonymous caller **422**, not 401: FastAPI resolves
+   dependencies in declaration order, and the body parser was declared before
+   `get_current_entrant`. So the route validated for strangers and
+   authenticated afterwards, handing an unauthenticated caller a field-by-field
+   description of what it wants. Fixed by declaring the principal first, with
+   the reason written at the call site — the ordering is load-bearing and looks
+   like formatting.
+
+### Exactly next
+
+**Phase 9 — E4: signals, phases, public reads.** Its entry condition ("needs
+real entry states") is now met twice over: E2 produced the lifecycle and E3
+produced `awaiting_partner` and `pair_conflict`. It also inherits a concrete
+input from E2 — `lifecycle.committed_and_withdrawn` is already derived and
+waiting for the `COMMITTED_ENTRY_WITHDREW` attention code to read it.

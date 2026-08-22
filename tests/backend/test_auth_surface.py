@@ -184,6 +184,19 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "registered, and the unknown branch CHARGES the eip: throttle so "
         "walking an address list is not free"
     ),
+    ("GET", "/e/api/partner-invites/{token}"): (
+        "E3 (Phase 8) — the doubles partner's PREVIEW. Public by nature: the "
+        "recipient has just been mailed a link and has no account, so "
+        "requiring one before they can see what they are being asked would "
+        "start the flow with an unexplained sign-up wall. It is the operator "
+        "invite's own shape (identity/invites.py) applied to a member of the "
+        "public. It discloses the inviter, the tournament and the event and "
+        "nothing else — notably NOT the invited address, which an "
+        "unauthenticated echo would let any holder of a forwarded link "
+        "confirm. Unknown, expired, already-accepted and attached-to-a-dead- "
+        "entry are one uniform 404. The ACCEPTANCE beside it is session-gated "
+        "and is deliberately absent from this list"
+    ),
     ("POST", "/e/account/reset-password"): (
         "reset completion — the mailed token IS the credential, which is "
         "the whole point of the flow. Consuming it revokes every live "

@@ -101,6 +101,14 @@ export default [
   route('reset/sent', 'routes/resetPassword.tsx', { id: 'reset-sent' }),
   route('reset/done', 'routes/resetPassword.tsx', { id: 'reset-done' }),
   route('reset/failed', 'routes/resetPassword.tsx', { id: 'reset-failed' }),
+  // The doubles invitation (E3, Phase 8) and its two outcomes. The mailed
+  // link is `/e/partner?token=…`; the page previews anonymously and its form
+  // posts to a FastAPI route that requires a signed-in verified entrant —
+  // which is the whole difference between an invite and the capability token
+  // R10 retired. Static, so no workspace can be called "partner".
+  route('partner', 'routes/partner.tsx'),
+  route('partner/accepted', 'routes/partner.tsx', { id: 'partner-accepted' }),
+  route('partner/failed', 'routes/partner.tsx', { id: 'partner-failed' }),
   // `/e/me/entries` — the signed-in entrant's home (SP-P7 §3.1). Static, so
   // it ranks above `:slug`, and `me` is in the backend's `_RESERVED_SLUGS`
   // so no workspace can ever claim the segment. The document is an

@@ -95,6 +95,8 @@ _RESERVED_SLUGS = frozenset({
     # "verify" would be unreachable behind them, and — worse — a director
     # could claim the slug an entrant's confirmation link points at.
     "verify", "forgot", "reset",
+    # E3 (Phase 8): the doubles invitation page.
+    "partner",
 })
 
 

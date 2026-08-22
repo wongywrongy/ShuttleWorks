@@ -96,6 +96,12 @@ ENTRANT_REACHABLE = (
         ("POST", "/e/account/resend-verification"),
         ("POST", "/e/api/me/entries/{entry_id}/withdraw"),
     }
+    # E3 (Phase 8): accepting a doubles invite is an act by an entrant
+    # principal — that is the whole difference between an invite and the
+    # capability token R10 retired. The concrete token this sweep sends is
+    # not a real one, so it answers the uniform 404 either way; listed
+    # because it is entrant-reachable by design.
+    | {("POST", "/e/api/partner-invites/{token}/accept")}
 )
 
 

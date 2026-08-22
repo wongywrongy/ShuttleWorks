@@ -300,6 +300,34 @@ function PlayerBlock({
             </label>
           );
         })}
+        {/* E3: the partner field for every doubles event on offer.
+            **Rendered whether or not the event is ticked**, and that is a
+            consequence of the zero-JS constraint rather than an oversight:
+            nothing here can react to a checkbox. The server does the
+            filtering instead — `parse_partners` keeps only the addresses
+            whose event this block actually selected — so a stale value in an
+            unticked box nominates nobody.
+
+            The field NAME carries the key (`partner:<block>:<event id>`) and
+            the value is only the address. The events checkbox has to encode
+            its key in its value, because a checkbox's value IS its payload;
+            here there is a choice, and putting a user-typed string on the
+            safe side of the split is the better one. */}
+        {offered
+          .filter((event) => event.entryType === 'doubles')
+          .map((event) => (
+            <div key={`partner-${event.id}`} className="sm:col-span-2">
+              <TextField
+                id={`partner-${index}-${event.id}`}
+                label={`Partner's email for ${event.code}`}
+                name={`partner:${index}:${event.id}`}
+                type="email"
+                maxLength={320}
+                defaultValue={said.partners?.[event.id] ?? ''}
+                hint="We email them an invitation. Nothing is entered in their name until they accept, and you can leave this blank and add them later."
+              />
+            </div>
+          ))}
         {offered.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             No event is usually open to this player. Tick &ldquo;Show every event&rdquo;
