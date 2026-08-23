@@ -71,7 +71,7 @@ Both targets assume a host backend is already running on `:8600` — they only l
 **Two backend variables, one per surface — swapping them fails silently.** The entrant SSR server
 reads `API_BASE_URL` (`entrant/app/lib/apiFetch.server.ts`, which *throws* when it is unset, so
 every API-backed route 500s). `VITE_API_PROXY_TARGET` is read only by the operator SPA's dev proxy
-(`frontend/vite.config.ts`) and does nothing for the entrant app. The Make targets set each on the
+(`apps/console/vite.config.ts`) and does nothing for the entrant app. The Make targets set each on the
 surface that reads it. Ports are passed as `--port`; a `PORT` env var is ignored by both dev
 servers.
 
@@ -104,11 +104,11 @@ to the zero-friction bootstrap identity. Copy
 
 ### Cloud mode
 
-Drop a `backend/.env` with `ENVIRONMENT=cloud` to flip into the multi-tenant cloud runtime:
+Drop an `apps/api/.env` with `ENVIRONMENT=cloud` to flip into the multi-tenant cloud runtime:
 Postgres instead of SQLite, standalone `python -m worker` containers instead of the embedded
 worker, and real accounts instead of the bootstrap identity. It fails closed at startup without
 Postgres, `AUTH_MODE=cloud`, `SESSION_COOKIE_SECURE=true`, and SMTP — see
-`infra/compose/docker-compose.cloud.yml` and `backend/README.md`.
+`infra/compose/docker-compose.cloud.yml` and `apps/api/README.md`.
 
 ## Tests
 

@@ -101,18 +101,18 @@ drifted apart and the API failed to authenticate.
 ## 3. `.env`
 
 ```bash
-cp .env.selfhost.example .env   # then edit
+cp infra/compose/.env.selfhost.example .env   # then edit
 chmod 600 .env
 ```
 
-`.env.selfhost.example` carries exactly the variables this stack's compose file
+`infra/compose/.env.selfhost.example` carries exactly the variables this stack's compose file
 reads, each with the consequence of getting it wrong. Compose fails fast on the
 required ones rather than booting into a broken state. The table below is the
 wider backend reference — most of its rows have defaults you will not touch.
 
 ### Reference
 
-Verified against `backend/app/config.py`. "Required" means the process refuses
+Verified against `apps/api/src/core/config.py`. "Required" means the process refuses
 to start without it, or misbehaves in a way you will not notice.
 
 | Variable | Default | Local | Cloud API | Worker | What breaks if wrong |
@@ -241,7 +241,7 @@ re-check them after any Access policy edit.
 
 The Entries module adds a genuinely public surface. Since SP-PROGRAM-1 Phase 6
 it is served by **two tiers behind one hostname** (ruling R8-A), and
-`frontend/nginx.conf` is the only thing that knows there are two:
+`infra/nginx/console.conf` is the only thing that knows there are two:
 
 | Prefix | Served by | What lives there |
 | --- | --- | --- |
@@ -253,7 +253,7 @@ Longest-prefix wins, so `/e/api/` and `/e/account/` reach FastAPI while a slug
 falls through to node. `api` and `account` are reserved slugs on the node side
 so a director cannot mint an entry page that collides with the split.
 
-The edge configuration for all of it already exists in `frontend/nginx.conf`:
+The edge configuration for all of it already exists in `infra/nginx/console.conf`:
 a `sw_entries` `limit_req` zone (**120 r/m, burst 30**, the same number
 `sw_display` uses) applied at all four `/e/` locations, plus an explicit
 `location /e/` block that also stops the SPA fallback swallowing entry links.
@@ -382,12 +382,12 @@ nothing to set here.** Prefer the subnet over a container address: Docker
 reassigns container IPs on `--force-recreate`, and a pinned literal that stops
 matching fails open, silently.
 
-`.env.selfhost.example` therefore does **not** set this variable, and that
+`infra/compose/.env.selfhost.example` therefore does **not** set this variable, and that
 absence is deliberate: compose interpolates `.env` *before* applying a `:-`
 default, so anything the template says beats the compose file. Until
 2026-08-11 the template shipped `TRUSTED_PROXY_IPS=172.20.0.3` — an address
 from a subnet this stack no longer uses — and because §3's first step is
-`cp .env.selfhost.example .env`, every install inherited a trust check that
+`cp infra/compose/.env.selfhost.example .env`, every install inherited a trust check that
 could not match. Symptom: the failure this whole section describes, from day
 one, with nothing in any log.
 
@@ -400,7 +400,7 @@ echo 'TRUSTED_PROXY_IPS=10.201.0.0/24' >> .env   # must match `networks:` in the
 Both a bare address and a CIDR block are accepted.
 
 ::: warning The third place is inside the frontend image
-`apps/console/nginx.conf` carries `set_real_ip_from
+`infra/nginx/console.conf` carries `set_real_ip_from
 10.201.0.0/24`, which is how nginx decides whether to believe
 `CF-Connecting-IP` for **its own** rate-limit zones (`sw_auth`, `sw_entries`,
 `sw_display`) and what it then forwards to the API. It is baked into the

@@ -4,28 +4,29 @@
 TypeScript DTO twin, an `apiClient` method, and the hook that calls it — keeping
 the frontend and backend types in lock-step.
 
-This is the recipe from `frontend/src/api/README.md`, with the worked example
+This is the recipe from `apps/console/src/api/README.md`, with the worked example
 being the bracket result command (`submit_bracket_command` →
 `recordBracketResultCommand`).
 
 ::: info The one rule
 `api/dto.ts` holds a TypeScript twin of **every** Pydantic model in
-`backend/app/schemas.py`. Keep them field-for-field in lock-step — a drift here
+`apps/api/src/core/schemas.py`. Keep them field-for-field in lock-step — a drift here
 is the most common source of runtime surprises.
 :::
 
 ## 1 · Backend — model, handler, router
 
-1. Add the request/response models to `backend/app/schemas.py` (or a
+1. Add the request/response models to `apps/api/src/core/schemas.py` (or a
    feature-local schema module, as `brackets.py` does with `BracketCommandRequest`).
-2. Add the handler to the feature's router file, `backend/api/<feature>.py`:
+2. Add the handler to the owning domain's router file, `apps/api/src/<domain>/<feature>_routes.py` — each domain package owns its
+   routers as well as its services (SP-REORG-1 Phase 3):
 
    ```python
    @router.post("/commands", response_model=TournamentOut, dependencies=[_OPERATOR])
    def submit_bracket_command(body: BracketCommandRequest, ...):
        ...
    ```
-3. Register the router in `backend/app/main.py` if the feature file is new.
+3. Register the router in `apps/api/src/core/main.py` if the feature file is new.
 
 ### The enforcement seam — non-negotiable for workspace routes
 
@@ -74,7 +75,7 @@ async recordBracketResultCommand(tid: string, body: BracketCommandRequest) {
 ## 4 · Frontend — call it from a hook
 
 Components never call `apiClient` directly — **hooks are the seam**. Add or extend
-a hook under `frontend/src/hooks/` (e.g. `useBracketResultQueue`) that owns the
+a hook under `apps/console/src/hooks/` (e.g. `useBracketResultQueue`) that owns the
 call, the optimistic apply, and the outcome routing.
 
 ## 5 · If the endpoint is module-owned, declare it

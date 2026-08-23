@@ -50,11 +50,11 @@ Expose any tunables end-to-end so the product can set them:
 
 ```
 domain/models.SolverOptions          # add the field + default
-  → backend/app/schemas.py           # mirror it on the config DTO
+  → apps/api/src/core/schemas.py     # mirror it on the config DTO
     → frontend/src/api/dto.ts        # the TypeScript twin
 ```
 
-`backend/adapters/badminton.py` (`solver_options_for`) maps the frontend tournament config onto
+`apps/api/src/shared/sport/badminton.py` (`solver_options_for`) maps the frontend tournament config onto
 `SolverOptions` — and for the meet job rail, `services/solve_child.py` builds `SolverOptions` from
 the job's persisted `params` (seed, `num_workers`, `max_deterministic_time`), so a new knob must
 also flow through `services/solve_jobs.default_solve_params` if jobs should carry it.

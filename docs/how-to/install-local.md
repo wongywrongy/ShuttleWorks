@@ -36,7 +36,7 @@ reserved range, prefix `BACKEND_HOST_PORT=8600`.
 `make stop` shuts it down. `make scheduler-dev` runs Vite on `:5173` with HMR
 instead.
 
-That is the whole installation. Defaults in `apps/api/app/config.py`
+That is the whole installation. Defaults in `apps/api/src/core/config.py`
 already describe local mode — `ENVIRONMENT=local`, `AUTH_MODE=local`,
 `EMBEDDED_WORKER=true`, `EMAIL_BACKEND=console` — so no `.env` is needed.
 

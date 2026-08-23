@@ -241,7 +241,7 @@ frontend image:
 echo 'TRUSTED_PROXY_IPS=10.201.0.0/24' >> .env   # must match `networks:` in the compose file
 ```
 
-`apps/console/nginx.conf` carries `set_real_ip_from
+`infra/nginx/console.conf` carries `set_real_ip_from
 10.201.0.0/24`, which is how nginx decides whether to believe `CF-Connecting-IP`
 for its own rate-limit zones and what it forwards to the API. It is baked into
 the image, so a changed subnet needs an edit there and a rebuild, or nginx keys

@@ -15,7 +15,7 @@ PATCH /tournaments/{tournament_id}/modules/{module_id}
 body: { status?: "enabled" | "disabled", config?: {...} }
 ```
 
-`backend/api/workspace_modules.py` is the **single** place the rules are enforced
+`apps/api/src/workspaces/workspace_modules.py` is the **single** place the rules are enforced
 (the repository's `modules.update` is deliberately unguarded). Both body fields
 are optional; an omitted field is preserved (`exclude_unset` — no data loss).
 
