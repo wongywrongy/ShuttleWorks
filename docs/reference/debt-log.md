@@ -128,6 +128,8 @@ Mechanical, each independently shippable. Grouped only so the list stays scannab
 
 - **`tools/docs-freshness.mjs` maps two areas to a path that moved before this program.** Its `AREAS` manifest names `src/app/workspace/workspaceNav.ts` for both "Module contracts & overview" and "Extending (how-to guides)"; the nav model relocated to `platform/product-shell/workspaceNav.ts` on 2026-08-17. A mapping that points at a nonexistent file silently reports its area as never-changing, which is the one failure mode a freshness check must not have. Left alone deliberately so it is not mistaken for reorg damage. XS.
 
+- **Nothing checks that a backticked path in the docs still exists.** The build gate fails on broken *links*, so `[Modules](/reference/modules/entries)` is held — but `` `docs/programs/ENTRIES_PROGRESS.md` `` is just text, and every one of those rotted silently when SP-REORG-1 Phase 5 moved seven trees under `docs/history/`. The 2026-08-23 sweep fixed **17 across 9 live pages**, including `docs/index.md` and the whole docs-tree table in `reference/repo-layout.md` — the authoritative layout reference, stale in every row. The same class hit `reference/modules/entries.md`, which still named pre-SP-REORG-1 module paths (`api/entries.py`). A path-existence check over backticked repo-relative paths in the rendered quadrants would be a small script and would have caught all of it; the awkward half is deciding what counts as a path versus prose. Related in kind to the `docs-freshness` item above — both are "the doc says something about the tree that the tree stopped agreeing with". S.
+
 ---
 
 ## Recorded deliberately — not defects, not scheduled
@@ -160,7 +162,7 @@ Kept so a future reader doesn't rediscover them as bugs.
   now exist to catch a recurrence: the backend logs again (`efeb08c` — Alembic's `fileConfig` had been
   disabling every uvicorn logger for the life of the process, which is why hundreds of 500s left no
   traceback) and `test_concurrent_requests.py` (`7cae310`) fires genuinely parallel requests at the
-  whole app. **Full account, evidence and soak numbers: `docs/audits/2026-08-11-incident-500-burst.md`.**
+  whole app. **Full account, evidence and soak numbers: `docs/history/audits/2026-08-11-incident-500-burst.md`.**
   Size: unknown by construction; it is an investigation, not a task.
 
 

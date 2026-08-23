@@ -1,17 +1,22 @@
 """The Entries facts the control plane reads (E4, program Phase 9 — spec Q9).
 
-**Why this lives in ``shared/`` and not in ``entries/``.** Two modules need
-it and neither may name the other: the persistence layer builds it from
-grouped queries, and ``workspaces/workspace_signals.py`` derives the phase
-and the attention codes from it — and the import-linter contract "Workspaces
-names only Bracket, Identity, Meet and Operations" forbids a
-``workspaces -> entries`` edge. That contract is not an obstacle here, it is
-a description of the right answer: the *lifecycle* of an entry is Entries'
-business, the *shape of a workspace's entries* is a fact about the
-workspace, and this module is the second thing with no opinion about the
-first. It follows ``shared/``'s rule literally — it names no domain, imports
-no domain, and reads its inputs structurally (``getattr``), so it will
-compile against anything with the right attributes.
+**Why this lives in ``workspaces/`` and not in ``entries/``.** The
+import-linter contract "Workspaces names only Bracket, Identity, Meet and
+Operations" forbids a ``workspaces -> entries`` edge, and that contract is
+not an obstacle here — it is a description of the right answer. The
+*lifecycle* of an entry is Entries' business; the *shape of a workspace's
+entries* is a fact about the workspace, and aggregating facts about a
+workspace is what the control plane is for. So this module names no domain,
+imports no domain, and reads its inputs structurally (``getattr``): it will
+compile against anything carrying the right attributes, and the rows it
+counts are handed to it by the caller.
+
+It shipped in ``shared/`` and was moved here on 2026-08-23, because
+``shared/`` is chartered for domain logic **two or more domains** import and
+this has exactly one importer. The old home passed every machine contract —
+which is the point worth remembering: the admission rule for ``shared/`` is
+prose in ``apps/api/.importlinter``, not something lint-imports can check,
+so it is only as good as the reading it gets.
 
 **Everything here is pure and every number is COUNTED, never inferred.**
 ``build_entries_facts`` takes rows and returns a frozen record; the phase
@@ -28,7 +33,7 @@ from typing import Any, Optional, Sequence
 
 # The entry states this module reasons about. Spelled here rather than
 # imported from ``entries.lifecycle`` because importing it would be the
-# ``shared -> entries`` edge the module docstring exists to avoid — and
+# ``workspaces -> entries`` edge the module docstring exists to avoid — and
 # because these five strings are wire vocabulary that the database already
 # stores, not a rule. ``tests/backend/unit/test_entries_signals.py`` asserts
 # the two spellings agree, so the duplication cannot drift silently.

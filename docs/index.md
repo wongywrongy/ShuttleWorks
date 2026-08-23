@@ -48,12 +48,12 @@ features:
 | Know why a choice was made | [Decisions (ADRs)](/explanation/decisions/) |
 | Look up a term | [Glossary](/reference/glossary) |
 | See a day play out | [Operational scenarios](/explanation/architecture/operational-scenarios) |
-| See what has been built, and when | Program ledgers in `docs/programs/` (repo working records, outside this site) |
+| See what has been built, and when | Program ledgers in `docs/history/programs/` (repo working records, outside this site) |
 
 ::: tip This site is curated, not exhaustive
 The full design record — per-slice specs, dated change logs, audits, and the historical
-backend-merge roadmap — lives on disk under `docs/superpowers/`, `docs/changes/`,
-`docs/audits/`, and `docs/architectural-roadmap.md`. Those trees are intentionally **excluded**
+backend-merge roadmap — lives on disk under `docs/history/` (`superpowers/`, `changes/`,
+`audits/`, `architectural-roadmap.md`). Those trees are intentionally **excluded**
 from this site (they carry GitHub-relative links and implementation scratch). Useful prose from
 them has been consolidated into the pages here; the originals remain the archive.
 :::

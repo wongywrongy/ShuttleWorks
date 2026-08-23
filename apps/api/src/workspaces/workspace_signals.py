@@ -17,7 +17,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from db.models import display_dependency_satisfied
-from shared.entries_facts import EntriesFacts
+from workspaces.entries_facts import EntriesFacts
 
 
 @dataclass
@@ -523,7 +523,7 @@ def _entries_metrics(entries: Optional[EntriesFacts]) -> Optional[EntriesMetrics
     """Project the counted facts onto the wire, or answer None.
 
     A straight projection with no arithmetic: every number here was counted
-    in ``shared/entries_facts``, and a total re-derived at the boundary is a
+    in ``workspaces/entries_facts``, and a total re-derived at the boundary is a
     second answer waiting to disagree with the first.
     """
     if entries is None:

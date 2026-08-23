@@ -106,24 +106,36 @@ This site lives in `docs/` and is built by VitePress (`config.mts`, `srcDir: doc
 [Architecture](/explanation/architecture/system-overview), [Modules](/reference/modules/meet),
 [Module contracts](/reference/contracts/), [API reference](/reference/api/), and [Decisions](/explanation/decisions/).
 
-The pre-existing design record stays on disk but is **excluded from the site** (via `srcExclude`)
-because it carries GitHub-relative links and implementation scratch:
+Everything that is a **dated working record** rather than curated IA lives under
+`docs/history/`, which SP-REORG-1 Phase 5 made the single home for it. The whole tree is
+**excluded from the site** by one `srcExclude` entry (`history/**`) — it carries
+GitHub-relative links and implementation scratch, and it is never rewritten. Three other
+things are excluded alongside it: the workspace-suite ownership maps
+(`explanation/architecture/workspace-suite/**`, labelled historical snapshots),
+superseded drafts (`**/*.superseded-draft-*.md`), and `README.md`. **A page that
+`srcExclude` drops cannot be linked to from a rendered page** — the dead-link gate fails
+the build — so refer to those by backticked path, never by link:
 
 | On-disk tree | What it holds |
 | --- | --- |
-| `docs/superpowers/specs/` · `docs/superpowers/plans/` | Per-slice design specs + implementation roadmaps (incl. the workspace-suite redesign and the module-architecture-modernization design). |
-| `docs/architecture/workspace-suite/` | Ownership maps, the glossary, import boundaries, the meet design inventory. |
-| `docs/tech-stack.md` | The post-merge architecture + data-model reference. |
-| `docs/changes/` | Dated decision logs. |
-| `docs/audits/` | Historical UI/UX audits + screenshots. |
-| `docs/programs/` | Program ledgers — `CLOUD_PROGRESS.md`, `SEC_PROGRESS.md`, `REFACTOR_PROGRESS.md`, `FRONTEND_PROGRESS.md` — each read at session start and updated at session end, plus the `design-plan/` working notes. Moved off the repo root on 2026-08-06 so the root holds only files a tool or convention reads by path. |
-| `docs/deploy/cloud.md` | Tombstone. The Supabase-era deployment guide was removed 2026-08-06; use the `how-to/` runbooks. |
-| `docs/architectural-roadmap.md` | The historical backend-merge arc roadmap. |
+| `docs/history/superpowers/specs/` · `plans/` | Per-slice design specs + implementation roadmaps (incl. the workspace-suite redesign, the module-architecture modernization, and the Entries design). |
+| `docs/history/programs/` | Program ledgers — `CLOUD_PROGRESS.md`, `SEC_PROGRESS.md`, `REFACTOR_PROGRESS.md`, `FRONTEND_PROGRESS.md`, `ENTRIES_PROGRESS.md` and the rest — each read at session start and updated at session end, plus the master plans and the `design-plan/` working notes. |
+| `docs/history/audits/` | Dated audits + surface reports. |
+| `docs/history/changes/` | Dated decision logs. |
+| `docs/history/progress/` | The progress board. |
+| `docs/history/tech-stack.md` · `architectural-roadmap.md` | The post-merge architecture reference and the backend-merge arc roadmap, both retired as curated pages. |
+| `docs/history/PRODUCT.md` · `SCHEDULER.md` | The two product records SP-REORG-1 relocated. |
+| `docs/history/deploy/cloud.md` | Tombstone. The Supabase-era deployment guide was removed 2026-08-06; use the `how-to/` runbooks. |
 
-Nothing there is deleted — it is the archive. The one exception is `deploy/cloud.md`, whose
-body was removed on 2026-08-06 because it was a runbook for a topology that never existed;
-the path survives as a tombstone and the text is in git history. The curated pages here are
-the single source of truth going forward.
+Nothing there is deleted — it is the archive. The one exception is `history/deploy/cloud.md`,
+whose body was removed on 2026-08-06 because it was a runbook for a topology that never
+existed; the path survives as a tombstone and the text is in git history. The curated pages
+here are the single source of truth going forward.
+
+**Program ledgers moved twice and both moves are load-bearing to remember**: off the repo
+root on 2026-08-06 (so the root holds only files a tool or convention reads by path), then
+under `history/` in SP-REORG-1 Phase 5. `docs/programs/` no longer exists; any reference to
+it is stale.
 
 ## Keeping these docs current
 

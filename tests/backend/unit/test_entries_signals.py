@@ -3,7 +3,7 @@
 Spec Q9, executed and pinned. Everything under test is pure: `EntriesFacts`
 is built from literals, the phase and the codes are derived from that record,
 and no database appears anywhere. That is deliberate — the whole point of
-putting the counting in `shared/entries_facts.py` and the judgement in
+putting the counting in `workspaces/entries_facts.py` and the judgement in
 `workspace_signals.py` is that both halves can be exercised against stated
 inputs instead of against a fixture whose state has to be reasoned about.
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from shared.entries_facts import build_entries_facts
+from workspaces.entries_facts import build_entries_facts
 from workspaces.workspace_signals import (
     RowCounts,
     _derive_phase,
@@ -356,12 +356,12 @@ def test_the_vocabulary_is_exactly_the_spec_s_six():
 
 
 def test_the_state_vocabulary_matches_the_lifecycle_module():
-    """`shared/entries_facts` spells the five entry states rather than
+    """`workspaces/entries_facts` spells the five entry states rather than
     importing them, because importing would be the `shared -> entries` edge
     the module exists to avoid. This is what stops the duplication drifting.
     """
     from entries import lifecycle
-    from shared import entries_facts
+    from workspaces import entries_facts
 
     assert entries_facts._UNVERIFIED == lifecycle.UNVERIFIED
     assert entries_facts._PENDING == lifecycle.PENDING
@@ -374,6 +374,6 @@ def test_the_state_vocabulary_matches_the_lifecycle_module():
 
 def test_the_conflict_code_matches_the_partners_module():
     from entries import partners
-    from shared import entries_facts
+    from workspaces import entries_facts
 
     assert entries_facts._PAIR_CONFLICT == partners.PAIR_CONFLICT

@@ -8,7 +8,7 @@ with two open items deferred (below).
 dependency-cruiser's `no-cross-product` rule (a product under
 `src/products/{X}/` importing another product's internals) sat at **warn** with a
 pile of violations and a plan to "ratchet to error after cleanup." The
-debt-paydown program triaged every edge (`docs/audits/02-review-2-3.md`) and
+debt-paydown program triaged every edge (`docs/history/audits/02-review-2-3.md`) and
 found the pile is not uniform: some edges are legitimate composition, some are
 genuinely misplaced shared code, and a few are real architectural debt that needs
 a design decision. Ratcheting blindly to error would have forced bad couplings
@@ -69,5 +69,5 @@ remain. Progress so far: 17 → 11 warnings.
 
 ## See also
 
-- `docs/audits/01-findings.md` (F-ARCH-2, F-ARCH-3) · `02-review-2-3.md`
+- `docs/history/audits/01-findings.md` (F-ARCH-2, F-ARCH-3) · `02-review-2-3.md`
 - [ADR 0006 — Unified scheduling core, non-merged match record](/explanation/decisions/0006-unified-scheduling-core) · [ADR 0010 — Nav model in platform](/explanation/decisions/0010-nav-model-in-platform)

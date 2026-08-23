@@ -75,7 +75,7 @@ touch the repo.
 whispered.
 
 - **Standing discipline.** `CODE_HEALTH.md` (repo root) defines the ongoing practice
-  — follow prior art, bounded cleanup, cover-before-modify — and `docs/audits/debt-log.md`
+  — follow prior art, bounded cleanup, cover-before-modify — and `docs/reference/debt-log.md`
   is the live backlog. Out-of-scope debt is *logged*, not silently fixed or ignored.
 - **Architecture boundaries** are enforced by dependency-cruiser: `platform` must not
   import `app`/`products` (**error**), and cross-product imports are **warn**,
@@ -166,5 +166,5 @@ event, not a fleet.
 - [Glossary](/reference/glossary) — outbox, mirror, local-only tables, source of truth
 - [Deploy](/how-to/deploy) · [Operations](/how-to/operations) — the current deployment
   and day-two runbooks
-- Historical infra note: `docs/deploy/cloud.md` is a tombstone — the Supabase-era
+- Historical infra note: `docs/history/deploy/cloud.md` is a tombstone — the Supabase-era
   deployment guide was removed 2026-08-06; it points at the ADRs that hold the record

@@ -159,7 +159,7 @@ def test_nothing_is_published_while_entries_are_still_open(client):
 
 def test_an_undated_event_never_publishes_a_queue(client):
     """The director has not said when entries stop, so nothing has closed.
-    Same reading `shared/entries_facts` takes for the control plane."""
+    Same reading `workspaces/entries_facts` takes for the control plane."""
     world = _world(client, closes_at=None)
     _seed(world, "First Reserve", state="waitlisted", minutes_ago=40)
 

@@ -2120,3 +2120,79 @@ something only the owner can provide**, and none of them is code:
   prototyping done.
 - **Phase 5's public-exposure [USER SIGN-OFF]** — sits after Phase 2 by
   Amendment A1.
+
+---
+
+## Integration pass — merge, audit, and the one architecture correction (2026-08-23)
+
+The five outstanding branches were merged and the merged tree was audited
+against the spec rather than against this ledger. Recorded here because two
+of the findings are older than the program and will otherwise be re-found.
+
+### The merge
+
+`design/console-5` + phases 7–10 form a straight line off `main`, so they
+fast-forwarded as one (121 files, +11,113/−330). `chore/make-check-entrant-gates`
+merged on top; the two sets do not overlap — the entries stack touches neither
+`Makefile` nor `CLAUDE.md` — but the ordering matters in one direction, because
+every phase in this program had to run the entrant suite **by hand**, precisely
+because the local gate skipped it. From here `make check` covers both tiers.
+
+Gate on the merged tree: **exit 0** — pytest **1807 passed / 66 skipped**,
+console vitest **1812**, entrant vitest **683**, eslint 0 errors, console
+depcruise 0 errors / 16 pre-ratchet warnings, entrant depcruise clean,
+import-linter **15 kept, 0 broken**, docs build (dead-link gate) clean.
+
+**`modules/entries` appears in none of the 16 depcruise warnings.** Four
+slices of frontend added no cross-module edge at all.
+
+### Features, checked against spec §7 rather than against this file
+
+Every E2–E5 line item in the spec's delivery table is present. The four that
+were not obvious from the phase entries were confirmed at the source:
+regulations versioning (`regulations_version_accepted`), `remarks` carried
+through the commit seam, `list_opt_out` honoured in every public read, and
+`withdraws_until` enforced on entrant withdrawal. The reserve list advances
+position over opted-out rows rather than closing up over them, so a printed
+position means what it says.
+
+### The architecture correction: `entries_facts` moved out of `shared/`
+
+`shared/entries_facts.py` → **`workspaces/entries_facts.py`**.
+
+`shared/` is chartered for domain logic **two or more domains** import, owned
+by none (SP-REORG-1 ruling R1, stated in `apps/api/.importlinter`'s header).
+`entries_facts` had exactly one importer, `workspaces`. It passed every machine
+contract — it names no domain and imports no domain — so nothing caught it, and
+nothing could: **the admission rule for `shared/` is prose, not a contract.**
+Its own docstring supplied the argument for the right home ("the shape of a
+workspace's entries is a fact about the workspace"), and aggregating facts
+about a workspace is what the control plane is for.
+
+`shared/` now holds exactly what its charter says. The check that proves it:
+`sport/badminton.py` is imported by meet, bracket and solve_rail;
+`scheduling/params.py` is imported by bracket directly and by meet and
+solve_rail through `badminton.py` — a direct-importer count alone reads that
+second one as single-consumer and would have moved it wrongly.
+
+Behaviour is unchanged: pure counting functions, same inputs, same outputs,
+35 tests over the two touched modules green, ruff and import-linter clean.
+
+### Two documentation defects, both older than this program
+
+- **`reference/modules/entries.md` described a module four slices out of
+  date** — no verification, partners, retention, export or erasure — and its
+  "where things live" section still named **pre-SP-REORG-1 paths**
+  (`api/entries.py`, `services/entries.commit_entries`). Rewritten against the
+  real tree, with the lifecycle, doubles, money/retention and signals sections
+  the module had grown.
+- **`reference/repo-layout.md`'s docs-tree table was stale in every row.**
+  All seven trees it listed moved under `docs/history/` in SP-REORG-1 Phase 5.
+  The authoritative layout reference described a layout that no longer existed.
+  Rewritten, plus the `srcExclude` consequence that explains why these rot
+  unseen: an excluded page cannot be linked to, so it can only be referred to
+  by backticked path — and **the build gate checks links, not paths**.
+
+17 stale paths across 9 live pages were corrected in total. The class is now
+in the debt log; `docs/history/**` was deliberately left alone, since a dated
+record is allowed to say what was true on its date.

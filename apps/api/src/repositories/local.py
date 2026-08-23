@@ -1467,7 +1467,7 @@ class _LocalEntriesSignalRepo:
     """Grouped reads of the Entries family, for the control plane (E4).
 
     **Rows out, no derivation.** This layer fetches and returns; the counting
-    lives in ``shared/entries_facts`` and the caller performs it. That split
+    lives in ``workspaces/entries_facts`` and the caller performs it. That split
     is not stylistic — the import-linter contract "Persistence does not import
     upward" puts ``shared`` above ``repositories``, and a repository that
     built a domain record would be reaching up through it. Every other grouped

@@ -220,7 +220,7 @@ guards the roster, not the schedule.
 ::: warning Bracket lock signal is bracket-data-scoped
 The workspace-level **Venue and schedule** ribbon reads the *meet* store flag, so a
 bracket-only lock (committed bracket schedule / started draw) may show nothing
-there — the server 409 is the backstop. Tracked in `docs/audits/debt-log.md`.
+there — the server 409 is the backstop. Tracked in `docs/reference/debt-log.md`.
 :::
 
 ## See also

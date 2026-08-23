@@ -51,7 +51,7 @@ from identity.invites import (
     InviteSummaryDTO,
     _to_summary as _invite_summary,
 )
-from shared.entries_facts import build_entries_facts
+from workspaces.entries_facts import build_entries_facts
 from workspaces.workspace_signals import RowCounts, WorkspaceSignalsDTO, build_signals
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])

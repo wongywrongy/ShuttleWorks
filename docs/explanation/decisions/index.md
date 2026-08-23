@@ -5,8 +5,8 @@ record states a **status**, the **context** that forced the decision, the **deci
 its **consequences**. They are deliberately short; the code and the architecture pages carry the
 detail.
 
-These records consolidate rationale from the on-disk design archive (`docs/changes/`,
-`docs/architectural-roadmap.md`, `docs/superpowers/`, `docs/tech-stack.md`). Where a record
+These records consolidate rationale from the on-disk design archive under `docs/history/` (`changes/`,
+`architectural-roadmap.md`, `superpowers/`, `tech-stack.md`). Where a record
 references a longer source, it names the file rather than duplicating it.
 
 ## Records

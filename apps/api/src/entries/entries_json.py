@@ -108,7 +108,7 @@ def _entries_have_closed(events, now) -> bool:
     on one page is how the events list and the reserve list would end up
     disagreeing about whether entries are over.
 
-    Deliberately the same rule ``shared/entries_facts`` applies for the
+    Deliberately the same rule ``workspaces/entries_facts`` applies for the
     control plane: an UNDATED event never closes, so a page holding one never
     publishes a reserve list. The director has not said when entries stop,
     and the software does not decide that for them.

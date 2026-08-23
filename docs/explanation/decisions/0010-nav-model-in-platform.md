@@ -38,9 +38,9 @@ platform-legal — so nothing forced it to live under `app/`.
 - **Neutral** — `app/` and `pages/` importing the nav model from `platform/` is
   the correct direction (app/pages compose platform) and needs no rule.
 - **Cost** — five importers were repointed; verified behavior-preserving by three
-  independent reviewers + the full gate (`docs/audits/02-review-1.md`).
+  independent reviewers + the full gate (`docs/history/audits/02-review-1.md`).
 
 ## See also
 
-- `docs/audits/01-findings.md` (finding **F-ARCH-1**) · `02-review-1.md`
+- `docs/history/audits/01-findings.md` (finding **F-ARCH-1**) · `02-review-1.md`
 - [Workspace model](/explanation/architecture/workspace-model) · [ADR 0011 — Cross-product boundary policy](/explanation/decisions/0011-cross-product-boundary-policy)

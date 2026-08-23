@@ -11,7 +11,7 @@ enableable-versus-always-on distinction, and the test-enforced descriptor layer 
 addition without change — which is the outcome this record was betting on. Entries adds one wrinkle
 the original set did not have: it is Tier-1 but **cloud-only** (`CLOUD_ONLY_MODULES`), so
 "user-enableable" is now conditioned on deployment mode. See [Entries](/reference/modules/entries) and the program ledger
-`docs/programs/ENTRIES_PROGRESS.md` (repo working record, outside this site).
+`docs/history/programs/ENTRIES_PROGRESS.md` (repo working record, outside this site).
 :::
 
 ## Context
