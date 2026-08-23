@@ -47,7 +47,7 @@ help:
 	@echo "  make test               Run the backend pytest suite"
 	@echo "  make test-e2e           Run Playwright e2e (boots stack)"
 	@echo "  make test-e2e-dev       Run e2e against http://localhost:5173 (requires 'make scheduler-dev')"
-	@echo "  make check              Run all local checks (lint, types, vitest, depcruise, ruff, pytest)"
+	@echo "  make check              Run all local checks, both tiers (lint, types, vitest, depcruise, ruff, import-linter, pytest)"
 	@echo ""
 	@echo "Tournament simulator (internal dev tool, not in CI):"
 	@echo "  make sim                Run a scenario vs a running API (SCENARIO=, SEED=, SIM_URL=)"
@@ -252,13 +252,29 @@ check:
 # command already exists inside `build` and a second declaration of it is a
 # second thing to keep in step.
 #
-# The entrant tier is a SEPARATE invocation because it needs a separate step:
-# its `typecheck` runs `react-router typegen` first, and without the generated
-# route types `tsc` there is meaningless. Root already exposes it for CI.
 	cd apps/console && npx tsc -b
-	npm run typecheck:entrant
 	npm --prefix apps/console run test:run
 	npm run depcruise
+# The entrant tier, and why it is four lines of its own rather than folded into
+# the three above. It is a separate npm workspace with its own eslint config,
+# its own vitest project and its own dependency-cruiser ruleset (server-only
+# boundaries the console has no concept of), so every one of its gates is a
+# separate invocation — nothing here is a duplicate of a console command.
+#
+# `typecheck` in particular cannot be merged into the `tsc -b` above: it runs
+# `react-router typegen` first, and without the generated route types the type
+# check there is meaningless.
+#
+# Only that typecheck was wired in until 2026-08-22 — `make check` typechecked
+# the entrant tier and never linted, tested or boundary-checked it. That is the
+# same hole the type gate above closed, one tier over: CI has run all four since
+# the tier shipped (the `entrant` job), so an entrant-tier regression was
+# invisible locally and surfaced only on push. Root already exposes each one for
+# that job; these reuse them rather than declaring the commands a second time.
+	npm run lint:entrant
+	npm run typecheck:entrant
+	npm run test:entrant
+	npm run depcruise:entrant
 	ruff check $(PY_SOURCES)
 # The API's architecture contracts. Run from apps/api/src because that is the
 # sys.path root the packages import from (R4: src is a ROOT, not a package);
