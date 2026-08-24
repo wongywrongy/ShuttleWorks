@@ -1669,6 +1669,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/entries/{entry_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Entry
+         * @description ``pending | waitlisted | unverified → rejected`` — operator only.
+         *
+         *     Terminal, and deliberately not reachable from ``confirmed``: an entry
+         *     that has been confirmed may already be on a roster and in a draw, and
+         *     the honest operation there is a withdrawal, which describes what
+         *     actually happens to the player. The refusal says so.
+         */
+        post: operations["reject_entry_tournaments__tournament_id__entries__entry_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entries/{entry_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Entry
+         * @description ``waitlisted → pending`` — a place opened, not a decision made.
+         *
+         *     Lands in ``pending`` rather than jumping to ``confirmed`` (see
+         *     ``lifecycle.promote``): promoting says a place came free, confirming
+         *     says this entry is accepted, and collapsing the two would confirm an
+         *     entry past whatever pending reasons it is still carrying.
+         */
+        post: operations["promote_entry_tournaments__tournament_id__entries__entry_id__promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entries/{entry_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Entry At The Desk
+         * @description Any live state → ``withdrawn``, at the desk.
+         *
+         *     **The withdrawal deadline's stated escape hatch** (R14 §3). When an
+         *     entrant misses ``withdraws_until``, the public route tells them to
+         *     contact the organiser — this is what the organiser then does, and it is
+         *     the shape invariant I4 asks for: the software prevents the entrant's
+         *     accident, the operator decides the exception.
+         *
+         *     No erase flag. Erasure is the entrant's right exercised on their own
+         *     behalf; an operator scrubbing somebody's name from their own records is
+         *     a different act with different consequences, and Phase 10's account-level
+         *     deletion is where it belongs if it belongs anywhere.
+         */
+        post: operations["withdraw_entry_at_the_desk_tournaments__tournament_id__entries__entry_id__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/submissions/{submission_id}/paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Submission Paid
+         * @description Record that this act was paid. **Clears one reason; confirms nothing.**
+         *
+         *     Invariant I4, and the one most likely to erode: an operator marking a
+         *     payment obviously wants the entry to go through, and a helpful edit that
+         *     also confirmed it would make payment a consequential automatic decision.
+         *     Confirmation stays a separate press.
+         *
+         *     Idempotent — a second call finds the timestamp already there and is not
+         *     an error. Two operators on a busy desk is a thing that happens.
+         */
+        post: operations["mark_submission_paid_tournaments__tournament_id__submissions__submission_id__paid_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/submissions/{submission_id}/unpaid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Submission Unpaid
+         * @description Take a payment record back — the operator marked the wrong act.
+         *
+         *     The reason returns only where the act OWES money: un-marking a free act
+         *     must not invent a debt that never existed. A confirmed entry stays
+         *     confirmed; whether to un-confirm has consequences on a roster and belongs
+         *     to the ordinary desk actions, not to correcting a note.
+         */
+        post: operations["mark_submission_unpaid_tournaments__tournament_id__submissions__submission_id__unpaid_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entries/retention-sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Retention Sweep
+         * @description Anonymize this workspace's due entries (E5, spec Q10).
+         *
+         *     **Operator-invoked, per workspace, and deliberately NOT a background
+         *     job that deletes unattended.** The debt log's D17 names the failure this
+         *     avoids: an irreversible, backup-less delete of user data running at
+         *     startup with nobody watching. Retention is the same category of act, and
+         *     the same reasoning applies — a director presses this, and can take a
+         *     ``tournament_backups`` snapshot first if they want one.
+         *
+         *     **Idempotent**, so pressing it twice is safe and a scheduled caller needs
+         *     no cursor: the second pass reports ``erased: 0`` because the state it
+         *     reads is already on the rows.
+         *
+         *     Nothing happens where the director set no ``retention_days``. A default
+         *     deletion date the operator never chose would be exactly the consequential
+         *     automatic decision invariant I4 rules out, so "no policy" means "not
+         *     swept" and the answer says how many events that covered.
+         */
+        post: operations["run_retention_sweep_tournaments__tournament_id__entries_retention_sweep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/entry-page": {
         parameters: {
             query?: never;
@@ -1848,21 +2018,15 @@ export interface paths {
         };
         /**
          * Entry Page List
-         * @description Every OPEN entry page's slug — the list Task 26's ``sitemap.xml``
-         *     route crawls.
+         * @description The season calendar in one read (SP-P8 §3) — the G1 N+1's retirement.
          *
-         *     **``is_open`` is the entire point of this route, not an incidental
-         *     filter.** ``EntryPage.is_open`` (default ``False``) is what makes a page
-         *     public at all — ``_resolve`` answers the same uniform 404 for a closed
-         *     page as for an unknown slug. A list that ignored it would publish the
-         *     addresses of unopened events into a crawlable sitemap: worse than the
-         *     404, because it discloses that a workspace and its slug exist *before*
-         *     the director has opened entries.
-         *
-         *     Ordered by ``slug``, which carries its own unique index
-         *     (``uq_entry_pages_slug``) — unlike a random-UUID primary key, two rows
-         *     can never tie on it, so no second tiebreaker is needed for a stable
-         *     order across SQLite and Postgres.
+         *     ``is_open`` is still the entire gate: it is the page on/off switch, so a
+         *     completed tournament stays listed exactly as long as its director keeps
+         *     the page up, and an unopened one never leaks (the sitemap argument,
+         *     unchanged). Status is ``page_status`` — computed HERE, once; the tier
+         *     must not re-derive it (§3). ``now`` is the strip pick: first
+         *     ``in_progress_live`` row in the (date, slug) order, which with single-day
+         *     windows is the ending-soonest rule.
          */
         get: operations["entry_page_list_e_api_pages_get"];
         put?: never;
@@ -1991,6 +2155,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/e/api/me/entries/{entry_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Entry
+         * @description The entrant withdraws their own entry; optionally erases the player.
+         *
+         *     **A verified account is required** (spec §6's account-requirement
+         *     column). Withdrawal and erasure are the two irreversible things an
+         *     entrant can do, and an unverified account is one that has not yet shown
+         *     it controls the address it claims — so anyone who guessed an address
+         *     during signup could otherwise cancel the real owner's entries.
+         *
+         *     The deadline, the live-state rule and the erasure scrub all live in
+         *     ``entries.lifecycle``; this route resolves the entry, checks the
+         *     principal, and turns a ``LifecycleError`` into an HTTP answer. It
+         *     deliberately holds no rule of its own — a second copy of the withdrawal
+         *     deadline is how the desk and the public surface end up disagreeing about
+         *     when entries closed.
+         */
+        post: operations["withdraw_entry_e_api_me_entries__entry_id__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export My Account
+         * @description Everything this account holds (Q10 — the portability half).
+         *
+         *     Session-gated and scoped to the caller's own account, by construction:
+         *     every query below filters on ``account_id`` and there is no parameter
+         *     through which another account could be named.
+         */
+        get: operations["export_my_account_e_api_me_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/me/erase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Erase My Account
+         * @description Erase this person: their account's PII and every player they entered.
+         *
+         *     **A scrub, not a DELETE** — owner ruling D7. ``submissions.account_id``
+         *     and ``entry_players.account_id`` cascade from ``entrant_accounts``, so
+         *     deleting the row would take every submission and entry with it, including
+         *     entries a director confirmed, put on a roster and built a draw around. The
+         *     right being exercised is to stop being a person in those records; the
+         *     record of what happened is the director's.
+         *
+         *     A **verified** account is required, on E2's reasoning: this is the most
+         *     irreversible thing the surface offers, and an unverified account has not
+         *     shown it controls the address it claims — so a guessed address must not be
+         *     able to erase the real owner.
+         *
+         *     The session is destroyed by the scrub (every session is revoked), so the
+         *     caller is signed out by the act itself. There is no way back in: the
+         *     password hash is cleared, and the address that would receive a reset link
+         *     is gone.
+         */
+        post: operations["erase_my_account_e_api_me_erase_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/e/api/page/{slug}/draws": {
         parameters: {
             query?: never;
@@ -2093,6 +2351,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/e/api/partner-invites/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Partner Invite
+         * @description Public, unauthenticated: what am I being asked?
+         *
+         *     ``max_length`` on the path parameter rather than trust: this is an
+         *     unauthenticated route and the value reaches a hash function, so an
+         *     unbounded segment would be free work for anyone who wanted to send some.
+         */
+        get: operations["preview_partner_invite_e_api_partner_invites__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/partner-invites/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Partner Invite
+         * @description Accept as the signed-in entrant: build my half and link the pair.
+         *
+         *     **No check that the session's address matches the invited one, and that
+         *     is deliberate.** People are mailed at one address and hold an account at
+         *     another; a club secretary forwards an invite to the player it is
+         *     actually for. The invite's security property is possession of an
+         *     unguessable token plus *being a principal at all* — tying acceptance to
+         *     the typed address would break the ordinary case to defend against
+         *     someone who already has the token.
+         *
+         *     A **verified** account is required, on the same reasoning E2 applies to
+         *     withdrawal: this creates a record in somebody's name and attaches it to
+         *     a stranger's entry, and an unverified account has not shown it controls
+         *     the address it claims.
+         */
+        post: operations["accept_partner_invite_e_api_partner_invites__token__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/e/account/signup": {
         parameters: {
             query?: never;
@@ -2189,6 +2504,136 @@ export interface paths {
          *     the row outlives the credential.
          */
         post: operations["logout_e_account_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/account/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify
+         * @description Consume a mailed verification token (spec §6, R10).
+         *
+         *     **A POST, and the mailed link is a GET that renders a button.** A
+         *     verification link that mutated on GET would be consumed by every mail
+         *     scanner and link-preview bot between us and the entrant — the entrant
+         *     then clicks a dead link and cannot verify at all. The node route
+         *     ``/e/verify`` renders the token into a one-button form that posts here.
+         *
+         *     **The promotion is the point.** Verifying does not only flip a flag: it
+         *     moves every entry this account has parked in ``unverified`` to
+         *     ``pending``, which is the transition that makes them reachable by the
+         *     operator's confirm and therefore by the commit seam. R10's "one
+         *     verification covers every entry that account ever makes", executed in
+         *     one place.
+         *
+         *     No throttle key of its own. The token is 256 bits of ``secrets`` entropy
+         *     and the response is uniform, so there is nothing here to guess at
+         *     cheaply; the per-IP body cap and the nginx zone still apply.
+         */
+        post: operations["verify_e_account_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/account/resend-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Verification
+         * @description Mail a fresh confirmation link to the signed-in entrant's own address.
+         *
+         *     **Session-gated, and that is what keeps it from being a mail cannon.**
+         *     An address-taking resend route would let anyone send our mail to anyone
+         *     else's inbox as often as they liked; requiring the cookie means the only
+         *     address reachable is the caller's own, which also makes the route
+         *     incapable of confirming that some *other* address is registered.
+         *
+         *     An already-verified account gets 202 and no mail. Same answer either
+         *     way — the caller learns nothing they did not already know about their
+         *     own account, and an entrant who clicks twice is not shown an error for
+         *     succeeding.
+         */
+        post: operations["resend_verification_e_account_resend_verification_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/account/request-password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Entrant Password Reset
+         * @description Mail a reset link. **Always 202, always the same page** (R10, I5).
+         *
+         *     R10 explicitly extends the non-enumeration rule to reset: this route
+         *     must not become the account-existence oracle that signup pays an Argon2
+         *     hash to avoid being. So an unknown address takes the same status, the
+         *     same body and the same redirect as a known one — and charges the
+         *     throttle, so an attacker walking an address list pays for it.
+         *
+         *     ``eip:`` rather than the operator ``ip:`` namespace, for the reason the
+         *     module docstring gives: a public form must not be able to lock a
+         *     director out of their own console.
+         */
+        post: operations["request_entrant_password_reset_e_account_request_password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/account/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Entrant Password
+         * @description Consume a reset token and set a new password.
+         *
+         *     Every live session for the account is revoked by
+         *     ``consume_reset_token`` — OWASP's rule, and not optional here: a reset
+         *     is what someone does when they believe another party has their
+         *     password, and leaving that party's session alive makes the reset
+         *     theatre.
+         *
+         *     A weak new password is a 400 the entrant can act on
+         *     (``AUTH_WEAK_PASSWORD``), distinct from an invalid token, because those
+         *     are different problems with different fixes and neither reveals anything
+         *     about an account: you cannot reach either branch without already holding
+         *     a mailed token.
+         */
+        post: operations["reset_entrant_password_e_account_reset_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2628,6 +3073,65 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AccountErasedDTO
+         * @description What erasure did, stated so the entrant can check it.
+         *
+         *     Both numbers, always. "Your data was erased" is not an answer somebody
+         *     can verify; "3 player records erased, 2 submissions kept without your
+         *     details" says exactly what happened to what.
+         */
+        AccountErasedDTO: {
+            /** Playerserased */
+            playersErased: number;
+            /** Submissionskept */
+            submissionsKept: number;
+        };
+        /**
+         * AccountExportDTO
+         * @description Everything this account holds, in one document (Q10).
+         *
+         *     **A projection of what is stored, not a summary of it.** An export whose
+         *     author decided what was interesting would be answering a different
+         *     question than the one the right to portability asks. What is deliberately
+         *     absent is what is not the entrant's: other people's entries, the
+         *     director's notes, and anything derived about the tournament rather than
+         *     about them.
+         *
+         *     The password hash and the session tokens are absent for the obvious
+         *     reason — they are credentials, not personal data, and exporting them
+         *     would hand a copy of the account to whoever reads the file.
+         */
+        AccountExportDTO: {
+            /** Email */
+            email: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /**
+             * Emailverified
+             * @default false
+             */
+            emailVerified: boolean;
+            /** Createdat */
+            createdAt: string;
+            /**
+             * Players
+             * @default []
+             */
+            players: components["schemas"]["ExportedPlayerDTO"][];
+            /**
+             * Submissions
+             * @default []
+             */
+            submissions: components["schemas"]["ExportedSubmissionDTO"][];
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["ExportedEntryDTO"][];
+        };
         /**
          * Advisory
          * @description A live-operations recommendation surfaced to the operator.
@@ -3310,6 +3814,52 @@ export interface components {
             eventCodes: string[];
         };
         /**
+         * EntriesMetricsDTO
+         * @description The entries desk, in numbers, for the Overview and the Hub (E4).
+         *
+         *     **Counts only, and only counts an operator would act on.** No names, no
+         *     addresses, no per-entry anything: this rides on a workspace summary that
+         *     the Hub renders for every workspace at once, and a control-plane payload
+         *     that carried entrant data would be a disclosure surface with no route of
+         *     its own to review.
+         *
+         *     Absent (``None`` on the signals) for a workspace with no entry page,
+         *     which is every local-mode one — the same sparseness the phase and the
+         *     codes have, for the same reason (invariant I3).
+         */
+        EntriesMetricsDTO: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Pending
+             * @default 0
+             */
+            pending: number;
+            /**
+             * Waitlisted
+             * @default 0
+             */
+            waitlisted: number;
+            /**
+             * Confirmed
+             * @default 0
+             */
+            confirmed: number;
+            /**
+             * Uncommitted
+             * @default 0
+             */
+            uncommitted: number;
+            /**
+             * Closed
+             * @default false
+             */
+            closed: boolean;
+        };
+        /**
          * EntryCommitOutcomeDTO
          * @description One committed entry: which entry, which roster player it became.
          */
@@ -3496,11 +4046,6 @@ export interface components {
              */
             resultsPublished: boolean;
         };
-        /** EntryPageListItemDTO */
-        EntryPageListItemDTO: {
-            /** Slug */
-            slug: string;
-        };
         /**
          * EntryPageProjection
          * @description One loader, one call. The RR7 loader renders a whole entry page from
@@ -3517,6 +4062,11 @@ export interface components {
             events: components["schemas"]["EventDTO"][];
             /** Entrants */
             entrants: components["schemas"]["EntrantRowDTO"][];
+            /**
+             * Reserves
+             * @default []
+             */
+            reserves: components["schemas"]["ReserveRowDTO"][];
             viewer: components["schemas"]["ViewerDTO"];
         };
         /**
@@ -3667,6 +4217,11 @@ export interface components {
             feeCents?: number | null;
             /** Genderconstraint */
             genderConstraint?: string | null;
+            /**
+             * Entrytype
+             * @default singles
+             */
+            entryType: string;
             /** Opensat */
             opensAt?: string | null;
             /** Closesat */
@@ -3793,6 +4348,54 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             };
+        };
+        /** ExportedEntryDTO */
+        ExportedEntryDTO: {
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Eventcode */
+            eventCode: string;
+            /** Playername */
+            playerName: string;
+            /** State */
+            state: string;
+            /** Submittedat */
+            submittedAt: string;
+            /** Withdrawnat */
+            withdrawnAt?: string | null;
+        };
+        /**
+         * ExportedPlayerDTO
+         * @description A person this account entered, as they are stored.
+         */
+        ExportedPlayerDTO: {
+            /** Fullname */
+            fullName: string;
+            /** Gender */
+            gender: string;
+            /** Club */
+            club?: string | null;
+            /** Birthyear */
+            birthYear?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Erasedat */
+            erasedAt?: string | null;
+        };
+        /** ExportedSubmissionDTO */
+        ExportedSubmissionDTO: {
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Submittedat */
+            submittedAt: string;
+            /** Feetotalcents */
+            feeTotalCents?: number | null;
+            /** Paidat */
+            paidAt?: string | null;
+            /** Regulationsacceptedat */
+            regulationsAcceptedAt?: string | null;
+            /** Regulationsversionaccepted */
+            regulationsVersionAccepted?: number | null;
         };
         /** GenerateEventIn */
         GenerateEventIn: {
@@ -4058,6 +4661,15 @@ export interface components {
             pinnedCourtId: number;
         };
         /**
+         * MarkPaidRequest
+         * @description ``note`` is free text for the director's own record — "Zelle, ref
+         *     4412", "cash at the desk". Never rendered publicly.
+         */
+        MarkPaidRequest: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
          * MatchAction
          * @description Operator-facing names for the legal state transitions.
          *
@@ -4320,6 +4932,11 @@ export interface components {
         MyEntriesDTO: {
             /** Tournaments */
             tournaments: components["schemas"]["MyTournamentCardDTO"][];
+            /**
+             * Emailverified
+             * @default false
+             */
+            emailVerified: boolean;
         };
         /**
          * MyEntryLineDTO
@@ -4339,8 +4956,17 @@ export interface components {
             personKey: string;
             /** State */
             state: string;
+            /** Entryid */
+            entryId: string;
+            /**
+             * Canwithdraw
+             * @default false
+             */
+            canWithdraw: boolean;
             /** Resultbadge */
             resultBadge?: string | null;
+            /** Partnername */
+            partnerName?: string | null;
         };
         /** MyTournamentCardDTO */
         MyTournamentCardDTO: {
@@ -4418,6 +5044,13 @@ export interface components {
              */
             walkover: boolean;
         };
+        /** NowStripDTO */
+        NowStripDTO: {
+            /** Slug */
+            slug: string;
+            /** Morecount */
+            moreCount: number;
+        };
         /** PageDTO */
         PageDTO: {
             /** Slug */
@@ -4467,6 +5100,32 @@ export interface components {
             members?: string[] | null;
             /** Seed */
             seed?: number | null;
+        };
+        /** PartnerAcceptedDTO */
+        PartnerAcceptedDTO: {
+            /** Entryid */
+            entryId: string;
+            /** Eventcode */
+            eventCode: string;
+            /** State */
+            state: string;
+        };
+        /**
+         * PartnerInviteDTO
+         * @description What an unauthenticated holder of the link is told. See the module
+         *     docstring for what is deliberately absent.
+         */
+        PartnerInviteDTO: {
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Slug */
+            slug?: string | null;
+            /** Eventcode */
+            eventCode: string;
+            /** Discipline */
+            discipline: string;
+            /** Invitedby */
+            invitedBy: string;
         };
         /** PlanFinalizedDTO */
         PlanFinalizedDTO: {
@@ -4531,6 +5190,8 @@ export interface components {
             code: string;
             /** Discipline */
             discipline: string;
+            /** Partnername */
+            partnerName?: string | null;
         };
         /**
          * PlayerImpact
@@ -4813,6 +5474,26 @@ export interface components {
             /** Email */
             email: string;
         };
+        /**
+         * ReserveRowDTO
+         * @description One place in an event's queue (E4).
+         *
+         *     Position is the entrant's REAL place in the queue, not their index in
+         *     this list: an entrant who opted out of publication still holds their
+         *     place, so the printed numbers can skip one. Publishing a dense rank
+         *     would be the subtler lie — it would tell somebody they are third when
+         *     they are fourth.
+         */
+        ReserveRowDTO: {
+            /** Eventcode */
+            eventCode: string;
+            /** Position */
+            position: number;
+            /** Name */
+            name: string;
+            /** Club */
+            club?: string | null;
+        };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Token */
@@ -4839,6 +5520,20 @@ export interface components {
             } | null;
             /** Reason */
             reason?: string | null;
+        };
+        /**
+         * RetentionSweepDTO
+         * @description What one retention run did, in counts an operator can read back.
+         */
+        RetentionSweepDTO: {
+            /** Scanned */
+            scanned: number;
+            /** Erased */
+            erased: number;
+            /** Skippednopolicy */
+            skippedNoPolicy: number;
+            /** Skippednotdue */
+            skippedNotDue: number;
         };
         /** RoleChangeRequest */
         RoleChangeRequest: {
@@ -4974,6 +5669,48 @@ export interface components {
             groupName?: string | null;
             /** Matchcount */
             matchCount: number;
+        };
+        /** SeasonCountsDTO */
+        SeasonCountsDTO: {
+            /** Takingentries */
+            takingEntries: number;
+            /** Completed */
+            completed: number;
+        };
+        /** SeasonListDTO */
+        SeasonListDTO: {
+            /** Tournaments */
+            tournaments: components["schemas"]["SeasonRowDTO"][];
+            counts: components["schemas"]["SeasonCountsDTO"];
+            now?: components["schemas"]["NowStripDTO"] | null;
+        };
+        /**
+         * SeasonRowDTO
+         * @description One calendar row (SP-P8 §3): tournament-level facts ONLY — no entrant
+         *     data, no entry counts, no pricing. The key-set test in
+         *     ``test_season_listing.py`` reddens on any added field.
+         */
+        SeasonRowDTO: {
+            /** Slug */
+            slug: string;
+            /** Name */
+            name?: string | null;
+            /** Organizer */
+            organizer?: string | null;
+            /** Venuename */
+            venueName?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Eventcount */
+            eventCount: number;
+            /** Status */
+            status: string;
+            /** Closesindays */
+            closesInDays?: number | null;
+            /** Drawspublished */
+            drawsPublished: boolean;
+            /** Winnerspublished */
+            winnersPublished: boolean;
         };
         /** SeedLineDTO */
         SeedLineDTO: {
@@ -5191,6 +5928,26 @@ export interface components {
             points_lost: number;
             /** Position */
             position: number;
+        };
+        /**
+         * SubmissionPaymentDTO
+         * @description What the desk is told after marking a payment.
+         *
+         *     Deliberately small, and deliberately NOT the entry rows: the caller
+         *     re-reads the list, which is the same posture every other desk action
+         *     takes, and a partial row set here would be a second projection of the
+         *     desk that could disagree with the first.
+         */
+        SubmissionPaymentDTO: {
+            /** Submissionid */
+            submissionId: string;
+            /** Paidat */
+            paidAt?: string | null;
+            /**
+             * Entriesupdated
+             * @default 0
+             */
+            entriesUpdated: number;
         };
         /**
          * SuggestedAction
@@ -5754,6 +6511,30 @@ export interface components {
             semifinalists: components["schemas"]["HonorDTO"][];
         };
         /**
+         * WithdrawRequest
+         * @description ``erase`` is the GDPR half and it defaults OFF.
+         *
+         *     Not a StrictModel and not required: the form posts ``erase=on`` or omits
+         *     the field entirely, and a JSON caller may send neither. What matters is
+         *     the default — a withdrawal that erased by accident would destroy the
+         *     entrant's name on a routine "I can't make it", and the desk would lose
+         *     who withdrew.
+         */
+        WithdrawRequest: {
+            /**
+             * Erase
+             * @default false
+             */
+            erase: boolean;
+        };
+        /** WithdrawResultDTO */
+        WithdrawResultDTO: {
+            /** State */
+            state: string;
+            /** Erased */
+            erased: boolean;
+        };
+        /**
          * WorkspaceModuleDTO
          * @description Wire shape for one persisted per-workspace module row.
          *
@@ -5813,7 +6594,10 @@ export interface components {
          *     Vocabulary the frontend can rely on:
          *     - ``health``: ``"archived" | "draft" | "attention" | "good"``.
          *     - ``attention[].code``: ``NO_MODULES_ENABLED | DISPLAY_NO_SOURCE | NO_BRACKET |
-         *       NO_ROSTER | NOT_SCHEDULED``.
+         *       NO_ROSTER | NOT_SCHEDULED``, plus E4's six entries codes
+         *       (``ENTRIES_CLOSING_SOON | UNRESOLVED_PAIRS | AT_CAP_WITH_WAITLIST |
+         *       ENTRIES_NOT_COMMITTED | COMMITTED_ENTRY_WITHDREW | UNPAID_ENTRIES``),
+         *       which appear only on a workspace that has an entry page.
          *     - ``setup``: a ``dict[str, bool]`` readiness checklist whose keys vary by kind.
          */
         WorkspaceSignalsDTO: {
@@ -5835,6 +6619,7 @@ export interface components {
              * @default setup
              */
             phase: string;
+            entries?: components["schemas"]["EntriesMetricsDTO"] | null;
         };
     };
     responses: never;
@@ -8339,6 +9124,201 @@ export interface operations {
             };
         };
     };
+    reject_entry_tournaments__tournament_id__entries__entry_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryDeskRowDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_entry_tournaments__tournament_id__entries__entry_id__promote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryDeskRowDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_entry_at_the_desk_tournaments__tournament_id__entries__entry_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryDeskRowDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_submission_paid_tournaments__tournament_id__submissions__submission_id__paid_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkPaidRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionPaymentDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_submission_unpaid_tournaments__tournament_id__submissions__submission_id__unpaid_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionPaymentDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_retention_sweep_tournaments__tournament_id__entries_retention_sweep_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionSweepDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_entry_page_tournaments__tournament_id__entry_page_get: {
         parameters: {
             query?: never;
@@ -8541,7 +9521,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EntryPageListItemDTO"][];
+                    "application/json": components["schemas"]["SeasonListDTO"];
                 };
             };
         };
@@ -8626,6 +9606,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyEntriesDTO"];
+                };
+            };
+        };
+    };
+    withdraw_entry_e_api_me_entries__entry_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WithdrawRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WithdrawResultDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_my_account_e_api_me_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountExportDTO"];
+                };
+            };
+        };
+    };
+    erase_my_account_e_api_me_erase_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountErasedDTO"];
                 };
             };
         };
@@ -8787,6 +9842,75 @@ export interface operations {
             };
         };
     };
+    preview_partner_invite_e_api_partner_invites__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerInviteDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_partner_invite_e_api_partner_invites__token__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerAcceptedDTO"];
+                };
+            };
+            /** @description Form post: redirect to the outcome page */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     signup_e_account_signup_post: {
         parameters: {
             query?: never;
@@ -8852,6 +9976,110 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    verify_e_account_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Form post: redirect to the outcome page */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resend_verification_e_account_resend_verification_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Form post: redirect to the sign-in page */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    request_entrant_password_reset_e_account_request_password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Form post: redirect to the sent page */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_entrant_password_e_account_reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Form post: redirect to the outcome page */
+            303: {
                 headers: {
                     [name: string]: unknown;
                 };
