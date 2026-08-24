@@ -1000,7 +1000,9 @@ git add packages/design-system/tokens.css packages/design-system/tailwind-preset
 git commit -m "feat(design-system): inverse-surface tokens for the NOW strip (SP-P8 §2.1)" -- packages/design-system/tokens.css packages/design-system/tailwind-preset.js packages/design-system/scripts/check-contrast.mjs
 ```
 
----### Task 7: The four new components
+---
+
+### Task 7: The four new components
 
 **Files:**
 - Create: `apps/entrant/app/components/NowStrip.tsx`
