@@ -136,6 +136,13 @@ module.exports = {
           // Phase 0a interaction washes — visible on every step, both themes.
           hover:           'hsl(var(--surface-hover))',
           'selected-wash': 'hsl(var(--surface-selected-wash))',
+          // Fixed dark band (entrant NOW strip) + its own ink ramp — the two
+          // text names live here, not under `text`, so the band's ground and
+          // its ink stay one vocabulary: bg-surface-inverse /
+          // text-surface-inverse-ink / text-surface-inverse-muted.
+          inverse:         'hsl(var(--surface-inverse))',
+          'inverse-ink':   'hsl(var(--surface-inverse-ink))',
+          'inverse-muted': 'hsl(var(--surface-inverse-muted))',
         },
         text: {
           primary:     'hsl(var(--text-primary))',

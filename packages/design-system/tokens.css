@@ -259,6 +259,15 @@
     --surface-raised:  var(--gray-0);   /* #FFFFFF cards / rails / inputs    */
     --surface-overlay: var(--gray-0);   /* #FFFFFF menus / dialogs (+shadow) */
 
+    /* Inverse band — a FIXED dark strip (the entrant NOW strip), not a theme
+     * inversion: the same three values in both blocks. The public tier is
+     * light-only, so "inverse" means "inverted vs the page", and a dark band
+     * that flipped to light on dark would stop being a band. Off the gray
+     * ramp on purpose (slate 900/400 — the mockup's hues). */
+    --surface-inverse:       222 48% 11%;  /* #0F172A */
+    --surface-inverse-ink:   var(--gray-0);/* #FFFFFF */
+    --surface-inverse-muted: 215 20% 65%;  /* #94A3B8 */
+
     /* Text ramp (gray scale, never opacity) */
     --text-primary:    221 39% 11%;     /* #111827 — the Console ink */
     --text-secondary:  var(--gray-8);   /* #374151 */
@@ -428,6 +437,11 @@
     --surface-base:    var(--gray-12);  /* #16181D the page — NOT black      */
     --surface-raised:  var(--gray-11);  /* #23272E cards / rails / inputs    */
     --surface-overlay: var(--gray-10);  /* #313640 menus / dialogs           */
+
+    /* Inverse band — same fixed dark strip as light (see the light block). */
+    --surface-inverse:       222 48% 11%;  /* #0F172A */
+    --surface-inverse-ink:   var(--gray-0);/* #FFFFFF */
+    --surface-inverse-muted: 215 20% 65%;  /* #94A3B8 */
 
     /* Text ramp — off-white, never #FFF body text */
     --text-primary:    220 14% 94%;     /* #EDEFF3 */

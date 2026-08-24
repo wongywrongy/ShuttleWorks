@@ -130,6 +130,12 @@ for (const [theme, vars] of [['light', varsOf(lightBlock)], ['dark', varsOf(dark
   for (const fam of ['live', 'called', 'late', 'overdue'])
     check(theme, `status-${fam}-ink on status-${fam}-solid`, v(`--status-${fam}-ink`), v(`--status-${fam}-solid`), 4.5);
 
+  // Inverse band (entrant NOW strip): its own ink ramp on its own ground.
+  // The band is NOT in SURFACES on purpose — the page text ramp is never
+  // painted on it; these two are the only pairs it can produce.
+  for (const t of ['--surface-inverse-ink', '--surface-inverse-muted'])
+    check(theme, `${t.slice(2)} on surface-inverse`, v(t), v('--surface-inverse'), 4.5);
+
   // Interaction washes must keep text legible on them (Phase 0a).
   for (const t of ['--text-primary', '--text-muted'])
     for (const w of ['--surface-hover', '--surface-selected-wash'])
