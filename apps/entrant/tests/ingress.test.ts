@@ -175,12 +175,12 @@ describe('SP-HOST-1: the two tiers are two ports, and neither can serve the othe
 });
 
 describe('redirects stay relative, because nginx cannot see the public origin', () => {
-  // THE BUG THIS EXISTS FOR SHIPPED (2026-08-24, live on play.wongworks.dev).
+  // THE BUG THIS EXISTS FOR SHIPPED (2026-08-24, live on the play host).
   //
   // nginx defaults to `absolute_redirect on` and rebuilds Location from the
   // request host plus ITS OWN listen port and scheme. Behind the tunnel that
   // is wrong twice over, and the bare domain answered
-  //   Location: http://play.wongworks.dev:8081/e/
+  //   Location: http://play.<domain>:8081/e/
   // — a port Cloudflare does not serve, over a scheme the browser did not
   // use. Typing the bare hostname hung. Deep links to `/e/…` were fine, which
   // is precisely why every smoke check missed it.
