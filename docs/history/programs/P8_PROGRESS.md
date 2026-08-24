@@ -62,7 +62,9 @@ again from there.
 Sixteen on the branch, `e66006b5..6a1d9b38`, newest last. Two are plan
 documents; the other fourteen are the work. (The dispatch brief said "13
 commits" — the tree says 16 / 14-of-work; the list below is what `git log
-main..HEAD` reports, minus the four inherited SP-P7 commits below the base.)
+main..HEAD` reports, minus the seven inherited commits below the base — the
+`feat/p7-delta-38` stack plus the SP-HOST-1 domain-guard fix, all still unmerged
+to `main`.)
 
 ```
 e66006b5  docs: SP-P8 season-calendar implementation plan                        (plan doc)
