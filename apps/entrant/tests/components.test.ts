@@ -426,6 +426,18 @@ describe('SeasonControls', () => {
     expect(html).toContain('href="/e/#calendar"');
   });
 
+  it('emits no chip for an UNPARSEABLE bound — it filters nothing', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, {
+        filters: { ...NO_FILTERS, preset: '7d', from: 'abc' },
+        counts: { takingEntries: 0, completed: 0 },
+      }),
+    );
+    expect(html).toContain('data-chip-row');
+    expect(html).toContain('Next 7 days');
+    expect(html).not.toContain('From abc');
+  });
+
   it('labels a legacy 30d link honestly, though no radio offers it (D6)', () => {
     const html = renderToStaticMarkup(
       h(SeasonControls, {

@@ -30,6 +30,7 @@ import {
   visibleBlocks,
   visibleTabs,
   type Filters,
+  type PageStatus,
   type PhaseEvent,
   type SeasonRow,
 } from '../app/lib/phase';
@@ -91,6 +92,33 @@ describe('parseMoment', () => {
       'utf8',
     );
     expect(source).toContain('"%Y-%m-%d %H:%M UTC"');
+  });
+});
+
+describe('PageStatus', () => {
+  it('pins the six statuses against the Python side (the cross-tier idiom)', () => {
+    // `PAGE_STATUSES` (apps/api/src/entries/entries_public.py) is the producer,
+    // and `statusCell` switches on it exhaustively with NO default arm — so a
+    // SERVER-side seventh value would return `undefined` and TypeError the whole
+    // /e/ render. tsc cannot see that; this line can. A TS-side seventh is the
+    // compiler's job (the switch goes red); this pin is the other direction.
+    const source = readFileSync(
+      new URL('../../../apps/api/src/entries/entries_public.py', import.meta.url),
+      'utf8',
+    );
+    const block = /PAGE_STATUSES = frozenset\(\{([^}]*)\}\)/.exec(source);
+    expect(block).not.toBeNull();
+    const python = new Set([...block![1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]));
+    // Typed, so dropping or renaming a union member is a compile error here too.
+    const ts: PageStatus[] = [
+      'entries_open',
+      'entries_closed',
+      'in_progress_live',
+      'in_progress',
+      'completed_winners',
+      'completed',
+    ];
+    expect(python).toEqual(new Set(ts));
   });
 });
 
@@ -309,6 +337,9 @@ describe('anyFilterActive / dateFilterActive (a view is not a filter)', () => {
     ['a preset', { ...NO_FILTERS, preset: '7d' as const }, true, true],
     ['a custom from', { ...NO_FILTERS, from: '2026-09-01' }, true, true],
     ['a custom to', { ...NO_FILTERS, to: '2026-09-30' }, true, true],
+    // `rowMatches` parses from/to and ignores what it cannot parse, so an
+    // unparseable one filters NOTHING — and must not claim a chip either.
+    ['an unparseable from', { ...NO_FILTERS, from: 'abc' }, false, false],
     // q is a filter, but not a DATE filter — only the latter drives the chips.
     ['a query', { ...NO_FILTERS, q: 'gold' }, true, false],
   ])('%s → any %s, date %s', (_label, f, any, date) => {
@@ -351,6 +382,13 @@ describe('viewRows', () => {
       row({ slug: 'b', status: 'entries_open', closesInDays: 9 }),
       row({ slug: 'a', status: 'entries_open', closesInDays: 2 }),
       row({ slug: 'c', status: 'completed' }),
+    ];
+    expect(viewRows(rows, 'open').map((r) => r.slug)).toEqual(['a', 'b']);
+  });
+  it('open: two deadline-less rows fall through to the slug tiebreak (the NaN arm)', () => {
+    const rows = [
+      row({ slug: 'b', status: 'entries_open', closesInDays: null }),
+      row({ slug: 'a', status: 'entries_open', closesInDays: null }),
     ];
     expect(viewRows(rows, 'open').map((r) => r.slug)).toEqual(['a', 'b']);
   });

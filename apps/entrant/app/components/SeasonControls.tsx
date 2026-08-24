@@ -21,7 +21,13 @@
  */
 import { Button } from '@scheduler/design-system/components';
 
-import { dateFilterActive, type DatePreset, type Filters, type View } from '../lib/phase';
+import {
+  dateFilterActive,
+  parseIsoDate,
+  type DatePreset,
+  type Filters,
+  type View,
+} from '../lib/phase';
 
 const ACTION = '/e/#calendar';
 
@@ -229,10 +235,13 @@ export function SeasonControls({
               href={queryHref(filters, { preset: null })}
             />
           )}
-          {filters.from === null ? null : (
+          {/* Parsed, like `dateFilterActive` and `rowMatches`: an unparseable
+              bound narrows nothing, so it gets no chip describing a filter the
+              list is not under. */}
+          {parseIsoDate(filters.from) === null ? null : (
             <FilterChip label={`From ${filters.from}`} href={queryHref(filters, { from: null })} />
           )}
-          {filters.to === null ? null : (
+          {parseIsoDate(filters.to) === null ? null : (
             <FilterChip label={`To ${filters.to}`} href={queryHref(filters, { to: null })} />
           )}
           <a

@@ -376,9 +376,15 @@ export function parseFilters(params: URLSearchParams): Filters {
 }
 
 /** Is a DATE filter active? Drives the chips row and its badge, which say
- * nothing about a text search. */
+ * nothing about a text search. The bounds are tested PARSED, the way
+ * `rowMatches` reads them: `?from=abc` narrows nothing, so it must not put a
+ * "From abc" chip over an unfiltered list. */
 export function dateFilterActive(filters: Filters): boolean {
-  return filters.preset !== null || filters.from !== null || filters.to !== null;
+  return (
+    filters.preset !== null ||
+    parseIsoDate(filters.from) !== null ||
+    parseIsoDate(filters.to) !== null
+  );
 }
 
 /** Is any filter active (drives the "Clear filters" affordance)? The view is
@@ -401,6 +407,9 @@ export function viewRows(rows: readonly SeasonRow[], view: View): SeasonRow[] {
     return rows
       .filter((row) => row.status === 'entries_open')
       .sort(
+        // Two null countdowns give `Infinity - Infinity` = NaN, which is falsy
+        // and therefore falls through to the slug tiebreak — the order this
+        // wants, reached by `||` rather than by a branch. Pinned by a test row.
         (a, b) =>
           (a.closesInDays ?? Number.POSITIVE_INFINITY) -
             (b.closesInDays ?? Number.POSITIVE_INFINITY) ||
