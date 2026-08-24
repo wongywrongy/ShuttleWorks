@@ -180,13 +180,26 @@ Two prefixes, both registered without the global auth dependency:
 | --- | --- |
 | `GET /e/api/page/{slug}` | public: the entry page projection (page config, open events, fee schedule, the entrant list). Strict — entrant **names and event ids only**, opt-outs excluded, no contact data selected in the SQL |
 | `GET /e/api/config` | public: the entrant app's runtime config — the Turnstile **site** key and the auth mode. Cannot require a session: it is read by the page where a session is obtained |
-| `GET /e/api/pages` | public: the open pages' slugs, the list `/e/sitemap.xml` crawls. Filtered on `is_open` in SQL |
+| `GET /e/api/pages` | public: the **season listing** — `{tournaments, counts, now}`, one read for the whole `/e/` calendar (SP-P8). Each row carries `slug`, `name`, `organizer`, `venueName`, `date`, `eventCount`, `status`, `closesInDays`, `drawsPublished`, `winnersPublished`; `counts` is `{takingEntries, completed}`; `now` is the live pick or `null`. `Cache-Control: public, max-age=30`. Still filtered on `is_open` in SQL, and still the list `/e/sitemap.xml` crawls |
 | `POST /e/api/quote/{slug}` | **session-gated** (R8-C): the R14 running fee total. Shares one `compute_fee_total` with submit, so a quote cannot diverge from the charge |
 | `POST /e/api/submit/{slug}` | **session-gated**: creates the submission. Idempotent on `(tournament_id, account_id, idempotency_key)` |
 | `POST /e/account/signup` | public: entrant account creation — server-side Turnstile, its own `esignup:` throttle, the shared NIST password policy, and a uniform non-enumerating answer |
 | `POST /e/account/login` | public: the entrant login endpoint itself (`sw_play_session`) |
 | `POST /e/account/logout` | public: idempotent; no session to destroy is a no-op |
 | `GET /e/account/me` | the calling entrant's own record |
+
+The season listing's `status` is computed **server-side, once**, by `page_status`
+(`entries/entries_public.py`, `PAGE_STATUSES`) and is one of six values: `entries_open`,
+`entries_closed`, `in_progress_live`, `in_progress`, `completed_winners`, `completed`. The
+entrant tier renders it and must not re-derive it — it holds no clock below its loaders, and
+the `_live` / `_winners` variants depend on the publication flags (`draws_published` /
+`results_published`) that decide whether a link exists at all. `closesInDays` accompanies
+`entries_open` and is `null` otherwise. `now` is the NOW-strip pick — the first
+`in_progress_live` row in `(date, slug)` order plus a `moreCount` of the rest — and is `null`
+when nothing is live, so the strip is *absent* rather than empty. Rows sort dated-ascending
+then undated-last, tie-broken on `slug`, for a total order across SQLite and Postgres.
+`is_open` remains the entire listing gate: a completed tournament stays listed as long as its
+director keeps the page up, and an unopened one never leaks.
 
 Entrants are **not** `users`: they live in their own tables with their own `sw_play_session`
 cookie and never reach an operator route. Cookie-carrying writes here prove themselves with
