@@ -197,15 +197,20 @@ how a conditional element proves it disappears rather than emptying.
 | 10 | **LIVE control, real browser + real database** (T11 matrix line 3) | `UPDATE entry_pages SET draws_published=0 WHERE slug IN ('case-live','also-live')` against the running backend, then reload | the strip **element is gone** (not an empty band) and all three same-day rows render plain `In progress` with the row link only, no `?tab=draws`. Re-flipped to 1 and re-verified through `/e/api/pages`: both back to `in_progress_live`, `now.moreCount: 1`. |
 
 Two structural guarantees stand in place of controls, because the failure they
-prevent is a **compile error** rather than a test failure:
+prevent is caught by the **type system**, not by a control:
 
 - **No dead links.** `StatusCell` is a closed sum whose no-link arms carry no
   `href` key *at all*, so the trap-3 assertion `expect('href' in cell)
   .toBe(false)` holds by construction; the `chip-muted` and `text` arms render
   `<span>`, structurally hrefless.
 - **No blank cell for a new status.** `statusCell` is exhaustive with **no
-  `default`**, so a seventh `PageStatus` fails `tsc` instead of rendering
-  nothing.
+  `default`**, so a seventh value added to the TS `PageStatus` union fails
+  `tsc` instead of rendering nothing. The guarantee is one-directional: a
+  seventh value emitted by the **server** compiles fine and would return
+  `undefined` from the switch, so it is caught instead by the cross-tier pin
+  `PageStatus > pins the six statuses against the Python side`
+  (`phase.test.ts`), which reads `PAGE_STATUSES` off the Python source — the
+  `_moment` idiom, applied to the enum.
 
 One further control is a demonstrated *defect*, not a removal: the
 prototype-chain RED in T4, where `?status=toString` / `constructor` /
