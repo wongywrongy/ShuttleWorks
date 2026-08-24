@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { Links, Meta, Outlet, type LinksFunction } from 'react-router';
 
 import { MessagePage } from './components/MessagePage';
+import { hasEntrantSession } from './lib/session.server';
+import { EntrantSessionContext } from './lib/sessionContext';
 import stylesheet from './app.css?url';
 import type { Route } from './+types/root';
 
@@ -40,6 +42,23 @@ import type { Route } from './+types/root';
  * nothing fetches, which costs more than it saves.
  */
 export const links: LinksFunction = () => [{ rel: 'stylesheet', href: stylesheet }];
+
+/**
+ * The one session read in the tier, for the §3.8 header (SP-P7).
+ *
+ * Root's loader runs on every document, so this is a single read site feeding a
+ * single render site: `PlayShell` picks the flag up with
+ * `useRouteLoaderData('root')` rather than taking a prop, because ~16 route
+ * files render that shell and none of them have anything to say about sessions.
+ *
+ * It returns a boolean and never the token — see `lib/session.server.ts` for
+ * why observing presence is not the credential relay R8-D forbids. Every
+ * document this branches must not land in a shared cache; `entry.server.tsx`
+ * carries that half.
+ */
+export function loader({ request }: Route.LoaderArgs) {
+  return { signedIn: hasEntrantSession(request) };
+}
 
 /**
  * Root-level fallback title (2026-08-11 design audit, finding #4).
@@ -92,8 +111,21 @@ export function Layout({ children }: { children: ReactNode }) {
   );
 }
 
-export default function Root() {
-  return <Outlet />;
+/**
+ * Publishes root's session bit to the shell (SP-P7 §3.8).
+ *
+ * `loaderData` arrives as a prop, so this needs no hook and no
+ * `useRouteLoaderData` — which matters, because that hook throws without a
+ * data router above it. When the `ErrorBoundary` below renders instead of this
+ * component there is no provider, and `EntrantSessionContext`'s own default
+ * (`false`, signed out) is the fail-safe answer. See `lib/sessionContext.ts`.
+ */
+export default function Root({ loaderData }: Route.ComponentProps) {
+  return (
+    <EntrantSessionContext.Provider value={loaderData.signedIn}>
+      <Outlet />
+    </EntrantSessionContext.Provider>
+  );
 }
 
 /**

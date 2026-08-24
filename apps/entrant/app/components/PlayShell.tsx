@@ -9,15 +9,37 @@
  * phones (`order-last w-full`) and sits inline from `sm:` up. The `#results`
  * fragment on the action lands the post-submit scroll at the results heading.
  *
- * The sign-in link is static: no server-rendered page on this tier can know
- * who is reading it (R8-D), so the header states an affordance, never an
- * identity — the owner's STOP-1 ruling defers every signed-in state to E2.
- * `signInLabel` is the one deliberate exception: a ROUTE (not a session
- * read) may still know its own outcome — see `login.tsx`'s `/signed-in`
- * variant — and hand this shell different label text for it.
+ * **Session states (SP-P7 §3.8).** The header renders exactly two shapes:
+ * signed out it offers `Sign in`, signed in it offers `My entries`. Never
+ * both. Before this it showed both to everyone — a nav item pointing at an
+ * authed page is a state leak, and for a stranger it just bounced to sign-in,
+ * which reads as broken.
+ *
+ * The flag arrives through `EntrantSessionContext`, which root publishes, so
+ * there is one read site (root) and one render site (here); the ~16 route
+ * files that render this shell pass nothing and know nothing about sessions.
+ * It is a boolean derived from cookie PRESENCE, never an identity —
+ * `lib/session.server.ts` argues why that is not the credential relay R8-D
+ * forbids, and why the name and initials avatar the mockup shows are deferred
+ * rather than guessed.
+ *
+ * With no provider above it the context yields `false`, so an unmatched URL
+ * (root's `ErrorBoundary` renders instead of `Root`) and a bare unit render
+ * both get the signed-out shape. That default is argued in `sessionContext.ts`:
+ * offering a stranger a way in beats offering them a link that 401s.
+ *
+ * `useContext` is not a hydration dependency: it resolves during the server
+ * render. This tier still ships no `<Scripts/>` and nothing here needs a
+ * browser.
+ *
+ * `signInLabel` is the older, narrower exception: a ROUTE (not a session read)
+ * may know its own outcome — see `login.tsx`'s `/signed-in` variant — and hand
+ * this shell different label text for it.
  */
-import type { ReactNode } from 'react';
+import { useContext, type ReactNode } from 'react';
 import { Button } from '@scheduler/design-system/components';
+
+import { EntrantSessionContext } from '../lib/sessionContext';
 
 const DISCOVERY_HREF = '/e/';
 
@@ -30,6 +52,8 @@ export function PlayShell({
   signInLabel?: string;
   children: ReactNode;
 }) {
+  const signedIn = useContext(EntrantSessionContext);
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Console banner (2026-08-13): the public tier leads with the solid
@@ -71,23 +95,16 @@ export function PlayShell({
               Search
             </Button>
           </form>
-          {/* Both links are static affordances (R8-D: no server render can
-              know who is reading). "My entries" works signed out too — the
-              page itself redirects to sign-in with a return-to (SP-P7 §3.1),
-              so the header needs no identity to point at it. */}
+          {/* Exactly one of these renders (§3.8). `ml-auto` sits on whichever
+              one it is, so the single link right-aligns in both states the way
+              the pair used to. `min-h-6` (24px) is the tap-target floor
+              (WCAG 2.5.8) — text-sm's own line-height is 20px, under it with
+              no padding of its own. */}
           <a
-            href="/e/me/entries"
-            className="ml-auto inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline sm:ml-0"
+            href={signedIn ? '/e/me/entries' : '/e/login'}
+            className="ml-auto inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
           >
-            My entries
-          </a>
-          <a
-            href="/e/login"
-            // `min-h-6` (24px): the tap target floor (WCAG 2.5.8) — text-sm's
-            // own line-height is 20px, under it with no padding of its own.
-            className="inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
-          >
-            {signInLabel}
+            {signedIn ? 'My entries' : signInLabel}
           </a>
         </div>
       </header>
