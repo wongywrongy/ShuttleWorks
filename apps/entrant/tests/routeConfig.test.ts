@@ -24,10 +24,10 @@ import type { RouteConfigEntry } from '@react-router/dev/routes';
 
 import routes from '../app/routes';
 import { nodePaths } from './helpers/nodePaths';
-import { backendPrefixes } from './helpers/nginxConf';
+import { backendPrefixes, locations, tierSource } from './helpers/nginxConf';
 
 /**
- * The prefixes nginx gives FastAPI — now READ OUT OF `frontend/nginx.conf`
+ * The prefixes nginx gives FastAPI — now READ OUT OF `infra/nginx/play.conf`
  * (Task 22 wrote the ruling into it) instead of copied here by hand. The
  * copy was the right call while the config did not implement the split, and
  * the wrong one the moment it did: two hand-maintained lists of the same
@@ -36,7 +36,7 @@ import { backendPrefixes } from './helpers/nginxConf';
  * Derived by asking which `/e/…` locations proxy to the backend, so adding a
  * third such prefix to the ingress extends this guard on the same day.
  */
-const BACKEND_PREFIXES = backendPrefixes();
+const BACKEND_PREFIXES = backendPrefixes(locations(tierSource('play')));
 
 describe('node routes and the FastAPI prefixes do not overlap (R8-A)', () => {
   const paths = nodePaths(routes as RouteConfigEntry[]);

@@ -108,8 +108,17 @@ services:
       dockerfile: apps/console/Dockerfile
       args:
         - VITE_API_BASE_URL=/api
+    # Two ports since SP-HOST-1: 8080 is the operator tier, 8081 the public
+    # entrant tier. In production they are two hostnames on the tunnel and
+    # therefore two browser ORIGINS; on a laptop they are two host ports,
+    # which is enough to reproduce the boundary — `http://localhost:8090` and
+    # `http://localhost:8091` are different origins to a browser too.
+    #
+    # Without the second mapping `/e/*` is simply unreachable in local dev:
+    # it no longer has a location on 8080.
     ports:
       - "${FRONTEND_HOST_PORT:-80}:8080"
+      - "${PLAY_HOST_PORT:-8081}:8081"
     depends_on:
       backend:
         condition: service_healthy

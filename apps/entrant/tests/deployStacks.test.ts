@@ -38,7 +38,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { contains, hostAt } from './helpers/cidr';
-import { directive } from './helpers/nginxConf';
+import { directive, sharedSource } from './helpers/nginxConf';
 
 const STACK_DIR = join(import.meta.dirname, '..', '..', '..', 'infra', 'compose');
 const DOCKERFILE = join(import.meta.dirname, '..', 'Dockerfile');
@@ -368,7 +368,10 @@ describe('the chain from "who is the client" to "which bucket" holds in every st
     // stack with a cloudflared. If it ever covered another stack's network,
     // that stack's GATEWAY — the peer for every host-published request —
     // could set CF-Connecting-IP and pick its own bucket.
-    const trusted = directive('set_real_ip_from');
+    // `http-shared.conf` since SP-HOST-1: the realip trust boundary is a
+    // property of the network this container sits on, not of which tier port
+    // a request arrived at, so it is declared once for both server blocks.
+    const trusted = directive('set_real_ip_from', sharedSource());
     const selfhost = subnetOf('docker-compose.selfhost.yml')!;
     expect(trusted.some((range) => contains(range, selfhost))).toBe(true);
     for (const file of stackFiles) {

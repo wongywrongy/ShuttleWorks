@@ -93,8 +93,44 @@ services:
       # which is HTTPS at Cloudflare's edge. Nothing in the backend
       # sniffs the request scheme, so this is config, not detection.
       - SESSION_COOKIE_SECURE=true
-      - CORS_ORIGINS=https://${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME}
-      - PUBLIC_APP_ORIGIN=https://${PUBLIC_HOSTNAME}
+      # ───────────────────────────────────────────────────────────────
+      # TWO HOSTNAMES, TWO ORIGINS (SP-HOST-1).
+      #
+      # APP_HOSTNAME  — the operator console + /api/, behind Cloudflare
+      #                 Access. Tunnel rule → frontend:8080.
+      # PLAY_HOSTNAME — the public entrant site (/e/*), NO Access policy.
+      #                 Tunnel rule → frontend:8081.
+      #
+      # They were one variable, `PUBLIC_HOSTNAME`, and one hostname split
+      # by path — which made the two tiers the same browser ORIGIN,
+      # sharing cookies, localStorage and service-worker scope. `Path=`
+      # on a cookie is not enforced against same-origin script, so the
+      # operator's session credential was reachable from code running on
+      # the public surface. No alias is kept: a stale `.env` should fail
+      # to start loudly rather than boot half-split.
+      #
+      # CORS_ORIGINS names the OPERATOR origin ALONE. The play origin is
+      # deliberately absent and must stay absent — the entrant tier makes
+      # no browser-side API calls at all (it renders no `<Scripts/>`;
+      # every write is a native form POST to a relative path on its own
+      # host), so there is nothing to allow, and allowing it would hand
+      # the public origin credentialed access to the operator API.
+      # `allow_credentials=True` is on, and `core/config.py` refuses to
+      # start if this ever contains `*`.
+      #
+      # SESSION_COOKIE_DOMAIN is deliberately NOT SET, here or anywhere.
+      # Host-only cookies are the entire mechanism keeping the two
+      # origins apart, and the API refuses to start if the variable has
+      # a value (`_enforce_host_only_cookies`).
+      # ───────────────────────────────────────────────────────────────
+      - CORS_ORIGINS=https://${APP_HOSTNAME:?set APP_HOSTNAME}
+      - PUBLIC_APP_ORIGIN=https://${APP_HOSTNAME}
+      # Entrant verify / reset / partner-invite mail. REQUIRED rather
+      # than defaulted: blank falls back to PUBLIC_APP_ORIGIN, which
+      # would mail entrants a link to the Access-fronted operator host —
+      # a link they cannot open. That was the live state before
+      # SP-HOST-1, latent only because /e/* had never been exposed.
+      - PUBLIC_PLAY_ORIGIN=https://${PLAY_HOSTNAME:?set PLAY_HOSTNAME}
       # ───────────────────────────────────────────────────────────────
       # The address the API sees as its IMMEDIATE PEER — which in this
       # stack is the `frontend` nginx container, NOT cloudflared.
@@ -208,10 +244,13 @@ services:
       # backend (it also carries a `backend` network alias, for nginx.conf's
       # benefit); either resolves, and naming the real service is clearer.
       - API_BASE_URL=http://api:8000
-      # MUST MATCH `api`'s value above. Two processes on one origin issue
-      # cookies from this one variable name — the backend's session and
-      # node's `sw_play_csrf` nonce — and if they disagree the nonce goes
-      # out without `Secure` over an HTTPS-only deployment. Correct here for
+      # MUST MATCH `api`'s value above. Two processes issue cookies on the
+      # PLAY origin from this one variable name — the backend's
+      # `sw_play_session` and node's `sw_play_csrf` nonce — and if they
+      # disagree the nonce goes out without `Secure` over an HTTPS-only
+      # deployment. (Before SP-HOST-1 it was "two processes on one origin",
+      # counting the operator session too; that one now lives on its own
+      # hostname, and the requirement here is unchanged.) Correct here for
       # the same reason it is on `api`: the flag describes the BROWSER leg,
       # which is HTTPS at Cloudflare's edge, even though this container
       # speaks plain HTTP to nginx. Held by
@@ -287,19 +326,35 @@ services:
     restart: always
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN}
     # ─────────────────────────────────────────────────────────────────
-    # The tunnel's ingress rule must point at THIS service and nothing
-    # else:  <hostname> -> http://frontend:8080
+    # TWO ingress rules, both pointing at THIS service, on two ports
+    # (SP-HOST-1 D-1):
     #
-    # Point it at `frontend`, NOT at `api`. The frontend serves the SPA
-    # and proxies /api/* onward; pointing at the API publishes a bare
-    # JSON API with no user interface (which is what this stack did
+    #   ${APP_HOSTNAME}   ->  http://frontend:8080     (Access ON)
+    #   ${PLAY_HOSTNAME}  ->  http://frontend:8081     (NO Access)
+    #
+    # The tunnel is the hostname router. That is what lets every nginx
+    # conf file stay free of hostnames and be baked into an image at
+    # build time (invariant I1 — the domain is configuration, never
+    # code). Each port carries exactly one `server` block, so each is
+    # the default server for its own port and `server_name` never has to
+    # match anything.
+    #
+    # **The Access policy goes on the operator hostname ONLY.** An entry
+    # form behind a corporate SSO prompt is an entry form nobody fills
+    # in; the whole point of the second hostname is that it is public.
+    # The operator app keeps its two Bypass rules for the display plane
+    # (`/display/*`, `/api/display/*`) — see install-selfhost.md §4a.
+    #
+    # Point both at `frontend`, NOT at `api`. The frontend serves the
+    # SPA and proxies /api/* onward; pointing at the API publishes a
+    # bare JSON API with no user interface (which is what this stack did
     # before 2026-08-04).
     #
-    # Never point it at a shared reverse proxy, and never add a wildcard
-    # route. A wildcard would publish every other service reachable from
-    # this host — including anything else on the box — to the public
-    # internet through the same tunnel. Configure the rule in the
-    # Cloudflare dashboard for this named tunnel.
+    # Never point either at a shared reverse proxy, and never add a
+    # wildcard route. A wildcard would publish every other service
+    # reachable from this host — including anything else on the box — to
+    # the public internet through the same tunnel. Configure both rules
+    # in the Cloudflare dashboard for this named tunnel.
     # ─────────────────────────────────────────────────────────────────
     depends_on:
       frontend:
