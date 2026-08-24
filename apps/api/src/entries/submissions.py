@@ -262,6 +262,62 @@ def looks_duplicate(
     return hit is not None
 
 
+def same_person(
+    session: Session,
+    tournament_id: uuid.UUID,
+    account_id: uuid.UUID,
+    spec: PlayerInput,
+) -> Optional[EntryPlayer]:
+    """The person this spec re-names, if the tree can be CERTAIN it is them.
+
+    R-P7c says ``entry_players`` is the person-in-tournament identity — one
+    human in three events is one row, one entrant-list line, one player page.
+    Writing a fresh row per submission (the shape before SP-P7's delta) held
+    that only *within* a submission: the same person entering a third event a
+    week later became a second row, a second ``personKey``, and two
+    half-empty public player pages.
+
+    So the writer adopts instead of duplicating — but only on the one match
+    that cannot be two people (the incumbent's rule, ratified at the STOP:
+    auto-link what is certain, flag the rest, never merge by guesswork):
+
+      same account · same normalized name · same birth year, all present.
+
+    - The ACCOUNT scopes it. Two families' "Alice Chen" live under two
+      accounts and can never meet here; without that scope this would be the
+      false merge that shows one person another's record.
+    - Within an account, name alone is NOT enough — one club rep enters a
+      father and son sharing a name — so ``birth_year`` is the discriminator,
+      and a spec *without* one matches nothing rather than guessing. That
+      person becomes a separate row and rides the ``looks_duplicate`` →
+      NEEDS_REVIEW advisory like every other ambiguity (invariant I4: a flag
+      an operator resolves, never a silent decision).
+    - Erased rows never match: a scrubbed row's name is a tombstone, not a
+      person, and D7 promises the human behind it has stopped being
+      identifiable in these records. (Their name would not compare equal to
+      ``ERASED_NAME`` anyway; the filter states the intent rather than
+      leaning on that accident.)
+
+    Ordered by ``created_at`` then id: rows fragmented before this fix can
+    tie, and the adopted row must be the same one every time or the public
+    ``personKey`` flaps between requests.
+    """
+    if spec.birth_year is None:
+        return None
+    return session.execute(
+        select(EntryPlayer)
+        .where(
+            EntryPlayer.tournament_id == tournament_id,
+            EntryPlayer.account_id == account_id,
+            EntryPlayer.birth_year == spec.birth_year,
+            func.lower(EntryPlayer.full_name) == spec.full_name.strip().lower(),
+            EntryPlayer.erased_at.is_(None),
+        )
+        .order_by(EntryPlayer.created_at, EntryPlayer.id)
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 # ---- the write -----------------------------------------------------------
 
 
@@ -353,17 +409,29 @@ def _write(
     per_player_fee = _per_player_fee(fee_basis)
 
     for index, spec in enumerate(players):
-        player = EntryPlayer(
-            tournament_id=tournament_id,
-            account_id=account_id,
-            full_name=spec.full_name.strip(),
-            gender=spec.gender.strip(),
-            club=(spec.club or "").strip() or None,
-            birth_year=spec.birth_year,
-            remarks=(spec.remarks or "").strip() or None,
-        )
-        session.add(player)
-        session.flush()
+        # R-P7c: adopt the person this account already entered rather than
+        # minting a duplicate — see ``same_person`` for the (deliberately
+        # narrow) match. On adoption the DESCRIPTIVE fields take the fresh
+        # submission's values: the R-P7a snapshot lives on the submission and
+        # its entries, not here, so this row is free to hold the newest
+        # description of the person (a club change mid-season is the person
+        # updating themselves, not history being rewritten).
+        player = same_person(session, tournament_id, account_id, spec)
+        if player is None:
+            player = EntryPlayer(
+                tournament_id=tournament_id,
+                account_id=account_id,
+                full_name=spec.full_name.strip(),
+                gender=spec.gender.strip(),
+                club=(spec.club or "").strip() or None,
+                birth_year=spec.birth_year,
+                remarks=(spec.remarks or "").strip() or None,
+            )
+            session.add(player)
+            session.flush()
+        else:
+            player.club = (spec.club or "").strip() or None
+            player.remarks = (spec.remarks or "").strip() or None
         created_players.append(player)
 
         events = _distinct(spec.events)

@@ -368,7 +368,112 @@ def test_one_person_entering_two_events_is_listed_once(client, page, entrant):
 
 def test_two_entrants_who_share_a_name_are_both_listed(client, page, entrant):
     """Negative control for the grouping above: the list must not collapse
-    two different people who happen to be called the same thing."""
+    two different people who happen to be called the same thing.
+
+    Two ACCOUNTS, deliberately (SP-P7 delta). This test used to post twice
+    from one account with one name — a fixture byte-identical to one person
+    entering twice, so it PINNED the person-fragmentation defect as correct
+    and blocked the ``same_person`` adoption. Two families' "Alice Chen" is
+    what "two different people" means, and the account boundary is what makes
+    them undeniably different; ``same_person`` scopes to the account, so this
+    must never merge no matter how alike the specs are.
+    """
+    for email in ("parent@example.com", "other-family@example.com"):
+        client.cookies.clear()
+        if email != entrant:  # the fixture already created + signed in the first
+            assert (
+                client.post(
+                    "/e/account/signup",
+                    json={
+                        "email": email,
+                        "password": GOOD_PW,
+                        "turnstileToken": "a-solved-token",
+                    },
+                    headers=CSRF,
+                ).status_code
+                == 202
+            )
+        assert (
+            client.post(
+                "/e/account/login",
+                json={"email": email, "password": GOOD_PW},
+                headers=CSRF,
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                f"/e/api/submit/{page['slug']}",
+                data={
+                    "playerName": "Alice Chen",
+                    "gender": "F",
+                    "birthYear": "1990",  # identical on purpose — account is the boundary
+                    "events": [f"0:{page['ws']}"],
+                    "acknowledged": "on",
+                    "_csrf": _form_token(client, page),
+                },
+                follow_redirects=False,
+            ).status_code
+            == 303
+        )
+    _confirm_all(page)
+    client.cookies.clear()
+
+    body = client.get(f"/e/api/page/{page['slug']}").json()
+    assert [row["name"] for row in body["entrants"]] == ["Alice Chen", "Alice Chen"]
+
+
+def test_one_person_entering_across_two_submissions_is_one_person(
+    client, page, entrant
+):
+    """R-P7c, the SP-P7 §7 trap: a person in N events is ONE entrant row and
+    ONE player page, however many submissions it took them to get there.
+
+    The single-submission half has held since 2026-08-10 (the test above);
+    this is the half that was broken until the delta — the writer minted a
+    fresh ``entry_players`` row per submission, so entering a second event a
+    week later split one human into two ``personKey``s with a half-empty
+    public page each. ``same_person`` now adopts on the certain match: same
+    account, same normalized name, same birth year.
+    """
+    for event_key in ("ms", "ws"):
+        assert (
+            client.post(
+                f"/e/api/submit/{page['slug']}",
+                data={
+                    "playerName": "Alice Chen",
+                    "gender": "F",
+                    "birthYear": "1990",
+                    "events": [f"0:{page[event_key]}"],
+                    "acknowledged": "on",
+                    "_csrf": _form_token(client, page),
+                },
+                follow_redirects=False,
+            ).status_code
+            == 303
+        )
+    _confirm_all(page)
+    client.cookies.clear()
+
+    body = client.get(f"/e/api/page/{page['slug']}").json()
+    assert [row["name"] for row in body["entrants"]] == ["Alice Chen"]
+    assert sorted(body["entrants"][0]["eventCodes"]) == ["MS", "WS"]
+    # Both entries really exist — the adoption merged the PERSON, not the acts.
+    counts = {ev["id"]: ev["entryCount"] for ev in body["events"]}
+    assert counts[page["ms"]] == 1 and counts[page["ws"]] == 1
+
+
+def test_a_person_without_a_birth_year_is_never_guessed_together(
+    client, page, entrant
+):
+    """The other half of the STOP ruling: auto-link only what is CERTAIN.
+
+    Same account, same name, no birth year on either act — the incumbent's
+    lesson is that a record with no discriminator matches too much, and a
+    false merge (one person shown another's record) is unrecoverable where a
+    false split is a flag an operator resolves. So this stays two rows, and
+    rides the existing ``looks_duplicate`` → NEEDS_REVIEW advisory instead.
+    """
     for _ in range(2):
         assert (
             client.post(
