@@ -57,25 +57,38 @@ function CalendarRow({ row }: { row: SeasonRow }) {
   return (
     <li className="relative flex items-center gap-4 border-t border-rule-soft px-4 py-3 transition-colors duration-fast ease-brand hover:bg-surface-sunken">
       <DateBadge date={row.date} />
-      <div className="min-w-0 flex-1">
-        <a
-          href={`/e/${encodeURIComponent(row.slug)}`}
-          className="font-medium text-foreground after:absolute after:inset-0 hover:underline"
-        >
-          {row.name ?? row.slug}
-        </a>
-        {dateText === '' ? null : <span className="sr-only">{dateText}</span>}
-        {meta.length === 0 ? null : (
-          <p className="break-words text-sm text-muted-foreground">{meta.join(' · ')}</p>
-        )}
-      </div>
-      {/* The event count is the first thing to go at 380px: the name, the
-          date and the status are the row's answer; the count is texture. */}
-      <span className="hidden text-sm tabular-nums text-muted-foreground sm:block">
-        {`${row.eventCount} ${row.eventCount === 1 ? 'event' : 'events'}`}
-      </span>
-      <div className="flex min-w-[8rem] shrink-0 justify-end">
-        <SeasonStatusCell cell={statusCell(row)} />
+      {/* Task 11 QA, 380px: the status cell used to be a sibling of the date
+          badge with an UNCONDITIONAL `min-w-[8rem] shrink-0`, and the chip
+          inside it does not wrap (`StatusChip`, allowlisted). That set the
+          card's min-content width to ~364px against a 348px content box, so
+          the page scrolled sideways and the control row could not wrap —
+          against R11. Below `sm:` the badge keeps its line with the name and
+          the status drops UNDER the name block (this column), where it has
+          the full remaining width; from `sm:` up the column is a row again
+          and the original one-line anatomy is unchanged. Same shape as
+          `TournamentCard`'s breakpoint-scoped float: the defect was the
+          unconditional property, not the property. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <a
+            href={`/e/${encodeURIComponent(row.slug)}`}
+            className="font-medium text-foreground after:absolute after:inset-0 hover:underline"
+          >
+            {row.name ?? row.slug}
+          </a>
+          {dateText === '' ? null : <span className="sr-only">{dateText}</span>}
+          {meta.length === 0 ? null : (
+            <p className="break-words text-sm text-muted-foreground">{meta.join(' · ')}</p>
+          )}
+        </div>
+        {/* The event count is the first thing to go at 380px: the name, the
+            date and the status are the row's answer; the count is texture. */}
+        <span className="hidden text-sm tabular-nums text-muted-foreground sm:block">
+          {`${row.eventCount} ${row.eventCount === 1 ? 'event' : 'events'}`}
+        </span>
+        <div className="flex sm:min-w-[8rem] sm:shrink-0 sm:justify-end">
+          <SeasonStatusCell cell={statusCell(row)} />
+        </div>
       </div>
     </li>
   );

@@ -298,6 +298,41 @@ describe('SeasonCalendar', () => {
     expect(classTokens(html, 'sm:block')).toContain('hidden');
   });
 
+  // Task 11 live QA (380x840), R11: the status cell held `min-w-[8rem]
+  // shrink-0` UNCONDITIONALLY around a chip that cannot wrap, which set the
+  // card's min-content width to ~364px inside a 348px content box — the page
+  // scrolled sideways and the control row could not wrap. The fixed column is
+  // a desktop property; below `sm:` the status drops under the name block.
+  it('drops the status under the name block below sm: (R11, 380px)', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonCalendar, {
+        view: 'open',
+        rows: [
+          row({
+            slug: 'a', name: 'Autumn', status: 'entries_open', closesInDays: 4,
+            date: '2026-09-11', venueName: 'Hall', eventCount: 3,
+          }),
+        ],
+      }),
+    );
+
+    // One markup, two layouts: a column on phones, the row anatomy from sm:.
+    expect(classTokens(html, 'sm:flex-row')).toEqual(
+      expect.arrayContaining(['flex', 'flex-col', 'min-w-0', 'sm:items-center']),
+    );
+    // Every fixed-width property on the status column is breakpoint-scoped —
+    // a bare `min-w-[8rem]`/`shrink-0` token here is the defect returning.
+    const status = classTokens(html, 'sm:min-w-[8rem]');
+    expect(status).toEqual(
+      expect.arrayContaining(['flex', 'sm:shrink-0', 'sm:justify-end']),
+    );
+    expect(status).not.toContain('min-w-[8rem]');
+    expect(status).not.toContain('shrink-0');
+    expect(status).not.toContain('justify-end');
+    // The badge keeps the name's line, and the count still hides on phones.
+    expect(classTokens(html, 'sm:block')).toContain('hidden');
+  });
+
   it('renders no sr-only date line for a row with no parseable date', () => {
     const html = renderToStaticMarkup(
       h(SeasonCalendar, {
