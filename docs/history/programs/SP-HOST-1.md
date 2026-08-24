@@ -548,6 +548,26 @@ one place, which three per-runner copies would not have.
 | `nginx -t` on the real image | clean |
 | `docs:build` | clean (dead-link gate) |
 
+## A limit worth writing down: ports are not the boundary, hostnames are
+
+Cookie scope **ignores the port** (RFC 6265 §8.5 — a port is not part of a
+cookie's origin). So in a local compose stack, where the two tiers are
+`localhost:8080` and `localhost:8081`, they share one cookie jar and only the
+JS-visible storage (`localStorage`, IndexedDB, service-worker scope) is
+actually isolated. In a real deployment they are different hostnames and the
+isolation is complete.
+
+This does not weaken the deployed property, which is the one the program is
+about. It does mean:
+
+- The **nginx outbound Cookie allowlist** is not redundant and was right to
+  keep. It is the control that holds in the local shape — and in any future
+  one where the two share an origin again. It is documented that way in
+  `play.conf` rather than as legacy.
+- `tests/e2e/tests/10-entrant-r11-evidence.spec.ts` now takes **two** base
+  URLs (`E2E_BASE_URL`, `E2E_PLAY_BASE_URL`) and records the caveat where
+  someone running it will meet it.
+
 ## Phase 4 — owner, on cayde
 
 Not doable from here: it needs DNS records, the Cloudflare tunnel dashboard,
