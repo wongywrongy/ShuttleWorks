@@ -196,8 +196,9 @@ how a conditional element proves it disappears rather than emptying.
 | 9 | An empty **segment** is an empty state, never a bare card | the third arm's own fixture: one `entries_open` row, `?view=completed`, `now: null` | `the two empty states > takes the same arm for an empty SEGMENT — never a bare empty calendar`, which asserts `not.toContain('id="calendar"')` — the section is absent, not merely empty |
 | 10 | **LIVE control, real browser + real database** (T11 matrix line 3) | `UPDATE entry_pages SET draws_published=0 WHERE slug IN ('case-live','also-live')` against the running backend, then reload | the strip **element is gone** (not an empty band) and all three same-day rows render plain `In progress` with the row link only, no `?tab=draws`. Re-flipped to 1 and re-verified through `/e/api/pages`: both back to `in_progress_live`, `now.moreCount: 1`. |
 
-Two structural guarantees stand in place of controls, because the failure they
-prevent is caught by the **type system**, not by a control:
+Two structural guarantees stand alongside the controls — the first caught by
+the type system alone, the second by the type system in one direction and a
+cross-tier pin test in the other:
 
 - **No dead links.** `StatusCell` is a closed sum whose no-link arms carry no
   `href` key *at all*, so the trap-3 assertion `expect('href' in cell)
@@ -291,7 +292,10 @@ free.
 Attribution, because two numbers differ by one: the repo-wide `make check` was
 Task 10's run (`619ffdab`), which reported entrant **743**. The **744** above is
 the post-fix per-tier re-run after `6a1d9b38` added the R11 responsive test —
-no other count moved. Extra gates not in `make check`: the entrant page-weight
+no other count moved. A second repo-wide `make check` was then run at
+`662c6ec5` (post-docs, pre-fix-wave): **exit 0**, every stage green; the
+fix-wave commits after it (`7c42dc10`, `9c2d54ef`) re-ran the entrant suite
+(**748/748** — four new tests), typecheck, lint and `docs:build`, all green. Extra gates not in `make check`: the entrant page-weight
 CI gate (`/e/` at **2.2 KB gz, 0 scripts**, budget 4 KB) and the design-system
 contrast check (NOW-strip ink 17.91:1, muted 6.97:1, both themes).
 
