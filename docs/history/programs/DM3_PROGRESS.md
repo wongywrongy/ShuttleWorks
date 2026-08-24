@@ -10,7 +10,8 @@ re-decides them.
 gets its own detailed plan **at phase start against the then-current tree**.
 **Design doc / audit:** `docs/history/superpowers/specs/2026-08-24-domain-model-unification-design.md`
 · `docs/history/audits/2026-08-24-domain-model-audit.md` (pinned `e67633fe`).
-**Docs branch:** register + plan + this ledger live on `docs/dm1-rulings` (unmerged).
+**Docs branch:** MERGED — `docs/dm1-rulings` fast-forwarded into `main` 2026-08-24
+(Kyle's instruction), so register + plan + this ledger are all on `main`.
 Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-minting-gaps`).
 
 ## Slices, in ruled execution order
@@ -47,11 +48,9 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 - Register committed `45b241d2` (`docs/dm1-rulings`).
 - Kyle then requested the implementation plan (supersedes the SP-DM-2 STOP). Plan +
   this ledger authored and committed on the same docs branch.
-- **Next session:** the rulings, plan, and this ledger exist ONLY on `docs/dm1-rulings`
-  (unmerged) — a branch cut from bare `main` has none of them. Either merge
-  `docs/dm1-rulings` into `main` first (three docs-only commits: `45b241d2`, `38e04b61`
-  and this fix — Kyle's call, it is his docs branch) and then branch
-  `dm3/p3-minting-gaps` off `main`, or branch it off `docs/dm1-rulings` directly. Then
-  execute the plan's Task 1–4 (P3) via superpowers:subagent-driven-development or
-  executing-plans. The plan's line numbers anchor to `53b650a1`; re-anchor by symbol if
-  the tree has moved.
+- Kyle ruled: merge everything to `main` before implementation. Done —
+  `docs/dm1-rulings` fast-forwarded into `main` (`45b241d2`..`f705669e` + this note) and
+  the branch deleted. `main` is ahead of `origin/main`; pushing is Kyle's call.
+- **Next session:** branch `dm3/p3-minting-gaps` off `main`, execute the plan's Task 1–4
+  (P3) via superpowers:subagent-driven-development or executing-plans. The plan's line
+  numbers anchor to `53b650a1`; re-anchor by symbol if the tree has moved.
