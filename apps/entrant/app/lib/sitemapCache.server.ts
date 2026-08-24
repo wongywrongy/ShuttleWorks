@@ -17,12 +17,9 @@
  * can see `is_open` and stop.
  */
 import { apiGet } from './apiFetch.server';
+import type { SeasonList } from './phase';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
-
-interface EntryPageListItemDTO {
-  slug: string;
-}
 
 interface CacheEntry {
   slugs: readonly string[];
@@ -76,10 +73,11 @@ export function renderSitemapXml(baseUrl: string, slugs: readonly string[]): str
 }
 
 async function fetchOpenSlugs(): Promise<string[]> {
-  // The one call this module makes, and the one place it trusts: whatever
-  // `GET /e/api/pages` returns IS the public set, verbatim.
-  const pages = await apiGet<EntryPageListItemDTO[]>('/e/api/pages');
-  return pages.map((page) => page.slug);
+  // The one call this module makes, and the one place it trusts: the
+  // listed set of `GET /e/api/pages` IS the public set, verbatim. The
+  // SP-P8 payload grew around the slugs; the sitemap still wants only them.
+  const season = await apiGet<SeasonList>('/e/api/pages');
+  return season.tournaments.map((row) => row.slug);
 }
 
 // EXEMPT from `tests/entry.loader.test.ts`'s lib-tier "no mutable binding at

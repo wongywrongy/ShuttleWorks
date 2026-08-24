@@ -7,15 +7,36 @@ import { afterAll, afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
+import type { SeasonList, SeasonRow } from '../app/lib/phase';
+
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 afterAll(() => vite.close());
 
 const sent: Request[] = [];
 
+/** One row of the SP-P8 `GET /e/api/pages` season list. */
+const row = (slug: string): SeasonRow => ({
+  slug,
+  name: 'Spring Open',
+  organizer: 'Riverside BC',
+  venueName: 'Riverside Sports Hall',
+  date: '2026-09-12',
+  eventCount: 4,
+  status: 'entries_closed',
+  closesInDays: null,
+  drawsPublished: false,
+  winnersPublished: false,
+});
+
 function stubPages(slugs: string[]) {
+  const season: SeasonList = {
+    tournaments: slugs.map(row),
+    counts: { takingEntries: 0, completed: 0 },
+    now: null,
+  };
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     sent.push(new Request(input as RequestInfo, init));
-    return new Response(JSON.stringify(slugs.map((slug) => ({ slug }))), {
+    return new Response(JSON.stringify(season), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
