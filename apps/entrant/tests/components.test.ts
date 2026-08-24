@@ -17,17 +17,20 @@ import { DateBadge } from '../app/components/DateBadge';
 import { EmptyState } from '../app/components/EmptyState';
 import { EntrantsList } from '../app/components/EntrantsList';
 import { EventRow } from '../app/components/EventRow';
-import { FilterStrip } from '../app/components/FilterStrip';
 import { HeroHeader } from '../app/components/HeroHeader';
+import { NowStrip } from '../app/components/NowStrip';
 import { PlayShell } from '../app/components/PlayShell';
+import { SeasonCalendar } from '../app/components/SeasonCalendar';
+import { SeasonControls } from '../app/components/SeasonControls';
+import { SeasonStatusCell } from '../app/components/SeasonStatusCell';
 import { StatusChip } from '../app/components/StatusChip';
 import { StickyTotalBar } from '../app/components/StickyTotalBar';
 import { TabBar } from '../app/components/TabBar';
 import { TimelineCard } from '../app/components/TimelineCard';
-import { TournamentCard } from '../app/components/TournamentCard';
 import { formatDateLong, formatMoment } from '../app/lib/format';
 import type { EntryEventDTO } from '../app/lib/entryPage.types';
-import type { ChipState, DiscoveryCard, Filters, TimelineMoment } from '../app/lib/phase';
+import { statusCell } from '../app/lib/phase';
+import type { ChipState, Filters, SeasonRow, TimelineMoment } from '../app/lib/phase';
 
 /** 2026-08-11 12:00 UTC — the same fixture clock `phase.test.ts` pins. */
 const NOW = new Date(Date.UTC(2026, 7, 11, 12, 0));
@@ -35,18 +38,15 @@ const NOW = new Date(Date.UTC(2026, 7, 11, 12, 0));
 const OPEN_CHIP: ChipState = { kind: 'entriesOpen', closesInDays: 4 };
 const CLOSED_CHIP: ChipState = { kind: 'entriesClosed' };
 
-function card(overrides: Partial<DiscoveryCard> = {}): DiscoveryCard {
-  return {
-    slug: 'spring-open',
-    name: 'Spring Open',
-    tournamentDate: '2026-09-19',
-    venueName: 'Kingsway Centre',
-    eventCount: 4,
-    entriesOpen: true,
-    entriesCloseAt: '2026-08-14 23:59 UTC',
-    ...overrides,
-  };
-}
+/** One row of the SP-P8 season list — the same fixture `phase.test.ts` uses,
+ * so both suites describe the payload the same way. */
+const row = (over: Partial<SeasonRow> = {}): SeasonRow => ({
+  slug: 's', name: 'T', organizer: null, venueName: null, date: null,
+  eventCount: 0, status: 'entries_closed', closesInDays: null,
+  drawsPublished: false, winnersPublished: false, ...over,
+});
+
+const NO_FILTERS: Filters = { view: 'season', preset: null, from: null, to: null, q: '' };
 
 function event(overrides: Partial<EntryEventDTO> = {}): EntryEventDTO {
   return {
@@ -66,10 +66,6 @@ function event(overrides: Partial<EntryEventDTO> = {}): EntryEventDTO {
     entryCount: 7,
     ...overrides,
   };
-}
-
-function filters(overrides: Partial<Filters> = {}): Filters {
-  return { status: null, preset: null, from: null, to: null, q: '', ...overrides };
 }
 
 /**
@@ -140,202 +136,280 @@ describe('DateBadge', () => {
   });
 });
 
-// ---- TournamentCard --------------------------------------------------------
+// ---- SeasonStatusCell (SP-P8 §2.4) -----------------------------------------
+//
+// `TournamentCard` and `FilterStrip` used to be asserted here. Both are the
+// discovery card/sidebar the season calendar replaces, and both are deleted in
+// the task after this one; their describes went with the components rather
+// than being carried as tests for markup nothing renders.
 
-describe('TournamentCard', () => {
-  it('has the fixed anatomy: badge · name link · venue · count · chip', () => {
-    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
-    expect(html).toContain('Sep'); // the badge
-    expect(html).toMatch(/<a href="\/e\/spring-open"[^>]*>Spring Open<\/a>/);
-    expect(html).toContain('Kingsway Centre');
-    expect(html).toContain('4 events');
-    expect(html).toContain('Entries open · closes in 4d');
-  });
-
-  it('is one link, stretched over the whole card', () => {
-    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
-    expect(html.match(/<a /g)).toHaveLength(1);
-    expect(html).toContain('after:absolute after:inset-0');
-  });
-
-  it('pins the chip to a fixed right-aligned column FROM sm: UP (refinement 2)', () => {
-    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
-    const chip = classTokens(html, 'sm:float-right');
-
-    // A float, still: one vertical line of chips down the list, while long
-    // names keep the full card width and wrap under the chip. What changed
-    // is that it is now breakpoint-scoped — the desktop property is intact.
-    expect(chip).toContain('sm:float-right');
-    // …and the chip precedes the name in the markup (floats must), so at
-    // desktop widths it is structurally not a bottom row.
-    expect(html.indexOf('sm:float-right')).toBeLessThan(html.indexOf('Spring Open'));
-    // The defect: an UNCONDITIONAL float. At 390px a long name wrapped
-    // around the chip ("2026 Bay" / "Badminton Late Summer Open"), against
-    // this component's own docstring. A bare `float-right` token here is
-    // that defect returning.
-    expect(chip).not.toContain('float-right');
-  });
-
-  it('keeps the chip the bottom row on phones, as the docstring always said', () => {
-    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
-
-    // Native, no duplicated markup and no second copy for a screen reader:
-    // below `sm:` the content column is a flex column and the chip is
-    // `order-last`, so it lays out last while staying first in the DOM
-    // (which the float requires). From `sm:` up the column is `display:
-    // block` again, `order` goes inert and the float takes over.
-    expect(classTokens(html, 'sm:float-right')).toContain('order-last');
-    expect(classTokens(html, 'flex-col')).toEqual(
-      expect.arrayContaining(['flex', 'sm:block']),
+describe('SeasonStatusCell', () => {
+  it('renders Winners as a link and bare Completed as text (§7 trap 3)', () => {
+    const winners = renderToStaticMarkup(
+      h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status: 'completed_winners' })) }),
     );
-  });
+    expect(winners).toContain('href="/e/x?tab=winners"');
+    expect(winners).toContain('Winners');
 
-  it('collapses absent fields without breaking the anatomy order', () => {
-    const bare = card({ venueName: null, tournamentDate: null, eventCount: 1 });
-    const html = renderToStaticMarkup(h(TournamentCard, { card: bare, now: NOW }));
-    expect(html).toContain('TBC');
-    expect(html).toContain('1 event');
-    expect(html).not.toContain('Kingsway');
-  });
-
-  it('encodes the slug into the href', () => {
-    const html = renderToStaticMarkup(
-      h(TournamentCard, { card: card({ slug: 'a b' }), now: NOW }),
+    const done = renderToStaticMarkup(
+      h(SeasonStatusCell, { cell: statusCell(row({ status: 'completed' })) }),
     );
-    expect(html).toContain('href="/e/a%20b"');
+    expect(done).toContain('Completed');
+    expect(done).not.toContain('<a');
   });
 
-  // 2026-08-11 design audit (T1 / finding #2): `DateBadge`'s own comment
-  // claimed "the card's text carries the date for AT", and nothing on the
-  // card did — the badge is `aria-hidden` and nothing else named the date.
-  // This is the fix: an `sr-only` text carrying it, outside the stretched
-  // link (so the single-link/anatomy tests above stay exactly true).
-  it('carries the date as sr-only text, since the badge is aria-hidden decoration', () => {
-    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
-    expect(html).toContain(formatDateLong('2026-09-19'));
-    const srOnly = classTokens(html, 'sr-only');
-    expect(srOnly).toContain('sr-only');
-  });
-
-  it('renders no sr-only date paragraph when there is no parseable date', () => {
-    const html = renderToStaticMarkup(
-      h(TournamentCard, { card: card({ tournamentDate: null }), now: NOW }),
-    );
-    expect(classTokens(html, 'sr-only')).toEqual([]);
-  });
-
-  it('transitions border-color WITH box-shadow, both on ease-brand (MOTION.md anti-pattern #1)', () => {
-    // The defect: `transition-shadow` alone, no `ease-brand` — the
-    // Tailwind-default flat curve MOTION.md forbids by name — while
-    // `hover:border-rule-control` changes a property (`border-color`) the
-    // `transition-shadow` shorthand never covers, so the border snapped.
-    const html = renderToStaticMarkup(h(TournamentCard, { card: card(), now: NOW }));
-    const li = html.match(/<li class="[^"]*"/)?.[0] ?? '';
-    expect(li).toContain('ease-brand');
-    expect(li).toMatch(/transition-\[[^\]]*border-color[^\]]*box-shadow[^\]]*\]/);
-  });
-});
-
-// ---- FilterStrip (refinement 4: always visible; P1.1: facets are links) ----
-
-describe('FilterStrip', () => {
-  it('keeps one GET form, aimed at the results fragment, for the date range', () => {
-    const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
-    const form = html.match(/<form[^>]*>/)?.[0] ?? '';
-    expect(form).toContain('method="get"');
-    expect(form).toContain('action="/e/#results"');
-  });
-
-  it('has no disclosure toggle of any kind — the strip is always visible', () => {
-    const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
-    expect(html).not.toContain('filters-toggle');
-    expect(html).not.toContain('peer-checked');
-    expect(html).not.toContain('<details');
-    expect(html).not.toMatch(/\bhidden\b/);
-  });
-
-  // SP-P7 §3.8: the rail is a card at EVERY width. It used to shed its border,
-  // ground and padding from `md:` up, leaving the desktop rail as loose text
-  // links beside a column of carded results — the one surface on the tier that
-  // sat on the page ground instead of on a card.
-  it('stays a card at desktop widths, not floating text links', () => {
-    const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
-    const container = html.slice(0, html.indexOf('>') + 1);
-
-    expect(container).toContain('border-rule-soft');
-    expect(container).toContain('bg-surface-raised');
-    for (const shed of ['md:rounded-none', 'md:border-0', 'md:bg-transparent', 'md:p-0']) {
-      expect(container).not.toContain(shed);
+  it('lifts every real link above the row-wide stretched link', () => {
+    for (const status of ['in_progress_live', 'completed_winners'] as const) {
+      const html = renderToStaticMarkup(
+        h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status, drawsPublished: true })) }),
+      );
+      expect(classTokens(html, 'z-10')).toContain('relative');
     }
   });
 
-  // P1.1: a facet is a LINK carrying the whole current query with that one
-  // facet swapped — instant apply as plain GET navigation, zero client JS.
-  it('renders each facet as a link that swaps only its own facet', () => {
+  it('takes the chip vocabulary that already exists for an open row', () => {
     const html = renderToStaticMarkup(
-      h(FilterStrip, { filters: filters({ status: 'open', q: 'gold' }) }),
+      h(SeasonStatusCell, { cell: statusCell(row({ status: 'entries_open', closesInDays: 4 })) }),
     );
-    // Picking a preset keeps the chosen status and the search text.
-    expect(html).toMatch(
-      /<a href="\/e\/\?q=gold&(amp;)?status=open&(amp;)?preset=30d#results"/,
-    );
-    // Picking "All tournaments" drops status but keeps the search text.
-    expect(html).toMatch(/<a href="\/e\/\?q=gold#results"/);
+    expect(html).toContain('Entries open · closes in 4d');
+  });
+});
+
+// ---- NowStrip (SP-P8 §2.1) -------------------------------------------------
+
+describe('NowStrip', () => {
+  const live = row({
+    slug: 'x', name: 'Fall Open', venueName: 'Hall', date: '2026-09-12',
+    eventCount: 9, status: 'in_progress_live', drawsPublished: true,
   });
 
-  it('echoes the chosen facets back as the selected link (aria-current)', () => {
+  it('carries the follow-live deep link and NO player count (degraded field)', () => {
+    const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
+    expect(html).toContain('Now playing');
+    expect(html).toContain('Fall Open');
+    expect(html).toContain('href="/e/x?tab=draws"');
+    expect(html).not.toMatch(/player/i);
+  });
+
+  it('states venue · date · events, and nothing it was not given', () => {
+    const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
+    expect(html).toContain(`Hall · ${formatDateLong('2026-09-12')} · 9 events`);
+
+    const bare = renderToStaticMarkup(
+      h(NowStrip, { row: row({ slug: 'x', name: 'Bare', eventCount: 1 }), moreCount: 0 }),
+    );
+    // Exactly the one part it has — an absent venue leaves no dangling middot.
+    expect(bare).toContain('>1 event<');
+    expect(bare).not.toContain('null');
+  });
+
+  it('appends +N more only when there is more', () => {
+    expect(renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 1 }))).toContain('+1 more');
+    expect(renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }))).not.toContain('more');
+  });
+
+  it('sits on the inverse band tokens, never a literal colour', () => {
+    const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
+    expect(html).toContain('bg-surface-inverse');
+    expect(html).toContain('text-surface-inverse-ink');
+    expect(html).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+  });
+});
+
+// ---- SeasonCalendar (SP-P8 §2.4) -------------------------------------------
+
+describe('SeasonCalendar', () => {
+  it('renders month headers and a trailing Completed section under Season', () => {
     const html = renderToStaticMarkup(
-      h(FilterStrip, { filters: filters({ status: 'open', preset: '30d' }) }),
+      h(SeasonCalendar, {
+        view: 'season',
+        rows: [
+          row({ slug: 'a', name: 'Autumn', status: 'entries_open', date: '2026-09-11' }),
+          row({ slug: 'b', name: 'Bygone', status: 'completed', date: '2026-05-30' }),
+        ],
+      }),
     );
-    expect(html).toMatch(/<a[^>]*aria-current="true"[^>]*>Entries open<\/a>/);
-    expect(html).toMatch(/<a[^>]*aria-current="true"[^>]*>Next month<\/a>/);
-    expect(html).not.toMatch(/<a[^>]*aria-current="true"[^>]*>Upcoming<\/a>/);
+    expect(html).toContain('September 2026');
+    expect(html).toContain('Completed');
+    expect(html).toContain('id="calendar"');
+    // Order: the live month leads, the completed section trails.
+    expect(html.indexOf('Autumn')).toBeLessThan(html.indexOf('Bygone'));
   });
 
-  it('carries chosen facets into the date form as hidden fields', () => {
+  it('lists an undated ACTIVE row under its own section, never hidden', () => {
     const html = renderToStaticMarkup(
-      h(FilterStrip, { filters: filters({ status: 'open', preset: '30d' }) }),
+      h(SeasonCalendar, {
+        view: 'season',
+        rows: [row({ slug: 'u', name: 'Undated Cup', status: 'entries_open', date: null })],
+      }),
     );
-    expect(html).toMatch(/<input type="hidden" name="status" value="open"/);
-    expect(html).toMatch(/<input type="hidden" name="preset" value="30d"/);
+    expect(html).toContain('Undated Cup');
+    expect(html).toContain('Date to be confirmed');
   });
 
-  it('offers the custom range as two native date inputs', () => {
+  // Controller ruling 1: `monthGroupsDesc` drops every unparseable date, so
+  // the Completed view rendered from it alone silently loses a completed
+  // tournament that never got a date — the row the Season view does show.
+  it('keeps an undated COMPLETED row in the Completed view (ruling 1)', () => {
     const html = renderToStaticMarkup(
-      h(FilterStrip, { filters: filters({ from: '2026-09-01', to: '2026-09-30' }) }),
+      h(SeasonCalendar, {
+        view: 'completed',
+        rows: [
+          row({ slug: 'd', name: 'Dated Cup', status: 'completed', date: '2026-05-30' }),
+          row({ slug: 'u', name: 'Undated Cup', status: 'completed_winners', date: null }),
+        ],
+      }),
     );
-    expect(html).toMatch(/<input[^>]*type="date"[^>]*name="from"[^>]*value="2026-09-01"/);
-    expect(html).toMatch(/<input[^>]*type="date"[^>]*name="to"[^>]*value="2026-09-30"/);
+    expect(html).toContain('Dated Cup');
+    expect(html).toContain('Undated Cup');
+    expect(html).toContain('Date to be confirmed');
+    expect(html.indexOf('Dated Cup')).toBeLessThan(html.indexOf('Undated Cup'));
   });
 
-  it('keeps the header search text as a hidden q field', () => {
-    const html = renderToStaticMarkup(h(FilterStrip, { filters: filters({ q: 'gold' }) }));
-    expect(html).toMatch(/<input type="hidden" name="q" value="gold"/);
-  });
-
-  it('renders Clear only when something is active', () => {
-    expect(renderToStaticMarkup(h(FilterStrip, { filters: filters() }))).not.toContain(
-      'Clear',
+  it('renders one ungrouped list under Taking entries — no month headers', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonCalendar, {
+        view: 'open',
+        rows: [row({ slug: 'a', name: 'Autumn', status: 'entries_open', date: '2026-09-11' })],
+      }),
     );
-    expect(
-      renderToStaticMarkup(h(FilterStrip, { filters: filters({ status: 'open' }) })),
-    ).toContain('Clear');
+    expect(html).toContain('Autumn');
+    // No section header at all — the `sr-only` long date carries the month
+    // words on every row, so the header ELEMENT is what "ungrouped" means.
+    expect(html).not.toContain('<h3');
   });
 
-  it('groups each facet under a labelled nav', () => {
-    const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
-    expect(html).toContain('<nav aria-label="Status"');
-    expect(html).toContain('<nav aria-label="Dates"');
+  it('makes the row one stretched link and carries the date for AT', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonCalendar, {
+        view: 'open',
+        rows: [
+          row({
+            slug: 'a b', name: 'Autumn', status: 'entries_open', date: '2026-09-11',
+            venueName: 'Hall', organizer: 'Wessex CBA', eventCount: 3,
+          }),
+        ],
+      }),
+    );
+    expect(html).toContain('href="/e/a%20b"');
+    expect(html).toContain('after:absolute after:inset-0');
+    expect(html).toContain(formatDateLong('2026-09-11'));
+    expect(html).toContain('Hall · Wessex CBA');
+    expect(classTokens(html, 'sm:block')).toContain('hidden');
   });
 
-  // 2026-08-11 design audit, finding #6 (carried from the radio rows):
-  // `py-0.5` (2px) on a `text-sm` row sat at exactly the WCAG 2.2 AA
-  // target-size floor (24px) with zero margin, for a mobile-heavy audience.
-  it('gives each facet link row more than the bare 24px target-size floor', () => {
-    const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
-    const link = html.match(/<a[^>]*>All tournaments<\/a>/)?.[0] ?? '';
-    expect(link).not.toMatch(/\bpy-0\.5\b/);
-    expect(link).toMatch(/\bpy-1(\.5)?\b/);
+  it('renders no sr-only date line for a row with no parseable date', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonCalendar, {
+        view: 'open',
+        rows: [row({ slug: 'u', name: 'Undated', status: 'entries_open', date: null })],
+      }),
+    );
+    expect(classTokens(html, 'sr-only')).toEqual([]);
+  });
+});
+
+// ---- SeasonControls (SP-P8 §2.3) -------------------------------------------
+
+describe('SeasonControls', () => {
+  const counts = { takingEntries: 2, completed: 3 };
+
+  it('renders live counts on the segments', () => {
+    const html = renderToStaticMarkup(h(SeasonControls, { filters: NO_FILTERS, counts }));
+    expect(html).toContain('Taking entries · 2');
+    expect(html).toContain('Completed · 3');
+    expect(html).toContain('Season');
+  });
+
+  it('keeps search a GET form aimed at the calendar, carrying the date filters', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, { filters: { ...NO_FILTERS, preset: '7d', view: 'completed' }, counts }),
+    );
+    const form = html.match(/<form[^>]*>/)?.[0] ?? '';
+    expect(form).toContain('method="get"');
+    expect(form).toContain('action="/e/#calendar"');
+    expect(html).toMatch(/<input type="hidden" name="preset" value="7d"/);
+    expect(html).toMatch(/<input type="hidden" name="view" value="completed"/);
+  });
+
+  it('segments preserve the search text and the date filters, and drop the default view', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, { filters: { ...NO_FILTERS, q: 'gold', preset: '7d' }, counts }),
+    );
+    expect(html).toContain('href="/e/?q=gold&amp;view=open&amp;preset=7d#calendar"');
+    // Season is `parseFilters`' default, so its link names no view at all.
+    expect(html).toContain('href="/e/?q=gold&amp;preset=7d#calendar"');
+  });
+
+  it('hides the date filters behind a native details panel — no client JS', () => {
+    const html = renderToStaticMarkup(h(SeasonControls, { filters: NO_FILTERS, counts }));
+    expect(html).toContain('<details');
+    expect(html).toContain('<summary');
+    expect(html).toContain('Filters');
+    expect(html).not.toContain('onclick');
+    // The three presets and the free range, as native controls.
+    // "This season" is the checked default, and its value is empty so the
+    // loader's `canonicalQuery` drops it from the submitted URL entirely.
+    expect(html).toMatch(/<input[^>]*name="preset"[^>]*checked=""[^>]*value=""/);
+    expect(html).toContain('Next 7 days');
+    expect(html).toContain('Next 3 months');
+    expect(html).toMatch(/<input[^>]*type="date"[^>]*name="from"/);
+    expect(html).toMatch(/<input[^>]*type="date"[^>]*name="to"/);
+  });
+
+  it('badges the summary with the count of active date filters only', () => {
+    expect(renderToStaticMarkup(h(SeasonControls, { filters: NO_FILTERS, counts }))).not.toContain(
+      'Filters · ',
+    );
+    const two = renderToStaticMarkup(
+      h(SeasonControls, {
+        filters: { ...NO_FILTERS, from: '2026-09-01', to: '2026-09-30', q: 'gold' },
+        counts,
+      }),
+    );
+    expect(two).toContain('Filters · 2');
+  });
+
+  it('renders ZERO chips and no chip row in the default state (§7 trap 4)', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, { filters: NO_FILTERS, counts: { takingEntries: 0, completed: 0 } }),
+    );
+    expect(html).not.toContain('data-chip-row');
+  });
+
+  it('renders a dismissible chip per active date filter', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, {
+        filters: { ...NO_FILTERS, preset: '7d' },
+        counts: { takingEntries: 0, completed: 0 },
+      }),
+    );
+    expect(html).toContain('data-chip-row');
+    expect(html).toContain('Next 7 days');
+    expect(html).toContain('Clear all');
+    // Dismissing one chip is a link to the same query minus that param.
+    expect(html).toContain('href="/e/#calendar"');
+  });
+
+  it('labels a legacy 30d link honestly, though no radio offers it (D6)', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, {
+        filters: { ...NO_FILTERS, preset: '30d' },
+        counts: { takingEntries: 0, completed: 0 },
+      }),
+    );
+    expect(html).toContain('Next 30 days');
+  });
+
+  it('names both custom bounds as their own chips', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, {
+        filters: { ...NO_FILTERS, from: '2026-09-01', to: '2026-09-30' },
+        counts: { takingEntries: 0, completed: 0 },
+      }),
+    );
+    expect(html).toContain('From 2026-09-01');
+    expect(html).toContain('To 2026-09-30');
   });
 });
 
