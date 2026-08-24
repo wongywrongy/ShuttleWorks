@@ -9,15 +9,18 @@
  * NOTHING for a value that does not parse — a page must not invent a date
  * the director never set.
  */
-import { parseIsoDate, parseMoment } from './phase';
+import { monthLong, parseIsoDate, parseMoment } from './phase';
+
+/** `January`-style month for a zero-based index — the season calendar's month
+ * headers (SP-P8 §2.4). The table itself lives in `phase.ts`, which needs the
+ * words to label its `MonthGroup`s and cannot import this module back without
+ * closing a cycle; re-exported here so the vocabulary is still reachable from
+ * the module that owns every other date word. */
+export { monthLong };
 
 const MONTHS = Object.freeze([
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-]);
-const MONTHS_LONG = Object.freeze([
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
 ]);
 const WEEKDAYS = Object.freeze([
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
@@ -40,7 +43,7 @@ export function dateOfIso(iso: string | null): string | null {
 export function formatDateLong(iso: string | null): string {
   const date = parseIsoDate(iso);
   if (date === null) return '';
-  return `${WEEKDAYS[date.getUTCDay()]} ${date.getUTCDate()} ${MONTHS_LONG[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+  return `${WEEKDAYS[date.getUTCDay()]} ${date.getUTCDate()} ${monthLong(date.getUTCMonth())} ${date.getUTCFullYear()}`;
 }
 
 /** A UTC instant → `14 Aug 2026, 23:59 UTC`. */

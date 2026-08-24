@@ -16,8 +16,13 @@
  *
  * Owner rulings 2026-08-11 are baked in: the chip has exactly TWO states
  * (`Entries open [— closes in Nd]` / `Entries closed`; G4 declined — no
- * Live/Finished/In-play), and the status facets are open/upcoming/past with
- * `closed` for undatable closed tournaments (design §6 statusFacet table).
+ * Live/Finished/In-play).
+ *
+ * SP-P8 replaced the discovery CARD with the season ROW: `GET /e/api/pages`
+ * now ships a decided `PageStatus` per tournament, so the tier-side status
+ * facet, the card reduction and the multi-key discovery sort are all gone —
+ * one read, one server-decided status, and the pure functions below only
+ * SELECT, GROUP and LABEL what arrives.
  */
 import type { FormEcho } from './echo';
 
@@ -30,33 +35,81 @@ export type ChipState =
 export type CtaState = { kind: 'enter'; href: string } | { kind: 'closed' };
 
 /**
- * One discovery card. G1 (these fields on `GET /e/api/pages`) was DECLINED at
- * the Phase B gate, so the shape is derived tier-side by `toDiscoveryCard`
- * from the full page projection the loader fans out for — correct, N+1.
+ * Where a tournament sits in its life, decided by the SERVER (SP-P8 Task 2,
+ * `GET /e/api/pages`). The tier never re-derives it: `in_progress_live` in
+ * particular means "the director published draws", which is a publication fact
+ * no client-side date arithmetic can see.
  */
-export interface DiscoveryCard {
+export type PageStatus =
+  | 'entries_open'
+  | 'entries_closed'
+  | 'in_progress_live'
+  | 'in_progress'
+  | 'completed_winners'
+  | 'completed';
+
+/**
+ * One row of the season list. SP-P8 reversed the G1 decline: the server now
+ * ships every field the calendar renders, so `/e/` is ONE read rather than the
+ * fan-out `toDiscoveryCard` used to reduce.
+ */
+export interface SeasonRow {
   slug: string;
   name: string | null;
-  /** Raw `tournament_date` string — nullable, ISO by convention only. */
-  tournamentDate: string | null;
+  organizer: string | null;
   venueName: string | null;
+  /** Raw `tournament_date` string — nullable, ISO by convention only. */
+  date: string | null;
   eventCount: number;
-  /** Server-computed OR of `_event_is_open` — never re-derived here. */
-  entriesOpen: boolean;
-  /** Min `closesAt` over currently-open events, pinned wire format. */
-  entriesCloseAt: string | null;
+  status: PageStatus;
+  /** Whole days until entries close; server-computed, never 0 (ceil ≥ 1). */
+  closesInDays: number | null;
+  drawsPublished: boolean;
+  winnersPublished: boolean;
 }
 
-export type StatusFacetChoice = 'open' | 'upcoming' | 'past';
+export interface SeasonList {
+  tournaments: SeasonRow[];
+  /** Unfiltered, server-side segment counts (§2.3) — the labels never move. */
+  counts: { takingEntries: number; completed: number };
+  /** The happening-now strip, or null when nothing is in window. */
+  now: { slug: string; moreCount: number } | null;
+}
+
+/** The three segments of the calendar. A view is navigation, not a filter. */
+export type View = 'season' | 'open' | 'completed';
+
 export type DatePreset = '7d' | '30d' | '90d';
 
 export interface Filters {
-  status: StatusFacetChoice | null;
+  view: View;
   preset: DatePreset | null;
   from: string | null;
   to: string | null;
   q: string;
 }
+
+/** A month header plus its rows (§2.4). `key` is `year-monthIndex`. */
+export interface MonthGroup {
+  key: string;
+  label: string;
+  rows: SeasonRow[];
+}
+
+/**
+ * What the status column renders for one row (§2.4 table).
+ *
+ * A closed sum type rather than a string plus optional href: `completed`
+ * without published winners has NOWHERE to link (§7 trap 3), and the only way
+ * to make that unrepresentable is for the no-link arm to carry no `href`
+ * field at all.
+ */
+export type StatusCell =
+  | { kind: 'chip-live'; label: string; href: string }
+  | { kind: 'chip-open'; chip: ChipState }
+  | { kind: 'chip-muted'; label: string }
+  | { kind: 'link'; label: string; href: string }
+  | { kind: 'text'; label: string };
 
 export type TotalBarState =
   | { kind: 'unquoted' }
@@ -81,6 +134,27 @@ export interface PhaseEvent {
 }
 
 const DAY_MS = 86_400_000;
+
+/**
+ * The month words, and the season calendar's month-header vocabulary.
+ *
+ * They live HERE, not in `format.ts` where the rest of the date-to-words
+ * tables sit, for one structural reason: `format.ts` already imports this
+ * module's parsers, so a `phase → format` edge would close an import cycle,
+ * and `tests/boundaries.test.ts` holds the tier to ZERO depcruise findings —
+ * `no-circular` is `warn` severity but that test admits no warnings either.
+ * `format.ts` re-exports `monthLong`, so both import paths still work and
+ * there is still exactly one table.
+ */
+const MONTHS_LONG = Object.freeze([
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]);
+
+/** `January`-style month for a zero-based index; out of range → `''`. */
+export function monthLong(index: number): string {
+  return MONTHS_LONG[index] ?? '';
+}
 
 /**
  * Parse the backend's pinned moment format `"%Y-%m-%d %H:%M UTC"`
@@ -151,16 +225,25 @@ function countdown(deadlineMs: number, now: Date): number {
   return Math.max(0, Math.ceil((deadlineMs - now.getTime()) / DAY_MS));
 }
 
-/** The same chip, computed from a discovery card — `entriesCloseAt` is
- * already the nearest deadline `toDiscoveryCard` reduced to. */
-export function cardChipState(
-  card: Pick<DiscoveryCard, 'entriesOpen' | 'entriesCloseAt'>,
-  now: Date,
-): ChipState {
-  if (!card.entriesOpen) return { kind: 'entriesClosed' };
-  const deadline = parseMoment(card.entriesCloseAt);
-  if (deadline === null) return { kind: 'entriesOpen', closesInDays: null };
-  return { kind: 'entriesOpen', closesInDays: countdown(deadline.getTime(), now) };
+/**
+ * The nearest deadline over currently-OPEN events, as the raw wire string.
+ *
+ * The deadline half of the retired `toDiscoveryCard` — the entry form still
+ * states the deadline it is running against, and that reduction is the only
+ * part of the card it ever wanted. `min`, not `max`, for `chipState`'s reason:
+ * the page must never overstate the time an entrant has. Closed events are
+ * skipped however soon their deadline reads — their window is already spent.
+ */
+export function nearestCloseAt(
+  events: readonly Pick<PhaseEvent, 'isOpen' | 'closesAt'>[],
+): string | null {
+  return (
+    events
+      .filter((event) => event.isOpen)
+      .map((event) => ({ raw: event.closesAt, at: parseMoment(event.closesAt) }))
+      .filter((d): d is { raw: string; at: Date } => d.at !== null)
+      .sort((a, b) => a.at.getTime() - b.at.getTime())[0]?.raw ?? null
+  );
 }
 
 /** The chip's sentence-case public copy — the ruling's exact two states. */
@@ -217,20 +300,6 @@ export function activeTab(requested: string | null, visible: readonly Tab[]): Ta
   return visible.includes(requested as Tab) ? (requested as Tab) : 'overview';
 }
 
-/**
- * Design §6 statusFacet table (G4 declined). `closed` is the undatable
- * remainder: listed, matches no status/date facet, carries no date chip.
- */
-export function statusFacet(
-  card: Pick<DiscoveryCard, 'entriesOpen' | 'tournamentDate'>,
-  now: Date,
-): StatusFacetChoice | 'closed' {
-  if (card.entriesOpen) return 'open';
-  const date = parseIsoDate(card.tournamentDate);
-  if (date === null) return 'closed';
-  return date.getTime() >= utcDayStart(now) ? 'upcoming' : 'past';
-}
-
 /** A chain, not a module-scoped Map: the mutable-bindings guard
  * (`tests/helpers/sourceGuards.ts`) rules shared containers out of this
  * process, and three literals do not need a data structure. */
@@ -241,18 +310,17 @@ function presetDays(preset: DatePreset): number {
 }
 
 /**
- * Conjunction of facet match, date-window match and case-folded substring of
- * `q` against name and venue. A custom from/to wins over a preset; a card
- * whose date is unparseable matches only when no date filter is set.
+ * Conjunction of date-window match and case-folded substring of `q` against
+ * name, ORGANIZER and venue (D2 — there is no city on the wire). A custom
+ * from/to wins over a preset; a row whose date is unparseable matches only
+ * when no date filter is set. The VIEW is not applied here: it selects and
+ * orders (`viewRows`), it does not filter the counts.
  */
-export function cardMatches(card: DiscoveryCard, filters: Filters, now: Date): boolean {
-  if (filters.status !== null && statusFacet(card, now) !== filters.status) return false;
-
+export function rowMatches(row: SeasonRow, filters: Filters, now: Date): boolean {
   const from = parseIsoDate(filters.from);
   const to = parseIsoDate(filters.to);
-  const hasDateFilter = from !== null || to !== null || filters.preset !== null;
-  if (hasDateFilter) {
-    const date = parseIsoDate(card.tournamentDate);
+  if (from !== null || to !== null || filters.preset !== null) {
+    const date = parseIsoDate(row.date);
     if (date === null) return false;
     const t = date.getTime();
     if (from !== null || to !== null) {
@@ -263,88 +331,40 @@ export function cardMatches(card: DiscoveryCard, filters: Filters, now: Date): b
       if (t < start || t > start + presetDays(filters.preset!) * DAY_MS) return false;
     }
   }
-
   const q = filters.q.trim().toLowerCase();
   if (q !== '') {
-    const haystack = `${card.name ?? ''} ${card.venueName ?? ''}`.toLowerCase();
+    const haystack =
+      `${row.name ?? ''} ${row.organizer ?? ''} ${row.venueName ?? ''}`.toLowerCase();
     if (!haystack.includes(q)) return false;
   }
   return true;
 }
 
-/**
- * Discovery order (design §3 + Phase B refinement 1). The card that can be
- * acted on leads: entries-open cards first, **closing soonest first** — a
- * closed-but-sooner tournament must never outrank one an entrant can still
- * enter. Open cards with no parseable deadline follow, then closed cards,
- * both upcoming-first (parseable today-or-future dates ascending, then
- * undated/unparseable, then past descending). Name then slug as tiebreakers
- * so the order is total and stable across renders.
- */
-export function orderCards(cards: readonly DiscoveryCard[], now: Date): DiscoveryCard[] {
-  const start = utcDayStart(now);
-  const rank = (card: DiscoveryCard): [number, number, number] => {
-    const close = card.entriesOpen ? parseMoment(card.entriesCloseAt) : null;
-    if (close !== null) return [0, 0, close.getTime()];
-    const date = parseIsoDate(card.tournamentDate);
-    const dateRank: [number, number] =
-      date === null ? [1, 0] : date.getTime() >= start ? [0, date.getTime()] : [2, -date.getTime()];
-    return [card.entriesOpen ? 1 : 2, ...dateRank];
-  };
-  return [...cards].sort((a, b) => {
-    const ra = rank(a);
-    const rb = rank(b);
-    const byRank = ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2];
-    if (byRank !== 0) return byRank;
-    const nameOrder = (a.name ?? '').localeCompare(b.name ?? '');
-    return nameOrder !== 0 ? nameOrder : a.slug.localeCompare(b.slug);
-  });
-}
-
-/**
- * A discovery card, derived tier-side from the full page projection — the G1
- * decline path: `GET /e/api/pages` lists `{slug}` only, so the discovery
- * loader fans out one `GET /e/api/page/{slug}` per listed tournament and
- * reduces each answer to this. `entriesOpen` is the OR of the server's own
- * `isOpen` (never re-derived from moments); `entriesCloseAt` is the nearest
- * deadline over open events, kept as the raw wire string so the chip parses
- * exactly one format.
- */
-export function toDiscoveryCard(page: {
-  tournament: { name: string | null; date: string | null };
-  venue: { name: string | null } | null;
-  page: { slug: string };
-  events: readonly Pick<PhaseEvent, 'isOpen' | 'closesAt'>[];
-}): DiscoveryCard {
-  const deadlines = page.events
-    .filter((event) => event.isOpen)
-    .map((event) => ({ raw: event.closesAt, at: parseMoment(event.closesAt) }))
-    .filter((d): d is { raw: string; at: Date } => d.at !== null)
-    .sort((a, b) => a.at.getTime() - b.at.getTime());
-  return {
-    slug: page.page.slug,
-    name: page.tournament.name,
-    tournamentDate: page.tournament.date,
-    venueName: page.venue?.name ?? null,
-    eventCount: page.events.length,
-    entriesOpen: entriesOpen(page.events),
-    entriesCloseAt: deadlines[0]?.raw ?? null,
-  };
-}
-
 // Frozen literals — the safe-to-share form the mutable-bindings guard exempts.
-const STATUS_CHOICES = Object.freeze<StatusFacetChoice[]>(['open', 'upcoming', 'past']);
+const VIEW_CHOICES = Object.freeze<View[]>(['season', 'open', 'completed']);
 const PRESET_CHOICES = Object.freeze<DatePreset[]>(['7d', '30d', '90d']);
+const COMPLETED_STATUSES = Object.freeze<PageStatus[]>(['completed', 'completed_winners']);
 
-/** The filter GET form's query string → a validated `Filters`. Unknown values
- * fall back to "no filter" rather than erroring — a URL is typeable. */
+/** D6: the retired status facet's values, mapped onto the new views so a
+ * mailing-list link from the old page lands on the equivalent state. */
+const LEGACY_STATUS_VIEWS = Object.freeze<Record<string, View>>({
+  open: 'open',
+  past: 'completed',
+  upcoming: 'season',
+});
+
+/** The control row's query string → a validated `Filters`. Unknown values fall
+ * back to "no filter" rather than erroring — a URL is typeable. */
 export function parseFilters(params: URLSearchParams): Filters {
-  const status = params.get('status');
+  const view = params.get('view');
+  const legacy = params.get('status');
   const preset = params.get('preset');
   return {
-    status: STATUS_CHOICES.includes(status as StatusFacetChoice)
-      ? (status as StatusFacetChoice)
-      : null,
+    view: VIEW_CHOICES.includes(view as View)
+      ? (view as View)
+      : legacy !== null && legacy in LEGACY_STATUS_VIEWS
+        ? LEGACY_STATUS_VIEWS[legacy]
+        : 'season',
     preset: PRESET_CHOICES.includes(preset as DatePreset) ? (preset as DatePreset) : null,
     from: params.get('from') || null,
     to: params.get('to') || null,
@@ -352,15 +372,122 @@ export function parseFilters(params: URLSearchParams): Filters {
   };
 }
 
-/** Is any filter active (drives the "Clear filters" affordance)? */
+/** Is a DATE filter active? Drives the chips row and its badge, which say
+ * nothing about a text search. */
+export function dateFilterActive(filters: Filters): boolean {
+  return filters.preset !== null || filters.from !== null || filters.to !== null;
+}
+
+/** Is any filter active (drives the "Clear filters" affordance)? The view is
+ * deliberately excluded: switching segment is navigation, and offering to
+ * "clear" it would name a default the entrant never set. */
 export function anyFilterActive(filters: Filters): boolean {
-  return (
-    filters.status !== null ||
-    filters.preset !== null ||
-    filters.from !== null ||
-    filters.to !== null ||
-    filters.q.trim() !== ''
-  );
+  return dateFilterActive(filters) || filters.q.trim() !== '';
+}
+
+/**
+ * The rows one segment shows, in that segment's own order (§2.3).
+ *
+ * `open` leads with the deadline an entrant can still act on — closing
+ * soonest first, the SP-P6-2 refinement carried over. `completed` reads most
+ * recent first. `season` keeps the server's (date, slug) order verbatim, which
+ * is what the month sections are built on.
+ */
+export function viewRows(rows: readonly SeasonRow[], view: View): SeasonRow[] {
+  if (view === 'open') {
+    return rows
+      .filter((row) => row.status === 'entries_open')
+      .sort(
+        (a, b) =>
+          (a.closesInDays ?? Number.POSITIVE_INFINITY) -
+            (b.closesInDays ?? Number.POSITIVE_INFINITY) ||
+          a.slug.localeCompare(b.slug),
+      );
+  }
+  if (view === 'completed') {
+    return rows
+      .filter((row) => COMPLETED_STATUSES.includes(row.status))
+      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug));
+  }
+  return [...rows];
+}
+
+/**
+ * Group consecutive same-month rows — a walk, not a sort: the caller has
+ * already ordered the rows, and re-sorting here would silently overrule it.
+ * Undated rows must be filtered out before the call.
+ */
+function groupByMonth(rows: readonly SeasonRow[]): MonthGroup[] {
+  const groups: MonthGroup[] = [];
+  for (const row of rows) {
+    const date = parseIsoDate(row.date)!;
+    const key = `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+    const last = groups[groups.length - 1];
+    if (last !== undefined && last.key === key) last.rows.push(row);
+    else {
+      groups.push({
+        key,
+        label: `${monthLong(date.getUTCMonth())} ${date.getUTCFullYear()}`,
+        rows: [row],
+      });
+    }
+  }
+  return groups;
+}
+
+/**
+ * The Season view's shape (§2.4): active tournaments in ascending month
+ * sections, with completed ones and undated ones trailing as their own
+ * sections. A tournament with no date is still listed — it is a real state
+ * ("date to be confirmed"), not missing data to hide.
+ */
+export function seasonSections(rows: readonly SeasonRow[]): {
+  months: MonthGroup[];
+  completed: SeasonRow[];
+  undated: SeasonRow[];
+} {
+  const isCompleted = (row: SeasonRow) => COMPLETED_STATUSES.includes(row.status);
+  const active = rows.filter((row) => !isCompleted(row));
+  return {
+    months: groupByMonth(active.filter((row) => parseIsoDate(row.date) !== null)),
+    completed: rows
+      .filter(isCompleted)
+      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug)),
+    undated: active.filter((row) => parseIsoDate(row.date) === null),
+  };
+}
+
+/**
+ * Month sections for the Completed view. Rows arrive already date-descending
+ * from `viewRows('completed')`, and grouping preserves that order, so the
+ * months come out most-recent-first without a second sort.
+ */
+export function monthGroupsDesc(rows: readonly SeasonRow[]): MonthGroup[] {
+  return groupByMonth(rows.filter((row) => parseIsoDate(row.date) !== null));
+}
+
+/**
+ * The §2.4 status-column table, one arm per `PageStatus`.
+ *
+ * Exhaustive over the enum with no default, so adding a status is a compile
+ * error here rather than a blank cell in production.
+ */
+export function statusCell(row: SeasonRow): StatusCell {
+  const page = `/e/${encodeURIComponent(row.slug)}`;
+  switch (row.status) {
+    case 'in_progress_live':
+      return { kind: 'chip-live', label: 'In progress · follow live', href: `${page}?tab=draws` };
+    case 'in_progress':
+      return { kind: 'chip-muted', label: 'In progress' };
+    case 'entries_open':
+      return { kind: 'chip-open', chip: { kind: 'entriesOpen', closesInDays: row.closesInDays } };
+    case 'entries_closed':
+      return { kind: 'chip-muted', label: 'Entries closed' };
+    case 'completed_winners':
+      return { kind: 'link', label: 'Winners', href: `${page}?tab=winners` };
+    case 'completed':
+      return { kind: 'text', label: 'Completed' };
+  }
 }
 
 /**

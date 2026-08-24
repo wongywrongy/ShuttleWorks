@@ -45,7 +45,7 @@ import { mintFormCsrf } from '../lib/formCsrf.server';
 import { formatCents } from '../lib/money';
 import {
   chipState,
-  toDiscoveryCard,
+  nearestCloseAt,
   totalBarState,
   visibleBlocks,
 } from '../lib/phase';
@@ -367,7 +367,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
   const bar = totalBarState(echo);
   const now = new Date(nowMs);
   const chip = chipState(page.events, now);
-  const deadline = toDiscoveryCard(page).entriesCloseAt;
+  const deadline = nearestCloseAt(page.events);
   const slug = page.page.slug;
   // Whichever variant is rendering, the add-player round trip lands back on
   // it — a plain `/enter` would drop the outcome the URL states.
