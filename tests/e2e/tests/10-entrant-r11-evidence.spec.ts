@@ -442,20 +442,21 @@ test.describe('entrant app — R11 evidence', () => {
    * The seeded tournament is on the list, and the list is the front door.
    *
    * Without this the discovery screenshot above is satisfiable by an empty
-   * results panel: `/e/` answers 200 and lays out perfectly with no cards at
-   * all, so "no horizontal scroll" would be measuring the empty state while
-   * claiming to measure a card grid. Asserting the seeded card is present —
-   * by its own link, not by a count, since the demo database this runs
-   * against carries other tournaments — is what makes the measurement about
-   * the thing it is named after.
+   * calendar: `/e/` answers 200 and lays out perfectly with no rows at all,
+   * so "no horizontal scroll" would be measuring the empty state while
+   * claiming to measure the season calendar. Asserting the seeded row is
+   * present — by its own link, not by a count, since the demo database this
+   * runs against carries other tournaments — is what makes the measurement
+   * about the thing it is named after. (`#calendar` is the SeasonCalendar
+   * card's anchor since SP-P8; the pre-P8 `#results` panel no longer exists.)
    */
-  test('discovery lists the seeded tournament as a card', async ({ page }) => {
+  test('discovery lists the seeded tournament as a calendar row', async ({ page }) => {
     const slug = await seed(page);
     await page.goto('/e/');
-    await expect(page.locator(`#results a[href="/e/${slug}"]`)).toHaveText(
+    await expect(page.locator(`#calendar a[href="/e/${slug}"]`)).toHaveText(
       'Riverside Spring Open',
     );
-    await expect(page.locator('#results')).toContainText('Entries open');
+    await expect(page.locator('#calendar')).toContainText('Entries open');
   });
 
   /**
