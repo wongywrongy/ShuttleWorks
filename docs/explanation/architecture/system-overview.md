@@ -47,6 +47,11 @@ The operator console (`apps/console`) is the React + Vite SPA. The public
 [**entrant tier**](/explanation/architecture/entrant-tier) (`apps/entrant`) is a separate
 server-rendered React Router app under `/e/` that ships **zero client JavaScript**. It is not a
 module — it is a delivery tier in front of the Entries module's public data plane.
+
+Since SP-HOST-1 the two are also two **origins**: the console and `/api/` are served on
+`app.<domain>` behind Cloudflare Access, the entrant tier on `play.<domain>` with no Access at
+all. They were one hostname split by path, which made them one browser origin sharing one cookie
+jar — and `Path=` is not enforced against same-origin script.
 :::
 
 This split is declared, and **test-enforced**, in

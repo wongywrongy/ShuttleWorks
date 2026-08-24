@@ -39,7 +39,7 @@ packages/                      shared libraries (npm workspaces + one pip packag
 
 infra/                         deployment orchestration (Dockerfiles stay with their apps)
 ├── compose/                   six stacks + their .env.*.example files
-└── nginx/                     console.conf · docs.conf · security-headers.conf
+└── nginx/                     http-shared.conf · console.conf · play.conf · docs.conf · security-headers.conf
 
 tests/
 ├── backend/                   API + solver tests (pytest; rootdir is the repo root)

@@ -61,7 +61,8 @@ the [Settings page](/reference/modules/settings).
 
 ::: tip The public site is a tier, not a module
 Everything above is the **operator console**. The public face of a tournament — where a player
-finds it and enters it — is a second, separately-served app under `/e/` with zero client
+finds it and enters it — is a second, separately-served app on its own public hostname
+under `/e/`, with zero client
 JavaScript. See [the entrant tier](/explanation/architecture/entrant-tier).
 :::
 

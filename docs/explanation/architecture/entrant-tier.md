@@ -19,6 +19,23 @@ pages, draws, seeds, and winners. It is a **separate frontend workspace**
   SP-P7, cookie-carrying browser fetches). nginx routes `/e/api/` and
   `/e/account/` to the backend with a cookie allowlist that carries the
   entrant session cookie; `/e/` goes to node.
+- **Its own hostname, and therefore its own browser origin** (SP-HOST-1).
+  `play.<domain>` serves this tier from port 8081 of the `frontend` container
+  with no Cloudflare Access policy on it; the operator console and `/api/` are
+  `app.<domain>` on port 8080, behind Access. Two hostnames rather than one
+  split by path, because **origin** is what scopes cookies, `localStorage`,
+  IndexedDB and service-worker registration, and the `Path=` attribute on a
+  cookie is not enforced against same-origin script. Under the old shared
+  origin an operator's `sw_session` was reachable from code running here.
+  Nothing in `infra/nginx/` names a hostname — the tunnel routes hostname to
+  port, so the domain stays configuration (`APP_HOSTNAME` / `PLAY_HOSTNAME`).
+- **No browser-side API calls at all**, which is what makes the split free of
+  CORS. `root.tsx` renders no `<Scripts/>`; the one client script is a
+  DOM-only filter. Every write is a native `<form method="post">` to a
+  relative path on this same host — a navigation, not a CORS request — so the
+  operator API's allow-list stays closed to this origin and nothing breaks.
+  Two things enforce that and both demand same-origin: CSP `form-action
+  'self'`, and a host-only `sw_play_session`.
 - **Two principals, two seams.** Entrant accounts (`entrant_accounts` +
   `entrant_sessions`) are structurally separate from operator users
   (ruling D-A3). `tests/test_cross_principal_sessions.py` sweeps every
