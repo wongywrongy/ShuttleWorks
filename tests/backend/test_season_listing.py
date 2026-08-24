@@ -66,6 +66,10 @@ def season(client):
         make(session, "case-quiet-live", today)
         make(session, "case-winners", yesterday, results=True)
         make(session, "case-done", yesterday)
+        # Undated: the ONLY page exercising the sort's first key. Reads
+        # entries_closed (no date facts, no open events) so it bumps neither
+        # count.
+        make(session, "case-undated", None, with_event=False)
         make(session, "never-listed", today, is_open=False)
         session.commit()
     finally:
@@ -86,6 +90,15 @@ def test_every_enum_case_computes_serverside(client, season):
     assert rows["case-quiet-live"]["status"] == "in_progress"
     assert rows["case-winners"]["status"] == "completed_winners"
     assert rows["case-done"]["status"] == "completed"
+    assert rows["case-undated"]["status"] == "entries_closed"
+    # The two publication flags carry VALUES, not just keys: winnersPublished
+    # mirrors results_published (SP-P7 §4) and drawsPublished mirrors
+    # draws_published. Each fixture page sets exactly one, so a swapped
+    # mirror reddens here.
+    assert rows["case-winners"]["winnersPublished"] is True
+    assert rows["case-winners"]["drawsPublished"] is False
+    assert rows["case-live"]["drawsPublished"] is True
+    assert rows["case-live"]["winnersPublished"] is False
 
 
 def test_the_key_set_is_pinned(client, season):
@@ -145,6 +158,7 @@ def test_rows_order_dated_ascending_then_slug(client, season):
         "case-done", "case-winners",          # yesterday, slug-tied
         "case-live", "case-quiet-live",       # today
         "case-closed", "case-open",           # next month
+        "case-undated",                       # undated sorts LAST, not first
     ]
 
 
