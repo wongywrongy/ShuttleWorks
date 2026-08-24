@@ -187,7 +187,10 @@ function cardEl(doc, card, emailVerified) {
     const row = el(doc, 'li', 'flex flex-wrap items-center gap-x-2 gap-y-1 text-sm');
     row.appendChild(
       el(doc, 'span', 'text-foreground',
-        `${line.eventCode} · ${line.discipline} · ${line.playerName}`),
+        // §3.1: the accepted doubles partner rides the line ("with Sam Ali").
+        // textContent-only like everything here, so a hostile name is inert.
+        `${line.eventCode} · ${line.discipline} · ${line.playerName}` +
+          (line.partnerName ? ` with ${line.partnerName}` : '')),
     );
     const own = lineChip(card.status, line.state);
     if (own) {

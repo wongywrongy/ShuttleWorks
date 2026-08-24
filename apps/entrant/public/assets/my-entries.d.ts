@@ -16,6 +16,8 @@ export interface MyEntryLine {
   /** E2: the server's own `assert_withdrawable`, precomputed. */
   canWithdraw: boolean;
   resultBadge: string | null;
+  /** §3.1: the accepted doubles partner's name, or null. */
+  partnerName: string | null;
 }
 
 export interface MyTournamentCard {

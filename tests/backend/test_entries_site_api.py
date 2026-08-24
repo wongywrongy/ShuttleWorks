@@ -448,7 +448,12 @@ def test_the_player_page_header_events_and_upcoming_matches(client, bracket_page
     assert set(body) == {"personKey", "name", "club", "events", "record", "matches"}
     assert body["name"] == "Ada Chen"
     assert body["club"] == "Riverside BC"
-    assert body["events"] == [{"code": "MS", "discipline": "Men's Singles"}]
+    # SP-P7 delta (§3.3): event rows carry the accepted-partner slot. None
+    # here — a singles event has no partner; the populated case and its
+    # privacy gates live in test_partner_names_on_the_player_page.
+    assert body["events"] == [
+        {"code": "MS", "discipline": "Men's Singles", "partnerName": None}
+    ]
     # Results unpublished: no record claim, and the SF shows as undecided.
     assert body["record"] is None
     (match,) = body["matches"]

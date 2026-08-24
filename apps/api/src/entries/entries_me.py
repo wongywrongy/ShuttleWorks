@@ -33,7 +33,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 
 from entries.entries_public import _moment_iso
 from core.dependencies import AuthEntrant, get_current_entrant
@@ -83,6 +83,10 @@ class MyEntryLineDTO(BaseModel):
     # publication-gated field: present only while the workspace has
     # ``results_published`` on, absent again the moment it goes off.
     resultBadge: Optional[str] = None
+    # §3.1 "event lines with partner names" — the ACCEPTED doubles partner,
+    # or None. Acceptance is the own-view's whole gate (playing doubles
+    # together is mutual visibility); the name, never the nominated email.
+    partnerName: Optional[str] = None
 
 
 class MyTournamentCardDTO(BaseModel):
@@ -263,6 +267,58 @@ def my_entries(
             select(EntryEvent).where(EntryEvent.tournament_id.in_(tids))
         )
     }
+
+    # ---- accepted doubles partners (E3 → §3.1) --------------------------
+    # The OWN view's gate is acceptance alone: playing doubles together IS
+    # mutual visibility, so a partner who accepted needs no publication flag
+    # to appear on their partner's card. (The public player page applies the
+    # stricter set — confirmed, not opted out.) Batched: the partner's entry
+    # belongs to a DIFFERENT account, so it is not in ``entries`` above —
+    # two SELECTs total, never per-line. Erased partners drop out (D7).
+    partner_pairs = [
+        (e.tournament_id, e.partner_entry_id)
+        for e in entries
+        if e.partner_entry_id is not None and e.partner_accepted_at is not None
+    ]
+    partner_name_by_entry: Dict[uuid.UUID, str] = {}
+    if partner_pairs:
+        partner_entries = {
+            (pe.tournament_id, pe.id): pe
+            for pe in session.scalars(
+                select(Entry).where(
+                    tuple_(Entry.tournament_id, Entry.id).in_(partner_pairs)
+                )
+            )
+        }
+        player_keys = {
+            (pe.tournament_id, pe.entry_player_id)
+            for pe in partner_entries.values()
+            if pe.entry_player_id is not None
+        }
+        partner_players = (
+            {
+                (p.tournament_id, p.id): p
+                for p in session.scalars(
+                    select(EntryPlayer).where(
+                        tuple_(EntryPlayer.tournament_id, EntryPlayer.id).in_(
+                            player_keys
+                        ),
+                        EntryPlayer.erased_at.is_(None),
+                    )
+                )
+            }
+            if player_keys
+            else {}
+        )
+        for e in entries:
+            if e.partner_entry_id is None or e.partner_accepted_at is None:
+                continue
+            pe = partner_entries.get((e.tournament_id, e.partner_entry_id))
+            if pe is None:
+                continue
+            partner = partner_players.get((pe.tournament_id, pe.entry_player_id))
+            if partner is not None:
+                partner_name_by_entry[e.id] = partner.full_name
     tournaments = {
         t.id: t
         for t in session.scalars(select(Tournament).where(Tournament.id.in_(tids)))
@@ -317,6 +373,7 @@ def my_entries(
                     # button that renders here is one the route will accept.
                     canWithdraw=_can_withdraw(entry, event),
                     resultBadge=event_badges.get(f"entry-{entry.entry_player_id}"),
+                    partnerName=partner_name_by_entry.get(entry.id),
                 )
             )
         lines.sort(key=lambda line: (line.playerName, line.eventCode))

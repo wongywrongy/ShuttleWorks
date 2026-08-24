@@ -29,6 +29,9 @@ export interface PlayerMatchDTO {
 export interface PlayerEventDTO {
   code: string;
   discipline: string;
+  /** §3.3 "with <partner>" — the accepted, publicly-visible doubles partner,
+   *  or null (singles, no acceptance yet, or the partner is not public). */
+  partnerName: string | null;
 }
 
 export interface PlayerRecordDTO {

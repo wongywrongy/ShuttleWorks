@@ -114,7 +114,13 @@ export default function Player({ loaderData }: Route.ComponentProps) {
           {player.events.length > 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">
               {player.events
-                .map((event) => `${event.code} · ${event.discipline}`)
+                .map(
+                  (event) =>
+                    `${event.code} · ${event.discipline}` +
+                    // §3.3: "CXD with Prashant Vurikiti". Absent for singles
+                    // and while the partner is not publicly visible.
+                    (event.partnerName ? ` with ${event.partnerName}` : ''),
+                )
                 .join('  |  ')}
             </p>
           ) : null}

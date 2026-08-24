@@ -239,6 +239,11 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
             "entryId",
             "canWithdraw",
             "resultBadge",
+            # SP-P7 delta (§3.1): the ACCEPTED doubles partner's NAME — never
+            # the nominated email, which stays on the entry unprojected. The
+            # widening is the STOP-approved ruling this exact-set exists to
+            # force; both directions in test_partner_names_on_the_own_card.
+            "partnerName",
         }
         for line in card["events"]
     )

@@ -35,6 +35,7 @@ function line(over: Record<string, unknown> = {}) {
     entryId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     canWithdraw: true,
     resultBadge: null,
+    partnerName: null,
     ...over,
   };
 }
@@ -146,6 +147,24 @@ describe('the DOM render', () => {
       (a) => a.textContent === 'View results',
     );
     expect(view?.getAttribute('href')).toContain('/players/');
+  });
+
+  it('names an accepted doubles partner on the line, and only then (§3.1)', () => {
+    const root = mount();
+    render(root, {
+      tournaments: [
+        card({
+          events: [
+            line({ eventCode: 'XD', partnerName: 'Sam Ali' }),
+            line({ partnerName: null }),
+          ],
+        }),
+      ],
+    });
+    expect(root.textContent).toContain("XD · Men's Singles · Ada Chen with Sam Ali");
+    expect(root.textContent).toContain("MS · Men's Singles · Ada Chen");
+    // The un-partnered line carries no stray "with".
+    expect(root.textContent).not.toContain('Ada Chen with Sam Ali with');
   });
 
   it('renders the calm empty state', () => {

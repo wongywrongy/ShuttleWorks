@@ -485,3 +485,110 @@ def test_the_invite_mail_names_the_inviter_and_the_event_and_nothing_more(
     # No fee, no other entrants, no workspace id.
     assert "40.00" not in body
     assert world["tid"] not in body
+
+
+# ---- the names reach the projections (SP-P7 delta, §3.1/§3.3) -------------
+#
+# E3 shipped the pairing and SP-P7 shipped the surfaces, and neither ever
+# told the other: entries_site and entries_me carried no partner reference
+# at all, so "CXD with Prashant Vurikiti" (§3.3) and the §3.1 partner lines
+# rendered without the "with". These live HERE because this file owns the
+# nominate→accept fixtures; the exact-key-set guards that forced the widening
+# to be a ruling live with their surfaces (test_entries_me_api,
+# test_entries_site_api).
+
+
+def _publish_and_confirm(world):
+    """Flip the public gates on and confirm every entry — the desk's act."""
+    from sqlalchemy import select
+    from db.models import Entry, EntryPage
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        page = session.get(EntryPage, uuid.UUID(world["tid"]))
+        page.entrants_published = True
+        for entry in session.scalars(
+            select(Entry).where(Entry.tournament_id == uuid.UUID(world["tid"]))
+        ):
+            entry.state = "confirmed"
+        session.commit()
+    finally:
+        session.close()
+
+
+def test_partner_names_on_the_own_card(client, world, mailbox):
+    """§3.1: the own card names an ACCEPTED partner — and nothing sooner.
+
+    Acceptance is the own-view's whole gate: a nomination is a claim about
+    somebody else, so before it the line carries None; after it, both halves
+    see each other by name (playing doubles together is mutual visibility).
+    """
+    _verified_entrant(client, mailbox, "alex@example.com")
+    out = _nominate(client, world, partner_email="sam@example.com")
+    _, token = out["invites"][0]
+
+    # Nominated, not accepted: no name yet.
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert [line["partnerName"] for line in card["events"]] == [None]
+
+    _verified_entrant(client, mailbox, "sam@example.com")
+    _accept(client, token)
+
+    # Sam's own card names Alex…
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert [line["partnerName"] for line in card["events"]] == ["Alex Kim"]
+    # …and never the address the invite travelled through.
+    assert "sam@example.com" not in str(card)
+
+    # Alex's names Sam.
+    client.cookies.clear()
+    client.post(
+        "/e/account/login",
+        json={"email": "alex@example.com", "password": PW},
+        headers=CSRF,
+    )
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert [line["partnerName"] for line in card["events"]] == ["Sam Ali"]
+
+
+def test_partner_names_on_the_player_page(client, world, mailbox):
+    """§3.3: the public page says "with <partner>" — behind the public gates.
+
+    The public view is stricter than the own card: the partner's entry must
+    itself be CONFIRMED (pending people never appear publicly, on a partner
+    line no less than on the list). Both directions asserted: the name is
+    absent while the partner is pending, present once the desk confirms.
+    """
+    _verified_entrant(client, mailbox, "alex@example.com")
+    out = _nominate(client, world, partner_email="sam@example.com")
+    _, token = out["invites"][0]
+    _verified_entrant(client, mailbox, "sam@example.com")
+    _accept(client, token)
+
+    # Publish + confirm ALEX only: Sam stays pending.
+    from db.models import Entry, EntryPage
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        page = session.get(EntryPage, uuid.UUID(world["tid"]))
+        page.entrants_published = True
+        mine = session.get(
+            Entry, (uuid.UUID(world["tid"]), uuid.UUID(out["entry_id"]))
+        )
+        mine.state = "confirmed"
+        alex_key = str(mine.entry_player_id)
+        session.commit()
+    finally:
+        session.close()
+
+    client.cookies.clear()
+    body = client.get(f"/e/api/page/pairs-open/players/{alex_key}").json()
+    (xd,) = [ev for ev in body["events"] if ev["code"] == "XD"]
+    assert xd["partnerName"] is None  # accepted, but not confirmed → not public
+
+    _publish_and_confirm(world)
+    body = client.get(f"/e/api/page/pairs-open/players/{alex_key}").json()
+    (xd,) = [ev for ev in body["events"] if ev["code"] == "XD"]
+    assert xd["partnerName"] == "Sam Ali"

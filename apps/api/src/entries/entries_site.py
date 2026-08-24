@@ -229,6 +229,14 @@ class WinnersDTO(BaseModel):
 class PlayerEventDTO(BaseModel):
     code: str
     discipline: str
+    # §3.3 "CXD with Prashant Vurikiti" — the ACCEPTED doubles partner's
+    # name, or None. Gated three ways before it can appear: the pairing is
+    # accepted (a nomination is a claim about somebody else), the partner's
+    # own entry is confirmed (pending people never appear publicly, on a
+    # partner line no less than on the list), and the partner has not opted
+    # out of publication or been erased. Never the nominated EMAIL, which
+    # lives on the entry precisely so it is never projected.
+    partnerName: Optional[str] = None
 
 
 class PlayerMatchSideDTO(BaseModel):
@@ -871,14 +879,63 @@ def player_page(
             select(EntryEvent).where(EntryEvent.tournament_id == tournament.id)
         )
     }
+
+    # ---- accepted doubles partners (E3 → §3.3) -------------------------
+    # Batched: one SELECT for the partner entries, one for their players —
+    # never per-line (the N+1 precedent). See PlayerEventDTO for the gates.
+    partner_ids = [
+        e.partner_entry_id
+        for e in entries
+        if e.partner_entry_id is not None and e.partner_accepted_at is not None
+    ]
+    partner_name_by_event: dict = {}
+    if partner_ids:
+        partner_entries = {
+            pe.id: pe
+            for pe in repo.session.scalars(
+                select(Entry).where(
+                    Entry.tournament_id == tournament.id,
+                    Entry.id.in_(partner_ids),
+                    Entry.state == "confirmed",
+                )
+            )
+        }
+        partner_player_ids = {
+            pe.entry_player_id
+            for pe in partner_entries.values()
+            if pe.entry_player_id is not None
+        }
+        partner_players = (
+            {
+                p.id: p
+                for p in repo.session.scalars(
+                    select(EntryPlayer).where(
+                        EntryPlayer.tournament_id == tournament.id,
+                        EntryPlayer.id.in_(partner_player_ids),
+                        EntryPlayer.erased_at.is_(None),
+                    )
+                )
+            }
+            if partner_player_ids
+            else {}
+        )
+        for e in entries:
+            pe = partner_entries.get(e.partner_entry_id)
+            if pe is None or pe.list_opt_out:
+                continue
+            partner = partner_players.get(pe.entry_player_id)
+            if partner is not None:
+                partner_name_by_event[e.entry_event_id] = partner.full_name
+
     player_events = sorted(
         {
-            (event.code, event.discipline)
+            (event.code, event.discipline, partner_name_by_event.get(event.id))
             for event in (
                 events_by_id.get(e.entry_event_id) for e in entries
             )
             if event is not None
-        }
+        },
+        key=lambda row: (row[0], row[1]),
     )
 
     results_on = bool(page.results_published)
@@ -985,8 +1042,8 @@ def player_page(
         name=person.full_name,
         club=person.club,
         events=[
-            PlayerEventDTO(code=code, discipline=discipline)
-            for code, discipline in player_events
+            PlayerEventDTO(code=code, discipline=discipline, partnerName=partner)
+            for code, discipline, partner in player_events
         ],
         record=(
             PlayerRecordDTO(played=wins + losses, wins=wins, losses=losses)
