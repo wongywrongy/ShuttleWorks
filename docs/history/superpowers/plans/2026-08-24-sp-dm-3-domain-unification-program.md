@@ -552,7 +552,7 @@ Expected: PASS — NC1 (two rows + flag), NC2 (father/son, no new flag), NC3 (do
 - [ ] **Step 3: Full gate**
 
 Run: `make check`
-Expected: green across both tiers (console lint/types/vitest/depcruise, entrant lint/types/vitest/depcruise, ruff, import-linter, pytest). Fix anything red before proceeding; report honestly if a failure is pre-existing on `main` (verify by `git stash` — no: verify by checking out `main` in a worktree or reading CI, **never** `git stash`).
+Expected: green across both tiers (console lint/types/vitest/depcruise, entrant lint/types/vitest/depcruise, ruff, import-linter, pytest). Fix anything red before proceeding; report honestly if a failure is pre-existing — verify that by running the same gate on a `main` worktree or reading CI, **never** with `git stash`.
 
 - [ ] **Step 4: Update the ledger** — `docs/history/programs/DM3_PROGRESS.md`: flip P3's row to DONE with the commit SHAs, note any deviation from this plan.
 
