@@ -32,10 +32,11 @@ are the public surface's, not because it registers anything.
 from __future__ import annotations
 
 import logging
+import math
 import re
 import uuid
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import date, datetime, timezone
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from fastapi import Request
 from sqlalchemy import func, select
@@ -127,6 +128,61 @@ def _event_is_open(event: EntryEvent, now: datetime) -> bool:
     if event.closes_at is not None and _aware(event.closes_at) <= now:
         return False
     return True
+
+
+# ---- SP-P8: the one public status function ------------------------------
+
+PAGE_STATUSES = frozenset({
+    "entries_open", "entries_closed", "in_progress_live",
+    "in_progress", "completed_winners", "completed",
+})
+
+
+def _parse_page_date(raw: Optional[str]) -> Optional[date]:
+    """``tournament_date`` is ISO by convention only (a director typed it).
+    Unparseable → None, never a guess — the TournamentDTO posture."""
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(str(raw))
+    except ValueError:
+        return None
+
+
+def page_status(
+    *,
+    tournament_date: Optional[str],
+    events: Sequence,
+    draws_published: bool,
+    results_published: bool,
+    now: datetime,
+) -> Tuple[str, Optional[int]]:
+    """The SP-P8 §3 pure status: one enum for strip, rows and counts.
+
+    Precedence: DATE facts beat entry flags. In-window is in-progress even
+    if an event is somehow still open; past is completed even if a director
+    forgot a ``closes_at``. The window is the single ``tournament_date`` day
+    (D1 — the schema has no end date; that column is debt-logged, and this
+    function is where an end date would slot in).
+
+    ``closes_in_days`` reproduces the tier's ``countdown`` exactly
+    (ceil to whole days, floored at 0 for the clock-skew row) so moving the
+    derivation server-side is not a behavior change.
+    """
+    day = _parse_page_date(tournament_date)
+    today = now.date()
+    if day is not None and today == day:
+        return ("in_progress_live" if draws_published else "in_progress", None)
+    if day is not None and today > day:
+        return ("completed_winners" if results_published else "completed", None)
+    open_events = [ev for ev in events if _event_is_open(ev, now)]
+    if not open_events:
+        return ("entries_closed", None)
+    deadlines = [_aware(ev.closes_at) for ev in open_events if ev.closes_at is not None]
+    if not deadlines:
+        return ("entries_open", None)
+    seconds = (min(deadlines) - now).total_seconds()
+    return ("entries_open", max(0, math.ceil(seconds / 86400)))
 
 
 def _entrants(
