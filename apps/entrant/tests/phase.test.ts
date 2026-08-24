@@ -1,9 +1,9 @@
 /**
- * The phase-gating pure functions, held to the design document's state tables
- * (SP-P6-2 design §6) — transcribed, not paraphrased. Everything the public
- * pages decide (chip, CTA, tabs, facets, filters, ordering, total bar,
- * timeline) is a pure function of data + `now`, so these are plain
- * input/output tables with no server in the loop.
+ * The phase-gating pure functions, held to the design documents' state tables
+ * (SP-P6-2 §6, SP-P8 §2) — transcribed, not paraphrased. Everything the public
+ * pages decide (chip, CTA, tabs, filters, segment views, month sections, the
+ * status cell, total bar, timeline) is a pure function of data + `now`, so
+ * these are plain input/output tables with no server in the loop.
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -283,6 +283,15 @@ describe('parseFilters (SP-P8 §2.3 + old-deep-link compatibility)', () => {
   it('keeps legacy presets valid so old preset links still filter', () => {
     expect(parseFilters(new URLSearchParams('preset=30d')).preset).toBe('30d');
   });
+  it.each([['toString'], ['constructor'], ['__proto__'], ['hasOwnProperty']])(
+    'reads ?status=%s off the legacy map WITHOUT its prototype chain',
+    (key) => {
+      // `key in map` would answer true for every Object.prototype member and
+      // put a FUNCTION in `view` — a public-tier URL is attacker-typeable, and
+      // Task 7 echoes `view` back into a hidden form input.
+      expect(parseFilters(new URLSearchParams(`status=${key}`)).view).toBe('season');
+    },
+  );
   it('reads the rest of the vocabulary, dropping unknown values', () => {
     expect(
       parseFilters(new URLSearchParams('preset=1y&from=2026-09-01&to=&q=gold')),

@@ -360,9 +360,13 @@ export function parseFilters(params: URLSearchParams): Filters {
   const legacy = params.get('status');
   const preset = params.get('preset');
   return {
+    // `Object.hasOwn`, never `legacy in LEGACY_STATUS_VIEWS`: `in` walks the
+    // prototype chain, so `?status=toString` would answer true and put
+    // `Object.prototype.toString` — a FUNCTION — into `view`. This parses a
+    // public URL, which is typeable by anyone.
     view: VIEW_CHOICES.includes(view as View)
       ? (view as View)
-      : legacy !== null && legacy in LEGACY_STATUS_VIEWS
+      : legacy !== null && Object.hasOwn(LEGACY_STATUS_VIEWS, legacy)
         ? LEGACY_STATUS_VIEWS[legacy]
         : 'season',
     preset: PRESET_CHOICES.includes(preset as DatePreset) ? (preset as DatePreset) : null,
