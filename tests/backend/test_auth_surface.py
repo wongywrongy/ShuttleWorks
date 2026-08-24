@@ -123,8 +123,12 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "test_the_config_route_never_publishes_the_turnstile_secret"
     ),
     ("GET", "/e/api/pages"): (
-        "the open entry pages' slugs — the list Task 26's sitemap.xml route "
-        "crawls. Public for the same reason GET /e/{slug} is: a poster URL "
+        "the season listing (SP-P8 §3): one row per open entry page — slug, "
+        "name, organizer, venue, date, event count, status — plus the counts "
+        "and the NOW pick. Tournament-level facts only; no entrant data, no "
+        "entry counts, no pricing (pinned by the key-set test in "
+        "tests/backend/test_season_listing.py::test_the_key_set_is_pinned). "
+        "Public for the same reason GET /e/{slug} is: a poster URL "
         "is meant to be discoverable. Filtered on is_open, which is checked "
         "as a negative control in "
         "tests/backend/test_entries_json_routes.py::"

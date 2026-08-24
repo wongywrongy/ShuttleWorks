@@ -625,17 +625,21 @@ def closed_page(client):
 
 @pytest.fixture
 def second_open_page(client):
-    """A second OPEN page whose slug sorts before the ``page`` fixture's
-    (``spring-open``) — proves the list actually orders rather than just
-    returning insertion order."""
+    """A second OPEN page that sorts before the ``page`` fixture's
+    (``spring-open``) on BOTH order keys — an earlier date and an earlier
+    slug — proving the list actually orders rather than returning insertion
+    order. Dated deliberately: SP-P8 §3 sorts undated rows LAST, so an
+    undated second page would land after ``spring-open`` and agree with
+    insertion order, which is the one arrangement that proves nothing."""
     tid = client.post(
         "/tournaments", json={"name": "Early Alphabet"}, headers=CSRF
     ).json()["id"]
-    from db.models import EntryPage
+    from db.models import EntryPage, Tournament
     from db.session import SessionLocal
 
     session = SessionLocal()
     try:
+        session.get(Tournament, uuid.UUID(tid)).tournament_date = "2026-01-05"
         session.add(
             EntryPage(tournament_id=uuid.UUID(tid), slug="aaa-open", is_open=True)
         )
@@ -648,25 +652,30 @@ def second_open_page(client):
 def test_the_page_list_carries_only_open_pages(client, page, closed_page):
     r = client.get("/e/api/pages")
     assert r.status_code == 200, r.text
-    assert [row["slug"] for row in r.json()] == ["spring-open"]
+    assert [row["slug"] for row in r.json()["tournaments"]] == ["spring-open"]
 
 
 def test_a_closed_pages_slug_never_appears_in_the_list(client, page, closed_page):
     """NEGATIVE CONTROL. To prove this is not vacuous: drop the ``is_open``
     filter from the route's query and this goes red. Put it back."""
     r = client.get("/e/api/pages")
-    assert closed_page["slug"] not in [row["slug"] for row in r.json()]
+    assert closed_page["slug"] not in [row["slug"] for row in r.json()["tournaments"]]
 
 
-def test_the_list_is_ordered_by_slug(client, page, second_open_page):
-    """Ordering has to be stable across SQLite and Postgres. ``slug`` carries
-    its own unique index (``uq_entry_pages_slug``), so ordering by it alone
-    needs no second tiebreaker — unlike a random-UUID primary key, two rows
-    can never share a slug. The ``page`` fixture (``spring-open``) is seeded
-    BEFORE ``second_open_page`` (``aaa-open``); insertion order would show
-    them in the opposite order to what this asserts."""
+def test_the_list_order_is_stable(client, page, second_open_page):
+    """Ordering has to be stable across SQLite and Postgres. SP-P8 §3 orders
+    on ``(date, slug)`` — dated ascending, undated last — where the old
+    contract ordered on ``slug`` alone. ``second_open_page`` (``aaa-open``,
+    2026-01-05) sorts first on either key; the ``page`` fixture
+    (``spring-open``, 2026-09-12) is seeded FIRST, so insertion order would
+    show them in the opposite order to what this asserts. ``slug`` remains
+    the tiebreaker and carries its own unique index
+    (``uq_entry_pages_slug``), so two rows can never tie on it."""
     r = client.get("/e/api/pages")
-    assert [row["slug"] for row in r.json()] == ["aaa-open", "spring-open"]
+    assert [row["slug"] for row in r.json()["tournaments"]] == [
+        "aaa-open",
+        "spring-open",
+    ]
 
 
 def test_the_route_is_registered(client):

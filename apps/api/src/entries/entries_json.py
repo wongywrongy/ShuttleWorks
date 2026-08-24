@@ -43,7 +43,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from urllib.parse import quote, urlencode
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -60,6 +60,7 @@ from entries.entries_public import (
     _moment_iso,
     _optional_entrant,
     _resolve,
+    page_status,
 )
 from core.client_ip import client_ip
 from core.config import settings
@@ -67,7 +68,7 @@ from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
 from core.form_csrf import FORM_FIELD, PLAY_CSRF_COOKIE
 from core.form_csrf import form_csrf_token as _form_csrf
-from db.models import EntryPage, Org
+from db.models import EntryEvent, EntryPage, Org, Tournament
 from repositories import LocalRepository, get_repository
 # SP-REORG-1 R1: the three throttle symbols this module uses are
 # infrastructure, not identity. Importing them from core is what deletes
@@ -527,36 +528,117 @@ def entrant_config() -> EntrantConfigDTO:
     )
 
 
-class EntryPageListItemDTO(BaseModel):
+class SeasonRowDTO(BaseModel):
+    """One calendar row (SP-P8 §3): tournament-level facts ONLY — no entrant
+    data, no entry counts, no pricing. The key-set test in
+    ``test_season_listing.py`` reddens on any added field."""
+
     slug: str
+    name: Optional[str] = None
+    organizer: Optional[str] = None
+    venueName: Optional[str] = None
+    date: Optional[str] = None
+    eventCount: int
+    status: str
+    closesInDays: Optional[int] = None
+    drawsPublished: bool
+    winnersPublished: bool
 
 
-@router.get("/pages", response_model=List[EntryPageListItemDTO])
+class SeasonCountsDTO(BaseModel):
+    takingEntries: int
+    completed: int
+
+
+class NowStripDTO(BaseModel):
+    slug: str
+    moreCount: int
+
+
+class SeasonListDTO(BaseModel):
+    tournaments: List[SeasonRowDTO]
+    counts: SeasonCountsDTO
+    now: Optional[NowStripDTO] = None
+
+
+@router.get("/pages", response_model=SeasonListDTO)
 def entry_page_list(
+    response: Response,
     repo: LocalRepository = Depends(get_repository),
-) -> List[EntryPageListItemDTO]:
-    """Every OPEN entry page's slug — the list Task 26's ``sitemap.xml``
-    route crawls.
+) -> SeasonListDTO:
+    """The season calendar in one read (SP-P8 §3) — the G1 N+1's retirement.
 
-    **``is_open`` is the entire point of this route, not an incidental
-    filter.** ``EntryPage.is_open`` (default ``False``) is what makes a page
-    public at all — ``_resolve`` answers the same uniform 404 for a closed
-    page as for an unknown slug. A list that ignored it would publish the
-    addresses of unopened events into a crawlable sitemap: worse than the
-    404, because it discloses that a workspace and its slug exist *before*
-    the director has opened entries.
-
-    Ordered by ``slug``, which carries its own unique index
-    (``uq_entry_pages_slug``) — unlike a random-UUID primary key, two rows
-    can never tie on it, so no second tiebreaker is needed for a stable
-    order across SQLite and Postgres.
+    ``is_open`` is still the entire gate: it is the page on/off switch, so a
+    completed tournament stays listed exactly as long as its director keeps
+    the page up, and an unopened one never leaks (the sitemap argument,
+    unchanged). Status is ``page_status`` — computed HERE, once; the tier
+    must not re-derive it (§3). ``now`` is the strip pick: first
+    ``in_progress_live`` row in the (date, slug) order, which with single-day
+    windows is the ending-soonest rule.
     """
-    slugs = repo.session.scalars(
-        select(EntryPage.slug)
+    now = _utcnow()
+    listed = repo.session.execute(
+        select(EntryPage, Tournament, Org)
+        .join(Tournament, Tournament.id == EntryPage.tournament_id)
+        .outerjoin(Org, Org.id == Tournament.org_id)
         .where(EntryPage.is_open.is_(True))
-        .order_by(EntryPage.slug)
     ).all()
-    return [EntryPageListItemDTO(slug=slug) for slug in slugs]
+    tids = [t.id for _, t, _ in listed]
+    events_by_tid: Dict[uuid.UUID, list] = {}
+    if tids:
+        for ev in repo.session.scalars(
+            select(EntryEvent).where(EntryEvent.tournament_id.in_(tids))
+        ):
+            events_by_tid.setdefault(ev.tournament_id, []).append(ev)
+
+    rows = []
+    for page, tournament, org in listed:
+        events = events_by_tid.get(tournament.id, [])
+        status, closes_in_days = page_status(
+            tournament_date=(
+                str(tournament.tournament_date)
+                if tournament.tournament_date
+                else None
+            ),
+            events=events,
+            draws_published=bool(page.draws_published),
+            results_published=bool(page.results_published),
+            now=now,
+        )
+        rows.append(SeasonRowDTO(
+            slug=page.slug,
+            name=tournament.name,
+            organizer=org.name if org is not None and org.name else None,
+            venueName=page.venue_name,
+            date=(
+                str(tournament.tournament_date)
+                if tournament.tournament_date
+                else None
+            ),
+            eventCount=len(events),
+            status=status,
+            closesInDays=closes_in_days,
+            drawsPublished=bool(page.draws_published),
+            winnersPublished=bool(page.results_published),
+        ))
+    rows.sort(key=lambda r: (r.date is None, r.date or "", r.slug))
+
+    live = [r for r in rows if r.status == "in_progress_live"]
+    response.headers["Cache-Control"] = "public, max-age=30"
+    return SeasonListDTO(
+        tournaments=rows,
+        counts=SeasonCountsDTO(
+            takingEntries=sum(r.status == "entries_open" for r in rows),
+            completed=sum(
+                r.status in ("completed", "completed_winners") for r in rows
+            ),
+        ),
+        now=(
+            NowStripDTO(slug=live[0].slug, moreCount=len(live) - 1)
+            if live
+            else None
+        ),
+    )
 
 
 # ---- POST /quote/{slug} ---------------------------------------------------
