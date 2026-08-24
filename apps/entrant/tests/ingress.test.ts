@@ -174,6 +174,63 @@ describe('SP-HOST-1: the two tiers are two ports, and neither can serve the othe
   });
 });
 
+describe('redirects stay relative, because nginx cannot see the public origin', () => {
+  // THE BUG THIS EXISTS FOR SHIPPED (2026-08-24, live on play.wongworks.dev).
+  //
+  // nginx defaults to `absolute_redirect on` and rebuilds Location from the
+  // request host plus ITS OWN listen port and scheme. Behind the tunnel that
+  // is wrong twice over, and the bare domain answered
+  //   Location: http://play.wongworks.dev:8081/e/
+  // — a port Cloudflare does not serve, over a scheme the browser did not
+  // use. Typing the bare hostname hung. Deep links to `/e/…` were fine, which
+  // is precisely why every smoke check missed it.
+  //
+  // Verified against a real container before and after the one-line fix, on
+  // all three affected paths.
+
+  it('turns absolute redirects off, once, in http context', () => {
+    // http context and not per-server: the reason is identical for both tiers
+    // and a per-server pair is two places for the next tier to forget.
+    expect(directive('absolute_redirect', sharedSource())).toEqual(['off']);
+  });
+
+  it('lets no tier turn it back on', () => {
+    // `absolute_redirect` is valid in server and location context too, so the
+    // http-level setting is overridable. Nothing may override it.
+    for (const tier of ['console', 'play'] as const) {
+      expect({ tier, override: directive('absolute_redirect', tierSource(tier)) })
+        .toEqual({ tier, override: [] });
+    }
+  });
+
+  it('writes every redirect target as a path, never an absolute URL', () => {
+    // Belt and braces, and it catches the OTHER way to reintroduce the bug:
+    // `absolute_redirect off` governs what nginx BUILDS, not what a
+    // `return 301 https://…;` says outright. Derived from the configs so a
+    // third redirect added later is covered without touching this file.
+    const returns = [...CONSOLE, ...PLAY].flatMap((l) =>
+      [...l.body.matchAll(/\breturn\s+30[12]\s+(\S+?)\s*;/g)].map((m) => ({
+        path: l.path,
+        target: m[1],
+      })),
+    );
+    // Non-vacuity: the play tier ships two of these (`= /e` and `= /`).
+    expect(returns.length).toBeGreaterThanOrEqual(2);
+    for (const r of returns) {
+      expect(r).toEqual({ path: r.path, target: expect.stringMatching(/^\//) });
+    }
+  });
+
+  it('NEGATIVE CONTROL: the matcher sees an absolute target as a finding', () => {
+    // If the regex above stopped matching, the loop would pass over a pasted
+    // `return 301 https://play.example.com/e/;` and prove nothing.
+    const sample = 'location = / { return 301 https://play.example.com/e/; }';
+    const hits = [...sample.matchAll(/\breturn\s+30[12]\s+(\S+?)\s*;/g)].map((m) => m[1]);
+    expect(hits).toEqual(['https://play.example.com/e/']);
+    expect(hits.every((t) => t.startsWith('/'))).toBe(false);
+  });
+});
+
 describe('ruling R8-A: the /e/ prefix is split across two tiers of the PLAY host', () => {
   it('names exactly the two FastAPI prefixes', () => {
     expect(backendPrefixes(PLAY)).toEqual(['/e/account/', '/e/api/']);

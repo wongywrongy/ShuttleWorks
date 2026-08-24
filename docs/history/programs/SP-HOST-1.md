@@ -8,7 +8,7 @@ Ledger. Read at session start, update at session end.
 | 1 — Design | **DONE 2026-08-23** (below) |
 | 2 — Config + code | **DONE 2026-08-23** |
 | 3 — Tests + negative controls | **DONE 2026-08-23** — all eight rows, every control demonstrated |
-| 4 — Deploy + verify on cayde | **OWNER** — needs DNS, the tunnel dashboard and a browser on cayde |
+| 4 — Deploy + verify on cayde | **LIVE 2026-08-24** — both origins up; one post-deploy defect found and fixed (below) |
 
 ---
 
@@ -547,6 +547,72 @@ one place, which three per-runner copies would not have.
 | `docker compose config` × 6 | clean |
 | `nginx -t` on the real image | clean |
 | `docs:build` | clean (dead-link gate) |
+
+## Post-deploy defect: the bare domain hung (fixed 2026-08-24)
+
+`play.wongworks.dev` and `app.wongworks.dev` came up correct on every check
+that mattered — Access on the operator host only, `/e/` serving 200, `/api/`
+and `/login` both 404 on the public host. One thing was broken: **the bare
+domain**.
+
+**Cause.** nginx defaults to `absolute_redirect on`, which rebuilds a
+redirect's `Location` from the request host plus **its own listen port and
+scheme**. This container is always behind something that terminates TLS
+elsewhere, so both are wrong by construction:
+
+```
+GET https://play.wongworks.dev/
+  -> Location: http://play.wongworks.dev:8081/e/
+            ^^^^ scheme downgraded     ^^^^ a port the tunnel does not serve
+```
+
+The browser dialled 8081, Cloudflare does not publish it, and the page hung.
+Deep links to `/e/…` were untouched — which is exactly why it survived every
+smoke check, mine included.
+
+**It was not specific to the two `return 301`s.** nginx emits an absolute
+redirect for its own internal ones too: on the console tier `try_files $uri
+$uri/` answers `GET /assets` with `Location: http://app.wongworks.dev:8080/assets/`.
+Reproduced in the same container. Same default, two tiers, one directory case
+nobody had hit yet — so the fix is **one line in http context**
+(`absolute_redirect off` in `http-shared.conf`), not a `return`-by-`return`
+patch that would have left the console case latent.
+
+`off` sends the path alone. RFC 7231 §7.1.2 has permitted a relative
+`Location` since 2014 and the browser resolves it against the current URL —
+the only correct answer here, since the browser knows the public scheme, host
+and port and this process does not. Telling nginx the public origin would be
+the hostname-in-config invariant I1 forbids.
+
+Verified against a real container, before and after:
+
+| Request | Before | After |
+| --- | --- | --- |
+| play `GET /` | `http://play.wongworks.dev:8081/e/` | `/e/` |
+| play `GET /e` | `http://play.wongworks.dev:8081/e/` | `/e/` |
+| console `GET /assets` | `http://app.wongworks.dev:8080/assets/` | `/assets/` |
+
+Guarded by four new assertions in `ingress.test.ts`: the directive is present
+and `off`, no tier overrides it back on, every `return 30x` target is a path
+rather than an absolute URL, and a negative control proving that last matcher
+still sees an absolute target. Removing the directive turns the first one red
+— demonstrated.
+
+### A correction to this ledger's own Phase 2 evidence
+
+The Phase 2 entry claimed "`nginx -t` clean on the real image with all three
+files mounted". **That run proved nothing.** It was issued from Git Bash, whose
+MSYS path conversion rewrote the container-side mount targets, so the files
+never landed and `nginx -t` validated the image's stock config. It printed
+"syntax is ok" either way — a control that could not fail, which is the shape
+CODE_HEALTH.md rule 3b exists to catch, found here in the verification rather
+than in a test.
+
+Re-run correctly (`MSYS_NO_PATHCONV=1`, `$(pwd -W)`), the conclusion holds: the
+three files parse. The same run also surfaced real evidence the vacuous one had
+hidden — `conflicting server name "localhost" on 0.0.0.0:8080, ignored`, which
+is the stock `default.conf` collision the Dockerfile's `rm` exists to prevent,
+now observed instead of predicted.
 
 ## A limit worth writing down: ports are not the boundary, hostnames are
 
