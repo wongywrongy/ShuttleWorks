@@ -50,7 +50,8 @@ function stubUpstream() {
           headers: { 'content-type': 'application/json' },
         });
       if (url.endsWith('/e/api/config')) return json(CONFIG);
-      if (url.includes('/e/api/pages')) return json([]);
+      if (url.includes('/e/api/pages'))
+        return json({ tournaments: [], counts: { takingEntries: 0, completed: 0 }, now: null });
       if (url.endsWith('/e/api/page/spring-open')) return json(PAGE);
       return json({ detail: { code: 'TOURNAMENT_NOT_FOUND', message: 'x' } }, 404);
     }),

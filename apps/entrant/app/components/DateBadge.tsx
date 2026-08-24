@@ -1,9 +1,10 @@
 /**
- * The card's month/day block. Parses the ISO `tournament_date` convention
- * only; a null or unparseable date renders the same box saying "TBC" — a
- * tournament that has not set a date has not set one, and the box must not
- * invent it. `aria-hidden`: purely decorative — the date for assistive tech
- * is `TournamentCard`'s own `sr-only` text (`formatDateLong`), not this box.
+ * The calendar row's month/day block. Parses the ISO `tournament_date`
+ * convention only; a null or unparseable date renders the same box saying
+ * "TBC" — a tournament that has not set a date has not set one, and the box
+ * must not invent it. `aria-hidden`: purely decorative — the date for
+ * assistive tech is the row's own `sr-only` text (`formatDateLong`, in
+ * `SeasonCalendar`), not this box.
  *
  * (2026-08-11 design audit, T1/finding #2: this comment used to claim "the
  * card's text carries the date for AT". Nothing on the card did — no date

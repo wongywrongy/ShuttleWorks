@@ -1,82 +1,69 @@
 /**
- * `/e/` — discovery, asserted on real server-rendered HTML (SP-P6-2 §1).
+ * `/e/` — the season calendar, asserted on real server-rendered HTML (SP-P8 §2).
  *
- * The loader is the G1 decline path: `GET /e/api/pages` lists `{slug}` only,
- * so one `GET /e/api/page/{slug}` follows per listed tournament — correct,
- * N+1, and pinned here so the call pattern is a contract rather than an
- * accident. Filtering is the Z1 GET form, server-side, with checked state
- * echoed back.
+ * The G1 decline is over: `GET /e/api/pages` ships every field the calendar
+ * renders, so this page is ONE backend read and the old per-slug fan-out is
+ * gone. That call count is pinned below, because "one read" is the property the
+ * whole task bought.
  *
- * Date fixtures sit far in the past/future (2000/2099) because these render
- * against the real clock — the pure-function tables with a pinned `now` live
- * in `phase.test.ts`; this file asserts the wiring.
+ * Dates are fixed 2026 strings: nothing this page decides reads the clock
+ * (no date filter is set in these fixtures, and the views neither filter nor
+ * order by `now`), so the real-clock renders stay deterministic. The pinned-
+ * `now` state tables live in `phase.test.ts`; this file asserts the wiring.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
-function page(
-  slug: string,
-  name: string,
-  overrides: {
-    date?: string | null;
-    venue?: string | null;
-    open?: boolean;
-    closesAt?: string | null;
-    eventCount?: number;
-  } = {},
-) {
-  const { date = '2099-06-05', venue = 'Some Hall', open = true, closesAt = null, eventCount = 3 } =
-    overrides;
+import type { PageStatus, SeasonList, SeasonRow } from '../app/lib/phase';
+
+const MASTHEAD =
+  'Badminton tournaments taking entries through ShuttleWorks. Every entry is confirmed by the organizer.';
+
+function row(slug: string, name: string, status: PageStatus, overrides: Partial<SeasonRow> = {}): SeasonRow {
   return {
-    tournament: { name, date },
-    org: null,
-    venue: venue === null ? null : { name: venue, address: null },
-    page: {
-      slug,
-      introText: null,
-      regulationsText: null,
-      regulationsVersion: 1,
-      paymentInstructions: null,
-      feeSchedule: {},
-    },
-    policy: { maxEventsPerPerson: null, disciplineCaps: null, collectPhone: false, waiverRequired: false },
-    events: Array.from({ length: eventCount }, (_, i) => ({
-      id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
-      code: `E${i}`,
-      discipline: `Event ${i}`,
-      feeCents: null,
-      genderConstraint: null,
-      opensAt: null,
-      closesAt,
-      withdrawsUntil: null,
-      opensAtIso: null,
-      closesAtIso: null,
-      withdrawsUntilIso: null,
-      isOpen: open,
-      ageBracketed: false,
-      entryCount: 0,
-    })),
-    entrants: [],
-    viewer: { signedIn: false, email: null, formCsrf: '' },
+    slug,
+    name,
+    organizer: 'Wessex BC',
+    venueName: 'Some Hall',
+    date: '2026-09-12',
+    eventCount: 3,
+    status,
+    closesInDays: null,
+    drawsPublished: false,
+    winnersPublished: false,
+    ...overrides,
   };
 }
 
-/** Three listed tournaments across states: open-with-deadline, closed
- * upcoming, closed past — plus per-test extras. */
-const PAGES: Record<string, unknown> = {
-  'wessex-open': page('wessex-open', 'Wessex Autumn Gold', {
-    closesAt: '2099-01-01 00:00 UTC',
-  }),
-  'meadowbank-upcoming': page('meadowbank-upcoming', 'Meadowbank Masters', {
-    open: false,
-    date: '2099-08-29',
-  }),
-  'sussex-past': page('sussex-past', 'Sussex Spring Restricted', {
-    open: false,
-    date: '2000-05-02',
-    venue: 'Triangle LC',
-  }),
+/** One row per `PageStatus`, plus the NOW pick. */
+const SEASON: SeasonList = {
+  tournaments: [
+    row('wessex-open', 'Wessex Autumn Gold', 'entries_open', { closesInDays: 5 }),
+    row('meadowbank-closed', 'Meadowbank Masters', 'entries_closed', { date: '2026-09-26' }),
+    row('harbour-live', 'Harbour Invitational', 'in_progress_live', {
+      date: '2026-10-03',
+      drawsPublished: true,
+    }),
+    row('granite-progress', 'Granite City Open', 'in_progress', { date: '2026-10-04' }),
+    row('sussex-winners', 'Sussex Spring Restricted', 'completed_winners', {
+      date: '2026-05-02',
+      winnersPublished: true,
+    }),
+    row('triangle-done', 'Triangle Trophy', 'completed', { date: '2026-04-11' }),
+  ],
+  counts: { takingEntries: 1, completed: 2 },
+  now: { slug: 'harbour-live', moreCount: 2 },
+};
+
+/** The same season with nothing happening now — the strip is the server's
+ *  call, so switching it off is a payload change, never a filter. */
+const NO_NOW: SeasonList = { ...SEASON, now: null };
+
+const EMPTY: SeasonList = {
+  tournaments: [],
+  counts: { takingEntries: 0, completed: 0 },
+  now: null,
 };
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
@@ -92,30 +79,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function respond(
-  path: string,
-  pages: Record<string, unknown> = PAGES,
-): Promise<Response> {
+async function respond(path: string, season: SeasonList = SEASON): Promise<Response> {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input instanceof Request ? input.url : input);
       called.push(url);
-      if (url.endsWith('/e/api/pages')) {
-        return new Response(
-          JSON.stringify(Object.keys(pages).map((slug) => ({ slug }))),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        );
-      }
-      const slug = decodeURIComponent(url.split('/e/api/page/')[1] ?? '');
-      const body = pages[slug];
-      if (body === undefined) {
-        return new Response(
-          JSON.stringify({ detail: { code: 'TOURNAMENT_NOT_FOUND', message: 'x' } }),
-          { status: 404, headers: { 'content-type': 'application/json' } },
-        );
-      }
-      return new Response(JSON.stringify(body), {
+      return new Response(JSON.stringify(season), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -124,43 +94,39 @@ async function respond(
   const build = (await vite.ssrLoadModule(
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
-  return createRequestHandler(build, 'development')(
-    new Request(`http://entrant.test${path}`),
-  );
+  return createRequestHandler(build, 'development')(new Request(`http://entrant.test${path}`));
 }
 
-async function render(path = '/e/', pages: Record<string, unknown> = PAGES): Promise<string> {
-  return (await respond(path, pages)).text();
+async function render(path = '/e/', season: SeasonList = SEASON): Promise<string> {
+  return (await respond(path, season)).text();
 }
 
 describe('the front door', () => {
-  it('answers the basename with a real page, not a blank 200 or a 404', async () => {
+  it('answers the basename with the season calendar, not a blank 200 or a 404', async () => {
     const res = await respond('/e/');
     const html = await res.text();
 
     expect(res.status).toBe(200);
-    expect(html).toContain('Find a tournament');
-    expect(html).toContain('3 tournaments');
+    // Not `toContain('Tournaments')`: the shell's wordmark carries that word.
+    expect(html).toMatch(/<h1[^>]*>\s*Tournaments\s*<\/h1>/);
+    expect(html).toContain(MASTHEAD);
+    expect(html).toContain('Wessex Autumn Gold');
   });
 
-  it('fans out one projection call per listed slug — the G1 decline path', async () => {
+  it('is ONE backend read — the N+1 fan-out is retired', async () => {
     await render();
 
-    expect(called[0]).toBe('http://backend:8000/e/api/pages');
-    expect(called.slice(1).sort()).toEqual([
-      'http://backend:8000/e/api/page/meadowbank-upcoming',
-      'http://backend:8000/e/api/page/sussex-past',
-      'http://backend:8000/e/api/page/wessex-open',
-    ]);
+    expect(called).toEqual(['http://backend:8000/e/api/pages']);
   });
 
-  it('drops a slug that closed between the list and the read, and still renders', async () => {
-    const racy = { ...PAGES, 'gone-mid-flight': undefined } as Record<string, unknown>;
-    const res = await respond('/e/', racy);
-    const html = await res.text();
+  it('puts nothing between the masthead and the control row', async () => {
+    const html = await render();
+    // From the masthead in the BODY, not the `<meta name="description">` that
+    // carries the same sentence in the head.
+    const start = html.indexOf(MASTHEAD, html.indexOf('<h1')) + MASTHEAD.length;
+    const between = html.slice(start, html.indexOf('name="q"', start));
 
-    expect(res.status).toBe(200);
-    expect(html).toContain('3 tournaments');
+    expect(between).not.toMatch(/<h2|<section|<ul|<a\s/);
   });
 
   it('ships zero script tags and mints nothing', async () => {
@@ -173,119 +139,139 @@ describe('the front door', () => {
   });
 });
 
-describe('the cards', () => {
-  it('renders the fixed anatomy and leads with the actionable card (refinement 1)', async () => {
+describe('the NOW strip (§2.1)', () => {
+  it('renders the band the server picked, with its jump into the calendar', async () => {
     const html = await render();
 
-    // The open tournament leads; the closed-but-sooner one must not outrank
-    // it (Phase B sign-off, refinement 1).
-    const openAt = html.indexOf('Wessex Autumn Gold');
-    const upcomingAt = html.indexOf('Meadowbank Masters');
-    const pastAt = html.indexOf('Sussex Spring Restricted');
-    expect(openAt).toBeGreaterThan(-1);
-    expect(openAt).toBeLessThan(upcomingAt);
-    expect(upcomingAt).toBeLessThan(pastAt);
-
-    // Anatomy: name link to the tournament page, venue, count, chip.
-    expect(html).toMatch(/<a href="\/e\/wessex-open"[^>]*>Wessex Autumn Gold<\/a>/);
-    expect(html).toContain('Some Hall');
-    expect(html).toContain('3 events');
-    expect(html).toContain('Entries open');
-    expect(html).toContain('Entries closed');
+    expect(html).toContain('aria-label="Now playing"');
+    expect(html).toContain('Harbour Invitational');
+    // React splits interpolated text with `<!-- -->` markers in SSR output.
+    expect(html).toMatch(/href="#calendar"[^>]*>\+(<!-- -->)?2(<!-- -->)? more</);
   });
 
-  it('renders only the two ruled chip states — no Live, Finished or In play', async () => {
-    const html = await render();
+  it('is ABSENT — no band, no placeholder — when the server picked nothing', async () => {
+    const html = await render('/e/', NO_NOW);
 
-    expect(html).not.toMatch(/>Live</);
-    expect(html).not.toMatch(/Finished/);
-    expect(html).not.toMatch(/In play/);
+    expect(html).not.toContain('Now playing');
+  });
+
+  it('never re-derives "happening now" from a date: in_progress in window, no strip', async () => {
+    // §7 trap 1, frontend half. `in_progress` means the director has NOT
+    // published draws; only the server can know that, so a row dated today
+    // must not conjure a band the payload does not carry.
+    const today = new Date().toISOString().slice(0, 10);
+    const html = await render('/e/', {
+      tournaments: [row('granite-progress', 'Granite City Open', 'in_progress', { date: today })],
+      counts: { takingEntries: 0, completed: 0 },
+      now: null,
+    });
+
+    expect(html).toContain('Granite City Open');
+    expect(html).not.toContain('Now playing');
   });
 });
 
-describe('the filters (Z1 — one GET form, refinement 4: always visible)', () => {
-  it('filters server-side and echoes the choice back as the selected link', async () => {
-    const html = await render('/e/?status=open');
+describe('the control row (§2.3)', () => {
+  it('has no chip row at all in the default state (§7 trap 4)', async () => {
+    const html = await render();
+
+    expect(html).not.toContain('data-chip-row');
+  });
+
+  it("labels the segments with the server's unfiltered counts, verbatim", async () => {
+    const html = await render();
+
+    expect(html).toContain('Taking entries · 1');
+    expect(html).toContain('Completed · 2');
+  });
+
+  it('maps a legacy ?status= link onto the equivalent view (§7 trap 5)', async () => {
+    const html = await render('/e/?status=open', NO_NOW);
 
     expect(html).toContain('Wessex Autumn Gold');
     expect(html).not.toContain('Meadowbank Masters');
-    expect(html).toContain('1 of 3 tournaments');
-    // P1.1: facets are instant-apply links; the chosen one carries aria-current.
-    expect(html).toMatch(/<a[^>]*aria-current="true"[^>]*>Entries open<\/a>/);
+    expect(html).not.toContain('Harbour Invitational');
   });
 
-  it('searches name and venue from the header form vocabulary', async () => {
-    const html = await render('/e/?q=triangle');
+  it('searches name, organizer and venue', async () => {
+    const html = await render('/e/?q=granite', NO_NOW);
 
-    expect(html).toContain('Sussex Spring Restricted');
+    expect(html).toContain('Granite City Open');
     expect(html).not.toContain('Wessex Autumn Gold');
   });
+});
 
-  it('has no disclosure toggle at any width — the strip is always in the document', async () => {
+describe('the calendar (§2.4)', () => {
+  it('sections the active rows under their month header', async () => {
     const html = await render();
 
-    expect(html).not.toContain('filters-toggle');
-    expect(html).not.toContain('peer-checked');
-    expect(html).not.toContain('<details');
+    expect(html).toContain('September 2026');
   });
 
-  it('renders the EmptyState with its one action when nothing matches', async () => {
+  it('links Winners where they are published and says Completed where they are not (§7 trap 3)', async () => {
+    const html = await render();
+
+    expect(html).toMatch(/<a href="\/e\/sussex-winners\?tab=winners"/);
+    expect(html).toContain('Winners');
+    expect(html).toMatch(/text-muted-foreground">Completed<\/span>/);
+    expect(html).not.toContain('/e/triangle-done?tab=winners');
+  });
+});
+
+describe('the two empty states', () => {
+  it('says so honestly when the calendar is empty — no dead Clear action', async () => {
+    const html = await render('/e/', EMPTY);
+
+    expect(html).toContain('No tournaments on the calendar yet');
+    expect(html).toContain('No tournament is taking entries right now');
+    expect(html).not.toContain('Clear filters');
+  });
+
+  it('offers Clear filters when a query matched nothing', async () => {
     const html = await render('/e/?q=zzz-no-such');
 
-    expect(html).toContain('Nothing matches those filters');
+    expect(html).toContain('No tournaments match');
     expect(html).toMatch(/<a href="\/e\/"[^>]*>Clear filters<\/a>/);
   });
+});
 
-  it('drops empty filter fields from the URL instead of echoing them (E5)', async () => {
-    // A native GET form submits every named control, including the ones
-    // left blank — so pressing "Apply filters" with nothing chosen produced
-    // `/e/?q=&status=&preset=&from=&to=`, which is what an entrant then
-    // copies out of the address bar and sends to a club mailing list. No
-    // form markup can suppress a blank field without script, so the loader
-    // canonicalises: empty values are dropped and the browser is redirected
-    // once to the clean URL. Nothing about which cards match changes —
-    // `parseFilters` already read `''` as "no filter".
-    const res = await respond('/e/?status=&preset=&from=&to=');
+describe('E5: empty filter fields never survive into a shareable URL', () => {
+  it('drops empty filter fields from the URL instead of echoing them', async () => {
+    // A native GET form submits every named control, including the ones left
+    // blank — so an empty submit produced `/e/?q=&preset=&from=&to=`, which is
+    // the URL an entrant then copies out of the address bar and sends to a
+    // club mailing list. No markup can suppress a blank field without script.
+    const res = await respond('/e/?q=&preset=&from=&to=');
 
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/e/');
   });
 
-  it('keeps the filters that carry a value while dropping the blanks (E5)', async () => {
-    const res = await respond('/e/?q=&status=open&preset=&from=2099-01-01&to=');
+  it('keeps the filters that carry a value while dropping the blanks', async () => {
+    const res = await respond('/e/?q=&view=open&preset=&from=2026-01-01&to=');
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/e/?status=open&from=2099-01-01');
+    expect(res.headers.get('location')).toBe('/e/?view=open&from=2026-01-01');
   });
 
-  it('answers an already-clean URL directly — no redirect, no loop (E5)', async () => {
-    // The half that makes the canonicalisation safe: the redirect target
-    // must itself be answered 200, or every visit is an infinite bounce.
-    for (const path of ['/e/', '/e/?status=open']) {
-      const res = await respond(path);
-      expect(res.status).toBe(200);
+  it('answers an already-clean URL directly — no redirect, no loop', async () => {
+    // The half that makes the canonicalisation safe: the redirect target must
+    // itself be answered 200, or every visit is an infinite bounce.
+    for (const path of ['/e/', '/e/?view=open']) {
+      expect((await respond(path)).status).toBe(200);
     }
   });
+});
 
-  it('says so honestly when nothing is listed at all — no dead Clear action', async () => {
-    const html = await render('/e/', {});
+describe('the retired sidebar leaves nothing behind', () => {
+  it('renders no FilterStrip status facet and no second search landmark', async () => {
+    const html = await render();
 
-    expect(html).toContain('No tournament is taking entries right now');
-    expect(html).not.toContain('Clear filters');
-  });
-
-  it('renders the nothing-listed case in the EmptyState card, not a bare sentence (§3.8)', async () => {
-    // The copy was always right; the CONTAINER was missing — a sentence
-    // floating in whitespace reads as the page having failed to draw. The
-    // card carries the heading; the sentence stays as its body.
-    const html = await render('/e/', {});
-    const idx = html.indexOf('No tournaments are listed yet');
-
-    expect(idx).toBeGreaterThan(-1);
-    // The card opens shortly before the heading. Slice from the last opening
-    // `<div` ahead of it and assert the card classes ride that element.
-    const container = html.slice(html.lastIndexOf('<div', idx), idx);
-    expect(container).toContain('bg-surface-raised');
-    expect(container).toContain('border-rule-soft');
+    expect(html).not.toContain('aria-label="Status"');
+    expect(html).not.toContain('aria-label="Dates"');
+    // Exactly one: the shell's. The control row's forms carry no role.
+    expect(html.match(/role="search"/g)).toHaveLength(1);
+    // The facet LINK is gone; the chip that says the same words lives on.
+    expect(html).not.toMatch(/<a[^>]*>Entries open<\/a>/);
   });
 });

@@ -8,7 +8,7 @@
  * **A card, not a dashed outline (SP-P7 §3.8).** The dashed border is the
  * drop-target/placeholder idiom, which says "something is missing here" — the
  * opposite of what an empty result set means. Every other block of content on
- * this tier is a card (`SectionCard`, `TournamentCard`), so the dashed variant
+ * this tier is a card (`SectionCard`, `SeasonCalendar`), so the dashed variant
  * also read as a different KIND of thing rather than a quieter one.
  *
  * `action` is optional, and that is what lets a page use this container

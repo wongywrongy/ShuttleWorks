@@ -78,8 +78,27 @@ const PAGE = JSON.parse(
 globalThis.fetch = async (input) => {
   const url = typeof input === 'string' ? input : input.url;
   if (url === `${process.env.API_BASE_URL}/e/api/pages`) {
-    // Discovery's list — one slug, so the fan-out below hits the same page.
-    return new Response(JSON.stringify([{ slug: 'spring-open' }]), {
+    // The SP-P8 season list: one row, so `/e/` measures a real calendar row
+    // and `/e/spring-open` below measures the same tournament's page.
+    const season = {
+      tournaments: [
+        {
+          slug: 'spring-open',
+          name: 'Spring Open',
+          organizer: 'Riverside BC',
+          venueName: 'Riverside Sports Hall',
+          date: '2026-09-12',
+          eventCount: 4,
+          status: 'entries_open',
+          closesInDays: 5,
+          drawsPublished: false,
+          winnersPublished: false,
+        },
+      ],
+      counts: { takingEntries: 1, completed: 0 },
+      now: null,
+    };
+    return new Response(JSON.stringify(season), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
