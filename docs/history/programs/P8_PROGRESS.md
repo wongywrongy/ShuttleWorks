@@ -178,8 +178,10 @@ SDD ledger with their cost-if-wrong.
 ## Negative controls (rule §0.8 / CODE_HEALTH.md 3b)
 
 Every gate and conditional render in this program was demonstrated to fail when
-its condition is removed. Each row is a mutation or removal that was **actually
-run**, with the named test that caught it.
+its condition is removed. Rows 1–6 and 10 are **mutations or removals actually
+run** against the tree, each with the named test that caught it; rows 7–9 are
+**paired fixture arms** — the condition-absent half of a render pair, which is
+how a conditional element proves it disappears rather than emptying.
 
 | # | Control | Mutation / removal performed | Test that failed |
 |---|---|---|---|
@@ -299,7 +301,7 @@ pass.
 | Condition | Verified by |
 |---|---|
 | Public tier reads projections only; no new mutation endpoints (§0.2) | `GET /e/api/pages` is the only route touched; `tests/backend/test_auth_surface.py` (anonymous-surface allowlist, prose updated, status-code contract unchanged) |
-| No hardcoded hostnames (I1) | the CI domain-grep guard, green on every push |
+| No hardcoded hostnames (I1) | `test_no_deployment_hostname_is_written_into_the_shipped_tree` (`tests/backend/test_host_split.py:484`) |
 | Tournament-level facts only — no entrant data, no entry counts, no pricing (§0.4) | `test_no_entrant_or_pricing_data_leaks` + `test_the_key_set_is_pinned` (backend); `not.toMatch(/player/i)` in `components.test.ts` (frontend) |
 | Exactly four page elements; the six cut shapes not reintroduced (§0.5) | `discovery.render.test.ts` cut-shape assertions (no `aria-label="Status"`, no `aria-label="Dates"`, `role="search"` count === 1, no facet link) + Task 10's `git diff main -- apps/entrant \| grep -iE "season stats\|signed-in card\|winner name\|hero\|FilterStrip"` → deletions only |
 | 380px works fully (R11) | Task 11 matrix line 7, re-verified live at overflow 0 after `6a1d9b38`; pinned by `SeasonCalendar > drops the status under the name block below sm: (R11, 380px)` |
@@ -320,7 +322,11 @@ pass.
 
 ## Deferred
 
-Harvested from the SDD ledger, deduplicated. Nothing here blocks the merge.
+Harvested from the SDD ledger, deduplicated. Nothing here blocks the merge. One
+class is deliberately excluded: notes about a **task report's own prose** rather
+than the tree (e.g. Task 4's "the RED-run prose conflates two runs" — the
+numbers reconcile; only the narration was ambiguous). Those live in the SDD
+workspace and are not repo debt.
 
 **Promoted to `docs/reference/debt-log.md`** (the ones with an owner cost):
 no tournament end date (ruling D1's upgrade) · the NOW-strip player count
