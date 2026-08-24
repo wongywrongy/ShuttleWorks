@@ -208,10 +208,74 @@ depcruise 0 errors (15 warnings operator / 0 entrant). ruff clean.
 - Doubles partners: E3 has not shipped; no partner data exists, so event
   lines and player pages render without "with X" until it does.
 
-## Next task
+## SP-P7 delta (2026-08-23, branch `feat/p7-delta-38` off main @ 58b90a7c)
 
-Phase 2: `/e/me/entries` page (SSR shell + cookie-carrying browser fetch,
-signed-out redirect via the `safeNext`/`_SAFE_NEXT` twins) + §3.7
-tournament-page revisions (tab bar, regulations document row + routed
-reader, fees off the overview). Integrate `design/console-2` into the
-branch first (the other agent is done).
+The prompt was re-delivered with a new §3.8 (header session states +
+visual conformance) and "Ready for Phase 0" — stale against this ledger.
+Owner ruling: **delta only** — build §3.8, fix what the delta audit found
+broken in the shipped work, leave the rest standing. Plan + audit:
+`~/.claude/plans/sp-p7-public-delegated-sutton.md`.
+
+What shipped, one commit per slice:
+
+- **Header session states (82ce3cbd).** `PlayShell` renders exactly one of
+  `Sign in` / `My entries`, from cookie PRESENCE read once in root's loader
+  (`lib/session.server.ts` — observing ≠ the relay R8-D forbids; the
+  boolean return type is the guarantee). `EntrantSessionContext` carries it
+  (the `useRouteLoaderData` shape throws with no router above it — that is
+  why the context exists, and its `false` default is the ErrorBoundary
+  fail-safe). `Vary: Cookie` + conditional `Cache-Control: private` on
+  every document via `entry.server.tsx` (loaders drop ResponseInit without
+  a `headers` export; the boundary doesn't). `viewer.signedIn` untouched.
+  **Deferred: name + initials avatar** (needs a credentialed call — debt-log).
+- **Conformance (b3bed55d).** §3.8's drift list checked claim-by-claim:
+  "flat white background" and "uncarded results" are FALSE in this tree;
+  the three real gaps fixed — FilterStrip un-carded itself from `md:` up,
+  EmptyState wore the dashed placeholder idiom, and discovery's
+  nothing-listed case was a bare `<p>` (EmptyState.action is now optional
+  for exactly that case). Tokens only; the mockups file
+  (`public-site-entrant-mockups.html`) is STILL unreachable — conformance
+  ran from the tokens, per the STOP ruling.
+- **personKey across submissions (73f7e329).** The 2026-08-17 audit's
+  "R-P7c resolved" held only within one submission — the writer minted a
+  fresh `entry_players` row per act. `same_person` now adopts on the one
+  certain match (account + normalized name + birth year, all present;
+  erased rows never; deterministic winner by created_at). Fuzzier cases
+  stay separate + NEEDS_REVIEW, per the incumbent-research ruling (never
+  auto-merge). `test_two_entrants_who_share_a_name_are_both_listed` was
+  pinning the defect (one account posting twice ≡ one person entering
+  twice) — rewritten to two accounts; the §7 trap is now a real test.
+  **Deferred: operator merge surface for flagged duplicates** (debt-log).
+- **Auth-surface record (f1f79fab).** The five `entries_site` routes were
+  anonymous-by-design but absent from `PUBLIC_BY_DESIGN`, passing only via
+  the random-UUID probe's 404. Recorded with reasons; routes unchanged.
+- **Partner names (6c7b01ed).** E3's data never reached the projections.
+  `partnerName` on the player-page event rows (gates: accepted + partner
+  confirmed + not opted out/erased) and the My-Entries lines (gate:
+  accepted alone — the own view). Name, never `partner_email`. Both
+  exact-key-set guards fired on the widening and were extended citing the
+  ruling. Frontend renders "with <name>" in both places.
+- **Pre-existing red gate fixed en route (8baa8395):** the SP-HOST-1
+  domain guard was failing on main — the redirect-fix commit wrote the
+  literal hostname into two comments. Spelling changed to `play.<domain>`;
+  incident record kept.
+
+Negative controls (rule 8, all demonstrated by mutation this session):
+both-links header → 4 tests red · dropped `Vary`/unconditional
+Cache-Control → 2 red (incl. the no-store-preservation one) · dashed
+EmptyState → 2 red · adoption disabled → the §7 trap red, both non-merge
+boundaries green · misspelled allowlist entry → stale-entry gate red ·
+the partner DTO widening itself reddened both key-set guards before they
+were extended.
+
+Gates at completion: entrant vitest **723** (baseline 700 on this main) +
+typecheck + lint + depcruise + build; import-linter 15/15; ruff clean;
+backend full suite re-run at session end (baseline on main was 1831
+passed / 66 skipped with the one pre-existing host-split failure fixed
+above).
+
+Still deferred from the first run (unchanged): live-state chip wiring ·
+highlight-player · elimination connector lines · withdrawn/rejected write
+paths (E2) · "account has newer details" hint · global profiles (R15) ·
+compass/monrad plate winners · symbol-less money and the adapted RR
+columns stand as recorded deviations.
