@@ -1192,7 +1192,9 @@ def create_invite_link(
         from core.email import send_email
 
         tournament = repo.tournaments.get_by_id(tournament_id)
-        origin = settings.public_app_origin.rstrip("/")
+        # OPERATOR tier (SP-HOST-1 D-9): a workspace invite is accepted in
+        # the console, behind Access, by someone who will be a member.
+        origin = settings.app_origin
         send_email(
             to=email,
             subject=f"You're invited to {tournament.name or 'a ShuttleWorks workspace'}",

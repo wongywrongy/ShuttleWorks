@@ -121,11 +121,6 @@ def _entries_have_closed(events, now) -> bool:
     return not any(_event_is_open(ev, now) for ev in events)
 
 
-def _play_origin() -> str:
-    """Absolute origin for links in entrant mail (program invariant I1)."""
-    return (settings.public_play_origin or settings.public_app_origin).rstrip("/")
-
-
 def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: str) -> None:
     """Mail one doubles invite.
 
@@ -140,7 +135,9 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
     """
     from core.email import send_email
 
-    origin = _play_origin()
+    # PUBLIC tier (SP-HOST-1 D-9). This lands in the inbox of someone who
+    # may have no account and is certainly not behind Access.
+    origin = settings.play_origin
     try:
         send_email(
             to=entry.partner_email,
