@@ -290,9 +290,11 @@ contrast check (NOW-strip ink 17.91:1, muted 6.97:1, both themes).
 
 ## Done-conditions checklist
 
-**Reconstructed.** The prompt's §9 is not a repo file; this checklist is built
-from the plan's Global Constraints plus its spec-coverage map. Diff it against
-the real §9 before signing off.
+Built from the plan's Global Constraints plus its spec-coverage map, then
+verified against the prompt's §9 by the controller (who holds the prompt):
+§9's five bullets all map onto rows below — the three that lacked an explicit
+row (deep links, both empty states, the screenshot set) were added in this
+pass.
 
 | Condition | Verified by |
 |---|---|
@@ -312,6 +314,9 @@ the real §9 before signing off.
 | One backend read from the loader (the G1 N+1 retired) | `expect(called).toEqual(['http://backend:8000/e/api/pages'])` — an equality assertion, not a prefix check |
 | Phase-1 STOP artifact posted before any frontend task | `phase1-payload-examples.json` — one page per enum case plus a second live page so `now.moreCount` is 1 |
 | Docs and ledger updated | this file, `docs/reference/api/index.md`, `docs/reference/debt-log.md`; `npm run docs:build` green |
+| Old deep links resolve to equivalent views (§9) | `parseFilters` legacy tests (`?status=open→open`, `past→completed`, `upcoming→season`, prototype-chain rows) + Task 11 matrix line 6 live (`/e/?status=open`, `/e/?preset=30d&q=…`, `/e/?view=completed`) |
+| Both empty states shown (§9) | `discovery.render.test.ts` (no-tournaments state, no-match state, empty-segment third arm) + Task 11 matrix line 8 live incl. the fresh-empty-DB boot; `sp-p8-after-empty-filtered.png` |
+| Screenshot set delivered (§9) | `docs/screenshots/`: `sp-p8-phase0-before-{desktop,mobile-380}.png` + `sp-p8-after-{desktop,mobile-380,now-strip,completed-view,filter-panel,empty-filtered}.png` (gitignored evidence) |
 
 ## Deferred
 
