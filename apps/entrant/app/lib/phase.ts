@@ -143,8 +143,7 @@ const DAY_MS = 86_400_000;
  * module's parsers, so a `phase → format` edge would close an import cycle,
  * and `tests/boundaries.test.ts` holds the tier to ZERO depcruise findings —
  * `no-circular` is `warn` severity but that test admits no warnings either.
- * `format.ts` re-exports `monthLong`, so both import paths still work and
- * there is still exactly one table.
+ * `format.ts` imports the word from here, so there is exactly one table.
  */
 const MONTHS_LONG = Object.freeze([
   'January', 'February', 'March', 'April', 'May', 'June',

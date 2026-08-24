@@ -11,13 +11,6 @@
  */
 import { monthLong, parseIsoDate, parseMoment } from './phase';
 
-/** `January`-style month for a zero-based index — the season calendar's month
- * headers (SP-P8 §2.4). The table itself lives in `phase.ts`, which needs the
- * words to label its `MonthGroup`s and cannot import this module back without
- * closing a cycle; re-exported here so the vocabulary is still reachable from
- * the module that owns every other date word. */
-export { monthLong };
-
 const MONTHS = Object.freeze([
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
