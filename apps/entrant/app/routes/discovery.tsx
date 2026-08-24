@@ -165,12 +165,18 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
                 </div>
               ) : (
                 // An empty listing with no filters set is information, not a
-                // failed query — there is nothing to clear and no action to
-                // offer, so it is a sentence rather than an EmptyState.
-                <p className="mt-4 text-sm text-muted-foreground">
-                  No tournament is taking entries right now. Check back soon, or open
-                  the entry link your organizer gave you.
-                </p>
+                // failed query — there is nothing to clear and nowhere to send
+                // anyone, so this one carries no action. It is still an empty
+                // STATE though: rendered as a bare sentence it read as the page
+                // having failed to draw, which is the §3.8 finding. `action` is
+                // optional on EmptyState precisely so this case keeps the
+                // container without inventing a button for it.
+                <div className="mt-4">
+                  <EmptyState
+                    heading="No tournaments are listed yet"
+                    body="No tournament is taking entries right now. Check back soon, or open the entry link your organizer gave you."
+                  />
+                </div>
               )
             ) : (
               <ul className="mt-4 grid gap-4 lg:grid-cols-2">

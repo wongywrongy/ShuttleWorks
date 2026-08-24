@@ -273,4 +273,19 @@ describe('the filters (Z1 — one GET form, refinement 4: always visible)', () =
     expect(html).toContain('No tournament is taking entries right now');
     expect(html).not.toContain('Clear filters');
   });
+
+  it('renders the nothing-listed case in the EmptyState card, not a bare sentence (§3.8)', async () => {
+    // The copy was always right; the CONTAINER was missing — a sentence
+    // floating in whitespace reads as the page having failed to draw. The
+    // card carries the heading; the sentence stays as its body.
+    const html = await render('/e/', {});
+    const idx = html.indexOf('No tournaments are listed yet');
+
+    expect(idx).toBeGreaterThan(-1);
+    // The card opens shortly before the heading. Slice from the last opening
+    // `<div` ahead of it and assert the card classes ride that element.
+    const container = html.slice(html.lastIndexOf('<div', idx), idx);
+    expect(container).toContain('bg-surface-raised');
+    expect(container).toContain('border-rule-soft');
+  });
 });

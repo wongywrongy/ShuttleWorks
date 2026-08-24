@@ -67,7 +67,15 @@ function FacetLink({
 
 export function FilterStrip({ filters }: { filters: Filters }) {
   return (
-    <div className="grid gap-4 rounded-lg border border-rule-soft bg-surface-sunken p-4 md:gap-5 md:rounded-none md:border-0 md:bg-transparent md:p-0">
+    // SP-P7 §3.8: a card at EVERY width. It used to shed its border, ground
+    // and padding from `md:` up (`md:rounded-none md:border-0
+    // md:bg-transparent md:p-0`), which left the desktop rail as loose text
+    // links floating beside a column of carded results — the one place on the
+    // tier where content sat on the page ground rather than on a surface.
+    // Sunken becomes raised with it: the panel was a well at phone widths
+    // because it sat inline above the results, but as a rail beside them it is
+    // a peer of the cards, not a backdrop for them.
+    <div className="grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-sm md:gap-5">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-1 md:gap-5">
         <nav aria-label="Status" className="grid content-start gap-1.5">
           <div className="mb-1.5 text-sm font-semibold text-foreground">Status</div>

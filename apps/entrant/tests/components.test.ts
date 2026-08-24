@@ -254,6 +254,21 @@ describe('FilterStrip', () => {
     expect(html).not.toMatch(/\bhidden\b/);
   });
 
+  // SP-P7 §3.8: the rail is a card at EVERY width. It used to shed its border,
+  // ground and padding from `md:` up, leaving the desktop rail as loose text
+  // links beside a column of carded results — the one surface on the tier that
+  // sat on the page ground instead of on a card.
+  it('stays a card at desktop widths, not floating text links', () => {
+    const html = renderToStaticMarkup(h(FilterStrip, { filters: filters() }));
+    const container = html.slice(0, html.indexOf('>') + 1);
+
+    expect(container).toContain('border-rule-soft');
+    expect(container).toContain('bg-surface-raised');
+    for (const shed of ['md:rounded-none', 'md:border-0', 'md:bg-transparent', 'md:p-0']) {
+      expect(container).not.toContain(shed);
+    }
+  });
+
   // P1.1: a facet is a LINK carrying the whole current query with that one
   // facet swapped — instant apply as plain GET navigation, zero client JS.
   it('renders each facet as a link that swaps only its own facet', () => {
@@ -339,6 +354,31 @@ describe('EmptyState', () => {
     expect(html).toContain('Try widening the dates.');
     expect(html.match(/<a /g)).toHaveLength(1);
     expect(html).toMatch(/<a href="\/e\/"[^>]*>Clear filters<\/a>/);
+  });
+
+  // SP-P7 §3.8. The dashed outline is the placeholder/drop-target idiom —
+  // "something is missing here" — where an empty result set means "this query
+  // found nothing", and every other content block on the tier is a card.
+  it('wears the card treatment, not a dashed placeholder outline', () => {
+    const html = renderToStaticMarkup(h(EmptyState, props));
+    const container = html.slice(0, html.indexOf('>') + 1);
+
+    expect(container).toContain('bg-surface-raised');
+    expect(container).toContain('border-rule-soft');
+    expect(container).toContain('shadow-sm');
+    expect(container).not.toContain('border-dashed');
+  });
+
+  it('omits the action entirely when there is nothing to offer', () => {
+    // What lets discovery use this container for "nothing listed at all",
+    // where there is nowhere to send anyone, instead of a bare sentence.
+    const html = renderToStaticMarkup(
+      h(EmptyState, { heading: 'No tournaments are listed yet', body: 'Check back soon.' }),
+    );
+
+    expect(html).toContain('No tournaments are listed yet');
+    expect(html).not.toContain('<a ');
+    expect(html).not.toContain('<button');
   });
 });
 
