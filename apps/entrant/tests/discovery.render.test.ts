@@ -233,6 +233,23 @@ describe('the two empty states', () => {
     expect(html).toContain('No tournaments match');
     expect(html).toMatch(/<a href="\/e\/"[^>]*>Clear filters<\/a>/);
   });
+
+  it('takes the same arm for an empty SEGMENT — never a bare empty calendar', async () => {
+    // §2.4: a conditional element disappears cleanly. A view is a selection
+    // too, so `?view=completed` over a season with nothing completed has zero
+    // rows and no filter set — the old `anyFilterActive` gate let that fall
+    // through to an empty bordered card, which is the "empty band" the rule
+    // forbids.
+    const html = await render('/e/?view=completed', {
+      tournaments: [row('wessex-open', 'Wessex Autumn Gold', 'entries_open')],
+      counts: { takingEntries: 1, completed: 0 },
+      now: null,
+    });
+
+    expect(html).toContain('No tournaments match');
+    expect(html).toMatch(/<a href="\/e\/"[^>]*>Clear filters<\/a>/);
+    expect(html).not.toContain('id="calendar"');
+  });
 });
 
 describe('E5: empty filter fields never survive into a shareable URL', () => {

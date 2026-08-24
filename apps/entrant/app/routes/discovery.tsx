@@ -25,7 +25,6 @@ import { SeasonCalendar } from '../components/SeasonCalendar';
 import { SeasonControls } from '../components/SeasonControls';
 import { apiGet } from '../lib/apiFetch.server';
 import {
-  anyFilterActive,
   parseFilters,
   rowMatches,
   viewRows,
@@ -137,14 +136,20 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
 
         <div className="mt-6 grid gap-4">
           <SeasonControls filters={filters} counts={counts} />
-          {/* The empty states render INSTEAD of the calendar: an empty
-              bordered card under a "nothing here" message is noise. */}
+          {/* The empty states render INSTEAD of the calendar, and the
+              filtered arm is NOT gated on `anyFilterActive`: §2.4 says a
+              conditional element disappears cleanly, so an empty bordered
+              card is as much a violation as an empty band. A segment is
+              itself a selection — `?view=completed` with nothing completed
+              has zero rows and no filter set — and "Clear filters" honestly
+              returns the reader to the full Season view. `SeasonCalendar`
+              therefore never receives an empty `rows`. */}
           {listedCount === 0 ? (
             <EmptyState
               heading="No tournaments on the calendar yet"
               body="No tournament is taking entries right now. Check back soon, or open the entry link your organizer gave you."
             />
-          ) : rows.length === 0 && anyFilterActive(filters) ? (
+          ) : rows.length === 0 ? (
             <EmptyState
               heading="No tournaments match"
               body="Check spelling, change the date range, or clear filters."
