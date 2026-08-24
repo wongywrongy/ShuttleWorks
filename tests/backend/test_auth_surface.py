@@ -132,6 +132,43 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "list would publish a closed workspace's address into a crawlable "
         "sitemap, disclosing it exists before the director opened entries"
     ),
+    # ---- SP-P7 §5 — the public-site projections (entries_site.py) -------
+    #
+    # Registered anonymous on purpose (core/main.py: "the publication flags
+    # are the gate, not a session") and absent from this list until the
+    # SP-P7 delta audit — they passed the gate only INCIDENTALLY, because
+    # the probe fills {slug} with a random UUID and gets the uniform 404.
+    # That is the silent-tolerance failure the submit note below describes:
+    # the allowlist records intent, and the tier's largest anonymous read
+    # surface was invisible to review. All five share the page projection's
+    # posture: slug-only addressing (a raw tournament UUID is never a public
+    # key), strict field-by-field DTOs, and the entry_pages publication
+    # flags as the data gate — off-states asserted as negative controls in
+    # tests/backend/test_entries_site_api.py, not inferred.
+    ("GET", "/e/api/page/{slug}/draws"): (
+        "published draws index — gated by draws_published; unpublished "
+        "answers an explicit published:false envelope with no draw data"
+    ),
+    ("GET", "/e/api/page/{slug}/draws/{draw_key}"): (
+        "one draw's structure — unpublished is the uniform 404 (an "
+        "unpublished tier has no draw keyspace to enumerate); scores are "
+        "stripped at source while results_published is off, including "
+        "resolved advancement projected back into its placeholder"
+    ),
+    ("GET", "/e/api/page/{slug}/seeds"): (
+        "per-event seed lists — seeds are draw facts, so draws_published "
+        "gates them; the same published:false envelope when off"
+    ),
+    ("GET", "/e/api/page/{slug}/winners"): (
+        "per-event winners — results_published gates them; derived by the "
+        "same _event_winner the entrant's own result badges use"
+    ),
+    ("GET", "/e/api/page/{slug}/players/{person_key}"): (
+        "one person's tournament — entrants_published gates the page "
+        "(unpublished person is the uniform 404); the person_key is the "
+        "opaque entry_player id, never a name, and a pending person has no "
+        "page at all (test_a_pending_person_has_no_public_page)"
+    ),
     ("POST", "/e/account/signup"): (
         "entrant account creation — cannot require an account, for the same "
         "reason /auth/register cannot. Session-free BY NATURE, not by policy. "
