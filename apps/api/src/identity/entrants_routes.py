@@ -457,18 +457,6 @@ def _auth_error(exc: AuthError):
     return http_error(status.HTTP_400_BAD_REQUEST, code, exc.message)
 
 
-def _play_origin() -> str:
-    """Absolute origin for links in entrant mail — program invariant I1.
-
-    Falls back through ``public_app_origin`` to the empty string, which
-    yields a relative link. That is the local-mode answer and it is a
-    working one: the console backend's email backend *logs* the message, and
-    a developer following a relative path against their own dev server gets
-    where they are going.
-    """
-    return (settings.public_play_origin or settings.public_app_origin).rstrip("/")
-
-
 def _mail(to: str, subject: str, body: str) -> None:
     """Send, and never let the outcome reach the caller's response.
 
@@ -489,7 +477,9 @@ def _mail(to: str, subject: str, body: str) -> None:
 
 
 def _send_verification(account, token: str) -> None:
-    origin = _play_origin()
+    # PUBLIC tier (SP-HOST-1 D-9). An entrant has no console account and no
+    # Access seat; a verify link on the operator host is unopenable.
+    origin = settings.play_origin
     _mail(
         account.email,
         "Confirm your email for ShuttleWorks entries",
@@ -898,7 +888,8 @@ def request_entrant_password_reset(
         if account is not None:
             token = entrant_service.issue_reset_token(repo.session, account)
             repo.session.commit()
-            origin = _play_origin()
+            # PUBLIC tier (SP-HOST-1 D-9), same reason as verification.
+            origin = settings.play_origin
             _mail(
                 account.email,
                 "Reset your ShuttleWorks entry password",

@@ -179,7 +179,13 @@ jobs:
           # that the files PARSE and that every referenced variable is
           # actually declared somewhere.
           POSTGRES_BIND_ADDR: 127.0.0.1
-          PUBLIC_HOSTNAME: example.test
+          # Two hostnames since SP-HOST-1: the operator console and the public
+          # entrant site are separate origins. Both are `${VAR:?}` in the
+          # self-host stack — PLAY_HOSTNAME deliberately has no default,
+          # because falling back to the operator origin mails entrants a link
+          # that stops at a Cloudflare Access prompt.
+          APP_HOSTNAME: app.example.test
+          PLAY_HOSTNAME: play.example.test
           CLOUDFLARE_TUNNEL_TOKEN: dummy-tunnel-token
           # TRUSTED_PROXY_IPS is deliberately NOT here. It is not a `${VAR:?}`
           # variable — it has a compose default that is the correct value —

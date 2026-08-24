@@ -40,9 +40,10 @@ instead — no accounts, no TLS, fully offline, and strictly simpler. Come back
 here when two people need the same workspace.
 
 **Have your own TLS terminator** (Tailscale Serve, an existing reverse proxy
-with a real certificate)? Workable in principle: publish a port on `frontend`,
-point `PUBLIC_HOSTNAME` at that hostname, and set `TRUSTED_PROXY_IPS` to
-whatever the API sees as its peer. **Untested** — and §6 fails *open* if you
+with a real certificate)? Workable in principle: publish both of `frontend`'s
+ports (8080 operator, 8081 public), point `APP_HOSTNAME` and `PLAY_HOSTNAME` at
+the two hostnames they serve, and set `TRUSTED_PROXY_IPS` to whatever the API
+sees as its peer. **Untested** — and §6 fails *open* if you
 get it wrong, so treat step 10 as mandatory.
 
 ## 1. Prerequisites
@@ -113,9 +114,13 @@ cp .env.selfhost.example .env   # then edit
 chmod 600 .env
 ```
 
-Set at minimum: `PUBLIC_HOSTNAME`, `SMTP_HOST` (+ credentials),
-`CLOUDFLARE_TUNNEL_TOKEN` (step 6), `POSTGRES_BIND_ADDR` (step 5), and
-`POSTGRES_DATA_DIR`.
+Set at minimum: `APP_HOSTNAME` and `PLAY_HOSTNAME` (step 6), `SMTP_HOST`
+(+ credentials), `CLOUDFLARE_TUNNEL_TOKEN` (step 6), `POSTGRES_BIND_ADDR`
+(step 5), and `POSTGRES_DATA_DIR`.
+
+`SESSION_COOKIE_DOMAIN` is not in that list and must not be added. Host-only
+cookies are what keep the two hostnames apart as two browser origins, and the
+API refuses to start if the variable has a value.
 
 Leave **`TRUSTED_PROXY_IPS` unset** — it defaults to the stack's pinned subnet,
 which is correct for a standard install. See step 9 if you changed the subnet.
@@ -146,16 +151,23 @@ the variable, deliberately, so the choice is explicit.
 ## 6. Cloudflare Tunnel
 
 Create a **named tunnel** (Zero Trust → Networks → Tunnels), put its token in
-`.env` as `CLOUDFLARE_TUNNEL_TOKEN`, and add exactly one public hostname:
+`.env` as `CLOUDFLARE_TUNNEL_TOKEN`, and add **two** public hostnames — two
+ports of the same container:
 
 ```
-Service:  HTTP   →   frontend:8080
+${APP_HOSTNAME}    HTTP  →  frontend:8080     ← operator console + /api/
+${PLAY_HOSTNAME}   HTTP  →  frontend:8081     ← public entrant site (/e/*)
 ```
 
-::: danger Point it at `frontend`, never at `api`, never a wildcard
-`frontend` serves the app *and* proxies `/api/*` onward, so one origin serves
-both — which is what `CORS_ORIGINS` and `PUBLIC_APP_ORIGIN` assume. Routing
-straight to `api:8000` publishes a bare JSON API with no user interface.
+Two hostnames because they must be two browser **origins**: origin is what
+scopes cookies and storage, and `Path=` on a cookie is not enforced against
+same-origin script. Put Cloudflare Access on `${APP_HOSTNAME}` and **never** on
+`${PLAY_HOSTNAME}`.
+
+::: danger Point both at `frontend`, never at `api`, never a wildcard
+`frontend` serves the app *and* proxies onward, which is what `CORS_ORIGINS`,
+`PUBLIC_APP_ORIGIN` and `PUBLIC_PLAY_ORIGIN` assume. Routing straight to
+`api:8000` publishes a bare JSON API with no user interface.
 
 A **wildcard** route publishes every service the connector can reach — on a
 homelab box that means Home Assistant, media servers, dashboards, everything —
@@ -205,7 +217,7 @@ makes mandatory. Do not rely on the tunnel to hide them: it publishes a
 hostname, not a route list.
 :::
 
-Then open `https://<your-hostname>`, register the first account, and create the
+Then open `https://${APP_HOSTNAME}`, register the first account, and create the
 first workspace. The first registered user is a normal account — there is no
 superuser — and owns whatever they create.
 

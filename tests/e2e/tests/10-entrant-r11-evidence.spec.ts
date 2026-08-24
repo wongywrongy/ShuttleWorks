@@ -76,10 +76,15 @@
  * Run against an already-running stack (the ports below are overridable
  * because :80 and :8000 are frequently taken on a dev box):
  *
- *   FRONTEND_HOST_PORT=8090 BACKEND_HOST_PORT=8600 \
+ *   FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 BACKEND_HOST_PORT=8600 \
  *     docker compose up -d backend entrant frontend
- *   cd e2e && E2E_BASE_URL=http://localhost:8090 E2E_MANAGE_STACK=0 \
+ *   cd tests/e2e && E2E_BASE_URL=http://localhost:8090 \
+ *     E2E_PLAY_BASE_URL=http://localhost:8091 E2E_MANAGE_STACK=0 \
  *     npx playwright test tests/10-entrant-r11-evidence.spec.ts
+ *
+ * TWO base URLs since SP-HOST-1: the operator origin (8080 in the container)
+ * and the public one (8081). They are separate hostnames in a real
+ * deployment; here they are the frontend container's two published ports.
  *
  * NOT in the PR gate: e2e boots Docker and the gates are deliberately lean.
  * That is an accepted limit, not an oversight — see the task report. It is
@@ -204,6 +209,32 @@ const OPERATOR = {
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost';
 
+/**
+ * The PUBLIC tier's own base URL (SP-HOST-1).
+ *
+ * `/e/*` moved off the operator origin. In production the two are separate
+ * HOSTNAMES on one Cloudflare tunnel; in a compose stack they are the two
+ * published ports of the one `frontend` container, 8080 and 8081. Either way
+ * a page under `/e/` is no longer reachable from `BASE_URL`, and the operator
+ * `/api/` is no longer reachable from here — the play tier has no `/api/`
+ * location at all, by design.
+ *
+ * So this file navigates against the play origin and reaches the operator API
+ * by ABSOLUTE url in its setup and teardown. The two halves are named
+ * separately rather than derived from each other, because the relationship
+ * between them is a deployment's to decide.
+ *
+ * **A caveat this spec is the natural place to record.** Port-based
+ * separation isolates JS-visible storage but NOT cookies: cookie scope
+ * ignores the port, so `http://localhost:8080` and `http://localhost:8081`
+ * share one jar. The isolation is real only where the two are different
+ * hostnames, which is the deployed shape. Locally, the thing keeping the
+ * operator session off the entrant tier is the nginx Cookie allowlist —
+ * which is precisely why SP-HOST-1 kept it instead of deleting it as
+ * redundant.
+ */
+const PLAY_BASE_URL = process.env.E2E_PLAY_BASE_URL ?? 'http://localhost:8081';
+
 /** Empty in local mode, where no credential is needed. */
 let sessionCookies: SessionCookies = [];
 
@@ -222,7 +253,7 @@ const created: string[] = [];
 async function establishSession(playwright: PlaywrightT): Promise<void> {
   const api = await playwright.request.newContext({ baseURL: BASE_URL });
   try {
-    const config = await api.get('/e/api/config');
+    const config = await api.get(`${PLAY_BASE_URL}/e/api/config`);
     expect(config.ok(), await config.text()).toBeTruthy();
     if ((await config.json()).authMode !== 'cloud') return;
 
@@ -247,7 +278,7 @@ async function seed(page: Page): Promise<string> {
   const slug = `spring-open-${Date.now().toString(36)}`;
   const date = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
 
-  const workspace = await page.request.post('/api/tournaments', {
+  const workspace = await page.request.post(`${BASE_URL}/api/tournaments`, {
     headers: CSRF,
     data: { name: 'Riverside Spring Open', tournamentDate: date },
   });
@@ -255,7 +286,7 @@ async function seed(page: Page): Promise<string> {
   const tid = (await workspace.json()).id as string;
   created.push(tid);
 
-  const put = await page.request.put(`/api/tournaments/${tid}/entry-page`, {
+  const put = await page.request.put(`${BASE_URL}/api/tournaments/${tid}/entry-page`, {
     headers: CSRF,
     data: {
       slug,
@@ -277,7 +308,7 @@ async function seed(page: Page): Promise<string> {
     { code: 'WS', discipline: "Women's Singles", entryType: 'singles', genderConstraint: 'F' },
     { code: 'XD', discipline: 'Mixed Doubles', entryType: 'doubles', genderConstraint: 'mixed' },
   ]) {
-    const res = await page.request.post(`/api/tournaments/${tid}/entry-events`, {
+    const res = await page.request.post(`${BASE_URL}/api/tournaments/${tid}/entry-events`, {
       headers: CSRF,
       data: event,
     });
@@ -368,7 +399,7 @@ test.afterAll(async ({ playwright }) => {
   });
   try {
     for (const tid of created.splice(0)) {
-      await api.delete(`/api/tournaments/${tid}`, { headers: CSRF });
+      await api.delete(`${BASE_URL}/api/tournaments/${tid}`, { headers: CSRF });
     }
   } finally {
     await api.dispose();
@@ -376,6 +407,11 @@ test.afterAll(async ({ playwright }) => {
 });
 
 test.describe('entrant app — R11 evidence', () => {
+  // Every `page.goto()` below is a path under `/e/`, which lives on the
+  // public origin since SP-HOST-1. The operator API calls in `seed()` and the
+  // hooks above name `BASE_URL` explicitly for the same reason.
+  test.use({ baseURL: PLAY_BASE_URL });
+
   /**
    * The dual-width control AND the reviewable artefact, in one pass, because
    * they need the identical setup and splitting them would double a seed and

@@ -172,7 +172,13 @@ class Settings(BaseSettings):
     # dev works; cloud deployments MUST serve HTTPS and set this true
     # (enforced by the cloud validator below).
     session_cookie_secure: bool = False
-    # Blank = host-only cookie (the right default).
+    # Blank = host-only cookie, and blank is the ONLY permitted value —
+    # ``_enforce_host_only_cookies`` below refuses to start otherwise
+    # (SP-HOST-1 R5). Kept as a setting rather than deleted outright
+    # precisely so a deployment that sets it gets an error: ``model_config``
+    # declares ``extra="ignore"``, so removing the field would make
+    # ``SESSION_COOKIE_DOMAIN=.example.com`` silently do nothing, which looks
+    # identical to it silently working.
     session_cookie_domain: str = ""
     # The ENTRANT session cookie (SP-E1-2 / ruling R10, D-A3). A distinct
     # name from the operator's, on the same host-only default: with
@@ -352,6 +358,67 @@ class Settings(BaseSettings):
         return v
 
     @model_validator(mode="after")
+    def _enforce_host_only_cookies(self) -> "Settings":
+        """Refuse to start with a ``Domain``-scoped session cookie.
+
+        SP-HOST-1, ruling R5. The operator console and the public entrant
+        site are separate hostnames precisely so they are separate browser
+        ORIGINS, and the only thing making them separate origins is that the
+        session cookies are host-only. A ``Domain=.example.com`` cookie is
+        sent to — and readable by same-origin script on — every subdomain
+        under it, which hands an operator credential to the public tier and
+        undoes the whole split in one line of configuration. ``Path=`` is not
+        a substitute: it is not enforced against same-origin script.
+
+        A refusal rather than a comment, because the failure is invisible.
+        Everything keeps working; the property that was the point of the
+        deployment is simply gone, and nothing logs, 500s or looks wrong.
+
+        **Unconditional, not folded into the cloud validator below.** The
+        rule is permanent and mode-independent (there is no deployment shape
+        where cross-subdomain SSO is wanted), and a check that only fires
+        under ``ENVIRONMENT=cloud`` is one a local reproduction of the
+        problem walks straight past.
+        """
+        if self.session_cookie_domain:
+            raise ValueError(
+                "SESSION_COOKIE_DOMAIN must be blank. Session cookies are "
+                "host-only by design (SP-HOST-1 R5): a Domain attribute "
+                "shares the operator session with every subdomain, including "
+                "the public entrant tier. Cross-subdomain SSO is not "
+                "supported — unset the variable."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _refuse_wildcard_cors(self) -> "Settings":
+        """Refuse a wildcard CORS origin, because this API is credentialed.
+
+        SP-HOST-1 D-4. ``core.main`` mounts ``CORSMiddleware`` with
+        ``allow_credentials=True`` — cookie sessions require it — and
+        Starlette's handling of the wildcard under that flag is the trap:
+        rather than refusing the combination, it stops sending a literal
+        ``*`` and starts **echoing the request's own Origin**. So
+        ``CORS_ORIGINS=*`` does not mean "no credentialed cross-origin
+        access", it means "credentialed cross-origin access from anywhere",
+        which is the opposite of how the value reads.
+
+        Unconditional, like the cookie check above: the allowlist exists to
+        keep the public entrant origin out of the operator API, and a
+        wildcard that only fails under ``ENVIRONMENT=cloud`` is one a
+        developer pastes locally and ships.
+        """
+        if "*" in self.cors_origins:
+            raise ValueError(
+                "CORS_ORIGINS must not contain '*'. This API authenticates "
+                "with cookies (allow_credentials=True), and Starlette answers "
+                "a wildcard under that flag by echoing whatever Origin asked "
+                "— granting credentialed access to every site on the "
+                "internet. Name the operator origin explicitly."
+            )
+        return self
+
+    @model_validator(mode="after")
     def _enforce_cloud_secrets(self) -> "Settings":
         # In cloud mode the bootstrap-identity fallback is unacceptable
         # — every request would silently act as the local operator.
@@ -402,6 +469,50 @@ class Settings(BaseSettings):
                 + ". Set these via your deployment host's secret manager."
             )
         return self
+
+    @property
+    def app_origin(self) -> str:
+        """Absolute origin of the OPERATOR tier — program invariant I1.
+
+        One of exactly two destinations for every absolute URL this
+        application generates (SP-HOST-1 D-9). Password resets and workspace
+        invites are operator business and belong on the Access-fronted host;
+        an entrant-facing link that lands here is a link nobody outside the
+        organisation can open.
+
+        Trailing slash stripped here rather than at each of the two call
+        sites, which is where it used to be: a setting written
+        ``https://app.example.com/`` produced ``…com//login?reset=`` from one
+        generator and not the other, depending on which had remembered.
+        """
+        return self.public_app_origin.rstrip("/")
+
+    @property
+    def play_origin(self) -> str:
+        """Absolute origin of the PUBLIC entrant tier — program invariant I1.
+
+        The other destination. Entrant verification, entrant password reset
+        and doubles-partner invites all arrive in a stranger's inbox and must
+        open without a login in front of them.
+
+        **The fallback chain is load-bearing in both directions.** Blank
+        ``public_play_origin`` falls through to the operator origin and then
+        to the empty string, which yields a relative link — the local-mode
+        answer, and a working one, since the two tiers share one origin in
+        development. In a *split* deployment that same fallback is a defect
+        wearing a default's clothes: it points entrant mail at the
+        Access-fronted host, which is precisely the state the audit found
+        (SP-HOST-1 F-6, latent only because ``/e/*`` had never been exposed).
+        The self-host stack therefore sets ``PUBLIC_PLAY_ORIGIN`` from a
+        REQUIRED ``PLAY_HOSTNAME`` rather than letting it default.
+
+        Previously two identical private helpers, ``_play_origin()`` in
+        ``entries/entries_json.py`` and in ``identity/entrants_routes.py``.
+        They could not import one another — the import-linter forbids the
+        cross-domain edge — so the seam belongs in the kernel, which is what
+        a kernel is for.
+        """
+        return (self.public_play_origin or self.public_app_origin).rstrip("/")
 
     @property
     def session_cookie_names(self) -> tuple[str, ...]:

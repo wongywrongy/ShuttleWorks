@@ -1,8 +1,8 @@
 /**
- * The ingress contract, asked of `frontend/nginx.conf` rather than grepped
- * from it (Task 22).
+ * The ingress contract, asked of the nginx config rather than grepped from it
+ * (Task 22, extended by SP-HOST-1).
  *
- * Every assertion below runs the real matching rules over the real file:
+ * Every assertion below runs the real matching rules over the real files:
  * `resolve()` implements nginx's exact-then-longest-prefix order and
  * `forwardedCookie()` executes the config's own `map` regexes. The three
  * mutations this suite exists to catch were each verified RED against a
@@ -15,9 +15,17 @@
  *   - `location = /robots.txt` deleted: the origin root serves the SPA's
  *     index.html and the file is inert again.
  *
- * What this suite does NOT prove: that nginx is configured the way this
- * model says it is. `nginx -t` and a container run cover that, and the
- * report records both.
+ * SP-HOST-1 added a fourth thing worth catching, and it is the reason the
+ * suite is now organised by TIER: the operator console and the public entrant
+ * site are two `server` blocks on two ports, published as two hostnames, so
+ * that a browser treats them as two ORIGINS. The assertions that matter most
+ * here are the ones about what is ABSENT from a tier — the play tier has no
+ * `/api/` location, and the console tier has no `/e/` — because an origin
+ * boundary is made of absences.
+ *
+ * What this suite does NOT prove: that nginx is configured the way this model
+ * says it is. `nginx -t` and a container run cover that, and the SP-HOST-1
+ * ledger records both.
  */
 import { describe, expect, it } from 'vitest';
 import type { RouteConfigEntry } from '@react-router/dev/routes';
@@ -29,41 +37,146 @@ import { contains } from './helpers/cidr';
 import { nodePaths } from './helpers/nodePaths';
 import {
   assertModelHolds,
+  assertOneServerBlockPerTier,
   backendPrefixes,
   directive,
   forwardedCookie,
+  headersSnippet,
+  listenPorts,
   locations,
   proxyPass,
   proxySetHeader,
   resolve,
+  serverBlockCount,
+  sharedSource,
+  tierSource,
   upstreamFor,
 } from './helpers/nginxConf';
 
 const ENTRANT = 'entrant:3000';
 const BACKEND = 'backend:8000';
 
-describe('the model still describes the file', () => {
-  it('parses a plausible number of locations and no unmodelled construct', () => {
+const CONSOLE = locations(tierSource('console'));
+const PLAY = locations(tierSource('play'));
+
+/** Where a URL lands on a given tier. */
+const onConsole = (path: string) => resolve(path, CONSOLE);
+const onPlay = (path: string) => resolve(path, PLAY);
+
+describe('the model still describes the files', () => {
+  it('parses a plausible number of locations per tier and no unmodelled construct', () => {
     // Non-vacuity: an empty parse would make every routing assertion below
     // pass by never matching anything.
-    const all = locations();
-    expect(all.length).toBeGreaterThan(5);
-    expect(all.some((l) => l.kind === 'exact')).toBe(true);
-    expect(all.some((l) => l.kind === 'prefix')).toBe(true);
-    expect(() => assertModelHolds(all)).not.toThrow();
+    for (const all of [CONSOLE, PLAY]) {
+      expect(all.length).toBeGreaterThan(4);
+      expect(all.some((l) => l.kind === 'exact')).toBe(true);
+      expect(all.some((l) => l.kind === 'prefix')).toBe(true);
+      expect(() => assertModelHolds(all)).not.toThrow();
+    }
+  });
+
+  it('keeps exactly one server block per tier file, and none in the shared one', () => {
+    // THE ASSERTION THIS MODULE'S CORRECTNESS RESTS ON (SP-HOST-1 F-8).
+    // `locations()` does not track which `server {}` encloses a location, so
+    // two blocks in one file would merge the tiers and leave every routing
+    // assertion here green while describing a config nginx never serves —
+    // including, specifically, "the operator API is unreachable from the
+    // public origin", which would go from proven to assumed without a single
+    // test turning red.
+    expect(() => assertOneServerBlockPerTier()).not.toThrow();
+    expect(serverBlockCount(sharedSource())).toBe(0);
+    expect(serverBlockCount(tierSource('console'))).toBe(1);
+    expect(serverBlockCount(tierSource('play'))).toBe(1);
   });
 
   it('resolves by longest prefix, not by source order', () => {
     // The property the whole R8-A split rests on, stated on a case with a
     // known answer: `/e/api/x` is matched by BOTH `/e/` and `/e/api/`.
-    expect(resolve('/e/api/x').path).toBe('/e/api/');
-    expect(resolve('/e/anything-else').path).toBe('/e/');
+    expect(onPlay('/e/api/x').path).toBe('/e/api/');
+    expect(onPlay('/e/anything-else').path).toBe('/e/');
   });
 });
 
-describe('ruling R8-A: the /e/ prefix is split across two tiers', () => {
+describe('SP-HOST-1: the two tiers are two ports, and neither can serve the other', () => {
+  it('listens on one port per tier, and they differ', () => {
+    // Two ports is what lets the tunnel publish two HOSTNAMES from one
+    // container, which is what makes the browser see two ORIGINS. Derived
+    // from the `listen` directives so the CSP maps below can be checked
+    // against them rather than against a repeated literal.
+    expect(listenPorts('console')).toEqual([8080]);
+    expect(listenPorts('play')).toEqual([8081]);
+  });
+
+  it('gives the public tier NO route to the operator API', () => {
+    // The routing half of the origin boundary. `/api/` must not resolve to a
+    // proxy on the play tier — it falls through to the catch-all, which
+    // returns 404 and reaches no upstream at all.
+    for (const path of ['/api/tournaments', '/api/auth/login', '/api/display/x']) {
+      const landing = onPlay(path);
+      expect(landing.path).toBe('/');
+      expect(proxyPass(landing)).toBeNull();
+      expect(landing.body).toMatch(/return\s+404\s*;/);
+    }
+    // ...and no location on that tier proxies to anything but the two
+    // upstreams it is allowed to reach.
+    for (const location of PLAY.filter((l) => proxyPass(l) !== null)) {
+      expect({
+        path: location.path,
+        host: new URL(proxyPass(location) as string).host,
+      }).toEqual({ path: location.path, host: expect.stringMatching(/^(entrant:3000|backend:8000)$/) });
+    }
+  });
+
+  it('gives the public tier no filesystem to serve from and no SPA to fall back to', () => {
+    // `root` is unset in play.conf, and the catch-all returns rather than
+    // `try_files`. A fallback that served the operator bundle here would be
+    // the split undone by the one location nobody reads.
+    expect(directive('root', tierSource('play'))).toEqual([]);
+    // Comments stripped first: this file EXPLAINS that it has no `try_files`,
+    // and a scanner that cannot tell prose from a directive punishes a file
+    // for documenting itself.
+    expect(tierSource('play').replace(/^\s*#.*$/gm, '')).not.toMatch(/try_files/);
+    expect(onPlay('/anything-at-all').body).toMatch(/return\s+404\s*;/);
+  });
+
+  it('gives the operator tier no route to the entrant surface', () => {
+    // The other half. `/e/...` on the console host is a stale link to a
+    // surface that moved hosts; the SPA's own 404 route is the honest answer,
+    // and crucially it reaches neither node nor the entrant API.
+    for (const path of ['/e/', '/e/summer-open', '/e/api/config', '/e/account/login']) {
+      const landing = onConsole(path);
+      expect(landing.path).toBe('/');
+      expect(proxyPass(landing)).toBeNull();
+    }
+    expect(backendPrefixes(CONSOLE)).toEqual([]);
+  });
+
+  it('names no hostname in any conf file', () => {
+    // Invariant I1: the domain is configuration, never code. These files are
+    // baked into an image at build time, so a hostname here could not be
+    // changed by a deployment even if it wanted to. The tunnel does hostname
+    // routing; `server_name localhost` constrains nothing and is not meant
+    // to, because each port carries exactly one server block.
+    const sources = [sharedSource(), tierSource('console'), tierSource('play')];
+    for (const source of sources) {
+      const code = source.replace(/^\s*#.*$/gm, '');
+      // The only absolute URLs permitted are compose-network service names,
+      // plus Turnstile's origin — a THIRD-PARTY host named in a CSP, which is
+      // the opposite of a deployment hostname: it is fixed by Cloudflare, the
+      // same in every deployment, and cannot be configuration.
+      for (const [url] of code.matchAll(/https?:\/\/[^\s;"']+/g)) {
+        expect(url).toMatch(
+          /^(http:\/\/(backend:8000|entrant:3000)|https:\/\/challenges\.cloudflare\.com)/,
+        );
+      }
+      expect(directive('server_name', source).every((v) => v === 'localhost')).toBe(true);
+    }
+  });
+});
+
+describe('ruling R8-A: the /e/ prefix is split across two tiers of the PLAY host', () => {
   it('names exactly the two FastAPI prefixes', () => {
-    expect(backendPrefixes()).toEqual(['/e/account/', '/e/api/']);
+    expect(backendPrefixes(PLAY)).toEqual(['/e/account/', '/e/api/']);
   });
 
   it.each(nodePaths(routes as RouteConfigEntry[]))(
@@ -72,12 +185,12 @@ describe('ruling R8-A: the /e/ prefix is split across two tiers', () => {
       // DERIVED from app/routes.ts: a route added tomorrow is checked
       // tomorrow, with no list for anyone to remember to update. `:slug` is
       // substituted because nginx matches URLs, not route patterns.
-      expect(upstreamFor(path.replace(/:\w+/g, 'sample'))).toBe(ENTRANT);
+      expect(upstreamFor(path.replace(/:\w+/g, 'sample'), PLAY)).toBe(ENTRANT);
     },
   );
 
-  it.each(backendPrefixes())('sends %s to FastAPI', (prefix) => {
-    expect(upstreamFor(`${prefix}whatever`)).toBe(BACKEND);
+  it.each(backendPrefixes(PLAY))('sends %s to FastAPI', (prefix) => {
+    expect(upstreamFor(`${prefix}whatever`, PLAY)).toBe(BACKEND);
   });
 
   it('preserves the request URI to node, which mounts on the /e/ basename', () => {
@@ -85,18 +198,18 @@ describe('ruling R8-A: the /e/ prefix is split across two tiers', () => {
     // request would be "No route matches URL" — the app's basename is
     // `/e/`. nginx also refuses a URI part in the named location, so the
     // same mistake there fails `nginx -t` outright.
-    expect(proxyPass(resolve('/e/health'))).toBe(`http://${ENTRANT}`);
+    expect(proxyPass(onPlay('/e/health'))).toBe(`http://${ENTRANT}`);
   });
 
   it('keeps the entrant surface on its own rate-limit zone', () => {
     for (const path of ['/e/health', '/e/api/x', '/e/account/login', '/robots.txt']) {
-      expect(resolve(path).body).toMatch(/limit_req\s+zone=sw_entries/);
+      expect(onPlay(path).body).toMatch(/limit_req\s+zone=sw_entries/);
     }
   });
 
   it('applies the shared security-headers snippet on every entrant path', () => {
     for (const path of ['/e/health', '/e/api/x', '/e/account/login', '/robots.txt']) {
-      expect(resolve(path).body).toContain('snippets/security-headers.conf');
+      expect(onPlay(path).body).toContain('snippets/security-headers.conf');
     }
   });
 });
@@ -116,9 +229,14 @@ describe('the rate-limit bucket cannot be chosen by the client', () => {
   // ONLY from a peer in `set_real_ip_from` — so there is no premise left to
   // keep true. These assertions are the ones that go red if the map comes
   // back.
+  //
+  // SP-HOST-1 moved all of it into `http-shared.conf`: a `limit_req_zone` may
+  // be declared once, and both tiers meter. Re-run here against that file,
+  // which is a re-run and not a relaxation — the ingress moved, the property
+  // did not.
 
   it('keys every zone on the connection address, never on a header', () => {
-    const zones = directive('limit_req_zone');
+    const zones = directive('limit_req_zone', sharedSource());
     // Non-vacuity: an empty list would make the loop below trivially true.
     expect(zones.length).toBeGreaterThan(2);
     for (const zone of zones) {
@@ -129,8 +247,8 @@ describe('the rate-limit bucket cannot be chosen by the client', () => {
   });
 
   it('rewrites that address from CF-Connecting-IP only for a trusted peer', () => {
-    expect(directive('real_ip_header')).toEqual(['CF-Connecting-IP']);
-    const trusted = directive('set_real_ip_from');
+    expect(directive('real_ip_header', sharedSource())).toEqual(['CF-Connecting-IP']);
+    const trusted = directive('set_real_ip_from', sharedSource());
     expect(trusted.length).toBeGreaterThan(0);
     for (const range of trusted) {
       // The negative control that matters: a range covering the internet
@@ -140,13 +258,13 @@ describe('the rate-limit bucket cannot be chosen by the client', () => {
     }
   });
 
-  it('overwrites the header on the way upstream, on every path that proxies', () => {
+  it('overwrites the header on the way upstream, on every path that proxies, on BOTH tiers', () => {
     // nginx forwards client request headers verbatim unless told otherwise,
     // so without this the backend — which trusts THIS proxy — would receive
     // whatever CF-Connecting-IP the client typed. `$remote_addr` is the
     // address realip has already vouched for: the real client behind the
     // tunnel, the socket peer everywhere else.
-    const proxying = locations().filter((l) => proxyPass(l) !== null);
+    const proxying = [...CONSOLE, ...PLAY].filter((l) => proxyPass(l) !== null);
     expect(proxying.length).toBeGreaterThan(5);
     for (const location of proxying) {
       expect({
@@ -172,9 +290,11 @@ describe('the forwarded Host keeps its port', () => {
   // `<loc>http://localhost/e/…</loc>` — an unreachable URL.
   //
   // 443 and 80 hide it, which is why the cloudflared self-host stack was fine
-  // and dev was not.
+  // and dev was not. It also gets sharper under SP-HOST-1: the play tier
+  // listens on 8081, so a laptop reaching it reaches a non-default port by
+  // construction.
   it('forwards $http_host, not $host, from every location that proxies', () => {
-    const proxying = locations().filter((l) => proxyPass(l) !== null);
+    const proxying = [...CONSOLE, ...PLAY].filter((l) => proxyPass(l) !== null);
     expect(proxying.length).toBeGreaterThan(5);
     for (const location of proxying) {
       expect(
@@ -185,6 +305,13 @@ describe('the forwarded Host keeps its port', () => {
 });
 
 describe('the operator session cannot reach the node process', () => {
+  // Since SP-HOST-1 the browser does not send `sw_session` to the play host
+  // at all — it is host-only, and the two tiers are two origins. This
+  // allowlist is therefore no longer the load-bearing control, and it stays
+  // anyway: it is what makes the property hold for a request that arrives
+  // some OTHER way (a host-published port in a dev stack, a hand-written
+  // jar). A control removed because the layer above it currently makes it
+  // redundant is a control absent the day that layer moves.
   const OPERATOR = 'sw_session=OPERATOR-SESSION-VALUE';
 
   it('forwards only the entrant cookies, whatever else is in the jar', () => {
@@ -221,7 +348,7 @@ describe('the operator session cannot reach the node process', () => {
     // entirely. (This used to cover the `@entrant_assets` fallback too; that
     // location is gone — the entrant tier emits `/e/assets/*` now, which
     // rides `location /e/` and its allowlist like every other node path.)
-    expect(proxySetHeader(resolve('/robots.txt'), 'Cookie')).toBe('');
+    expect(proxySetHeader(onPlay('/robots.txt'), 'Cookie')).toBe('');
   });
 });
 
@@ -234,7 +361,7 @@ describe('the operator session cannot reach the entrant API either', () => {
   // The backend fix is the one that has to be right (local dev has no
   // nginx); this is the tier that makes the collision impossible to have.
   const OPERATOR = 'sw_session=OPERATOR-SESSION-VALUE';
-  const prefixes = backendPrefixes();
+  const prefixes = backendPrefixes(PLAY);
 
   it.each(prefixes)('forwards only the entrant cookies to %s', (prefix) => {
     const forwarded = forwardedCookie(
@@ -268,37 +395,59 @@ describe('the operator session cannot reach the entrant API either', () => {
   it('leaves the operator API untouched — the allowlist is the entrant surface only', () => {
     // Negative control on reach: `/api/` is the console's own plane and MUST
     // keep carrying `sw_session`, or this "fix" signs every director out.
-    expect(proxySetHeader(resolve('/api/tournaments'), 'Cookie')).toBeNull();
-    expect(forwardedCookie(OPERATOR, '/api/tournaments')).toBe(OPERATOR);
+    expect(proxySetHeader(onConsole('/api/tournaments'), 'Cookie')).toBeNull();
+    expect(forwardedCookie(OPERATOR, '/api/tournaments', 'console')).toBe(OPERATOR);
   });
 });
 
-describe('RFC 9309: robots.txt is served from the origin root', () => {
-  it('maps the root path onto the app copy, exactly and only', () => {
-    const root = resolve('/robots.txt');
+describe('RFC 9309: robots.txt is served from the origin root of BOTH hosts', () => {
+  it('maps the play root path onto the app copy, exactly and only', () => {
+    const root = onPlay('/robots.txt');
     expect(root.kind).toBe('exact');
     expect(proxyPass(root)).toBe(`http://${ENTRANT}/e/robots.txt`);
     // One body, not two: the app's own path still serves the same file.
-    expect(upstreamFor('/e/robots.txt')).toBe(ENTRANT);
-    // A near miss must NOT be captured by the exact match.
-    expect(resolve('/robots.txt.bak').path).toBe('/');
+    expect(upstreamFor('/e/robots.txt', PLAY)).toBe(ENTRANT);
+    // A near miss must NOT be captured by the exact match — and on this tier
+    // the fallthrough is a 404, not an SPA.
+    expect(onPlay('/robots.txt.bak').path).toBe('/');
+  });
+
+  it('refuses the whole operator origin, from the operator origin', () => {
+    // The console host used to have no robots of its own: the origin-root
+    // file proxied into the entrant app, whose body spoke for both tiers
+    // (`Disallow: /` then `Allow: /e/`). Split apart, that body belongs to
+    // the play host and this host needs its own — and it is not made
+    // redundant by Cloudflare Access, because §4a requires two Bypass rules
+    // for the display plane and a leaked capability link is exactly what
+    // those make crawlable.
+    const root = onConsole('/robots.txt');
+    expect(root.kind).toBe('exact');
+    expect(proxyPass(root)).toBeNull();
+    expect(root.body).toMatch(/Disallow: \//);
+    expect(root.body).not.toMatch(/Allow: /);
   });
 });
 
-describe('bare /e reaches the entrant tier, not the operator SPA', () => {
-  it('redirects the trailing-slash-less form instead of letting it fall through', () => {
+describe('bare paths reach the entrant tier, not a dead end', () => {
+  it('redirects the trailing-slash-less /e instead of letting it fall through', () => {
     // `/e` matched no location, so it fell through to `location /` — the
     // operator SPA's index.html and a blank operator route, which is verbatim
     // the symptom the explicit `/e/` block exists to prevent. And `/e` is a
-    // plausible mistyping of a poster URL. The redirect only became safe to
-    // ship once `/e/` itself stopped being a soft-404 (`app/routes.ts` now
-    // declares an index route); before that it traded one blank page for
-    // another.
-    const bare = resolve('/e');
+    // plausible mistyping of a poster URL.
+    const bare = onPlay('/e');
     expect(bare.kind).toBe('exact');
     expect(bare.body).toMatch(/return\s+301\s+\/e\/\s*;/);
     // A near miss must NOT be captured by the exact match.
-    expect(resolve('/elsewhere').path).toBe('/');
+    expect(onPlay('/elsewhere').path).toBe('/');
+  });
+
+  it('redirects the bare play origin onto the discovery page', () => {
+    // Someone who types the play hostname into a phone should land on
+    // discovery, not a 404. A redirect rather than a second mount point, so
+    // there is one canonical URL per page and the sitemap stays honest.
+    const root = onPlay('/');
+    expect(root.kind).toBe('exact');
+    expect(root.body).toMatch(/return\s+301\s+\/e\/\s*;/);
   });
 });
 
@@ -310,7 +459,9 @@ describe('the two tiers no longer collide on /assets/', () => {
   // @entrant_assets`, which was also the one route into the node tier with no
   // `limit_req` on it. Fixed at the source: `vite.config.ts` sets
   // `base: '/e/'`, so the collision, the fallback and the unmetered path are
-  // all gone.
+  // all gone. Under SP-HOST-1 the two are on separate origins as well, but
+  // `base` is still what stops the entrant tier asking its own host for a
+  // path it does not serve.
 
   it('emits its assets under a prefix nginx already routes to the node tier', () => {
     // DERIVED from the config that decides it, not from a literal: `base` is
@@ -318,18 +469,100 @@ describe('the two tiers no longer collide on /assets/', () => {
     // every emitted URL) and what `@react-router/serve` mounts its static
     // dirs at. Reverting it to `/` fails here rather than in a browser.
     expect(viteConfig.base).toBe(rrConfig.basename);
-    expect(upstreamFor(`${viteConfig.base}assets/app-hash.css`)).toBe(ENTRANT);
+    expect(upstreamFor(`${viteConfig.base}assets/app-hash.css`, PLAY)).toBe(ENTRANT);
     // ...and it is metered and cookie-filtered like every other node path,
     // because it is `location /e/` that answers it.
-    expect(resolve(`${viteConfig.base}assets/x.js`).path).toBe('/e/');
+    expect(onPlay(`${viteConfig.base}assets/x.js`).path).toBe('/e/');
   });
 
   it('leaves the operator bundle on disk with no fallback into node', () => {
     // The negative half. A `try_files` here — or any named location for it to
     // reach — is the collision workaround coming back.
-    const assets = resolve('/assets/x.js');
+    const assets = onConsole('/assets/x.js');
     expect(proxyPass(assets)).toBeNull();
     expect(assets.body).not.toMatch(/try_files/);
-    expect(locations().filter((l) => l.kind === 'named')).toEqual([]);
+    expect([...CONSOLE, ...PLAY].filter((l) => l.kind === 'named')).toEqual([]);
+  });
+});
+
+describe('SP-HOST-1 D-6: the public tier carries the tighter CSP', () => {
+  // One `security-headers.conf`, included by every location on both tiers,
+  // with three directives varying by `$server_port`. A per-tier COPY was the
+  // obvious alternative and is the wrong one: nginx cannot OVERRIDE an
+  // add_header, so a variant means duplicating the whole list (drift), and
+  // two Content-Security-Policy headers are enforced as their INTERSECTION,
+  // which would silently tighten the other tier too.
+  const snippet = headersSnippet();
+  const shared = sharedSource();
+
+  /** A `map $server_port $name { … }` as {key: value}. */
+  function portMap(name: string): Record<string, string> {
+    const open = shared.indexOf(`map $server_port $${name}`);
+    expect(open, `no map for $${name}`).toBeGreaterThan(-1);
+    const body = shared.slice(open, shared.indexOf('}', open));
+    return Object.fromEntries(
+      [...body.matchAll(/^\s*(default|\d+)\s+"([^"]*)"\s*;/gm)].map((m) => [m[1], m[2]]),
+    );
+  }
+
+  it('varies exactly the three directives that should differ, and no others', () => {
+    for (const name of ['sw_connect_src', 'sw_frame_ancestors', 'sw_frame_options']) {
+      expect(snippet, `${name} is not interpolated into a header`).toContain(`$${name}`);
+    }
+    // Everything the two tiers share stays a literal in the one list. If
+    // `script-src` or `form-action` ever becomes per-tier, that is a decision
+    // that should break this test and be argued rather than slid in.
+    expect(snippet).toContain("script-src 'self'$sw_turnstile_origin");
+    expect(snippet).toContain("form-action 'self'");
+    expect(snippet).toContain("object-src 'none'");
+  });
+
+  it('keys each map on the PLAY tier’s real listen port', () => {
+    // Derived, not repeated. A tier that moved ports while these maps stayed
+    // put would silently serve the console policy to the public internet, and
+    // nothing else in the suite would notice.
+    const playPort = String(listenPorts('play')[0]);
+    for (const name of ['sw_connect_src', 'sw_frame_ancestors', 'sw_frame_options']) {
+      expect(Object.keys(portMap(name)).sort()).toEqual(['default', playPort].sort());
+    }
+  });
+
+  it('gives the public tier the stricter value in every case', () => {
+    const playPort = String(listenPorts('play')[0]);
+    expect(portMap('sw_connect_src')).toEqual({ default: "'self'", [playPort]: "'none'" });
+    expect(portMap('sw_frame_ancestors')).toEqual({ default: "'self'", [playPort]: "'none'" });
+    expect(portMap('sw_frame_options')).toEqual({ default: 'SAMEORIGIN', [playPort]: 'DENY' });
+  });
+
+  it('defaults to the OPERATOR value, so a new tier fails safe-ish rather than public-strict', () => {
+    // The direction matters. `default` is what an unlisted port gets, and the
+    // console policy is the looser of the two — but it is also exactly what
+    // shipped before the split, so a mis-keyed map is a regression to the
+    // status quo rather than a new hole. The public tier is the one that has
+    // to opt IN, which is the safe direction for the surface facing the
+    // internet.
+    expect(portMap('sw_connect_src').default).toBe("'self'");
+    expect(portMap('sw_frame_options').default).toBe('SAMEORIGIN');
+  });
+
+  it('still sends the security headers from every location on both tiers', () => {
+    // SEC-02: nginx drops the inherited add_header list in any location that
+    // declares one of its own, so the snippet has to be re-included there.
+    // The maps change the POLICY's value, never whether it is sent.
+    //
+    // Bare redirects are excluded, and only they: a `return 301` emits a
+    // Location header and no body, so there is no document for a CSP or a
+    // frame policy to govern. Anything that serves or proxies content is in
+    // scope, which is what the filter says — a location that stopped
+    // including the snippet could not slip through by adding a `return`,
+    // because it would have to drop its `proxy_pass` to do so.
+    const rendersSomething = [...CONSOLE, ...PLAY].filter(
+      (l) => !/^\s*return\s+30[12]\s/m.test(l.body.trim()),
+    );
+    expect(rendersSomething.length).toBeGreaterThan(8);
+    for (const location of rendersSomething) {
+      expect({ path: location.path, included: location.body.includes('security-headers.conf') })
+        .toEqual({ path: location.path, included: true });
+    }
   });
 });

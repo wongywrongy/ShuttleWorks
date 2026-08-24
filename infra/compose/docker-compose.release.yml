@@ -115,8 +115,12 @@ services:
 
   frontend:
     image: ghcr.io/${OWNER:-misogyu}/scheduler-frontend:${TAG:-latest}
+    # 8080 = operator tier, 8081 = public entrant tier (SP-HOST-1 D-1). Two
+    # ports so an ingress can make them two hostnames and therefore two
+    # browser origins; without the second mapping `/e/*` has no route at all.
     ports:
       - "80:8080"
+      - "8081:8081"
     networks:
       # A FIXED address, because the backend has to name it: this is the
       # peer every proxied request presents, and `TRUSTED_PROXY_IPS` above

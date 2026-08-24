@@ -323,7 +323,9 @@ def request_password_reset(
         # appears in the HTTP response or the cloud application log.
         from core.email import send_email
 
-        origin = settings.public_app_origin.rstrip("/")
+        # OPERATOR tier (SP-HOST-1 D-9): a password reset is operator
+        # business and its link lands on the Access-fronted console host.
+        origin = settings.app_origin
         try:
             send_email(
                 to=email,

@@ -124,8 +124,9 @@ to start without it, or misbehaves in a way you will not notice.
 | `EMAIL_BACKEND` | `console` | `console` | **`smtp`** | not read | `console` prints live invite/reset tokens into the logs. |
 | `SMTP_HOST` | `''` | – | **required** | not read | Startup fails. Invites and resets silently never arrive. |
 | `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | `587` / `''` / `''` / `ShuttleWorks <no-reply@localhost>` | – | as your provider requires | not read | Mail silently fails. |
-| `PUBLIC_APP_ORIGIN` | `''` | – | **required** | not read | Emailed invite/reset links come out relative and unclickable. |
-| `CORS_ORIGINS` | localhost list | default | **your hostname** | not read | The browser blocks API calls. Never `*` — cookie auth requires an explicit allowlist. |
+| `PUBLIC_APP_ORIGIN` | `''` | – | **required** | not read | The **operator** origin (`https://${APP_HOSTNAME}`). Workspace invites and operator password resets come out relative and unclickable. |
+| `PUBLIC_PLAY_ORIGIN` | `''` | – | **required** | not read | The **public** origin (`https://${PLAY_HOSTNAME}`). Blank falls back to `PUBLIC_APP_ORIGIN`, which mails entrants a verify/reset link pointing at the Access-fronted console — a link they cannot open. |
+| `CORS_ORIGINS` | localhost list | default | **the operator hostname, alone** | not read | The browser blocks API calls. Never `*` — the API refuses to start, because Starlette answers a wildcard under `allow_credentials` by echoing whatever Origin asked. The **play** origin is deliberately absent: the entrant tier makes no browser-side API calls, so there is nothing to allow. |
 | `TRUSTED_PROXY_IPS` | `[]` (trust nothing) | leave empty | **compose subnet** (defaulted) | not read | See §6 — this is the one that locks out every user at once. Must match the API's peer (`frontend` nginx), not cloudflared. |
 | `OPS_TOKEN` | `''` (guard off) | leave empty | **required** (`OPS_TOKEN_FILE`) | not read | Without it `/health/ready\|deep\|metrics` publish worker ids, live job ids and the schema revision to anyone who can reach the hostname. |
 | `PROCESS_ROLE` | `api` | – | `api` | `worker` (set automatically) | Set by `worker.py` itself; only override to be explicit. |
@@ -139,7 +140,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `SOLVE_RANDOM_SEED` / `SOLVE_NUM_WORKERS` / `SOLVE_MAX_DETERMINISTIC_TIME` | `42` / `1` / `60.0` | – | ✓ | ✓ | **Do not change `SOLVE_NUM_WORKERS`.** Determinism depends on single-threaded search. |
 | `SOLVE_WALL_CLOCK_CEILING_SECONDS` | `300.0` | – | ✓ | ✓ | Outer safety kill only; must stay well above the deterministic budget. |
 | `AUTH_THROTTLE_MAX_FAILURES` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` | `5` / `900` / `60` | ✓ | ✓ | not read | Credential-stuffing backoff. |
-| `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `30` / `sw_session` / `''` | ✓ | ✓ | not read | Blank domain = host-only cookie, which is the right default. |
+| `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `30` / `sw_session` / `''` | ✓ | ✓ | not read | **`SESSION_COOKIE_DOMAIN` must stay blank and the API refuses to start otherwise.** Host-only cookies are the entire mechanism keeping the two hostnames apart; a `Domain=` cookie is sent to every subdomain, handing the operator session to the public entrant tier. `Path=` is not a substitute — it is not enforced against same-origin script. |
 | `PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` / `RESET_TOKEN_TTL_MINUTES` | `8` / `128` / `60` | ✓ | ✓ | not read | NIST 800-63B: length only. |
 | `INVITE_TTL_DAYS` | `14.0` | ✓ | ✓ | not read | Email-invite expiry. |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | Cloudflare's **dummy always-pass pair** | leave | **real keys, once entries are public** | not read | The defaults always pass, which is right while nothing routes to `/e/` and wrong the moment something does — an always-pass challenge is no challenge. Get a pair from Cloudflare → Turnstile; the secret belongs in a secret file (`TURNSTILE_SECRET_KEY_FILE`), not in `.env`. |
@@ -148,7 +149,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `LOG_LEVEL` / `HOST` / `PORT` | `info` / `0.0.0.0` / `8000` | ✓ | ✓ | ✓ | The image hardcodes its bind; `HOST`/`PORT` only affect `python -m app.main`. |
 | `POSTGRES_DATA_DIR` | `./data/postgres` | – | compose-only | – | Must be a real local filesystem. `initdb` fails on synced/network paths. |
 | `POSTGRES_BIND_ADDR` | none — **required** | – | compose-only | – | See §5. |
-| `PUBLIC_HOSTNAME`, `CLOUDFLARE_TUNNEL_TOKEN` | none — **required** | – | compose-only | – | Compose refuses to start without them. |
+| `APP_HOSTNAME`, `PLAY_HOSTNAME`, `CLOUDFLARE_TUNNEL_TOKEN` | none — **required** | – | compose-only | – | Compose refuses to start without them. `APP_HOSTNAME` is the operator console (Access on it); `PLAY_HOSTNAME` is the public entrant site (no Access, ever). They replaced a single `PUBLIC_HOSTNAME` — no alias is kept, so a stale `.env` fails loudly rather than booting half-split. |
 
 Any variable also accepts a `<VAR>_FILE` form pointing at a file containing the
 value; the file is read and stripped. `<VAR>` wins if both are set.
@@ -179,48 +180,80 @@ deployment on `http://` cannot log in.
   director and is strictly simpler.
 - **Another TLS terminator you already trust** (Tailscale Serve, an existing
   reverse proxy with a real certificate). Workable in principle — publish a
-  port on `frontend`, point `PUBLIC_HOSTNAME` at that hostname, and set
+  port on `frontend` (both 8080 and 8081), point `APP_HOSTNAME` and
+  `PLAY_HOSTNAME` at the two hostnames it serves, and set
   `TRUSTED_PROXY_IPS` to whatever address the API sees as its peer. **Not
   tested here**, and getting `TRUSTED_PROXY_IPS` wrong fails open (see §6), so
   verify with the day-one smoke check below before trusting it.
 :::
 
 Create a **named tunnel** in the Cloudflare dashboard (Zero Trust → Networks →
-Tunnels), copy its token into `.env` as `CLOUDFLARE_TUNNEL_TOKEN`, and add a
-public hostname.
+Tunnels), copy its token into `.env` as `CLOUDFLARE_TUNNEL_TOKEN`, and add
+**two** public hostnames.
 
-::: danger The ingress rule points at the frontend container and nothing else
-Set exactly one public hostname, routed to:
-
+::: danger Two hostnames, two ports, one container — and nothing else
 ```
-Service:  HTTP   →   frontend:8080
+${APP_HOSTNAME}    HTTP  →  frontend:8080     ← operator console + /api/
+${PLAY_HOSTNAME}   HTTP  →  frontend:8081     ← public entrant site (/e/*)
 ```
 
-Point it at `frontend`, **not** `api`. The frontend container serves the
-application and proxies `/api/*` onward to the backend over the compose
-network, so one origin serves both — which is what `CORS_ORIGINS` and
-`PUBLIC_APP_ORIGIN` assume. Routing straight to `api:8000` publishes a bare
-JSON API with no user interface.
+**Why two.** The operator console and the public entry site used to share one
+hostname, split by path. That made them the same browser **origin** — and
+origin is what scopes cookies, `localStorage`, IndexedDB and service-worker
+registration. The `Path=` attribute on a cookie is not a security boundary and
+is **not enforced against same-origin script**, so an operator's session
+credential was reachable from code running on the public surface. Two
+hostnames make the browser do the isolating; §4a puts Cloudflare Access on
+exactly one of them.
 
-**Never route it at a shared reverse proxy, and never add a wildcard.** A
+Point both at `frontend`, **not** `api`. The frontend container serves the
+application and proxies onward to the backend over the compose network, which
+is what `CORS_ORIGINS`, `PUBLIC_APP_ORIGIN` and `PUBLIC_PLAY_ORIGIN` assume.
+Routing straight to `api:8000` publishes a bare JSON API with no user
+interface.
+
+The tunnel is the **only** thing that knows a hostname. Nothing in
+`infra/nginx/` names one — those files are baked into an image at build time,
+so a hostname there could not be changed by a deployment even if it wanted to.
+Each port carries exactly one `server` block, so each is the default server for
+its own port and `server_name` never has to match anything.
+
+**Never route either at a shared reverse proxy, and never add a wildcard.** A
 wildcard route publishes every service the connector can reach — on a homelab
 box that means Home Assistant, media servers, dashboards, everything — to the
 public internet through the same tunnel, with no authentication in front of it.
 The tunnel's blast radius is whatever you point it at.
 :::
 
-### 4a. Cloudflare Access, and the one route that must stay open
+### 4a. Cloudflare Access — on the operator hostname, and only there
 
-Registration is open by default: anyone who finds the hostname can create an
+Registration is open by default: anyone who finds the operator hostname can create an
 account. Until you have deliberately decided otherwise, put **Cloudflare
-Access** in front of the hostname — it is free, takes about ten minutes, and is
-reversible. It is the right posture for any deployment that has not been
+Access** in front of `${APP_HOSTNAME}` — it is free, takes about ten minutes,
+and is reversible. It is the right posture for any deployment that has not been
 penetration-tested.
 
+::: danger Never put Access in front of `${PLAY_HOSTNAME}`
+The public hostname exists to be public. An entry form behind a corporate SSO
+prompt is an entry form nobody fills in, and an entrant has no account in your
+identity provider to sign in *with*.
+
+This is also the reason the split exists rather than a longer exclusion list:
+before SP-HOST-1 every new public surface meant another path-based Bypass rule
+on the one Access application, and a Bypass list is a thing that grows, gets
+re-argued and eventually gets one entry wrong. Ingress by hostname does not.
+:::
+
 ::: danger Exclude the display routes or every spectator screen goes dark
-An Access policy covering the whole hostname breaks the public display plane,
-and it breaks it *at the event*, on the screens in the hall, in front of
+An Access policy covering the whole operator hostname breaks the public display
+plane, and it breaks it *at the event*, on the screens in the hall, in front of
 everyone.
+
+**SP-HOST-1 did not move Display.** `/display?token=` is a route in the
+operator SPA bundle, so relocating it to the public host means relocating the
+page, which the program declared out of scope. These two Bypass rules therefore
+stay exactly as they were — the exclusion list does not grow, and it does not
+shrink either. Retiring them is the day Display's own surface migrates.
 
 Two things must bypass the policy:
 
@@ -237,11 +270,15 @@ Add both as Bypass rules in the Access application before the first event, and
 re-check them after any Access policy edit.
 :::
 
-### 4b. The public entry surface (`/e/*`) — wired, not yet exposed
+### 4b. The public entry surface (`/e/*`) — its own hostname
 
-The Entries module adds a genuinely public surface. Since SP-PROGRAM-1 Phase 6
-it is served by **two tiers behind one hostname** (ruling R8-A), and
-`infra/nginx/console.conf` is the only thing that knows there are two:
+The Entries module is a genuinely public surface, and since SP-HOST-1 it has
+its own origin: `${PLAY_HOSTNAME}`, served from port 8081 of the same
+`frontend` container, with no Access policy on it.
+
+Behind that one hostname the `/e/` prefix is still split across **two tiers**
+(ruling R8-A), and `infra/nginx/play.conf` is the only thing that knows there
+are two:
 
 | Prefix | Served by | What lives there |
 | --- | --- | --- |
@@ -253,10 +290,13 @@ Longest-prefix wins, so `/e/api/` and `/e/account/` reach FastAPI while a slug
 falls through to node. `api` and `account` are reserved slugs on the node side
 so a director cannot mint an entry page that collides with the split.
 
-The edge configuration for all of it already exists in `infra/nginx/console.conf`:
-a `sw_entries` `limit_req` zone (**120 r/m, burst 30**, the same number
-`sw_display` uses) applied at all four `/e/` locations, plus an explicit
-`location /e/` block that also stops the SPA fallback swallowing entry links.
+The edge configuration lives in `infra/nginx/play.conf`, with the shared
+http-context pieces (rate-limit zones, cookie maps, the realip trust boundary)
+in `infra/nginx/http-shared.conf`: a `sw_entries` `limit_req` zone (**120 r/m,
+burst 30**, the same number `sw_display` uses) applied at all four `/e/`
+locations. There is no SPA on this tier to fall back to — anything outside
+`/e/` returns 404, and there is no `root` for it to serve from even by
+accident.
 
 **The zone's size is set by the flow, not by the number of routes.** A
 signed-out entrant's happy path is seven metered requests (page → signup page →
@@ -267,29 +307,37 @@ password was a `429`, and a second entrant behind the same venue NAT within
 
 The zone stays under `/e/` rather than moving to `/api/` on purpose — `/api/`
 is served on the Access-fronted operator hostname, and an entrant login behind
-Cloudflare Access is an entrant login nobody can reach. The `Cookie` header is
-rewritten on the way to node so only `sw_play_session` and `sw_play_csrf` get
-through: the **operator** session is inadmissible on the entrant tier by
-construction, not by convention.
+Cloudflare Access is an entrant login nobody can reach. Since SP-HOST-1 the
+public host has **no `/api/` location at all**, which is the routing half of the
+origin boundary.
+
+The `Cookie` header is still rewritten on the way upstream so only
+`sw_play_session` and `sw_play_csrf` get through. That control is now
+belt-and-braces rather than load-bearing — `sw_session` is host-only, so a
+browser does not send it to the public hostname in the first place — and it
+stays because it is what makes the property hold for a request that arrives
+some other way: a host-published port in a dev stack, a hand-written jar, or a
+future ingress that shares an origin again.
 
 The operator's entries desk needs nothing of its own: it is
 `/tournaments/{id}/entries`, session-guarded, and rides the general `/api/`
 block.
 
-::: warning Activated at Phase 2 deployment, deliberately not before
-`/e/` now **routes** in every stack that has a frontend — Phase 6 wired the
-split above and added the `entrant` service to the base, release and selfhost
-compose files. What has not happened is **exposure**: no hostname has been
-published for it, and none should be until the public-exposure gate has been
-passed. Turning it on is three changes, in this order — **and step 3 is
-currently a known blocker, not an open question**:
+::: warning One step of the exposure gate is still open: real Turnstile keys
+`/e/` routes in every stack that has a frontend, and since SP-HOST-1 it has its
+own hostname and its own origin — step 2 of the exposure gate below is **done**.
+Steps 1 and 3 are where things stand:
 
-1. **Real Turnstile keys** (`TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`).
-   The shipped defaults are Cloudflare's dummy always-pass pair.
-2. **Ingress by hostname, not by another Access exclusion.** The entry page is
-   served under its own public hostname with no Access policy attached — that
-   is what keeps §4a's exclusion list from growing a `/entries/*` entry every
-   time a public surface appears.
+1. **Real Turnstile keys** (`TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`) —
+   **STILL REQUIRED, and a blocker for publishing `${PLAY_HOSTNAME}`.** The
+   shipped defaults are Cloudflare's documented dummy always-pass pair, which
+   is right for a deployment where nothing routes to `/e/` and wrong the
+   moment one does: an always-pass challenge is no challenge. Get a pair from
+   Cloudflare → Turnstile and put the secret in a secret file.
+2. **Ingress by hostname, not by another Access exclusion** — **done by
+   SP-HOST-1.** The entry site is served under `${PLAY_HOSTNAME}` with no
+   Access policy attached, which is what keeps §4a's exclusion list from
+   growing an entry every time a public surface appears.
 3. **The CSP question is answered: the policy admits Turnstile on one path.**
    SP-E1-2 moved the challenge off the entry page and onto entrant **signup**
    (ruling R10 — a puzzle in front of a route that already requires an account
@@ -314,16 +362,18 @@ currently a known blocker, not an open question**:
    it. Found in Chromium and with curl against the containerised stack
    (SP-PROGRAM-1 Phase 6, Task 30) and fixed in Task 33.
 
-   **The fix, and what it costs you.** `nginx.conf` now carries a
+   **The fix, and what it costs you.** `infra/nginx/http-shared.conf` carries a
    `$sw_turnstile_origin` map that appends `https://challenges.cloudflare.com`
    to `script-src` and `frame-src` — the two directives Cloudflare
    [documents as required](https://developers.cloudflare.com/turnstile/reference/content-security-policy/)
    — **for `/e/signup` and no other path.** So the origin you host trusts one
    third-party script host, on one public page, and the operator console served
    from the same origin still gets `script-src 'self'` byte for byte. That
-   scoping is not decoration: the two tiers share an origin, so a global
-   widening would have handed the console a third-party script source it has no
-   use for. Nothing about your Cloudflare account, DNS, tunnel or Access config
+   scoping is not decoration. It predates SP-HOST-1, when the two tiers did
+   share an origin and a global widening would have handed the console a
+   third-party script source it has no use for; the tiers are separate origins
+   now, and the map stays keyed on `$uri` anyway because the scope it wants is
+   narrower than a tier — `/e/signup` is the one page with a widget on it. Nothing about your Cloudflare account, DNS, tunnel or Access config
    changes — this is our own nginx header. `e2e/tests/10-entrant-r11-evidence.spec.ts`
    holds both halves: the widget must render with zero CSP violations, and no
    path other than `/e/signup` may name that host.
@@ -400,7 +450,7 @@ echo 'TRUSTED_PROXY_IPS=10.201.0.0/24' >> .env   # must match `networks:` in the
 Both a bare address and a CIDR block are accepted.
 
 ::: warning The third place is inside the frontend image
-`infra/nginx/console.conf` carries `set_real_ip_from
+`infra/nginx/http-shared.conf` carries `set_real_ip_from
 10.201.0.0/24`, which is how nginx decides whether to believe
 `CF-Connecting-IP` for **its own** rate-limit zones (`sw_auth`, `sw_entries`,
 `sw_display`) and what it then forwards to the API. It is baked into the
