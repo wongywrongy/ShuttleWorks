@@ -109,8 +109,17 @@ export function SeasonControls({
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-3">
         {/* Search: a GET form landing on the calendar, carrying the dates and
-            the view so searching does not reset the rest of the row. */}
-        <form method="get" action={ACTION} className="flex min-w-0 flex-1 items-center gap-2">
+            the view so searching does not reset the rest of the row.
+            `role="search"` since SP-P8 §4: the header shed its search, and a
+            tier with no search landmark anywhere is an a11y regression, so
+            the landmark moves here with the box. The dates popover below
+            stays roleless — one search landmark per page. */}
+        <form
+          role="search"
+          method="get"
+          action={ACTION}
+          className="flex min-w-0 flex-1 items-center gap-2"
+        >
           <Hidden name="view" value={filters.view === 'season' ? null : filters.view} />
           <Hidden name="preset" value={filters.preset} />
           <Hidden name="from" value={filters.from} />

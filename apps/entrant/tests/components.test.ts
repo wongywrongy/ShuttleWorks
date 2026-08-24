@@ -836,38 +836,31 @@ describe('StickyTotalBar', () => {
 // ---- PlayShell -------------------------------------------------------------
 
 describe('PlayShell', () => {
-  const html = renderToStaticMarkup(h(PlayShell, { q: 'gold', children: h('main', null, 'X') }));
+  const html = renderToStaticMarkup(h(PlayShell, { children: h('main', null, 'X') }));
 
-  it('carries the wordmark home link, the search landmark and the sign-in link', () => {
+  it('carries the wordmark home link and the sign-in link', () => {
     // The wordmark sits inside the Console banner chip (nested spans since
     // 2026-08-13) — assert the home link still wraps it, not adjacency.
     const home = html.match(/<a href="\/e\/"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? '';
     expect(home).toContain('ShuttleWorks');
-    const search = html.match(/<form[^>]*role="search"[^>]*>/)?.[0] ?? '';
-    expect(search).toContain('method="get"');
-    expect(search).toContain('action="/e/#results"');
-    const q = html.match(/<input[^>]*type="search"[^>]*>/)?.[0] ?? '';
-    expect(q).toContain('name="q"');
-    expect(q).toContain('value="gold"');
     expect(html).toMatch(/<a href="\/e\/login"[^>]*>Sign in<\/a>/);
   });
 
-  // 2026-08-11 design audit, finding #5: the header search box is ~208px
-  // (18rem minus the "Search" button and the gap), ~184px of that usable
-  // after `px-3` padding — and the OLD placeholder, "Search tournaments or
-  // venues" (29 chars), needs ~230px, so it clipped to "Search tournaments
-  // or venu" with no ellipsis on every page at every width. The accessible
-  // name (`aria-label`) is not visually rendered, so it can stay the fuller
-  // sentence without clipping anything.
-  it('keeps the visible placeholder short enough not to clip in the ~184px box (finding #5)', () => {
-    const q = html.match(/<input[^>]*type="search"[^>]*>/)?.[0] ?? '';
-    const placeholder = q.match(/placeholder="([^"]*)"/)?.[1] ?? '';
-    const ariaLabel = q.match(/aria-label="([^"]*)"/)?.[1] ?? '';
+  // SP-P8 §4: the header sheds its search. It sat on all ~16 pages to serve
+  // one of them, and the calendar now carries a search that also carries the
+  // rest of the filter state — two boxes searching the same list, one of them
+  // dropping the reader's filters, was the defect.
+  it('renders no search landmark at all, on any page (SP-P8 §4)', () => {
+    expect(html).not.toContain('role="search"');
+    expect(html).not.toContain('type="search"');
+    // The `#results` fragment went with the form — the calendar's anchor is
+    // `#calendar` and nothing on this tier points at `#results` any more.
+    expect(html).not.toContain('#results');
+  });
 
-    // ~8px/char average for this font — the audit's own measured figure.
-    expect(placeholder.length).toBeLessThanOrEqual(23);
-    // The accessible name still says what the box searches, unclipped.
-    expect(ariaLabel).toBe('Search tournaments or venues');
+  it('offers exactly one session link (§3.8), now that nothing sits between them', () => {
+    const session = [...html.matchAll(/href="(\/e\/login|\/e\/me\/entries)"/g)];
+    expect(session).toHaveLength(1);
   });
 
   it('links nothing into a FastAPI prefix', () => {

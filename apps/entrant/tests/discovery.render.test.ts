@@ -286,7 +286,10 @@ describe('the retired sidebar leaves nothing behind', () => {
 
     expect(html).not.toContain('aria-label="Status"');
     expect(html).not.toContain('aria-label="Dates"');
-    // Exactly one: the shell's. The control row's forms carry no role.
+    // Exactly one, and since SP-P8 §4 it is the control row's search form,
+    // not the shell's — the header sheds its search and this page owns it.
+    // The popover (dates/view) form carries no role, which is what keeps the
+    // count at one.
     expect(html.match(/role="search"/g)).toHaveLength(1);
     // The facet LINK is gone; the chip that says the same words lives on.
     expect(html).not.toMatch(/<a[^>]*>Entries open<\/a>/);

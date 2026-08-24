@@ -154,7 +154,9 @@ describe('the header renders exactly one session state', () => {
     const out = header(await (await fetchPath('/e/')).text());
     const inn = header(await (await fetchPath('/e/', SESSION)).text());
 
-    for (const shell of ['ShuttleWorks', 'role="search"', 'Tournaments']) {
+    // The search left the header in SP-P8 §4; the wordmark and the eyebrow
+    // are what the two states still share.
+    for (const shell of ['ShuttleWorks', 'Tournaments']) {
       expect(out).toContain(shell);
       expect(inn).toContain(shell);
     }

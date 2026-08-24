@@ -1,13 +1,16 @@
 /**
- * The public shell: wordmark · search · sign-in over the page, small print
- * under it. Promoted from the Phase B mockups (SP-P6-2) into the component
- * inventory; every colour, radius and type step is the design system's, in
- * the consumer register (sentence case, roomier rhythm).
+ * The public shell: wordmark · sign-in over the page, small print under it.
+ * Promoted from the Phase B mockups (SP-P6-2) into the component inventory;
+ * every colour, radius and type step is the design system's, in the consumer
+ * register (sentence case, roomier rhythm).
  *
- * The search box is the brief's header search (Z3) — a plain GET form landing
- * on discovery's results, functional at every width: it takes the full row on
- * phones (`order-last w-full`) and sits inline from `sm:` up. The `#results`
- * fragment on the action lands the post-submit scroll at the results heading.
+ * **No header search (SP-P8 §4).** The Z3 header search lived here — a GET
+ * form landing on `/e/#results` — which put a search box on all ~16 pages of
+ * the tier to serve exactly one of them. The season calendar now carries its
+ * own search (`SeasonControls`), and that one keeps the rest of the filter
+ * state with it, which the header form silently dropped. Two boxes over the
+ * same list, one of them lossy, was the defect; the `#results` anchor went
+ * with the form (the calendar's anchor is `#calendar`).
  *
  * **Session states (SP-P7 §3.8).** The header renders exactly two shapes:
  * signed out it offers `Sign in`, signed in it offers `My entries`. Never
@@ -37,18 +40,15 @@
  * this shell different label text for it.
  */
 import { useContext, type ReactNode } from 'react';
-import { Button } from '@scheduler/design-system/components';
 
 import { EntrantSessionContext } from '../lib/sessionContext';
 
 const DISCOVERY_HREF = '/e/';
 
 export function PlayShell({
-  q = '',
   signInLabel = 'Sign in',
   children,
 }: {
-  q?: string;
   signInLabel?: string;
   children: ReactNode;
 }) {
@@ -57,10 +57,9 @@ export function PlayShell({
   return (
     <div className="flex min-h-screen flex-col">
       {/* Console banner (2026-08-13): the public tier leads with the solid
-          accent bar and the skewed white wordmark chip from the mock. Every
-          functional element (search form, sign-in) is unchanged — only the
-          ground moved. Text on the bar is full white (AA against the accent,
-          verified by the token contrast gate's text-on-accent pair). */}
+          accent bar and the skewed white wordmark chip from the mock. Text on
+          the bar is full white (AA against the accent, verified by the token
+          contrast gate's text-on-accent pair). */}
       <header className="bg-accent">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-2.5">
           <a href={DISCOVERY_HREF} className="inline-flex items-center gap-3">
@@ -73,28 +72,6 @@ export function PlayShell({
               Tournaments
             </span>
           </a>
-          <form
-            role="search"
-            method="get"
-            action={`${DISCOVERY_HREF}#results`}
-            className="order-last flex w-full min-w-0 items-center gap-2 sm:order-none sm:ml-auto sm:w-72"
-          >
-            <input
-              type="search"
-              name="q"
-              defaultValue={q}
-              // 2026-08-11 design audit, finding #5: the box is ~184px
-              // usable after the "Search" button and its padding — the old
-              // placeholder needed ~230px and clipped. The full sentence
-              // stays on `aria-label`, which never visually renders.
-              placeholder="Search tournaments"
-              aria-label="Search tournaments or venues"
-              className="h-9 w-full min-w-0 rounded border border-transparent bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground"
-            />
-            <Button type="submit" variant="secondary" size="sm">
-              Search
-            </Button>
-          </form>
           {/* Exactly one of these renders (§3.8). `ml-auto` sits on whichever
               one it is, so the single link right-aligns in both states the way
               the pair used to. `min-h-6` (24px) is the tap-target floor
