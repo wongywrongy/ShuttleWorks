@@ -20,7 +20,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 |---|---|---|---|---|
 | 1 | **P3 — minting gaps** (pulled forward, R-DM-1.x) | R-DM-1 (a)/(a) | S | **DONE 2026-08-24** — branch dm3/p3-minting-gaps (405c34ec..68c27751 + bookkeeping) — **merged to main 2026-08-24** (ff to 9c5e6186, Kyle's instruction) |
 | 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **DONE 2026-08-24** — branch dm3/p0-type-mechanism (bd262dbd..4630ec53, stacked on P3) — **merged to main 2026-08-24** (ff to 9c5e6186, Kyle's instruction) |
-| 3 | P1 — one standings shape | — | M | **DONE 2026-08-24** — branch dm3/p1-standings-shape (6546e63b..ac086c47), merge pending |
+| 3 | P1 — one standings shape | — | M | **DONE 2026-08-24** — 6546e63b..4df4b9cc, final review "merge as-is" — **merged to main 2026-08-24** (ff to 4df4b9cc) |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | **NEXT — write detailed plan at phase start** |
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | pending — blocked by P3+P2 |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | pending — blocked by P2 |
