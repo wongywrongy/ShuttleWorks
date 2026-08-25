@@ -78,6 +78,55 @@ describe('reconcileBracketRoster', () => {
     const bracket = { participants: [] } as unknown as BracketTournamentDTO;
     expect(reconcileBracketRoster(bracket)).toEqual([]);
   });
+
+  /**
+   * SP-DM-3 P6 Task 1 — a PIN ON BEHAVIOUR TASK 2 DELETES, kept only long
+   * enough to prove the deletion is deliberate. The zip is positional: it
+   * assumes the label's Nth name belongs to `members[N]`. That holds for a
+   * seam-built team by pure construction (`entries/entries.py::team_name`
+   * takes `members[0], members[1]` in the same order `member_ids` is built),
+   * and holds for nothing else — `bracket_participants.name` is operator
+   * editable and a hand-added team mints its label from different variables.
+   * Delete this case with the decode; do not port it forward.
+   */
+  it('zips the label onto members POSITIONALLY, right or wrong', () => {
+    const bracket = {
+      participants: [
+        {
+          id: 'MD-T1',
+          // The label's order is the OPPOSITE of the member order.
+          name: 'Ben Carter / Alexei Sorokin',
+          members: ['p-alexei-sorokin', 'p-ben-carter'],
+        },
+      ],
+    } as unknown as BracketTournamentDTO;
+    const byId = new Map(
+      reconcileBracketRoster(bracket).map((p) => [p.id, p.name]),
+    );
+    // Both names are now on the wrong person, and nothing notices.
+    expect(byId.get('p-alexei-sorokin')).toBe('Ben Carter');
+    expect(byId.get('p-ben-carter')).toBe('Alexei Sorokin');
+  });
+
+  /**
+   * SP-DM-3 P6 Task 2 unskips this. A TEAM member no PLAYER participant can
+   * name is OMITTED, not guessed — F-DM-19's don't-invent posture. The old
+   * behaviour named it by de-slugging (`nameFromSlug`) or by splitting the
+   * team label; both are identity read out of a display string, which is
+   * what R-DM-7(a) demotes.
+   */
+  it.skip('omits a TEAM member no participant can name', () => {
+    const bracket = {
+      participants: [
+        {
+          id: 'MD-T1',
+          name: 'Alexei Sorokin / Ben Carter',
+          members: ['p-alexei-sorokin', 'p-ben-carter'],
+        },
+      ],
+    } as unknown as BracketTournamentDTO;
+    expect(reconcileBracketRoster(bracket)).toEqual([]);
+  });
 });
 
 /**
@@ -132,6 +181,19 @@ describe('healBracketRosterNames', () => {
 
   it('leaves a slug-named player the snapshot knows nothing about', () => {
     const stored = roster({ id: 'someone-else', name: 'someone-else' });
+    expect(healBracketRosterNames(stored, doublesDraw)).toBe(stored);
+  });
+
+  /**
+   * SP-DM-3 P6 Task 3 deletes this whole describe. Pinned first so the
+   * deletion commit can name what it is giving up: the repair (a) only ever
+   * fires on a row whose stored name IS its own id, (b) never overwrites an
+   * operator's typing, and (c) returns the same array reference otherwise.
+   * (a) is the reason deletion is safe — see Task 3 Step 1, which proves no
+   * live write path can produce that row any more.
+   */
+  it('never fires on a row whose name is not its own id', () => {
+    const stored = roster({ id: 'cormac-delahunt', name: 'Cormac Delahunt' });
     expect(healBracketRosterNames(stored, doublesDraw)).toBe(stored);
   });
 });

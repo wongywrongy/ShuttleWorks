@@ -136,6 +136,29 @@ describe('BracketRosterTab', () => {
     expect(players.find((p) => p.name === 'Elle Ruiz')).toBeDefined();
   });
 
+  /**
+   * NC 1, the RESIDUAL half. R-DM-7(a) (`DM1_RULINGS.md:66-70`) keeps
+   * hand-added participants slug-keyed and accepts in writing that "two
+   * hand-added same-named participants still collide". `playerSlug('Li Wei')`
+   * is `p-li-wei` for both, and `commitAdd` silently discards the second.
+   * P6 does NOT close this — it is pinned so the ledger can say the residual
+   * is a ruling, not an oversight. The delivered half of NC 1 is pinned in
+   * `test_entries_commit_seam.py` (Task 1 Step 4).
+   */
+  it('silently discards a second hand-added player with the same name (ruled residual)', async () => {
+    useTournamentStore.setState({
+      bracketPlayers: [{ id: 'p-li-wei', name: 'Li Wei' }],
+    });
+    render(<BracketRosterTab />);
+    fireEvent.click(screen.getByRole('button', { name: /Add player/i }));
+    const input = screen.getByPlaceholderText(
+      /New player name/i,
+    ) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Li Wei' } });
+    fireEvent.blur(input);
+    expect(useTournamentStore.getState().bracketPlayers).toHaveLength(1);
+  });
+
   it('deletes a player via the row overflow menu and updates the count', () => {
     // The inline Delete link moved into a per-row "…" overflow (SP-D7 S3).
     render(<BracketRosterTab />);
@@ -144,6 +167,30 @@ describe('BracketRosterTab', () => {
     const players = useTournamentStore.getState().bracketPlayers;
     expect(players).toHaveLength(3);
     expect(players.find((p) => p.id === 'p-alex-tan')).toBeUndefined();
+  });
+
+  /**
+   * NC 2 (SP-DM-3 P6, card §C6): renaming a participant changes no id and
+   * orphans no match or result. Structurally true — `updateBracketPlayer`
+   * is a keyed map that never writes `id` (`tournamentStore.ts:222-227`) —
+   * and pinned because P6's whole claim is that the name is not the key.
+   *
+   * Recorded divergence, NOT fixed here: the rename does not propagate to
+   * `bracket_participants.name`, so a renamed roster player keeps the old
+   * label in the draw until it is regenerated. Pre-existing; making the
+   * participant render from the roster is a read-path change R-DM-7(a)
+   * neither asks for nor forbids.
+   */
+  it('a rename keeps the id and every reference to it', () => {
+    useTournamentStore.setState({
+      bracketPlayers: [{ id: 'p-li-wei', name: 'Li Wei' }],
+    });
+    useTournamentStore.getState().updateBracketPlayer('p-li-wei', {
+      name: 'Li Wei (Sr.)',
+    });
+    const [row] = useTournamentStore.getState().bracketPlayers;
+    expect(row.id).toBe('p-li-wei');
+    expect(row.name).toBe('Li Wei (Sr.)');
   });
 });
 

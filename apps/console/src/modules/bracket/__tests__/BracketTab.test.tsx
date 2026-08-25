@@ -217,6 +217,67 @@ describe('BracketTab — Setup chrome', () => {
  * read the stored roster and read `cormac-delahunt`. One stale seam, three
  * symptoms — so the repair belongs where the roster is loaded, not at each.
  */
+/**
+ * SP-DM-3 P6 Task 1, controller amendment — the guard Task 3's safety
+ * argument rests on, and Task 2's.
+ *
+ * The bracket-roster migration only ever runs against an EMPTY roster
+ * (`BracketTab.tsx`: `if (!bracketRosterMigrated && bracketPlayers.length
+ * === 0)`). That is the whole reason Task 2's "omit a member no participant
+ * can name" is safe: the roster blob is where REMARKS and AVAILABILITY live
+ * — operator data, not a projection — so omission can only ever decline to
+ * *create* a row. It can never destroy one, because reconcile's output is
+ * not written when a roster already exists.
+ *
+ * Weaken or delete the length check and this goes red: the reconciled
+ * doubles members would replace the seeded row and take its remarks with
+ * them. (Verified by perturbation — see the Task 1 report.)
+ */
+describe('BracketTab — the roster migration never overwrites an existing roster', () => {
+  /** A draw whose reconcile output shares no id with the seeded roster, so
+   *  a write from reconcile is unmistakable. Local to this describe: Task 3
+   *  deletes the V3 describe below, helper and all. */
+  function doublesDraw(): BracketTournamentDTO {
+    const b = makePopulatedBracket();
+    b.participants = [
+      {
+        id: 'MD1-T1',
+        name: 'Cormac Delahunt / Jae Hyun Choi',
+        members: ['cormac-delahunt', 'jae-hyun-choi'],
+      },
+    ];
+    return b;
+  }
+
+  it('does not write reconcile output over a populated roster', () => {
+    vi.mocked(useBracket).mockReturnValue({
+      data: doublesDraw(),
+      setData: vi.fn(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    // NOT migrated — the only thing holding reconcile off is the roster
+    // being non-empty. The seeded row is inert to the name repair that
+    // runs after the guard (its name is not its id, and the snapshot
+    // knows nothing about its id), so any write here came from reconcile.
+    useTournamentStore.setState({
+      bracketRosterMigrated: false,
+      bracketPlayers: [
+        { id: 'p-solo', name: 'Solo Operator', notes: 'ankle taped' },
+      ],
+    });
+    useUiStore.setState({ activeTab: 'bracket-roster' });
+    renderBracketTab();
+
+    const roster = useTournamentStore.getState().bracketPlayers;
+    expect(roster).toEqual([
+      { id: 'p-solo', name: 'Solo Operator', notes: 'ankle taped' },
+    ]);
+    expect(screen.queryByText('Cormac Delahunt')).toBeNull();
+  });
+});
+
 describe('BracketTab — an already-migrated roster still gets its names fixed', () => {
   /** Doubles-only draw: the team display name is the only place the two
    *  members' real names survive. */

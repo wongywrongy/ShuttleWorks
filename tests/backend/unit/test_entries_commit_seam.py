@@ -1135,6 +1135,37 @@ def test_a_committed_entry_puts_the_person_key_on_its_participant(repo, session)
     assert [p.entry_player_id for p in participants] == [entry.entry_player_id]
 
 
+def test_two_people_with_the_SAME_NAME_are_two_participants_with_two_keys(
+    repo, session
+):
+    """NC 1 (SP-DM-3 P6, card §C6), delivered half.
+
+    Two humans named "Li Wei" enter one draw. Under the 2026-08-23 minting
+    rule they are two ``entry_players`` (adoption needs a birth-year match,
+    and ``_entry`` mints a fresh person per call), so the seam emits two
+    participants with two distinct ``entry_player_id`` values - the P4 FK
+    doing the work R-DM-7(a) says it does instead of a re-key. A slug of
+    the display name would have collapsed them into one row.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    ev = _entry_event(session, tid, code="MS", bracket_event_id="MS")
+    first = _entry(session, tid, ev, player_name="Li Wei")
+    second = _entry(session, tid, ev, player_name="Li Wei")
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    participants = repo.brackets.list_participants(tid, "MS")
+    assert len(participants) == 2
+    assert [p.name for p in participants] == ["Li Wei", "Li Wei"]
+    keys = {p.entry_player_id for p in participants}
+    assert keys == {first.entry_player_id, second.entry_player_id}
+    assert len(keys) == 2
+    # And the ids are distinct without being a slug of anything.
+    assert participants[0].id != participants[1].id
+
+
 def test_one_person_in_two_draws_is_one_roster_row_in_both_participant_lists(
     repo, session
 ):
