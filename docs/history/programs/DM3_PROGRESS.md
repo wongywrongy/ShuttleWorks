@@ -22,7 +22,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **DONE 2026-08-24** — branch dm3/p0-type-mechanism (bd262dbd..4630ec53, stacked on P3) — **merged to main 2026-08-24** (ff to 9c5e6186, Kyle's instruction) |
 | 3 | P1 — one standings shape | — | M | **DONE 2026-08-24** — 6546e63b..4df4b9cc, final review "merge as-is" — **merged to main 2026-08-24** (ff to 4df4b9cc) |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | **DONE 2026-08-25** — 93f41250..0098ee46 (incl. final-review fix wave f673ea2e + Dockerfile source COPY 0098ee46) — **merged to main 2026-08-25** (ff to 0098ee46) |
-| 5 | P4 — people→competition key | R-DM-2 (a) | L | pending — blocked by P3+P2 |
+| 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — branch dm3/p4-person-key (`3bf049f7`..`e2be7119`); merging is Kyle's call |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | pending — blocked by P2 |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | pending — blocked by P4 |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
@@ -113,7 +113,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 - **Gates:** `make check` **green across both tiers** — pytest `1883 passed, 66 skipped` (11m23s), zero `FAILED`/`ERROR`. The only non-zero line is the advisory `docs:freshness` step (`Error 1 (ignored)`, which the Makefile marks *"never fails the gate"*), reporting three BEHIND areas — one of them *State management*, now naming `d478e681`, which is the stale-prose follow-up recorded above. NC suite `69 passed`.
 - **P4, P5 and P7 are now unblocked** (P2 was the named blocker on all three). Merging `dm3/p2-blob-versioning` is Kyle's call. **The next slice is the controller's decision — this entry does not pick one**; note only that P4 and P5 are both L-sized and both reshape blobs this slice deliberately left registered-but-unversioned.
 
-### 2026-08-25 — P4 slice IN FLIGHT (session handoff — resume here)
+### 2026-08-25 — P4 slice IN FLIGHT (session handoff — **SUPERSEDED**, see the completion entry below)
 
 **State at handoff:** P3, P0, P1, P2 all DONE and **merged to `main`** (Kyle's standing instruction "merge first and proceed"; `main` @ `9f423053` + P2 head, unpushed — pushing stays Kyle's call). **P4 is 5/8 tasks complete** on branch `dm3/p4-person-key` @ `6b5c6f83`, all landed tasks review-clean.
 
@@ -126,3 +126,173 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 **P4 commits so far:** `3bf049f7` plan · `0a5f40e9` T1 characterization pins (3 written + crash-window cited) · `b9287e5c` T2 R13 FKs reach models + constraint drift test (zero sweep breakage, structural reasons recorded) · `f56d1a41` T3 migration `y9e4f0a2b7c8` (entry_player_id composite FK CASCADE + match_states composite FK CASCADE + orphan sweep) **including the ratified live-code fix**: three write paths in `operations/match_state_routes.py` wrote the state row before its parent match — reordered parent-first (reviewer confirmed: pair was never atomic, residue flips illegal→legal, fix set proven closed) · `b1c6bb2d` T3 fix round (NC asserts BOTH bracket_participants FKs survive the batch rebuild) · `e911fe70` T4 key survives commit/hydrate/generate/regenerate (F-DM-09 generation half fixed) · `6b5c6f83` T5 wire (ParticipantOut/In + both roster blob DTOs + regen + console reconcile + `_participant_persist_fields` helper + 3 review riders).
 
 **Known items for T8's ledger/debt-log (accumulating in the SDD ledger):** the 412-on-naive-retry error-path delta from the match_state reorder; drift test can't compare `ondelete` + covers ENTRIES_TABLES only; `ParticipantIn` has no `meta` so one `getattr` spread is dead; fabricated `entryPlayerId` on upsert = deliberate 500; BLOB_VERSIONS re-attribution (side_a/side_b/dependencies → P6); D22 gender-on-adopt still needs an owner ruling.
+
+### 2026-08-25 — P4 slice executed (people→competition key, subagent-driven, opus)
+
+Branch `dm3/p4-person-key` off `main` @ `9f423053`. Eight tasks, each implementer+reviewer
+dispatched separately; SDD working ledger (rulings, per-task lines, deferred minors) at
+`.superpowers/sdd/2026-08-25-sp-dm-3-p4-person-key/progress.md`.
+
+**Commit chain.** `3bf049f7` detailed plan · `0a5f40e9` **T1** characterization pins (3 written,
+crash-window cited — already covered at `test_entries_commit_seam.py:499`) · `b9287e5c` **T2**
+the two R13 FKs reach `models.py` + a constraint-comparing drift test · `f56d1a41` **T3**
+migration `y9e4f0a2b7c8` (`entry_player_id` composite FK CASCADE + `match_states` composite FK
+CASCADE + orphan sweep) **including the ratified live-code fix** — three write paths in
+`operations/match_state_routes.py` wrote the state row before its parent match, reordered
+parent-first · `b1c6bb2d` T3 fix round (NC asserts BOTH `bracket_participants` FKs survive the
+batch rebuild) · `e911fe70` **T4** the key survives commit / hydrate / generate / regenerate
+(F-DM-09 generation half) · `6b5c6f83` **T5** the wire (`ParticipantOut`/`ParticipantIn`, both
+roster blob DTOs, regen, console reconcile, `_participant_persist_fields` helper, 3 riders) ·
+`aca891b8` mid-slice handoff docs · `7b35ea99` + `5e6c247a` **T6** the `entry-{uuid}` collapse
+behind `roster_id()` + a hardened source-reading gate · `26bc989b` **T7** the two P3
+carry-forward pickups · `63df5891` T5-ruled console rider (manual roster assignment carries the
+key) · `d2bcc615` T7-ruled console rider (the participant picker carries the key **to the wire**)
+· `e2be7119` **T8** the `BLOB_VERSIONS` re-attribution.
+
+**Four `entry-{uuid}` derivation sites existed, not three.** The card said three; the planner's
+tree pass found a fourth at `entries_me.py:375`, added post-audit. All four now route through one
+`roster_id()`. The T8 deletion gate is the proof and it is **one hit** — the helper itself
+(`entries/entries.py`), verbatim:
+
+```
+apps/api/src/entries/entries.py:    return f"entry-{person_id}"
+```
+
+The prose docstring at `entries_site.py:76` was **not** caught by the pattern (it is `entry-` in
+running text, not a quoted prefix), so nothing had to be argued around; no prose was edited to
+satisfy a grep. The commit-seam source-reading gate that T6 added is narrower than this `rg` — it
+counts `"entry-` only, missing a single-quoted concat, and reads three files — recorded as a
+minor, not fixed.
+
+**T2 carried no migration, deliberately — F-DM-11 in reverse.** The trap the program guards against
+is a FK in `models.py` with no migration. T2 is the mirror case: migration `s3d8f2b5c0e1` **already
+declared** both R13 FKs (`entries.entry_player_id`, `submissions.entry_player_id`) and `models.py`
+did not, so the fix is models-only and any new Alembic revision would have been a no-op that
+re-declares live constraints. The commit message says so. The deeper half — *why the drift lived* —
+is closed by making the drift test compare **constraints** rather than columns; its two remaining
+ceilings are new debt rows. The full-suite sweep after turning the FKs on broke **zero** tests, for
+a structural reason worth keeping: both columns are nullable and SQLite's `MATCH SIMPLE` skips NULL
+children, so no fixture with a made-up parent id was ever exercised.
+
+**Behavior change 1 — `match_states` now CASCADEs, and it was characterized first.** Ruling 1:
+RESTRICT was not available (it breaks the Meet projection delete), so the composite FK forced
+CASCADE. Per the program's own discipline the pre-change orphan behavior was pinned at
+**`0a5f40e9`** *before* the schema moved, and T3 Step 5 flipped exactly that pin — a scheduled flip
+citing its own characterization SHA, not drift. NC 3 is the standing guard: a blob-removed match id
+still deletes its `matches` row, and now takes its state row with it.
+
+**Behavior change 2 — the `match_state_routes` parent-first reorder, with an error-path delta.**
+The new FK exposed three live write paths that inserted a `match_states` row before its parent
+`matches` row. Reordering parent-first is the minimal correct fix; the reviewer confirmed it
+introduces no new commit boundary (the pair was never atomic) and that the residue it can leave
+flips from **illegal to legal**. The delta that is genuinely new and is recorded here rather than
+fixed: the parent write now bumps the version **before** the child write, so a mid-pair failure
+leaves a **bumped ETag** and a naive same-ETag retry now **412s**. It is recoverable by re-GET, and
+it is a failure-mode ordering change on the live Run surface, which is why it is in the ledger.
+
+**Behavior change 3 — `askBirthYear` is now the entry page's OPEN-events rule** (ruling 6; the page
+is the collecting authority, and the P3 carry-forward flagged the drift). **Behavior change 4 —
+partner acceptance now raises `needs_review_person`** (`partners.py:239` + `:264`), closing the P3 debt row.
+
+**CASCADE on the participant FK, and the account-deletion grep (judgment call 7).** The composite
+`bracket_participants.entry_player_id` FK is `ON DELETE CASCADE`. A first draft of the plan
+specified `SET NULL`; review killed it, and the reasoning is recorded because it is *good policy the
+schema shape does not permit* — SQLite and portable Postgres apply `SET NULL` to **every**
+referencing column, and this composite FK's leading column is the `NOT NULL` primary-key column
+`tournament_id`, so the failure would have landed on **tournament deletion**, not on the new
+feature. NC 4 is the empirical guard that would have caught it, and it passes. The accepted blast
+radius has two halves: teardown (no new loss — the participant dies with its tournament anyway) and
+account deletion. The executor STOP condition on the second half was run and **NOT triggered**:
+**no live code path deletes `EntrantAccount` rows.** D7 retention *scrubs* the columns and keeps the
+row, which is the ruled behavior, so nothing today can reach the cascade from the person side.
+
+**No backfill, no version bump, cap unmoved — all three held.** `entry_player_id` is additive and
+nullable; old rows read `null` and P6 needs only the FK, so **no backfill** was taken (ruling 3).
+**No `tournaments.data` version bump** (ruling 4): P4 reshaped no blob — it added a real COLUMN, and
+the roster shapes that gained a typed `entryPlayerId` live *inside* `tournaments.data`, which P2
+already versions, with an optional key older readers ignore. The `MatchStateDTO` allow-list was
+untouched and the parity ratchet **cap stayed 19** (ruling 5; F-DM-28b is the state-authority
+question, not P4's). T8 corrected the one comment this made owed: `bracket_matches.side_a`/`side_b`
+and `dependencies` in `BLOB_VERSIONS` were attributed to P4 and are now **P6**, with the reason
+recorded in the `None`-family note (`e2be7119`, comment-only).
+
+**Deviations from the plan, all reviewed:**
+- **T3 landed 7 paths, 2 beyond the brief** — the `match_state_routes` reorder and its fixture
+  seeding. Ratified in principle mid-task, confirmed by review.
+- **T3 fixed 9 fixture reds by seeding real parent rows**, never by dropping a constraint (the plan
+  named that as the only acceptable fix and forbade the tempting one).
+- **T4's first characterization test landed in the commit-seam file**, not the bracket file — the
+  bracket test client mounts no entries router.
+- **T5's helper is `_participant_persist_fields(metadata)`, not `(p)`** — two unrelated participant
+  types reach it; behavior-equivalent.
+- **T7's flag went on the `Entry(...)` construction site**; the brief's line anchor did not exist.
+- **Two console riders beyond the plan's file map**, each ruled during its own task's review:
+  `63df5891` (manual roster assignment) and `d2bcc615` (the participant picker). Both are the same
+  defect class — a synthesis path building a participant row with no `entryPlayerId` for a roster
+  player who has one, i.e. a NULL-keyed `bracket_participants` row for somebody the commit seam
+  identified. The second rider **required a file the ruling did not name**: `BracketDrawsTab`'s
+  `commitPicks` re-derives every participant row from the picks, so a picker-only fix died one hop
+  short of the wire — and, worse, re-saving the picker *stripped* keys off participants that already
+  had them (the SP-CONSOLE-4 write-echo class). Both singles and doubles synthesis were fixed, not
+  only the doubles path the ruling named.
+- **T8 corrected three `BLOB_VERSIONS` attributions and left two.** `bracket_matches.slot_a`/`slot_b`
+  still read `P4` on the same grounds the corrected three did. The brief enumerated three; rather
+  than silently widen a comment-only step past its ruling, they are recorded here — a stale forward
+  attribution, XS, and the next phase to touch that file should sweep them.
+
+**Deliberate stances, recorded rather than fixed:**
+- A **fabricated `entryPlayerId` on upsert is a deliberate 500** — no preflight validation. Two
+  flavors, the same failing-loudly class: `IntegrityError` for a well-formed UUID with no
+  `entry_players` row, and `ValueError` from `uuid.UUID(...)` for a malformed non-UUID string.
+- The **blob-vs-column double-store is unasserted this slice.** `BracketPlayerDTO.entryPlayerId`
+  (inside `tournaments.data`) and `bracket_participants.entry_player_id` (the column) are
+  deliberately both written; **no agreement assertion exists**, and P4 did not add one.
+- A **doubles team row carries only `members[0]`'s key** — the nominating player's. One row, one
+  person key; the partner's key is not represented. This is the shipped shape on both the manual
+  assignment path and the picker path.
+- **`_echo_shape` keeps `seed`/`members` `None` keys** that the real `toUpsertParticipant` omits, so
+  its docstring slightly overclaims. **`_meet_matches`'s parameter shadows the `roster_id` import**
+  (loud `TypeError` if ever hit; left in-brief).
+
+**Negative controls — all four green, run as a set** (`136 passed`, with
+`test_bracket_event_routes.py` + `test_bracket_repository.py`; NC 4 in fact lives in
+`test_person_key_migration.py`, not the bracket file the brief guessed):
+NC 1 `test_a_dangling_entry_player_id_is_refused` — `IntegrityError` on **migration-built** schema,
+asserting `PRAGMA foreign_keys == 1` first so it cannot pass vacuously, and asserting **both**
+`bracket_participants` FKs survive the batch rebuild · NC 2
+`test_a_crash_between_the_two_writes_self_heals` — the crash window still adopts, unchanged by the
+slice (the re-run *is* the proof) · NC 3
+`test_a_match_state_whose_match_is_deleted_goes_with_it` (+ `test_repositories.py:278`) · NC 4
+`test_deleting_a_tournament_with_a_person_keyed_participant_still_succeeds` — the cascade-order
+control.
+
+**Gates.** `make check` **green across both tiers** — console lint/`tsc -b`/vitest/depcruise,
+entrant lint/typecheck/vitest/depcruise, ruff, import-linter **15 kept 0 broken**, pytest
+`1896 passed, 66 skipped` (11m32s), console vitest `203 files / 1826 tests`, entrant vitest
+`37 files / 760 tests`, console depcruise `16 warnings, 0 errors` (the pre-ratchet
+`KNOWN_CROSS_MODULE` set, unchanged), entrant depcruise clean, ruff `All checks passed!`, exit
+code **0**. `docs:freshness` is advisory and never fails the gate — it reported three BEHIND
+areas (State management, Modules, Entrant tier) and was not acted on. Deletion gate 1 =
+one hit (above). Deletion gate 2 (`committed_player_id`) = the writer + the model + two migration
+files + the read-only lifecycle/facts/schema consumers — **no new derivation site**; the card's
+"writer + migration only" is the *end* state after R-DM-2(c) retires the column, which P4 does not
+do. Deletion gate 3 (`entryPlayerId` in the console) = non-zero as expected, plus the two rider
+files the brief predates.
+
+**New debt rows:** partner acceptance still skips `gender_flags`/`looks_duplicate` (the two thirds
+of the fork P4's namesake fix did not cover — pre-existing) · `ParticipantIn` has no `meta`, so
+`POST /bracket` cannot carry `sourceEntryId` and one `getattr` spread is dead on the route ·
+the FK drift test cannot compare `ondelete` and covers `ENTRIES_TABLES` only · `bracketDto.ts`
+`Participant` lacks `sourceEntryId` (`ParticipantOut` now returns it and no console reader can see
+it without a type error). **Closed:** the P3 row "Partner acceptance raises no `needs_review_person`"
+— struck, with `26bc989b` cited. **D22 (`gender` on adoption) is still open and P4 did NOT rule it**
+— the row says *revisit with P4/P8*; P4 touched the adoption seam but was not given the ruling, so
+it stays open for P8 or the owner.
+
+**Next.** **P4 unblocks P6** (bracket person-key demotion — the FK it needed now exists) **and the
+two deferred SP-P7 highlight-player items.** The **R-DM-2(c) Meet-roster extraction is now due as
+its own program** (row 11 in the slice table) — P4 deliberately did not retire
+`entries.committed_player_id`, and the deletion gate above says so. Merging `dm3/p4-person-key` is
+Kyle's call (superpowers:finishing-a-development-branch); the ruled next slice is **P5 (pair
+survives intake)** — author its detailed plan at phase start against the then-current tree, and note
+that P5's area has the **thinnest test cover of any slice, so characterization comes first**.
