@@ -56,6 +56,12 @@ _BACKEND_PACKAGE_NAMES = {
 # fixture reset ``sys.modules``.
 _PURGE_EXEMPT = frozenset({
     "core.exceptions",
+    # SP-DM-3 P2: same reason. ``BlobVersionError`` is raised by the
+    # ``VersionedJSON`` decorator bound onto the column at model-import
+    # time, so a purged-and-re-imported copy of this module gives a test
+    # a different class than the one the ORM raises. SQLAlchemy-only, no
+    # settings and no DB, so it qualifies on the rule above.
+    "db.blob_version",
 })
 
 

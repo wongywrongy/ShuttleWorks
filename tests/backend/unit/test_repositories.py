@@ -570,3 +570,90 @@ def test_count_matches_results_and_match_states_by_tournament(repo):
     assert repo.brackets.count_matches_by_tournament(ids) == {t2.id: 1}
     assert repo.brackets.count_results_by_tournament(ids) == {t2.id: 1}
     assert repo.match_states.count_by_tournament(ids) == {t1.id: 1}
+
+
+def test_state_version_and_the_schema_version_coexist_and_move_apart(session):
+    """R-DM-8's sub-answer, pinned. ``tournaments.data['version']`` is the
+    SCHEMA version and does not move when the document changes;
+    ``state_version`` is the I8 optimistic-concurrency token and moves on
+    every committed write. They are two different numbers on one row and
+    P2 must not have collapsed them."""
+    repo = LocalRepository(session)
+    row = repo.tournaments.create(name="Coexistence")
+    assert row.state_version == 0
+
+    repo.tournaments.upsert_data(row.id, {"config": {"tournamentName": "Coexistence"}})
+    repo.tournaments.upsert_data(row.id, {"config": {"tournamentName": "Renamed"}})
+
+    session.expire_all()
+    fresh = repo.tournaments.get_by_id(row.id)
+    assert fresh.state_version == 2, "the OCC token counts writes"
+    assert fresh.data["version"] == 2, "the schema version does not"
+    assert fresh.schema_version == 2, "and the mirror column tracks the schema one"
+
+
+def test_a_fresh_workspace_keeps_an_empty_document(session):
+    """The empty-dict NC. ``create()`` stores ``data={}`` and four call
+    sites read that emptiness as 'no state yet' - notably
+    ``display/display.py``'s 204 branch. A version stamp would make it
+    truthy and silently flip all four."""
+    repo = LocalRepository(session)
+    row = repo.tournaments.create(name="Fresh")
+    session.expire_all()
+    assert repo.tournaments.get_by_id(row.id).data == {}
+
+
+def test_a_future_version_blob_refuses_to_load(session):
+    """NC 1 end-to-end: v2 code meeting a v3 document raises instead of
+    parsing it. The blob is planted with textual SQL ON PURPOSE - the bind
+    processor would re-stamp it to 2 through any typed write, so a
+    ``session.execute(update(...))`` plant would test nothing."""
+    import json
+
+    from sqlalchemy import text
+
+    from db.blob_version import BlobVersionError
+
+    repo = LocalRepository(session)
+    row = repo.tournaments.create(name="From the future")
+    repo.tournaments.upsert_data(row.id, {"config": {}})
+
+    session.execute(
+        text("UPDATE tournaments SET data = :d WHERE id = :i"),
+        # ``.hex``, not ``str()``: SQLAlchemy's ``Uuid`` stores UNDASHED
+        # 32-char hex on SQLite, so a dashed bind matches zero rows and
+        # the plant silently does nothing.
+        {"d": json.dumps({"version": 3, "config": {}}), "i": row.id.hex},
+    )
+    session.commit()
+    session.expire_all()
+
+    with pytest.raises(BlobVersionError):
+        _ = repo.tournaments.get_by_id(row.id).data
+
+
+def test_an_unversioned_blob_reads_as_v1_and_is_rewritten_stamped(session):
+    """NC 1's other half - the compatibility promise the no-backfill
+    decision rests on. Every row in a shipped database is in this state."""
+    import json
+
+    from sqlalchemy import text
+
+    repo = LocalRepository(session)
+    row = repo.tournaments.create(name="Legacy")
+    repo.tournaments.upsert_data(row.id, {"config": {}})
+    session.execute(
+        text("UPDATE tournaments SET data = :d WHERE id = :i"),
+        # ``.hex`` for the same undashed-UUID reason as above.
+        {"d": json.dumps({"config": {"tournamentName": "Legacy"}}), "i": row.id.hex},
+    )
+    session.commit()
+    session.expire_all()
+
+    legacy = repo.tournaments.get_by_id(row.id)
+    assert "version" not in legacy.data, "planted unversioned"
+    assert legacy.data["config"]["tournamentName"] == "Legacy", "reads as v1"
+
+    repo.tournaments.upsert_data(row.id, dict(legacy.data))
+    session.expire_all()
+    assert repo.tournaments.get_by_id(row.id).data["version"] == 2

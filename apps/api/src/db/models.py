@@ -56,6 +56,8 @@ from sqlalchemy import (
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION, VersionedJSON
+
 
 class MatchStatus(str, enum.Enum):
     """Lifecycle of a single match.
@@ -122,23 +124,43 @@ class Tournament(Base):
     # ISO date string ("2026-02-15") preserved as-is. Stored as String,
     # not Date, to mirror the on-the-wire shape in TournamentConfig.
     tournament_date: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
-    # Full TournamentStateDTO payload — config + groups + players +
-    # matches + schedule + history. We keep it as a single blob in
-    # Step 1; later steps may normalise individual sub-entities if
-    # query needs warrant it.
-    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    # Mirrors ``data["version"]``; lets Alembic-level queries reason
-    # about payload schema without parsing the blob.
-    schema_version: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
-    # Optimistic-concurrency counter for the whole ``data`` blob
-    # (SP-CLOUD-4). Bumped on every committed write; a ``PUT /state``
-    # carrying a stale value is refused rather than silently clobbering.
+    # The full ``TournamentStateDTO`` document - config + groups + players
+    # + matches + schedule + history. One blob by choice; sub-entities
+    # normalise out only when query needs warrant it.
     #
-    # Deliberately NOT called ``version``: three near-collisions already
-    # exist on this object — ``TournamentStateDTO.version`` (the schema
-    # version, currently 2), ``schema_version`` above (its column), and
-    # ``TournamentStateDTO.scheduleVersion`` (the proposal-commit
-    # counter). A fourth bare ``version`` would be unreadable.
+    # FOUR NUMBERS LIVE ON OR IN THIS COLUMN. Reconciled by R-DM-8(a)
+    # (ruled 2026-08-24) - each one has exactly one job:
+    #
+    #   data["version"]        the SCHEMA version of the document. Absent
+    #                          means 1. Stamped on write and checked on
+    #                          read by ``VersionedJSON`` below; a document
+    #                          newer than this build raises rather than
+    #                          being mis-parsed.
+    #   schema_version         a COLUMN MIRROR of data["version"], so
+    #                          Alembic-level SQL can reason about payload
+    #                          shape without parsing the blob. Never an
+    #                          independent value.
+    #   state_version          the OPTIMISTIC-CONCURRENCY token (I8,
+    #                          SP-CLOUD-4). Counts committed writes; a
+    #                          PUT /state carrying a stale one is refused.
+    #                          NOT a schema version and never compared to
+    #                          one - which is why it is not called
+    #                          ``version``.
+    #   data["scheduleVersion"]  the proposal-commit counter, a domain
+    #                          value inside the document. Unrelated to all
+    #                          three of the above.
+    #
+    # F-DM-39 stands and is documented rather than fixed: this document is
+    # a superset of ``TournamentStateDTO``, and ``state_dto_from_document``
+    # drops any section the DTO does not declare (``bracket_session``,
+    # ``_integrity``). The wire type is a known-lossy filter over storage,
+    # by design. Making it lossless is a wire change, not a versioning one.
+    data: Mapped[dict] = mapped_column(
+        VersionedJSON(CURRENT_TOURNAMENT_SCHEMA_VERSION, "version"),
+        nullable=False,
+        default=dict,
+    )
+    schema_version: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
