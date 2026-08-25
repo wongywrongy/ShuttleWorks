@@ -810,6 +810,96 @@ def test_a_one_directional_partner_link_is_detected_and_no_team_is_built(
     )
 
 
+def test_a_teams_member_ids_name_the_roster_rows_its_members_actually_occupy(
+    repo, session
+):
+    """NC 2's "no member id naming a roster row that does not exist", for
+    the case where a half ADOPTS its roster row instead of minting one.
+
+    ``_adoptable``'s ``sourceEntryId`` branch returns a legacy entry-keyed
+    row (``entry-{entry.id}``, left by a build that keyed the roster on the
+    entry) where ``_player_id`` mints ``entry-{entry_player_id}``. The two
+    are different strings, so a team whose ``member_ids`` carried the
+    person ids would point at nothing for that half, while the half's own
+    ``committed_player_id`` pointed at the adopted row - the roster editor
+    and the draw disagreeing about the same human.
+
+    ``member_ids`` therefore carries the SEAT ids, the same two the
+    predicate's legs 6 and 7 are checked against. ``team_id`` stays on the
+    PERSON ids: it must be the same string whether or not this particular
+    run adopted a legacy row, which is the whole of its re-run promise.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    nominator, partner = _pair(session, tid, ev)
+
+    # The legacy row: entry-keyed, and reachable only through
+    # ``sourceEntryId`` because its id is not the one the seam would mint.
+    legacy_id = roster_id(nominator.id)
+    assert legacy_id != roster_id(nominator.entry_player_id)
+    row = repo.tournaments.get_by_id(tid)
+    document = dict(row.data)
+    document["bracketPlayers"] = [
+        {
+            "id": legacy_id,
+            "name": "Ana Reyes",
+            "availability": [],
+            "sourceEntryId": str(nominator.id),
+        }
+    ]
+    repo.tournaments.upsert_data(tid, document)
+
+    commit_entries(repo, tid)
+
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert len(participants) == 1
+    team = participants[0]
+    assert team.type == "TEAM"
+    assert team.member_ids == [legacy_id, roster_id(partner.entry_player_id)]
+
+    # The point of the assertion above, stated as the invariant it defends.
+    roster = repo.tournaments.get_by_id(tid).data["bracketPlayers"]
+    assert set(team.member_ids) <= {p["id"] for p in roster}
+    session.expire_all()
+    assert nominator.committed_player_id == legacy_id
+    assert nominator.committed_player_id in team.member_ids
+    # And the id itself did NOT move onto the adopted seat.
+    assert team.id.endswith(str(partner.entry_player_id))
+
+
+def test_two_halves_in_different_events_never_put_one_team_in_two_draws(
+    repo, session
+):
+    """The predicate's fifth leg. Both halves carry the same
+    ``entry_event_id`` by construction — ``partners.accept()`` copies it
+    onto the half it builds — so this, like the one-directional link and
+    the self-reference, is hand-built corruption.
+
+    It is checked rather than trusted because ``existing_ids`` is keyed per
+    BRACKET event: the team id that de-duplicates the pair's second half
+    against the first would be looked up in a different draw's set, and the
+    same team would be inserted twice, once into each draw.
+    """
+    tid = _bracket_workspace(repo)
+    xd = _doubles_draw(repo, session, tid, code="XD")
+    md = _doubles_draw(repo, session, tid, code="MD")
+    now = datetime.now(timezone.utc)
+    first = _entry(
+        session, tid, xd, player_name="Ana Reyes", partner_accepted_at=now
+    )
+    second = _entry(session, tid, md, player_name="Bo Lin", partner_accepted_at=now)
+    first.partner_entry_id = second.id
+    second.partner_entry_id = first.id
+    session.commit()
+
+    commit_entries(repo, tid)
+
+    for code, name in (("XD", "Ana Reyes"), ("MD", "Bo Lin")):
+        assert [
+            (p.type, p.name) for p in repo.brackets.list_participants(tid, code)
+        ] == [("PLAYER", name)]
+
+
 def test_an_entry_partnered_with_ITSELF_does_not_become_a_one_person_team(
     repo, session
 ):

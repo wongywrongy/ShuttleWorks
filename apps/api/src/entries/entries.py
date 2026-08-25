@@ -642,10 +642,10 @@ def _pair_batch(
     against per-event state the caller loads lazily inside its loop, so
     they are checked there, before the team is emitted.
 
-    Member order is the nominator first: earlier ``submitted_at``, ``id``
-    as the tiebreaker for the same reason ``_candidates`` uses it. Order
-    is load-bearing twice over - it fixes ``team_id`` so a re-run is
-    idempotent, and it fixes which half's person key the row carries.
+    The mapping is symmetric and carries no order: which half is the
+    nominator decides ``team_id`` and the label, and that is settled where
+    the team is built, against the same ``(submitted_at, id)`` key
+    ``_candidates`` sorts on.
     """
     from entries.partners import is_doubles
 
@@ -678,11 +678,8 @@ def _pair_batch(
         event = events.get(entry.entry_event_id)
         if event is None or not is_doubles(event):
             continue
-        first, second = sorted(
-            (entry, partner), key=lambda e: (e.submitted_at, e.id)
-        )
-        pairs[first.id] = second
-        pairs[second.id] = first
+        pairs[entry.id] = partner
+        pairs[partner.id] = entry
     return pairs
 
 
@@ -766,18 +763,29 @@ def _plan_bracket(
             members = sorted(
                 (entry, partner), key=lambda e: (e.submitted_at, e.id)
             )
+            # Member order is the nominator first - earlier ``submitted_at``,
+            # ``id`` as the tiebreaker for the same reason ``_candidates``
+            # uses it. It fixes ``team_id`` so a re-run is idempotent, and it
+            # fixes which half's person key the row carries.
+            seats = {entry.id: participant_id, partner.id: partner_seat}
             person_ids = tuple(m.entry_player_id or m.id for m in members)
             insert = {
+                # On the PERSON keys, never the seats: a seat may be an
+                # adopted legacy id, and the id has to be the same string
+                # whether or not this run adopted one - that is the whole
+                # of ``team_id``'s idempotency promise.
                 "id": team_id(person_ids),
                 "name": team_name(members[0].player_name, members[1].player_name),
                 "type": "TEAM",
-                # ``roster_id`` of each person, which is what the roster
-                # blob keys its rows by and what the console's own
-                # hand-built teams put here. Both person keys are therefore
-                # recoverable from this list, which is why the row carrying
-                # only members[0]'s typed key (P4's ruled shape) loses
-                # nothing.
-                "member_ids": [roster_id(pid) for pid in person_ids],
+                # The SEAT ids - the ``bracketPlayers`` rows these two humans
+                # actually occupy, which is what legs 6 and 7 checked two
+                # lines above and what the console's own hand-built teams put
+                # here. ``_player_id`` would be wrong for an adopted half:
+                # ``_adoptable``'s ``sourceEntryId`` branch returns a legacy
+                # ``entry-{entry.id}`` row, so the team would name a roster
+                # row that does not exist while the half's own
+                # ``committed_player_id`` pointed at the real one.
+                "member_ids": [seats[m.id] for m in members],
                 "entry_player_id": members[0].entry_player_id,
                 "seed": None,
                 "meta": {
