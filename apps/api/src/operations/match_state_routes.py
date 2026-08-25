@@ -392,8 +392,13 @@ def update_match_state(
         assert_valid_transition(match_id, current, target)
 
     try:
-        row = repo.match_states.upsert(tid, match_id, _dto_to_fields(update))
+        # Canonical row FIRST. Since SP-DM-3 P4 ``match_states`` has a
+        # composite FK onto ``matches`` (migration y9e4f0a2b7c8), and
+        # ``set_status`` is an upsert — it is what CREATES the parent row for
+        # a match the schedule projection has not touched. Writing the state
+        # row first made that insert reference a match that did not exist yet.
         _sync_canonical_status(repo, tid, match_id, target)
+        row = repo.match_states.upsert(tid, match_id, _dto_to_fields(update))
     except Exception as e:
         log.error("match-state write failed: %s", e)
         raise http_error(
@@ -517,11 +522,13 @@ async def import_match_states(
 
     tid = _ensure_tournament(repo, tournament_id)
     repo.match_states.reset_all(tid)
+    # Canonical rows first — see the note in ``update_match_state``; the FK
+    # added by y9e4f0a2b7c8 means the state rows cannot land before them.
+    _bulk_sync_canonical_statuses(repo, tid, match_states)
     repo.match_states.bulk_upsert(
         tid,
         {mid: _dto_to_fields(dto) for mid, dto in match_states.items()},
     )
-    _bulk_sync_canonical_statuses(repo, tid, match_states)
     return {
         "message": "Tournament state imported successfully",
         "matchCount": len(match_states),
@@ -545,8 +552,9 @@ def import_match_states_bulk(
         ms.matchId = match_id
         ms.updatedAt = now_iso()
         fields_map[match_id] = _dto_to_fields(ms)
-    repo.match_states.bulk_upsert(tid, fields_map)
+    # Canonical rows first — see the note in ``update_match_state``.
     _bulk_sync_canonical_statuses(repo, tid, match_states)
+    repo.match_states.bulk_upsert(tid, fields_map)
     total = len(repo.match_states.list_for_tournament(tid))
     return {
         "message": "Match states imported successfully",

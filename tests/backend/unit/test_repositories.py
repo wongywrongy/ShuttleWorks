@@ -60,6 +60,19 @@ def _seed_tournament(repo: LocalRepository, **kwargs) -> uuid.UUID:
     return repo.tournaments.create(**kwargs).id
 
 
+def _seed_matches(repo: LocalRepository, tid: uuid.UUID, *match_ids: str) -> None:
+    """Real ``matches`` rows for the ``match_states`` tests to hang off.
+
+    SP-DM-3 P4 gave ``match_states`` its composite FK onto ``matches``
+    (migration ``y9e4f0a2b7c8``), so a state row for a match id that was never
+    a match is no longer representable — it only looked like one while the
+    join was an unconstrained String.
+    """
+    for match_id in match_ids:
+        repo.session.add(Match(tournament_id=tid, id=match_id))
+    repo.session.commit()
+
+
 def _seed_user(repo: LocalRepository) -> uuid.UUID:
     """A real ``users`` row to hang a membership on.
 
@@ -191,6 +204,7 @@ def test_upsert_data_strips_legacy_integrity_field(repo):
 
 def test_match_state_upsert_and_get(repo):
     tid = _seed_tournament(repo, name="A")
+    _seed_matches(repo, tid, "m1")
     row = repo.match_states.upsert(tid, "m1", {"status": "called"})
     assert row.status == "called"
 
@@ -201,6 +215,7 @@ def test_match_state_upsert_and_get(repo):
 
 def test_match_state_update_overwrites_existing(repo):
     tid = _seed_tournament(repo, name="A")
+    _seed_matches(repo, tid, "m1")
     repo.match_states.upsert(tid, "m1", {"status": "called"})
     repo.match_states.upsert(tid, "m1", {"status": "started"})
     assert repo.match_states.get(tid, "m1").status == "started"
@@ -209,6 +224,8 @@ def test_match_state_update_overwrites_existing(repo):
 def test_match_state_list_returns_only_tournament_scoped_rows(repo):
     tid_a = _seed_tournament(repo, name="A")
     tid_b = _seed_tournament(repo, name="B")
+    _seed_matches(repo, tid_a, "m1")
+    _seed_matches(repo, tid_b, "m2")
     repo.match_states.upsert(tid_a, "m1", {"status": "called"})
     repo.match_states.upsert(tid_b, "m2", {"status": "started"})
 
@@ -218,6 +235,7 @@ def test_match_state_list_returns_only_tournament_scoped_rows(repo):
 
 def test_match_state_delete_returns_true_then_false(repo):
     tid = _seed_tournament(repo, name="A")
+    _seed_matches(repo, tid, "m1")
     repo.match_states.upsert(tid, "m1", {"status": "called"})
     assert repo.match_states.delete(tid, "m1") is True
     assert repo.match_states.delete(tid, "m1") is False
@@ -227,6 +245,8 @@ def test_match_state_delete_returns_true_then_false(repo):
 def test_match_state_reset_all_clears_only_one_tournament(repo):
     tid_a = _seed_tournament(repo, name="A")
     tid_b = _seed_tournament(repo, name="B")
+    _seed_matches(repo, tid_a, "m1", "m2")
+    _seed_matches(repo, tid_b, "m3")
     repo.match_states.upsert(tid_a, "m1", {"status": "called"})
     repo.match_states.upsert(tid_a, "m2", {"status": "called"})
     repo.match_states.upsert(tid_b, "m3", {"status": "called"})
@@ -239,6 +259,7 @@ def test_match_state_reset_all_clears_only_one_tournament(repo):
 
 def test_match_state_bulk_upsert_inserts_and_updates(repo):
     tid = _seed_tournament(repo, name="A")
+    _seed_matches(repo, tid, "m1", "m2")
     repo.match_states.upsert(tid, "m1", {"status": "called"})
     n = repo.match_states.bulk_upsert(tid, {
         "m1": {"status": "started"},  # existing
@@ -254,18 +275,20 @@ def test_match_state_bulk_upsert_empty_dict_is_noop(repo):
     assert repo.match_states.bulk_upsert(tid, {}) == 0
 
 
-def test_a_blob_removed_match_deletes_its_matches_row_and_TODAY_orphans_its_state(
-    repo, session
-):
-    """Baseline for P4's ``match_states`` FK (F-DM-22).
+def test_a_blob_removed_match_takes_its_state_row_with_it(repo, session):
+    """P4's ``match_states`` FK (F-DM-22), now live.
 
     ``repositories/local.py:483-486`` deletes a ``matches`` row whose id left
-    ``data["matches"]``. ``match_states`` has no FK, so its row survives with
-    no parent. P4 adds the composite FK with ``ondelete="CASCADE"`` (forced:
-    RESTRICT would make this very delete raise), after which the state row
-    goes with the match. THIS TEST IS EXPECTED TO CHANGE IN TASK 3 — that is
-    the point of writing it now, so the change is a visible edit and not a
-    silent one."""
+    ``data["matches"]``. Migration ``y9e4f0a2b7c8`` gives ``match_states`` the
+    composite FK onto ``matches`` with ``ondelete="CASCADE"``, so the state row
+    goes with the match instead of surviving orphaned.
+
+    **This assertion was inverted deliberately — it is a RULED behavior
+    change, not a test edited to pass.** The plan's judgment call 1 forces
+    CASCADE: a RESTRICT would turn this very delete, an ordinary Meet write,
+    into an IntegrityError. Losing live-ops state for a match the director
+    removed from the blob is the accepted cost, and it was characterized in
+    this file under the old name before the migration landed."""
     tid = _seed_tournament(repo, name="Ops")
     repo.commit_tournament_state(tid, {"matches": [{"id": "m1"}]})
     repo.match_states.upsert(tid, "m1", {"status": "called"})
@@ -274,7 +297,7 @@ def test_a_blob_removed_match_deletes_its_matches_row_and_TODAY_orphans_its_stat
     repo.commit_tournament_state(tid, {"matches": []})
 
     assert session.get(Match, (tid, "m1")) is None
-    assert session.get(MatchState, (tid, "m1")) is not None
+    assert session.get(MatchState, (tid, "m1")) is None
 
 
 # ---- TournamentBackup --------------------------------------------------
@@ -404,6 +427,7 @@ def test_restore_raises_when_tournament_missing(repo):
 
 def test_delete_cascades_match_states_and_backups(repo):
     tid = _seed_tournament(repo, name="A")
+    _seed_matches(repo, tid, "m1")
     repo.match_states.upsert(tid, "m1", {"status": "called"})
     repo.backups.create(tid, {"v": 1}, "snap.json")
 
@@ -588,6 +612,7 @@ def test_count_matches_results_and_match_states_by_tournament(repo):
     # One BracketResult on t2/E1/M1.
     repo.brackets.record_result(t2.id, "E1", "M1", winner_side="A")
     # One MatchState on t1.
+    _seed_matches(repo, t1.id, "m1")
     repo.match_states.upsert(t1.id, "m1", {"status": "called"})
 
     ids = [t1.id, t2.id]

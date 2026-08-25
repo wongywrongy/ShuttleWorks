@@ -322,6 +322,30 @@ class MatchState(Base):
 
     tournament: Mapped[Tournament] = relationship(back_populates="match_states")
 
+    # F-DM-22: one Meet match is three records joined by an unconstrained
+    # String(100), and this was the table with no ``__table_args__`` at
+    # all. ``commands`` (same file, :283) is the prior art — composite
+    # because ``matches.id`` alone is not unique.
+    #
+    # CASCADE is FORCED, not preferred: the Meet projection
+    # (repositories/local.py:483) deletes a ``matches`` row whose id left
+    # ``tournaments.data["matches"]``, and a RESTRICT would turn that
+    # ordinary write into an IntegrityError. The consequence is real and
+    # accepted — live-ops state for a match removed from the blob is now
+    # deleted with it instead of surviving orphaned (characterized in
+    # tests/backend/unit/test_repositories.py before the change).
+    #
+    # No extra Index: the primary key IS (tournament_id, match_id).
+    # ``commands`` needs one because its index is
+    # (tournament_id, match_id, applied_at) over a surrogate PK.
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tournament_id", "match_id"],
+            ["matches.tournament_id", "matches.id"],
+            ondelete="CASCADE",
+        ),
+    )
+
 
 class TournamentBackup(Base):
     __tablename__ = "tournament_backups"
@@ -494,6 +518,16 @@ class BracketParticipant(Base):
     member_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     seed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     meta: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # R-DM-2(a) / SP-DM-3 P4: the FIRST constrained hop from the people
+    # spine to the competition spine. ``id`` above stays the name-derived
+    # String by ruling R-DM-7(a) — no re-key — so this is the identity for
+    # every participant that resolves to a person, and ``id`` degrades to a
+    # display/URL key. Nullable because a hand-added participant is nobody
+    # in ``entry_players``. Composite because ``entry_players``' PK is
+    # ``(tournament_id, id)``.
+    entry_player_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -507,6 +541,16 @@ class BracketParticipant(Base):
         ForeignKeyConstraint(
             ["tournament_id", "bracket_event_id"],
             ["bracket_events.tournament_id", "bracket_events.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tournament_id", "entry_player_id"],
+            ["entry_players.tournament_id", "entry_players.id"],
+            # CASCADE, not SET NULL: a composite SET NULL nulls EVERY
+            # referencing column, ``tournament_id`` included - and that is
+            # a NOT NULL primary-key column here. Same ondelete as the
+            # ``entries`` FK onto the same parent (s3d8f2b5c0e1). Blast
+            # radius argued in the plan's judgment call 7.
             ondelete="CASCADE",
         ),
     )

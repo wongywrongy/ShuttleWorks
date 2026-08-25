@@ -42,8 +42,10 @@ _BACKEND = Path(__file__).resolve().parents[3] / "apps" / "api"
 ENTRIES_REVISION = "s3d8f2b5c0e1"
 # The head moves with every migration; E2 (Phase 7) added the entrant
 # verification token pair and the ``entry_players.erased_at`` tombstone, and
-# E3 (Phase 8) the doubles partner-invite trio.
-HEAD_REVISION = "x8d3e9f1a6b7"
+# E3 (Phase 8) the doubles partner-invite trio. SP-DM-3 P4 then added the
+# ``bracket_participants.entry_player_id`` person key and the ``match_states``
+# composite FK.
+HEAD_REVISION = "y9e4f0a2b7c8"
 PREVIOUS_REVISION = "r2c7e1f4a9b3"
 
 # Every table the Entries family owns after the R13 reshape. The account

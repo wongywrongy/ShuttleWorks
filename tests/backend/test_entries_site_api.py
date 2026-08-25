@@ -491,7 +491,7 @@ def test_meet_matches_reach_the_player_page_with_gated_scores(client):
     person = _seed_person(tid, "Ada Chen", "Riverside BC", event_code="MS1")
     roster_id = f"entry-{person}"
 
-    from db.models import MatchState, Tournament
+    from db.models import Match, MatchState, Tournament
     from db.session import SessionLocal
 
     session = SessionLocal()
@@ -517,6 +517,11 @@ def test_meet_matches_reach_the_player_page_with_gated_scores(client):
                 ]
             },
         }
+        # The blob is written straight in, bypassing the projection that
+        # normally creates the ``matches`` row. Since SP-DM-3 P4 the state row
+        # has a composite FK onto it (migration y9e4f0a2b7c8), so the parent
+        # has to exist here too.
+        session.add(Match(tournament_id=uuid.UUID(tid), id="m1"))
         session.add(
             MatchState(
                 tournament_id=uuid.UUID(tid),
