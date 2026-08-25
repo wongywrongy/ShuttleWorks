@@ -22,7 +22,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **DONE 2026-08-24** — branch dm3/p0-type-mechanism (bd262dbd..4630ec53, stacked on P3) — **merged to main 2026-08-24** (ff to 9c5e6186, Kyle's instruction) |
 | 3 | P1 — one standings shape | — | M | **DONE 2026-08-24** — 6546e63b..4df4b9cc, final review "merge as-is" — **merged to main 2026-08-24** (ff to 4df4b9cc) |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | **DONE 2026-08-25** — 93f41250..0098ee46 (incl. final-review fix wave f673ea2e + Dockerfile source COPY 0098ee46) — **merged to main 2026-08-25** (ff to 0098ee46) |
-| 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to `7cf58d71`, Kyle's standing instruction) |
+| 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to the branch tip incl. the closing ledger commits, Kyle's standing instruction) |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | pending — blocked by P2 |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | pending — blocked by P4 |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
@@ -305,8 +305,8 @@ it stays open for P8 or the owner.
 two deferred SP-P7 highlight-player items.** The **R-DM-2(c) Meet-roster extraction is now due as
 its own program** (row 11 in the slice table) — P4 deliberately did not retire
 `entries.committed_player_id`, and the deletion gate above says so. `dm3/p4-person-key` was
-**merged to `main` 2026-08-25** (ff to `7cf58d71`, per Kyle's standing merge-and-proceed
-instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call). The ruled next
+**merged to `main` 2026-08-25** (fast-forward to the branch tip, per Kyle's standing
+merge-and-proceed instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call). The ruled next
 slice is **P5 (pair survives intake)** — author its detailed plan at phase start against the
 then-current tree, and note that P5's area has the **thinnest test cover of any slice, so
 characterization comes first**.
