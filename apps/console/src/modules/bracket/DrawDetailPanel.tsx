@@ -85,8 +85,11 @@ export function DrawDetailPanel({
                   // for "no value", and a row whose member count this
                   // two-step picker can't represent still belongs to the
                   // draw. Reshaping or filtering it would be the picker
-                  // deciding something.
-                  ...(p.members ? { members: p.members } : {}),
+                  // deciding something — so `members: []` rides through AS
+                  // `[]`, and it is the picker's `unavailable` guard, not
+                  // this seed, that reads it as "this row's id IS the
+                  // person" (rosterEvents.ts:79).
+                  ...(p.members != null ? { members: p.members } : {}),
                   ...(p.entryPlayerId != null ? { entryPlayerId: p.entryPlayerId } : {}),
                 }))
               : []

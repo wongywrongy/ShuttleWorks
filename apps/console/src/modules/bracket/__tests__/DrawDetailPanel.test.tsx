@@ -249,19 +249,29 @@ describe('DrawDetailPanel', () => {
     const bd = doublesEvent('BD', 'BD', [
       { id: 'p-cara', name: 'Cara Diaz' },
       { id: 'p-dan', name: 'Dan Osei', entryPlayerId: 'ep-dan' },
+      // `members: []` is the third shape the wire admits (bracketDto.ts:23),
+      // and the module already reads it as "this row's id IS the person"
+      // (rosterEvents.ts:79). It is truthy AND non-nullish, so a `??` guard
+      // lets it contribute NOBODY to `unavailable` and Eve stays pickable
+      // into a second row.
+      { id: 'p-eve', name: 'Eve Novak', members: [] },
     ]);
     render(
       <DrawDetailPanel ev={bd} players={roster} onClose={onClose} onCommitPicks={onCommitPicks} />,
     );
     // A carried singleton's own id IS its player id, so it must block that
-    // player too — otherwise one save enters Cara twice.
+    // player too — otherwise one save enters them twice.
     expect(screen.getByRole('radio', { name: /Cara Diaz/ })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: /Eve Novak/ })).toBeDisabled();
     pairAlexAndBen();
     await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
     const picks = onCommitPicks.mock.calls[0][0];
-    expect(picks).toHaveLength(3);
+    expect(picks).toHaveLength(4);
     expect(picks[0]).toEqual({ id: 'p-cara', name: 'Cara Diaz' });
     expect(picks[1]).toEqual({ id: 'p-dan', name: 'Dan Osei', entryPlayerId: 'ep-dan' });
+    // Verbatim: an empty members list is NOT reshaped to PLAYER form on the
+    // way back out — the seed carries what the row said.
+    expect(picks[2]).toEqual({ id: 'p-eve', name: 'Eve Novak', members: [] });
   });
 
   it('groups the roster by initial so a long list is navigable', () => {

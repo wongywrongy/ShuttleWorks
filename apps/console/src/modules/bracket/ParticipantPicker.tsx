@@ -188,10 +188,15 @@ function DoublesPicker({
   const [pairs, setPairs] = useState<PickedPair[]>(initialPairs);
 
   // Already paired (either step) plus, on step B, the player chosen for A.
-  // A memberless row is a singleton, and ITS id is the player id — without
-  // the fallback one save could enter the same human twice, once as a
-  // PLAYER row and once inside a new team.
-  const unavailable = new Set(pairs.flatMap((pair) => pair.members ?? [pair.id]));
+  // A row with no members is a singleton and ITS id is the player id —
+  // without the fallback one save could enter the same human twice, once as
+  // a PLAYER row and once inside a new team. Length, not nullishness: the
+  // wire admits `members: []` (bracketDto.ts:23) and the module's canonical
+  // reading of that shape is "this row's id IS the person"
+  // (rosterEvents.ts:79). `??` would let `[]` name nobody.
+  const unavailable = new Set(
+    pairs.flatMap((pair) => (pair.members?.length ? pair.members : [pair.id])),
+  );
   if (step === 'B' && pickedA) unavailable.add(pickedA.id);
 
   const pick = (id: string | null) => {
