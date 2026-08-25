@@ -3,6 +3,13 @@ import { healBracketRosterNames, reconcileBracketRoster } from '../bracketMigrat
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../../api/dto';
 
+/**
+ * SP-DM-3 P6 (card §C6, R-DM-7(a)): the decode-from-label cases that used to
+ * live here were DELETED, not ported — the behaviour they pinned is what the
+ * ruling removed. Their pins are in the Task 1 commit (`c96ea959`, placement
+ * fixed in `caf96c22`) if the history matters. The one that survives is the
+ * positional-zip pin, INVERTED in place: it now pins the omission.
+ */
 describe('reconcileBracketRoster', () => {
   it('extracts unique players from PLAYER participants', () => {
     const bracket = {
@@ -24,6 +31,7 @@ describe('reconcileBracketRoster', () => {
       participants: [
         { id: 'MS-T1', name: 'Alex / Ben', members: ['p-alex', 'p-ben'] },
         { id: 'p-alex', name: 'Alex Tan' },
+        { id: 'p-ben', name: 'Ben Carter' },
       ],
     } as unknown as BracketTournamentDTO;
     const result = reconcileBracketRoster(bracket);
@@ -33,45 +41,8 @@ describe('reconcileBracketRoster', () => {
     // dedup: p-alex should appear once.
     const seen = new Set(ids);
     expect(seen.size).toBe(ids.length);
-    // name resolution: p-alex has a PLAYER entry → must use display name, not slug.
+    // name resolution: each member has a PLAYER entry → use its display name.
     expect(result.find((p) => p.id === 'p-alex')?.name).toBe('Alex Tan');
-  });
-
-  // D3 — the Bracket roster shipped raw slugs ("alexei-sorokin") as player
-  // names. A doubles-only draw has NO player participants, so the slug→name
-  // lookup was empty and every member fell back to its own id.
-  it('reads TEAM member names off the team display name (doubles-only draw)', () => {
-    const bracket = {
-      participants: [
-        {
-          id: 'MD-T1',
-          name: 'Alexei Sorokin / Ben Carter',
-          members: ['p-alexei-sorokin', 'p-ben-carter'],
-        },
-      ],
-    } as unknown as BracketTournamentDTO;
-    const byId = new Map(
-      reconcileBracketRoster(bracket).map((p) => [p.id, p.name]),
-    );
-    expect(byId.get('p-alexei-sorokin')).toBe('Alexei Sorokin');
-    expect(byId.get('p-ben-carter')).toBe('Ben Carter');
-  });
-
-  it('de-slugs members the team name cannot account for', () => {
-    const bracket = {
-      participants: [
-        // Name and members disagree in arity — nothing positional to read.
-        {
-          id: 'MD-T1',
-          name: 'Team One',
-          members: ['p-alexei-sorokin', 'p-ben-carter'],
-        },
-      ],
-    } as unknown as BracketTournamentDTO;
-    expect(reconcileBracketRoster(bracket).map((p) => p.name)).toEqual([
-      'Alexei Sorokin',
-      'Ben Carter',
-    ]);
   });
 
   it('returns empty when bracket has no participants', () => {
@@ -80,16 +51,21 @@ describe('reconcileBracketRoster', () => {
   });
 
   /**
-   * SP-DM-3 P6 Task 1 — a PIN ON BEHAVIOUR TASK 2 DELETES, kept only long
-   * enough to prove the deletion is deliberate. The zip is positional: it
-   * assumes the label's Nth name belongs to `members[N]`. That holds for a
-   * seam-built team by pure construction (`entries/entries.py::team_name`
-   * takes `members[0], members[1]` in the same order `member_ids` is built),
-   * and holds for nothing else — `bracket_participants.name` is operator
-   * editable and a hand-added team mints its label from different variables.
-   * Delete this case with the decode; do not port it forward.
+   * SP-DM-3 P6 Task 2 FLIPPED this pin in place. Task 1 (`c96ea959`,
+   * placement fixed in `caf96c22`) pinned the zip as it was: positional and
+   * unverified — it assumed the label's Nth name belonged to `members[N]`,
+   * so a label ordered the OPPOSITE way put both names on the wrong person
+   * and nothing noticed. That property is what R-DM-7(a) removes, so the
+   * assertions are now inverted: the same fixture names nobody, because a
+   * label is not a person and nothing else here can name these two.
+   *
+   * The zip held for a seam-built team by pure construction only
+   * (`entries/entries.py::team_name` takes `members[0], members[1]` in the
+   * order `member_ids` is built) and for nothing else —
+   * `bracket_participants.name` is operator editable and a hand-added team
+   * mints its label from different variables.
    */
-  it('zips the label onto members POSITIONALLY, right or wrong', () => {
+  it('no longer zips the label onto members positionally', () => {
     const bracket = {
       participants: [
         {
@@ -103,19 +79,19 @@ describe('reconcileBracketRoster', () => {
     const byId = new Map(
       reconcileBracketRoster(bracket).map((p) => [p.id, p.name]),
     );
-    // Both names are now on the wrong person, and nothing notices.
-    expect(byId.get('p-alexei-sorokin')).toBe('Ben Carter');
-    expect(byId.get('p-ben-carter')).toBe('Alexei Sorokin');
+    // Nobody is named off the label — not rightly, not wrongly.
+    expect(byId.get('p-alexei-sorokin')).toBeUndefined();
+    expect(byId.get('p-ben-carter')).toBeUndefined();
   });
 
   /**
-   * SP-DM-3 P6 Task 2 unskips this. A TEAM member no PLAYER participant can
-   * name is OMITTED, not guessed — F-DM-19's don't-invent posture. The old
-   * behaviour named it by de-slugging (`nameFromSlug`) or by splitting the
-   * team label; both are identity read out of a display string, which is
-   * what R-DM-7(a) demotes.
+   * SP-DM-3 P6 Task 2 unskips this (pinned as a skip in `c96ea959`, placement
+   * fixed in `caf96c22`). A TEAM member no PLAYER participant can name is
+   * OMITTED, not guessed — F-DM-19's don't-invent posture. The old behaviour
+   * named it by de-slugging its id or by splitting the team label; both are
+   * identity read out of a display string, which is what R-DM-7(a) demotes.
    */
-  it.skip('omits a TEAM member no participant can name', () => {
+  it('omits a TEAM member no participant can name', () => {
     const bracket = {
       participants: [
         {
