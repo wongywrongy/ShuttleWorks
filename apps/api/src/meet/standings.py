@@ -17,23 +17,24 @@ details from the source:
   can't actually tie, so this branch is inert in practice, but the port
   keeps it rather than inventing different behavior.
 
+The row shape is ``core.schemas.MeetStandingRowDTO`` — the wire DTO itself,
+not a private mirror of it (SP-DM-3 P1, F-DM-26: standings was declared nine
+times in two grains). This module owns the *computation*; the kernel owns the
+*shape*, because ``TournamentStateDTO`` embeds it and the kernel may not
+import a domain (see ``apps/api/.importlinter``, kernel-direction). Importing
+the kernel costs this module nothing it did not already have: ``core.schemas``
+reaches pydantic and ``core.limits`` and nothing else, so the "pure, no
+DB/session" promise above still holds.
+
 This function is pure (no DB/session) so it's cheaply unit-testable; the
 ``/tournaments/{id}/state`` route adapts ORM rows into the plain-dict shapes
 below.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-
-@dataclass(frozen=True)
-class StandingRow:
-    groupId: str
-    groupName: str
-    matchesPlayed: int
-    wins: int
-    losses: int
+from core.schemas import MeetStandingRowDTO
 
 
 def _first_group_id(
@@ -62,7 +63,7 @@ def compute_meet_standings(
     match_states: Mapping[str, Mapping[str, Any]],
     groups: Sequence[Mapping[str, Any]],
     players: Sequence[Mapping[str, Any]],
-) -> list[StandingRow]:
+) -> list[MeetStandingRowDTO]:
     """Compute school-vs-school (dual-meet) standings.
 
     ``matches`` — ``{"id", "sideA": [playerId, ...], "sideB": [playerId, ...]}``.
@@ -114,7 +115,7 @@ def compute_meet_standings(
                 scores[side_b_group]["losses"] += 1
 
     rows = [
-        StandingRow(
+        MeetStandingRowDTO(
             groupId=group_id,
             groupName=group_name_by_id.get(group_id, group_id),
             matchesPlayed=s["matchesPlayed"],

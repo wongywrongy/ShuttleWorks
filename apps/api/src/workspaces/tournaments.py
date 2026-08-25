@@ -215,22 +215,14 @@ def _meet_standings_for(
     # of current schedule membership. The client's original UI only saw
     # matches within schedule.assignments (incidental filtering), but the
     # authoritative backend standings reflect all recorded results.
-    standing_rows = compute_meet_standings(
+    # ``compute_meet_standings`` returns the wire DTO itself since SP-DM-3 P1
+    # (F-DM-26) - there is no private row shape left to translate from.
+    return compute_meet_standings(
         matches=matches,
         match_states=match_states,
         groups=groups,
         players=players,
     )
-    return [
-        MeetStandingRowDTO(
-            groupId=r.groupId,
-            groupName=r.groupName,
-            matchesPlayed=r.matchesPlayed,
-            wins=r.wins,
-            losses=r.losses,
-        )
-        for r in standing_rows
-    ]
 
 
 def _counts_for(
