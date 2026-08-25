@@ -108,6 +108,10 @@ class VersionedJSON(TypeDecorator):
 # P4/P5 work) and ROUND-TRIP-SENSITIVE blobs (an extra key reaches a
 # consumer that did not ask for it).
 #
+# P4 added ``bracket_participants.entry_player_id`` as a real COLUMN, not a
+# blob key - the roster shapes it typed live inside ``tournaments.data``,
+# which is already versioned, and the field is additive so no bump was taken.
+#
 # Recorded edge, not fixed: ``tournament_backups.snapshot`` is a frozen
 # copy of ``tournaments.data`` stored in a plain ``JSON`` column, so it is
 # unguarded on read, and restoring it writes it back through
@@ -120,9 +124,9 @@ BLOB_VERSIONS: dict[str, Optional[int]] = {
     "tournaments.data": CURRENT_TOURNAMENT_SCHEMA_VERSION,
     # -- list-shaped: needs a reshape, owned by a later phase ----------
     "bracket_participants.member_ids": None,  # Pair membership; P5 reshapes
-    "bracket_matches.side_a": None,  # resolved participants; P4
+    "bracket_matches.side_a": None,  # resolved participants; P6
     "bracket_matches.side_b": None,  # same
-    "bracket_matches.dependencies": None,  # draw topology; P4/P6
+    "bracket_matches.dependencies": None,  # draw topology; P6
     "bracket_matches.child_unit_ids": None,  # draw topology
     "entries.pending_reasons": None,  # entry lifecycle state (list of codes)
     # -- round-trip-sensitive: an extra key would reach a consumer -----
