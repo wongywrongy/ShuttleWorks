@@ -10,6 +10,15 @@
  *
  * Keys only, by ruling — types and optionality are not policed (P0 plan,
  * Global Constraints).
+ *
+ * Why the two `dto.generated.ts` exclusions stay (re-justified 2026-08-24,
+ * SP-DM-3 P0). `knip.json` — src/api/dto.generated.ts has no importer BY
+ * DESIGN: this file reads it as TEXT (the R-DM-9a parity oracle), which
+ * gives knip no import edge to see. The note lives here because knip's
+ * schema rejects unknown keys, so `knip.json` cannot carry a comment.
+ * `vitest.config.ts` coverage — the generated file is types-only and emits
+ * no runtime code, so it can only ever report 0%. Neither exclusion leaves
+ * it unpoliced; this test is what polices it.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -136,6 +145,26 @@ describe('console DTO parity oracle', () => {
     for (const e of allowlist) {
       expect(e.why).toMatch(/F-DM-\d+|R-DM-\d+|ADR \d+/);
       expect(['violation', 'accepted']).toContain(e.kind);
+    }
+  });
+});
+
+describe('NC: the oracle SEES F-DM-28a (it is allow-listed, not silenced)', () => {
+  it('reports PlayerDTO status / withdrawalReason / withdrawnAt as hand-only divergences', () => {
+    // The allow-list stops these from failing the suite. This asserts the
+    // oracle still DETECTS them - so deleting the allow-list entries is the
+    // only way to make them go away, and quietly widening the allow-list
+    // cannot hide them. R-DM-9a: "ratcheted to zero, never silenced".
+    const seen = divergences()
+      .filter((d) => d.shape === 'PlayerDTO')
+      .map((d) => d.field)
+      .sort();
+    expect(seen).toEqual(['status', 'withdrawalReason', 'withdrawnAt']);
+    const listed = allowlist.filter((e) => e.shape === 'PlayerDTO');
+    expect(listed).toHaveLength(3);
+    for (const e of listed) {
+      expect(e.kind).toBe('violation');
+      expect(e.why).toContain('F-DM-28a');
     }
   });
 });
