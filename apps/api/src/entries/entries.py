@@ -653,7 +653,12 @@ def _pair_batch(
     pairs: dict[uuid.UUID, Entry] = {}
     for entry in candidates:
         partner_id = entry.partner_entry_id
-        if partner_id is None or entry.id in pairs:
+        # A pair is TWO entries. A self-referential link passes the mutual
+        # check trivially and would emit a one-person team named after them
+        # twice, so it is refused first - same hand-corruption threat model
+        # as the one-directional link below, and equally unreachable from
+        # ``partners.accept()``.
+        if partner_id is None or partner_id == entry.id or entry.id in pairs:
             continue
         partner = by_id.get(partner_id)
         if partner is None:

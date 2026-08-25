@@ -810,6 +810,43 @@ def test_a_one_directional_partner_link_is_detected_and_no_team_is_built(
     )
 
 
+def test_an_entry_partnered_with_ITSELF_does_not_become_a_one_person_team(
+    repo, session
+):
+    """The predicate's premise is TWO entries, and a self-link satisfies
+    the mutual check trivially — ``entry.partner_entry_id == entry.id``
+    means ``partner.partner_entry_id == entry.id`` by construction. Left
+    unrefused it would emit a TEAM carrying one human's roster id twice and
+    named after them twice.
+
+    Same threat model as the one-directional link: unreachable from
+    ``partners.accept()``, hand-built here, and refused rather than
+    reasoned about.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    # ``partner_accepted_at`` is stamped so the self-reference is the ONLY
+    # leg that fails — otherwise leg 3 would refuse first and the test
+    # would pass without exercising anything.
+    entry = _entry(
+        session,
+        tid,
+        ev,
+        player_name="Ana Reyes",
+        partner_accepted_at=datetime.now(timezone.utc),
+    )
+    entry.partner_entry_id = entry.id
+    session.commit()
+
+    commit_entries(repo, tid)
+
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert len(participants) == 1
+    assert participants[0].type == "PLAYER"
+    assert participants[0].member_ids == []
+    assert participants[0].name == "Ana Reyes"
+
+
 def test_a_singles_event_never_builds_a_team_even_with_a_partner_link(repo, session):
     """The predicate's fourth leg. ``entry_events.entry_type`` is the
     backend's one answer to "is this doubles" (``partners.is_doubles``,
