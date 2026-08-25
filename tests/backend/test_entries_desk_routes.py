@@ -380,6 +380,7 @@ def test_a_desk_row_carries_its_partner_link(client, workspace):
     workspace, so a name is a join it can do itself (plan judgment call 7).
     """
     import uuid as _uuid
+    from datetime import datetime, timezone
     from db.models import Entry
     from db.session import SessionLocal
 
@@ -392,12 +393,18 @@ def test_a_desk_row_carries_its_partner_link(client, workspace):
             {"player_name": "Robin Ng"},
         ],
     )
-    # Linked both ways, which is what ``partners.accept()`` writes.
+    # The end state ``partners.accept()`` leaves: the link AND the
+    # acceptance stamp, on BOTH halves, in one transaction. Written
+    # directly rather than driving the accept flow because this is a
+    # projection test — but written whole, so the fixture is a state
+    # production can actually produce.
+    accepted_at = datetime.now(timezone.utc)
     session = SessionLocal()
     try:
         for mine, theirs in ((left, right), (right, left)):
             row = session.get(Entry, (_uuid.UUID(tid), _uuid.UUID(mine)))
             row.partner_entry_id = _uuid.UUID(theirs)
+            row.partner_accepted_at = accepted_at
         session.commit()
     finally:
         session.close()

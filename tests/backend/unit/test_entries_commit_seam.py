@@ -810,6 +810,49 @@ def test_a_one_directional_partner_link_is_detected_and_no_team_is_built(
     )
 
 
+def test_a_pair_conflict_flag_does_not_stop_the_seam_building_the_team(repo, session):
+    """RULED (SP-DM-3 P5): ``pair_conflict`` does not keep an agreed pair out
+    of the draw — the team is built and the flag rides along.
+
+    The predicate requires a MUTUAL, both-accepted link: two people who
+    actually agreed. ``pair_conflict`` says a THIRD person unilaterally
+    nominated one of them, and letting that veto the agreed pair would hand
+    any stranger a way to keep two entrants out of a draw. The flagged half
+    still commits carrying its reason, so the operator still adjudicates —
+    the flag stays a question, never a refusal (invariant I4).
+
+    ``pending_reasons`` appears NOWHERE in ``entries/entries.py`` and no
+    predicate leg reads it. That is decided, not accidental, and this is
+    where a later change teaching the seam to consult it — to skip the pair
+    or to refuse the entry — goes red.
+
+    Bracket, not meet, on purpose: ``_candidates`` is kind-agnostic and
+    ``test_partner_invites.py`` covers that chokepoint. The surface only a
+    bracket workspace reaches is ``_plan_bracket``'s plan-local legs, and
+    ``TEAM`` exists nowhere else.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    nominator, partner = _pair(session, tid, ev)
+    nominator.pending_reasons = ["pair_conflict"]
+    session.commit()
+
+    result = commit_entries(repo, tid)
+
+    assert {c.entry_id for c in result.committed} == {
+        str(nominator.id),
+        str(partner.id),
+    }
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert [p.type for p in participants] == ["TEAM"]
+    assert participants[0].name == "Ana Reyes / Bo Lin"
+
+    # …and the flag is still there afterwards, which is the half of the
+    # ruling that keeps this from being "the seam ignores conflicts".
+    session.expire_all()
+    assert "pair_conflict" in nominator.pending_reasons
+
+
 def test_a_teams_member_ids_name_the_roster_rows_its_members_actually_occupy(
     repo, session
 ):
