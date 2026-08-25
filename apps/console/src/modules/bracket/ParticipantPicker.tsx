@@ -16,15 +16,24 @@ import { Button } from '@scheduler/design-system';
 import { EventPicker, type EventPickerOption } from '../../components/control-plane';
 import { EYEBROW_CLASS } from '../../lib/utils';
 
+/** R-DM-2(a): the roster player already holds the person key, so a pick that
+ *  drops it commits a NULL-keyed `bracket_participants` row for somebody the
+ *  entries commit seam identified. Optional and omitted-when-absent, never
+ *  nulled — `toUpsertParticipant`'s idiom, and absent is what the wire means
+ *  by "no key". */
 export interface PickedSingle {
   id: string;
   name: string;
+  entryPlayerId?: string;
 }
 
 export interface PickedPair {
   id: string;
   name: string;
   members: [string, string];
+  /** A team row carries ONE key, and it is the nominating player's — the
+   *  same half `members[0]` names. */
+  entryPlayerId?: string;
 }
 
 interface Props {
@@ -127,7 +136,11 @@ function SinglesPicker({
               picked
                 .map((id) => players.find((p) => p.id === id))
                 .filter((p): p is BracketPlayerDTO => p != null)
-                .map((p) => ({ id: p.id, name: p.name })),
+                .map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  ...(p.entryPlayerId != null ? { entryPlayerId: p.entryPlayerId } : {}),
+                })),
             )
           }
         >
@@ -172,6 +185,7 @@ function DoublesPicker({
         id: `${eventId}-T${arr.length + 1}`,
         name: `${pickedA.name} / ${p.name}`,
         members: [pickedA.id, p.id],
+        ...(pickedA.entryPlayerId != null ? { entryPlayerId: pickedA.entryPlayerId } : {}),
       },
     ]);
     setPickedA(null);

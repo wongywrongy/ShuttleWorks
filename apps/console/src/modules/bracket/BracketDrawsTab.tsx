@@ -242,14 +242,25 @@ export function BracketDrawsTab() {
         const s = (ev.participants ?? []).find((x) => x.id === id)?.seed;
         return s == null ? undefined : s;
       };
+      // R-DM-2(a): this re-derives EVERY participant row from the picks, so a
+      // key it fails to carry is a key deleted from the row — the picker's
+      // fix is dead without the passthrough.
+      const keyOf = (p: PickedSingle | PickedPair) =>
+        p.entryPlayerId != null ? { entryPlayerId: p.entryPlayerId } : {};
       const participants = isDoubles
         ? (picks as PickedPair[]).map((p) => {
             const seed = seedOf(p.id);
-            return { id: p.id, name: p.name, members: p.members, ...(seed != null ? { seed } : {}) };
+            return {
+              id: p.id,
+              name: p.name,
+              members: p.members,
+              ...(seed != null ? { seed } : {}),
+              ...keyOf(p),
+            };
           })
         : (picks as PickedSingle[]).map((p) => {
             const seed = seedOf(p.id);
-            return { id: p.id, name: p.name, ...(seed != null ? { seed } : {}) };
+            return { id: p.id, name: p.name, ...(seed != null ? { seed } : {}), ...keyOf(p) };
           });
       const next = await api.eventUpsert(ev.id, buildEventUpsertPayload(ev, participants));
       setData(next);

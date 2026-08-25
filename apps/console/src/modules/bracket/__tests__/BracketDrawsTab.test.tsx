@@ -121,7 +121,9 @@ beforeEach(() => {
   mockNavigate.mockReset();
   useTournamentStore.setState({
     bracketPlayers: [
-      { id: 'p-alex', name: 'Alex Tan' },
+      // Alex came through the entries commit seam and holds a person key;
+      // Ben was hand-added and holds none (R-DM-2(a)).
+      { id: 'p-alex', name: 'Alex Tan', entryPlayerId: 'ep-alex' },
       { id: 'p-ben', name: 'Ben Carter' },
     ],
   });
@@ -344,10 +346,14 @@ describe('BracketDrawsTab — draw detail panel', () => {
         expect.objectContaining({
           discipline: 'MS',
           format: 'se',
-          participants: expect.arrayContaining([
-            expect.objectContaining({ id: 'p-alex', name: 'Alex Tan' }),
-            expect.objectContaining({ id: 'p-ben', name: 'Ben Carter' }),
-          ]),
+          // R-DM-2(a): commitPicks re-derives every row from the picks, so
+          // the key has to survive picker → commitPicks → the wire. `toEqual`
+          // on the row, not `objectContaining`, so a stray `entryPlayerId` on
+          // the hand-added player fails too.
+          participants: [
+            { id: 'p-alex', name: 'Alex Tan', entryPlayerId: 'ep-alex' },
+            { id: 'p-ben', name: 'Ben Carter' },
+          ],
         }),
       ),
     );

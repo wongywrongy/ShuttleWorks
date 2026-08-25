@@ -18,7 +18,9 @@ const ev: BracketEventDTO = {
 } as BracketEventDTO;
 
 const players = [
-  { id: 'p-alex', name: 'Alex Tan' },
+  // Alex came through the entries commit seam and holds a person key;
+  // Ben was hand-added and holds none (R-DM-2(a)).
+  { id: 'p-alex', name: 'Alex Tan', entryPlayerId: 'ep-alex' },
   { id: 'p-ben', name: 'Ben Carter' },
 ];
 
@@ -55,6 +57,28 @@ describe('DrawDetailPanel', () => {
         expect.objectContaining({ id: 'p-ben' }),
       ]),
     );
+  });
+
+  // R-DM-2(a): the team row the doubles picker synthesizes is a
+  // `bracket_participants` row like any other, so it has to carry the
+  // nominating player's key — the same half `members[0]` names.
+  it('carries the nominating player entryPlayerId onto a synthesized team', async () => {
+    const md = { ...ev, id: 'MD', discipline: 'MD' } as BracketEventDTO;
+    render(
+      <DrawDetailPanel ev={md} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,
+    );
+    fireEvent.click(screen.getByRole('radio', { name: /Alex Tan/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /Ben Carter/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Save pairs$/i }));
+    await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
+    expect(onCommitPicks.mock.calls[0][0]).toEqual([
+      {
+        id: 'MD-T1',
+        name: 'Alex Tan / Ben Carter',
+        members: ['p-alex', 'p-ben'],
+        entryPlayerId: 'ep-alex',
+      },
+    ]);
   });
 
   // Commit REPLACES the event's participants. Opening the picker empty meant
