@@ -46,7 +46,10 @@ class BlobVersionError(RuntimeError):
     Deliberately fatal. The alternative - parse it anyway - is the exact
     silent mis-read this mechanism exists to prevent, and on a
     single-store product an operator seeing a loud error has a real
-    remedy (restore a snapshot, or run the newer build).
+    remedy: run the build that wrote the blob. Note it is the ONLY
+    remedy for the offending row - the guard fires at hydration, so
+    ``delete``/``upsert``/``restore`` on that row raise too; restoring a
+    snapshot only helps OTHER workspaces.
     """
 
 
@@ -76,14 +79,17 @@ class VersionedJSON(TypeDecorator):
         return value
 
     def process_result_value(self, value, dialect):
+        # P4/P5: when you wire your first column, tighten
+        # ``test_a_future_version_blob_refuses_to_load`` to assert the raise
+        # lands in ``get_by_id`` - i.e. at HYDRATION, not at attribute access.
         if isinstance(value, dict) and value:
             stored = value.get(self.version_key, 1)
             if isinstance(stored, int) and stored > self.version:
                 raise BlobVersionError(
                     f"stored blob is version {stored}; this build reads at "
-                    f"most {self.version}. Refusing to parse it - run the "
-                    f"newer build, or restore a snapshot taken before the "
-                    f"upgrade."
+                    f"most {self.version}. Run the build that wrote it - "
+                    f"this row cannot be read, rewritten or restored by an "
+                    f"older build."
                 )
         return value
 
@@ -111,31 +117,31 @@ class VersionedJSON(TypeDecorator):
 # ---------------------------------------------------------------------
 BLOB_VERSIONS: dict[str, Optional[int]] = {
     # -- versioned ----------------------------------------------------
-    "tournaments.data": CURRENT_TOURNAMENT_SCHEMA_VERSION,  # models.py:129
+    "tournaments.data": CURRENT_TOURNAMENT_SCHEMA_VERSION,
     # -- list-shaped: needs a reshape, owned by a later phase ----------
-    "bracket_participants.member_ids": None,  # :472 - Pair membership; P5 reshapes
-    "bracket_matches.side_a": None,  # :519 - resolved participants; P4
-    "bracket_matches.side_b": None,  # :520 - same
-    "bracket_matches.dependencies": None,  # :521 - draw topology; P4/P6
-    "bracket_matches.child_unit_ids": None,  # :526 - draw topology
-    "entries.pending_reasons": None,  # :1501 - entry lifecycle state (list of codes)
+    "bracket_participants.member_ids": None,  # Pair membership; P5 reshapes
+    "bracket_matches.side_a": None,  # resolved participants; P4
+    "bracket_matches.side_b": None,  # same
+    "bracket_matches.dependencies": None,  # draw topology; P4/P6
+    "bracket_matches.child_unit_ids": None,  # draw topology
+    "entries.pending_reasons": None,  # entry lifecycle state (list of codes)
     # -- round-trip-sensitive: an extra key would reach a consumer -----
-    "solve_jobs.params": None,  # :857 - PINNED determinism input; do not perturb
-    "solve_jobs.input_snapshot": None,  # :859 - solver input, hashed alongside params
-    "workspace_modules.config": None,  # :775 - Display tv* layout, goes to the console
-    "bracket_participants.meta": None,  # :474 - documented "arbitrary round-trip"
-    "bracket_matches.meta": None,  # :527 - same
-    "submissions.fee_basis": None,  # :1275 - money provenance kept for disputes
-    "bracket_results.score": None,  # :572 - Result; ADR 0006 forbids reshaping it here
+    "solve_jobs.params": None,  # PINNED determinism input; do not perturb
+    "solve_jobs.input_snapshot": None,  # solver input, hashed alongside params
+    "workspace_modules.config": None,  # Display tv* layout, goes to the console
+    "bracket_participants.meta": None,  # documented "arbitrary round-trip"
+    "bracket_matches.meta": None,  # same
+    "submissions.fee_basis": None,  # money provenance kept for disputes
+    "bracket_results.score": None,  # Result; ADR 0006 forbids reshaping it here
     # -- not yet needed by any phase -----------------------------------
-    "tournament_backups.snapshot": None,  # :317 - see the recorded edge above
-    "commands.payload": None,  # :243 - operator command args
-    "bracket_events.config": None,  # :435 - per-draw format knobs (SP-P11)
-    "bracket_matches.slot_a": None,  # :517 - draw slot pointers; P4
-    "bracket_matches.slot_b": None,  # :518 - same
-    "solve_jobs.result": None,  # :863 - ScheduleDTO
-    "solve_jobs.error": None,  # :864 - {code,message,detail}
-    "solve_jobs.progress": None,  # :867 - live phase/objective
-    "entry_pages.fee_schedule": None,  # :1688 - cumulative price ladder
-    "entry_pages.discipline_caps": None,  # :1701 - entry policy
+    "tournament_backups.snapshot": None,  # see the recorded edge above
+    "commands.payload": None,  # operator command args
+    "bracket_events.config": None,  # per-draw format knobs (SP-P11)
+    "bracket_matches.slot_a": None,  # draw slot pointers; P4
+    "bracket_matches.slot_b": None,  # same
+    "solve_jobs.result": None,  # ScheduleDTO
+    "solve_jobs.error": None,  # {code,message,detail}
+    "solve_jobs.progress": None,  # live phase/objective
+    "entry_pages.fee_schedule": None,  # cumulative price ladder
+    "entry_pages.discipline_caps": None,  # entry policy
 }

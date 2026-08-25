@@ -37,6 +37,7 @@ WORKDIR /app
 # apps/console/Dockerfile.
 COPY package.json package-lock.json ./
 COPY packages/design-system/package.json ./packages/design-system/package.json
+COPY packages/shared-contract/package.json ./packages/shared-contract/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY apps/entrant/package.json ./apps/entrant/package.json
 

@@ -35,6 +35,7 @@ COPY package.json package-lock.json ./
 # workspace graph. Source files come later so editing a .tsx doesn't
 # invalidate the install layer.
 COPY packages/design-system/package.json ./packages/design-system/package.json
+COPY packages/shared-contract/package.json ./packages/shared-contract/package.json
 COPY apps/console/package.json ./apps/console/package.json
 
 # Install the workspace graph. Cache mount keeps the npm download cache
