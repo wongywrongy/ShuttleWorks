@@ -27,6 +27,7 @@ whose characterization pass (SP-E1-1 Task 1) is what this seam is built on.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -1164,6 +1165,190 @@ def test_two_people_with_the_SAME_NAME_are_two_participants_with_two_keys(
     assert len(keys) == 2
     # And the ids are distinct without being a slug of anything.
     assert participants[0].id != participants[1].id
+
+
+def _person_key_disagreements(repo, tournament_id, event_id):
+    """Every participant whose two copies of the person key do not agree.
+
+    SP-DM-3 P6 (``debt-log.md``, the blob-vs-column row): P4 double-stores
+    the person key on purpose — once as ``bracket_participants.
+    entry_player_id`` (a real, constrained column) and once as
+    ``entryPlayerId`` on the roster row inside ``tournaments.data``. Nothing
+    asserted the two copies agreed. This is that assertion, and it is an
+    assertion ONLY: P6 writes no backfill, because P4's merge ruled the key
+    landed additively with old rows reading NULL.
+
+    Which is why **absent on both sides is AGREEMENT**, not a finding. A
+    pre-P4 participant has a NULL column and a roster row with no
+    ``entryPlayerId``; that is the ruled-correct legacy state. Disagreement
+    is one copy present with the other absent, or both present and
+    different.
+
+    The seat compared against is the participant's own roster row for a
+    PLAYER, and ``member_ids[0]``'s row for a TEAM — a TEAM has no roster
+    row of its own (its two humans do) and P4/P5 ruled the column carries
+    ``members[0]``'s key.
+
+    **For whoever writes the backfill later:** the console builds a
+    participant's key FROM the blob row on every operator re-save
+    (``BracketDrawsTab.tsx``, ``DrawDetailPanel.tsx``, ``ParticipantPicker
+    .tsx``, ``rosterEvents.ts``), so the blob is upstream of the column. A
+    backfill that keys the column without keying the blob in the same pass
+    is undone by the first roster edit.
+    """
+    repo.session.expire_all()
+    document = repo.tournaments.get_by_id(tournament_id).data or {}
+    blob_key = {
+        row["id"]: row.get("entryPlayerId")
+        for row in (document.get("bracketPlayers") or [])
+    }
+    found = []
+    for p in repo.brackets.list_participants(tournament_id, event_id):
+        seat = p.member_ids[0] if p.type == "TEAM" and p.member_ids else p.id
+        column = None if p.entry_player_id is None else str(p.entry_player_id)
+        # ``.get`` and not ``[]``: a participant with no roster row at all
+        # (the director's hand-added seed) has no blob copy, which is the
+        # same "absent" as a row that simply carries no key.
+        if column != blob_key.get(seat):
+            found.append((p.id, column, blob_key.get(seat)))
+    return found
+
+
+def test_the_person_key_agrees_between_the_column_and_the_roster_blob(repo, session):
+    """The singles shape. Both copies present, and equal.
+
+    Asserting the key is not None first: without that the equality below
+    would pass vacuously on a pair of absences and pin nothing.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    ev = _entry_event(session, tid, code="MS", bracket_event_id="MS")
+    _entry(session, tid, ev, player_name="Alex Tan")
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    participants = repo.brackets.list_participants(tid, "MS")
+    assert participants, "expected a committed participant"
+    assert all(p.entry_player_id is not None for p in participants)
+    roster = repo.tournaments.get_by_id(tid).data["bracketPlayers"]
+    assert all(row.get("entryPlayerId") for row in roster)
+    assert _person_key_disagreements(repo, tid, "MS") == []
+
+
+def test_a_seam_TEAM_carries_the_key_of_the_roster_row_it_names_first(repo, session):
+    """The pair shape of the same agreement. A TEAM has no roster row of
+    its own — its two members do — and P4/P5 ruled the row carries
+    ``members[0]``'s key. So the agreement to assert is between the TEAM's
+    column and the roster row named by ``member_ids[0]``.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid, code="XD")
+    nominator, _partner = _pair(session, tid, ev)
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    team = repo.brackets.list_participants(tid, "XD")[0]
+    assert team.type == "TEAM"
+    assert team.entry_player_id == nominator.entry_player_id
+    assert _person_key_disagreements(repo, tid, "XD") == []
+
+
+def test_a_participant_with_NEITHER_copy_of_the_key_agrees(repo, session):
+    """The legacy state, and the reason this check is shaped the way it is.
+
+    Two hand-added participants, neither keyed: one with no roster row at
+    all (the director's seeded placeholder), one whose roster row simply
+    carries no ``entryPlayerId``. Both are pre-P4-shaped and both are
+    correct. A check that demanded both copies be present would redden on
+    every such fixture, and the only way anyone would "fix" that is by
+    weakening it back to nothing.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    document = dict(repo.tournaments.get_by_id(tid).data)
+    document["bracketPlayers"] = [
+        {"id": "P2", "name": "Hand Added", "availability": []}
+    ]
+    repo.tournaments.upsert_data(tid, document)
+    repo.brackets.bulk_create_participants(
+        tid,
+        "MS",
+        [
+            {"id": "P1", "name": "Seeded One", "type": "PLAYER"},
+            {"id": "P2", "name": "Hand Added", "type": "PLAYER"},
+        ],
+    )
+
+    assert _person_key_disagreements(repo, tid, "MS") == []
+
+
+def test_the_agreement_check_catches_a_blob_key_that_drifted(repo, session):
+    """Non-vacuity, the failing direction: both copies present and
+    DIFFERENT.
+
+    The seam cannot produce this today — it writes both copies in one plan
+    — so it is planted, which is exactly why the pin is cheap now and
+    expensive to discover later.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    ev = _entry_event(session, tid, code="MS", bracket_event_id="MS")
+    _entry(session, tid, ev, player_name="Alex Tan")
+    commit_entries(repo, tid)
+    assert _person_key_disagreements(repo, tid, "MS") == []
+
+    stale = str(uuid.uuid4())
+    document = dict(repo.tournaments.get_by_id(tid).data)
+    document["bracketPlayers"] = [
+        {**row, "entryPlayerId": stale} for row in document["bracketPlayers"]
+    ]
+    repo.tournaments.upsert_data(tid, document)
+
+    assert [d[2] for d in _person_key_disagreements(repo, tid, "MS")] == [stale]
+
+
+def test_adopting_a_legacy_roster_row_keys_the_column_and_not_the_blob(repo, session):
+    """Non-vacuity's other half — one copy present, the other absent — and
+    the one place the CURRENT seam produces it.
+
+    ``_adoptable``'s ``sourceEntryId`` branch attaches an entry to a legacy
+    entry-keyed roster row and then, on the adopted branch, does NOT write
+    the payload it built (``entries.py``, ``if adopted is None: roster.
+    append(payload)``). The participant insert still carries
+    ``entry.entry_player_id``. So the column is keyed and the blob row it
+    names is not — the very shape the debt row warns a column-only backfill
+    would leave everywhere, here reachable by one operator with an old
+    roster.
+
+    Characterized, not fixed: P6 writes no backfill and no production code,
+    and the repair is a blob write, which is a re-save the seam's "never
+    mutates an existing roster player" invariant does not currently make.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    ev = _entry_event(session, tid, code="MS", bracket_event_id="MS")
+    entry = _entry(session, tid, ev, player_name="Alex Tan")
+    legacy_id = roster_id(entry.id)
+    assert legacy_id != roster_id(entry.entry_player_id)
+    document = dict(repo.tournaments.get_by_id(tid).data)
+    document["bracketPlayers"] = [
+        {
+            "id": legacy_id,
+            "name": "Alex Tan",
+            "availability": [],
+            "sourceEntryId": str(entry.id),
+        }
+    ]
+    repo.tournaments.upsert_data(tid, document)
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    assert _person_key_disagreements(repo, tid, "MS") == [
+        (legacy_id, str(entry.entry_player_id), None)
+    ]
 
 
 def test_one_person_in_two_draws_is_one_roster_row_in_both_participant_lists(
