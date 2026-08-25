@@ -202,11 +202,19 @@ _MEET_PROJECTION_FIELDS = tuple(
     "/{token}/state",
     response_model=DisplayStateDTO,
     # The projection copies a key only when the blob HAS it
-    # (``if k in t.data``), and the board distinguishes an absent key from a
-    # null one. ``exclude_unset`` is what keeps that true through the
-    # response model: a dict validated into the model marks exactly the keys
-    # it carried as "set", so the wire key set is byte-for-byte what it was
-    # before P1 — which the key-set test above is there to prove.
+    # (``if k in t.data``). ``exclude_unset`` keeps that true through the
+    # response model: a dict validated into the model marks exactly the
+    # keys it carried as "set", so the wire key set is byte-for-byte what
+    # it was before P1 gave this route a response_model - which the
+    # key-set test above proves.
+    #
+    # This is conservatism about the wire, NOT a contract with the board:
+    # the console's own consumer null-coalesces every field it reads
+    # (``useDisplaySync.ts`` - ``remote.config ?? null`` and friends), so
+    # it cannot tell an absent key from a null one. An earlier version of
+    # this comment claimed it could. Other consumers of a public capability
+    # URL are not enumerable, which is the real reason not to widen the
+    # payload here.
     response_model_exclude_unset=True,
 )
 def display_state(
