@@ -207,6 +207,22 @@ def _expire(session: Session) -> None:
     session.expire_all()
 
 
+def roster_id(person_id) -> str:
+    """The one place the ``entry-{uuid}`` roster/participant id is spelled.
+
+    F-DM-05: this prefix was the ONLY storage link from the people spine to
+    the competition spine, and it was minted here and independently
+    re-derived in three other modules - so renaming it orphaned every
+    public player page silently, in three directions at once.
+
+    It survives P4 as a legacy READ path and as the participant PK
+    (R-DM-7(a) forbids a re-key). What replaces it as the *identity* is
+    ``bracket_participants.entry_player_id`` - a real, constrained key.
+    This function is where the string dies when that day comes.
+    """
+    return f"entry-{person_id}"
+
+
 def _player_id(entry: Entry) -> str:
     """Deterministic roster id for the PERSON this entry enters.
 
@@ -224,7 +240,7 @@ def _player_id(entry: Entry) -> str:
     100. ``entry_player_id`` is nullable only while the R13 narrowing is in
     flight, so the entry id remains the fallback key.
     """
-    return f"entry-{entry.entry_player_id or entry.id}"
+    return roster_id(entry.entry_player_id or entry.id)
 
 
 def _adoptable(roster: list, entry: Entry) -> Optional[str]:

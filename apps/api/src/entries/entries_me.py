@@ -35,6 +35,7 @@ from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import select, tuple_
 
+from entries.entries import roster_id
 from entries.entries_public import _moment_iso
 from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
@@ -372,7 +373,7 @@ def my_entries(
                     # state rule AND the ``withdraws_until`` deadline, so a
                     # button that renders here is one the route will accept.
                     canWithdraw=_can_withdraw(entry, event),
-                    resultBadge=event_badges.get(f"entry-{entry.entry_player_id}"),
+                    resultBadge=event_badges.get(roster_id(entry.entry_player_id)),
                     partnerName=partner_name_by_entry.get(entry.id),
                 )
             )

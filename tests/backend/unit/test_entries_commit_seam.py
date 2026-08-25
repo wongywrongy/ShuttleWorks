@@ -750,3 +750,22 @@ def test_an_existing_bracket_participant_is_never_disturbed(repo, session):
     assert len(rows) == 2
     assert rows["P1"].name == "Seeded One"
     assert rows["P1"].seed == 1
+
+
+def test_the_roster_id_prefix_has_exactly_one_definition():
+    """F-DM-05's deletion gate as an executable assertion, not a grep in a
+    plan. The prefix was minted in one file and RE-DERIVED in three others
+    (``entries_site.py`` twice, ``entries_me.py`` once), so renaming it
+    silently orphaned every public player page. Read the sources and assert
+    the literal appears once."""
+    import pathlib
+
+    import entries.entries as entries_module
+
+    src = pathlib.Path(entries_module.__file__).parent
+    counts = {
+        name: pathlib.Path(src, name).read_text(encoding="utf-8").count('f"entry-{')
+        for name in ("entries.py", "entries_site.py", "entries_me.py")
+    }
+
+    assert counts == {"entries.py": 1, "entries_site.py": 0, "entries_me.py": 0}

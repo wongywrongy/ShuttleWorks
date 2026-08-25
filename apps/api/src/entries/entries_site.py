@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends, Path, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from entries.entries import roster_id
 from entries.entries_public import _not_found, _resolve
 from db.models import Entry, EntryEvent, EntryPage, EntryPlayer, Tournament
 from repositories import LocalRepository, get_repository
@@ -85,7 +86,7 @@ def _clubs_by_roster_id(repo: LocalRepository, tournament_id) -> Dict[str, Optio
             EntryPlayer.tournament_id == tournament_id
         )
     ).all()
-    return {f"entry-{pid}": club for pid, club in rows}
+    return {roster_id(pid): club for pid, club in rows}
 
 
 def _hhmm_plus(day_start: str, minutes: int) -> str:
@@ -939,7 +940,7 @@ def player_page(
     )
 
     results_on = bool(page.results_published)
-    roster_id = f"entry-{person_id}"
+    roster_id_str = roster_id(person_id)
     matches: List[PlayerMatchDTO] = []
     wins = losses = 0
 
@@ -951,7 +952,7 @@ def player_page(
             mine = {
                 p.id
                 for p in event.participants
-                if p.id == roster_id or roster_id in (p.members or [])
+                if p.id == roster_id_str or roster_id_str in (p.members or [])
             }
             if not mine:
                 continue
@@ -1032,7 +1033,7 @@ def player_page(
                         )
 
     # ---- meet-origin matches -----------------------------------------
-    meet = _meet_matches(repo, tournament, roster_id, results_on)
+    meet = _meet_matches(repo, tournament, roster_id_str, results_on)
     matches.extend(meet.matches)
     wins += meet.wins
     losses += meet.losses
