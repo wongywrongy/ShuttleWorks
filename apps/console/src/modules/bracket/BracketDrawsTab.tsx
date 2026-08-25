@@ -34,6 +34,7 @@ import {
   type BandedTableGroup,
 } from '../../components/control-plane';
 import { disciplineOrderIndex } from '../../lib/eventColors';
+import { isDoublesCode } from '../../lib/doubles';
 import { Modal } from '../../components/common/Modal';
 import {
   MAX_EVENT_CODE_LENGTH,
@@ -237,7 +238,7 @@ export function BracketDrawsTab() {
   // picker; the Draw detail panel drives it.
   const commitPicks = useCallback(
     async (ev: BracketEventDTO, picks: PickedSingle[] | PickedPair[]) => {
-      const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
+      const isDoubles = isDoublesCode(ev.discipline);
       const seedOf = (id: string): number | undefined => {
         const s = (ev.participants ?? []).find((x) => x.id === id)?.seed;
         return s == null ? undefined : s;

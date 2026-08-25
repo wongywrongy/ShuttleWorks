@@ -11,6 +11,7 @@
 import type ExcelJSNs from 'exceljs';
 import { defaultEventOrder } from '../roster/positionGrid/helpers';
 import { indexById } from '../../../lib/indexById';
+import { isDoublesCode } from '../../../lib/doubles';
 import {
   applyRangeStyle,
   downloadXlsx,
@@ -63,10 +64,6 @@ const ROSE_B = 'FFF8DCDC';
 const BANNER_FILL = 'FFF3F4F6';
 const BANNER_FONT = 'FF374151';
 
-function isDoublesPrefix(prefix: string): boolean {
-  return prefix.endsWith('D');
-}
-
 export async function exportRosterXlsx(
   players: PlayerDTO[],
   groups: RosterGroupDTO[],
@@ -93,7 +90,7 @@ export async function exportRosterXlsx(
   sheet.columns = [
     { header: '#', key: 'num', width: 8 },
     ...events.map((ev, i) => ({
-      header: `${ev} · ${isDoublesPrefix(ev) ? 'doubles' : 'singles'}`,
+      header: `${ev} · ${isDoublesCode(ev) ? 'doubles' : 'singles'}`,
       key: `ev${i}`,
       width: 30,
     })),
@@ -145,7 +142,7 @@ export async function exportRosterXlsx(
         }
         const occupants = byRank.get(`${ev}${r}`) ?? [];
         const names = occupants.map((p) => p.name || '(unnamed)');
-        row.getCell(col).value = isDoublesPrefix(ev) ? names.join(' & ') : (names[0] ?? '');
+        row.getCell(col).value = isDoublesCode(ev) ? names.join(' & ') : (names[0] ?? '');
       });
 
       rowIdx++;
@@ -272,7 +269,7 @@ export async function exportMatchesXlsx(
     bannerRow.height = 24;
     sheet.mergeCells(rowIdx, 1, rowIdx, colCount);
     const bannerCell = bannerRow.getCell(1);
-    const isDoubles = prefix.endsWith('D');
+    const isDoubles = isDoublesCode(prefix);
     bannerCell.value = `${prefix} · ${isDoubles ? 'doubles' : 'singles'} · ${bucket.length} match${bucket.length === 1 ? '' : 'es'}`;
     bannerCell.font = { bold: true, size: 12, color: { argb: BANNER_FONT } };
     bannerCell.alignment = { vertical: 'middle', horizontal: 'center' };

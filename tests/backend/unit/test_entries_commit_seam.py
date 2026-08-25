@@ -895,3 +895,29 @@ def test_the_roster_id_prefix_has_exactly_one_definition():
     }
 
     assert counts == {"entries.py": 1, "entries_site.py": 0, "entries_me.py": 0}
+
+
+def test_the_backend_asks_entry_type_in_exactly_one_place():
+    """F-DM-13's backend half. ``entries/partners.py::is_doubles`` is the
+    one place ``entry_events.entry_type`` is compared to ``"doubles"``
+    (audit B1). P5 adds a second CALLER (the commit seam) and no second
+    RULE — read the sources and assert the comparison appears once."""
+    import pathlib
+    import re
+
+    import entries.entries as entries_module
+
+    src = pathlib.Path(entries_module.__file__).parent
+    # Match the COMPARISON (``== "doubles"``), not the bare word: a docstring
+    # that says "doubles" is prose, and ``entries_json``'s ``or "singles"``
+    # default is a fallback, not a rule. Globbed rather than named so a
+    # FUTURE file growing its own copy of the rule trips this too — which is
+    # the whole point of the gate.
+    comparison = re.compile(r'==\s*"doubles"')
+    counts = {
+        path.name: len(comparison.findall(path.read_text(encoding="utf-8")))
+        for path in sorted(src.glob("*.py"))
+    }
+
+    assert counts.pop("partners.py") == 1
+    assert {name: n for name, n in counts.items() if n} == {}

@@ -18,6 +18,7 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import { useMeetResultsLock } from '../../../hooks/useMeetResultsLock';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
+import { isDoublesRank } from '../roster/positionGrid/helpers';
 import type { MatchDTO } from '../../../api/dto';
 
 function expandRanks(counts: Record<string, number> | undefined): string[] {
@@ -26,10 +27,6 @@ function expandRanks(counts: Record<string, number> | undefined): string[] {
     for (let i = 1; i <= count; i++) out.push(`${prefix}${i}`);
   }
   return out;
-}
-
-function isDoublesRank(rank: string): boolean {
-  return rank.replace(/\d+$/, '').endsWith('D');
 }
 
 export function RegenerateMenu() {

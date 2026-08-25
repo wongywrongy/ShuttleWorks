@@ -81,22 +81,22 @@ describe('DrawDetailPanel', () => {
     ]);
   });
 
-  it('TODAY opens the SINGLES picker for a director-defined BD draw', () => {
-    /* F-DM-13 characterization, before SP-DM-3 P5 Task 2 collapses the six
-       doubles rules into one. `DrawDetailPanel.tsx:28` asks a closed
-       `['MD','WD','XD']` list, so `BD` — doubles by the D-suffix convention
-       the product documents as its rule (`MeetEventsSection.tsx:15`) and
-       doubles everywhere in Meet — opens the singles picker here. Pinned
-       through the COMPONENT, not through a literal: the sibling pin in
-       `lib/__tests__/doubles.test.ts` asserts against its own copy of the
-       closed list, so it stays green whatever this file says.
-       EXPECTED TO FLIP IN TASK 2. */
+  it('opens the DOUBLES picker for a director-defined BD draw', () => {
+    /* THE FLIP. Characterized at 70b61bf1 asserting the opposite: the panel
+       asked a closed `['MD','WD','XD']` list, so `BD` — doubles by the
+       D-suffix convention the product documents as its rule
+       (`MeetEventsSection.tsx:15`) and doubles everywhere in Meet — opened
+       the SINGLES picker. F-DM-13 collapsed the six doubles rules into
+       `lib/doubles.ts::isDoublesCode`, and this is the deliberate,
+       user-visible half of that widening (P5 judgment call 6). The
+       inversion of this pin is the proof the collapse changed behavior
+       rather than just moving a literal. */
     const bd = { ...ev, id: 'BD', discipline: 'BD' } as BracketEventDTO;
     render(
       <DrawDetailPanel ev={bd} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,
     );
-    expect(screen.getByRole('button', { name: /^Save participants$/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Save pairs$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Save pairs$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Save participants$/i })).not.toBeInTheDocument();
   });
 
   // Commit REPLACES the event's participants. Opening the picker empty meant

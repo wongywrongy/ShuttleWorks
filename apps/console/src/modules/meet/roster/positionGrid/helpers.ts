@@ -92,17 +92,15 @@ export const EVENT_LABEL: Record<
  */
 export const ROSTER_DRAG_ACTIVATION_DISTANCE = 8;
 
-export function isDoubles(prefix: string): boolean {
-  return prefix.endsWith('D');
-}
-
 /**
- * True when the given rank (prefix+digits, e.g. "MD2", "WS3") belongs
- * to a doubles event. Strips the trailing digits and consults
- * `isDoubles`. Used to enforce the singles invariant (≤1 player per
- * school per singles rank) at every mutation point.
+ * `isDoubles(prefix)` — true when an event prefix ("MD", "WS") is doubles.
+ * `isDoublesRank(rank)` — the same question about a rank (prefix+digits,
+ * e.g. "MD2"); used to enforce the singles invariant (≤1 player per school
+ * per singles rank) at every mutation point.
+ *
+ * Both are now RE-EXPORTS of `lib/doubles.ts::isDoublesCode`, the console's
+ * one authority (F-DM-13) — it strips trailing digits unconditionally, which
+ * is a no-op for a prefix. The two names survive so the ~15 meet call sites
+ * do not churn; there is no second rule behind them.
  */
-export function isDoublesRank(rank: string): boolean {
-  const prefix = rank.replace(/\d+$/, '');
-  return isDoubles(prefix);
-}
+export { isDoublesCode as isDoubles, isDoublesCode as isDoublesRank } from '../../../../lib/doubles';

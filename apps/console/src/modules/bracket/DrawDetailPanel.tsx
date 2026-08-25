@@ -11,6 +11,7 @@ import { DetailPanel } from '../../components/control-plane';
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
 import type { BracketEventDTO } from './eventUpsertPayload';
 import { formatLabel, disciplineLabel } from './bracketLabels';
+import { isDoublesCode } from '../../lib/doubles';
 
 export function DrawDetailPanel({
   ev,
@@ -25,7 +26,7 @@ export function DrawDetailPanel({
    *  flow (BracketDrawsTab.commitPicks); the panel only forwards picks. */
   onCommitPicks: (picks: PickedSingle[] | PickedPair[]) => Promise<void>;
 }) {
-  const isDoubles = ['MD', 'WD', 'XD'].includes(ev.discipline);
+  const isDoubles = isDoublesCode(ev.discipline);
   const configEntries = Object.entries(ev.config ?? {});
   const entered = ev.participants ?? [];
   return (

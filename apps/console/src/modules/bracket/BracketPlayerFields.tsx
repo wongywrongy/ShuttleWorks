@@ -30,6 +30,7 @@ import {
 } from './rosterEvents';
 import { disciplineLabel } from './bracketLabels';
 import { EYEBROW_CLASS } from '../../lib/utils';
+import { isDoublesCode } from '../../lib/doubles';
 
 /** Writes one event's participant list (config echoed by the caller). */
 export type CommitEventFn = (
@@ -196,9 +197,6 @@ function EventTypeEditor({
   const matching = events.filter((e) => e.discipline === typeCode);
   if (matching.length === 0) return null;
 
-  const isDoublesEvent = (ev: BracketEventDTO) =>
-    ['MD', 'WD', 'XD'].includes(ev.discipline);
-
   // R-DM-2(a): the roster player already holds the person key, so a manual
   // assignment must carry it or it writes a NULL-keyed
   // `bracket_participants` row for somebody the commit seam identified.
@@ -236,7 +234,7 @@ function EventTypeEditor({
           (p) => p.id !== player.id && !(p.members ?? []).includes(player.id),
         ),
       );
-    } else if (isDoublesEvent(ev)) {
+    } else if (isDoublesCode(ev.discipline)) {
       // ON (doubles) — arm the inline partner select first.
       setPairingFor((curr) => (curr === ev.id ? null : ev.id));
       setPartnerId('');
