@@ -81,6 +81,24 @@ describe('DrawDetailPanel', () => {
     ]);
   });
 
+  it('TODAY opens the SINGLES picker for a director-defined BD draw', () => {
+    /* F-DM-13 characterization, before SP-DM-3 P5 Task 2 collapses the six
+       doubles rules into one. `DrawDetailPanel.tsx:28` asks a closed
+       `['MD','WD','XD']` list, so `BD` — doubles by the D-suffix convention
+       the product documents as its rule (`MeetEventsSection.tsx:15`) and
+       doubles everywhere in Meet — opens the singles picker here. Pinned
+       through the COMPONENT, not through a literal: the sibling pin in
+       `lib/__tests__/doubles.test.ts` asserts against its own copy of the
+       closed list, so it stays green whatever this file says.
+       EXPECTED TO FLIP IN TASK 2. */
+    const bd = { ...ev, id: 'BD', discipline: 'BD' } as BracketEventDTO;
+    render(
+      <DrawDetailPanel ev={bd} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,
+    );
+    expect(screen.getByRole('button', { name: /^Save participants$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Save pairs$/i })).not.toBeInTheDocument();
+  });
+
   // Commit REPLACES the event's participants. Opening the picker empty meant
   // ticking one name dropped everyone already entered.
   it('opens holding the participants already entered in the draw', () => {
