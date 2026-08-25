@@ -223,6 +223,44 @@ def roster_id(person_id) -> str:
     return f"entry-{person_id}"
 
 
+def team_id(person_ids: tuple[uuid.UUID, uuid.UUID]) -> str:
+    """The deterministic participant id for a seam-built doubles pair.
+
+    Deterministic for the same reason ``_player_id`` is: this seam is
+    RE-RUNNABLE by design (module docstring, spec Q3), and a partially
+    applied run has to be recognizable on the next one. A random id would
+    make every re-run mint a second team for the same two people.
+
+    Not ``roster_id`` of anything: a team is not a person and must never
+    collide with one. Not the console's ``{eventId}-T{n}`` either - that
+    numbering depends on how many teams already exist, which is exactly
+    the kind of position-dependence a re-runnable seam cannot have. The
+    two person UUIDs in member order are 78 characters, inside
+    ``BracketParticipant.id``'s String(100) and inside ``Identifier``.
+    """
+    return f"team-{person_ids[0]}-{person_ids[1]}"
+
+
+def team_name(name_a: str, name_b: str) -> str:
+    """The backend's one pair-label mint.
+
+    ``bracket_participants.name`` is NOT NULL, so a team needs a label and
+    P5 therefore ADDS a mint rather than deleting one - the design doc's
+    "-> 0" deletion gate for the minting direction is unachievable while
+    director manual pairing stays (R-DM-4's ruling note). What P5 can
+    honestly deliver is that nothing has to DECODE this label: for a
+    seam-built team ``member_ids`` carries the two ``entry-{uuid}`` roster
+    ids, so membership is data. Deleting the decode
+    (``bracketMigration.ts:41-53``'s split-and-zip) is P6's, per the design
+    doc's own text.
+
+    The separator matches the console's two mint sites
+    (``ParticipantPicker`` and ``BracketPlayerFields``) so one draw does
+    not render two spellings of the same idea.
+    """
+    return f"{name_a} / {name_b}"
+
+
 def _player_id(entry: Entry) -> str:
     """Deterministic roster id for the PERSON this entry enters.
 
@@ -547,6 +585,102 @@ def _commit_bracket(
     )
 
 
+def _bracket_payload(entry: Entry, player_id: str) -> dict:
+    """The ``bracketPlayers`` blob row for one PERSON.
+
+    Extracted so the pair branch can ask "would the OTHER half's payload
+    validate?" before emitting a team — the loop only ever validates the
+    entry it is currently on, and the nominator is processed first.
+    ``player_id`` is a parameter because the loop's own id may be an
+    adopted one rather than ``_player_id(entry)``.
+    """
+    payload = {
+        "id": player_id,
+        "name": entry.player_name,
+        "availability": [],
+        "sourceEntryId": str(entry.id),
+        "entryPlayerId": str(entry.entry_player_id) if entry.entry_player_id else None,
+    }
+    if entry.remarks:
+        payload["remarks"] = entry.remarks
+    return payload
+
+
+def _pair_batch(
+    candidates: list[Entry],
+    events: dict[uuid.UUID, EntryEvent],
+) -> dict[uuid.UUID, Entry]:
+    """Entry id -> its partner entry, for the pairs this run may build.
+
+    R-DM-4(a): a pair is built only from the mutual key the intake chain
+    already wrote, never from matching names. That is the whole reason
+    this is safe where the incumbent products' name matching is not - and
+    it is the same "auto-link what is certain, flag the rest" shape as the
+    2026-08-23 minting ruling (see R-DM-4's rationale).
+
+    Every leg of the predicate is a REFUSAL to pair, never a decision to
+    un-pair: a candidate that fails any of them commits exactly as it does
+    today, as a singleton, and the director pairs it by hand (the ruled
+    manual path stays). The legs:
+
+    1. both halves are in THIS run's candidate list - so both are
+       ``confirmed`` and neither is on the roster yet;
+    2. the link is MUTUAL. It is mutual by write convention only (F-DM-12:
+       no FK, nothing detects a half-written link), so the seam checks
+       rather than trusts, and logs when it finds one;
+    3. both carry ``partner_accepted_at`` - a nomination is not a pair;
+    4. the event takes pairs, asked through the backend's ONE answer
+       (``partners.is_doubles``, F-DM-13);
+    5. both halves sit in the SAME entry event. True by construction
+       (``partners.accept()`` copies ``entry_event_id`` onto the half it
+       builds) and checked anyway, because the participant list a team is
+       inserted into is per bracket event: two halves in different events
+       would put one team in two draws.
+
+    The remaining two legs cannot live here. Whether a half's payload
+    validates and whether it is already in the draw are both answered
+    against per-event state the caller loads lazily inside its loop, so
+    they are checked there, before the team is emitted.
+
+    Member order is the nominator first: earlier ``submitted_at``, ``id``
+    as the tiebreaker for the same reason ``_candidates`` uses it. Order
+    is load-bearing twice over - it fixes ``team_id`` so a re-run is
+    idempotent, and it fixes which half's person key the row carries.
+    """
+    from entries.partners import is_doubles
+
+    by_id = {entry.id: entry for entry in candidates}
+    pairs: dict[uuid.UUID, Entry] = {}
+    for entry in candidates:
+        partner_id = entry.partner_entry_id
+        if partner_id is None or entry.id in pairs:
+            continue
+        partner = by_id.get(partner_id)
+        if partner is None:
+            continue
+        if partner.partner_entry_id != entry.id:
+            log.warning(
+                "entries: one-directional partner link between %s and %s; "
+                "committing both as singletons (F-DM-12)",
+                entry.id,
+                partner_id,
+            )
+            continue
+        if entry.partner_accepted_at is None or partner.partner_accepted_at is None:
+            continue
+        if partner.entry_event_id != entry.entry_event_id:
+            continue
+        event = events.get(entry.entry_event_id)
+        if event is None or not is_doubles(event):
+            continue
+        first, second = sorted(
+            (entry, partner), key=lambda e: (e.submitted_at, e.id)
+        )
+        pairs[first.id] = second
+        pairs[second.id] = first
+    return pairs
+
+
 def _plan_bracket(
     repo: LocalRepository,
     tournament_id: uuid.UUID,
@@ -559,6 +693,7 @@ def _plan_bracket(
     skipped: list[SkippedEntry] = []
     inserts: dict[str, list[dict]] = {}
     existing_ids: dict[str, set[str]] = {}
+    pairs = _pair_batch(candidates, events)
     mutated = False
 
     for entry in candidates:
@@ -591,15 +726,7 @@ def _plan_bracket(
                 )
             }
 
-        payload = {
-            "id": participant_id,
-            "name": entry.player_name,
-            "availability": [],
-            "sourceEntryId": str(entry.id),
-            "entryPlayerId": str(entry.entry_player_id) if entry.entry_player_id else None,
-        }
-        if entry.remarks:
-            payload["remarks"] = entry.remarks
+        payload = _bracket_payload(entry, participant_id)
         if not _valid(BracketPlayerDTO, payload, entry):
             skipped.append(SkippedEntry(str(entry.id), SkipReason.INVALID_PLAYER))
             continue
@@ -607,24 +734,74 @@ def _plan_bracket(
         if adopted is None:
             roster.append(payload)
             mutated = True
-        if participant_id not in existing_ids[event.bracket_event_id]:
-            inserts.setdefault(event.bracket_event_id, []).append(
-                {
-                    "id": participant_id,
-                    "name": entry.player_name,
-                    "type": "PLAYER",
-                    "member_ids": [],
-                    # R-DM-2(a): the constrained half of the link. ``id``
-                    # above is still the ``entry-{uuid}`` string and stays
-                    # the PK (R-DM-7(a) — no re-key); this is the key
-                    # anything joining a draw appearance to a human should
-                    # use from now on.
-                    "entry_player_id": entry.entry_player_id,
-                    "seed": None,
-                    "meta": {"sourceEntryId": str(entry.id)},
-                }
+
+        in_draw = existing_ids[event.bracket_event_id]
+        partner = pairs.get(entry.id)
+        if partner is not None:
+            partner_seat = _adoptable(roster, partner) or _player_id(partner)
+            if not (
+                # Leg 6: BOTH payloads must project onto the roster DTO. The
+                # loop validates one entry at a time and the nominator runs
+                # first, so without this the team could name a member whose
+                # own iteration is about to be skipped.
+                _valid(BracketPlayerDTO, _bracket_payload(partner, partner_seat), partner)
+                # Leg 7: neither half may already be in this draw. A
+                # hand-added PLAYER row for one of them is the director's, and
+                # removing it to make room for a team is not the seam's call
+                # (I4).
+                and participant_id not in in_draw
+                and partner_seat not in in_draw
+            ):
+                partner = None  # fall through to the singleton insert
+
+        if partner is not None:
+            # R-DM-4(a): ONE participant for the pair. The roster blob
+            # above still carries both humans - remarks and availability
+            # are per-person - so this is the only place the two collapse.
+            members = sorted(
+                (entry, partner), key=lambda e: (e.submitted_at, e.id)
             )
-            existing_ids[event.bracket_event_id].add(participant_id)
+            person_ids = tuple(m.entry_player_id or m.id for m in members)
+            insert = {
+                "id": team_id(person_ids),
+                "name": team_name(members[0].player_name, members[1].player_name),
+                "type": "TEAM",
+                # ``roster_id`` of each person, which is what the roster
+                # blob keys its rows by and what the console's own
+                # hand-built teams put here. Both person keys are therefore
+                # recoverable from this list, which is why the row carrying
+                # only members[0]'s typed key (P4's ruled shape) loses
+                # nothing.
+                "member_ids": [roster_id(pid) for pid in person_ids],
+                "entry_player_id": members[0].entry_player_id,
+                "seed": None,
+                "meta": {
+                    "sourceEntryId": str(members[0].id),
+                    "partnerSourceEntryId": str(members[1].id),
+                },
+            }
+        else:
+            insert = {
+                "id": participant_id,
+                "name": entry.player_name,
+                "type": "PLAYER",
+                "member_ids": [],
+                # R-DM-2(a): the constrained half of the link. ``id``
+                # above is still the ``entry-{uuid}`` string and stays
+                # the PK (R-DM-7(a) — no re-key); this is the key
+                # anything joining a draw appearance to a human should
+                # use from now on.
+                "entry_player_id": entry.entry_player_id,
+                "seed": None,
+                "meta": {"sourceEntryId": str(entry.id)},
+            }
+        # Keyed on the INSERT's id, so the pair's second half is a no-op on
+        # this run and the whole pair a no-op on the next one.
+        if insert["id"] not in in_draw:
+            inserts.setdefault(event.bracket_event_id, []).append(insert)
+            in_draw.add(insert["id"])
+        # The back-reference is to this person's own roster row, never to
+        # the team: both halves keep their own.
         planned.append((entry, participant_id))
 
     if mutated:

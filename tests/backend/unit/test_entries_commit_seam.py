@@ -26,6 +26,7 @@ whose characterization pass (SP-E1-1 Task 1) is what this seam is built on.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -41,7 +42,7 @@ from db.models import (
     EntryPlayer,
 )
 from repositories.local import LocalRepository
-from entries.entries import SkipReason, commit_entries
+from entries.entries import SkipReason, commit_entries, roster_id
 
 
 @pytest.fixture
@@ -204,7 +205,14 @@ def _entry(
     return row
 
 
-def _pair(session, tournament_id, entry_event, *, names=("Ana Reyes", "Bo Lin")):
+def _pair(
+    session,
+    tournament_id,
+    entry_event,
+    *,
+    names=("Ana Reyes", "Bo Lin"),
+    states=("confirmed", "confirmed"),
+):
     """Two confirmed entries mutually linked, as ``partners.accept()`` leaves them.
 
     ``accept()`` writes ``partner_entry_id`` on BOTH halves inside one
@@ -218,10 +226,19 @@ def _pair(session, tournament_id, entry_event, *, names=("Ana Reyes", "Bo Lin"))
     UUID, so two rows written microseconds apart would tie on the
     timestamp and order randomly - which would make every assertion about
     member order or the minted team name flaky.
+
+    ``states`` exists because the seam's first predicate leg is "both halves
+    are candidates on THIS run", and the only way to fail that from a fixture
+    is to leave one half out of the candidate set. Widened in Task 3 (SP-DM-3
+    P5) for exactly that; the default is still the accepted pair.
     """
     now = datetime.now(timezone.utc)
-    first = _entry(session, tournament_id, entry_event, player_name=names[0])
-    second = _entry(session, tournament_id, entry_event, player_name=names[1])
+    first = _entry(
+        session, tournament_id, entry_event, player_name=names[0], state=states[0]
+    )
+    second = _entry(
+        session, tournament_id, entry_event, player_name=names[1], state=states[1]
+    )
     first.submitted_at = now
     second.submitted_at = now + timedelta(seconds=1)
     first.partner_entry_id = second.id
@@ -640,24 +657,33 @@ def test_a_bracket_entry_becomes_a_participant_and_a_roster_player(repo, session
     assert entry.committed_player_id == participants[0].id == roster[0]["id"]
 
 
-def test_a_confirmed_pair_TODAY_commits_as_two_unrelated_singletons(repo, session):
-    """F-DM-03, characterized. ``_plan_bracket`` emits
-    ``{"type": "PLAYER", "member_ids": []}`` for every entry regardless of
-    ``entry_events.entry_type`` or ``entries.partner_entry_id``
-    (``entries/entries.py:611-626``), so two humans who agreed to play
-    together reach the draw as two strangers and a director re-mints the
-    pair by hand as a name concatenation.
+def _doubles_draw(repo, session, tid, *, code="XD"):
+    """A draft draw plus the doubles entry event mapped onto it."""
+    _draft_event(repo, tid, code)
+    return _entry_event(
+        session, tid, code=code, bracket_event_id=code, entry_type="doubles"
+    )
 
-    THIS TEST IS EXPECTED TO CHANGE IN TASK 3 — that is the point of
-    writing it now. The area has the thinnest test cover of any slice in
-    this program (design doc §2 P5), so the flip has to be a visible edit
-    against a recorded baseline, not a claim.
+
+def test_a_confirmed_pair_commits_as_ONE_team_with_real_member_ids(repo, session):
+    """NC 1 (P5 card) — the flip of ``test_a_confirmed_pair_TODAY_commits_
+    as_two_unrelated_singletons`` (characterized at ``8ded73c5``).
+
+    R-DM-4(a): the intake chain already holds a real mutual key
+    (``entries.partner_entry_id``, written on BOTH halves at acceptance),
+    so the seam does not have to match names the way the incumbent
+    products do — it can build the team from the key it was given. One
+    ``TEAM`` participant, two ``member_ids``, and the two humans still get
+    one roster row each because that is where remarks and availability
+    live.
+
+    So ``participant_id == roster_id`` stops being universally true: it
+    holds for singles (``test_a_bracket_entry_becomes_a_participant_and_a_
+    roster_player``, untouched) and not for a pair, whose participant is
+    neither of its two roster rows.
     """
     tid = _bracket_workspace(repo)
-    _draft_event(repo, tid, "XD")
-    ev = _entry_event(
-        session, tid, code="XD", bracket_event_id="XD", entry_type="doubles"
-    )
+    ev = _doubles_draw(repo, session, tid)
     nominator, partner = _pair(session, tid, ev)
 
     result = commit_entries(repo, tid)
@@ -667,21 +693,212 @@ def test_a_confirmed_pair_TODAY_commits_as_two_unrelated_singletons(repo, sessio
         str(partner.id),
     }
     participants = repo.brackets.list_participants(tid, "XD")
-    assert len(participants) == 2, "the pair is two rows, not one team"
-    assert {p.type for p in participants} == {"PLAYER"}
-    assert all(p.member_ids == [] for p in participants)
-    # SORTED, not indexed: ``list_participants`` orders by ``id``
-    # (``repositories/local.py:674``) and that id is ``entry-{random uuid}``,
-    # so read-back order is arbitrary. The blob assertion below is the one
-    # that can be order-sensitive — it is append order, which ``_pair``'s
-    # explicit ``submitted_at`` spacing pins.
-    assert sorted(p.name for p in participants) == ["Ana Reyes", "Bo Lin"]
+    assert len(participants) == 1, "a confirmed pair is ONE team"
+    team = participants[0]
+    assert team.type == "TEAM"
+    assert team.name == "Ana Reyes / Bo Lin"
+    session.expire_all()
+    assert team.member_ids == [
+        roster_id(nominator.entry_player_id),
+        roster_id(partner.entry_player_id),
+    ], "nominator first — ``_pair`` spaces submitted_at by a second"
 
-    # The roster blob half. Two PEOPLE are two roster rows whether or not
-    # they are a pair, and Task 3 does NOT change that — this assertion is
-    # what proves the flip stays on the participant side.
+    # The roster blob half: two PEOPLE are two rows whether or not they are
+    # a pair, because remarks and availability are per-person.
     roster = repo.tournaments.get_by_id(tid).data["bracketPlayers"]
     assert [p["name"] for p in roster] == ["Ana Reyes", "Bo Lin"]
+
+    # Each half keeps its OWN back-reference, to its own roster row — never
+    # to the team.
+    session.expire_all()
+    assert nominator.committed_player_id == roster_id(nominator.entry_player_id)
+    assert partner.committed_player_id == roster_id(partner.entry_player_id)
+    assert team.id not in (
+        nominator.committed_player_id,
+        partner.committed_player_id,
+    )
+
+
+def test_a_half_accepted_pair_commits_as_a_singleton_and_nothing_dangles(
+    repo, session
+):
+    """NC 2 (P5 card). Only one half is confirmed-and-uncommitted, so
+    there is no pair to build. It commits exactly as it does today — one
+    ``PLAYER``, one roster row, one back-reference — and NOTHING points at
+    a partner that is not there: no TEAM with one member, no member id
+    naming a roster row that does not exist. The designed state
+    (``entries/partners.py:28-34`` — unpartnered is ``pending`` with
+    ``awaiting_partner``, not over-cap and not refused) survives untouched.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    nominator, partner = _pair(session, tid, ev, states=("confirmed", "pending"))
+
+    result = commit_entries(repo, tid)
+
+    assert [c.entry_id for c in result.committed] == [str(nominator.id)]
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert len(participants) == 1
+    assert participants[0].type == "PLAYER"
+    assert participants[0].member_ids == []
+    roster = repo.tournaments.get_by_id(tid).data["bracketPlayers"]
+    assert [p["name"] for p in roster] == ["Ana Reyes"]
+    session.expire_all()
+    assert partner.committed_player_id is None
+
+
+def test_a_partner_already_committed_alone_leaves_the_second_half_a_singleton(
+    repo, session
+):
+    """The common upgrade path, and the reason director manual pairing
+    STAYS (R-DM-4's ruling note). A pair whose halves were confirmed on
+    different days: the first ran through the seam as a PLAYER before its
+    partner confirmed, so on the second run there is no candidate to pair
+    with and the seam declines rather than rewriting a participant row
+    that a draw may already reference. Two PLAYERs, and the director pairs
+    them in the picker.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    nominator, partner = _pair(session, tid, ev, states=("confirmed", "pending"))
+    assert [c.entry_id for c in commit_entries(repo, tid).committed] == [
+        str(nominator.id)
+    ]
+
+    partner.state = "confirmed"
+    session.commit()
+    result = commit_entries(repo, tid)
+
+    assert [c.entry_id for c in result.committed] == [str(partner.id)]
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert len(participants) == 2
+    assert {p.type for p in participants} == {"PLAYER"}
+    assert all(p.member_ids == [] for p in participants)
+
+
+def test_a_one_directional_partner_link_is_detected_and_no_team_is_built(
+    repo, session, caplog
+):
+    """NC 4 (P5 card). ``partner_entry_id`` is mutual by WRITE CONVENTION
+    only (F-DM-12): no FK, no constraint, nothing that detects a
+    half-written link. ``partners.accept()`` writes both halves in one
+    transaction and withdrawal touches neither, so this state is not
+    reachable from live code — it is constructed here by hand, which is
+    the only way to assert that the seam notices.
+
+    Detection is the seam refusing to build the team and saying so in the
+    log, NOT a new operator reason code: ``pair_conflict`` means "the
+    named partner is already spoken for" (``entries/partners.py:36-40``)
+    and would be a lie here. See the plan's judgment call 3.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    nominator, partner = _pair(session, tid, ev)
+    nominator_id, partner_id = str(nominator.id), str(partner.id)
+    partner.partner_entry_id = None
+    session.commit()
+
+    with caplog.at_level(logging.WARNING, logger="scheduler.entries"):
+        result = commit_entries(repo, tid)
+
+    assert {c.entry_id for c in result.committed} == {nominator_id, partner_id}
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert len(participants) == 2
+    assert {p.type for p in participants} == {"PLAYER"}
+    assert nominator_id in caplog.text and partner_id in caplog.text, (
+        "the half-written link must be reported, not silently tolerated"
+    )
+
+
+def test_a_singles_event_never_builds_a_team_even_with_a_partner_link(repo, session):
+    """The predicate's fourth leg. ``entry_events.entry_type`` is the
+    backend's one answer to "is this doubles" (``partners.is_doubles``,
+    F-DM-13), and a stray ``partner_entry_id`` on a singles event is data
+    the seam must not act on."""
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    ev = _entry_event(
+        session, tid, code="MS", bracket_event_id="MS", entry_type="singles"
+    )
+    _pair(session, tid, ev)
+
+    commit_entries(repo, tid)
+
+    participants = repo.brackets.list_participants(tid, "MS")
+    assert len(participants) == 2
+    assert {p.type for p in participants} == {"PLAYER"}
+    assert sorted(p.name for p in participants) == ["Ana Reyes", "Bo Lin"]
+
+
+def test_a_half_that_fails_validation_leaves_a_singleton_and_no_dangling_team(
+    repo, session
+):
+    """NC 2's sharp edge, and the reason leg 6 checks BOTH halves.
+
+    ``_valid(BracketPlayerDTO, ...)`` runs per entry inside the loop, and
+    the nominator is processed FIRST. Without a both-halves check the
+    nominator would emit a TEAM naming a member whose own iteration then
+    fails validation and writes no ``bracketPlayers`` row - a team
+    pointing at a roster row that does not exist, an entry that never
+    commits, and a re-run that cannot repair it because the team id is
+    already in ``existing_ids``. The valid half must commit as a
+    singleton instead.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    # 300 characters: ``BracketPlayerDTO.name`` caps at 200, and SQLite does
+    # not enforce the column width, so the DTO is the only thing that
+    # refuses it — which is exactly the seam under test.
+    nominator, partner = _pair(session, tid, ev, names=("Ana Reyes", "B" * 300))
+
+    result = commit_entries(repo, tid)
+
+    assert [c.entry_id for c in result.committed] == [str(nominator.id)]
+    assert [(s.entry_id, s.reason) for s in result.skipped] == [
+        (str(partner.id), SkipReason.INVALID_PLAYER)
+    ]
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert len(participants) == 1
+    assert participants[0].type == "PLAYER"
+    assert participants[0].member_ids == []
+    roster = repo.tournaments.get_by_id(tid).data["bracketPlayers"]
+    assert [p["name"] for p in roster] == ["Ana Reyes"]
+
+
+def test_a_member_already_entered_by_hand_is_not_double_entered_as_a_team(
+    repo, session
+):
+    """The predicate's seventh leg. The director may hand-add one half
+    through the participant picker before the other half's entry is
+    confirmed. Emitting a TEAM then would put one human in the draw
+    TWICE - once inside the team, once as their surviving PLAYER row -
+    and un-adding the PLAYER row is a decision the seam does not get to
+    make (I4). Both halves commit as singletons; the director pairs them.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    nominator, partner = _pair(session, tid, ev)
+    # Hand-added under the id the seam would itself mint for that person —
+    # the only id "already in this draw" can be recognized by, since a
+    # picker row carries no ``entry_player_id``.
+    repo.brackets.bulk_create_participants(
+        tid,
+        "XD",
+        [
+            {
+                "id": roster_id(nominator.entry_player_id),
+                "name": "Ana Reyes",
+                "type": "PLAYER",
+            }
+        ],
+    )
+
+    commit_entries(repo, tid)
+
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert len(participants) == 2
+    assert {p.type for p in participants} == {"PLAYER"}
+    assert sorted(p.name for p in participants) == ["Ana Reyes", "Bo Lin"]
 
 
 def test_a_committed_entry_puts_the_person_key_on_its_participant(repo, session):
