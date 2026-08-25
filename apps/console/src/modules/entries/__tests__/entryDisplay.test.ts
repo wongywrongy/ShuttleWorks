@@ -102,6 +102,11 @@ describe('pending reasons', () => {
     expect(hasAttention(['awaiting_payment', 'awaiting_partner'])).toBe(false);
     expect(hasAttention([])).toBe(false);
   });
+
+  it('labels the workspace-scoped duplicate advisory and treats it as attention', () => {
+    expect(reasonLabel('needs_review_person')).toBe('Possible duplicate person');
+    expect(hasAttention(['needs_review_person'])).toBe(true);
+  });
 });
 
 describe('money', () => {

@@ -546,7 +546,7 @@ def test_a_different_player_under_the_same_account_is_not_flagged(session, world
     assert "needs_review" not in second.entries[0].pending_reasons
 
 
-def test_the_same_player_in_a_different_event_is_not_flagged(session, world):
+def test_the_old_event_scoped_flag_still_ignores_other_events(session, world):
     _create(
         session, world, [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])]
     )
@@ -554,6 +554,63 @@ def test_the_same_player_in_a_different_event_is_not_flagged(session, world):
         session, world, [PlayerInput("Alice Chen", "F", events=[world["events"]["XD"]])]
     )
     assert "needs_review" not in second.entries[0].pending_reasons
+    # R-DM-1 (i), ruled 2026-08-24: the fork is no longer silent — the
+    # weaker, workspace-scoped advisory fires where the event-scoped one does not.
+    assert "needs_review_person" in second.entries[0].pending_reasons
+
+
+def test_the_same_name_in_a_DIFFERENT_event_rides_the_weaker_advisory(session, world):
+    """R-DM-1 gap (i), ruled 2026-08-24 (DM1_RULINGS.md): the 2026-08-23
+    ruling's advisory promise now reaches across events. Same account + same
+    name + no birth year in a second event -> still TWO rows (never merged),
+    plus the workspace-scoped flag. This DELIBERATELY supersedes the old
+    assertion that a different event is not flagged."""
+    first = _create(
+        session, world, [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])]
+    )
+    second = _create(
+        session, world, [PlayerInput("Alice Chen", "F", events=[world["events"]["XD"]])]
+    )
+    # The minting ruling holds: two rows, no merge.
+    assert first.players[0].id != second.players[0].id
+    # What is new: the fork is no longer silent.
+    assert "needs_review_person" in second.entries[0].pending_reasons
+    # And the old same-event flag did not fire (different events).
+    assert "needs_review" not in second.entries[0].pending_reasons
+
+
+def test_distinct_birth_years_are_two_people_and_no_new_flag(session, world):
+    """R-DM-1 NC 2: the father-and-son case. Both years present and
+    different -> the identity is NOT ambiguous, so the weaker advisory
+    stays quiet."""
+    _create(
+        session,
+        world,
+        [PlayerInput("Robert Chen", "M", birth_year=1970, events=[world["events"]["WS"]])],
+    )
+    second = _create(
+        session,
+        world,
+        [PlayerInput("Robert Chen", "M", birth_year=2005, events=[world["events"]["XD"]])],
+    )
+    assert "needs_review_person" not in second.entries[0].pending_reasons
+
+
+def test_adoption_never_carries_the_weaker_advisory(session, world):
+    """Certain match (account+name+year all present) -> adopted, one row,
+    and nothing to review."""
+    first = _create(
+        session,
+        world,
+        [PlayerInput("Alice Chen", "F", birth_year=2001, events=[world["events"]["WS"]])],
+    )
+    second = _create(
+        session,
+        world,
+        [PlayerInput("Alice Chen", "F", birth_year=2001, events=[world["events"]["XD"]])],
+    )
+    assert first.players[0].id == second.players[0].id
+    assert "needs_review_person" not in second.entries[0].pending_reasons
 
 
 def test_a_withdrawn_entry_does_not_raise_the_flag(session, world):

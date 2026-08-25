@@ -64,7 +64,7 @@ from sqlalchemy.orm import Session
 
 from db.models import Entry, EntryPlayer, Submission
 from entries import lifecycle, money, partners
-from entries.entry_policy import NEEDS_REVIEW, gender_flags
+from entries.entry_policy import NEEDS_REVIEW, NEEDS_REVIEW_PERSON, gender_flags
 
 log = logging.getLogger("scheduler.entries")
 
@@ -318,6 +318,74 @@ def same_person(
     ).scalar_one_or_none()
 
 
+def has_unresolvable_namesake(
+    session: Session,
+    tournament_id: uuid.UUID,
+    account_id: uuid.UUID,
+    spec: PlayerInput,
+    exclude_id: uuid.UUID,
+) -> bool:
+    """Does this account already hold a same-named person this spec CANNOT
+    be distinguished from?
+
+    The workspace-scoped advisory R-DM-1 (i) added: ``same_person`` adopts
+    only the certain match, so a birth-year-less namesake under the same
+    account forks silently across events - this is the flag that makes the
+    fork visible. Rows whose birth year is present AND different from the
+    spec's are excluded: a father and son sharing a name are two people,
+    not an ambiguity (NC 2). ``exclude_id`` keeps the row minted for this
+    very spec out of its own advisory.
+    """
+    stmt = (
+        select(EntryPlayer.id)
+        .where(
+            EntryPlayer.tournament_id == tournament_id,
+            EntryPlayer.account_id == account_id,
+            func.lower(EntryPlayer.full_name) == spec.full_name.strip().lower(),
+            EntryPlayer.erased_at.is_(None),
+            EntryPlayer.id != exclude_id,
+        )
+        .limit(1)
+    )
+    if spec.birth_year is not None:
+        # The spec has a year, so only year-less rows are ambiguous with it.
+        stmt = stmt.where(EntryPlayer.birth_year.is_(None))
+    return session.execute(stmt).first() is not None
+
+
+def adopt_or_mint(
+    session: Session,
+    tournament_id: uuid.UUID,
+    account_id: uuid.UUID,
+    spec: PlayerInput,
+) -> tuple[EntryPlayer, bool]:
+    """The one place an ``EntryPlayer`` comes from.
+
+    Adopt the certain match (``same_person``) or mint a fresh row -
+    extracted from ``_write`` so the partner path (R-DM-1 (ii)) applies the
+    identical rule instead of constructing rows on its own. Returns
+    ``(player, adopted)``. On adoption the DESCRIPTIVE fields take the
+    fresh values (see the R-P7c comment at the ``_write`` call site).
+    """
+    player = same_person(session, tournament_id, account_id, spec)
+    if player is None:
+        player = EntryPlayer(
+            tournament_id=tournament_id,
+            account_id=account_id,
+            full_name=spec.full_name.strip(),
+            gender=spec.gender.strip(),
+            club=(spec.club or "").strip() or None,
+            birth_year=spec.birth_year,
+            remarks=(spec.remarks or "").strip() or None,
+        )
+        session.add(player)
+        session.flush()
+        return player, False
+    player.club = (spec.club or "").strip() or None
+    player.remarks = (spec.remarks or "").strip() or None
+    return player, True
+
+
 # ---- the write -----------------------------------------------------------
 
 
@@ -416,22 +484,10 @@ def _write(
         # its entries, not here, so this row is free to hold the newest
         # description of the person (a club change mid-season is the person
         # updating themselves, not history being rewritten).
-        player = same_person(session, tournament_id, account_id, spec)
-        if player is None:
-            player = EntryPlayer(
-                tournament_id=tournament_id,
-                account_id=account_id,
-                full_name=spec.full_name.strip(),
-                gender=spec.gender.strip(),
-                club=(spec.club or "").strip() or None,
-                birth_year=spec.birth_year,
-                remarks=(spec.remarks or "").strip() or None,
-            )
-            session.add(player)
-            session.flush()
-        else:
-            player.club = (spec.club or "").strip() or None
-            player.remarks = (spec.remarks or "").strip() or None
+        player, adopted = adopt_or_mint(session, tournament_id, account_id, spec)
+        flag_person = not adopted and has_unresolvable_namesake(
+            session, tournament_id, account_id, spec, exclude_id=player.id
+        )
         created_players.append(player)
 
         events = _distinct(spec.events)
@@ -447,6 +503,8 @@ def _write(
             reasons = [*owed, *gender_flags(spec.gender, event)]
             if looks_duplicate(session, tournament_id, event.id, spec.full_name):
                 reasons.append(NEEDS_REVIEW)
+            if flag_person:
+                reasons.append(NEEDS_REVIEW_PERSON)
             # The cap is read PER ENTRY and inside the loop, not once for
             # the act: a family entering three children into a draw with two
             # places left must fill both and queue the third, and a count

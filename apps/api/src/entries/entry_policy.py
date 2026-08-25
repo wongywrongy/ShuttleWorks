@@ -37,6 +37,15 @@ from typing import Any, Optional, Sequence
 NEEDS_REVIEW = "needs_review"
 GENDER_MISMATCH = "gender_mismatch"
 
+# R-DM-1 (i), ruled 2026-08-24: the workspace-scoped half of the duplicate
+# advisory. Same account + same normalized name in ANY event, where at
+# least one side has no birth year to distinguish them. Weaker than
+# NEEDS_REVIEW (no shared event) and quiet when both years are present and
+# differ - the father-and-son case is not ambiguous. A flag an operator
+# resolves, never a merge (invariant I4; the 2026-08-23 minting rule is
+# untouched).
+NEEDS_REVIEW_PERSON = "needs_review_person"
+
 # What a director may write in ``entry_events.gender_constraint`` and what
 # an entrant may write for themselves, folded onto the same three values.
 # 'mixed' is a property of the *event* (an XD draw takes both), never of a

@@ -30,6 +30,13 @@ export const NEEDS_REVIEW = 'needs_review';
  *  of the workspace attention codes. */
 export const GENDER_MISMATCH = 'gender_mismatch';
 
+/** R-DM-1 (i): same account + same name in ANY event with no birth year to
+ *  tell them apart. The workspace-scoped half of the duplicate advisory —
+ *  weaker than `needs_review` (no shared event), and absent when birth
+ *  years distinguish the two (a father and son are not an ambiguity).
+ *  Flag-only; the operator resolves (invariant I4). */
+export const NEEDS_REVIEW_PERSON = 'needs_review_person';
+
 /** E3 / spec Q6: the named partner is already spoken for in this event, so
  *  BOTH halves of the ambiguity carry this. The software cannot know which
  *  pairing is the mistake — guessing would silently break a pair that had
@@ -59,6 +66,7 @@ export const ENTRY_STATE_TONE: Record<EntryState, PillTone> = {
 
 const REASON_LABEL: Record<string, string> = {
   [NEEDS_REVIEW]: 'Needs review',
+  [NEEDS_REVIEW_PERSON]: 'Possible duplicate person',
   [GENDER_MISMATCH]: 'Gender mismatch',
   [PAIR_CONFLICT]: 'Pair conflict',
   awaiting_partner: 'Awaiting partner',
@@ -80,7 +88,12 @@ export function reasonLabel(code: string): string {
  *  `pair_conflict` (E3) joined them for the same reason: two entrants have
  *  named the same partner, nothing about that resolves on its own, and the
  *  entry sits there until a human picks. */
-const ATTENTION = new Set([NEEDS_REVIEW, GENDER_MISMATCH, PAIR_CONFLICT]);
+const ATTENTION = new Set([
+  NEEDS_REVIEW,
+  NEEDS_REVIEW_PERSON,
+  GENDER_MISMATCH,
+  PAIR_CONFLICT,
+]);
 
 /** Does this entry carry a flag an operator must resolve? */
 export function hasAttention(pendingReasons: readonly string[]): boolean {
