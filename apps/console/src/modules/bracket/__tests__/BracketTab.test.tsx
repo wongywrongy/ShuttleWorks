@@ -220,11 +220,12 @@ describe('BracketTab — Setup chrome', () => {
  * argument rests on, and Task 2's.
  *
  * The EXTRACTION half of the bracket-roster migration only ever runs against
- * an EMPTY roster (`BracketTab.tsx`: `if (!bracketRosterMigrated &&
- * bracketPlayers.length === 0)`). Only the extraction — the
- * `healBracketRosterNames` pass below it was NOT gated by that check and DID
- * run against a populated roster, which is what Task 3 deleted, so the effect
- * is now wholly empty-roster-only. The
+ * an EMPTY roster (`BracketTab.tsx`: `if (bracketRosterMigrated ||
+ * bracketPlayers.length > 0) return;` — Task 3 restated the same condition as
+ * an early return). Only the extraction — the `healBracketRosterNames` pass
+ * below it was NOT gated by that check and DID run against a populated roster,
+ * which is what Task 3 deleted, so the effect is now wholly
+ * empty-roster-only. The
  * extraction guard is the whole reason Task 2's "omit a member no
  * participant can name" is safe: the roster blob is where REMARKS and
  * AVAILABILITY live — operator data, not a projection — so omission can only

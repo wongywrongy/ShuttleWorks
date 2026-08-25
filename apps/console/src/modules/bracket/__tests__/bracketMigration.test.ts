@@ -105,19 +105,36 @@ describe('reconcileBracketRoster', () => {
   });
 
   /**
-   * SP-DM-3 P6 Task 3 (Task 2 review rider 3): the PARTIALLY nameable team.
-   * Every other case here is all-or-nothing, so a regression that moved the
-   * omission from per-MEMBER to per-PARTICIPANT would pass all of them. This
-   * one only passes while the `continue` stays inside the member loop.
+   * SP-DM-3 P6 Task 3 (Task 2 review rider 3, fixture per the Task 3 review):
+   * the PARTIALLY nameable team. Every other case here is all-or-nothing, so a
+   * regression moving the omission from per-MEMBER to per-PARTICIPANT — skip
+   * the whole team the moment one member is unnameable — would pass all of
+   * them.
+   *
+   * It would pass a naive fixture too. The emitted id SET is invariant under
+   * that regression: `playerNames` holds only PLAYER participants, and the
+   * `else if` emits every PLAYER participant unconditionally, so any member the
+   * team loop can name is already reachable without the team loop. The one
+   * observable difference is INSERTION ORDER, and only when a partially
+   * nameable TEAM is listed before two or more of its PLAYER participants —
+   * which is exactly this fixture's shape. Per-member reaches `p-b` through the
+   * team and emits it first; per-participant skips the team entirely and falls
+   * back to source order. Verified by making the regression and watching this
+   * go red (Task 3 fix report).
    */
   it('keeps the nameable member of a TEAM and omits the other', () => {
     const bracket = {
       participants: [
-        { id: 'p-alex', name: 'Alex Tan' },
-        { id: 'MD-T1', name: 'Alex Tan / Somebody', members: ['p-alex', 'p-nobody'] },
+        { id: 'MD-T1', name: 'B / Somebody', members: ['p-b', 'p-nobody'] },
+        { id: 'p-a', name: 'Alex Tan' },
+        { id: 'p-b', name: 'Ben Carter' },
       ],
     } as unknown as BracketTournamentDTO;
-    expect(reconcileBracketRoster(bracket).map((p) => p.id)).toEqual(['p-alex']);
+    // `p-nobody` omitted; `p-b` reached THROUGH the team, so it lands first.
+    expect(reconcileBracketRoster(bracket).map((p) => p.id)).toEqual([
+      'p-b',
+      'p-a',
+    ]);
   });
 });
 
@@ -125,15 +142,23 @@ describe('reconcileBracketRoster', () => {
  * NC 3 (SP-DM-3 P6, card §C6): removing the repair must not resurrect the
  * defect its comment described (`bracketMigration.ts:8-14` — the BRACKET
  * DEFECT SERIES D3, not debt-log D3; two registers, same number). The repair
- * healed roster rows a pre-fix build had FROZEN as `name === id`. Deleting it
- * is safe only if nothing can write such a row any more, so that is what this
- * asserts — on the one writer P6 owns. The other three are structural: the
- * seam writes `entry-{uuid}` + a person's name, `playerSlug` always prefixes
- * `p-` so a slug never equals the name it came from, and a rename writes what
- * the operator typed.
+ * healed roster rows a pre-fix build had FROZEN as `name === id` — rows whose
+ * name had been MINTED out of an id (de-slugged, or zipped off a label).
+ * Deleting the repair is safe only if nothing mints such a name any more, so
+ * that is what this asserts — on the one writer P6 owns.
+ *
+ * Minting is the precise property, and it is narrower than "never emits a row
+ * whose name equals its id" (Task 3 review, minor 2): `bracketMigration.ts:43`
+ * copies a PLAYER participant's name VERBATIM, so a snapshot participant that
+ * is already self-named propagates unchanged. That is carrying a name someone
+ * else wrote, not inventing one, and it is not what the repair existed to fix.
+ *
+ * The other three writers are structural: the seam writes `entry-{uuid}` + a
+ * person's name, `playerSlug` always prefixes `p-` so a slug never equals the
+ * name it came from, and a rename writes what the operator typed.
  */
-describe('NC 3 — no surviving path writes a name that is its own id', () => {
-  it('reconcile never emits a row whose name equals its id', () => {
+describe('NC 3 — no surviving path MINTS a name out of an id', () => {
+  it('reconcile names a member only from a participant, never from its id', () => {
     const bracket = {
       participants: [
         { id: 'p-alex-tan', name: 'Alex Tan' },
@@ -148,7 +173,7 @@ describe('NC 3 — no surviving path writes a name that is its own id', () => {
     expect(rows.map((p) => p.id)).toEqual(['p-alex-tan']);
   });
 
-  it('the hand-add mint can never produce one either', () => {
+  it('the hand-add mint can never produce a self-named row either', () => {
     // `p-alex-tan` is here on purpose: it is the only input a reader would
     // guess round-trips, and it does not — it slugs to `p-p-alex-tan`.
     for (const name of ['Alex Tan', "O'Brien", 'p-alex-tan', 'Li Wei']) {

@@ -124,10 +124,13 @@ function BracketTabBody() {
   // SP-DM-3 P6 deleted the name-repair pass that used to run beside it on
   // every poll: it decided a stored row was corrupt by testing
   // ``p.name === p.id`` and PERSISTED its guess (F-DM-15), which is identity
-  // repair keyed on a name equalling a slug. Nothing writes such a row any
-  // more — pinned by ``bracketMigration.test.ts``'s "NC 3" describe. That
-  // repair was also the only half of this effect that ran against a POPULATED
-  // roster; with it gone, the migration is wholly empty-roster-only.
+  // repair keyed on a name equalling a slug. Nothing MINTS such a name out of
+  // an id any more — pinned by ``bracketMigration.test.ts``'s "NC 3" describe.
+  // (Reconcile copies a participant's name verbatim, so a snapshot that is
+  // already self-named still propagates; that is carrying someone else's
+  // string, not inventing one.) That repair was also the only half of this
+  // effect that ran against a POPULATED roster; with it gone, the migration is
+  // wholly empty-roster-only.
   const bracketPlayers = useTournamentStore((s) => s.bracketPlayers);
   const setBracketPlayers = useTournamentStore((s) => s.setBracketPlayers);
   const bracketRosterMigrated = useTournamentStore((s) => s.bracketRosterMigrated);
