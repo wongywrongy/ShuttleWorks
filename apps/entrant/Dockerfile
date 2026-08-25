@@ -47,6 +47,7 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 # The design system ships as raw .tsx (its exports map points at source), so
 # the SSR bundler transpiles it — it has to be present, not just installed.
 COPY packages/design-system ./packages/design-system
+COPY packages/shared-contract ./packages/shared-contract
 COPY apps/entrant ./apps/entrant
 
 RUN npm run -w apps/entrant build

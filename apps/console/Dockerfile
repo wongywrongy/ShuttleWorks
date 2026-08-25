@@ -47,6 +47,7 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 
 # Now copy the full source for the workspaces we actually build.
 COPY packages/design-system ./packages/design-system
+COPY packages/shared-contract ./packages/shared-contract
 COPY apps/console ./apps/console
 
 # Build args — baked into the static bundle at build time.
