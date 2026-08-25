@@ -92,6 +92,45 @@ describe('DrawDetailPanel', () => {
     expect(screen.getByText(/Pick participants \(1\)/i)).toBeInTheDocument();
   });
 
+  it('TODAY drops every existing team when a doubles pair is committed', async () => {
+    /* debt-log.md:96, characterized before SP-DM-3 P5 Task 6 fixes it.
+       Commit REPLACES the event's participant list. The singles picker was
+       taught to open holding what is already entered; the doubles half
+       never was — `DrawDetailPanel.tsx:74` hands it a literal `[]` and
+       `ParticipantPicker.tsx:92-98` does not forward `initialIds` at all.
+       So an operator with four teams entered who forms one new pair saves
+       ONE team. EXPECTED TO CHANGE IN TASK 6. */
+    const roster = [
+      ...players,
+      { id: 'p-cara', name: 'Cara Diaz' },
+      { id: 'p-dan', name: 'Dan Osei' },
+      { id: 'p-eve', name: 'Eve Novak' },
+      { id: 'p-fin', name: 'Fin Wallace' },
+    ];
+    const xd = {
+      ...ev,
+      id: 'XD',
+      discipline: 'XD',
+      participant_count: 2,
+      participants: [
+        { id: 'XD-T1', name: 'Cara Diaz / Dan Osei', members: ['p-cara', 'p-dan'] },
+        { id: 'XD-T2', name: 'Eve Novak / Fin Wallace', members: ['p-eve', 'p-fin'] },
+      ],
+    } as unknown as BracketEventDTO;
+    render(
+      <DrawDetailPanel ev={xd} players={roster} onClose={onClose} onCommitPicks={onCommitPicks} />,
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: /Alex Tan/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /Ben Carter/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Save pairs$/i }));
+
+    await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
+    const picks = onCommitPicks.mock.calls[0][0];
+    expect(picks).toHaveLength(1);
+    expect(picks[0].members).toEqual(['p-alex', 'p-ben']);
+  });
+
   it('groups the roster by initial so a long list is navigable', () => {
     render(
       <DrawDetailPanel ev={ev} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,

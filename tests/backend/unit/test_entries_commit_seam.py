@@ -26,6 +26,8 @@ whose characterization pass (SP-E1-1 Task 1) is what this seam is built on.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -113,12 +115,19 @@ def _bracket_workspace(repo):
     return row.id
 
 
-def _entry_event(session, tournament_id, *, code="MS", bracket_event_id=None):
+def _entry_event(
+    session,
+    tournament_id,
+    *,
+    code="MS",
+    bracket_event_id=None,
+    entry_type="singles",
+):
     row = EntryEvent(
         tournament_id=tournament_id,
         code=code,
         discipline=f"{code} discipline",
-        entry_type="singles",
+        entry_type=entry_type,
         bracket_event_id=bracket_event_id,
     )
     session.add(row)
@@ -153,6 +162,8 @@ def _entry(
     state="confirmed",
     remarks=None,
     player=None,
+    partner_entry_id=None,
+    partner_accepted_at=None,
 ):
     """One confirmed entry, built at the level boundary ruling R13 drew.
 
@@ -185,10 +196,40 @@ def _entry(
         entry_player_id=player.id,
         state=state,
         pending_reasons=[],
+        partner_entry_id=partner_entry_id,
+        partner_accepted_at=partner_accepted_at,
     )
     session.add(row)
     session.commit()
     return row
+
+
+def _pair(session, tournament_id, entry_event, *, names=("Ana Reyes", "Bo Lin")):
+    """Two confirmed entries mutually linked, as ``partners.accept()`` leaves them.
+
+    ``accept()`` writes ``partner_entry_id`` on BOTH halves inside one
+    transaction (``entries/partners.py:265,272``); this helper reproduces
+    that end state directly rather than driving the HTTP invite flow,
+    because what the seam reads is the two columns, not how they got set.
+    Returns ``(nominator, partner)`` in submission order.
+
+    ``submitted_at`` is set EXPLICITLY and one second apart. The seam
+    orders pair members by ``(submitted_at, id)`` and ``id`` is a random
+    UUID, so two rows written microseconds apart would tie on the
+    timestamp and order randomly - which would make every assertion about
+    member order or the minted team name flaky.
+    """
+    now = datetime.now(timezone.utc)
+    first = _entry(session, tournament_id, entry_event, player_name=names[0])
+    second = _entry(session, tournament_id, entry_event, player_name=names[1])
+    first.submitted_at = now
+    second.submitted_at = now + timedelta(seconds=1)
+    first.partner_entry_id = second.id
+    second.partner_entry_id = first.id
+    first.partner_accepted_at = now
+    second.partner_accepted_at = now
+    session.commit()
+    return first, second
 
 
 def _players(repo, tournament_id):
@@ -422,6 +463,43 @@ def test_a_workspace_with_no_rank_vocabulary_accepts_any_code(repo, session):
     assert [c.entry_id for c in result.committed] == [str(entry.id)]
 
 
+def test_a_committed_meet_entry_cannot_reach_a_generated_match(repo, session):
+    """Recorded, not fixed — P7 owns it (see the P5 plan, "What the tree
+    says that the card does not" §4).
+
+    ``_plan_meet`` writes ``groupId = event.code`` and ``ranks =
+    [event.code]`` (``entries/entries.py:418-419``), e.g. ``"XD"``. The
+    only Meet match generator, ``RegenerateMenu.expandRanks``, expands
+    ``config.rankCounts`` into NUMBERED ranks ``"XD1".."XDn"`` and filters
+    players with ``(p.ranks ?? []).includes(rank)`` - and ``"XD" !=
+    "XD1"``. It also pairs only ACROSS groups, while every committed
+    entrant lands in the single group named for their event code. So a
+    committed Meet entry is invisible to match generation whether or not
+    it has a partner, which is why P5 does NOT put a pair field on the
+    Meet roster: there is no reader for it until P7 gives Meet an Event.
+    """
+    tid = _meet_workspace(repo, ranks=("XD",))
+    ev = _entry_event(session, tid, code="XD", entry_type="doubles")
+    _entry(session, tid, ev, player_name="Ana Reyes")
+
+    commit_entries(repo, tid)
+
+    player = _players(repo, tid)[0]
+    assert player["ranks"] == ["XD"]
+    assert player["groupId"] == "XD"
+
+    # Two-line mirror of ``RegenerateMenu.tsx:23-29`` (``expandRanks``):
+    # every declared prefix, numbered 1..count.
+    counts = repo.tournaments.get_by_id(tid).data["config"]["rankCounts"]
+    expanded = [
+        f"{prefix}{i}" for prefix, count in counts.items() for i in range(1, count + 1)
+    ]
+    assert expanded == ["XD1", "XD2"]
+    assert not set(expanded) & set(player["ranks"]), (
+        "a committed entry's rank is not one the match generator ever emits"
+    )
+
+
 # ---- Meet: the CAS contract --------------------------------------------
 
 
@@ -560,6 +638,50 @@ def test_a_bracket_entry_becomes_a_participant_and_a_roster_player(repo, session
     assert roster[0]["sourceEntryId"] == str(entry.id)
     session.expire_all()
     assert entry.committed_player_id == participants[0].id == roster[0]["id"]
+
+
+def test_a_confirmed_pair_TODAY_commits_as_two_unrelated_singletons(repo, session):
+    """F-DM-03, characterized. ``_plan_bracket`` emits
+    ``{"type": "PLAYER", "member_ids": []}`` for every entry regardless of
+    ``entry_events.entry_type`` or ``entries.partner_entry_id``
+    (``entries/entries.py:611-626``), so two humans who agreed to play
+    together reach the draw as two strangers and a director re-mints the
+    pair by hand as a name concatenation.
+
+    THIS TEST IS EXPECTED TO CHANGE IN TASK 3 — that is the point of
+    writing it now. The area has the thinnest test cover of any slice in
+    this program (design doc §2 P5), so the flip has to be a visible edit
+    against a recorded baseline, not a claim.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "XD")
+    ev = _entry_event(
+        session, tid, code="XD", bracket_event_id="XD", entry_type="doubles"
+    )
+    nominator, partner = _pair(session, tid, ev)
+
+    result = commit_entries(repo, tid)
+
+    assert {c.entry_id for c in result.committed} == {
+        str(nominator.id),
+        str(partner.id),
+    }
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert len(participants) == 2, "the pair is two rows, not one team"
+    assert {p.type for p in participants} == {"PLAYER"}
+    assert all(p.member_ids == [] for p in participants)
+    # SORTED, not indexed: ``list_participants`` orders by ``id``
+    # (``repositories/local.py:674``) and that id is ``entry-{random uuid}``,
+    # so read-back order is arbitrary. The blob assertion below is the one
+    # that can be order-sensitive — it is append order, which ``_pair``'s
+    # explicit ``submitted_at`` spacing pins.
+    assert sorted(p.name for p in participants) == ["Ana Reyes", "Bo Lin"]
+
+    # The roster blob half. Two PEOPLE are two roster rows whether or not
+    # they are a pair, and Task 3 does NOT change that — this assertion is
+    # what proves the flip stays on the participant side.
+    roster = repo.tournaments.get_by_id(tid).data["bracketPlayers"]
+    assert [p["name"] for p in roster] == ["Ana Reyes", "Bo Lin"]
 
 
 def test_a_committed_entry_puts_the_person_key_on_its_participant(repo, session):
