@@ -105,7 +105,7 @@ class VersionedJSON(TypeDecorator):
 # A ``None`` is not an oversight - it is an enumerated debt, and the
 # phase that reshapes the blob flips it. Two families are None today:
 # LIST-SHAPED blobs (nowhere to put a key without reshaping the value -
-# P4/P5 work) and ROUND-TRIP-SENSITIVE blobs (an extra key reaches a
+# P5/P6 work) and ROUND-TRIP-SENSITIVE blobs (an extra key reaches a
 # consumer that did not ask for it).
 #
 # P4 added ``bracket_participants.entry_player_id`` as a real COLUMN, not a
@@ -141,7 +141,7 @@ BLOB_VERSIONS: dict[str, Optional[int]] = {
     "tournament_backups.snapshot": None,  # see the recorded edge above
     "commands.payload": None,  # operator command args
     "bracket_events.config": None,  # per-draw format knobs (SP-P11)
-    "bracket_matches.slot_a": None,  # draw slot pointers; P4
+    "bracket_matches.slot_a": None,  # draw slot pointers; P6
     "bracket_matches.slot_b": None,  # same
     "solve_jobs.result": None,  # ScheduleDTO
     "solve_jobs.error": None,  # {code,message,detail}
