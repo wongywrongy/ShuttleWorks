@@ -753,6 +753,17 @@ def _plan_bracket(
                 # (I4).
                 and participant_id not in in_draw
                 and partner_seat not in in_draw
+                # Leg 8: the two halves must be two PEOPLE. A nominator who
+                # typed their own address can accept their own invite (the
+                # accept route checks neither address nor account against
+                # the inviter), and ``adopt_or_mint`` then reuses their own
+                # ``EntryPlayer`` - two entries, one human, one seat. Before
+                # P5 that degraded to a single PLAYER row through the id
+                # dedupe; without this clause it upgrades to a one-person
+                # TEAM named "Alex Kim / Alex Kim". Compared on the SEAT
+                # because that is the row a member would occupy, which is
+                # also what makes it survive either half adopting.
+                and partner_seat != participant_id
             ):
                 partner = None  # fall through to the singleton insert
 

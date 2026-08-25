@@ -980,6 +980,54 @@ def test_an_entry_partnered_with_ITSELF_does_not_become_a_one_person_team(
     assert participants[0].name == "Ana Reyes"
 
 
+def test_one_human_holding_BOTH_halves_does_not_become_a_one_person_team(
+    repo, session
+):
+    """The predicate's eighth leg — two entries must be two PEOPLE.
+
+    Unlike the one-directional link and the self-reference, this state is
+    REACHABLE from live code. ``partner_routes.py:243`` says in so many
+    words that the accept route checks neither the accepting address nor
+    the accepting account against the inviter, so a nominator who typed
+    their own address can accept their own invite; ``adopt_or_mint`` then
+    matches on account + name + birth year and hands back the nominator's
+    OWN ``EntryPlayer``. Two mutually-linked, both-accepted entries, one
+    ``entry_player_id``, one roster seat.
+
+    Before P5 that corruption degraded gracefully — the seam's id dedupe
+    collapsed it to a single PLAYER row. Without this leg P5 upgrades it to
+    exactly the artifact the self-reference guard exists to refuse: a TEAM
+    named "Alex Kim / Alex Kim" whose ``member_ids`` names one seat twice.
+    Refusing restores the pre-P5 behaviour, which is the honest one: one
+    human in the draw once, and an operator to notice.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    now = datetime.now(timezone.utc)
+    first = _entry(
+        session, tid, ev, player_name="Alex Kim", partner_accepted_at=now
+    )
+    # ``player=`` is the same human, which is precisely what ``adopt_or_mint``
+    # produces when the nominator accepts their own invite.
+    second = _entry(session, tid, ev, player=first.player, partner_accepted_at=now)
+    first.submitted_at = now
+    second.submitted_at = now + timedelta(seconds=1)
+    first.partner_entry_id = second.id
+    second.partner_entry_id = first.id
+    session.commit()
+
+    commit_entries(repo, tid)
+
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert [(p.type, p.name) for p in participants] == [("PLAYER", "Alex Kim")]
+    assert participants[0].member_ids == []
+    roster = repo.tournaments.get_by_id(tid).data["bracketPlayers"]
+    assert [p["name"] for p in roster] == ["Alex Kim"]
+    session.expire_all()
+    seat = roster_id(first.entry_player_id)
+    assert first.committed_player_id == second.committed_player_id == seat
+
+
 def test_a_singles_event_never_builds_a_team_even_with_a_partner_link(repo, session):
     """The predicate's fourth leg. ``entry_events.entry_type`` is the
     backend's one answer to "is this doubles" (``partners.is_doubles``,
