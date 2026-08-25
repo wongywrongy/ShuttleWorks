@@ -3662,7 +3662,7 @@ export interface components {
          *     (the operator revert pool), ``scheduleVersion``, ``bracketPlayers``,
          *     ``planFinalized``.
          *
-         *     ponytail: the five pass-through fields are typed ``Any``, not with their
+         *     ponytail: the six pass-through fields are typed ``Any``, not with their
          *     real DTOs. Ceiling named: this is the public plane reading a blob that
          *     predates the strict DTOs, so validating it through ``TournamentConfig`` /
          *     ``PlayerDTO`` / ... (all ``StrictModel``, ``extra="forbid"``) would turn a
