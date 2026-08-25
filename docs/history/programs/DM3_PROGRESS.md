@@ -19,8 +19,8 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | # | Slice | Ruled by | Size | Status |
 |---|---|---|---|---|
 | 1 | **P3 — minting gaps** (pulled forward, R-DM-1.x) | R-DM-1 (a)/(a) | S | **DONE 2026-08-24** — branch dm3/p3-minting-gaps (405c34ec..68c27751 + bookkeeping), unmerged |
-| 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **NEXT — write detailed plan at phase start** |
-| 3 | P1 — one standings shape | — | M | pending |
+| 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **DONE 2026-08-24** — branch dm3/p0-type-mechanism (bd262dbd..b30c38ab + bookkeeping, stacked on P3), unmerged |
+| 3 | P1 — one standings shape | — | M | **NEXT — write detailed plan at phase start** |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | pending |
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | pending — blocked by P3+P2 |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | pending — blocked by P2 |
@@ -64,3 +64,11 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 - New debt rows: partner path raises no `needs_review_person` (→P4); gender ignored on adopt (needs ruling).
 - Docs-freshness advisory flags Modules + Entrant-tier pages behind this branch (advisory only).
 - Merging `dm3/p3-minting-gaps` is Kyle's call. Next slice: P0 (type mechanism) — write its detailed plan at phase start against the then-current tree.
+
+### 2026-08-24 — P0 slice executed (subagent-driven, opus)
+- Branch `dm3/p0-type-mechanism` stacked on P3: `626416c7` deletes dead `MatchStateOut` (F-DM-45) · `da254eed` backend freshness oracle (live OpenAPI vs committed `dto.generated.ts`; parser scoped to `export interface components` after a plan parser bug — 177 real schemas, 3 phantoms in the plan's count) · `a0aaa860` console parity oracle + the 19-entry allow-list (all `violation`, F-DM-28a/28b/29; ratchet cap 19, raising it is a ruling) · `7c829019` entrant oracle (35 explicit pairs incl. the two name-collision remaps, 0 divergences, cap unraised) · `b30c38ab` NC2 (F-DM-28a detected-not-silenced) + exclusions re-justified (knip's schema rejects note keys → justification in the test header).
+- NC1 evidenced end-to-end: Pydantic field-add → backend RED → `make generate-api` (no hand edit) → console RED `EntryDTO.nc_probe` + entrant RED `MyEntryLine.nc_probe`; fully reverted.
+- Ruled deviations: NC2 = detected + allow-listed (the design doc's "red until dropped" would ship a red suite); NC1 = two-link chain (committing the OpenAPI JSON as a third artifact rejected).
+- Deletion gates: `MatchStateOut` 0 hits. `dto.generated` resolves to the expected set plus two explained extras — the new freshness pytest (this slice's own third oracle) and `apps/api/BACKEND.md` (pre-existing prose, still on pre-reorg `frontend/` paths) — and the Makefile hit is real but outside the `apps packages tests tools` scan scope. `platform/contracts/__tests__/publicUrlContract.test.ts` is the pre-existing out-of-scope exclusion; untouched, as the plan directs.
+- Debt rows added: the three ratchet clusters, the keys-only ceiling (71 optionality), the allow-list tier-discriminator gap, bare-`python` generate-api, the knip `$schema` pin. Closed: "`dto.generated.ts` freshness is on the honour system" — `da254eed` is the gate it asked for.
+- Merging: P3 merges first or together (stacked). Next slice: P1 (one standings shape) — write its detailed plan at phase start; note Task 3's hand-shape floor (64, zero headroom) reddens on `dto.ts` deletions and is documented "lower freely".
