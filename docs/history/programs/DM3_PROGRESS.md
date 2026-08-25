@@ -19,7 +19,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | # | Slice | Ruled by | Size | Status |
 |---|---|---|---|---|
 | 1 | **P3 — minting gaps** (pulled forward, R-DM-1.x) | R-DM-1 (a)/(a) | S | **DONE 2026-08-24** — branch dm3/p3-minting-gaps (405c34ec..68c27751 + bookkeeping), unmerged |
-| 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **DONE 2026-08-24** — branch dm3/p0-type-mechanism (bd262dbd..b30c38ab + bookkeeping, stacked on P3), unmerged |
+| 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **DONE 2026-08-24** — branch dm3/p0-type-mechanism (bd262dbd..4630ec53, stacked on P3), unmerged |
 | 3 | P1 — one standings shape | — | M | **NEXT — write detailed plan at phase start** |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | pending |
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | pending — blocked by P3+P2 |
@@ -71,4 +71,5 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 - Ruled deviations: NC2 = detected + allow-listed (the design doc's "red until dropped" would ship a red suite); NC1 = two-link chain (committing the OpenAPI JSON as a third artifact rejected).
 - Deletion gates: `MatchStateOut` 0 hits. `dto.generated` resolves to the expected set plus two explained extras — the new freshness pytest (this slice's own third oracle) and `apps/api/BACKEND.md` (pre-existing prose, still on pre-reorg `frontend/` paths) — and the Makefile hit is real but outside the `apps packages tests tools` scan scope. `platform/contracts/__tests__/publicUrlContract.test.ts` is the pre-existing out-of-scope exclusion; untouched, as the plan directs.
 - Debt rows added: the three ratchet clusters, the keys-only ceiling (71 optionality), the allow-list tier-discriminator gap, bare-`python` generate-api, the knip `$schema` pin. Closed: "`dto.generated.ts` freshness is on the honour system" — `da254eed` is the gate it asked for.
-- Merging: P3 merges first or together (stacked). Next slice: P1 (one standings shape) — write its detailed plan at phase start; note Task 3's hand-shape floor (64, zero headroom) reddens on `dto.ts` deletions and is documented "lower freely".
+- Final whole-branch review: merge-ready with fixes; fix wave `4630ec53` landed and re-reviewed clean — 3 new ALIASES (CommandRequestDTO/CommandResponseDTO/ProposedMove had exact wire twins, zero divergences), explicit 7-entry UNPAIRED map + exhaustiveness test (no console shape can go unpoliced by omission), exact pair floor 57, 7 overbroad MatchStateDTO `why` strings corrected (useLiveTracking preserves only postponed+playerConfirmations), zero-empty-schema parser guards both sides.
+- Merging: P3 merges first or together (stacked). Next slice: P1 (one standings shape) — write its detailed plan at phase start; note Task 3's hand-shape floor (64, zero headroom) reddens on `dto.ts` deletions and is documented "lower freely"; P1's standings rename will hit the freshness oracle's generated-not-live direction by design.
