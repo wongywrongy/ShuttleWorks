@@ -138,6 +138,34 @@ def test_a_dangling_entry_player_id_is_refused(alembic_cfg):
     never enforcing anything."""
     engine = _upgraded(alembic_cfg)
 
+    # BOTH foreign keys must be present, compared by shape rather than name
+    # (SQLite auto-names unnamed constraints, so the two sides would never
+    # agree on a label). The PRE-EXISTING one to ``bracket_events`` is
+    # asserted here because ``batch_alter_table`` REBUILDS the table from
+    # reflection — a constraint the reflection loses would be invisible in
+    # three places at once: NC 4 still passes (with the ``entry_players``
+    # cascade present the tournament delete leaves zero participants either
+    # way), every other suite builds its schema with ``create_all``, and the
+    # entries drift test only walks ``ENTRIES_TABLES``.
+    fks = {
+        (
+            tuple(sorted(fk["constrained_columns"])),
+            fk["referred_table"],
+            tuple(sorted(fk["referred_columns"])),
+        )
+        for fk in sa.inspect(engine).get_foreign_keys("bracket_participants")
+    }
+    assert (
+        ("bracket_event_id", "tournament_id"),
+        "bracket_events",
+        ("id", "tournament_id"),
+    ) in fks, f"the batch rebuild dropped the bracket_events FK: {sorted(fks)}"
+    assert (
+        ("entry_player_id", "tournament_id"),
+        "entry_players",
+        ("id", "tournament_id"),
+    ) in fks, f"no composite FK to entry_players: {sorted(fks)}"
+
     with engine.begin() as conn:
         _assert_enforcement_on(conn)
         _seed_tournament(conn)
