@@ -304,6 +304,48 @@ def test_migration_matches_the_models_column_for_column(alembic_cfg):
         )
 
 
+def test_migration_matches_the_models_foreign_key_for_foreign_key(alembic_cfg):
+    """F-DM-11's real hole: the column comparison above was green the whole
+    time two FKs existed in production and not in the models, so the unit
+    suites' ``create_all`` schema was WEAKER than production and an orphan
+    was representable in tests where it raised in prod. Constraints, not
+    just columns.
+
+    Compared as (sorted local columns, referred table, sorted referred
+    columns) triples — names are not compared, because SQLite auto-names
+    unnamed constraints and the two sides would never agree on a label."""
+    from alembic import command
+
+    cfg, url = alembic_cfg
+    command.upgrade(cfg, "head")
+    inspector, _ = _inspector(url)
+
+    from db.models import Base
+
+    for table in ENTRIES_TABLES:
+        migrated = {
+            (
+                tuple(sorted(fk["constrained_columns"])),
+                fk["referred_table"],
+                tuple(sorted(fk["referred_columns"])),
+            )
+            for fk in inspector.get_foreign_keys(table)
+        }
+        modelled = {
+            (
+                tuple(sorted(fk.column_keys)),
+                fk.referred_table.name,
+                tuple(sorted(el.column.name for el in fk.elements)),
+            )
+            for fk in Base.metadata.tables[table].foreign_key_constraints
+        }
+        assert migrated == modelled, (
+            f"{table}: migration/model FK drift — "
+            f"only in migration {sorted(migrated - modelled)}, "
+            f"only in model {sorted(modelled - migrated)}"
+        )
+
+
 def test_the_gender_column_is_not_null_in_production_too(alembic_cfg):
     """R12 through the migration rather than only through the models.
 

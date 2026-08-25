@@ -1580,6 +1580,23 @@ class Entry(Base):
             ["entry_events.tournament_id", "entry_events.id"],
             ondelete="CASCADE",
         ),
+        # R13's two spine pointers, FK'd in the migration since
+        # ``s3d8f2b5c0e1`` and absent here until SP-DM-3 P4 (F-DM-11). The
+        # gap was not cosmetic: the unit suites build schema with
+        # ``Base.metadata.create_all``, so an orphaned entry was
+        # REPRESENTABLE in every test while raising IntegrityError in
+        # production. The relationships below stay ``viewonly`` +
+        # ``primaryjoin`` — a relationship is a join, never a constraint.
+        ForeignKeyConstraint(
+            ["tournament_id", "submission_id"],
+            ["submissions.tournament_id", "submissions.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tournament_id", "entry_player_id"],
+            ["entry_players.tournament_id", "entry_players.id"],
+            ondelete="CASCADE",
+        ),
         # NON-unique on purpose (Q12, preserved verbatim by R13). It powers
         # the soft duplicate lookup and nothing more: one account
         # legitimately enters the same event for two different players, and
