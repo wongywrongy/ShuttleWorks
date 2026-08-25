@@ -18,7 +18,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 
 | # | Slice | Ruled by | Size | Status |
 |---|---|---|---|---|
-| 1 | **P3 — minting gaps** (pulled forward, R-DM-1.x) | R-DM-1 (a)/(a) | S | **DONE 2026-08-24** — branch dm3/p3-minting-gaps (3aab38fc..68c27751 + bookkeeping), unmerged |
+| 1 | **P3 — minting gaps** (pulled forward, R-DM-1.x) | R-DM-1 (a)/(a) | S | **DONE 2026-08-24** — branch dm3/p3-minting-gaps (405c34ec..68c27751 + bookkeeping), unmerged |
 | 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **NEXT — write detailed plan at phase start** |
 | 3 | P1 — one standings shape | — | M | pending |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | pending |
@@ -33,7 +33,8 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 ## Standing constraints (from the rulings — never re-decide)
 
 - 2026-08-23 minting rule untouched; name-alone matching forbidden; merge tool stays a
-  ruled deferral (`debt-log.md:78`).
+  ruled deferral (debt-log, "operator merge tool" entry — the log is append-in-the-middle,
+  so cite it by title, not line).
 - I4 everywhere: flags, never resolutions; never a 409 for a duplicate.
 - R2 (no FK on `bracket_event_id`), ADR 0006 (no match merge), ADR 0014 (no renames),
   R7/R13 (no hard contact unique), D7 (scrub, keep rows).
