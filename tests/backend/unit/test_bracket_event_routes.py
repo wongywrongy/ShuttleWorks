@@ -258,6 +258,61 @@ def test_generate_draft_sets_status_generated(client, tid):
     assert ms_play_units, "play_units should include MS matches after generate"
 
 
+def _participant_meta(tid: str, event_id: str) -> dict[str, dict]:
+    """``bracket_participants.meta`` straight from the DB, by participant id."""
+    from db.session import SessionLocal
+    from db.models import BracketParticipant
+    from sqlalchemy import select
+    session = SessionLocal()
+    try:
+        rows = session.scalars(
+            select(BracketParticipant).where(
+                BracketParticipant.tournament_id == uuid.UUID(tid),
+                BracketParticipant.bracket_event_id == event_id,
+            )
+        ).all()
+        return {r.id: dict(r.meta or {}) for r in rows}
+    finally:
+        session.close()
+
+
+def _stamp_participant_meta(tid: str, event_id: str, pid: str, meta: dict) -> None:
+    """Write ``meta`` onto a participant row.
+
+    Done in SQL because the upsert route hard-codes ``"meta": {}``
+    (``brackets.py:2009``) — the entries commit seam is what puts
+    ``sourceEntryId`` there in production.
+    """
+    from db.session import SessionLocal
+    from db.models import BracketParticipant
+    session = SessionLocal()
+    try:
+        row = session.get(BracketParticipant, (uuid.UUID(tid), event_id, pid))
+        row.meta = meta
+        session.commit()
+    finally:
+        session.close()
+
+
+def test_regenerating_a_draw_TODAY_destroys_participant_meta(client, tid):
+    """F-DM-09's generation half, characterized. ``brackets.py:2152-2160``
+    builds engine Participants with ``metadata={"seed": ...}`` only, and
+    ``:2266-2287`` re-persists the rows FROM those Participants — so every
+    regenerate wipes ``meta.sourceEntryId``. Task 4 flips this assertion;
+    it is written first so the flip is evidence, not a claim."""
+    _minimal_bracket(tid, client)
+    client.post(_event_url(tid, "MS"), json=_upsert_body())
+    _stamp_participant_meta(tid, "MS", "P1", {"sourceEntryId": "entry-abc"})
+    assert _participant_meta(tid, "MS")["P1"] == {"sourceEntryId": "entry-abc"}
+
+    r = client.post(_event_url(tid, "MS", "generate"), json={"wipe": False})
+    assert r.status_code == 200, r.text
+
+    assert _participant_meta(tid, "MS")["P1"] == {}, (
+        "meta survived generate — F-DM-09 may already be fixed"
+    )
+
+
 def test_generate_with_wipe_true_succeeds(client, tid):
     """Generated event + wipe=true → re-generates successfully."""
     _minimal_bracket(tid, client)

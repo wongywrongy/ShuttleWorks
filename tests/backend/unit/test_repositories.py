@@ -19,6 +19,7 @@ from sqlalchemy.pool import StaticPool
 from db.models import (
     Base,
     InviteLink,
+    Match,
     MatchState,
     TournamentBackup,
     TournamentMember,
@@ -251,6 +252,29 @@ def test_match_state_bulk_upsert_inserts_and_updates(repo):
 def test_match_state_bulk_upsert_empty_dict_is_noop(repo):
     tid = _seed_tournament(repo, name="A")
     assert repo.match_states.bulk_upsert(tid, {}) == 0
+
+
+def test_a_blob_removed_match_deletes_its_matches_row_and_TODAY_orphans_its_state(
+    repo, session
+):
+    """Baseline for P4's ``match_states`` FK (F-DM-22).
+
+    ``repositories/local.py:483-486`` deletes a ``matches`` row whose id left
+    ``data["matches"]``. ``match_states`` has no FK, so its row survives with
+    no parent. P4 adds the composite FK with ``ondelete="CASCADE"`` (forced:
+    RESTRICT would make this very delete raise), after which the state row
+    goes with the match. THIS TEST IS EXPECTED TO CHANGE IN TASK 3 — that is
+    the point of writing it now, so the change is a visible edit and not a
+    silent one."""
+    tid = _seed_tournament(repo, name="Ops")
+    repo.commit_tournament_state(tid, {"matches": [{"id": "m1"}]})
+    repo.match_states.upsert(tid, "m1", {"status": "called"})
+    assert session.get(Match, (tid, "m1")) is not None
+
+    repo.commit_tournament_state(tid, {"matches": []})
+
+    assert session.get(Match, (tid, "m1")) is None
+    assert session.get(MatchState, (tid, "m1")) is not None
 
 
 # ---- TournamentBackup --------------------------------------------------

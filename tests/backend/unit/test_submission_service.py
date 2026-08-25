@@ -631,6 +631,26 @@ def test_a_withdrawn_entry_does_not_raise_the_flag(session, world):
     )
 
 
+def test_re_entering_after_a_withdrawal_carries_the_weaker_advisory(session, world):
+    """Carried from SP-DM-3 P3 (ledger, 2026-08-24) — judged CORRECT and
+    pinned here. A withdrawn entry's ``entry_players`` row survives by
+    design (only D7 erasure scrubs it), so a year-less re-entry under the
+    same account collides with the person's own earlier row and rides
+    ``needs_review_person``. That is the advisory doing its job: two rows
+    exist and an operator should look. Not silence, and not a merge (I4)."""
+    first = _create(
+        session, world, [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])]
+    )
+    first.entries[0].state = "withdrawn"
+    session.commit()
+
+    second = _create(
+        session, world, [PlayerInput("Alice Chen", "F", events=[world["events"]["WS"]])]
+    )
+
+    assert "needs_review_person" in second.entries[0].pending_reasons
+
+
 # ---- reading an act back -------------------------------------------------
 
 
