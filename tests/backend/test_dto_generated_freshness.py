@@ -77,9 +77,16 @@ def _live_object_schemas() -> dict[str, set[str]]:
 
 def test_the_generated_file_still_parses():
     """Guards the parser itself: a formatting change must fail loudly here,
-    not quietly turn every comparison below into a no-op."""
+    not quietly turn every comparison below into a no-op. FIELD-level drift
+    lands here too (the empty-schema assertion), so a change to the property
+    indentation is diagnosed as a parser break rather than surfacing in the
+    keys test, whose remedy message says "regenerate" - the wrong fix."""
     parsed = _parse_generated()
     assert len(parsed) >= 175, f"parsed only {len(parsed)} schemas"  # 177 today
+    # Every object schema has at least one property, so a schema parsed to
+    # zero fields means _FIELD's 12-space anchor stopped matching.
+    empty = sorted(name for name, keys in parsed.items() if not keys)
+    assert not empty, f"schemas parsed with 0 fields (parser drift, not staleness): {empty}"
 
 
 def test_the_generated_and_live_schema_NAMES_match_both_ways():

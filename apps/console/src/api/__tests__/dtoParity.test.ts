@@ -80,8 +80,40 @@ export function parseHand(source: string): Record<string, Set<string>> {
   return out;
 }
 
-/** F-DM-49: the same shape under two names. */
-const ALIASES: Record<string, string> = { EntryDTO: 'EntryDeskRowDTO' };
+/** F-DM-49: the same shape under two names.
+ *  The last three are pure name-suffix mismatches (a `DTO` suffix the wire
+ *  lacks, or one it has and the hand type lacks) - all three pair with zero
+ *  key divergence, so they are naming drift, not shape drift. */
+const ALIASES: Record<string, string> = {
+  EntryDTO: 'EntryDeskRowDTO',
+  CommandRequestDTO: 'CommandRequest',
+  CommandResponseDTO: 'CommandResponse',
+  ProposedMove: 'ProposedMoveDTO',
+};
+
+/** Hand shapes with NO wire twin, each with the reason it has none.
+ *  This is the structural close of the unpoliced-shape class: `divergences()`
+ *  skips any hand shape it cannot pair, so without this map a shape drifts
+ *  unpoliced simply by being forgotten. Mirrors the entrant test's
+ *  `unpaired` (apps/entrant/tests/dtoParity.test.ts). The exhaustiveness
+ *  test below is what holds it to reality in BOTH directions - a shape that
+ *  GAINS a wire twin must be promoted out of here into a real pair. */
+const UNPAIRED: Record<string, string> = {
+  SetScore:
+    'Client-local set score. Wire candidate twin `MatchScore` is field-identical ({sideA, sideB}); aliasing it is a naming ruling and is deliberately not forced in P0.',
+  LiveScheduleState:
+    'Client-local aggregate (currentTime + a matchId->MatchStateDTO map + lastSynced) assembled by the polling hooks; the wire never sends this envelope.',
+  SolverProgressEvent:
+    'SSE payload for the solver-progress stream. OpenAPI models the ROUTE, not the event bodies, so there is no schema to pair against.',
+  SolverModelBuiltEvent:
+    'SSE "model_built" payload. Same reason as SolverProgressEvent: OpenAPI does not model text/event-stream event bodies.',
+  SolverPhaseEvent:
+    'SSE "phase" payload. Same reason as SolverProgressEvent: OpenAPI does not model text/event-stream event bodies.',
+  ConstraintViolation:
+    'Constraint-visualisation type. Wire candidate twin `SoftViolation` overlaps only on type/description; pairing them would need a shape decision, which is P1/P4 territory.',
+  CommandConflictDTO:
+    'Command-path 409 body. Wire candidate twin `ValidationConflict` is a different thing (schedule validation, not command conflict) despite the near-name; deliberately not forced.',
+};
 
 type AllowEntry = { shape: string; field: string; side: string; kind: string; why: string };
 
@@ -100,7 +132,10 @@ export function divergences(): AllowEntry[] {
   const found: AllowEntry[] = [];
   for (const [name, handKeys] of Object.entries(hand)) {
     const wire = generated[ALIASES[name] ?? name];
-    if (!wire) continue; // frontend-private type: no wire twin, nothing to police
+    // No wire twin: nothing to compare. Not a hole - the "every hand shape is
+    // either paired or explicitly unpaired" test below proves every name that
+    // lands here is a declared `UNPAIRED` entry with a reason.
+    if (!wire) continue;
     for (const k of handKeys) if (!wire.has(k)) found.push({ shape: name, field: k, side: 'hand-only', kind: '', why: '' });
     for (const k of wire) if (!handKeys.has(k)) found.push({ shape: name, field: k, side: 'generated-only', kind: '', why: '' });
   }
@@ -111,11 +146,13 @@ const key = (e: { shape: string; field: string; side: string }) => `${e.shape}.$
 
 describe('console DTO parity oracle', () => {
   it('parses both files (guards the parsers themselves)', () => {
-    // Pinned at da254eed: 177 generated schemas, 64 hand shapes, 54 pairs.
+    // Actuals today: 177 generated schemas, 64 hand shapes, 57 pairs.
     // These floors are PARSER guards, not a ratchet: lower them freely when
     // shapes are deliberately deleted (R-DM-9(c)'s end-state shrinks dto.ts;
     // P1's own gate is 9 declarations -> <=3). Only the ALLOW-LIST cap below
     // is a ratchet, and raising that one is a ruling.
+    // A floor sits AT or BELOW the actual by design - it exists to catch a
+    // parser that stopped seeing things, not to freeze the count.
     expect(Object.keys(generated).length).toBeGreaterThanOrEqual(175);
     expect(Object.keys(hand).length).toBeGreaterThanOrEqual(64);
     // Every `export interface` HAS a body, so every one must have parsed -
@@ -124,7 +161,27 @@ describe('console DTO parity oracle', () => {
       expect(Object.keys(hand)).toContain(name);
     }
     const paired = Object.keys(hand).filter((n) => generated[ALIASES[n] ?? n]);
-    expect(paired.length).toBeGreaterThanOrEqual(53);
+    expect(paired.length).toBeGreaterThanOrEqual(57);
+    // FIELD-level parser drift lands here, not in the keys test: a schema
+    // parsed to zero fields means the indentation the field regex keys on
+    // moved. Without this, that shows up downstream as "every generated key
+    // vanished", whose remedy reads as "regenerate" - the wrong diagnosis.
+    const empty = [...Object.entries(generated), ...Object.entries(hand)]
+      .filter(([, keys]) => keys.size === 0)
+      .map(([name]) => name);
+    expect(empty).toEqual([]);
+  });
+
+  it('every hand shape is either paired or explicitly unpaired with a reason', () => {
+    // One assertion, three failure modes, all of them the point:
+    //  - a hand shape with no twin and no UNPAIRED entry (drift unpoliced by
+    //    being forgotten - the hole this test closes);
+    //  - a stale UNPAIRED entry for a shape that no longer exists;
+    //  - an UNPAIRED shape that GAINED a wire twin, which drops off the left
+    //    side and so forces promotion to a real (policed) pair.
+    const noTwin = Object.keys(hand).filter((n) => !generated[ALIASES[n] ?? n]);
+    expect(noTwin.sort()).toEqual(Object.keys(UNPAIRED).sort());
+    for (const why of Object.values(UNPAIRED)) expect(why.length).toBeGreaterThan(20);
   });
 
   it('dto.ts matches the generated shapes, except the allow-listed divergences', () => {
