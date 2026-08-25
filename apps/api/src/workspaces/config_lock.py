@@ -1,9 +1,10 @@
 """Scheduling-field classification behind the CONFIG_LOCKED contract.
 
 The complement list (non-scheduling keys) lives in
-``packages/shared-contract/non-scheduling-keys.json`` — a single file
-read by this module AND by the console parity test, so the two sides
-cannot silently drift. Classification is fail-closed: any key not in
+``packages/shared-contract/non-scheduling-keys.json`` — a single file,
+now a versioned ``{$schema, version, keys}`` document (R-DM-8a), read by
+this module AND by the console parity test, so the two sides cannot
+silently drift. Classification is fail-closed: any key not in
 the exempt list is scheduling-relevant.
 """
 from __future__ import annotations
@@ -38,9 +39,24 @@ def _locate_shared() -> Path:
 
 _SHARED_JSON = _locate_shared()
 
-NON_SCHEDULING_KEYS: frozenset[str] = frozenset(
-    json.loads(_SHARED_JSON.read_text(encoding="utf-8"))
-)
+# SP-DM-3 P2 (R-DM-8a) gave this file a version. Same rule as the blob
+# columns: a file NEWER than this reader raises rather than being
+# half-understood. Written inline rather than through
+# ``db.blob_version.VersionedJSON`` - that guards a database column, this
+# is a file read at import, and ``workspaces`` has no business importing a
+# persistence type to check two integers.
+_KNOWN_CONTRACT_VERSION = 1
+
+_contract = json.loads(_SHARED_JSON.read_text(encoding="utf-8"))
+_contract_version = _contract.get("version", 1)
+if _contract_version > _KNOWN_CONTRACT_VERSION:
+    raise RuntimeError(
+        f"{_SHARED_JSON} is version {_contract_version}; this build knows "
+        f"{_KNOWN_CONTRACT_VERSION}. Refusing to classify config keys against "
+        "a contract it does not understand (CONFIG_LOCKED is fail-closed)."
+    )
+
+NON_SCHEDULING_KEYS: frozenset[str] = frozenset(_contract["keys"])
 
 
 def changed_scheduling_fields(

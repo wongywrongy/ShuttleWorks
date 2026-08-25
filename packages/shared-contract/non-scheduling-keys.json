@@ -1,17 +1,21 @@
-[
-  "scoringFormat",
-  "setsToWin",
-  "pointsPerSet",
-  "deuceEnabled",
-  "standingsMode",
-  "tvDisplayMode",
-  "tvAccent",
-  "tvPreset",
-  "tvGridColumns",
-  "tvCardSize",
-  "tvShowScores",
-  "courtOrder",
-  "hiddenCourts",
-  "tournamentName",
-  "clockShiftMinutes"
-]
+{
+  "$schema": "./non-scheduling-keys.schema.json",
+  "version": 1,
+  "keys": [
+    "scoringFormat",
+    "setsToWin",
+    "pointsPerSet",
+    "deuceEnabled",
+    "standingsMode",
+    "tvDisplayMode",
+    "tvAccent",
+    "tvPreset",
+    "tvGridColumns",
+    "tvCardSize",
+    "tvShowScores",
+    "courtOrder",
+    "hiddenCourts",
+    "tournamentName",
+    "clockShiftMinutes"
+  ]
+}

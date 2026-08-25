@@ -1,0 +1,10 @@
+{
+  "name": "@scheduler/shared-contract",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Data both tiers read. One file today: the CONFIG_LOCKED non-scheduling key exemption list, versioned per R-DM-8(a). Consumers import it by package name so neither side counts directory levels to reach it (F-DM-53).",
+  "type": "module",
+  "exports": {
+    "./non-scheduling-keys.json": "./non-scheduling-keys.json"
+  }
+}

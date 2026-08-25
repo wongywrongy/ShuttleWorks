@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShuttleWorks non-scheduling config keys",
+  "description": "The exempt list behind the CONFIG_LOCKED contract: config keys whose change never invalidates a solved schedule. Classification is fail-closed - anything NOT listed here is scheduling-relevant. Read by apps/api/src/workspaces/config_lock.py and by the console parity test.",
+  "type": "object",
+  "required": ["version", "keys"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Schema version of THIS file (R-DM-8a). A reader that knows a lower version must refuse rather than guess."
+    },
+    "keys": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false
+}
