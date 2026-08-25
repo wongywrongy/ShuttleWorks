@@ -3911,6 +3911,8 @@ export interface components {
             submission?: components["schemas"]["EntrySubmissionDTO"] | null;
             /** Playername */
             playerName: string;
+            /** Entryplayerid */
+            entryPlayerId?: string | null;
             /** Remarks */
             remarks?: string | null;
             /**
@@ -5126,6 +5128,11 @@ export interface components {
             discipline: string;
             /** Invitedby */
             invitedBy: string;
+            /**
+             * Askbirthyear
+             * @default false
+             */
+            askBirthYear: boolean;
         };
         /** PlanFinalizedDTO */
         PlanFinalizedDTO: {

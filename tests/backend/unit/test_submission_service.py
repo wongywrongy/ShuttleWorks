@@ -577,6 +577,10 @@ def test_the_same_name_in_a_DIFFERENT_event_rides_the_weaker_advisory(session, w
     assert "needs_review_person" in second.entries[0].pending_reasons
     # And the old same-event flag did not fire (different events).
     assert "needs_review" not in second.entries[0].pending_reasons
+    # The self-exclusion guard: `exclude_id` keeps a fresh mint out of its own
+    # advisory, so the FIRST entry never flags itself against the row it just
+    # wrote (autoflush makes that row visible to the namesake query).
+    assert "needs_review_person" not in first.entries[0].pending_reasons
 
 
 def test_distinct_birth_years_are_two_people_and_no_new_flag(session, world):

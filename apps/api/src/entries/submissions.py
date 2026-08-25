@@ -289,9 +289,10 @@ def same_person(
     - Within an account, name alone is NOT enough — one club rep enters a
       father and son sharing a name — so ``birth_year`` is the discriminator,
       and a spec *without* one matches nothing rather than guessing. That
-      person becomes a separate row and rides the ``looks_duplicate`` →
-      NEEDS_REVIEW advisory like every other ambiguity (invariant I4: a flag
-      an operator resolves, never a silent decision).
+      person becomes a separate row, and ``has_unresolvable_namesake``
+      surfaces that fork as the workspace-scoped ``NEEDS_REVIEW_PERSON``
+      advisory like every other ambiguity (invariant I4: a flag an operator
+      resolves, never a silent decision).
     - Erased rows never match: a scrubbed row's name is a tombstone, not a
       person, and D7 promises the human behind it has stopped being
       identifiable in these records. (Their name would not compare equal to
