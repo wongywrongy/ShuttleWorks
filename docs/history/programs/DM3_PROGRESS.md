@@ -18,8 +18,8 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 
 | # | Slice | Ruled by | Size | Status |
 |---|---|---|---|---|
-| 1 | **P3 — minting gaps** (pulled forward, R-DM-1.x) | R-DM-1 (a)/(a) | S | **NEXT — plan is detailed, execute it** |
-| 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | pending (write detailed plan at start) |
+| 1 | **P3 — minting gaps** (pulled forward, R-DM-1.x) | R-DM-1 (a)/(a) | S | **DONE 2026-08-24** — branch dm3/p3-minting-gaps (3aab38fc..68c27751 + bookkeeping), unmerged |
+| 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **NEXT — write detailed plan at phase start** |
 | 3 | P1 — one standings shape | — | M | pending |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | pending |
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | pending — blocked by P3+P2 |
@@ -54,3 +54,12 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 - **Next session:** branch `dm3/p3-minting-gaps` off `main`, execute the plan's Task 1–4
   (P3) via superpowers:subagent-driven-development or executing-plans. The plan's line
   numbers anchor to `53b650a1`; re-anchor by symbol if the tree has moved.
+
+### 2026-08-24 — P3 slice executed (subagent-driven, opus)
+- Branch `dm3/p3-minting-gaps` off `main`: `3aab38fc` advisory + `adopt_or_mint` extraction · `4d72884e` partner adoption via the matcher (+ `birthYear`/`askBirthYear` wire + entrant form field) · `de4eda6c` `blank_clears` keyword so partner adoption preserves club/remarks the accept form never asked (final-review Important, ruled) · `68c27751` `entryPlayerId` on the desk wire · + slice-end bookkeeping commits.
+- Gates: `make check` green (1864 passed); deletion gates hold (one `EntryPlayer(` construction site; console carries the key). Final whole-branch review: merge-ready with fixes, fixes landed.
+- Deviations from plan, all reviewed: `adopt_or_mint` gained keyword-only `blank_clears` (entry-form blank-means-clear unchanged); `dto.generated.ts` regenerated once at slice end, not per-task; two console test factories touched beyond the file map (tsc-forced).
+- Carried to P4's plan: withdrawn-re-entry now raises the new flag (judged correct, pin with a test); `askBirthYear` parity drift (all events vs open events) + no true-branch test — one age-bracketed fixture closes both; the advisory marks only the LATER half of a fork, so the merge tool cannot find both sides from flagged rows alone.
+- New debt rows: partner path raises no `needs_review_person` (→P4); gender ignored on adopt (needs ruling).
+- Docs-freshness advisory flags Modules + Entrant-tier pages behind this branch (advisory only).
+- Merging `dm3/p3-minting-gaps` is Kyle's call. Next slice: P0 (type mechanism) — write its detailed plan at phase start against the then-current tree.
