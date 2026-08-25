@@ -77,6 +77,10 @@ from db.models import (
     WorkspaceModule,
     derive_modules,
 )
+# Relocated to ``db`` in SP-DM-3 P2 so ``models.py`` can declare the
+# column with it; re-bound here because ``ops/health.py`` imports the
+# name from this module and there is no reason to churn that.
+from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION
 from db.session import SessionLocal
 
 log = logging.getLogger("scheduler.repositories")
@@ -84,7 +88,6 @@ log = logging.getLogger("scheduler.repositories")
 # Matches the on-disk shape of the legacy backup files so any UI that
 # parses the filename keeps working.
 _FILENAME_SLUG = re.compile(r"[^a-zA-Z0-9-]+")
-CURRENT_TOURNAMENT_SCHEMA_VERSION = 2
 
 
 def _slugify(value: str) -> str:
