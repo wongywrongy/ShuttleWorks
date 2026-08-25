@@ -22,7 +22,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 2 | P0 — type mechanism (parity oracle) | R-DM-9 (a) | M | **DONE 2026-08-24** — branch dm3/p0-type-mechanism (bd262dbd..4630ec53, stacked on P3) — **merged to main 2026-08-24** (ff to 9c5e6186, Kyle's instruction) |
 | 3 | P1 — one standings shape | — | M | **DONE 2026-08-24** — 6546e63b..4df4b9cc, final review "merge as-is" — **merged to main 2026-08-24** (ff to 4df4b9cc) |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | **DONE 2026-08-25** — 93f41250..0098ee46 (incl. final-review fix wave f673ea2e + Dockerfile source COPY 0098ee46) — **merged to main 2026-08-25** (ff to 0098ee46) |
-| 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — branch dm3/p4-person-key (`3bf049f7`..`e2be7119`); merging is Kyle's call |
+| 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to `7cf58d71`, Kyle's standing instruction) |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | pending — blocked by P2 |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | pending — blocked by P4 |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
@@ -147,7 +147,19 @@ roster blob DTOs, regen, console reconcile, `_participant_persist_fields` helper
 behind `roster_id()` + a hardened source-reading gate · `26bc989b` **T7** the two P3
 carry-forward pickups · `63df5891` T5-ruled console rider (manual roster assignment carries the
 key) · `d2bcc615` T7-ruled console rider (the participant picker carries the key **to the wire**)
-· `e2be7119` **T8** the `BLOB_VERSIONS` re-attribution.
+· `e2be7119` **T8** the `BLOB_VERSIONS` re-attribution · `57af7abf` this ledger + debt-log ·
+`62ccbcab` T8 fix round (D22 annotated at the row; DoublesPicker `initialIds` debt row) ·
+`7cf58d71` final-review fix wave (`slot_a`/`slot_b` → P6; blob-vs-column deferral debt-logged,
+owner P6, with the backfill-must-key-the-blob-too inheritance note).
+
+**Final whole-branch review (9f423053..62ccbcab): "Ready to merge: Yes", 0 Critical, 0
+Important.** The match_state parent-first reorder was the reviewer's main merge-scale target and
+held: the three reordered sites are the only `match_states` upsert callers in `apps/api/src`, and
+the residue a mid-pair failure leaves (parent row, no state row) was already a legal, representable
+state pre-P4. Its two docs-only Minors are the `7cf58d71` fix wave; its deferred-minors triage kept
+everything else deferred, flagging the pre-existing DoublesPicker `initialIds` gap as the worst
+adjacent defect (debt-logged, not P4's regression). Standing caveat restated: all migration
+evidence is SQLite; Postgres untested (the program's known limit since P2).
 
 **Four `entry-{uuid}` derivation sites existed, not three.** The card said three; the planner's
 tree pass found a fourth at `entries_me.py:375`, added post-audit. All four now route through one
@@ -292,7 +304,9 @@ it stays open for P8 or the owner.
 **Next.** **P4 unblocks P6** (bracket person-key demotion — the FK it needed now exists) **and the
 two deferred SP-P7 highlight-player items.** The **R-DM-2(c) Meet-roster extraction is now due as
 its own program** (row 11 in the slice table) — P4 deliberately did not retire
-`entries.committed_player_id`, and the deletion gate above says so. Merging `dm3/p4-person-key` is
-Kyle's call (superpowers:finishing-a-development-branch); the ruled next slice is **P5 (pair
-survives intake)** — author its detailed plan at phase start against the then-current tree, and note
-that P5's area has the **thinnest test cover of any slice, so characterization comes first**.
+`entries.committed_player_id`, and the deletion gate above says so. `dm3/p4-person-key` was
+**merged to `main` 2026-08-25** (ff to `7cf58d71`, per Kyle's standing merge-and-proceed
+instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call). The ruled next
+slice is **P5 (pair survives intake)** — author its detailed plan at phase start against the
+then-current tree, and note that P5's area has the **thinnest test cover of any slice, so
+characterization comes first**.
