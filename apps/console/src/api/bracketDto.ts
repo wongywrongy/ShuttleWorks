@@ -8,6 +8,13 @@
  * any in-flight imports from before the move don't break — new code
  * should prefer the prefixed names.
  */
+
+// SP-DM-3 P1: the two standings row shapes are taken from the generated
+// OpenAPI types rather than hand-mirrored (R-DM-9(c), applied to the shapes
+// whose divergence count is already zero). A generated alias cannot drift, so
+// these two need no parity entry - see api/__tests__/dtoParity.test.ts.
+import type { components } from './dto.generated';
+
 export type WinnerSide = "A" | "B" | "none";
 
 export interface Participant {
@@ -126,18 +133,16 @@ export interface SegmentDTO {
 }
 
 /** One row of a standings table (RR / Swiss / group pools) — BWF tie-break
- *  chain is applied backend-side; `position` is the resolved rank. */
-export interface StandingRowDTO {
-  participant_id: string;
-  played: number;
-  wins: number;
-  losses: number;
-  games_won: number;
-  games_lost: number;
-  points_won: number;
-  points_lost: number;
-  position: number;
-}
+ *  chain is applied backend-side; `position` is the resolved rank.
+ *
+ *  Aliases the wire schema `StandingRow` (snake_case — NOT the camelCase
+ *  `StandingRowDTO` schema, which is a different display shape). OpenAPI
+ *  marks the eight counter fields non-required because they carry dataclass
+ *  defaults, but openapi-typescript renders them as required with `@default`
+ *  doc tags, and the backend always emits all nine — so the generated type
+ *  is honest as-is and needs no `Required<>` wrapper. SP-DM-3 P1,
+ *  `bracket/standings.py`. */
+export type StandingRowDTO = components['schemas']['StandingRow'];
 
 interface EventDTO {
   id: string;

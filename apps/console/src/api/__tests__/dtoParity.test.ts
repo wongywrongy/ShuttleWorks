@@ -12,13 +12,18 @@
  * Global Constraints).
  *
  * Why the two `dto.generated.ts` exclusions stay (re-justified 2026-08-24,
- * SP-DM-3 P0). `knip.json` — src/api/dto.generated.ts has no importer BY
- * DESIGN: this file reads it as TEXT (the R-DM-9a parity oracle), which
- * gives knip no import edge to see. The note lives here because knip's
- * schema rejects unknown keys, so `knip.json` cannot carry a comment.
- * `vitest.config.ts` coverage — the generated file is types-only and emits
- * no runtime code, so it can only ever report 0%. Neither exclusion leaves
- * it unpoliced; this test is what polices it.
+ * SP-DM-3 P1). `knip.json` — the file DOES have importers now (`dto.ts` and
+ * `bracketDto.ts` both `import type { components }` for the standings
+ * aliases), so the old "no importer BY DESIGN" reason is dead. The ignore
+ * still stands for a different reason, measured by removing it and running
+ * knip: `openapi-typescript` emits four whole-file exports nobody imports —
+ * `paths`, `webhooks`, `$defs`, `operations` — which knip reports as unused
+ * exported types (28 -> 32). They are generator output, not dead code, and
+ * cannot be deleted without regenerating differently. The note lives here
+ * because knip's schema rejects unknown keys, so `knip.json` cannot carry a
+ * comment. `vitest.config.ts` coverage — the generated file is types-only
+ * and emits no runtime code, so it can only ever report 0%. Neither
+ * exclusion leaves it unpoliced; this test is what polices it.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -146,7 +151,10 @@ const key = (e: { shape: string; field: string; side: string }) => `${e.shape}.$
 
 describe('console DTO parity oracle', () => {
   it('parses both files (guards the parsers themselves)', () => {
-    // Actuals today: 177 generated schemas, 64 hand shapes, 57 pairs.
+    // Actuals today: 177 generated schemas, 63 hand shapes, 56 pairs.
+    // `hand` and `pairs` each dropped by one in SP-DM-3 P1:
+    // `MeetStandingRowDTO` became a generated alias, so `parseHand`
+    // correctly no longer sees it (an alias line has no `{`).
     // These floors are PARSER guards, not a ratchet: lower them freely when
     // shapes are deliberately deleted (R-DM-9(c)'s end-state shrinks dto.ts;
     // P1's own gate is 9 declarations -> <=3). Only the ALLOW-LIST cap below
@@ -154,14 +162,14 @@ describe('console DTO parity oracle', () => {
     // A floor sits AT or BELOW the actual by design - it exists to catch a
     // parser that stopped seeing things, not to freeze the count.
     expect(Object.keys(generated).length).toBeGreaterThanOrEqual(175);
-    expect(Object.keys(hand).length).toBeGreaterThanOrEqual(64);
+    expect(Object.keys(hand).length).toBeGreaterThanOrEqual(63);
     // Every `export interface` HAS a body, so every one must have parsed -
     // a silently skipped shape is the parser's only fail-dangerous mode.
     for (const [, name] of handSource.matchAll(/^export interface ([A-Za-z_][A-Za-z0-9_]*)/gm)) {
       expect(Object.keys(hand)).toContain(name);
     }
     const paired = Object.keys(hand).filter((n) => generated[ALIASES[n] ?? n]);
-    expect(paired.length).toBeGreaterThanOrEqual(57);
+    expect(paired.length).toBeGreaterThanOrEqual(56);
     // FIELD-level parser drift lands here, not in the keys test: a schema
     // parsed to zero fields means the indentation the field regex keys on
     // moved. Without this, that shows up downstream as "every generated key

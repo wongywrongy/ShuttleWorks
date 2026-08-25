@@ -336,10 +336,11 @@ class EventOut(BaseModel):
     # The row type is ``bracket.standings.StandingRow`` itself since
     # SP-DM-3 P1 (F-DM-26): pydantic serializes a stdlib dataclass field
     # natively, so the wire shape and the computation shape are one
-    # declaration. Its defaulted fields render as OPTIONAL in OpenAPI
-    # (they were required under the deleted ``StandingRowOut`` mirror);
-    # the backend still always emits all nine, and the console alias
-    # wraps ``Required<>`` to say so.
+    # declaration. Its defaulted fields are non-required in the OpenAPI
+    # schema (they were required under the deleted ``StandingRowOut``
+    # mirror), but openapi-typescript renders them as required with
+    # ``@default`` doc tags, and the backend always emits all nine — so
+    # the console aliases the generated type directly, unwrapped.
     standings: Optional[List[StandingRow]] = None
     # Per-event lifecycle status: 'draft' | 'generated' | 'started'.
     # Drives the Draws-page status pill + Generate/Open affordances.
