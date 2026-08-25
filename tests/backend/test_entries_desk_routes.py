@@ -369,6 +369,45 @@ def test_a_desk_row_carries_the_resolved_person_key(client, workspace):
     assert rows[0]["entryPlayerId"], "the desk row must carry the person key"
 
 
+def test_a_desk_row_carries_its_partner_link(client, workspace):
+    """F-DM-35: the desk had ZERO pair shapes. ``partner`` against
+    ``core/schemas.py`` returned nothing, and this DTO's own docstring
+    still said the doubles columns "mean nothing until E3" — which
+    shipped. So the operator surface for entries could neither show a
+    pairing nor act on one, while the backend held a real mutual key.
+
+    One field, not four: the desk already holds every row of the
+    workspace, so a name is a join it can do itself (plan judgment call 7).
+    """
+    import uuid as _uuid
+    from db.models import Entry
+    from db.session import SessionLocal
+
+    tid = workspace
+    left, right, solo = _seed_entries(
+        tid,
+        [
+            {"player_name": "Alex Kim"},
+            {"player_name": "Sam Ali"},
+            {"player_name": "Robin Ng"},
+        ],
+    )
+    # Linked both ways, which is what ``partners.accept()`` writes.
+    session = SessionLocal()
+    try:
+        for mine, theirs in ((left, right), (right, left)):
+            row = session.get(Entry, (_uuid.UUID(tid), _uuid.UUID(mine)))
+            row.partner_entry_id = _uuid.UUID(theirs)
+        session.commit()
+    finally:
+        session.close()
+
+    rows = {row["id"]: row for row in client.get(f"/tournaments/{tid}/entries").json()}
+    assert rows[left]["partnerEntryId"] == right
+    assert rows[right]["partnerEntryId"] == left
+    assert rows[solo]["partnerEntryId"] is None
+
+
 def test_a_viewer_can_read_the_desk_list(client, workspace):
     tid = workspace
     _seed_entries(tid, [{"player_name": "Alice Chen"}])

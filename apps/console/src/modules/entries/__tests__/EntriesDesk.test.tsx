@@ -47,6 +47,7 @@ function entry(partial: Partial<EntryDTO> & { id: string }): EntryDTO {
     submission: submission(),
     playerName: 'Alice Chen',
     entryPlayerId: null,
+    partnerEntryId: null,
     remarks: null,
     listOptOut: false,
     committedPlayerId: null,

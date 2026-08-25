@@ -735,9 +735,10 @@ class EntrySubmissionDTO(BaseModel):
 class EntryDeskRowDTO(BaseModel):
     """One row of the operator's entries desk.
 
-    A **projection**, not the table. The doubles columns are deliberately
-    absent: they exist in the schema (created now to avoid migration churn)
-    but mean nothing until E3 and would read as broken features.
+    A **projection**, not the table. Of the doubles columns it carries the
+    pair KEY (``partnerEntryId``) and deliberately not the partner's name:
+    the desk holds every row of the workspace, so the name is a join it can
+    do itself.
 
     **The credential material this projection used to exclude no longer
     exists.** E1 carried ``Entry.manage_token_hash`` and this docstring
@@ -768,6 +769,13 @@ class EntryDeskRowDTO(BaseModel):
     # desk groups one human's entries across submissions by this, not by
     # eye. Null only for rows minted before the person spine existed.
     entryPlayerId: Optional[str] = None
+    # F-DM-35 / R-DM-4(a): the operator wire's FIRST pair shape. The
+    # column has existed since E3 and reached exactly two public
+    # projections, both of which only rendered a name string (F-DM-07) -
+    # the desk, which is where an operator would act on a pairing, could
+    # not see it at all. Null for a singles entry and for a doubles entry
+    # whose partner has not accepted.
+    partnerEntryId: Optional[str] = None
     remarks: Optional[str] = None
     listOptOut: bool = False
     committedPlayerId: Optional[str] = None
@@ -785,6 +793,7 @@ class EntryDeskRowDTO(BaseModel):
             submission=EntrySubmissionDTO.from_row(row.submission),
             playerName=row.player_name,
             entryPlayerId=str(row.entry_player_id) if row.entry_player_id else None,
+            partnerEntryId=str(row.partner_entry_id) if row.partner_entry_id else None,
             remarks=row.remarks,
             listOptOut=bool(row.list_opt_out),
             committedPlayerId=row.committed_player_id,

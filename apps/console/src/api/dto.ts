@@ -723,6 +723,12 @@ export interface EntryDTO {
    *  before it had only `playerName` and eyes. Null on rows minted before
    *  the person spine. */
   entryPlayerId: string | null;
+  /** The other half of this doubles pair (`entries.partner_entry_id`),
+   *  written on BOTH halves at acceptance. Null for singles and for a
+   *  nomination nobody has accepted. The partner's NAME is a join the desk
+   *  already holds every row for — F-DM-35 was the key not being on the
+   *  wire, not the name. */
+  partnerEntryId: string | null;
   remarks: string | null;
   listOptOut: boolean;
   /** Set once Seam A has materialized this entry as a roster player. */

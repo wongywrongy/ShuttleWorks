@@ -3928,9 +3928,10 @@ export interface components {
          * EntryDeskRowDTO
          * @description One row of the operator's entries desk.
          *
-         *     A **projection**, not the table. The doubles columns are deliberately
-         *     absent: they exist in the schema (created now to avoid migration churn)
-         *     but mean nothing until E3 and would read as broken features.
+         *     A **projection**, not the table. Of the doubles columns it carries the
+         *     pair KEY (``partnerEntryId``) and deliberately not the partner's name:
+         *     the desk holds every row of the workspace, so the name is a join it can
+         *     do itself.
          *
          *     **The credential material this projection used to exclude no longer
          *     exists.** E1 carried ``Entry.manage_token_hash`` and this docstring
@@ -3961,6 +3962,8 @@ export interface components {
             playerName: string;
             /** Entryplayerid */
             entryPlayerId?: string | null;
+            /** Partnerentryid */
+            partnerEntryId?: string | null;
             /** Remarks */
             remarks?: string | null;
             /**

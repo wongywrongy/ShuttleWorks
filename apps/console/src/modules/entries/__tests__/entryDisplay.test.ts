@@ -42,6 +42,7 @@ function entry(id: string, submissionId: string | null, email = 'a@b.c'): EntryD
       : null,
     playerName: 'Alice Chen',
     entryPlayerId: null,
+    partnerEntryId: null,
     remarks: null,
     listOptOut: false,
     committedPlayerId: null,
