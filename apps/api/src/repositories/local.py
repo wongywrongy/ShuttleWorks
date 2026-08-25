@@ -742,6 +742,7 @@ class _LocalBracketRepo:
                 member_ids=p.get("member_ids") or [],
                 seed=p.get("seed"),
                 meta=p.get("meta") or {},
+                entry_player_id=p.get("entry_player_id"),
             )
             for p in participants
         ]

@@ -258,8 +258,8 @@ def test_generate_draft_sets_status_generated(client, tid):
     assert ms_play_units, "play_units should include MS matches after generate"
 
 
-def _participant_meta(tid: str, event_id: str) -> dict[str, dict]:
-    """``bracket_participants.meta`` straight from the DB, by participant id."""
+def _participant_rows(tid: str, event_id: str) -> dict[str, dict]:
+    """``meta`` + ``entry_player_id`` straight from the DB, by participant id."""
     from db.session import SessionLocal
     from db.models import BracketParticipant
     from sqlalchemy import select
@@ -271,46 +271,84 @@ def _participant_meta(tid: str, event_id: str) -> dict[str, dict]:
                 BracketParticipant.bracket_event_id == event_id,
             )
         ).all()
-        return {r.id: dict(r.meta or {}) for r in rows}
+        return {
+            r.id: {"meta": dict(r.meta or {}), "entry_player_id": r.entry_player_id}
+            for r in rows
+        }
     finally:
         session.close()
 
 
-def _stamp_participant_meta(tid: str, event_id: str, pid: str, meta: dict) -> None:
-    """Write ``meta`` onto a participant row.
+def _stamp_person(tid: str, event_id: str, pid: str, meta: dict) -> uuid.UUID:
+    """Write ``meta`` **and** a real ``entry_player_id`` onto a participant row.
 
     Done in SQL because the upsert route hard-codes ``"meta": {}``
-    (``brackets.py:2009``) — the entries commit seam is what puts
-    ``sourceEntryId`` there in production.
+    (``brackets.py:2009``, deferred to Task 5) and carries no person key
+    either — the entries commit seam is what puts ``sourceEntryId`` and the
+    key there in production (see
+    ``test_entries_commit_seam.test_a_committed_entry_puts_the_person_key_on_its_participant``).
+
+    The ``entry_players`` parent row is real, not a bare ``uuid4``: the
+    composite FK ``(tournament_id, entry_player_id)`` is enforced (SQLite
+    ``PRAGMA foreign_keys`` is ON for every app session), and the regenerate
+    path re-INSERTs the participant row.
     """
     from db.session import SessionLocal
-    from db.models import BracketParticipant
+    from db.models import BracketParticipant, EntrantAccount, EntryPlayer
     session = SessionLocal()
     try:
+        account = EntrantAccount(email="stamp@example.com", password_hash="x")
+        session.add(account)
+        session.flush()
+        player = EntryPlayer(
+            tournament_id=uuid.UUID(tid),
+            account_id=account.id,
+            full_name="Player 1",
+            gender="F",
+        )
+        session.add(player)
+        session.flush()
         row = session.get(BracketParticipant, (uuid.UUID(tid), event_id, pid))
         row.meta = meta
+        row.entry_player_id = player.id
         session.commit()
+        return player.id
     finally:
         session.close()
 
 
-def test_regenerating_a_draw_TODAY_destroys_participant_meta(client, tid):
-    """F-DM-09's generation half, characterized. ``brackets.py:2152-2160``
-    builds engine Participants with ``metadata={"seed": ...}`` only, and
-    ``:2266-2287`` re-persists the rows FROM those Participants — so every
-    regenerate wipes ``meta.sourceEntryId``. Task 4 flips this assertion;
-    it is written first so the flip is evidence, not a claim."""
+def test_regenerating_a_draw_preserves_the_person_key_and_meta(client, tid):
+    """The flip of Task 1's characterization (commit ``0a5f40e9``'s
+    ``test_regenerating_a_draw_TODAY_destroys_participant_meta``).
+
+    ``brackets.py`` rebuilds participant rows FROM engine Participants on
+    every generate and regenerate, so any column not lifted into
+    ``Participant.metadata`` at hydration is destroyed by a regenerate.
+    ``seed`` is the prior art for the lift; ``entry_player_id`` follows it,
+    and ``meta`` — dropped entirely today (F-DM-09's generation half) — is
+    carried with it."""
     _minimal_bracket(tid, client)
     client.post(_event_url(tid, "MS"), json=_upsert_body())
-    _stamp_participant_meta(tid, "MS", "P1", {"sourceEntryId": "entry-abc"})
-    assert _participant_meta(tid, "MS")["P1"] == {"sourceEntryId": "entry-abc"}
+    player_id = _stamp_person(tid, "MS", "P1", {"sourceEntryId": "entry-abc"})
+    assert _participant_rows(tid, "MS")["P1"] == {
+        "meta": {"sourceEntryId": "entry-abc"},
+        "entry_player_id": player_id,
+    }
 
     r = client.post(_event_url(tid, "MS", "generate"), json={"wipe": False})
     assert r.status_code == 200, r.text
+    assert _participant_rows(tid, "MS")["P1"] == {
+        "meta": {"sourceEntryId": "entry-abc"},
+        "entry_player_id": player_id,
+    }, "generate destroyed the person key or meta"
 
-    assert _participant_meta(tid, "MS")["P1"] == {}, (
-        "meta survived generate — F-DM-09 may already be fixed"
-    )
+    # And again — a REgenerate is the hop the round trip actually dies on.
+    r = client.post(_event_url(tid, "MS", "generate"), json={"wipe": True})
+    assert r.status_code == 200, r.text
+    assert _participant_rows(tid, "MS")["P1"] == {
+        "meta": {"sourceEntryId": "entry-abc"},
+        "entry_player_id": player_id,
+    }, "regenerate destroyed the person key or meta"
 
 
 def test_generate_with_wipe_true_succeeds(client, tid):

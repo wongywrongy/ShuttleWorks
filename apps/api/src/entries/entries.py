@@ -596,6 +596,12 @@ def _plan_bracket(
                     "name": entry.player_name,
                     "type": "PLAYER",
                     "member_ids": [],
+                    # R-DM-2(a): the constrained half of the link. ``id``
+                    # above is still the ``entry-{uuid}`` string and stays
+                    # the PK (R-DM-7(a) — no re-key); this is the key
+                    # anything joining a draw appearance to a human should
+                    # use from now on.
+                    "entry_player_id": entry.entry_player_id,
                     "seed": None,
                     "meta": {"sourceEntryId": str(entry.id)},
                 }

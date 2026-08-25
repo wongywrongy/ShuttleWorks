@@ -562,6 +562,22 @@ def test_a_bracket_entry_becomes_a_participant_and_a_roster_player(repo, session
     assert entry.committed_player_id == participants[0].id == roster[0]["id"]
 
 
+def test_a_committed_entry_puts_the_person_key_on_its_participant(repo, session):
+    """R-DM-2(a) end to end: the commit seam knows the person
+    (``entries.entry_player_id``), and now the participant row carries it as
+    a constrained key instead of only as a name-derived id."""
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    ev = _entry_event(session, tid, code="MS", bracket_event_id="MS")
+    entry = _entry(session, tid, ev, player_name="Alex Tan")
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    participants = repo.brackets.list_participants(tid, "MS")
+    assert [p.entry_player_id for p in participants] == [entry.entry_player_id]
+
+
 def test_one_person_in_two_draws_is_one_roster_row_in_both_participant_lists(
     repo, session
 ):

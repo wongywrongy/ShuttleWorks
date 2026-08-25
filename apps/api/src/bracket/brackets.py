@@ -801,6 +801,17 @@ def _hydrate_session(
                 metadata={
                     **(dict(p.meta) if p.meta else {}),
                     **({"seed": p.seed} if p.seed is not None else {}),
+                    # Columns ride in ``metadata`` between hydration and
+                    # persist because the engine ``Participant`` is the only
+                    # thing the generate/regenerate round trip preserves —
+                    # see the three persist dicts, which rebuild rows FROM
+                    # these objects. Same mechanism as ``seed``; a column
+                    # not lifted here is destroyed by every regenerate.
+                    **(
+                        {"entryPlayerId": str(p.entry_player_id)}
+                        if p.entry_player_id is not None
+                        else {}
+                    ),
                 },
             )
             state.participants[p.id] = participant
@@ -1021,10 +1032,15 @@ def _persist_event(
                     if isinstance(p.metadata, dict)
                     else None
                 ),
+                "entry_player_id": (
+                    uuid.UUID(p.metadata["entryPlayerId"])
+                    if isinstance(p.metadata, dict) and p.metadata.get("entryPlayerId")
+                    else None
+                ),
                 "meta": {
                     k: v
                     for k, v in (p.metadata or {}).items()
-                    if k != "seed"
+                    if k not in ("seed", "entryPlayerId")
                 },
             }
             for p in draw.participants.values()
@@ -1449,7 +1465,19 @@ def create_bracket(
                     else ParticipantType.PLAYER
                 ),
                 member_ids=list(p.members or []),
-                metadata=({"seed": p.seed} if p.seed is not None else {}),
+                metadata={
+                    # F-DM-09, generation half: this construction dropped
+                    # ``p.meta`` outright, so every generate/regenerate erased
+                    # ``sourceEntryId`` — and would erase the person key the
+                    # same way. Characterized before the fix; see the test.
+                    **(dict(p.meta) if getattr(p, "meta", None) else {}),
+                    **({"seed": p.seed} if p.seed is not None else {}),
+                    **(
+                        {"entryPlayerId": str(p.entry_player_id)}
+                        if getattr(p, "entry_player_id", None)
+                        else {}
+                    ),
+                },
             )
             for p in ev.participants
         ]
@@ -2006,6 +2034,9 @@ def upsert_event(
                     "type": "TEAM" if p.members else "PLAYER",
                     "member_ids": list(p.members or []),
                     "seed": p.seed,
+                    # Task 5: the source here is ``ParticipantIn``, which
+                    # has neither ``meta`` nor ``entryPlayerId`` until that
+                    # task adds them — so this dict keeps dropping both.
                     "meta": {},
                 }
                 for p in body.participants
@@ -2155,7 +2186,19 @@ def generate_event_route(
             name=p.name,
             type=_parse_participant_type(p.type),
             member_ids=list(p.member_ids or []),
-            metadata=({"seed": p.seed} if p.seed is not None else {}),
+            metadata={
+                # F-DM-09, generation half: this construction dropped
+                # ``p.meta`` outright, so every generate/regenerate erased
+                # ``sourceEntryId`` — and would erase the person key the
+                # same way. Characterized before the fix; see the test.
+                **(dict(p.meta) if getattr(p, "meta", None) else {}),
+                **({"seed": p.seed} if p.seed is not None else {}),
+                **(
+                    {"entryPlayerId": str(p.entry_player_id)}
+                    if getattr(p, "entry_player_id", None)
+                    else {}
+                ),
+            },
         )
         for p in participant_rows
     ]
@@ -2277,10 +2320,15 @@ def generate_event_route(
                     if isinstance(p.metadata, dict)
                     else None
                 ),
+                "entry_player_id": (
+                    uuid.UUID(p.metadata["entryPlayerId"])
+                    if isinstance(p.metadata, dict) and p.metadata.get("entryPlayerId")
+                    else None
+                ),
                 "meta": {
                     k: v
                     for k, v in (p.metadata or {}).items()
-                    if k != "seed"
+                    if k not in ("seed", "entryPlayerId")
                 },
             }
             for p in draw.participants.values()
