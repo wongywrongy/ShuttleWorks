@@ -36,6 +36,7 @@ from fastapi import APIRouter, Depends, Path, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ValidationError
+from sqlalchemy import select
 
 from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
@@ -43,7 +44,9 @@ from core.limits import Name, StrictModel
 from db.models import EntryEvent, EntryPage, Tournament
 from entries import partners as partner_service
 from entries.entries_json import require_form_csrf
+from entries.entries_public import _is_age_bracketed
 from entries.entry_fees import PlayerSelection, compute_fee_total
+from entries.entry_form import parse_year
 from repositories import LocalRepository, get_repository
 
 router = APIRouter(prefix="/e/api/partner-invites", tags=["entries-partners"])
@@ -62,6 +65,7 @@ class PartnerInviteDTO(BaseModel):
     # The inviter's display name, or their address when they set none. The
     # recipient was mailed by this person and already has it.
     invitedBy: str
+    askBirthYear: bool = False
 
 
 class PartnerAcceptRequest(StrictModel):
@@ -76,6 +80,10 @@ class PartnerAcceptRequest(StrictModel):
     gender: Name
     club: Optional[Name] = None
     remarks: Optional[Name] = None
+    # R-DM-1 (ii): the identity discriminator, string-typed and parsed by
+    # parse_year - an unparseable year is dropped, not refused, exactly as
+    # the entry form treats it.
+    birthYear: Optional[Name] = None
 
 
 class PartnerAcceptedDTO(BaseModel):
@@ -184,6 +192,11 @@ def preview_partner_invite(
     event = repo.session.get(EntryEvent, (entry.tournament_id, entry.entry_event_id))
     tournament = repo.session.get(Tournament, entry.tournament_id)
     page = repo.session.get(EntryPage, entry.tournament_id)
+
+    events = repo.session.scalars(
+        select(EntryEvent).where(EntryEvent.tournament_id == entry.tournament_id)
+    ).all()
+    ask_birth_year = any(_is_age_bracketed(ev) for ev in events)
     return PartnerInviteDTO(
         tournamentName=tournament.name if tournament is not None else None,
         slug=page.slug if page is not None else None,
@@ -192,6 +205,7 @@ def preview_partner_invite(
         # ``contact_name`` already falls back to the address when an account
         # set no display name — the honest answer is what we actually know.
         invitedBy=entry.contact_name or "Someone",
+        askBirthYear=ask_birth_year,
     )
 
 
@@ -272,6 +286,7 @@ def accept_partner_invite(
         gender=body.gender,
         club=body.club,
         remarks=body.remarks,
+        birth_year=parse_year(body.birthYear or ""),
         fee_total_cents=total,
         fee_basis=basis,
     )

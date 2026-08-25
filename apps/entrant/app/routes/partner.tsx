@@ -42,6 +42,7 @@ interface PartnerInvite {
   eventCode: string;
   discipline: string;
   invitedBy: string;
+  askBirthYear: boolean;
 }
 
 export interface PartnerLoaderData {
@@ -219,6 +220,17 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
               name="club"
               maxLength={200}
             />
+
+            {invite.askBirthYear ? (
+              <TextField
+                id="partner-year"
+                label="Birth year"
+                name="birthYear"
+                inputMode="numeric"
+                maxLength={4}
+                hint="This tournament runs age-bracketed events, so the organizer needs a year to place this player."
+              />
+            ) : null}
 
             <Button type="submit" className="justify-self-start">
               Accept and enter

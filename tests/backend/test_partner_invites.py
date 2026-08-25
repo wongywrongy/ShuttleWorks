@@ -405,6 +405,66 @@ def test_an_invite_is_spent_by_the_first_acceptance(client, world, mailbox):
     assert _accept(client, token).status_code == 404
 
 
+def test_accepting_under_the_same_account_adopts_the_existing_person(
+    client, world, mailbox
+):
+    """R-DM-1 gap (ii), ruled 2026-08-24 (DM1_RULINGS.md NC 3): enter alone,
+    then accept a doubles invite under the same account with a matching
+    birth year -> ONE person row, not two. Before this, ``accept()`` minted
+    unconditionally and a partner-minted person could never be the certain
+    match in either direction."""
+    import uuid as _uuid
+
+    from sqlalchemy import select
+
+    from db.models import EntrantAccount, EntryEvent, EntryPage
+    from db.session import SessionLocal
+    from entries.submissions import PlayerInput, create_submission
+
+    # Sam enters the singles event on their own account, with a birth year.
+    _verified_entrant(client, mailbox, "sam@example.com")
+    session = SessionLocal()
+    try:
+        sam = session.scalars(
+            select(EntrantAccount).where(EntrantAccount.email == "sam@example.com")
+        ).one()
+        page = session.get(EntryPage, _uuid.UUID(world["tid"]))
+        ms = session.get(EntryEvent, (_uuid.UUID(world["tid"]), _uuid.UUID(world["ms"])))
+        own = create_submission(
+            session,
+            tournament_id=_uuid.UUID(world["tid"]),
+            page=page,
+            account_id=sam.id,
+            players=[PlayerInput("Sam Ali", "F", birth_year=2000, events=[ms])],
+            fee_total_cents=2000,
+            fee_basis={"basis": "schedule", "players": []},
+        )
+        session.commit()
+        own_person_id = str(own.players[0].id)
+    finally:
+        session.close()
+
+    # Alex nominates sam@example.com for the doubles event.
+    _verified_entrant(client, mailbox, "alex@example.com")
+    out = _nominate(client, world, partner_email="sam@example.com")
+    _, token = out["invites"][0]
+
+    # Sam accepts with the same name and the same birth year. Re-signing up
+    # would mail nothing (the account exists), so `mailbox[-1]` would be
+    # Alex's spent token — sign back in the way the own-card test does.
+    client.cookies.clear()
+    assert client.post(
+        "/e/account/login",
+        json={"email": "sam@example.com", "password": PW},
+        headers=CSRF,
+    ).status_code == 200
+    r = _accept(client, token, birthYear="2000")
+    assert r.status_code == 200, r.text
+
+    theirs = _entry(world["tid"], r.json()["entryId"])
+    assert str(theirs.entry_player_id) == own_person_id
+
+
 # ---- conflicts -----------------------------------------------------------
 
 

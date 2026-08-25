@@ -52,7 +52,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from db.models import Entry, EntryPlayer, Submission
+from db.models import Entry, Submission
 from entries import lifecycle
 from identity.auth import _hash_token, normalize_email
 
@@ -183,6 +183,7 @@ def accept(
     gender: str,
     club: Optional[str] = None,
     remarks: Optional[str] = None,
+    birth_year: Optional[int] = None,
     fee_total_cents: Optional[int] = None,
     fee_basis: Optional[dict] = None,
 ) -> Entry:
@@ -201,14 +202,25 @@ def accept(
     about their entry is touched.** Acceptance answers the partner question;
     it does not confirm an entry, clear a cap, or resolve a conflict flag.
     Those are separate judgements with separate owners.
+
+    ``birth_year`` is the R-DM-1 discriminator: with it, ``adopt_or_mint``
+    can recognize a person this account already entered.
     """
-    partner_player = EntryPlayer(
-        tournament_id=entry.tournament_id,
-        account_id=account_id,
-        full_name=full_name.strip()[:200],
-        gender=gender.strip()[:20],
-        club=(club or "").strip()[:200] or None,
-        remarks=(remarks or "").strip()[:2000] or None,
+    # Local import: ``submissions`` imports this module at top level, so a
+    # module-level import here would be a cycle.
+    from entries.submissions import PlayerInput, adopt_or_mint
+
+    partner_player, _ = adopt_or_mint(
+        session,
+        entry.tournament_id,
+        account_id,
+        PlayerInput(
+            full_name=full_name.strip()[:200],
+            gender=gender.strip()[:20],
+            club=(club or "").strip()[:200] or None,
+            remarks=(remarks or "").strip()[:2000] or None,
+            birth_year=birth_year,
+        ),
     )
     partner_submission = Submission(
         tournament_id=entry.tournament_id,
@@ -220,7 +232,7 @@ def accept(
         # every other submission, because this one IS a submission.
         regulations_accepted_at=_utcnow(),
     )
-    session.add_all([partner_player, partner_submission])
+    session.add(partner_submission)
     session.flush()
 
     partner_entry = Entry(
