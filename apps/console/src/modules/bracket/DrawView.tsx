@@ -985,12 +985,12 @@ function BracketCell({
   // card gives each player their own line, so the " / " join is noise there.
   // A doubles side is ONE participant whose NAME carries the join — split it
   // too. Feeder/bye placeholders and the score-entry labels keep the string.
-  // SP-DM-3 P6 kept this split deliberately (plan judgment call 3): the
-  // string being split is one `labelFor` produced from ids two lines above
-  // (`side.map(id => nameById[id]).join(" / ")`), so this is line-breaking a
-  // label we just minted, not decoding identity out of one. Nothing is
-  // persisted and no member id is recovered. The decode that DID recover
-  // identity — `bracketMigration.ts`'s split-and-zip — is gone.
+  // SP-DM-3 P6 kept this split deliberately (plan judgment call 3): it splits
+  // the participant's OWN stored display name (`nameById[id]` — the persisted,
+  // operator-editable `bracket_participants.name`; it never reads `labelFor`'s
+  // output), purely to line-break the card. Nothing is persisted and no member
+  // id is recovered. The decode that DID recover identity —
+  // `bracketMigration.ts`'s split-and-zip — is gone.
   const membersOf = (ids: string[] | null) =>
     ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
   const aMembers = membersOf(pu.side_a);

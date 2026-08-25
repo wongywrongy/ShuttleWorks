@@ -208,55 +208,12 @@ describe('BracketTab — Setup chrome', () => {
 });
 
 /**
- * V3 — the D3 fix (`bracketMigration.ts`, slug→name from the TEAM display
- * name) changed nothing an operator could see, because the migration runs
- * ONCE per bracket and its output is persisted on the tournament blob. A
- * workspace migrated by the pre-fix build kept its slug names for good: the
- * matches ROW resolves names from the live snapshot and read correctly, while
- * the roster list, the draw participant picker and the match detail panel all
- * read the stored roster and read `cormac-delahunt`. One stale seam, three
- * symptoms — so the repair belongs where the roster is loaded, not at each.
+ * The V3 "an already-migrated roster still gets its names fixed" describe was
+ * DELETED by SP-DM-3 P6 Task 3 (card §C6, R-DM-7(a)) along with the repair it
+ * pinned: `healBracketRosterNames` decided a stored row was corrupt by testing
+ * `name === id` and PERSISTED its guess. Nothing writes such a row any more —
+ * pinned by `bracketMigration.test.ts`'s "NC 3" describe.
  */
-describe('BracketTab — an already-migrated roster still gets its names fixed', () => {
-  /** Doubles-only draw: the team display name is the only place the two
-   *  members' real names survive. */
-  function doublesOnlyBracket(): BracketTournamentDTO {
-    const b = makePopulatedBracket();
-    b.participants = [
-      {
-        id: 'MD1-T1',
-        name: 'Cormac Delahunt / Jae Hyun Choi',
-        members: ['cormac-delahunt', 'jae-hyun-choi'],
-      },
-    ];
-    return b;
-  }
-
-  it('replaces stored slug names on load and leaves operator names alone', () => {
-    vi.mocked(useBracket).mockReturnValue({
-      data: doublesOnlyBracket(),
-      setData: vi.fn(),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    });
-    // The state a pre-fix build left behind: migrated, and wrong.
-    useTournamentStore.setState({
-      bracketRosterMigrated: true,
-      bracketPlayers: [
-        { id: 'cormac-delahunt', name: 'cormac-delahunt' },
-        { id: 'jae-hyun-choi', name: 'J. Choi' },
-      ],
-    });
-    useUiStore.setState({ activeTab: 'bracket-roster' });
-    renderBracketTab();
-
-    expect(screen.getByText('Cormac Delahunt')).toBeInTheDocument();
-    expect(screen.queryByText('cormac-delahunt')).toBeNull();
-    // The hand-typed name is not a slug and is never touched.
-    expect(screen.getByText('J. Choi')).toBeInTheDocument();
-  });
-});
 
 /**
  * SP-DM-3 P6 Task 1, controller amendment — the guard Task 3's safety
@@ -265,8 +222,9 @@ describe('BracketTab — an already-migrated roster still gets its names fixed',
  * The EXTRACTION half of the bracket-roster migration only ever runs against
  * an EMPTY roster (`BracketTab.tsx`: `if (!bracketRosterMigrated &&
  * bracketPlayers.length === 0)`). Only the extraction — the
- * `healBracketRosterNames` pass below it is NOT gated by that check and does
- * run against a populated roster, which is what Task 3 deletes. The
+ * `healBracketRosterNames` pass below it was NOT gated by that check and DID
+ * run against a populated roster, which is what Task 3 deleted, so the effect
+ * is now wholly empty-roster-only. The
  * extraction guard is the whole reason Task 2's "omit a member no
  * participant can name" is safe: the roster blob is where REMARKS and
  * AVAILABILITY live — operator data, not a projection — so omission can only
@@ -278,12 +236,12 @@ describe('BracketTab — an already-migrated roster still gets its names fixed',
  * them. (Verified by perturbation — see the Task 1 report.)
  *
  * Deliberately placed BELOW the V3 heal describe, with its own fixture:
- * Task 3 deletes that describe wholesale and this pin must survive it.
+ * Task 3 deleted that describe wholesale and this pin survived it.
  */
 describe('BracketTab — the roster migration never overwrites an existing roster', () => {
   /** A draw whose reconcile output shares no id with the seeded roster, so
    *  a write from reconcile is unmistakable. Local to this describe so it
-   *  outlives the V3 describe above, helper and all. */
+   *  outlived the V3 describe above, helper and all. */
   function doublesDraw(): BracketTournamentDTO {
     const b = makePopulatedBracket();
     b.participants = [
@@ -305,9 +263,9 @@ describe('BracketTab — the roster migration never overwrites an existing roste
       refresh: vi.fn(),
     });
     // NOT migrated — the only thing holding reconcile off is the roster
-    // being non-empty. The seeded row is inert to the name repair that
-    // runs after the guard (its name is not its id, and the snapshot
-    // knows nothing about its id), so any write here came from reconcile.
+    // being non-empty. Nothing else in the effect writes the roster now
+    // (the name repair that used to run after the guard is gone), so any
+    // write here came from reconcile.
     useTournamentStore.setState({
       bracketRosterMigrated: false,
       bracketPlayers: [

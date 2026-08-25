@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { healBracketRosterNames, reconcileBracketRoster } from '../bracketMigration';
+import { reconcileBracketRoster } from '../bracketMigration';
+import { playerSlug } from '../../../lib/playerSlug';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
-import type { BracketPlayerDTO } from '../../../api/dto';
 
 /**
  * SP-DM-3 P6 (card §C6, R-DM-7(a)): the decode-from-label cases that used to
@@ -103,73 +103,64 @@ describe('reconcileBracketRoster', () => {
     } as unknown as BracketTournamentDTO;
     expect(reconcileBracketRoster(bracket)).toEqual([]);
   });
+
+  /**
+   * SP-DM-3 P6 Task 3 (Task 2 review rider 3): the PARTIALLY nameable team.
+   * Every other case here is all-or-nothing, so a regression that moved the
+   * omission from per-MEMBER to per-PARTICIPANT would pass all of them. This
+   * one only passes while the `continue` stays inside the member loop.
+   */
+  it('keeps the nameable member of a TEAM and omits the other', () => {
+    const bracket = {
+      participants: [
+        { id: 'p-alex', name: 'Alex Tan' },
+        { id: 'MD-T1', name: 'Alex Tan / Somebody', members: ['p-alex', 'p-nobody'] },
+      ],
+    } as unknown as BracketTournamentDTO;
+    expect(reconcileBracketRoster(bracket).map((p) => p.id)).toEqual(['p-alex']);
+  });
 });
 
 /**
- * V3 — the D3 fix landed in `reconcileBracketRoster` and changed nothing the
- * operator could see, because that function runs ONCE per bracket and its
- * result is persisted. A workspace migrated by the pre-fix build kept its slug
- * names forever: the matches ROW resolves names from the live snapshot and read
- * correctly, while the roster list, the draw participant picker and the match
- * detail panel all read the stored roster and read `cormac-delahunt`.
+ * NC 3 (SP-DM-3 P6, card §C6): removing the repair must not resurrect the
+ * defect its comment described (`bracketMigration.ts:8-14` — the BRACKET
+ * DEFECT SERIES D3, not debt-log D3; two registers, same number). The repair
+ * healed roster rows a pre-fix build had FROZEN as `name === id`. Deleting it
+ * is safe only if nothing can write such a row any more, so that is what this
+ * asserts — on the one writer P6 owns. The other three are structural: the
+ * seam writes `entry-{uuid}` + a person's name, `playerSlug` always prefixes
+ * `p-` so a slug never equals the name it came from, and a rename writes what
+ * the operator typed.
  */
-describe('healBracketRosterNames', () => {
-  /** A doubles-only draw: the team display name is the ONLY place the two
-   *  members' real names survive. */
-  const doublesDraw = {
-    participants: [
-      {
-        id: 'MD1-T1',
-        name: 'Cormac Delahunt / Jae Hyun Choi',
-        members: ['cormac-delahunt', 'jae-hyun-choi'],
-      },
-    ],
-  } as unknown as BracketTournamentDTO;
-
-  const roster = (...rows: BracketPlayerDTO[]) => rows;
-
-  it('replaces a stored name that is its own slug', () => {
-    const stored = roster(
-      { id: 'cormac-delahunt', name: 'cormac-delahunt' },
-      { id: 'jae-hyun-choi', name: 'jae-hyun-choi' },
-    );
-    expect(healBracketRosterNames(stored, doublesDraw)).toEqual([
-      { id: 'cormac-delahunt', name: 'Cormac Delahunt' },
-      { id: 'jae-hyun-choi', name: 'Jae Hyun Choi' },
-    ]);
+describe('NC 3 — no surviving path writes a name that is its own id', () => {
+  it('reconcile never emits a row whose name equals its id', () => {
+    const bracket = {
+      participants: [
+        { id: 'p-alex-tan', name: 'Alex Tan' },
+        { id: 'MD-T1', name: 'Alex Tan / Ben Carter', members: ['p-alex-tan', 'p-ben-carter'] },
+        // The shape that USED to produce a self-named row: an unnameable
+        // member. It is now omitted rather than named after itself.
+        { id: 'MD-T2', name: 'Two Others', members: ['p-nobody', 'p-else'] },
+      ],
+    } as unknown as BracketTournamentDTO;
+    const rows = reconcileBracketRoster(bracket);
+    expect(rows.some((p) => p.name === p.id)).toBe(false);
+    expect(rows.map((p) => p.id)).toEqual(['p-alex-tan']);
   });
 
-  it('never overwrites a name an operator typed', () => {
-    // Same person, renamed by hand after the migration. The id is still the
-    // original slug; only `name === id` marks the broken write.
-    const stored = roster({ id: 'cormac-delahunt', name: 'C. Delahunt' });
-    expect(healBracketRosterNames(stored, doublesDraw)[0].name).toBe(
-      'C. Delahunt',
-    );
-  });
-
-  it('returns the SAME array reference when nothing needs repair', () => {
-    // Called on every 2.5s poll — a fresh array would re-render the roster
-    // and re-arm the whole-blob autosave forever.
-    const stored = roster({ id: 'cormac-delahunt', name: 'Cormac Delahunt' });
-    expect(healBracketRosterNames(stored, doublesDraw)).toBe(stored);
-  });
-
-  it('leaves a slug-named player the snapshot knows nothing about', () => {
-    const stored = roster({ id: 'someone-else', name: 'someone-else' });
-    expect(healBracketRosterNames(stored, doublesDraw)).toBe(stored);
-  });
-
-  /**
-   * SP-DM-3 P6 Task 3 deletes this whole describe. Pinned first so the
-   * deletion commit can name what it is giving up: the repair (a) only ever
-   * fires on a row whose stored name IS its own id, (b) never overwrites an
-   * operator's typing, and (c) returns the same array reference otherwise.
-   * (a) is the reason deletion is safe — see Task 3 Step 1, which proves no
-   * live write path can produce that row any more.
-   */
-  it('never fires on a row whose name is not its own id', () => {
-    const stored = roster({ id: 'cormac-delahunt', name: 'Cormac Delahunt' });
-    expect(healBracketRosterNames(stored, doublesDraw)).toBe(stored);
+  it('the hand-add mint can never produce one either', () => {
+    // `p-alex-tan` is here on purpose: it is the only input a reader would
+    // guess round-trips, and it does not — it slugs to `p-p-alex-tan`.
+    for (const name of ['Alex Tan', "O'Brien", 'p-alex-tan', 'Li Wei']) {
+      expect(playerSlug(name)).not.toBe(name);
+    }
   });
 });
+
+/**
+ * `healBracketRosterNames` was DELETED by SP-DM-3 P6 (card §C6, R-DM-7(a)):
+ * "the `p.name === p.id` repair is deleted, not fixed". Its cases went with
+ * it — they pinned the behaviour the ruling removed. What replaces them is
+ * the "NC 3" describe above, which asserts no surviving path can write the
+ * row the repair existed to heal.
+ */

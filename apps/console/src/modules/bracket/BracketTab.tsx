@@ -21,7 +21,7 @@ import { useBracket } from '../../hooks/useBracket';
 import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
-import { healBracketRosterNames, reconcileBracketRoster } from './bracketMigration';
+import { reconcileBracketRoster } from './bracketMigration';
 import { ConfigSurface, LockedFieldset } from '../../platform/engine-config/ConfigSurface';
 import { EngineConfigForm } from '../../platform/engine-config/EngineConfigForm';
 import { LockRibbon } from '../../components/status/LockRibbon';
@@ -118,13 +118,16 @@ function BracketTabBody() {
   const activeEventId =
     data?.events.find((e) => e.id === eventId)?.id ?? data?.events[0]?.id ?? '';
 
-  // First-load migration: if we have a legacy bracket with participants
-  // but no bracketPlayers in store yet, extract them once.
-  // The ``bracketRosterMigrated`` flag in the store keeps the EXTRACTION to
-  // once per bracket, so a 2.5s poll doesn't re-derive a roster the operator
-  // has since edited. The name-repair pass below it is not gated by the flag
-  // — see ``healBracketRosterNames`` for why a one-shot persisted migration
-  // needs one — and is a no-op (same array back) on every healthy poll.
+  // First-load migration: a LEGACY bracket (participants, no ``bracketPlayers``)
+  // gets its roster extracted once, gated by ``bracketRosterMigrated`` so a
+  // 2.5s poll cannot re-derive a roster the operator has since edited.
+  // SP-DM-3 P6 deleted the name-repair pass that used to run beside it on
+  // every poll: it decided a stored row was corrupt by testing
+  // ``p.name === p.id`` and PERSISTED its guess (F-DM-15), which is identity
+  // repair keyed on a name equalling a slug. Nothing writes such a row any
+  // more — pinned by ``bracketMigration.test.ts``'s "NC 3" describe. That
+  // repair was also the only half of this effect that ran against a POPULATED
+  // roster; with it gone, the migration is wholly empty-roster-only.
   const bracketPlayers = useTournamentStore((s) => s.bracketPlayers);
   const setBracketPlayers = useTournamentStore((s) => s.setBracketPlayers);
   const bracketRosterMigrated = useTournamentStore((s) => s.bracketRosterMigrated);
@@ -133,22 +136,10 @@ function BracketTabBody() {
   useEffect(() => {
     if (!data) return;
     if (data.participants.length === 0) return;
-    if (!bracketRosterMigrated && bracketPlayers.length === 0) {
-      const derived = reconcileBracketRoster(data);
-      if (derived.length > 0) {
-        setBracketPlayers(derived);
-      }
-      setBracketRosterMigrated(true);
-      return;
-    }
-    // Already migrated — but the migration's OUTPUT is persisted, so a
-    // bracket migrated by an older build still carries whatever that build
-    // resolved, and the one-shot flag meant no later fix could ever reach it
-    // (defect V3: raw slugs surviving in the roster list, the draw picker and
-    // the match detail panel). Repair is idempotent and returns the same
-    // array when there is nothing to do, so this costs one scan per poll.
-    const healed = healBracketRosterNames(bracketPlayers, data);
-    if (healed !== bracketPlayers) setBracketPlayers(healed);
+    if (bracketRosterMigrated || bracketPlayers.length > 0) return;
+    const derived = reconcileBracketRoster(data);
+    if (derived.length > 0) setBracketPlayers(derived);
+    setBracketRosterMigrated(true);
   }, [data, bracketPlayers, bracketRosterMigrated, setBracketPlayers, setBracketRosterMigrated]);
 
   // ``activeTab`` is normalized to a ``bracket-*`` id by
