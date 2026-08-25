@@ -44,7 +44,7 @@ from core.limits import Name, StrictModel
 from db.models import EntryEvent, EntryPage, Tournament
 from entries import partners as partner_service
 from entries.entries_json import require_form_csrf
-from entries.entries_public import _is_age_bracketed
+from entries.entries_public import _event_is_open, _is_age_bracketed, _utcnow
 from entries.entry_fees import PlayerSelection, compute_fee_total
 from entries.entry_form import parse_year
 from repositories import LocalRepository, get_repository
@@ -196,7 +196,15 @@ def preview_partner_invite(
     events = repo.session.scalars(
         select(EntryEvent).where(EntryEvent.tournament_id == entry.tournament_id)
     ).all()
-    ask_birth_year = any(_is_age_bracketed(ev) for ev in events)
+    # Parity with the entry page (apps/entrant/app/routes/enter.tsx:377),
+    # which asks over OPEN events only. The page is the authority: it is
+    # the surface that collects the year, and an invite that asks for one
+    # the nominator's own form never collected is a question with no
+    # answer behind it. Carried from SP-DM-3 P3.
+    now = _utcnow()
+    ask_birth_year = any(
+        _is_age_bracketed(ev) for ev in events if _event_is_open(ev, now)
+    )
     return PartnerInviteDTO(
         tournamentName=tournament.name if tournament is not None else None,
         slug=page.slug if page is not None else None,

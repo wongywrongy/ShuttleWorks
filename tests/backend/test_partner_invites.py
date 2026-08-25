@@ -300,6 +300,61 @@ def test_an_invite_dies_with_the_entry_that_sent_it(client, world, mailbox):
     assert client.get(f"/e/api/partner-invites/{token}").status_code == 404
 
 
+def test_the_preview_asks_for_a_birth_year_only_when_an_OPEN_event_is_age_bracketed(
+    client, world, mailbox
+):
+    """Carried from SP-DM-3 P3 (ledger): the preview computed over ALL
+    events while the entry page computes over OPEN ones, so an invite could
+    ask for a year the nominator's own form never collected - or, worse,
+    not ask where the form did. The entry page is the authority: it is the
+    surface that collects the field (R12 posture unchanged - the field
+    appears only where the page already asks).
+
+    This is also the FIRST test of the true branch; the shipped
+    ``askBirthYear`` had coverage on the False side only."""
+    from datetime import datetime, timedelta, timezone
+
+    from db.models import EntryEvent
+    from db.session import SessionLocal
+
+    _verified_entrant(client, mailbox, "alex@example.com")
+    _, token = _nominate(client, world, partner_email="sam@example.com")["invites"][0]
+
+    # `world` carries XD and MS — neither age-bracketed, which is why the
+    # shipped test only ever saw the False side.
+    client.cookies.clear()
+    assert client.get(f"/e/api/partner-invites/{token}").json()["askBirthYear"] is False
+
+    session = SessionLocal()
+    try:
+        junior = EntryEvent(
+            tournament_id=uuid.UUID(world["tid"]),
+            code="U15XD",
+            discipline="U15 Mixed Doubles",
+            entry_type="doubles",
+        )
+        session.add(junior)
+        session.commit()
+        junior_key = (junior.tournament_id, junior.id)
+    finally:
+        session.close()
+
+    assert client.get(f"/e/api/partner-invites/{token}").json()["askBirthYear"] is True
+
+    # Same event, entries closed. The page would no longer offer it, so the
+    # invite must no longer ask for it.
+    session = SessionLocal()
+    try:
+        session.get(EntryEvent, junior_key).closes_at = datetime.now(
+            timezone.utc
+        ) - timedelta(days=1)
+        session.commit()
+    finally:
+        session.close()
+
+    assert client.get(f"/e/api/partner-invites/{token}").json()["askBirthYear"] is False
+
+
 # ---- acceptance ----------------------------------------------------------
 
 
@@ -488,6 +543,61 @@ def test_accepting_under_the_same_account_adopts_the_existing_person(
         assert person.remarks == "Left-handed"
     finally:
         session.close()
+
+
+def test_an_unresolvable_namesake_flags_the_accepted_entry(client, world, mailbox):
+    """Carried from SP-DM-3 P3 (debt-log; ruled P4's to close). The entry
+    form flags a year-less collision with an existing namesake under the
+    same account; acceptance through an invite reached the same
+    ``adopt_or_mint`` and never asked. Same fork, one path silent."""
+    import uuid as _uuid
+
+    from sqlalchemy import select
+
+    from db.models import EntrantAccount, EntryEvent, EntryPage
+    from db.session import SessionLocal
+    from entries.submissions import PlayerInput, create_submission
+
+    # Sam enters the singles event on their own account with NO birth year,
+    # so nothing can later be distinguished from this row.
+    _verified_entrant(client, mailbox, "sam@example.com")
+    session = SessionLocal()
+    try:
+        sam = session.scalars(
+            select(EntrantAccount).where(EntrantAccount.email == "sam@example.com")
+        ).one()
+        page = session.get(EntryPage, _uuid.UUID(world["tid"]))
+        ms = session.get(EntryEvent, (_uuid.UUID(world["tid"]), _uuid.UUID(world["ms"])))
+        own = create_submission(
+            session,
+            tournament_id=_uuid.UUID(world["tid"]),
+            page=page,
+            account_id=sam.id,
+            players=[PlayerInput("Sam Ali", "F", events=[ms])],
+            fee_total_cents=2000,
+            fee_basis={"basis": "schedule", "players": []},
+        )
+        session.commit()
+        own_person_id = str(own.players[0].id)
+    finally:
+        session.close()
+
+    _verified_entrant(client, mailbox, "alex@example.com")
+    _, token = _nominate(client, world, partner_email="sam@example.com")["invites"][0]
+
+    client.cookies.clear()
+    assert client.post(
+        "/e/account/login",
+        json={"email": "sam@example.com", "password": PW},
+        headers=CSRF,
+    ).status_code == 200
+    r = _accept(client, token)
+    assert r.status_code == 200, r.text
+
+    theirs = _entry(world["tid"], r.json()["entryId"])
+    # A fork, not a merge (I4): the second row stands and is flagged.
+    assert str(theirs.entry_player_id) != own_person_id
+    assert "needs_review_person" in theirs.pending_reasons
 
 
 # ---- conflicts -----------------------------------------------------------

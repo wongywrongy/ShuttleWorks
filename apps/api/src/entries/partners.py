@@ -54,6 +54,7 @@ from sqlalchemy.orm import Session
 from core.config import settings
 from db.models import Entry, Submission
 from entries import lifecycle
+from entries.entry_policy import NEEDS_REVIEW_PERSON
 from identity.auth import _hash_token, normalize_email
 
 #: Set on an entry whose named partner has not accepted yet. Cleared on
@@ -208,23 +209,35 @@ def accept(
     """
     # Local import: ``submissions`` imports this module at top level, so a
     # module-level import here would be a cycle.
-    from entries.submissions import PlayerInput, adopt_or_mint
+    from entries.submissions import (
+        PlayerInput,
+        adopt_or_mint,
+        has_unresolvable_namesake,
+    )
 
-    partner_player, _ = adopt_or_mint(
+    spec = PlayerInput(
+        full_name=full_name.strip()[:200],
+        gender=gender.strip()[:20],
+        club=(club or "").strip()[:200] or None,
+        remarks=(remarks or "").strip()[:2000] or None,
+        birth_year=birth_year,
+    )
+    partner_player, adopted = adopt_or_mint(
         session,
         entry.tournament_id,
         account_id,
-        PlayerInput(
-            full_name=full_name.strip()[:200],
-            gender=gender.strip()[:20],
-            club=(club or "").strip()[:200] or None,
-            remarks=(remarks or "").strip()[:2000] or None,
-            birth_year=birth_year,
-        ),
+        spec,
         # The accept form asks for a name, a gender and (optionally) a club
         # — never remarks. A blank here means "this form did not ask", so it
         # must not wipe what the person recorded on their own earlier entry.
         blank_clears=False,
+    )
+    # Mirrors ``submissions._write``: the fork is flagged, never merged
+    # (I4). Carried from P3, where the entry-form path got this and the
+    # invite path did not — the same two rows arriving by a different door
+    # were silent.
+    flag_person = not adopted and has_unresolvable_namesake(
+        session, entry.tournament_id, account_id, spec, exclude_id=partner_player.id
     )
     partner_submission = Submission(
         tournament_id=entry.tournament_id,
@@ -248,7 +261,7 @@ def accept(
         # question. Not ``confirmed``: an operator confirms entries, and a
         # partner accepting is not an operator.
         state=lifecycle.PENDING,
-        pending_reasons=[],
+        pending_reasons=[NEEDS_REVIEW_PERSON] if flag_person else [],
         partner_entry_id=entry.id,
         partner_email=entry.contact_email,
         partner_accepted_at=_utcnow(),
