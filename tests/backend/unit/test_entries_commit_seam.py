@@ -764,7 +764,11 @@ def test_the_roster_id_prefix_has_exactly_one_definition():
 
     src = pathlib.Path(entries_module.__file__).parent
     counts = {
-        name: pathlib.Path(src, name).read_text(encoding="utf-8").count('f"entry-{')
+        # ``"entry-`` rather than ``f"entry-{``: it catches the f-string AND
+        # a plain concatenation, which is the same drift wearing a different
+        # syntax. The prose mention in ``entries_site``'s docstring uses
+        # backticks, so it is not a match.
+        name: pathlib.Path(src, name).read_text(encoding="utf-8").count('"entry-')
         for name in ("entries.py", "entries_site.py", "entries_me.py")
     }
 
