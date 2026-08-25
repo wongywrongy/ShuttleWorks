@@ -199,6 +199,15 @@ function EventTypeEditor({
   const isDoublesEvent = (ev: BracketEventDTO) =>
     ['MD', 'WD', 'XD'].includes(ev.discipline);
 
+  // R-DM-2(a): the roster player already holds the person key, so a manual
+  // assignment must carry it or it writes a NULL-keyed
+  // `bracket_participants` row for somebody the commit seam identified.
+  // Omitted rather than nulled — `toUpsertParticipant`'s idiom, and absent
+  // is what the wire means by "no key".
+  const personKey = player.entryPlayerId != null
+    ? { entryPlayerId: player.entryPlayerId }
+    : {};
+
   const commit = async (
     ev: BracketEventDTO,
     participants: BracketEventUpsertIn['participants'],
@@ -233,7 +242,10 @@ function EventTypeEditor({
       setPartnerId('');
     } else {
       // ON (singles) — append this player.
-      void commit(ev, [...existing, { id: player.id, name: player.name }]);
+      void commit(ev, [
+        ...existing,
+        { id: player.id, name: player.name, ...personKey },
+      ]);
     }
   };
 
@@ -249,6 +261,9 @@ function EventTypeEditor({
         id: nextTeamId(ev.id, wireParticipants),
         name: `${player.name} / ${partner.name}`,
         members: [player.id, partner.id],
+        // A team row carries ONE key, and it is the nominating player's —
+        // the same half `members[0]` names.
+        ...personKey,
       },
     ]);
   };
