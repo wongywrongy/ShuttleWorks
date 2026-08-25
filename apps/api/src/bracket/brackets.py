@@ -108,7 +108,7 @@ from bracket.player_constraints import (
     PlayerExtras,
     build_player_extras,
 )
-from bracket.standings import compute_standings
+from bracket.standings import StandingRow, compute_standings
 from bracket.state import (
     BracketSession,
     EventMeta,
@@ -320,22 +320,6 @@ class SegmentOut(BaseModel):
     positions: Optional[List[int]] = None
 
 
-class StandingRowOut(BaseModel):
-    """One participant's line in a computed standings table (mirrors
-    ``bracket.standings.StandingRow`` — the BWF chain: wins →
-    games ratio → points ratio → head-to-head → id)."""
-
-    participant_id: str
-    played: int
-    wins: int
-    losses: int
-    games_won: int
-    games_lost: int
-    points_won: int
-    points_lost: int
-    position: int
-
-
 class EventOut(BaseModel):
     id: str
     discipline: str
@@ -347,9 +331,16 @@ class EventOut(BaseModel):
     # old clients and fixtures unaffected).
     segments: Optional[List[SegmentOut]] = None
     # Computed standings, embedded only for ``has_standings`` formats
-    # (round robin, Swiss) — rides the existing poll so Display gets it
+    # (round robin, Swiss) - rides the existing poll so Display gets it
     # free and Swiss pairing consumes the same numbers the client sees.
-    standings: Optional[List[StandingRowOut]] = None
+    # The row type is ``bracket.standings.StandingRow`` itself since
+    # SP-DM-3 P1 (F-DM-26): pydantic serializes a stdlib dataclass field
+    # natively, so the wire shape and the computation shape are one
+    # declaration. Its defaulted fields render as OPTIONAL in OpenAPI
+    # (they were required under the deleted ``StandingRowOut`` mirror);
+    # the backend still always emits all nine, and the console alias
+    # wraps ``Required<>`` to say so.
+    standings: Optional[List[StandingRow]] = None
     # Per-event lifecycle status: 'draft' | 'generated' | 'started'.
     # Drives the Draws-page status pill + Generate/Open affordances.
     status: Optional[str] = None
@@ -1122,24 +1113,11 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
         # compute_standings is one pass over the results + a sort, so the
         # per-request cost stays negligible.
         spec = get_format(meta.format) if meta else None
-        standings_out: Optional[List[StandingRowOut]] = None
+        standings_out: Optional[List[StandingRow]] = None
         if spec is not None and spec.has_standings:
-            standings_out = [
-                StandingRowOut(
-                    participant_id=row.participant_id,
-                    played=row.played,
-                    wins=row.wins,
-                    losses=row.losses,
-                    games_won=row.games_won,
-                    games_lost=row.games_lost,
-                    points_won=row.points_won,
-                    points_lost=row.points_lost,
-                    position=row.position,
-                )
-                for row in compute_standings(
-                    draw.play_units, state.results, list(draw.participants)
-                )
-            ]
+            standings_out = compute_standings(
+                draw.play_units, state.results, list(draw.participants)
+            )
         events_out.append(
             EventOut(
                 id=event_id,

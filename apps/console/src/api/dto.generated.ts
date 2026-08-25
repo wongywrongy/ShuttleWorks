@@ -4301,7 +4301,7 @@ export interface components {
             /** Segments */
             segments?: components["schemas"]["SegmentOut"][] | null;
             /** Standings */
-            standings?: components["schemas"]["StandingRowOut"][] | null;
+            standings?: components["schemas"]["StandingRow"][] | null;
             /** Status */
             status?: string | null;
             /** Seeded Count */
@@ -5884,6 +5884,54 @@ export interface components {
          * @enum {string}
          */
         SolverStatus: "optimal" | "feasible" | "infeasible" | "unknown";
+        /**
+         * StandingRow
+         * @description One participant's line in an event's standings table.
+         */
+        StandingRow: {
+            /** Participant Id */
+            participant_id: string;
+            /**
+             * Played
+             * @default 0
+             */
+            played: number;
+            /**
+             * Wins
+             * @default 0
+             */
+            wins: number;
+            /**
+             * Losses
+             * @default 0
+             */
+            losses: number;
+            /**
+             * Games Won
+             * @default 0
+             */
+            games_won: number;
+            /**
+             * Games Lost
+             * @default 0
+             */
+            games_lost: number;
+            /**
+             * Points Won
+             * @default 0
+             */
+            points_won: number;
+            /**
+             * Points Lost
+             * @default 0
+             */
+            points_lost: number;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+        };
         /** StandingRowDTO */
         StandingRowDTO: {
             /** Position */
@@ -5909,32 +5957,6 @@ export interface components {
              * @default []
              */
             history: string[];
-        };
-        /**
-         * StandingRowOut
-         * @description One participant's line in a computed standings table (mirrors
-         *     ``bracket.standings.StandingRow`` — the BWF chain: wins →
-         *     games ratio → points ratio → head-to-head → id).
-         */
-        StandingRowOut: {
-            /** Participant Id */
-            participant_id: string;
-            /** Played */
-            played: number;
-            /** Wins */
-            wins: number;
-            /** Losses */
-            losses: number;
-            /** Games Won */
-            games_won: number;
-            /** Games Lost */
-            games_lost: number;
-            /** Points Won */
-            points_won: number;
-            /** Points Lost */
-            points_lost: number;
-            /** Position */
-            position: number;
         };
         /**
          * SubmissionPaymentDTO
