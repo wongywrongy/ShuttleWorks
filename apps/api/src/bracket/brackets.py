@@ -215,6 +215,11 @@ class ParticipantIn(StrictModel):
             "by ascending seed for placement; unseeded entries trail."
         ),
     )
+    # Echoed back by the console's upsert path (``rosterEvents.ts``
+    # ``toUpsertParticipant``). StrictModel forbids extras, so a field on
+    # ``ParticipantOut`` that is missing here makes the echo a 422 - or, if
+    # the client strips it, silently erases the key on every roster edit.
+    entryPlayerId: Optional[str] = None
 
 
 class EventIn(StrictModel):
@@ -249,6 +254,15 @@ class ParticipantOut(BaseModel):
     # Serialized so a flow that echoes participants back through the
     # create-or-replace upsert doesn't silently drop imported seeds.
     seed: Optional[int] = None
+    # F-DM-09: the Entries→Bracket provenance link lived in
+    # ``bracket_participants.meta`` and reached NO layer above the table -
+    # ``ParticipantOut`` dropped ``meta`` entirely, at both call sites and
+    # at the generation path. These two are the exits it was missing.
+    # ``entryPlayerId`` is the R-DM-2(a) key (join a draw node to a human);
+    # ``sourceEntryId`` is the entry that produced it. Optional because a
+    # hand-added participant has neither.
+    entryPlayerId: Optional[str] = None
+    sourceEntryId: Optional[str] = None
 
 
 class BracketSlotOut(BaseModel):
@@ -1027,21 +1041,7 @@ def _persist_event(
                 "name": p.name,
                 "type": p.type.value.upper(),
                 "member_ids": list(p.member_ids or []),
-                "seed": (
-                    p.metadata.get("seed")
-                    if isinstance(p.metadata, dict)
-                    else None
-                ),
-                "entry_player_id": (
-                    uuid.UUID(p.metadata["entryPlayerId"])
-                    if isinstance(p.metadata, dict) and p.metadata.get("entryPlayerId")
-                    else None
-                ),
-                "meta": {
-                    k: v
-                    for k, v in (p.metadata or {}).items()
-                    if k not in ("seed", "entryPlayerId")
-                },
+                **_participant_persist_fields(p.metadata),
             }
             for p in draw.participants.values()
         ],
@@ -1069,6 +1069,31 @@ def _persist_event(
                 }
             )
     repo.brackets.bulk_create_matches(tournament_id, event_id, match_dicts)
+
+
+def _participant_persist_fields(metadata: Optional[dict]) -> dict:
+    """The seed / person-key / meta columns of a participant row.
+
+    ``seed`` and ``entryPlayerId`` ride in the engine ``Participant``'s
+    ``metadata`` between hydration and persist (see ``_hydrate_session``);
+    here they are lifted back into their own columns and EXCLUDED from the
+    free-form ``meta`` blob so neither is stored twice and drifts.
+
+    Takes the metadata dict rather than a participant because the three
+    call sites do not share a participant type: two hold engine
+    ``Participant``s, the upsert route holds a wire ``ParticipantIn``
+    (which passes ``{"seed": …, "entryPlayerId": …}`` directly).
+    """
+    meta = metadata if isinstance(metadata, dict) else {}
+    return {
+        "seed": meta.get("seed"),
+        "entry_player_id": (
+            uuid.UUID(meta["entryPlayerId"]) if meta.get("entryPlayerId") else None
+        ),
+        "meta": {
+            k: v for k, v in meta.items() if k not in ("seed", "entryPlayerId")
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1170,6 +1195,16 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
                         if p.type == ParticipantType.TEAM and p.member_ids
                         else None,
                         seed=p.metadata.get("seed"),
+                        entryPlayerId=(
+                            p.metadata.get("entryPlayerId")
+                            if isinstance(p.metadata, dict)
+                            else None
+                        ),
+                        sourceEntryId=(
+                            p.metadata.get("sourceEntryId")
+                            if isinstance(p.metadata, dict)
+                            else None
+                        ),
                     )
                     for p in draw.participants.values()
                 ],
@@ -1210,6 +1245,16 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
             if p.type == ParticipantType.TEAM and p.member_ids
             else None,
             seed=p.metadata.get("seed"),
+            entryPlayerId=(
+                p.metadata.get("entryPlayerId")
+                if isinstance(p.metadata, dict)
+                else None
+            ),
+            sourceEntryId=(
+                p.metadata.get("sourceEntryId")
+                if isinstance(p.metadata, dict)
+                else None
+            ),
         )
         for p in state.participants.values()
     ]
@@ -1473,8 +1518,8 @@ def create_bracket(
                     **(dict(p.meta) if getattr(p, "meta", None) else {}),
                     **({"seed": p.seed} if p.seed is not None else {}),
                     **(
-                        {"entryPlayerId": str(p.entry_player_id)}
-                        if getattr(p, "entry_player_id", None)
+                        {"entryPlayerId": p.entryPlayerId}
+                        if p.entryPlayerId
                         else {}
                     ),
                 },
@@ -2033,11 +2078,13 @@ def upsert_event(
                     "name": p.name,
                     "type": "TEAM" if p.members else "PLAYER",
                     "member_ids": list(p.members or []),
-                    "seed": p.seed,
-                    # Task 5: the source here is ``ParticipantIn``, which
-                    # has neither ``meta`` nor ``entryPlayerId`` until that
-                    # task adds them — so this dict keeps dropping both.
-                    "meta": {},
+                    # The source here is the wire ``ParticipantIn``, which
+                    # has no ``meta`` — only the two lifted columns. An
+                    # upsert therefore still clears ``meta``; what it must
+                    # NOT clear is the person key the client echoed back.
+                    **_participant_persist_fields(
+                        {"seed": p.seed, "entryPlayerId": p.entryPlayerId}
+                    ),
                 }
                 for p in body.participants
             ],
@@ -2315,21 +2362,7 @@ def generate_event_route(
                 "name": p.name,
                 "type": p.type.value.upper(),
                 "member_ids": list(p.member_ids or []),
-                "seed": (
-                    p.metadata.get("seed")
-                    if isinstance(p.metadata, dict)
-                    else None
-                ),
-                "entry_player_id": (
-                    uuid.UUID(p.metadata["entryPlayerId"])
-                    if isinstance(p.metadata, dict) and p.metadata.get("entryPlayerId")
-                    else None
-                ),
-                "meta": {
-                    k: v
-                    for k, v in (p.metadata or {}).items()
-                    if k not in ("seed", "entryPlayerId")
-                },
+                **_participant_persist_fields(p.metadata),
             }
             for p in draw.participants.values()
         ],

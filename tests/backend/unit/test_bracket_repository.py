@@ -344,6 +344,7 @@ def test_add_participants_defaults_match_the_bulk_path(repo, tournament_id):
     assert rows["P1"].member_ids == []
     assert rows["P1"].meta == {}
     assert rows["P1"].seed is None
+    assert rows["P1"].entry_player_id is None
     assert rows["T1"].type == "TEAM"
     assert rows["T1"].member_ids == ["P1", "P2"]
     assert rows["T1"].seed == 3

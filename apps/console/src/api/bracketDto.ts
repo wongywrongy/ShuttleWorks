@@ -24,6 +24,10 @@ export interface Participant {
   /** Seed number (1 = top seed); null/absent = unseeded. Mirrors backend
    *  `ParticipantOut.seed` so an echo through the upsert preserves seeds. */
   seed?: number | null;
+  /** R-DM-2(a) person key; null/absent = a hand-added participant. Mirrors
+   *  backend `ParticipantOut.entryPlayerId` so an echo through the upsert
+   *  preserves the person key. */
+  entryPlayerId?: string | null;
 }
 
 interface ParticipantInput {
@@ -31,6 +35,9 @@ interface ParticipantInput {
   name: string;
   members?: string[];
   seed?: number;
+  /** Accepted by `ParticipantIn` — echoing it back is what keeps a roster
+   *  edit from erasing the person key. */
+  entryPlayerId?: string;
 }
 
 export interface EventIn {

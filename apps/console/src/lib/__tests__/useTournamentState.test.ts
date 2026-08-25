@@ -326,7 +326,7 @@ describe('snapshot — Entries provenance survives a load/save cycle', () => {
     return putSpy.mock.calls.at(-1)?.[1] as unknown as Record<string, unknown>;
   }
 
-  it('a committed player keeps sourceEntryId + remarks through hydrate → PUT', async () => {
+  it('a committed player keeps sourceEntryId + entryPlayerId + remarks through hydrate → PUT', async () => {
     // Typed as PlayerDTO on purpose: deleting either field from the interface
     // is then a `tsc -b` failure here, not just a silent runtime pass.
     const committed: PlayerDTO = {
@@ -335,6 +335,9 @@ describe('snapshot — Entries provenance survives a load/save cycle', () => {
       groupId: 'g1',
       availability: [],
       sourceEntryId: 'e-9f6d',
+      // R-DM-2(a): sourceEntryId points at ONE entry; this points at the
+      // HUMAN, who routinely holds several.
+      entryPlayerId: 'ep-4c21',
       remarks: "can't play before 6pm Saturday",
     };
     const body = await roundTrip({ players: [committed] });
@@ -343,6 +346,7 @@ describe('snapshot — Entries provenance survives a load/save cycle', () => {
       expect.objectContaining({
         id: 'p1',
         sourceEntryId: 'e-9f6d',
+        entryPlayerId: 'ep-4c21',
         remarks: "can't play before 6pm Saturday",
       }),
     ]);

@@ -307,6 +307,11 @@ export interface PlayerDTO {
    *  (422), so the autosave PUT must carry the field by name or the whole
    *  blob write fails once a committed player is in the roster. */
   sourceEntryId?: string;
+  /** R-DM-2(a) — the person key. `sourceEntryId` points at ONE entry; this
+   *  points at the HUMAN, who routinely holds several. Same value the
+   *  `entry-{uuid}` id encodes, typed instead of parsed out of a prefix.
+   *  Declared here for the same StrictModel reason as `sourceEntryId`. */
+  entryPlayerId?: string;
   /** The entrant's own free-text availability sentence, carried verbatim from
    *  `entries.remarks`. Deliberately NOT `notes` — that is the operator's own
    *  field, and overwriting it would destroy what the operator wrote and lose
@@ -334,6 +339,10 @@ export interface BracketPlayerDTO {
    *  writes the `bracket_participants` row *and* this blob entry, because the
    *  participant table has nowhere to put a remark. */
   sourceEntryId?: string;
+  /** R-DM-2(a) — the person key, mirroring `PlayerDTO`. Also stored as
+   *  `bracket_participants.entry_player_id`; this blob copy is what the
+   *  roster/availability surfaces read. */
+  entryPlayerId?: string;
   remarks?: string;
 }
 

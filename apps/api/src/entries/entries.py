@@ -403,6 +403,7 @@ def _plan_meet(
             "ranks": [event.code],
             "availability": [],
             "sourceEntryId": str(entry.id),
+            "entryPlayerId": str(entry.entry_player_id) if entry.entry_player_id else None,
         }
         if entry.remarks:
             payload["remarks"] = entry.remarks
@@ -579,6 +580,7 @@ def _plan_bracket(
             "name": entry.player_name,
             "availability": [],
             "sourceEntryId": str(entry.id),
+            "entryPlayerId": str(entry.entry_player_id) if entry.entry_player_id else None,
         }
         if entry.remarks:
             payload["remarks"] = entry.remarks

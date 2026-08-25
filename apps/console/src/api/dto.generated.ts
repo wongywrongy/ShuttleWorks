@@ -3359,6 +3359,8 @@ export interface components {
             availability?: components["schemas"]["AvailabilityWindow"][];
             /** Sourceentryid */
             sourceEntryId?: string | null;
+            /** Entryplayerid */
+            entryPlayerId?: string | null;
             /** Remarks */
             remarks?: string | null;
         };
@@ -5137,6 +5139,8 @@ export interface components {
              * @description Optional seed number (1=top seed). Participants are sorted by ascending seed for placement; unseeded entries trail.
              */
             seed?: number | null;
+            /** Entryplayerid */
+            entryPlayerId?: string | null;
         };
         /** ParticipantOut */
         ParticipantOut: {
@@ -5148,6 +5152,10 @@ export interface components {
             members?: string[] | null;
             /** Seed */
             seed?: number | null;
+            /** Entryplayerid */
+            entryPlayerId?: string | null;
+            /** Sourceentryid */
+            sourceEntryId?: string | null;
         };
         /** PartnerAcceptedDTO */
         PartnerAcceptedDTO: {
@@ -5234,6 +5242,8 @@ export interface components {
             notes?: string | null;
             /** Sourceentryid */
             sourceEntryId?: string | null;
+            /** Entryplayerid */
+            entryPlayerId?: string | null;
             /** Remarks */
             remarks?: string | null;
         };

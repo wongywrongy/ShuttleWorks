@@ -279,25 +279,21 @@ def _participant_rows(tid: str, event_id: str) -> dict[str, dict]:
         session.close()
 
 
-def _stamp_person(tid: str, event_id: str, pid: str, meta: dict) -> uuid.UUID:
-    """Write ``meta`` **and** a real ``entry_player_id`` onto a participant row.
+def _mint_person(tid: str, email: str = "stamp@example.com") -> uuid.UUID:
+    """Create a real ``entry_players`` row and return its id.
 
-    Done in SQL because the upsert route hard-codes ``"meta": {}``
-    (``brackets.py:2009``, deferred to Task 5) and carries no person key
-    either — the entries commit seam is what puts ``sourceEntryId`` and the
-    key there in production (see
-    ``test_entries_commit_seam.test_a_committed_entry_puts_the_person_key_on_its_participant``).
-
-    The ``entry_players`` parent row is real, not a bare ``uuid4``: the
-    composite FK ``(tournament_id, entry_player_id)`` is enforced (SQLite
-    ``PRAGMA foreign_keys`` is ON for every app session), and the regenerate
-    path re-INSERTs the participant row.
+    Real, not a bare ``uuid4``: the composite FK
+    ``(tournament_id, entry_player_id)`` on ``bracket_participants`` is
+    enforced (SQLite ``PRAGMA foreign_keys`` is ON for every app session),
+    so a fabricated key is an IntegrityError, not a stored value. ``email``
+    is a parameter because ``entrant_accounts.email`` is unique — a test
+    minting two people must vary it.
     """
     from db.session import SessionLocal
-    from db.models import BracketParticipant, EntrantAccount, EntryPlayer
+    from db.models import EntrantAccount, EntryPlayer
     session = SessionLocal()
     try:
-        account = EntrantAccount(email="stamp@example.com", password_hash="x")
+        account = EntrantAccount(email=email, password_hash="x")
         session.add(account)
         session.flush()
         player = EntryPlayer(
@@ -307,12 +303,31 @@ def _stamp_person(tid: str, event_id: str, pid: str, meta: dict) -> uuid.UUID:
             gender="F",
         )
         session.add(player)
-        session.flush()
-        row = session.get(BracketParticipant, (uuid.UUID(tid), event_id, pid))
-        row.meta = meta
-        row.entry_player_id = player.id
         session.commit()
         return player.id
+    finally:
+        session.close()
+
+
+def _stamp_person(tid: str, event_id: str, pid: str, meta: dict) -> uuid.UUID:
+    """Write ``meta`` **and** a real ``entry_player_id`` onto a participant row.
+
+    Done in SQL because the upsert route writes neither from its own
+    payload before an operator has echoed one back — the entries commit
+    seam is what puts ``sourceEntryId`` and the key there in production
+    (see
+    ``test_entries_commit_seam.test_a_committed_entry_puts_the_person_key_on_its_participant``).
+    """
+    from db.session import SessionLocal
+    from db.models import BracketParticipant
+    player_id = _mint_person(tid)
+    session = SessionLocal()
+    try:
+        row = session.get(BracketParticipant, (uuid.UUID(tid), event_id, pid))
+        row.meta = meta
+        row.entry_player_id = player_id
+        session.commit()
+        return player_id
     finally:
         session.close()
 
@@ -349,6 +364,86 @@ def test_regenerating_a_draw_preserves_the_person_key_and_meta(client, tid):
         "meta": {"sourceEntryId": "entry-abc"},
         "entry_player_id": player_id,
     }, "regenerate destroyed the person key or meta"
+
+
+def _echo_shape(participants: list[dict]) -> list[dict]:
+    """``ParticipantOut`` payloads narrowed to the ``ParticipantIn`` keys.
+
+    What the console's ``toUpsertParticipant`` does: take the participants
+    the GET returned and hand them straight back to the create-or-replace
+    upsert.
+    """
+    keys = ("id", "name", "members", "seed", "entryPlayerId")
+    return [{k: v for k, v in p.items() if k in keys} for p in participants]
+
+
+def test_get_bracket_exposes_the_person_key_and_source_entry(client, tid):
+    """F-DM-09's exit half. ``ParticipantOut`` dropped ``meta`` outright, so
+    the provenance ``bracket_participants`` carries reached NO layer above
+    the table: no console, no export, no display. ``entryPlayerId`` (the
+    R-DM-2(a) key — join a draw node to a human) and ``sourceEntryId`` (the
+    entry that produced it) are the two exits it was missing."""
+    _minimal_bracket(tid, client)
+    client.post(_event_url(tid, "MS"), json=_upsert_body())
+    player_id = _stamp_person(tid, "MS", "P1", {"sourceEntryId": "entry-abc"})
+
+    r = client.get(_bracket_url(tid))
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    ms = next(e for e in body["events"] if e["id"] == "MS")
+    p1 = next(p for p in ms["participants"] if p["id"] == "P1")
+    assert p1["entryPlayerId"] == str(player_id)
+    assert p1["sourceEntryId"] == "entry-abc"
+
+    # The session-level list is the SECOND ``ParticipantOut`` call site —
+    # a fix at one is not a fix at both.
+    top = next(p for p in body["participants"] if p["id"] == "P1")
+    assert top["entryPlayerId"] == str(player_id)
+    assert top["sourceEntryId"] == "entry-abc"
+
+    # A hand-added participant is nobody in ``entry_players`` — hence
+    # Optional, not required.
+    p2 = next(p for p in ms["participants"] if p["id"] == "P2")
+    assert p2["entryPlayerId"] is None
+    assert p2["sourceEntryId"] is None
+
+
+def test_upsert_echo_preserves_the_person_key(client, tid):
+    """Echo the GET's participants back through the upsert; the key stays.
+
+    The roster editor owns the whole participant list and re-POSTs it
+    (``rosterEvents.ts::toUpsertParticipant``). ``ParticipantIn`` is a
+    ``StrictModel``, so a field on ``ParticipantOut`` that ``ParticipantIn``
+    does not accept is either a 422 or — if the client strips it to avoid
+    the 422 — a silent erasure of the key on every roster edit. That is the
+    SP-CONSOLE-4 write-echo class of bug, and it is why the field is on
+    both models.
+
+    **New edge, deliberately NOT softened:** with the FK enforced, an
+    upsert carrying a *fabricated* ``entryPlayerId`` (no ``entry_players``
+    row behind it) surfaces as a 500 ``IntegrityError``, not a 422. The
+    route echoes what it was handed, and a key pointing at no person is a
+    client bug failing loudly rather than a validation case. No pre-flight
+    existence check is added — the database already answers that question,
+    and a second authority for it would drift from the first.
+    """
+    _minimal_bracket(tid, client)
+    client.post(_event_url(tid, "MS"), json=_upsert_body())
+    player_id = _stamp_person(tid, "MS", "P1", {"sourceEntryId": "entry-abc"})
+
+    out = client.get(_bracket_url(tid)).json()
+    ms = next(e for e in out["events"] if e["id"] == "MS")
+    echoed = _echo_shape(ms["participants"])
+    assert any(p["entryPlayerId"] == str(player_id) for p in echoed), (
+        "the GET did not carry the key — nothing to echo"
+    )
+
+    r = client.post(_event_url(tid, "MS"), json=_upsert_body(echoed))
+    assert r.status_code == 200, r.text
+    assert _participant_rows(tid, "MS")["P1"]["entry_player_id"] == player_id, (
+        "the roster edit erased the person key"
+    )
 
 
 def test_generate_with_wipe_true_succeeds(client, tid):

@@ -71,6 +71,25 @@ describe('toUpsertParticipant', () => {
     });
   });
 
+  it('carries entryPlayerId so a roster edit does not erase the person key', () => {
+    // R-DM-2(a). The editor owns the whole participant list and re-POSTs it,
+    // so a key this mapper drops is a key deleted from the row — the
+    // SP-CONSOLE-4 write-echo class of bug.
+    expect(
+      toUpsertParticipant({ id: 'P1', name: 'Alpha', entryPlayerId: 'ep-1' }),
+    ).toEqual({ id: 'P1', name: 'Alpha', entryPlayerId: 'ep-1' });
+  });
+
+  it('omits entryPlayerId for a hand-added participant (null/absent)', () => {
+    expect(
+      toUpsertParticipant({ id: 'P2', name: 'Beta', entryPlayerId: null }),
+    ).toEqual({ id: 'P2', name: 'Beta' });
+    expect(toUpsertParticipant({ id: 'P3', name: 'Gamma' })).toEqual({
+      id: 'P3',
+      name: 'Gamma',
+    });
+  });
+
   it('omits seed when unseeded (null/absent) — no `seed` key on the wire', () => {
     expect(toUpsertParticipant({ id: 'P2', name: 'Beta', seed: null })).toEqual({
       id: 'P2',

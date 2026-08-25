@@ -684,8 +684,8 @@ class _LocalBracketRepo:
         """Insert participants for an event in one transaction.
 
         Each ``participants`` entry: ``id``, ``name``, ``type``,
-        optional ``member_ids``, ``seed``, ``meta``. Returns the
-        number of rows inserted.
+        optional ``member_ids``, ``seed``, ``entry_player_id``, ``meta``.
+        Returns the number of rows inserted.
         """
         return self._insert_participants(tournament_id, event_id, participants)
 

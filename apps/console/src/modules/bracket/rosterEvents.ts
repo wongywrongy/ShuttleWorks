@@ -151,12 +151,14 @@ export function toUpsertParticipant(p: Participant): {
   name: string;
   members?: string[];
   seed?: number;
+  entryPlayerId?: string;
 } {
   return {
     id: p.id,
     name: p.name,
     ...(p.members && p.members.length > 0 ? { members: [...p.members] } : {}),
     ...(p.seed != null ? { seed: p.seed } : {}),
+    ...(p.entryPlayerId != null ? { entryPlayerId: p.entryPlayerId } : {}),
   };
 }
 

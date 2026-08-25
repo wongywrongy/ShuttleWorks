@@ -261,6 +261,18 @@ class PlayerDTO(StrictModel):
     # hand-added roster player never came from an entry, and requiring it
     # would fail every existing payload on the next autosave.
     sourceEntryId: Optional[Identifier] = None
+    # R-DM-2(a) / SP-DM-3 P4: the roster row's person key. ``sourceEntryId``
+    # above points at ONE entry; this points at the HUMAN, who routinely
+    # holds several. It is the same value ``entries/entries.py::roster_id``
+    # encodes into ``id`` as ``entry-{uuid}`` - typed and readable here
+    # instead of parsed out of a string prefix. Optional: a hand-added
+    # roster player is nobody in ``entry_players``.
+    #
+    # ADDITIVE ONLY - no ``tournaments.data`` version bump. Bumping
+    # CURRENT_TOURNAMENT_SCHEMA_VERSION would make P4-written documents
+    # unreadable by a pre-P4 build (db/blob_version.py) in exchange for
+    # nothing: an older reader ignores an unknown optional key.
+    entryPlayerId: Optional[Identifier] = None
     # The entrant's own free-text availability sentence, carried verbatim
     # from ``entries.remarks``. Kept distinct from ``notes`` (the
     # operator's own field) so the seam never overwrites what an operator
@@ -292,6 +304,14 @@ class BracketPlayerDTO(StrictModel):
     # ``bracket_participants`` has nowhere to put a remark and the
     # availability controls the operator uses read from here.
     sourceEntryId: Optional[Identifier] = None
+    # R-DM-2(a) / SP-DM-3 P4: the person key, mirroring ``PlayerDTO``. The
+    # Bracket half stores it TWICE on purpose - as
+    # ``bracket_participants.entry_player_id`` (the constrained, joinable
+    # column) and here, because the availability controls the operator uses
+    # read from this blob and never touch that table.
+    #
+    # ADDITIVE ONLY - no ``tournaments.data`` version bump; see PlayerDTO.
+    entryPlayerId: Optional[Identifier] = None
     remarks: Optional[Notes] = None
 
 
