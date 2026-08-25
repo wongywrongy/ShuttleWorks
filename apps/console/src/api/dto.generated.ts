@@ -2922,6 +2922,12 @@ export interface paths {
          * @description Bracket board read — same serialized session the viewer-gated
          *     ``GET /bracket`` returns (it is already a projection DTO with no
          *     operator-only material), served through the short-TTL cache.
+         *
+         *     ``response_model`` is ``TournamentOut`` — the exact type
+         *     ``_serialize_session`` already returns (F-DM-30: the route was untyped,
+         *     not un-shaped). Declaring it changes no key; it puts the shape in the
+         *     OpenAPI document, which is what the generated types and the parity
+         *     oracle read.
          */
         get: operations["display_bracket_display__token__bracket_get"];
         put?: never;
@@ -3641,6 +3647,46 @@ export interface components {
             matchStates?: {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
+        };
+        /**
+         * DisplayStateDTO
+         * @description The meet board's projection of the workspace state blob (F-DM-30).
+         *
+         *     Until SP-DM-3 P1 this route had NO ``response_model``: the one
+         *     unauthenticated data plane in the product was the one with no declared
+         *     shape, and its allow-list was a Python tuple with a prose comment naming
+         *     its TS consumer. This class IS that allow-list now, and
+         *     ``tests/backend/test_display_public.py`` pins its key set exactly.
+         *
+         *     Notably ABSENT vs the raw blob, and deliberately: ``scheduleHistory``
+         *     (the operator revert pool), ``scheduleVersion``, ``bracketPlayers``,
+         *     ``planFinalized``.
+         *
+         *     ponytail: the five pass-through fields are typed ``Any``, not with their
+         *     real DTOs. Ceiling named: this is the public plane reading a blob that
+         *     predates the strict DTOs, so validating it through ``TournamentConfig`` /
+         *     ``PlayerDTO`` / ... (all ``StrictModel``, ``extra="forbid"``) would turn a
+         *     legacy key into a 500 on a screen in a public hall, or — worse, with
+         *     ``extra="ignore"`` — silently DROP keys the board renders. Upgrade path:
+         *     tighten one field at a time behind P2's blob versioning, each with its own
+         *     key-set test. What P1 buys is the KEY SET being declared, which is what
+         *     F-DM-30 is about.
+         */
+        DisplayStateDTO: {
+            /** Config */
+            config?: unknown;
+            /** Groups */
+            groups?: unknown;
+            /** Players */
+            players?: unknown;
+            /** Matches */
+            matches?: unknown;
+            /** Schedule */
+            schedule?: unknown;
+            /** Scheduleisstale */
+            scheduleIsStale?: unknown;
+            /** Standings */
+            standings?: components["schemas"]["MeetStandingRowDTO"][];
         };
         /**
          * DisplaySummaryDTO
@@ -10476,7 +10522,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DisplayStateDTO"];
                 };
             };
             /** @description Validation Error */
@@ -10540,7 +10586,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TournamentOut"];
                 };
             };
             /** @description Validation Error */
