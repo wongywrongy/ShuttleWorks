@@ -744,6 +744,10 @@ class EntryDeskRowDTO(BaseModel):
     # shows the same address three times for one form.
     submission: Optional[EntrySubmissionDTO] = None
     playerName: str
+    # R-P7c resolved the person; F-DM-16 was the wire not carrying it. The
+    # desk groups one human's entries across submissions by this, not by
+    # eye. Null only for rows minted before the person spine existed.
+    entryPlayerId: Optional[str] = None
     remarks: Optional[str] = None
     listOptOut: bool = False
     committedPlayerId: Optional[str] = None
@@ -760,6 +764,7 @@ class EntryDeskRowDTO(BaseModel):
             pendingReasons=list(row.pending_reasons or []),
             submission=EntrySubmissionDTO.from_row(row.submission),
             playerName=row.player_name,
+            entryPlayerId=str(row.entry_player_id) if row.entry_player_id else None,
             remarks=row.remarks,
             listOptOut=bool(row.list_opt_out),
             committedPlayerId=row.committed_player_id,

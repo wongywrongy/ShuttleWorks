@@ -357,6 +357,18 @@ def test_the_desk_list_is_newest_first_with_a_stable_tiebreaker(client, workspac
     assert len(first) == 8
 
 
+def test_a_desk_row_carries_the_resolved_person_key(client, workspace):
+    """F-DM-16 / R-DM-1 (P3): the backend resolved the person (R-P7c) but
+    the wire never carried it, so the desk could not group one person's
+    entries across submissions except by eye."""
+    tid = workspace
+    _seed_entries(tid, [{"player_name": "Alice Chen"}])
+
+    rows = client.get(f"/tournaments/{tid}/entries").json()
+    assert rows, "expected at least one desk row"
+    assert rows[0]["entryPlayerId"], "the desk row must carry the person key"
+
+
 def test_a_viewer_can_read_the_desk_list(client, workspace):
     tid = workspace
     _seed_entries(tid, [{"player_name": "Alice Chen"}])

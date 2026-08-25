@@ -706,6 +706,11 @@ export interface EntryDTO {
    *  produces — see the backend DTO. */
   submission: EntrySubmissionDTO | null;
   playerName: string;
+  /** The resolved person (R-P7c): `entry_players.id`. The key one human's
+   *  entries share across submissions — the desk's grouping identity, where
+   *  before it had only `playerName` and eyes. Null on rows minted before
+   *  the person spine. */
+  entryPlayerId: string | null;
   remarks: string | null;
   listOptOut: boolean;
   /** Set once Seam A has materialized this entry as a roster player. */
