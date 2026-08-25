@@ -108,6 +108,13 @@ class VersionedJSON(TypeDecorator):
 # P5/P6 work) and ROUND-TRIP-SENSITIVE blobs (an extra key reaches a
 # consumer that did not ask for it).
 #
+# P5 taught the commit seam to write real ``member_ids`` for a confirmed pair.
+# The value is still a bare ``list[str]`` - nowhere to put a ``v`` key without
+# wrapping it and rewriting every reader in ``brackets.py``, ``local.py``, the
+# engine and the console - so the entry stays ``None`` and the reshape is
+# unowned. R-DM-4.x's rationale said P2 would give ``member_ids`` a versioned
+# home; P2 gave it this enumerated slot instead.
+#
 # P4 added ``bracket_participants.entry_player_id`` as a real COLUMN, not a
 # blob key - the roster shapes it typed live inside ``tournaments.data``,
 # which is already versioned, and the field is additive so no bump was taken.
@@ -123,7 +130,7 @@ BLOB_VERSIONS: dict[str, Optional[int]] = {
     # -- versioned ----------------------------------------------------
     "tournaments.data": CURRENT_TOURNAMENT_SCHEMA_VERSION,
     # -- list-shaped: needs a reshape, owned by a later phase ----------
-    "bracket_participants.member_ids": None,  # Pair membership; P5 reshapes
+    "bracket_participants.member_ids": None,  # Pair membership; P5 FILLED it (still a bare list)
     "bracket_matches.side_a": None,  # resolved participants; P6
     "bracket_matches.side_b": None,  # same
     "bracket_matches.dependencies": None,  # draw topology; P6

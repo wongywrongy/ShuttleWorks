@@ -23,7 +23,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 3 | P1 — one standings shape | — | M | **DONE 2026-08-24** — 6546e63b..4df4b9cc, final review "merge as-is" — **merged to main 2026-08-24** (ff to 4df4b9cc) |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | **DONE 2026-08-25** — 93f41250..0098ee46 (incl. final-review fix wave f673ea2e + Dockerfile source COPY 0098ee46) — **merged to main 2026-08-25** (ff to 0098ee46) |
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to the branch tip incl. the closing ledger commits, Kyle's standing instruction) |
-| 6 | P5 — pair survives intake | R-DM-4 (a) | L | pending — blocked by P2 |
+| 6 | P5 — pair survives intake | R-DM-4 (a) | L | **Tasks 1–7 DONE 2026-08-25** — `9e81ca68`..this ledger commit on `dm3/p5-pair-intake`, **unmerged**; whole-branch review + merge are Kyle's call. Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | pending — blocked by P4 |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
 | 9 | P9 — cosmetic sweep | — | S | pending — anytime after P0 |
@@ -310,3 +310,281 @@ merge-and-proceed instruction; `main` remains ahead of `origin/main` — pushing
 slice is **P5 (pair survives intake)** — author its detailed plan at phase start against the
 then-current tree, and note that P5's area has the **thinnest test cover of any slice, so
 characterization comes first**.
+
+### 2026-08-25 — P5 slice executed (pair survives intake — **Bracket half only**, subagent-driven, opus)
+
+Branch `dm3/p5-pair-intake` off `main` @ `621325ab`. Seven tasks, each implementer+reviewer
+dispatched separately (T4+T5 batched, disjoint file sets); SDD working ledger — rulings,
+per-task lines, deviations, deferred minors — at
+`.superpowers/sdd/2026-08-25-sp-dm-3-p5-pair-intake/progress.md`.
+
+**Commit chain.** `9e81ca68` detailed plan · `8ded73c5` **T1** characterization pins + fixture
+widening (`_entry_event` hardcoded `entry_type="singles"`; `_entry` could not link two entries —
+the seam's fixtures could not express a pair at all) · `70b61bf1` **T2** the ruled Step-0 pin
+("a `BD` draw opens the SINGLES picker today") · `eca960f8` **T2** the `isDoubles` collapse ·
+`439db74d` **T3** the TEAM pre-pass · `3c65bf94` **T3** the self-referential-link guard ·
+`0e040c2d` **T3** fix round (`member_ids` → seat ids, the leg-5 test, the dead sort deleted) ·
+`7173110b` **T4** the I4 pins · `a2a62095` **T5** the `partnerEntryId` wire · `a814e331`
+**T4/T5** fix round (the I4 bracket-path pin) · `5d811d17` **T6** picker seeding + the console
+mint collapse · `0eebce39` **T6** fix round (the `members: []` guard) · plus this ledger commit
+(`BLOB_VERSIONS` comment correction + debt-log + the design-doc F-DM-08 amendment).
+
+**P5 ships the BRACKET half of "pair survives intake". The Meet half was CUT, at ratification.**
+The planner proposed it (judgment call 1) and the controller ratified the cut with an amendment,
+on a structural fact verified independently: `_plan_meet` writes `ranks=[event.code]` — `"XD"` —
+while the only Meet match generator, `RegenerateMenu.expandRanks`, emits only *numbered* ranks
+`XD1..XDn` and filters `(p.ranks ?? []).includes(rank)`. **No committed Meet entry can reach a
+generated Meet match at all today**, so a Meet pair field would have had no reader: dead code on
+a broken path P7 is chartered to fix. The gap is not merely asserted — it is executable, pinned
+by T1's `test_a_committed_meet_entry_cannot_reach_a_generated_match`, so this paragraph's honesty
+has a test behind it. **The amendment (owed by T7, done):** the design doc's traceability row for
+F-DM-08 said the `RegenerateMenu.tsx` client-side lineup construction "Moves server-side. **P5.**"
+It now says **P7**, with the rank-mapping reason. That removes a self-contradiction rather than
+reassigning work — the same doc's P7 slice header and R-DM-5's recommendation already give P7
+F-DM-08 "in part", and `DM1_RULINGS.md:142` agrees. The P5 slice card's own "`_plan_meet` gets the
+analogous side construction" clause is annotated with the same cut.
+
+**The whole TEAM round-trip already worked; only the seam refused** (stale-card §1).
+`bracket/brackets.py` was never opened: all three `Participant(...)` constructions already carry
+`member_ids`, both persist dicts write it back, and `ParticipantIn`/`ParticipantOut` already
+declare `members`. The backend half of P5 is **one file** — `entries/entries.py`. The card read as
+though the team shape had to be built; it had to be *emitted*.
+
+**F-DM-13 had SIX answers, not the four the card names — and two of the extras were in one file.**
+`meet/exports/xlsxExports.ts` held both a local `isDoublesPrefix()` helper and a separate inline
+`prefix.endsWith('D')`. All six now route through one authority per tier,
+`lib/doubles.ts::isDoublesCode`, across ten call sites in seven production files — including three
+the brief's line list did not enumerate (the deleted helper's two call sites, which would not have
+compiled if missed, and `BracketPlayerFields`). Two plan-drift facts, both corroborated at review:
+`BracketDrawsTab.tsx` has exactly **one** doubles rule, not the two the plan claimed, and the
+prior-art test the brief cited was at a different line.
+
+**Pair-name mints: the design doc's `→ 0` deletion gate is STALE, and P5 moved the count the other
+way first.** A `bracket_participants.name` is NOT NULL and **director manual pairing stays by
+ruling**, so a mint must exist; the gate is unachievable as written. What P5 did instead: T6
+collapsed the console's **two** mints (`ParticipantPicker`, `BracketPlayerFields`) into one shared
+`bracketLabels.ts::teamName`, and T3 **added** the backend's first, `entries.py::team_name`. Two
+mints today, one per tier, same separator so a draw cannot render two spellings. The honest
+deliverable is that nothing has to **decode** a label: a seam-built team's `member_ids` carries the
+two roster ids, so membership is *data*. The decode direction (`bracketMigration.ts`'s
+split-and-zip plus the render-site splits) is **P6's**, by the design doc's own text, and is
+deliberately still present.
+
+**The pair predicate has SEVEN legs, and every failure is a REFUSAL, not a decision.** The seam
+builds a `TEAM` only for two entries that are mutually linked, both confirmed, both valid, in the
+same draw, neither already committed. Any leg that fails leaves the confirmed half committing as a
+**singleton** — nothing dangles, nothing is auto-resolved, and the director's manual pairing path
+is what finishes the job. **Legs 6 and 7 exist because a first draft of the plan got them wrong,
+and that is worth recording**: the draft argued leg 6 was "satisfied by construction, the loop
+already validates every entry" — true, and still wrong, because the nominator is processed first,
+so a partner whose payload later fails validation would leave a TEAM naming a roster row that was
+never written, unrepairable on re-run since the team id is already in `existing_ids`. The same walk
+exposed leg 7 (a hand-added participant for one half would put that human in the draw twice). Two
+further strengthenings landed beyond the brief, both pure refusals: leg 5 is a real
+`partner.entry_event_id` check (without it, mismatched halves insert one team id into two draws,
+`existing_ids` being per bracket event), and legs 6/7 test the **seat id each half would actually
+take**. Self-review then found that a self-referential `partner_entry_id` built a one-person
+"Ana / Ana" team; guarded in `3c65bf94`.
+
+**A one-directional `partner_entry_id` is detected by refusal + `log.warning` — NOT a new reason
+code** (judgment call 3, ratified). `pair_conflict` was deliberately **not** reused: its documented
+meaning is a different situation. The state is unreachable today (`accept()` writes both halves in
+one transaction), which is why an operator-visible code would be a surface with no producer; the
+cost accepted is that if it ever *becomes* reachable, the anomaly is log-only.
+
+**A seam-built TEAM carries `members[0]`'s person key** — the nominating player's (judgment call 2,
+ratified; it keeps P4's ruled shape). Both keys remain recoverable from `member_ids` by
+construction. The alternative — a per-member key list — needs a column and the migration R-DM-4(a)
+declined.
+
+**Behavior change 1 — a confirmed pair now commits as ONE `TEAM` with real `member_ids`.** It used
+to commit as two unrelated singletons, re-minted by hand in the console as a name concatenation.
+Characterized first: T1's `..._TODAY_commits_as_two_unrelated_singletons` existed only to be
+flipped, and T3 Step 1 is that pin inverted. Two invariants held through the change and are stated
+because they are easy to break later: `committed_player_id` stays the **per-person** roster id, and
+the roster blob still gets **two** rows per pair, one per human, because that is where remarks and
+availability live — so `participant_id == roster_id` stops being universally true and is now a
+singles-only property.
+
+**Behavior change 2 — the `isDoubles` collapse WIDENS the bracket surfaces to the D-suffix rule, so
+a director-defined `BD` draw is now doubles** (judgment call 6, ratified as a named behavior change
+— recorded here the way P4's CASCADE was). Three bracket surfaces previously asked a closed
+`['MD','WD','XD']` list; they now ask `isDoublesCode`. **The upgrade consequence, stated plainly:**
+an existing `BD` draw's already-committed **singles** rows stay singles, while its picker now
+renders **doubles**. There is **no migration in scope**. The widening only flips codes that are
+D-then-digits, where the old code was already self-contradictory with itself (`isDoubles('MD2')`
+was false while `isDoublesRank('MD21')` was true), so the collapse also makes the two rules agree.
+`EventsControl`'s `EVENT_CATEGORIES` was checked and is correctly **not** a missed site (display
+grouping — a `BD` draw simply renders under its own heading).
+
+**Behavior change 3 — the doubles participant picker now opens SEEDED.** Committing from it used
+to **replace** the draw's participant list with only this session's pairs, so an operator with four
+teams entered who formed one more and saved ended with **one**. `ParticipantPicker` now forwards a
+new `initialPairs`, `DrawDetailPanel` builds it from the event's existing participants instead of
+handing the doubles branch a literal `[]`, and `DoublesPicker` seeds from it. Pinned by a T1
+characterization pin that T6 flipped. Two consequences the brief did not name, both closed with
+tests: a carried singleton's id **is** its player id, so the `unavailable` set needed a
+length-aware guard or one save enters the same human twice; and sequence numbering would have
+minted a duplicate `XD-T2` once the list opens seeded.
+
+**The I4 ruling — a `pair_conflict` flag does NOT veto an agreed pair.** Surfaced by the T4/T5
+implementer and ruled by the controller; recorded at length because it is the subtlest call in the
+slice and it is now pinned by a test. In a bracket workspace a `pair_conflict`-flagged entry
+**still** pairs into a TEAM, because no leg of the predicate consults `pending_reasons`. That is
+correct and is **not** an I4 breach. `pair_conflict` means "the named partner is already spoken
+for"; the predicate requires **mutual + both-accepted**, i.e. two humans who actually agreed. In
+the surfaced scenario — Alex nominates Sam, Robin also nominates Sam, Sam accepts Alex — the seam
+is not choosing between two valid pairs: only one pair exists, and Robin never had Sam's
+acceptance. Robin's entry still commits, still carrying its flag, so the operator still sees and
+adjudicates it. **Nothing was resolved.** The alternative — refusing the mutually-agreed team
+because a third party also nominated Sam — would let a stranger's unilateral nomination **veto** an
+agreed pair, which is the bigger I4 problem. Cost if wrong: a flagged workspace auto-forms teams
+the owner meant to adjudicate first; mitigated because the flag persists and manual pairing stays.
+Pinned by `test_a_pair_conflict_still_only_flags_after_the_seam_builds_teams` and by a
+bracket-path twin whose docstring opens "RULED (SP-DM-3 P5)".
+
+**Two brief defects were REFUSED by implementers and the refusals ratified.** Both are recorded
+because in each case the executor was right and the instruction was wrong. (1) **T3's brief
+specified `member_ids` as `roster_id(person_id)` values, which name non-seats.** A member's actual
+`bracketPlayers` row id is `adopted or _player_id(m)`, so under adoption (a legacy `sourceEntryId`
+row) the TEAM's `member_ids` would point at nothing — violating the brief's own NC 2 ("no member id
+naming a roster row that does not exist"). Ruled: the spec wins, `member_ids` carries the two
+**seat** ids in member order; `team_id` **stays** on person ids, because re-run determinism is its
+whole promise. (2) **T6's brief specified a `members.length === 2` filter on the picker seed.**
+That filter deletes exactly the PLAYER rows the dispatch required preserved — commit replaces the
+whole list, so "filtered out" means "deleted", not "left alone". Ruled: carry every row verbatim;
+the cost is `PickedPair.members` widening to `string[] | undefined` (debt-logged).
+
+**No migration, no FK, no `BLOB_VERSIONS` flip, no `tournaments.data` version bump, allow-list cap
+still 19.** R-DM-4(a) chose the no-table option, so there is no `entry_pairs` table, no backfill
+and no re-key. **`bracket_participants.member_ids` stays `None` in the registry**: P5 **FILLED**
+it, it did not reshape it — the value is still a bare `list[str]` with nowhere to put a `v` key
+without wrapping it and rewriting every reader in `brackets.py`, `local.py`, the engine and the
+console. The registry comment was corrected accordingly this task (comment-only; the same move P4
+T8 made for `side_a`/`side_b`/`dependencies`), and
+`test_the_tournament_document_is_the_one_wired_column_today` is untouched and green.
+`partnerEntryId` reaches the desk wire **alone** — no denormalized name or `acceptedAt` (judgment
+call 7, ratified) — landing whole across all three mirrors in one commit; the parity ratchet cap
+stayed **19**. `partners.is_doubles` **stays where it is** and becomes an authority by import
+(judgment call 8 — the laziest thing that works).
+
+**R-DM-4.x's rationale overstates what P2 delivered — flagged, not reopened** (stale-card §6). The
+ruling's rationale says P2 would give `member_ids` a versioned home; P2 gave it an enumerated
+`None` slot in `BLOB_VERSIONS` instead. The decision itself (option (a), no `entry_pairs` table) is
+unaffected and P5 executed it as ruled. The discrepancy is now recorded at the registry line as
+well as here, so the next reader of R-DM-4.x is not surprised.
+
+**Deletion gates — three of the five brief patterns are stale as written; no code was edited to
+satisfy a grep.** Gate 1, the one that actually states the rule, is clean: `endsWith('D')` →
+**one** hit, `lib/doubles.ts::isDoublesCode`, the authority itself. Gate 2 (`['MD', 'WD', 'XD']` →
+expected 0) returns **one** hit — `lib/__tests__/doubles.test.ts:11`'s local `CLOSED_LIST` mirror,
+a T1 characterization literal, **zero in production**; under a looser grep the two known
+out-of-scope non-predicates appear exactly as the brief predicted (`eventColors.ts`'s
+`DISCIPLINE_ORDER`, ordering data; `EventsControl.tsx`'s `types: ['MD','WD']`, filter grouping).
+Gate 3 (`} / ${`) returns **two**: `bracketLabels.ts::teamName` (the mint) and
+`RunSummaryBand.tsx`'s `${done} / ${total}` progress counter — a false positive of the pattern, not
+a mint. Gate 4 (`" / "` in `apps/api/src/entries`) **cannot match the code it was written for**:
+`team_name` returns an f-string, `f"{name_a} / {name_b}"`, so the pattern finds only a prose
+comment; the correct pattern `} / {` over all of `apps/api/src` returns **exactly one** hit, the
+mint. Gate 5 (`isDoublesRank`) returns **nine** files, not the "two" the brief guessed — one line
+of that is the re-export alias at `positionGrid/helpers.ts:106` and the rest are meet call sites
+reaching the single authority through it. The alias is deliberate (it avoids ~15 call-site renames
+for zero behavior gain) and it is why a future reader of the design doc's
+`rg "isDoublesRank|['MD','WD','XD']"` gate will see a non-zero count that is nonetheless correct:
+**the honest gate is gate 1**.
+
+**Negative controls — all four green, run as a set** (`87 passed`, across
+`test_entries_commit_seam.py` + `test_partner_invites.py` + `test_entries_desk_routes.py`; the
+seven named tests re-selected by name, `7 passed`): NC 1
+`test_a_confirmed_pair_commits_as_ONE_team_with_real_member_ids` — the T1 pin inverted · NC 2 the
+four refusal tests (half-accepted; partner already committed alone; a half that fails validation =
+leg 6; a member already entered by hand = leg 7) · NC 3
+`test_a_pair_conflict_still_only_flags_after_the_seam_builds_teams` plus its bracket-path twin ·
+NC 4 `test_a_one_directional_partner_link_is_detected_and_no_team_is_built`.
+
+**Gates.** `make check` **green across both tiers**, exit code **0** — console lint (0 errors,
+117 warnings, the standing downgraded set) / `tsc -b` / vitest **204 files, 1839 tests** /
+depcruise **16 warnings, 0 errors** (the pre-ratchet `KNOWN_CROSS_MODULE` set, unchanged);
+entrant lint / typecheck / vitest **37 files, 760 tests** / depcruise **clean**; ruff
+`All checks passed!`; import-linter **15 kept, 0 broken**; pytest
+**`1911 passed, 66 skipped, 7 warnings in 762.65s (12:42)`**. `docs:freshness` is advisory and
+never fails the gate — it reported the same three BEHIND areas P4's run did (State management,
+Modules, Entrant tier) and was not acted on. Nothing was red, so nothing had to be argued
+pre-existing; no `git stash` was used at any point in this slice.
+
+**Deviations from the plan, all reviewed:**
+- **The Meet half was cut** (judgment call 1) — the largest deviation, ratified with the design-doc
+  amendment this task carried out.
+- **T1's `CLOSED_LIST` pin was tautological**, and the brief specified it verbatim. The real closed
+  list was an unexported inline array, so no T1 pin would have reddened when T2 widened the call
+  sites. Ruled a **brief defect, not a rework**: it became a T2 *precondition* — a render-level
+  "`BD` opens the SINGLES picker" pin (`70b61bf1`) that is red the moment the widening lands, with
+  the inversion proven behaviorally (reverting only `DrawDetailPanel.tsx` failed the flipped
+  assertion on "Save pairs", not on an import).
+- **T2 touched three sites the brief's line list omitted** and corrected two plan-authoring line
+  claims (above).
+- **T3 wrote seven tests where the dispatch said five**, added two strengthenings and a
+  self-referential-link guard beyond the brief, and refused the brief's `member_ids` formula.
+- **T3 process gap, disclosed and judged sufficient at review:** the T1 pin was **replaced** at
+  Step 1 rather than run red first, so the flip's RED evidence is the new test failing `2 == 1`
+  rather than the old pin reddening.
+- **T4's test signature was adapted** to `(client, workspace)` — the brief's `(client, world,
+  mailbox)` belongs to a different file; name and docstring kept verbatim. Its no-TEAM assertion is
+  a **backstop only** (that file's fixture is a MEET workspace, where `_plan_meet` has no TEAM
+  shape), which is exactly why the I4 ruling needed the bracket-path pin added in the fix round —
+  induced RED with a temporary eighth predicate leg, probe reverted, no residue in the diff.
+- **T5 edited two console fixture builders in the same commit as the DTO** — `EntryDTO`'s hand
+  mirror is a required `string | null`, so splitting them would have reddened the type gate.
+- **T6 refused the brief's `=== 2` filter** (ratified, above) and added a **new `initialPairs`
+  prop** rather than forwarding `initialIds`, because a doubles seed carries *team* ids while the
+  picker's list and `unavailable` set are keyed on *player* ids.
+- **T7 (this task) added a step the brief does not contain** — the controller's F-DM-08 design-doc
+  amendment — and extended the brief's commit path list to include the design doc, which the brief
+  predates.
+
+**Deferred minors, rolled up:** T1's `expandRanks` pin mirrors the generator's rule in a **local
+literal**, so a P7 generator-side fix leaves it green while its docstring goes false (also in the
+P7 handoff below) · `_pair`'s docstring describes a member ordering the seam does not yet have ·
+`doubles.test.ts` lives under `src/lib/__tests__` but tests nothing in `src/lib` (brief-mandated
+placement) · a leftover function-local `timedelta` import now duplicated by the module-level one
+(boy-scout when next touched) · only **1 of the 3** widened bracket surfaces has a render-level
+pin; the other two are covered transitively by the authority's unit test · the backend `isDoubles`
+source gate is non-recursive (`src.glob`) and matches only `== "doubles"` · T3's leg 3 has no test
+(unreachable via `accept()`) · no TEAM re-run **idempotency** pin (holds by construction —
+deterministic `team_id` + dedupe on `insert["id"]`; the re-run path was traced at review) · legs
+4/5/7 were never mutation-checked (only the self-referential guard was, by temporary reversion) ·
+T4's test name slightly overclaims what its fixture can prove, commented inline · T6's
+`initialPairs` is a required prop passed `[]` in singles mode · pre-existing `act(...)` stderr in
+`BracketDrawsTab.test.tsx` · the repo-wide `StarletteDeprecationWarning`, pre-existing.
+
+**New debt rows:** a committed Meet entry can never reach a generated Meet match (**P7**, with the
+local-mirror caveat on its pin) · the commit seam recognises "already in this draw" by
+**participant id only**, so a picker row under an arbitrary id naming the same person is invisible
+to leg 7 — the same blind spot today's singleton dedupe has, disclosed rather than closed because
+narrowing it means matching on the person key, which is P6's · the doubles picker has **no
+remove/unpair affordance**, with the trade-off named: the destructive re-save *was* the unpair
+escape hatch, and P5 removed it by fixing the data loss · `commitPicks` emits `members: undefined`
+rather than omitting the key (safe today **only** because `JSON.stringify` drops it) ·
+`PickedPair.members` widened to `string[] | undefined`, losing the compile-time exactly-two
+invariant (`(PickedPair | PickedSingle)[]` keeps it — a follow-up, not a redo). **Extended:** the
+`ParticipantIn`-has-no-`meta` row — a seam-built TEAM writes `meta.sourceEntryId` **and**
+`meta.partnerSourceEntryId`, so a console echo through the upsert now drops **pair** provenance as
+well as entry provenance. **Closed:** the DoublesPicker `initialIds` row — struck, citing
+`5d811d17` (+ `0eebce39`), with the removable half named as its residue. **Left with P6:** the
+blob-vs-column double-store row, untouched by P5 as ruled at P4's merge. The brief's conditional
+sixth row was **not** needed: T3 Step 4's `submitted_at is None` note stayed unexercised (nothing
+raised, so the column keeps its ORM default) and produced no edit.
+
+**Standing caveat, restated:** all migration and FK evidence in this program is **SQLite only**;
+Postgres is untested. P5 carries **no migration**, so it adds nothing to that debt.
+
+**Next.** **P5 unblocks P6** (the bracket person-key demotion): its NC "two 'Li Wei' in one draw
+are two rows" now has both P4's FK and a seam that has stopped minting name-concatenated teams as
+identity, and its `bracketMigration.ts` decode deletion is the other half of P5's mint work.
+**P7 inherits two things from P5**: F-DM-08's server-route half (now correctly attributed in the
+design doc), and the new Meet rank-disconnect debt row — which is worse than the row's headline,
+because Meet's intake is disconnected from Meet's generation **twice over**: at the rank level
+(`ranks=[event.code]` vs numbered `XD1..XDn`) **and** at the group level (`_plan_meet` writes
+`groupId = event.code`, putting every entrant in one "school", while the generator only pairs
+*across* groups). `dm3/p5-pair-intake` is **not merged** — the whole-branch review and the merge
+are Kyle's call.
