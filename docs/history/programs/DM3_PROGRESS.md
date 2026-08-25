@@ -23,7 +23,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 3 | P1 — one standings shape | — | M | **DONE 2026-08-24** — 6546e63b..4df4b9cc, final review "merge as-is" — **merged to main 2026-08-24** (ff to 4df4b9cc) |
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | **DONE 2026-08-25** — 93f41250..0098ee46 (incl. final-review fix wave f673ea2e + Dockerfile source COPY 0098ee46) — **merged to main 2026-08-25** (ff to 0098ee46) |
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to the branch tip incl. the closing ledger commits, Kyle's standing instruction) |
-| 6 | P5 — pair survives intake | R-DM-4 (a) | L | **Tasks 1–7 DONE 2026-08-25** — `9e81ca68`..this ledger commit on `dm3/p5-pair-intake`, **unmerged**; whole-branch review + merge are Kyle's call. Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
+| 6 | P5 — pair survives intake | R-DM-4 (a) | L | **DONE 2026-08-25** — `9e81ca68`..branch tip (incl. final-review fix wave `f94c85ce`+`4f049a45`), final review "Ready to merge, with fixes" → fixes landed and re-reviewed clean — **merged to main 2026-08-25** (fast-forward, Kyle's standing instruction). Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | pending — blocked by P4 |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
 | 9 | P9 — cosmetic sweep | — | S | pending — anytime after P0 |
@@ -586,5 +586,27 @@ design doc), and the new Meet rank-disconnect debt row — which is worse than t
 because Meet's intake is disconnected from Meet's generation **twice over**: at the rank level
 (`ranks=[event.code]` vs numbered `XD1..XDn`) **and** at the group level (`_plan_meet` writes
 `groupId = event.code`, putting every entrant in one "school", while the generator only pairs
-*across* groups). `dm3/p5-pair-intake` is **not merged** — the whole-branch review and the merge
-are Kyle's call.
+*across* groups).
+
+**Final whole-branch review (`621325ab`..`a767764b`): "Ready to merge, with fixes", 0 Critical.**
+It verified the round trip end to end — seam `TEAM` → `ParticipantOut.members` → the picker seed →
+`commitPicks` → `ParticipantIn` → the `brackets.py` re-derivation — and found that T3's fix-round
+decision to put **seat** ids in `member_ids` is exactly what makes T6's `unavailable` logic
+correct, a cross-task dependency neither task-scoped review could see whole. It also re-traced
+re-run/re-save idempotency independently and found no colliding-id path (console `XD-T{n}` and seam
+`team-{uuid}-{uuid}` are disjoint and inside `Identifier`'s 100). Its one Important was a **plan
+defect**: the predicate never named member **distinctness**, so a person holding BOTH halves — a
+state reachable from live code, because the accept route deliberately does not check who accepts
+(`partner_routes.py:243`) and `adopt_or_mint` then adopts the nominator's own `EntryPlayer` — built
+a one-person `"Alex Kim / Alex Kim"` TEAM. Pre-P5 that same corrupt state degraded gracefully to
+one PLAYER row via the id dedupe; P5 had upgraded it into exactly the artifact T3's self-reference
+guard exists to refuse. Closed in the fix wave by leg 8 (`partner_seat != participant_id`, compared
+on **seats** so it survives either half adopting) plus its test; the re-review confirmed no
+legitimate pair can be refused, since two different people always resolve to distinct seats. The
+wave also split the design doc's mint/decode row (the decode stays P6's; the **mint is permanent**,
+two per tier) rather than striking it, corrected two stale P5 claims, and logged the `team_name`
+length ceiling (~403 chars writable and readable, but a console re-save 422s the whole participant
+list).
+
+`dm3/p5-pair-intake` was **merged to `main` 2026-08-25** (fast-forward, per Kyle's standing
+merge-and-proceed instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call).
