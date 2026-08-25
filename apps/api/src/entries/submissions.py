@@ -358,6 +358,8 @@ def adopt_or_mint(
     tournament_id: uuid.UUID,
     account_id: uuid.UUID,
     spec: PlayerInput,
+    *,
+    blank_clears: bool = True,
 ) -> tuple[EntryPlayer, bool]:
     """The one place an ``EntryPlayer`` comes from.
 
@@ -366,6 +368,10 @@ def adopt_or_mint(
     identical rule instead of constructing rows on its own. Returns
     ``(player, adopted)``. On adoption the DESCRIPTIVE fields take the
     fresh values (see the R-P7c comment at the ``_write`` call site).
+
+    ``blank_clears`` keeps the entry form's blank-means-clear (R-P7c) as the
+    default; the partner accept form passes ``False`` because a blank there
+    means "the form never asked", not "clear this".
     """
     player = same_person(session, tournament_id, account_id, spec)
     if player is None:
@@ -381,8 +387,12 @@ def adopt_or_mint(
         session.add(player)
         session.flush()
         return player, False
-    player.club = (spec.club or "").strip() or None
-    player.remarks = (spec.remarks or "").strip() or None
+    club = (spec.club or "").strip() or None
+    remarks = (spec.remarks or "").strip() or None
+    if blank_clears or club is not None:
+        player.club = club
+    if blank_clears or remarks is not None:
+        player.remarks = remarks
     return player, True
 
 

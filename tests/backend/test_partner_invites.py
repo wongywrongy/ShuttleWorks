@@ -412,12 +412,17 @@ def test_accepting_under_the_same_account_adopts_the_existing_person(
     then accept a doubles invite under the same account with a matching
     birth year -> ONE person row, not two. Before this, ``accept()`` minted
     unconditionally and a partner-minted person could never be the certain
-    match in either direction."""
+    match in either direction.
+
+    The club/remarks half is the fix-round-1 guard: the accept form asks for
+    neither remarks nor a mandatory club, so adopting with the entry form's
+    blank-means-clear would null what Sam recorded on their own entry.
+    ``blank_clears=False`` is what keeps them."""
     import uuid as _uuid
 
     from sqlalchemy import select
 
-    from db.models import EntrantAccount, EntryEvent, EntryPage
+    from db.models import EntrantAccount, EntryEvent, EntryPage, EntryPlayer
     from db.session import SessionLocal
     from entries.submissions import PlayerInput, create_submission
 
@@ -435,7 +440,16 @@ def test_accepting_under_the_same_account_adopts_the_existing_person(
             tournament_id=_uuid.UUID(world["tid"]),
             page=page,
             account_id=sam.id,
-            players=[PlayerInput("Sam Ali", "F", birth_year=2000, events=[ms])],
+            players=[
+                PlayerInput(
+                    "Sam Ali",
+                    "F",
+                    club="Riverside",
+                    birth_year=2000,
+                    remarks="Left-handed",
+                    events=[ms],
+                )
+            ],
             fee_total_cents=2000,
             fee_basis={"basis": "schedule", "players": []},
         )
@@ -463,6 +477,17 @@ def test_accepting_under_the_same_account_adopts_the_existing_person(
 
     theirs = _entry(world["tid"], r.json()["entryId"])
     assert str(theirs.entry_player_id) == own_person_id
+
+    # The accept form asked for neither, so neither is cleared.
+    session = SessionLocal()
+    try:
+        person = session.get(
+            EntryPlayer, (_uuid.UUID(world["tid"]), _uuid.UUID(own_person_id))
+        )
+        assert person.club == "Riverside"
+        assert person.remarks == "Left-handed"
+    finally:
+        session.close()
 
 
 # ---- conflicts -----------------------------------------------------------

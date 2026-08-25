@@ -221,6 +221,10 @@ def accept(
             remarks=(remarks or "").strip()[:2000] or None,
             birth_year=birth_year,
         ),
+        # The accept form asks for a name, a gender and (optionally) a club
+        # — never remarks. A blank here means "this form did not ask", so it
+        # must not wipe what the person recorded on their own earlier entry.
+        blank_clears=False,
     )
     partner_submission = Submission(
         tournament_id=entry.tournament_id,
