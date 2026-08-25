@@ -650,6 +650,70 @@ def test_two_different_partners_are_not_a_conflict(client, world, mailbox):
     assert "pair_conflict" not in _entry(world["tid"], b["entry_id"]).pending_reasons
 
 
+def test_a_pair_conflict_still_only_flags_after_the_seam_builds_teams(
+    client, world, mailbox
+):
+    """NC 3 (P5 card) — invariant I4, re-asserted at the point where P5
+    made it easiest to break.
+
+    P5 taught the commit seam to act on ``partner_entry_id``. The
+    temptation that creates is to make the seam ADJUDICATE an ambiguous
+    pairing rather than decline it: two entrants naming the same partner
+    is precisely the case where a program can "helpfully" pick one. It
+    must not. Both halves still carry ``pair_conflict``, both entries are
+    still LIVE, the acceptance still returns 200, and the seam builds
+    nothing it was not certain about.
+    """
+    from db.session import SessionLocal
+    from entries.entries import commit_entries
+    from repositories.local import LocalRepository
+
+    _verified_entrant(client, mailbox, "alex@example.com")
+    first = _nominate(client, world, partner_email="sam@example.com", name="Alex Kim")
+    second = _nominate(client, world, partner_email="sam@example.com", name="Robin Ng")
+    _, token = first["invites"][0]
+
+    # Sam accepts one of the two. The ambiguity is not Sam's doing and the
+    # acceptance is not where it gets settled.
+    _verified_entrant(client, mailbox, "sam@example.com")
+    assert _accept(client, token).status_code == 200
+
+    for entry_id in (first["entry_id"], second["entry_id"]):
+        row = _entry(world["tid"], entry_id)
+        assert "pair_conflict" in row.pending_reasons
+        assert row.state == "pending"  # live, not withdrawn or rejected
+
+    _publish_and_confirm(world)
+
+    tid = uuid.UUID(world["tid"])
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        result = commit_entries(repo, tid)
+        document = repo.tournaments.get_by_id(tid).data or {}
+    finally:
+        session.close()
+
+    # A flag is not a refusal at the seam either: the conflicted halves are
+    # on the roster like everybody else, and the flag is still there for the
+    # operator afterwards.
+    assert result.skipped == []
+    assert {first["entry_id"], second["entry_id"]} <= {
+        c.entry_id for c in result.committed
+    }
+    for entry_id in (first["entry_id"], second["entry_id"]):
+        row = _entry(world["tid"], entry_id)
+        assert row.committed_player_id is not None
+        assert "pair_conflict" in row.pending_reasons
+
+    # Nothing was paired on. Backstop rather than the load-bearing claim:
+    # this file's workspace is a MEET, where the seam has no TEAM shape at
+    # all, so an ambiguous pairing has nothing to be resolved into here.
+    roster = [*(document.get("players") or []), *(document.get("bracketPlayers") or [])]
+    assert roster
+    assert [row for row in roster if row.get("type") == "TEAM"] == []
+
+
 # ---- the mail ------------------------------------------------------------
 
 
