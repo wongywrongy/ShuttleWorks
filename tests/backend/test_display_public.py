@@ -257,3 +257,136 @@ def test_invalidate_clears_every_namespace(client):
 
     assert response_cache.get(tid, response_cache.BRACKET) is None
     assert response_cache.get(tid, response_cache.DISPLAY_STATE) is None
+
+
+# ---- F-DM-30 / F-DM-71: the projection's EXACT key sets ---------------
+#
+# The public display plane is a strict allow-list projection, and until P1
+# it was an allow-list expressed as a Python tuple with a prose comment
+# naming its TS consumer. These pin the EXACT key sets — equality, not
+# subset, so an added field reddens here rather than reaching a public
+# screen unnoticed. Model: tests/backend/test_season_listing.py's ROW_KEYS.
+DISPLAY_STATE_KEYS = {
+    "config", "groups", "players", "matches", "schedule",
+    "scheduleIsStale", "standings",
+}
+MEET_STANDING_ROW_KEYS = {
+    "groupId", "groupName", "matchesPlayed", "wins", "losses",
+}
+# TournamentOut's field list — read off the ACTUAL response, so this pins
+# the wire rather than the declaration.
+DISPLAY_BRACKET_KEYS = {
+    "courts", "total_slots", "rest_between_rounds", "interval_minutes",
+    "start_time", "events", "participants", "play_units", "assignments",
+    "results",
+}
+
+
+def _put_meet_state_with_operator_material(client, tid: str) -> None:
+    """A blob carrying every projected field PLUS operator-only material,
+    with finished, scored cross-group pool play (crib of
+    ``test_tournaments.py::_meet_state_with_pool_play``)."""
+    import uuid as _uuid
+
+    state = {
+        "version": 2,
+        "config": {
+            "tournamentName": "TV Night",
+            "intervalMinutes": 30, "dayStart": "09:00", "dayEnd": "17:00",
+            "breaks": [], "courtCount": 4, "defaultRestMinutes": 30,
+            "freezeHorizonSlots": 0,
+        },
+        "groups": [
+            {"id": "g1", "name": "Riverside"},
+            {"id": "g2", "name": "Lakeside"},
+        ],
+        "players": [
+            {"id": "p1", "name": "Alice", "groupId": "g1", "availability": []},
+            {"id": "p2", "name": "Bob", "groupId": "g2", "availability": []},
+        ],
+        "matches": [
+            {"id": "m1", "sideA": ["p1"], "sideB": ["p2"], "durationSlots": 1},
+        ],
+        "schedule": None,
+        "scheduleIsStale": False,
+        # operator-only material — must never reach the public wire
+        "scheduleVersion": 3,
+        "scheduleHistory": [],
+        "planFinalized": True,
+        "bracketPlayers": [],
+    }
+    assert client.put(
+        f"/tournaments/{tid}/state", json=state, headers=CSRF
+    ).status_code == 200
+
+    from db.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        LocalRepository(session).match_states.upsert(
+            _uuid.UUID(tid),
+            "m1",
+            {"status": "finished", "score_side_a": 21, "score_side_b": 15},
+        )
+    finally:
+        session.close()
+
+
+def test_display_state_key_set_is_exact(client, workspace):
+    """A blob carrying EVERY projected field plus operator-only material:
+    the response is exactly the seven projected keys, no more and no fewer."""
+    tid, token = workspace
+    _put_meet_state_with_operator_material(client, tid)
+
+    client.cookies.clear()
+    body = client.get(f"/display/{token}/state").json()
+    assert set(body) == DISPLAY_STATE_KEYS
+
+
+def test_display_state_standings_rows_are_the_meet_grain(client, workspace):
+    """The one grain the public board sees is groupId (a school), and its
+    row keys are exactly MeetStandingRowDTO's — not the participant grain,
+    not a superset picked up from the blob."""
+    tid, token = workspace
+    _put_meet_state_with_operator_material(client, tid)
+
+    client.cookies.clear()
+    rows = client.get(f"/display/{token}/state").json()["standings"]
+    assert rows, "fixture must produce at least one standings row"
+    for row in rows:
+        assert set(row) == MEET_STANDING_ROW_KEYS
+
+
+def test_display_bracket_key_set_is_the_serialized_session(client, workspace):
+    """``/display/{token}/bracket`` returns the same projection the
+    viewer-gated ``GET /bracket`` does. Pinning its top-level key set is what
+    makes the response_model added in P1 provably a no-op on the wire."""
+    tid, token = workspace
+    assert client.post(
+        f"/tournaments/{tid}/bracket",
+        json={
+            "courts": 2,
+            "total_slots": 64,
+            "rest_between_rounds": 1,
+            "interval_minutes": 30,
+            "time_limit_seconds": 2.0,
+            "events": [
+                {
+                    "id": "MS",
+                    "discipline": "Mens Singles",
+                    "format": "se",
+                    "participants": [
+                        {"id": "s1", "name": "Seed1"},
+                        {"id": "s2", "name": "Seed2"},
+                    ],
+                    "duration_slots": 1,
+                }
+            ],
+        },
+        headers=CSRF,
+    ).status_code == 200
+
+    client.cookies.clear()
+    body = client.get(f"/display/{token}/bracket").json()
+    assert set(body) == DISPLAY_BRACKET_KEYS
