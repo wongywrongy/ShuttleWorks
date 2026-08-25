@@ -21,10 +21,12 @@ The row shape is ``core.schemas.MeetStandingRowDTO`` — the wire DTO itself,
 not a private mirror of it (SP-DM-3 P1, F-DM-26: standings was declared nine
 times in two grains). This module owns the *computation*; the kernel owns the
 *shape*, because ``TournamentStateDTO`` embeds it and the kernel may not
-import a domain (see ``apps/api/.importlinter``, kernel-direction). Importing
-the kernel costs this module nothing it did not already have: ``core.schemas``
-reaches pydantic and ``core.limits`` and nothing else, so the "pure, no
-DB/session" promise above still holds.
+import a domain (see ``apps/api/.importlinter``, kernel-direction). The kernel
+import is session-free — ``core.schemas`` is model *definitions*, and defining
+a model opens no DB session — but it is not import-free: ``core.schemas`` also
+reaches ``core.time_utils`` and, via ``core.constants``, the SQLAlchemy model
+module ``db.models``. The "pure, no DB/session" promise above is about this
+function's *behavior*, not about its import reach.
 
 This function is pure (no DB/session) so it's cheaply unit-testable; the
 ``/tournaments/{id}/state`` route adapts ORM rows into the plain-dict shapes
