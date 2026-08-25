@@ -15,6 +15,8 @@ import type { BracketPlayerDTO } from '../../api/dto';
 import { Button } from '@scheduler/design-system';
 import { EventPicker, type EventPickerOption } from '../../components/control-plane';
 import { EYEBROW_CLASS } from '../../lib/utils';
+import { teamName } from './bracketLabels';
+import { nextTeamId } from './rosterEvents';
 
 /** R-DM-2(a): the roster player already holds the person key, so a pick that
  *  drops it commits a NULL-keyed `bracket_participants` row for somebody the
@@ -30,7 +32,14 @@ export interface PickedSingle {
 export interface PickedPair {
   id: string;
   name: string;
-  members: [string, string];
+  /** The two members of a pair this picker formed, or of a team the entries
+   *  commit seam built. ABSENT for a row the two-step picker cannot
+   *  represent — a singleton left in a doubles draw by a commit made before
+   *  F-DM-13 widened `BD` from singles to doubles. Those ride through
+   *  verbatim rather than being reshaped into a team, which would be the
+   *  picker deciding something; commit replaces the list, so dropping them
+   *  would delete real entrants. */
+  members?: string[];
   /** A team row carries ONE key, and it is the nominating player's — the
    *  same half `members[0]` names. */
   entryPlayerId?: string;
@@ -41,6 +50,14 @@ interface Props {
   eventId: string;
   players: BracketPlayerDTO[];
   initialIds: string[];
+  /** The doubles seed (debt-log.md:96). Commit REPLACES the event's
+   *  participant list, so a doubles picker that opens empty deletes every
+   *  team already entered the moment one new pair is saved — and from
+   *  SP-DM-3 P5 those are the teams the entries commit seam built from two
+   *  humans' agreement. Ignored by the singles branch, which seeds from
+   *  `initialIds` (a doubles seed cannot: its ids are TEAM ids while the
+   *  list and its `unavailable` set are keyed on PLAYER ids). */
+  initialPairs: PickedPair[];
   onCommit: (picks: PickedSingle[] | PickedPair[]) => void;
   onCancel: () => void;
 }
@@ -75,6 +92,7 @@ export function ParticipantPicker({
   eventId,
   players,
   initialIds,
+  initialPairs,
   onCommit,
   onCancel,
 }: Props) {
@@ -92,6 +110,7 @@ export function ParticipantPicker({
     <DoublesPicker
       eventId={eventId}
       players={players}
+      initialPairs={initialPairs}
       onCommit={onCommit as (picks: PickedPair[]) => void}
       onCancel={onCancel}
     />
@@ -154,20 +173,25 @@ function SinglesPicker({
 function DoublesPicker({
   eventId,
   players,
+  initialPairs,
   onCommit,
   onCancel,
 }: {
   eventId: string;
   players: BracketPlayerDTO[];
+  initialPairs: PickedPair[];
   onCommit: (picks: PickedPair[]) => void;
   onCancel: () => void;
 }) {
   const [step, setStep] = useState<'A' | 'B'>('A');
   const [pickedA, setPickedA] = useState<BracketPlayerDTO | null>(null);
-  const [pairs, setPairs] = useState<PickedPair[]>([]);
+  const [pairs, setPairs] = useState<PickedPair[]>(initialPairs);
 
   // Already paired (either step) plus, on step B, the player chosen for A.
-  const unavailable = new Set(pairs.flatMap((pair) => pair.members));
+  // A memberless row is a singleton, and ITS id is the player id — without
+  // the fallback one save could enter the same human twice, once as a
+  // PLAYER row and once inside a new team.
+  const unavailable = new Set(pairs.flatMap((pair) => pair.members ?? [pair.id]));
   if (step === 'B' && pickedA) unavailable.add(pickedA.id);
 
   const pick = (id: string | null) => {
@@ -182,8 +206,10 @@ function DoublesPicker({
     setPairs((arr) => [
       ...arr,
       {
-        id: `${eventId}-T${arr.length + 1}`,
-        name: `${pickedA.name} / ${p.name}`,
+        // Max-suffix + 1, not sequence position: the list now opens seeded,
+        // so a draw holding only `XD-T2` would otherwise mint a second one.
+        id: nextTeamId(eventId, arr),
+        name: teamName(pickedA.name, p.name),
         members: [pickedA.id, p.id],
         ...(pickedA.entryPlayerId != null ? { entryPlayerId: pickedA.entryPlayerId } : {}),
       },

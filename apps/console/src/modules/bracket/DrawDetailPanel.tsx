@@ -69,10 +69,28 @@ export function DrawDetailPanel({
           mode={isDoubles ? 'doubles' : 'singles'}
           eventId={ev.id}
           players={players}
-          // Commit REPLACES the event's participant list, so the singles
-          // picker has to open holding what is already entered: seeded with
-          // [] it silently dropped everyone the operator didn't re-tick.
-          initialIds={isDoubles ? [] : entered.map((p) => p.id)}
+          // Commit REPLACES the event's participant list, so BOTH pickers
+          // have to open holding what is already entered: seeded with [] they
+          // silently drop everyone the operator didn't re-pick. The seeds
+          // differ because the key spaces do — `initialIds` is player ids for
+          // the singles list, `initialPairs` whole rows for the doubles one
+          // (debt-log.md:96).
+          initialIds={entered.map((p) => p.id)}
+          initialPairs={
+            isDoubles
+              ? entered.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  // Verbatim, both of them: null→absent is the wire's idiom
+                  // for "no value", and a row whose member count this
+                  // two-step picker can't represent still belongs to the
+                  // draw. Reshaping or filtering it would be the picker
+                  // deciding something.
+                  ...(p.members ? { members: p.members } : {}),
+                  ...(p.entryPlayerId != null ? { entryPlayerId: p.entryPlayerId } : {}),
+                }))
+              : []
+          }
           onCommit={onCommitPicks}
           onCancel={onClose}
         />

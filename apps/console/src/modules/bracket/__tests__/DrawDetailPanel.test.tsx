@@ -24,6 +24,37 @@ const players = [
   { id: 'p-ben', name: 'Ben Carter' },
 ];
 
+/** Enough free names that a doubles fixture can hold entered teams AND
+ *  still leave two players for the operator to pair by hand. */
+const roster = [
+  ...players,
+  { id: 'p-cara', name: 'Cara Diaz' },
+  { id: 'p-dan', name: 'Dan Osei' },
+  { id: 'p-eve', name: 'Eve Novak' },
+  { id: 'p-fin', name: 'Fin Wallace' },
+];
+
+/** A doubles draw already holding `participants`. */
+const doublesEvent = (
+  id: string,
+  discipline: string,
+  participants: unknown[],
+): BracketEventDTO =>
+  ({
+    ...ev,
+    id,
+    discipline,
+    participant_count: participants.length,
+    participants,
+  }) as unknown as BracketEventDTO;
+
+/** Form the one pair the roster always leaves free, then save. */
+const pairAlexAndBen = () => {
+  fireEvent.click(screen.getByRole('radio', { name: /Alex Tan/ }));
+  fireEvent.click(screen.getByRole('radio', { name: /Ben Carter/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Save pairs$/i }));
+};
+
 beforeEach(() => {
   onClose.mockReset();
   onCommitPicks.mockClear();
@@ -63,13 +94,16 @@ describe('DrawDetailPanel', () => {
   // `bracket_participants` row like any other, so it has to carry the
   // nominating player's key — the same half `members[0]` names.
   it('carries the nominating player entryPlayerId onto a synthesized team', async () => {
-    const md = { ...ev, id: 'MD', discipline: 'MD' } as BracketEventDTO;
+    // Empty on purpose: the fixture used to inherit `ev`'s singles
+    // participant, which was inert only while the doubles picker threw the
+    // draw's existing rows away. Now that it opens holding them, an
+    // inherited row would ride into this commit and blur what the pin is
+    // about — the key on the team the picker SYNTHESIZES.
+    const md = doublesEvent('MD', 'MD', []);
     render(
       <DrawDetailPanel ev={md} players={players} onClose={onClose} onCommitPicks={onCommitPicks} />,
     );
-    fireEvent.click(screen.getByRole('radio', { name: /Alex Tan/ }));
-    fireEvent.click(screen.getByRole('radio', { name: /Ben Carter/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^Save pairs$/i }));
+    pairAlexAndBen();
     await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
     expect(onCommitPicks.mock.calls[0][0]).toEqual([
       {
@@ -110,43 +144,124 @@ describe('DrawDetailPanel', () => {
     expect(screen.getByText(/Pick participants \(1\)/i)).toBeInTheDocument();
   });
 
-  it('TODAY drops every existing team when a doubles pair is committed', async () => {
-    /* debt-log.md:96, characterized before SP-DM-3 P5 Task 6 fixes it.
-       Commit REPLACES the event's participant list. The singles picker was
-       taught to open holding what is already entered; the doubles half
-       never was — `DrawDetailPanel.tsx:74` hands it a literal `[]` and
-       `ParticipantPicker.tsx:92-98` does not forward `initialIds` at all.
-       So an operator with four teams entered who forms one new pair saves
-       ONE team. EXPECTED TO CHANGE IN TASK 6. */
-    const roster = [
-      ...players,
-      { id: 'p-cara', name: 'Cara Diaz' },
-      { id: 'p-dan', name: 'Dan Osei' },
-      { id: 'p-eve', name: 'Eve Novak' },
-      { id: 'p-fin', name: 'Fin Wallace' },
-    ];
-    const xd = {
-      ...ev,
-      id: 'XD',
-      discipline: 'XD',
-      participant_count: 2,
-      participants: [
-        { id: 'XD-T1', name: 'Cara Diaz / Dan Osei', members: ['p-cara', 'p-dan'] },
-        { id: 'XD-T2', name: 'Eve Novak / Fin Wallace', members: ['p-eve', 'p-fin'] },
-      ],
-    } as unknown as BracketEventDTO;
+  /* THE FLIP of `TODAY drops every existing team when a doubles pair is
+     committed` (characterized at 8ded73c5), closing debt-log.md:96.
+     Commit REPLACES the event's participant list, so a picker that opens
+     empty is a delete button wearing a save label — and from P5 onward the
+     rows it deletes are the ones the entries commit seam built from two
+     humans' agreement. */
+  const twoTeams = [
+    { id: 'XD-T1', name: 'Cara Diaz / Dan Osei', members: ['p-cara', 'p-dan'] },
+    { id: 'XD-T2', name: 'Eve Novak / Fin Wallace', members: ['p-eve', 'p-fin'] },
+  ];
+
+  it('opens holding the teams already entered in the draw', () => {
     render(
-      <DrawDetailPanel ev={xd} players={roster} onClose={onClose} onCommitPicks={onCommitPicks} />,
+      <DrawDetailPanel
+        ev={doublesEvent('XD', 'XD', twoTeams)}
+        players={roster}
+        onClose={onClose}
+        onCommitPicks={onCommitPicks}
+      />,
     );
+    expect(screen.getByText('Cara Diaz / Dan Osei')).toBeInTheDocument();
+    expect(screen.getByText('Eve Novak / Fin Wallace')).toBeInTheDocument();
+    // Already-paired members are unpickable — the same `unavailable` set
+    // that has always guarded pairs formed in this sitting.
+    expect(screen.getByRole('radio', { name: /Cara Diaz/ })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: /Fin Wallace/ })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: /Alex Tan/ })).not.toBeDisabled();
+    // The next pair is the THIRD, not the first.
+    expect(screen.getByText(/Pick player A \(pair 3\)/i)).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('radio', { name: /Alex Tan/ }));
-    fireEvent.click(screen.getByRole('radio', { name: /Ben Carter/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^Save pairs$/i }));
-
+  it('adds a new pair to the existing ones rather than replacing them', async () => {
+    render(
+      <DrawDetailPanel
+        ev={doublesEvent('XD', 'XD', twoTeams)}
+        players={roster}
+        onClose={onClose}
+        onCommitPicks={onCommitPicks}
+      />,
+    );
+    pairAlexAndBen();
     await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
     const picks = onCommitPicks.mock.calls[0][0];
-    expect(picks).toHaveLength(1);
-    expect(picks[0].members).toEqual(['p-alex', 'p-ben']);
+    expect(picks).toHaveLength(3);
+    expect(picks.slice(0, 2)).toEqual(twoTeams);
+    expect(picks[2].members).toEqual(['p-alex', 'p-ben']);
+  });
+
+  it('numbers a new team past the highest existing suffix', async () => {
+    /* `nextTeamId` (rosterEvents.ts:136) already generalizes the picker's
+       `{eventId}-T{n}` rule to max-suffix + 1 so a removed pair's number is
+       never reused. Seeding from existing teams is what makes that
+       generalization reachable from this surface for the first time: with
+       only T2 left, sequence numbering would mint a SECOND T2. */
+    render(
+      <DrawDetailPanel
+        ev={doublesEvent('XD', 'XD', [twoTeams[1]])}
+        players={roster}
+        onClose={onClose}
+        onCommitPicks={onCommitPicks}
+      />,
+    );
+    pairAlexAndBen();
+    await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
+    expect(onCommitPicks.mock.calls[0][0][1].id).toBe('XD-T3');
+  });
+
+  it('keeps a seam-built team whose id is not the picker numbering', async () => {
+    /* The commit seam mints `team-{uuidA}-{uuidB}` (entries/entries.py
+       ::team_id) — deterministic, because that seam is re-runnable. It does
+       NOT match `{eventId}-T{n}`, so the seed must carry ids through
+       verbatim rather than re-deriving them. */
+    const seamTeam = {
+      id: 'team-11111111-1111-1111-1111-111111111111-22222222-2222-2222-2222-222222222222',
+      name: 'Cara Diaz / Dan Osei',
+      members: ['p-cara', 'p-dan'],
+      entryPlayerId: 'ep-cara',
+    };
+    render(
+      <DrawDetailPanel
+        ev={doublesEvent('XD', 'XD', [seamTeam])}
+        players={roster}
+        onClose={onClose}
+        onCommitPicks={onCommitPicks}
+      />,
+    );
+    pairAlexAndBen();
+    await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
+    const picks = onCommitPicks.mock.calls[0][0];
+    expect(picks[0]).toEqual(seamTeam);
+    // No `-T` suffix to beat, so the hand-added pair starts the numbering.
+    expect(picks[1].id).toBe('XD-T1');
+  });
+
+  it('keeps a singleton entered in a doubles draw through a re-save', async () => {
+    /* F-DM-13 widened `BD` from singles to doubles (`isDoublesCode`), so a
+       BD draw whose entrants were committed as PLAYER rows now opens the
+       DOUBLES picker. Those rows are not pairs and this two-step picker
+       cannot re-form them — but commit replaces the list, so dropping them
+       from the seed would delete real entrants on the next save. They ride
+       through verbatim; reshaping them into teams would be the picker
+       deciding something. */
+    const bd = doublesEvent('BD', 'BD', [
+      { id: 'p-cara', name: 'Cara Diaz' },
+      { id: 'p-dan', name: 'Dan Osei', entryPlayerId: 'ep-dan' },
+    ]);
+    render(
+      <DrawDetailPanel ev={bd} players={roster} onClose={onClose} onCommitPicks={onCommitPicks} />,
+    );
+    // A carried singleton's own id IS its player id, so it must block that
+    // player too — otherwise one save enters Cara twice.
+    expect(screen.getByRole('radio', { name: /Cara Diaz/ })).toBeDisabled();
+    pairAlexAndBen();
+    await vi.waitFor(() => expect(onCommitPicks).toHaveBeenCalledTimes(1));
+    const picks = onCommitPicks.mock.calls[0][0];
+    expect(picks).toHaveLength(3);
+    expect(picks[0]).toEqual({ id: 'p-cara', name: 'Cara Diaz' });
+    expect(picks[1]).toEqual({ id: 'p-dan', name: 'Dan Osei', entryPlayerId: 'ep-dan' });
   });
 
   it('groups the roster by initial so a long list is navigable', () => {

@@ -130,6 +130,16 @@ export function disciplineLabel(discipline: string | null | undefined): string {
   return DISCIPLINE_NAMES[discipline] ?? discipline;
 }
 
+/** The console's one pair-label mint. Matches the backend's
+ *  `entries/entries.py::team_name` separator so a draw containing both a
+ *  seam-built team and a hand-added one renders one spelling of the idea.
+ *  The DECODE direction — `split(' / ')` and positional zip — is P6's to
+ *  delete (`bracketMigration.ts:41-53`); this is the mint, and it stays
+ *  because director manual pairing stays (R-DM-4). */
+export function teamName(a: string, b: string): string {
+  return `${a} / ${b}`;
+}
+
 export function sideLabel(
   side: string[] | null,
   slot: {

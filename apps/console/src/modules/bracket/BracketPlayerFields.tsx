@@ -28,7 +28,7 @@ import {
   toUpsertParticipant,
   type BadgeEntry,
 } from './rosterEvents';
-import { disciplineLabel } from './bracketLabels';
+import { disciplineLabel, teamName } from './bracketLabels';
 import { EYEBROW_CLASS } from '../../lib/utils';
 import { isDoublesCode } from '../../lib/doubles';
 
@@ -257,7 +257,7 @@ function EventTypeEditor({
         // ParticipantPicker's synthesis rules: `${eventId}-T{n}` id,
         // "A / B" display name, member slugs in pick order.
         id: nextTeamId(ev.id, wireParticipants),
-        name: `${player.name} / ${partner.name}`,
+        name: teamName(player.name, partner.name),
         members: [player.id, partner.id],
         // A team row carries ONE key, and it is the nominating player's —
         // the same half `members[0]` names.
