@@ -26,7 +26,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | **DONE 2026-08-25** — `9e81ca68`..branch tip (incl. final-review fix wave `f94c85ce`+`4f049a45`), final review "Ready to merge, with fixes" → fixes landed and re-reviewed clean — **merged to main 2026-08-25** (fast-forward, Kyle's standing instruction). Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | **DONE 2026-08-25** — `637ea8df`..branch tip on `dm3/p6-person-demotion` (six tasks, each reviewed clean after at most one fix round), final whole-branch review **"Ready to merge: Yes", 0 Critical / 0 Important** — **merged to main 2026-08-25** (fast-forward, Kyle's standing merge-and-proceed instruction) |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
-| 9 | P9 — cosmetic sweep | — | S | **DONE 2026-08-25** — `b5f9e298`..`187b3dd9` plus this closing ledger commit, on `dm3/p9-cosmetic-sweep` (four tasks, T1/T2 reviewed clean, T3 clean after one fix round; this closing task's review follows it). **Small because the sweep is mostly not sweepable** — 22 cited · 3 already closed · 7 swept · **9 routed out** · 3 refused; see the P9 session-log section |
+| 9 | P9 — cosmetic sweep | — | S | **DONE 2026-08-25** — `b5f9e298`..branch tip on `dm3/p9-cosmetic-sweep` (four tasks, each reviewed clean; T3 one fix round, T4 two plus the final fix wave), final whole-branch review **"Ready to merge: Yes", 0 Critical / 0 Important** — **merged to main 2026-08-25** (fast-forward, Kyle's standing merge-and-proceed instruction). **Small because the sweep is mostly not sweepable** — 22 cited · 3 already closed · 7 swept · **9 routed out** · 3 refused; see the P9 session-log section |
 | 10 | P8 — PlayerProfile full v1 | R-DM-3 (c) | M | **BLOCKED — owner must supply the R15 text** |
 | 11 | Meet-roster extraction (R-DM-2 (c), ratified) | R-DM-2 | L | pending — committed follow-on after P4 |
 
@@ -1014,16 +1014,34 @@ count gates name their expected survivors individually, so none of them is writt
 unreachable 0. The entrant gate's residue was deliberately set at **3, not 0** for that reason — a
 gate a correct citation cannot pass is a gate that punishes the evidence.
 
-**A gate that reads GREEN over 29 live instances — new finding F-DM-78, and the id is minted here
+**A gate that reads GREEN over 63 live instances — new finding F-DM-78, and the id is minted here
 because the audit's sequence ends at F-DM-77.** T3 found that the F-DM-59 gate **under-measures**.
-It is right about its own residue; the defect is its pattern's **scope**. **29 further stale
-pre-SP-REORG-1 citations carry no `backend/` prefix and are invisible to it** — verified by this
-task, not relayed: **25** bare `api/*.py`, **1** `app/form_csrf.py` (`formCsrf.server.ts:20`), and
-**3** `frontend/src/…`. All three roots were confirmed **nonexistent** (`apps/api/src/api`,
-`apps/api/src/app`, `frontend/`). **A gate that reads green over 29 live instances is worse than no
-gate, because it certifies the opposite of the truth.** Logged with its decomposition, the three
-patterns, and the warning that any widened gate must not count the three correct
-`tests/backend/unit/` citations as stale. S, mechanical — the same repoint T3 Step 1 already did.
+It is right about its own residue; the defect is its pattern's **scope**. **63 stale
+pre-SP-REORG-1 citations are invisible to it** — measured over the whole tier by the final fix
+wave, not relayed: **32** in `app/`+`public/` (25 bare `api/*.py`, 3 `services/*.py`, 3
+`frontend/src/…`, 1 `app/form_csrf.py`) and **31** in `tests/` (23, 3, 2 bare `app/config.py`, 2
+`backend/app/…`, 1 `services/`). All roots confirmed **nonexistent** (`apps/api/src/api`,
+`apps/api/src/app`, `apps/api/src/services`, `frontend/`). **A gate that reads green over 63 live
+instances is worse than no gate, because it certifies the opposite of the truth.**
+
+**The row under-measured itself, twice, and that is the finding's real lesson.** Its first figure
+was 29 — wrong on **both** axes. Wrong on *directories*: the decomposition covered `app/` and
+`public/` but never `tests/`, where one of the misses is the **test-file twin of the very citation
+T3 repaired** (`apiFetch.server.test.ts:82` still names `backend/app/error_codes.py` while its
+source sibling was repointed), so the sweep fixed one half of a pair and the gate could not see the
+other. Wrong on *patterns*: running **all** of them over the widened scope — rather than only the
+one the review named, which would have repeated this row's own failure inside the row describing
+it — surfaced a **fifth stale root nobody had recorded**, `services/*.py`. **Eight** citations are
+excluded with stated reasons rather than dropped, including four stubbed error payloads that
+deliberately imitate a leaked server string (`'IntegrityError at /app/api/entries_json.py:214'`)
+inside negative controls asserting the leak never reaches the client — repointing those would make
+the fixtures *wrong*. S, mechanical — the same repoint T3 Step 1 already did.
+
+**The generalisation, third iteration of the same mistake:** for a citation gate, the default scope
+is **every directory the tier owns**, not just its source directories. A gate scoped to `app/`
+while `tests/` holds the same rot reads green forever. It pairs with this section's other rule —
+both are the same error at different altitudes: **trusting a description of the tree instead of the
+tree.**
 
 **The program-level pattern — the FIFTH gate episode across FOUR consecutive slices: a gate
 pattern in this program is unreliable until it has been RUN against the tree.** P4, P5 and P6 each
@@ -1138,3 +1156,24 @@ It is **program-scale and R-DM-5-gated** — do not start it without reading P6'
 decision** before anyone can build on them (F-DM-55 the migration, F-DM-47 the `dto.ts` direction
 ruling, F-DM-25 the key-mapping question) — they are unassigned on purpose, exactly like P6's
 adoption-divergence and orphan-row pair.
+
+**Final whole-branch review (`b86162e2`..`e645aaca`): "Ready to merge: Yes", 0 Critical, 0
+Important.** It audited the triage arithmetic independently, confirmed every routed-out finding is
+verifiably untouched in code (not partially swept), and reproduced all five deletion gates at HEAD.
+The merge-level question no task-scoped review could answer — whether a type narrowed on one tier
+while another tier can still emit the excluded value — was answered **no**: the narrowed entrant
+unions are closed **at their emitters** by code this branch never touched (`_ENTRY_STATE`'s
+fail-calm default, `_card_status`'s four returns, the `Literal` write path, the `FormatId`
+validator), and `kindLabel`'s `?? kind` runtime fallback survives, so even an off-registry wire
+value still renders exactly as before. Zero runtime lines changed on the public entrant tier.
+Its three Minors were docs-accuracy; two were taken (F-DM-78's scope, this row's commit range) and
+the third — `row_to_dto`'s brief-dictated "four importers" phrasing, defensible as an import-site
+count but loose as a module count — stays deferred for whatever next touches that file.
+
+**The strongest single piece of evidence that this slice changed nothing:** `make check` returns
+**every count identical to P6's baseline** — pytest 1923 passed / 66 skipped, console vitest 204
+files / 1840 tests, entrant 37 / 760, depcruise 16w/0e, import-linter 15 kept / 0 broken. **P9
+added zero tests**, which is exactly right for a sweep that is not allowed to change behaviour.
+
+`dm3/p9-cosmetic-sweep` was **merged to `main` 2026-08-25** (fast-forward, per Kyle's standing
+merge-and-proceed instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call).
