@@ -21,10 +21,13 @@ Three things this module is written around:
   *explicitly* and assert it is 0 — deterministic either way. FK **presence**
   is asserted separately, by reflection.
 - **``batch_alter_table`` REBUILDS the table from reflection.** Four tables are
-  rebuilt here, every one of them with foreign keys. A constraint the
-  reflection loses would be invisible everywhere else in the suite, so the FKs
-  are compared by shape (never by name — SQLite auto-names unnamed
-  constraints) before and against a known list.
+  rebuilt here; anything the reflection loses — a foreign key, an index, a
+  server default — would be invisible everywhere else in the suite, which
+  builds its schema with ``create_all`` from the models. So the whole shape of
+  those four tables is snapshotted at the previous revision and compared
+  either side of the migration, in both directions. Derived, not hand-listed:
+  the first version of this file listed the FKs by hand and missed
+  ``tournaments.org_id`` -> ``orgs`` outright.
 - **A downgrade that does not run is not a downgrade.** The round-trip test
   goes head → ``y9e4f0a2b7c8`` → head, which is the only thing that catches a
   ``drop_constraint`` that batch mode cannot resolve.
@@ -70,34 +73,9 @@ CHECKS = (
     ),
 )
 
-#: Shape-compared FKs that must survive the four batch rebuilds:
-#: (table, constrained columns, referred table, referred columns).
-SURVIVING_FKS = (
-    ("matches", ("tournament_id",), "tournaments", ("id",)),
-    ("entries", ("tournament_id",), "tournaments", ("id",)),
-    # All three of ``entries``' composite spine pointers — the whole set, so a
-    # key the rebuild drops cannot hide behind the two most obvious ones.
-    (
-        "entries",
-        ("entry_event_id", "tournament_id"),
-        "entry_events",
-        ("id", "tournament_id"),
-    ),
-    (
-        "entries",
-        ("submission_id", "tournament_id"),
-        "submissions",
-        ("id", "tournament_id"),
-    ),
-    (
-        "entries",
-        ("entry_player_id", "tournament_id"),
-        "entry_players",
-        ("id", "tournament_id"),
-    ),
-    ("tournament_members", ("tournament_id",), "tournaments", ("id",)),
-    ("tournament_members", ("user_id",), "users", ("id",)),
-)
+#: The four tables ``z0f5a1b3c9d2`` rebuilds. Everything they carried before
+#: the rebuild has to still be there after it — see the shape snapshot below.
+REBUILT_TABLES = ("tournaments", "matches", "entries", "tournament_members")
 
 
 @pytest.fixture
@@ -136,14 +114,41 @@ def _upgraded(alembic_cfg):
     return sa.create_engine(url)
 
 
-def _fk_shapes(engine, table):
+def _schema_shapes(engine):
+    """Everything ``batch_alter_table`` could silently drop, per rebuilt table.
+
+    Derived from the live database rather than hand-listed: a hand-maintained
+    expectation is only as complete as whoever last edited it, and the first
+    version of this file missed ``tournaments.org_id`` -> ``orgs`` entirely,
+    leaving the one rebuilt table with a single FK at zero coverage.
+
+    Foreign keys are compared by SHAPE, never by name — SQLite auto-names
+    unnamed constraints, so the two sides would never agree on a label.
+    ``ondelete`` is part of the shape because a rebuild that kept the edge but
+    lost its RESTRICT would otherwise look identical.
+    """
+    inspector = sa.inspect(engine)
     return {
-        (
-            tuple(sorted(fk["constrained_columns"])),
-            fk["referred_table"],
-            tuple(sorted(fk["referred_columns"])),
-        )
-        for fk in sa.inspect(engine).get_foreign_keys(table)
+        table: {
+            "fks": {
+                (
+                    tuple(sorted(fk["constrained_columns"])),
+                    fk["referred_table"],
+                    tuple(sorted(fk["referred_columns"])),
+                    (fk.get("options") or {}).get("ondelete"),
+                )
+                for fk in inspector.get_foreign_keys(table)
+            },
+            "indexes": {
+                (ix["name"], tuple(ix["column_names"]), bool(ix.get("unique")))
+                for ix in inspector.get_indexes(table)
+            },
+            "defaults": {
+                (col["name"], col["default"])
+                for col in inspector.get_columns(table)
+            },
+        }
+        for table in REBUILT_TABLES
     }
 
 
@@ -238,18 +243,44 @@ def test_a_value_outside_the_vocabulary_is_refused(
         )
 
 
-def test_the_batch_rebuilds_kept_every_foreign_key(alembic_cfg):
+def test_the_batch_rebuilds_changed_nothing_but_the_checks(alembic_cfg):
     """``batch_alter_table`` rebuilds from reflection, and this revision
-    rebuilds four tables that all have foreign keys. A key the reflection
-    dropped would be invisible to every other suite, which builds its schema
-    with ``create_all`` from the models."""
-    engine = _upgraded(alembic_cfg)
+    rebuilds four tables. Anything the reflection loses — a foreign key, an
+    index, a server default — would be invisible to every other suite, which
+    builds its schema with ``create_all`` from the models.
 
-    for table, cols, referred, referred_cols in SURVIVING_FKS:
-        shapes = _fk_shapes(engine, table)
-        assert (
-            (cols, referred, referred_cols) in shapes
-        ), f"the batch rebuild dropped {table}.{cols} -> {referred}: {sorted(shapes)}"
+    So this compares the WHOLE shape of those four tables either side of the
+    migration, in both directions, instead of asserting a list someone has to
+    remember to extend."""
+    from alembic import command
+
+    cfg, url = alembic_cfg
+    command.upgrade(cfg, PREVIOUS_REVISION)
+    engine = sa.create_engine(url)
+    before = _schema_shapes(engine)
+
+    # Anti-vacuity: an empty snapshot would compare equal to an empty snapshot
+    # forever. One representative of each of the three kinds must be in there,
+    # and the FK is ``tournaments``' only one — the gap that made the
+    # hand-listed version of this test wrong.
+    assert (
+        ("org_id",),
+        "orgs",
+        ("id",),
+        "RESTRICT",
+    ) in before["tournaments"]["fks"]
+    assert (
+        "ix_matches_tournament_status",
+        ("tournament_id", "status"),
+        False,
+    ) in before["matches"]["indexes"]
+    assert ("kind", "'meet'") in before["tournaments"]["defaults"]
+
+    command.upgrade(cfg, "head")
+    assert _schema_shapes(engine) == before, "the upgrade rebuild lost something"
+
+    command.downgrade(cfg, PREVIOUS_REVISION)
+    assert _schema_shapes(engine) == before, "the downgrade rebuild lost something"
 
 
 def test_the_downgrade_runs_and_the_upgrade_runs_again(alembic_cfg):
