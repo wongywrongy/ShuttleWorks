@@ -1327,3 +1327,41 @@ R-DM-5/10/11 are ruled, P0 is merged, F-DM-25 is closed. It is still banded **L 
 with the standing instruction not to start it inside another program's window, and P6's closing
 note above is still the thing to read first. Its first deliverable is a phase plan authored against
 the then-current tree, not code. **P8 stays owner-blocked on the R15 text.**
+
+**CI on the pushed `main` is green** — all five jobs (frontend, entrant, backend, interaction smoke,
+compose parse) on run `32934664209` at `cd6d12b1`. Worth stating separately from `make check`:
+CI's interaction-smoke job runs the **full `npm run build`**, which `make check` never does.
+
+**P7's phase plan is authored** — `docs/history/superpowers/plans/2026-08-25-sp-dm-3-p7-event-key-and-meet-event.md`
+(`506ee53d`), against this tree, per the standing convention. It makes **two controller calls**:
+
+1. **P7 is three shippable slices, not one.** **P7a** (four `CheckConstraint`s, delete the two
+   `or "meet"` fallbacks, make a published `eventCode` unrenameable) is **S**, closes four of P7's
+   seven findings, carries one additive migration and adds **no UI and no wire-shape change**.
+   **P7b** (a Meet Event + the mapping) and **P7c** (server-side Meet lineup + the slot-assignment
+   surface) hold the design work and get their own plans at phase start. A single phase carrying all
+   of it is shippable only at the end, which the program's every-phase-ships rule forbids.
+2. **R-DM-11 means (b), so P7 does NOT re-key the public tier.** The P7 card's body still describes
+   option **(a)** — stable key, `eventCode` demoted to a label. R-DM-11 ruled **(b) now**, and P7b
+   giving Meet a real Event arguably fires (a)'s trigger, so the plan settles it on the ruling's own
+   rationale: **one constraint** versus **102 `eventCode` sites across 33 files** plus a redirect
+   story. The re-key stays deferred until a consumer needs the conversion — where F-DM-31/32 already
+   sit.
+
+**Measured for the plan, produced not predicted:** `CheckConstraint` in `apps/api/src` = **0**
+(F-DM-37 exactly true); `or "meet"` = **2** (`entries/entries.py:165`,
+`workspaces/workspace_signals.py:603`); `rankCounts` = **3** real sites once `__pycache__` is
+excluded; `eventCode`/`event_code` = **102 sites / 33 files**; alembic head **`y9e4f0a2b7c8`**; all
+four CHECK-target columns exist and are bare `String` (`tournaments.kind:123`, `entries.state:1566`,
+`matches.status:219`, `tournament_members.role:404`).
+
+**The plan also flags a place the card contradicts the code.** P7's **NC 3** wants an empty
+`rankCounts` to stop accepting every code; `entries/entries.py:481-491`'s docstring argues that
+acceptance is **deliberate** — refusing would make the seam unusable on an unconfigured workspace,
+"which is exactly when public entries arrive". Do not encode NC 3 as written. **P7b** decides it
+with Events as the vocabulary source; **P7a** does not touch it. And P5's Meet disconnect was
+re-verified in code rather than inherited: `_plan_meet` writes `ranks=["XD"]` while
+`expandRanks` emits `XD1..XDn`, **and** `groupId=event.code` puts every entrant of an event in one
+group while the generator only pairs across groups (`for j = i+1`). Two independent breaks; Meet
+match generation itself lives in `RegenerateMenu.tsx`, on the **client**, which is what makes P7c a
+port rather than an edit.
