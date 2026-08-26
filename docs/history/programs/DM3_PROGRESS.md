@@ -1275,3 +1275,55 @@ Meet half was cut: a Meet pair field would have had no reader.
   (`git check-ignore` is the mechanical test — the SDD working ledger is git-ignored scratch).
 - **R-DM-2(c) Meet-roster extraction** remains a committed follow-on **program**, not a slice.
 - **P8** stays owner-blocked on the R15 content definition.
+
+---
+
+## 2026-08-25 — SESSION: the push happened, and F-DM-25 is ruled
+
+**The gate is green, but it is green via a SPLIT run — say that, not "make check exit 0".** A
+single `make check` exited **2**, and the reason was environmental, not a failure: `ruff` is not on
+`PATH` in a bare bash shell (`process_begin: CreateProcess(NULL, ruff check …) failed`), so the
+target died at the first backend line. **The frontend half ran to completion inside that same run**
+and every count is identical to the P6/P9 baseline — console **204 files / 1840 tests**, entrant
+**37 / 760**, depcruise **16 warnings / 0 errors**, entrant depcruise **clean**, `tsc -b` clean.
+The three backend lines were then re-run with the repo `.venv` on `PATH`: `ruff` **"All checks
+passed!"**, import-linter **15 kept / 0 broken**, pytest **1923 passed / 66 skipped** in 806 s.
+Together those reconstitute the whole `check` target except `docs:freshness`, which the Makefile
+itself marks advisory (`Makefile:252`, "never fails the gate"). **Every count that means something
+matches the baseline**, which is the standard this program has used since P6 — count-identity, not
+an exit code. Worth recording because a pipeline's `$?` would have lied here: `pytest | tail` reports
+**tail's** status, so an exit code alone could not have carried this.
+
+**The push happened.** Kyle was asked the §2 question from the previous handoff verbatim — whether
+any of `healBracketRosterNames`'s three ruled consequences counts as "loss of functionality" — and
+answered **none of them**. `git push origin main` → `53b650a1..122458d8`, **99 commits** (the
+handoff said 98; its own commit was the 99th). `origin/main` and `main` now agree. **This closes the
+first action of the previous handoff.**
+
+**F-DM-25 is ruled, and the ruling is the design doc's own recommendation.** Kyle accepted: **keep
+all four workspace key kinds, declare the mapping, do not re-key.** The declaration is
+`docs/reference/workspace-keys.md` (commit `b841428f`), wired into the sidebar and gated by
+`npm run docs:build` — the dead-link gate, which passes. The debt-log row is struck and closed.
+
+**The page corrects the audit twice, and both corrections were produced by reading the tree.**
+Three of the audit's line anchors had drifted (`db/models.py:89`→`:88,91`, `display/display.py:111`
+no longer the token resolver — it is `:97`, `entries_json.py:536` is a DTO field, while the resolver
+that matters is `entries_public.py:102`). The substantive correction is the fourth key kind: the
+audit's *"the console never holds the key it is scoped by"* is **false as written**. The console
+does hold the uuid — in `uiStore.activeTournamentId` (`store/uiStore.ts:144-146`, URL-derived, set
+by `TournamentPage.tsx:69` and `useTournamentState.ts:381`, **not persisted**). What carries no id
+is the **data blob** (`api/dto.ts:27` `TournamentConfig`, `store/tournamentStore.ts:22`), which is
+scoped by a key it does not itself contain. That is a narrower and true claim, and it is the one the
+reference page makes. A bounded Boy-Scout fix rode along: `reference/repo-layout.md` named
+`apps/console/src/products/`, a directory that is `modules/` — the exact silent-rot class the debt
+log's own doc-freshness row describes.
+
+**Open rulings are now FIVE, not six.** D22 (gender on adoption), the adoption-path divergence, the
+orphan roster-blob row, F-DM-55 (the `match_states` migration) and F-DM-47 (may `api/dto.ts` name
+domain types) all stand unchanged. **F-DM-25 is off that list.**
+
+**Next.** **P7 is the only implementation slice left, and its scoping input is now answered** —
+R-DM-5/10/11 are ruled, P0 is merged, F-DM-25 is closed. It is still banded **L / program-scale**
+with the standing instruction not to start it inside another program's window, and P6's closing
+note above is still the thing to read first. Its first deliverable is a phase plan authored against
+the then-current tree, not code. **P8 stays owner-blocked on the R15 text.**
