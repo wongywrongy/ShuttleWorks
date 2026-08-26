@@ -44,7 +44,14 @@ from db.models import (
     EntryPlayer,
 )
 from repositories.local import LocalRepository
-from entries.entries import SkipReason, commit_entries, roster_id
+from core.limits import MAX_GROUPS
+from core.schemas import state_dto_from_document
+from entries.entries import (
+    _UNKNOWN_SCHOOL,
+    SkipReason,
+    commit_entries,
+    roster_id,
+)
 
 
 @pytest.fixture
@@ -759,6 +766,57 @@ def test_the_same_fixture_generates_nothing_under_the_pre_p7b_shape(repo, sessio
         ],
     }
     assert _generate_matches(bare_code) == []
+
+
+def test_more_distinct_clubs_than_the_group_cap_still_write_a_valid_document(
+    repo, session
+):
+    """The group list is DTO-bounded, and ``club`` is entrant-supplied.
+
+    ``TournamentStateDTO.groups`` is capped at ``MAX_GROUPS``
+    (``core/limits.py:98``) and ``club`` is free text typed on a public
+    entry page, where two spellings of one club are two clubs. ``_valid``
+    guards ``PlayerDTO`` and nothing guarded the group list, so past the
+    bound the commit SUCCEEDED and then poisoned the blob: ``GET /state``
+    still loads (stored values are not re-validated on read) while every
+    save 422s and ``state_dto_from_document`` raises in schedule proposals,
+    advisories and both backup paths. That is exactly the failure
+    ``_valid``'s own docstring exists to prevent — *"writing a player the
+    DTO rejects would poison the blob"* — reached through the one field it
+    did not guard.
+
+    **The assertion is that the document VALIDATES**, through the same
+    projection every real reader uses, not that the list is short: a
+    version that capped the list but still wrote something the DTO rejects
+    would sail past a count assertion.
+
+    Seat, do not refuse — every entrant keeps a roster row, in a group that
+    exists, and the operator has a visible re-assignment where a skip would
+    have lost them.
+    """
+    tid = _meet_workspace(repo)
+    ev = _entry_event(session, tid, code="MS")
+    for i in range(MAX_GROUPS + 5):
+        _entry(session, tid, ev, player_name=f"Player {i}", club=f"Club {i:03d}")
+
+    result = commit_entries(repo, tid)
+
+    assert len(result.committed) == MAX_GROUPS + 5, "seat, do not refuse"
+    assert result.skipped == []
+
+    document = repo.tournaments.get_by_id(tid).data
+    state_dto_from_document(document)  # the real gate: every reader does this
+
+    assert len(document["groups"]) == MAX_GROUPS
+    existing = {g["id"] for g in document["groups"]}
+    assert all(p["groupId"] in existing for p in document["players"]), (
+        "an overflowed entrant is seated, not orphaned into a group that "
+        "does not exist - which is how the Meet roster renders nobody"
+    )
+    assert _UNKNOWN_SCHOOL in [g["name"] for g in document["groups"]], (
+        "one slot is reserved for the bucket the overflow falls into, or "
+        "this loop spends every slot on clubs and starves its own fallback"
+    )
 
 
 def test_a_dangling_meet_event_id_is_skipped_and_reported_not_guessed(

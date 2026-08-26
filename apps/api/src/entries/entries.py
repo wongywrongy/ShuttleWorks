@@ -53,6 +53,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from core.limits import MAX_GROUPS
 from core.schemas import BracketPlayerDTO, PlayerDTO
 from db.models import Entry, EntryEvent, MeetEvent
 from repositories.local import LocalRepository
@@ -495,7 +496,7 @@ def _plan_meet(
             continue
         code = division.id if division is not None else event.code
 
-        row, school = _seat(players, school_ids, entry)
+        row, school, name = _seat(players, school_ids, entry)
         if row is not None:
             # The person is already on the roster from an earlier event.
             # ``ranks[]`` is where a meet player carries the events they are
@@ -508,6 +509,20 @@ def _plan_meet(
                 mutated = True
             planned.append((entry, row["id"]))
             continue
+
+        if school not in group_ids and not _room_for(groups, school_ids, name):
+            # ``club`` is free text an entrant types on a PUBLIC page, and
+            # two spellings of one club are two clubs — so minting one group
+            # per distinct spelling can run past ``MAX_GROUPS``, which the
+            # state DTO enforces. Writing past it commits fine and then
+            # poisons the blob for every reader (``_valid``'s own argument,
+            # reached through the field ``_valid`` does not cover).
+            #
+            # Seat, do not refuse. The entrant keeps a roster row in the
+            # bucket the operator can re-assign out of; a skip would lose
+            # somebody who entered correctly over somebody else's typing.
+            name = _UNKNOWN_SCHOOL
+            school = school_ids.get(name.casefold()) or _school_id(name)
 
         payload = {
             "id": _player_id(entry),
@@ -527,8 +542,7 @@ def _plan_meet(
             continue
 
         players.append(payload)
-        if school not in group_ids:
-            name = _school_name(entry)
+        if school not in group_ids and len(groups) < MAX_GROUPS:
             groups.append({"id": school, "name": name})
             group_ids.add(school)
             school_ids[name.casefold()] = school
@@ -574,23 +588,53 @@ def _school_id(name: str) -> str:
 
 def _seat(
     players: list, school_ids: dict, entry: Entry
-) -> tuple[Optional[dict], Optional[str]]:
-    """(this entry's existing roster row, the school it belongs in).
+) -> tuple[Optional[dict], Optional[str], str]:
+    """(this entry's existing roster row, the school it goes in, its name).
 
     An adopted row keeps ITS OWN ``groupId`` — the operator may have moved
     that player into a real school, and re-deriving it from the club would
     silently undo them.
     """
     adopted = _adoptable(players, entry)
+    name = _school_name(entry)
     if adopted is not None:
         row = next(
             (p for p in players if isinstance(p, dict) and p.get("id") == adopted),
             None,
         )
         if row is not None:
-            return row, row.get("groupId")
-    name = _school_name(entry)
-    return None, school_ids.get(name.casefold()) or _school_id(name)
+            return row, row.get("groupId"), name
+    return None, school_ids.get(name.casefold()) or _school_id(name), name
+
+
+def _room_for(groups: list, school_ids: dict, name: str) -> bool:
+    """May a new group row be minted for ``name``?
+
+    ``TournamentStateDTO.groups`` carries ``max_length=MAX_GROUPS``
+    (``core/limits.py:98``, 200), and ``max_length`` admits a list of
+    exactly 200 and rejects 201 — so the 200th slot is mintable and the
+    test is ``len(groups) < MAX_GROUPS``, not ``<=``.
+
+    **One slot is reserved for the ``Unassigned`` bucket while it does not
+    exist yet**, because that bucket is where the overflow is seated:
+    without the reservation this loop can spend all 200 slots on clubs and
+    then have nowhere to put the entrant it just declined a group to. The
+    reservation costs one club group on a workspace with 200 of them, which
+    is a workspace already past every scale this product is built for.
+
+    **The only other writer of ``groups`` is the operator's own blob
+    write**, which is validated against the same DTO and so cannot exceed
+    the bound either. A restored backup replays a document that was
+    validated when it was written. So the list this seam meets is at most
+    ``MAX_GROUPS`` long, and a list already AT the bound with no
+    ``Unassigned`` row is the one state the reservation cannot rescue —
+    the entrant is still seated and still committed, but their school row
+    does not exist until the operator frees a slot.
+    """
+    if name.casefold() == _UNKNOWN_SCHOOL.casefold():
+        return len(groups) < MAX_GROUPS
+    reserved = 0 if _UNKNOWN_SCHOOL.casefold() in school_ids else 1
+    return len(groups) < MAX_GROUPS - reserved
 
 
 def _valid(model, payload: dict, entry: Entry) -> bool:
