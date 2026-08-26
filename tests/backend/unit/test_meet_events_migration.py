@@ -50,6 +50,21 @@ REAL_RANK_COUNTS = {"BS": 20, "GS": 20, "BD": 11, "GD": 11, "XD": 11}
 BIG = "1" * 32
 NO_KEY = "2" * 32
 EMPTY = "3" * 32
+OUT_OF_RANGE = "4" * 32
+
+#: A count outside ``slot_count``'s int4 range is dropped by the backfill the
+#: same way ``_rank_counts`` drops it, because on Postgres an unbounded value
+#: fails the INSERT and takes the upgrade down. Negatives are IN range and
+#: stay: ``slot_count`` carries no CHECK by ruling.
+OUT_OF_RANGE_COUNTS = {
+    "MS": 3,
+    "NEG": -4,
+    "MAXI": 2**31 - 1,
+    "MINI": -(2**31),
+    "OVER": 2**31,
+    "UNDER": -(2**31) - 1,
+    "HUGE": 10**12,
+}
 
 
 def _db_path(url: str) -> str:
@@ -57,13 +72,16 @@ def _db_path(url: str) -> str:
 
 
 def _seed(url: str) -> None:
-    """Three workspaces, one per state ``rankCounts`` can be in on disk."""
+    """Four workspaces, one per state ``rankCounts`` can be in on disk."""
     conn = sqlite3.connect(_db_path(url))
     blobs = {
         BIG: {"config": {"tournamentName": "Junior League", "rankCounts": REAL_RANK_COUNTS}},
         # The workspace-create seed writes a config with no rankCounts key.
         NO_KEY: {"config": {"tournamentName": "Seeded"}},
         EMPTY: {"config": {"tournamentName": "Smoke", "rankCounts": {}}},
+        OUT_OF_RANGE: {
+            "config": {"tournamentName": "Restored", "rankCounts": OUT_OF_RANGE_COUNTS}
+        },
     }
     for tid, blob in blobs.items():
         conn.execute(
@@ -241,3 +259,29 @@ def test_the_revision_id_scheme_is_unambiguous_against_every_older_id():
     assert two_letter == ["aa"], prefixes
     assert MEET_EVENTS_REVISION.startswith("aa")
     assert len(MEET_EVENTS_REVISION) == 12
+
+
+def test_a_count_outside_int4_is_skipped_by_the_backfill_too(alembic_cfg):  # noqa: F811
+    """The backfill mirrors ``_rank_counts``, bound included.
+
+    Unbounded, the INSERT this backfill performs would raise ``DataError`` on
+    Postgres and take the whole ``upgrade`` down mid-flight on a tenant whose
+    config already holds such a count — nothing bounded the value before
+    P7b either. **SQLite cannot reproduce that failure** (arbitrary-width
+    integers), so what is asserted here is the mirror: the out-of-range codes
+    are absent and the in-range ones, negatives included, are kept.
+    """
+    from alembic import command
+
+    cfg, url = alembic_cfg
+    command.upgrade(cfg, PREVIOUS_REVISION)
+    _seed(url)
+    command.upgrade(cfg, MEET_EVENTS_REVISION)
+
+    engine = sa.create_engine(url)
+    assert {r.id: r.slot_count for r in _rows(engine, OUT_OF_RANGE)} == {
+        "MAXI": 2**31 - 1,
+        "MINI": -(2**31),
+        "MS": 3,
+        "NEG": -4,
+    }

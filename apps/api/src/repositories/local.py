@@ -133,7 +133,12 @@ def _rank_counts(payload: dict) -> dict:
     ``rankCounts`` key at all, so "missing" is a state real workspaces are
     in, not a signal to skip the sync. Junk entries are dropped rather than
     raised on: this runs inside the blob write, and a malformed count in a
-    restored backup must not make the write itself fail.
+    restored backup must not make the write itself fail. That promise is why
+    the count is bounded to **int4** as well as coerced: ``slot_count`` is an
+    ``Integer`` column, so on Postgres an out-of-range value raises
+    ``DataError`` *inside* the write and 500s a config save that used to
+    succeed. Negatives are kept — ``slot_count`` deliberately carries no
+    CHECK, so the bound narrows the range and never the vocabulary.
     """
     cfg = payload.get("config") if isinstance(payload.get("config"), dict) else None
     counts = cfg.get("rankCounts") if cfg else None
@@ -144,9 +149,14 @@ def _rank_counts(payload: dict) -> dict:
         if not isinstance(code, str) or not code or len(code) > 40:
             continue
         try:
-            out[code] = int(count)
-        except (TypeError, ValueError):
+            slots = int(count)
+        except (TypeError, ValueError, OverflowError):
+            # OverflowError is ``int(float("inf"))``: ``json.loads`` accepts
+            # ``Infinity``, and a restored backup does not pass the schema.
             continue
+        if not -(2**31) <= slots < 2**31:
+            continue
+        out[code] = slots
     return out
 
 
@@ -229,7 +239,6 @@ class _LocalTournamentRepo:
         self.session.delete(row)
         self.session.commit()
         return True
-
 
     def _sync_meet_events(self, tournament_id: uuid.UUID, payload: dict) -> None:
         """Re-derive ``meet_events`` from the blob this write is persisting.

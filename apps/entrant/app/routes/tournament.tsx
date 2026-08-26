@@ -235,7 +235,7 @@ function DrawsPanel({ slug, draws }: { slug: string; draws: DrawsIndexDTO }) {
     // F-DM-33: an empty draws list has two unrelated causes, and until the
     // API carried `divisions` this tier could not tell them apart. A meet is
     // not a bracket waiting to be drawn, so it does not get told to wait.
-    if (draws.divisions.length > 0) {
+    if (draws.divisions?.length) {
       return (
         <p className="text-muted-foreground">
           Played as a meet, not by draws. Divisions: {draws.divisions.join(', ')}.

@@ -223,3 +223,54 @@ def test_every_direct_funnel_caller_re_derives_not_just_the_state_put(repo, sess
 
     repo.restore_tournament_from_backup(tid, filename)
     assert [r.id for r in _events(session, tid)] == ["MS"]
+
+
+def test_a_count_outside_int4_is_skipped_and_the_blob_write_still_succeeds(
+    repo, session
+):
+    """The bound that keeps a junk count from 500ing the write on Postgres.
+
+    ``slot_count`` is an ``Integer`` (int4) column, so ``{"MS": 10**12}``
+    validates through ``rankCounts: Dict[Code, int]`` (whose ``max_length``
+    bounds the key COUNT and key LENGTH, never the value), reaches the blob
+    and raises ``DataError`` on INSERT — *inside* the write, turning a
+    config save that used to succeed into a 500. That contradicts
+    ``_rank_counts``' own promise that a malformed count must not fail the
+    write.
+
+    **This test cannot reproduce the Postgres failure**: SQLite stores
+    arbitrary-width integers, so the unbounded version inserts happily here.
+    What it asserts instead is the two halves of the intended behaviour — the
+    entry is NOT refused (the blob round-trips with the out-of-range keys
+    intact) and the out-of-range division is simply ABSENT from
+    ``meet_events``. Without the bound the absence assertion reds, because
+    SQLite writes the row.
+
+    **The in-range negative is kept on purpose.** ``slot_count`` deliberately
+    carries no CHECK — a CHECK would 500 the blob write and contradict this
+    seam's junk tolerance — so the bound narrows the RANGE and never the
+    vocabulary. A future "fix" that drops negatives reds this line.
+    """
+    tid = _workspace(repo)
+    counts = {
+        "MS": 3,
+        "NEG": -4,
+        "MAXI": 2**31 - 1,
+        "MINI": -(2**31),
+        "OVER": 2**31,
+        "UNDER": -(2**31) - 1,
+        "HUGE": 10**12,
+        "INF": float("inf"),
+    }
+
+    row = repo.tournaments.upsert_data(tid, _blob(counts))
+
+    assert row.data["config"]["rankCounts"] == counts, (
+        "the entry must not be refused - the blob is written unchanged"
+    )
+    assert {r.id: r.slot_count for r in _events(session, tid)} == {
+        "MS": 3,
+        "NEG": -4,
+        "MAXI": 2**31 - 1,
+        "MINI": -(2**31),
+    }

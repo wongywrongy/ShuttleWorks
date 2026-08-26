@@ -107,9 +107,11 @@ def _backfill_meet_events_from_blobs() -> None:
 
     Mirrors ``repositories.local._rank_counts`` exactly, including its
     tolerance: absent ``config``, absent ``rankCounts`` and ``{}`` all mean
-    zero rows, and a junk key or non-integer count is dropped rather than
-    raised on — a migration that fails on a director's laptop is worse than
-    one that skips a value nothing could have read anyway.
+    zero rows, and a junk key, a non-integer count or a count outside the
+    ``slot_count`` column's int4 range is dropped rather than raised on — a
+    migration that fails on a director's laptop is worse than one that skips a
+    value nothing could have read anyway, and on Postgres an unbounded count
+    would fail the INSERT and take the whole upgrade down mid-flight.
     """
     bind = op.get_bind()
 
@@ -152,7 +154,9 @@ def _backfill_meet_events_from_blobs() -> None:
                 continue
             try:
                 slots = int(count)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if not -(2**31) <= slots < 2**31:
                 continue
             rows.append(
                 {

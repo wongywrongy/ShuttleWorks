@@ -1809,21 +1809,21 @@ pinned by a test. The `batch_alter_table` was verified to resolve to a plain `AD
 P7a's four targets).
 
 **The derivation hangs on `_LocalTournamentRepo.upsert_data`, and the reason that is safe is a
-measurement, not a judgement.** `upsert_data` (`apps/api/src/repositories/local.py:284`) contains the
-**only** assignment to `Tournament.data` anywhere in `apps/api/src` — `row.data = stamped` at `:318`,
+measurement, not a judgement.** `upsert_data` (`apps/api/src/repositories/local.py:293`) contains the
+**only** assignment to `Tournament.data` anywhere in `apps/api/src` — `row.data = stamped` at `:327`,
 and a repo-wide grep for `.data = ` under `apps/api/src` returns exactly that one hit. There is **no
 `MutableDict` and no `flag_modified` anywhere in `apps/api/src`**, so an in-place mutation of the blob
 cannot persist, which is what makes the assignment-site grep *total* coverage rather than a spot
 check. All nine blob writers reach it — the state PUT, the proposal commit, the create-seed, both
 entries seams, backup restore, two bracket paths and plan-finalized — so
-`self._sync_meet_events(tournament_id, stamped)` at `:342` (the method itself at `:234`) sees every
+`self._sync_meet_events(tournament_id, stamped)` at `:351` (the method itself at `:243`) sees every
 persisted config. A test proves it live rather than by argument: restoring a pre-division snapshot
 **removes** the row, which is impossible if the derivation hung one level up.
 
-**It was deliberately NOT hung on `commit_tournament_state` (`local.py:1886`), and the cheapest
+**It was deliberately NOT hung on `commit_tournament_state` (`local.py:1895`), and the cheapest
 lesson in this slice is a comment already in the file.** `upsert_data`'s own comment records that a
 prior author assumed `commit_tournament_state` was the funnel and that **three writers shipped
-without returning the new concurrency token because of it** (`local.py:338`). Hanging a second
+without returning the new concurrency token because of it** (`local.py:347`). Hanging a second
 derivation off the same false premise would have repeated a bug the file already documents. The
 `repositories/` package may not import `meet.*` (import-linter, blocking in CI), so the derivation
 reads `payload["config"]["rankCounts"]` and writes through `db.models`, following the prior art of
@@ -1968,6 +1968,24 @@ the first debounced PUT persists it, which is why five on-disk workspaces carry 
 same fact reappeared as a *design constraint* in T3 — rows alone cannot mean "this is a meet", because
 every fresh workspace gets five of them — and is the reason the public gate had to answer to `kind`.
 
+**And deleting divisions is ASYMMETRIC between one code and all of them — ruled behaviour on both
+sides, but an interaction between two rulings that no single ruling states.** Deleting **one**
+code from `config.rankCounts` deletes its `meet_events` row, leaves already-committed players'
+`ranks` untouched (they live on the blob, which the derivation never rewrites), makes any
+uncommitted entry pointing at it skip as `UNMAPPABLE_EVENT`, and drops it from the public
+`divisions` list. Deleting **all** of them does not merely do that five times: `divisions` goes
+**empty**, and `_plan_meet`'s guard is `if event is None or (divisions and division is None)`
+(`apps/api/src/entries/entries.py:489`) — so the empty map short-circuits and **Ruling C's
+fail-open reopens**. Every entry is then accepted with the *deleted* code written into `ranks[]`,
+because a workspace that has declared no divisions has declared nothing to contradict. That is
+exactly what Ruling C says should happen and exactly what R-DM-5 says a declared vocabulary is
+for; the two are simply never in force at the same time. The visible oddity is that the two
+surfaces disagree in that state: intake accepts the code while the public draws index stops
+saying "played as a meet" at all (`_meet_divisions` returns `[]`, so the page renders the plain
+"No draws yet."). Recorded, not fixed — the alternative is a "the vocabulary was deleted, so
+refuse everything" mode, which is a third state nobody ruled and which refuses entries at exactly
+the moment a director is mid-edit.
+
 **Two standing caveats, both of them measurements this slice owes its reader.** First, **all
 migration evidence in this program is SQLite-only**; Postgres is untested, and P7b adds a table *and*
 a backfill to that debt. Second, and sharper: **the backfill's on-disk target set was EMPTY, not
@@ -2086,9 +2104,81 @@ slice's task reports went stale **three separate times**, one set twice within t
 round moved the lines a reviewer had just corrected, and the implementer caught it only by printing
 them again rather than copying either the reviewer's or the plan's. Every anchor in this section was
 printed from the tree in the session that wrote it, and several of them differ from what the scratch
-ledger recorded: `upsert_data` is at `local.py:284`, not `:207`, and `row.data = stamped` at `:318`,
-not `:241`. A citation that arrives via a summary is a *predicted* citation no matter how
+ledger recorded: `upsert_data` is at `local.py:293`, not `:207`, and `row.data = stamped` at `:327`,
+not `:241`. Those two were `:284` / `:318` until the final fix wave below landed a net +9
+lines above them — the rule bites its own author, which is the point of it. A citation that arrives via a summary is a *predicted* citation no matter how
 authoritative the summariser.
 
 `dm3/p7b-meet-event` is **not merged** at the time this section was written; the gate above was
 produced at its tip.
+
+### 2026-08-26 — P7b final fix wave (whole-branch review: two Important, two Minor, one cosmetic)
+
+The whole-branch review returned **Ready to merge: No** — nothing structural, no Critical. One wave,
+recorded here because the SDD report it was written into is scratch.
+
+**The Important one is a 500 that SQLite structurally cannot show.** `_rank_counts`
+(`apps/api/src/repositories/local.py:128`) dropped a non-`str` or over-long **key** but put the
+**value** through an unbounded `int()` into `MeetEvent.slot_count`, an `Integer` (int4) column
+(`apps/api/src/db/models.py:756`). `core/schemas.py:118` types `rankCounts` as `Dict[Code, int]`
+whose `max_length` bounds the key COUNT and key LENGTH and never the value, so `{"MS": 10**12}`
+validates, reaches the blob, and on **Postgres** raises `DataError` on INSERT *inside the write* —
+turning a config save that used to succeed into a 500, against `_rank_counts`' own docstring
+promise that "a malformed count in a restored backup must not make the write itself fail". Nothing
+bounded that value before P7b either, so a cloud workspace may already hold one — in which case
+`_backfill_meet_events_from_blobs` would have crashed the Alembic upgrade **mid-flight on a real
+tenant**. **Bound chosen: int4, `-(2**31) <= n < 2**31`** (`local.py:157`), mirrored
+character-for-character in the backfill (`aa1b6c4e0d3f_meet_events.py:159`) because that function's
+docstring claims it "mirrors `_rank_counts` exactly" and a divergence would make the claim false —
+its own defect. **Negatives are NOT dropped**: `slot_count` deliberately carries no CHECK (a CHECK
+would 500 the blob write and contradict this seam's junk tolerance), so the bound narrows the
+RANGE, never the vocabulary. `OverflowError` joined the except tuple in both copies as the
+same-class hole the review did not name: `json.loads` accepts `Infinity`, a restored backup does
+not pass the schema, and `int(float("inf"))` raises `OverflowError` — which the old two-member
+tuple did not catch, so the docstring promise was already false for that input.
+
+**What the two new tests do and do NOT cover.**
+`test_a_count_outside_int4_is_skipped_and_the_blob_write_still_succeeds` (derivation) and
+`test_a_count_outside_int4_is_skipped_by_the_backfill_too` (migration) **cannot reproduce the
+Postgres `DataError`** — SQLite stores arbitrary-width integers, which is exactly why every test
+was green. What they assert instead is the two halves of the intended behaviour: the entry is **not
+refused** (the blob round-trips with the out-of-range keys intact) and the out-of-range division is
+simply **absent** from `meet_events`. The write-succeeds half is what stops a future implementation
+from satisfying the absence assertion by raising. Both were proved non-vacuous by removing the
+bound — both red on the absence assertion, both still green on the write-succeeds one. An in-range
+**negative** and both boundaries (`2**31 - 1` kept, `2**31` dropped, `-(2**31)` kept, `-(2**31) - 1`
+dropped) sit in the same dict, so a future "fix" that drops negatives reds the line.
+
+**The stale anchor, and it is this program's fourth.** debt-log **D24** cited `entries_site.py:530`
+for the `drawKey` URL segment. That was true at `9e2dcfc8`, and this slice's own `_meet_divisions`
+pushed it to **585** — the branch rewrote that row's re-ruling clause without re-printing the anchor
+it carried forward. Fixed by printing it, with identity proved rather than plausibility:
+`git show 9e2dcfc8:…entries_site.py | sed -n '530p'` prints the same `drawKey=event.id,` that `:585`
+prints today. **Every other anchor in this section was re-printed from the tree in this session**
+rather than inherited: D24's four `brackets.py` anchors (`:1455` `:3157` `:1657` `:1481`) are
+unmoved, as are `models.py:718/756/1596/1631`, the revision ids at
+`aa1b6c4e0d3f_meet_events.py:59-60`, `local.py:115` and `:128`, `schemas.py:118`
+(`rankCounts: Dict[Code, int] = Field(..., max_length=MAX_RANKS)`),
+`entries.py:419/566/589/610/640`,
+`entries_routes.py:833/920`, `entries_site.py:83/113/171/601`, `schemas.py:247`, `limits.py:98`,
+`standings.py:100`, `enter.tsx:293`, `tournament.tsx:238-241`, `draws.types.ts:37`,
+`tournamentStore.ts:104` and `RegenerateMenu.tsx:24-30/27/85-86/88/91`. **Six anchors this wave
+staled itself** — every `local.py` citation after line 115, because the bound and the blank-line
+removal are net +9 — and all six are corrected above. **One is knowingly left stale:** the **P7a**
+entry at this file's `:1514` cites `entries_site.py:530-531`, which P7b moved to `585-586`. It is a
+dated record of a different slice and `history/` is not rewritten; flagged here so a reader
+following it is not misled.
+
+**Also fixed.** `apps/entrant/app/routes/tournament.tsx:238` read `draws.divisions.length`
+unguarded — safe for every workspace state, because the pydantic default makes the key
+unconditional, but the two tiers ship as separate images and an API image older than the entrant
+image throws on `?tab=draws`. Now `draws.divisions?.length`; the DTO type stays non-optional, so no
+line moved. And a double blank line inside `_LocalTournamentRepo` (ruff is `select = ["F"]`, so it
+does not catch that).
+
+**Gate for this wave, deliberately narrower than `make check`** — which was green at `2ef4f1f8`, and
+this wave touches neither the console nor a lint surface:
+`pytest tests/backend/unit/test_meet_event_derivation.py tests/backend/unit/test_meet_events_migration.py`
+**17 passed** (15 + the two new), `ruff check apps/api tests/backend` clean, **import-linter 15 kept
+/ 0 broken**, and `npm run test:entrant` **37 files / 761 tests** — identical to the branch baseline,
+as a one-character entrant change should be.
