@@ -14,8 +14,13 @@
  */
 import { create } from 'zustand';
 import type { LiveScheduleState, MatchStateDTO } from '../api/dto';
+import type { MatchStatus } from '../platform/domain/match';
 
-type LegacyStatus = 'scheduled' | 'called' | 'started' | 'finished';
+/** F-DM-46: the legacy four-member wire spelling IS the canonical domain
+ *  union, character for character. Aliased rather than redeclared so a
+ *  future member lands in one place. `api/dto.ts` keeps its own inline
+ *  copy on purpose — the hand mirror tracks the WIRE, not the domain. */
+type LegacyStatus = MatchStatus;
 
 /**
  * Step G addition: a server-rejected command leaves a record here so

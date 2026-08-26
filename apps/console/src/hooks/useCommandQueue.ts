@@ -32,6 +32,7 @@ import {
   type SubmitFn,
   type SubmitResult,
 } from '../lib/commandQueue';
+import type { MatchStatus } from '../platform/domain/match';
 import { useMatchStateStore } from '../store/matchStateStore';
 import { assertCanEdit } from './useCanEdit';
 import { useTournamentId } from './useTournamentId';
@@ -39,7 +40,7 @@ import type { MatchStateDTO } from '../api/dto';
 
 const ACTION_TO_LEGACY_STATUS: Record<
   MatchAction,
-  'scheduled' | 'called' | 'started' | 'finished'
+  MatchStatus
 > = {
   call_to_court: 'called',
   start_match: 'started',
@@ -52,7 +53,7 @@ const ACTION_TO_LEGACY_STATUS: Record<
 
 const CANONICAL_TO_LEGACY_STATUS: Record<
   string,
-  'scheduled' | 'called' | 'started' | 'finished'
+  MatchStatus
 > = {
   scheduled: 'scheduled',
   called: 'called',
@@ -87,7 +88,7 @@ const CANONICAL_TO_LEGACY_STATUS: Record<
  */
 export function _buildCommandOkPatch(
   previous: MatchStateDTO,
-  legacyStatus: 'scheduled' | 'called' | 'started' | 'finished',
+  legacyStatus: MatchStatus,
   timeSlot: number | null,
   courtId?: number | null,
   action?: MatchAction,

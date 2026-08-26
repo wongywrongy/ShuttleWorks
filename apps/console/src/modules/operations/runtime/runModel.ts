@@ -1,3 +1,4 @@
+import type { MatchStatus } from '../../../platform/domain/match';
 import type { OpsBlock } from '../opsBlock';
 import type { BoardChip } from './boardPlacements';
 import { fromEngineStatus, deriveTimeliness, can, type RunStatus, type Timeliness } from './runMachine';
@@ -26,7 +27,7 @@ export function toRunMatches(
 ): RunMatch[] {
   const { calledBracketIds, eligibleBracketIds } = opts;
   return blocks.map((b) => {
-    let status = fromEngineStatus(b.status as 'scheduled' | 'called' | 'started' | 'finished');
+    let status = fromEngineStatus(b.status as MatchStatus);
     // Bracket has no persisted `called`; overlay the Operations-local flag.
     if (status === 'scheduled' && b.source === 'bracket' && calledBracketIds?.has(b.id)) {
       status = 'called';

@@ -6,6 +6,7 @@
  * status vocabulary. `late` is a derived flag (see deriveLate), never a state.
  */
 import { STATE_WORD } from '../../../lib/stateWords';
+import type { MatchStatus } from '../../../platform/domain/match';
 
 export type RunStatus = 'scheduled' | 'called' | 'playing' | 'done';
 export type RunActionKind = 'call' | 'start' | 'record' | 'postpone' | 'assign';
@@ -26,7 +27,7 @@ export function can(status: RunStatus, action: RunActionKind): boolean {
   return transition(status, action) !== null;
 }
 
-export function fromEngineStatus(s: 'scheduled' | 'called' | 'started' | 'finished'): RunStatus {
+export function fromEngineStatus(s: MatchStatus): RunStatus {
   if (s === 'started') return 'playing';
   if (s === 'finished') return 'done';
   return s; // scheduled | called

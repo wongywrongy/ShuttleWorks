@@ -151,7 +151,7 @@ export interface SegmentDTO {
  *  `bracket/standings.py`. */
 export type StandingRowDTO = components['schemas']['StandingRow'];
 
-interface EventDTO {
+export interface EventDTO {
   id: string;
   discipline: string;
   /** Draw format id ('se' | 'rr' | 'de' | 'monrad' | …) — widened to string

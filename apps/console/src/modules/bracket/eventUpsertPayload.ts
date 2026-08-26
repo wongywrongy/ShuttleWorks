@@ -10,11 +10,14 @@
  */
 import type {
   BracketEventUpsertIn,
-  BracketTournamentDTO,
+  EventDTO,
 } from '../../api/bracketDto';
 
-/** The tournament snapshot's per-event shape (EventDTO is module-private). */
-export type BracketEventDTO = BracketTournamentDTO['events'][number];
+/** The tournament snapshot's per-event shape. Aliases the exported DTO the
+ *  snapshot's `events` array is built from; the previous indexed-access alias
+ *  resolved to exactly this type, so the name is unchanged for consumers
+ *  (F-DM-48). */
+export type BracketEventDTO = EventDTO;
 
 export function buildEventUpsertPayload(
   ev: BracketEventDTO,
