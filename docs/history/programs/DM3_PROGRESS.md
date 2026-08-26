@@ -1177,3 +1177,101 @@ added zero tests**, which is exactly right for a sweep that is not allowed to ch
 
 `dm3/p9-cosmetic-sweep` was **merged to `main` 2026-08-25** (fast-forward, per Kyle's standing
 merge-and-proceed instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call).
+
+---
+
+## 2026-08-25 — SESSION HANDOFF (read this first next session)
+
+**Tree state.** `main` @ `f70e8ead`, working tree clean, only `main` + `infra/host-split` exist
+locally. **P3, P0, P1, P2, P4, P5, P6 and P9 are all merged.** `main` is **98 commits ahead of
+`origin/main` and UNPUSHED**. Every slice branch and SDD workspace was deleted at its merge.
+
+### 1. FIRST ACTION: the push is authorized but NOT cleared
+
+Kyle said **"yes push as long as all core functionality and no loss of functionality or ui."**
+Verification began and was **interrupted mid-flight — the push did NOT happen.**
+
+**What was mechanically verified** over the whole session range (`9f423053..f70e8ead`):
+
+| Check | Result |
+|---|---|
+| Files deleted | **zero** |
+| API routes removed (`@router.*` decorators) | **zero** |
+| React components removed / `export default function` removed | **zero** |
+| User-visible strings removed from JSX | **zero** |
+| Entrant route files touched | **zero** — the public tier's routes are untouched |
+| Non-test `.tsx` touched | **7**, all in `modules/bracket/` plus `RegenerateMenu.tsx` |
+| Exports that vanished from the diff | 6 — of which **5 still exist** (retyped or turned into re-exports: `fromEngineStatus`, `isDoubles`, `isDoublesRank`, `kindLabel`, `BracketEventDTO`) |
+
+**What was NOT verified: `make check` on `main`.** It reached ~11% of the backend suite and was
+killed by a session interrupt; the log's only `ERROR` is `The build was canceled`. **It was neither
+proven green nor proven red.** The last full green run was P9 Task 4 at `4714200c`, and only docs
+commits plus the merge have landed since — but that is an inference, not a run. **Re-run
+`make check` on `main` and confirm exit 0 before pushing.**
+
+### 2. The one genuine functionality removal — Kyle's call before pushing
+
+Exactly **one** function was truly deleted this session: **`healBracketRosterNames`** (P6, ruled
+*"deleted, not fixed"* by program card §C6). Three consequences are already recorded above and are
+the honest answer to "no loss of functionality or ui":
+
+1. **A legacy workspace never reopened since the name-heal shipped keeps its slug-style names
+   permanently** — retyping is now the only path. Cosmetic, recoverable, unmeasurable from the repo.
+2. **A legacy doubles-only draw migrating fresh shows FEWER roster rows** instead of names guessed
+   from a team label. The failure mode moved from *wrong names* to *fewer rows*, deliberately.
+3. **P5's D-suffix widening**: a director-defined `BD` draw is now doubles, so its picker renders
+   doubles while its already-committed rows stay singles. No migration, by ruling.
+
+None breaks the app; all three passed review as ruled, deliberate changes. **But if Kyle counts any
+of them as "loss of functionality", the push should wait for his answer.** Ask before pushing.
+
+### 3. Then: P7 — the only implementation slice left
+
+**Do not start it casually.** The program plan bands it **"L — program-scale"** and says *"Do not
+start it inside another program's window."* It wants a `meet_events` table (or a division-keyed
+versioned blob section) **plus a real mapping column**, `tournaments.kind` + CHECK as the engine
+authority, CheckConstraints on four columns (F-DM-37), a rule making a published `eventCode`
+**unrenameable**, and **an operator-side slot-assignment surface that does not exist yet**.
+
+**P7 has an unresolved input.** **F-DM-25** (how many kinds of workspace key there should be) is
+routed to *"P7/owner"* and is one of the open rulings below. Starting a program-scale slice on top
+of an unanswered scoping question is the thing to avoid — **get F-DM-25 answered first.**
+
+**What P7 inherits, all already recorded:** F-DM-08's server-route half (re-attributed to P7 in the
+design doc at P5's ratification); **F-DM-57** (P9 was forbidden to touch it — R-DM-11 owns it);
+**F-DM-25** and **F-DM-56** from P9's routing; and P5's finding that **Meet's intake is disconnected
+from Meet's generation twice over** — at the rank level (`ranks=[event.code]` vs the generator's
+numbered `XD1..XDn`) *and* at the group level (`groupId = event.code` puts every entrant in one
+"school" while the generator only ever pairs *across* groups). That second disconnect is why P5's
+Meet half was cut: a Meet pair field would have had no reader.
+
+### 4. Six open owner rulings — none blocks a slice, all block building ON them
+
+1. **D22** — gender on adoption. Never ruled. Owner: P8/Kyle.
+2. **The adoption-path divergence** — `_adoptable`'s `sourceEntryId` branch produces a keyed
+   **column** under an **unkeyed blob row** on *every* adoption. The debt log had claimed this was
+   impossible; P6 proved otherwise and pinned it with a characterization test whose signpost reads
+   *"if this reds, read it as FIXED — delete the test."* Deliberately unassigned.
+3. **The orphan roster-blob row on a person-refusal** — a refused person still gains a
+   `bracketPlayers` row no participant references. Repairing the back-reference would be a
+   *resolution*, which **I4 forbids** — so it needs a decision, not a patch.
+4. **F-DM-55** — the `match_states` String→`DateTime` migration. Ruled **OUT of P9**: those strings
+   ride the public `/display/{token}/match-states` wire and every migration this program shipped was
+   verified on **SQLite only**.
+5. **F-DM-47** — may `api/dto.ts` name domain types? Its fix would create the hand mirror's first
+   non-generated import.
+6. **F-DM-25** — the workspace-key-kinds question. **P7 wants this answered first.**
+
+### 5. Standing process notes for the next session
+
+- **Workflow unchanged:** `superpowers:subagent-driven-development`, opus subagents, tight contexts;
+  each phase gets its **detailed plan authored at phase start against the then-current tree**;
+  controller ratifies judgment calls and rules on findings; merge and proceed autonomously.
+- **The produced-not-predicted rule** (learned over four slices and six gate episodes) is recorded
+  in the P9 section and now binds every plan: a gate's expected count must be **produced by running
+  the pattern against the tree**, never predicted from an audit or a dispatch; no gate may be
+  satisfiable by rewording a comment; for **citation** gates the default scope is **every directory
+  the tier owns**, not just its source dirs; and a permanent doc may only cite permanent sources
+  (`git check-ignore` is the mechanical test — the SDD working ledger is git-ignored scratch).
+- **R-DM-2(c) Meet-roster extraction** remains a committed follow-on **program**, not a slice.
+- **P8** stays owner-blocked on the R15 content definition.
