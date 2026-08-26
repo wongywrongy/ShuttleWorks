@@ -1167,6 +1167,119 @@ def test_two_people_with_the_SAME_NAME_are_two_participants_with_two_keys(
     assert participants[0].id != participants[1].id
 
 
+def test_a_person_already_in_the_draw_under_ANOTHER_id_is_not_entered_twice(
+    repo, session
+):
+    """``debt-log.md:78``, closed by SP-DM-3 P6: the seam recognised "already
+    in this draw" by participant ID alone, so a participant row under an
+    arbitrary id - a hand-added roster row, a legacy import, a console
+    re-save - naming the same human was invisible to it and the person
+    entered twice. P4 gave every such row a real key
+    (``bracket_participants.entry_player_id``, carried from the roster blob
+    by the console), so the recognition can now ask about the PERSON.
+    R-DM-7(a) said the FK is the identity; this is the seam acting on it.
+
+    I4: the seam DECLINES to add a second row. It removes nothing, merges
+    nothing, and raises nothing - the entry still commits and still
+    back-references its own roster seat.
+
+    The negative control lives above:
+    ``test_two_people_with_the_SAME_NAME_are_two_participants_with_two_keys``
+    is NC 1 and asserts strictly more - the check is on the KEY, so two
+    humans sharing a name stay two participants even once the first one's
+    key is in the guard's set.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    ev = _entry_event(session, tid, code="MS", bracket_event_id="MS")
+    entry = _entry(session, tid, ev, player_name="Alex Tan")
+
+    # The same human, already a participant under a hand-typed id.
+    repo.brackets.add_participants(
+        tid,
+        "MS",
+        [
+            {
+                "id": "p-alex-tan",
+                "name": "Alex Tan",
+                "type": "PLAYER",
+                "member_ids": [],
+                "entry_player_id": entry.entry_player_id,
+                "seed": None,
+                "meta": {},
+            }
+        ],
+    )
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    participants = repo.brackets.list_participants(tid, "MS")
+    assert [p.id for p in participants] == ["p-alex-tan"], (
+        "the seam must not enter the same human a second time"
+    )
+    # The entry still commits; only the duplicate ROW is refused.
+    assert entry.committed_player_id is not None
+
+
+def test_a_participant_with_NO_key_never_blocks_an_entry(repo, session):
+    """The legacy path. ``entry_player_id`` is nullable and no backfill was
+    taken, so a pre-P4 participant row reads NULL. A NULL is not a person,
+    so it must neither crash the guard nor silently swallow the entry: the
+    seam still adds the row, exactly as it did before P6.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    ev = _entry_event(session, tid, code="MS", bracket_event_id="MS")
+    entry = _entry(session, tid, ev, player_name="Alex Tan")
+    repo.brackets.bulk_create_participants(
+        tid, "MS", [{"id": "legacy-row", "name": "Someone Else", "type": "PLAYER"}]
+    )
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    participants = repo.brackets.list_participants(tid, "MS")
+    assert sorted(p.id for p in participants) == sorted(
+        ["legacy-row", roster_id(entry.entry_player_id)]
+    )
+
+
+def test_a_committed_pair_survives_a_RE_RUN_without_a_stray_singleton(repo, session):
+    """The idempotency control for the person-key guard (SP-DM-3 P6 Task 5's
+    documented trap). A seam-built TEAM carries ``members[0]``'s person key,
+    so a naive key check inside the pair legs makes the pair refuse ITSELF on
+    a re-run and emit a lone PLAYER row for ``members[1]``.
+
+    A CLEAN second run cannot show this: ``_candidates`` filters on
+    ``committed_player_id IS NULL``, so it has no candidates and the pair
+    legs never re-execute. The state that does re-execute them is the crash
+    between the seam's two writes (``test_a_crash_between_the_two_writes_
+    self_heals``): participants inserted, back-references lost. The draw must
+    look identical after the healing run.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid, code="XD")
+    nominator, partner = _pair(session, tid, ev)
+
+    commit_entries(repo, tid)
+    before = [(p.id, p.type) for p in repo.brackets.list_participants(tid, "XD")]
+
+    # The crash: the roster blob and the participants survived, the
+    # back-references did not, so both halves are candidates again.
+    session.expire_all()
+    nominator.committed_player_id = None
+    partner.committed_player_id = None
+    session.commit()
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    after = [(p.id, p.type) for p in repo.brackets.list_participants(tid, "XD")]
+    assert after == before
+    assert [t for _, t in after] == ["TEAM"]
+
+
 def _person_key_disagreements(repo, tournament_id, event_id):
     """Every participant whose two copies of the person key do not agree.
 

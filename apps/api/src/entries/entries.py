@@ -695,6 +695,10 @@ def _plan_bracket(
     skipped: list[SkippedEntry] = []
     inserts: dict[str, list[dict]] = {}
     existing_ids: dict[str, set[str]] = {}
+    # The same question as ``existing_ids``, asked about the PERSON rather
+    # than the seat (``debt-log.md:78``). Per bracket event, like the ids:
+    # one human legitimately appears in two draws.
+    existing_keys: dict[str, set[uuid.UUID]] = {}
     pairs = _pair_batch(candidates, events)
     mutated = False
 
@@ -721,11 +725,17 @@ def _plan_bracket(
         participant_id = adopted or _player_id(entry)
 
         if event.bracket_event_id not in existing_ids:
-            existing_ids[event.bracket_event_id] = {
-                p.id
-                for p in repo.brackets.list_participants(
-                    tournament_id, event.bracket_event_id
-                )
+            current = repo.brackets.list_participants(
+                tournament_id, event.bracket_event_id
+            )
+            existing_ids[event.bracket_event_id] = {p.id for p in current}
+            # Read off the COLUMN, not the roster blob: the blob's copy can
+            # legitimately be absent where the column's is not (``_adoptable``'s
+            # ``sourceEntryId`` branch keys the column while the blob row it
+            # adopted predates the key). ``None`` is not a person, so an
+            # unkeyed legacy row blocks nobody.
+            existing_keys[event.bracket_event_id] = {
+                p.entry_player_id for p in current if p.entry_player_id is not None
             }
 
         payload = _bracket_payload(entry, participant_id)
@@ -738,9 +748,25 @@ def _plan_bracket(
             mutated = True
 
         in_draw = existing_ids[event.bracket_event_id]
+        in_keys = existing_keys[event.bracket_event_id]
         partner = pairs.get(entry.id)
         if partner is not None:
             partner_seat = _adoptable(roster, partner) or _player_id(partner)
+            # The id this pair WOULD carry, computed before the legs so leg 7b
+            # can tell "this very pair is already committed" apart from "one of
+            # these humans is in the draw some other way". Same sorted tuple the
+            # TEAM branch below re-derives, so the two ids are the same string.
+            already_ours = (
+                team_id(
+                    tuple(
+                        m.entry_player_id or m.id
+                        for m in sorted(
+                            (entry, partner), key=lambda e: (e.submitted_at, e.id)
+                        )
+                    )
+                )
+                in in_draw
+            )
             if not (
                 # Leg 6: BOTH payloads must project onto the roster DTO. The
                 # loop validates one entry at a time and the nominator runs
@@ -753,6 +779,28 @@ def _plan_bracket(
                 # (I4).
                 and participant_id not in in_draw
                 and partner_seat not in in_draw
+                # Leg 7b (SP-DM-3 P6, ``debt-log.md:78``): neither half may
+                # already be in this draw AS A PERSON either. Leg 7 asks by
+                # id, so a row under an arbitrary id naming the same human was
+                # invisible and the person entered twice. ``already_ours``
+                # excuses only THIS leg: on a re-run the pair's own TEAM row
+                # carries ``members[0]``'s key, and without that the pair would
+                # refuse itself and drop a stray singleton for the other half.
+                # A missing key (legacy rows read NULL) is not a person, so it
+                # refuses nothing.
+                and (
+                    already_ours
+                    or (
+                        (
+                            entry.entry_player_id is None
+                            or entry.entry_player_id not in in_keys
+                        )
+                        and (
+                            partner.entry_player_id is None
+                            or partner.entry_player_id not in in_keys
+                        )
+                    )
+                )
                 # Leg 8: the two halves must be two PEOPLE. A nominator who
                 # typed their own address can accept their own invite (the
                 # accept route checks neither address nor account against
@@ -820,10 +868,17 @@ def _plan_bracket(
                 "meta": {"sourceEntryId": str(entry.id)},
             }
         # Keyed on the INSERT's id, so the pair's second half is a no-op on
-        # this run and the whole pair a no-op on the next one.
-        if insert["id"] not in in_draw:
+        # this run and the whole pair a no-op on the next one — and on the
+        # PERSON too, so the singleton path is guarded by leg 7b's rule as
+        # well and the key set stays current within a run. This never
+        # removes, edits or merges an existing row (I4): the entry still
+        # reaches ``planned`` below with its own seat.
+        key = insert.get("entry_player_id")
+        if insert["id"] not in in_draw and (key is None or key not in in_keys):
             inserts.setdefault(event.bracket_event_id, []).append(insert)
             in_draw.add(insert["id"])
+            if key is not None:
+                in_keys.add(key)
         # The back-reference is to this person's own roster row, never to
         # the team: both halves keep their own.
         planned.append((entry, participant_id))
