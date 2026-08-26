@@ -10,12 +10,11 @@ export interface MyEntryLine {
   discipline: string;
   playerName: string;
   personKey: string;
-  /** F-DM-60: verified dishonest, NOT closed — see the note on
-   *  `MyTournamentCard.status`. `entries_me.py::_entry_state` maps every raw
+  /** Closed on purpose (F-DM-60): `entries_me.py::_entry_state` maps every raw
    *  state through a 6-entry dict with an `awaiting` fail-calm default, so an
-   *  unknown future state arrives AS `awaiting` and never as itself: the
-   *  `| string` tail describes a case the emitter cannot produce. */
-  state: 'awaiting' | 'entered' | 'withdrawn' | 'rejected' | string;
+   *  unknown future state arrives AS `awaiting` and never as itself. The old
+   *  `| string` tail described a case the emitter cannot produce. */
+  state: 'awaiting' | 'entered' | 'withdrawn' | 'rejected';
   /** E2: the id `POST /e/api/me/entries/{id}/withdraw` takes. */
   entryId: string;
   /** E2: the server's own `assert_withdrawable`, precomputed. */
@@ -33,18 +32,10 @@ export interface MyTournamentCard {
   resultsPublished: boolean;
   date: string | null;
   venueName: string | null;
-  /** F-DM-60: verified dishonest, NOT closed. `entries_me.py::_card_status`
-   *  has four `return` statements and every one is a member below, so the
-   *  `| string` tail describes a case the emitter cannot produce.
-   *
-   *  It stays because deleting it (and the twin on `MyEntryLine.state`)
-   *  reddens 26 lines of `tests/myEntries.script.test.ts`: its `line()` /
-   *  `card()` helpers take `Record<string, unknown>` overrides and spread
-   *  them, which widens the literal back to `string`. That is a test-helper
-   *  typing, NOT a consumer holding an off-union value — no app-tier file
-   *  errored. Closing these two is a one-line change to that helper's
-   *  override type, out of scope for the P9 cosmetic sweep. */
-  status: 'awaiting' | 'entered' | 'played' | 'withdrawn' | string;
+  /** Closed on purpose (F-DM-60): `entries_me.py::_card_status` has four
+   *  `return` statements and every one is a member below. The old `| string`
+   *  tail described a case the emitter cannot produce. */
+  status: 'awaiting' | 'entered' | 'played' | 'withdrawn';
   feeTotalCents: number | null;
   submittedAt: string;
   events: MyEntryLine[];

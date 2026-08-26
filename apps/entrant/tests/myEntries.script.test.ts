@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import type { MyEntryLine, MyTournamentCard } from '../public/assets/my-entries.js';
 import {
   cardChip,
   formatCents,
@@ -25,7 +26,7 @@ import {
   yearGroups,
 } from '../public/assets/my-entries.js';
 
-function line(over: Record<string, unknown> = {}) {
+function line(over: Partial<MyEntryLine> = {}): MyEntryLine {
   return {
     eventCode: 'MS',
     discipline: "Men's Singles",
@@ -40,7 +41,7 @@ function line(over: Record<string, unknown> = {}) {
   };
 }
 
-function card(over: Record<string, unknown> = {}) {
+function card(over: Partial<MyTournamentCard> = {}): MyTournamentCard {
   return {
     slug: 'spring-open',
     tournamentName: 'Spring Open',
