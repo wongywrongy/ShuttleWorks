@@ -180,6 +180,7 @@ export default defineConfig({
           { text: 'Operations to Display (Seam D)', link: '/reference/contracts/operations-display' },
           { text: 'API: overview and route ownership', link: '/reference/api/' },
           { text: 'API: signals', link: '/reference/api/signals' },
+          { text: 'Workspace keys: the four kinds', link: '/reference/workspace-keys' },
         ],
       },
       {

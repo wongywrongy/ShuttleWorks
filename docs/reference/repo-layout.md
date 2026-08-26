@@ -12,7 +12,7 @@ apps/                          the deployable surfaces
 ├── console/                   OPERATOR SPA — React 19 + Zustand + Vite
 │   ├── src/
 │   │   ├── app/               router, AppShell, ModuleOutlet (nav model lives in platform/product-shell)
-│   │   ├── products/          one folder per module: hub, meet, bracket, operations, display, settings, workspace, entries
+│   │   ├── modules/           one folder per module: hub, meet, bracket, operations, display, settings, workspace, entries
 │   │   ├── platform/          cross-module: product-shell, domain (module model), contracts, auth, settings
 │   │   ├── components/        shared UI incl. control-plane/ primitives
 │   │   └── api / store / hooks / lib …
