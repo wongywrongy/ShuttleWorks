@@ -3338,8 +3338,13 @@ export interface components {
          * BracketPlayerDTO
          * @description Roster entry for bracket-kind tournaments.
          *
-         *     ``id`` is the stable slug produced by the frontend ``playerSlug()``
-         *     helper; matches ``bracket_participants.member_ids`` after migration.
+         *     ``id`` is the roster row's own key, and where it came from depends on
+         *     who made the row: the commit seam mints ``entry-{entry_player_id}``
+         *     (``entries/entries.py::roster_id``, the one definition), while a
+         *     hand-added row is slugged from the typed name by the console's
+         *     ``playerSlug()``. It is NOT an identity - ``entryPlayerId`` is
+         *     (R-DM-2(a)/R-DM-7(a)); the id is a locally-unique row key that matches
+         *     ``bracket_participants.member_ids``.
          *
          *     ``availability`` holds POSITIVE (allowed) HH:mm windows — empty
          *     means available all day. ``restSlots`` overrides the session's

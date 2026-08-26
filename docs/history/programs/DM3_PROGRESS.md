@@ -24,7 +24,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | **DONE 2026-08-25** — 93f41250..0098ee46 (incl. final-review fix wave f673ea2e + Dockerfile source COPY 0098ee46) — **merged to main 2026-08-25** (ff to 0098ee46) |
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to the branch tip incl. the closing ledger commits, Kyle's standing instruction) |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | **DONE 2026-08-25** — `9e81ca68`..branch tip (incl. final-review fix wave `f94c85ce`+`4f049a45`), final review "Ready to merge, with fixes" → fixes landed and re-reviewed clean — **merged to main 2026-08-25** (fast-forward, Kyle's standing instruction). Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
-| 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | pending — blocked by P4 |
+| 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | **DONE 2026-08-25** — `637ea8df`..branch tip on `dm3/p6-person-demotion` (six tasks; Tasks 1-5 reviewed clean, at most one fix round each) — **not yet merged**; the closing task stops at the ledger commit, per the slice's own instruction |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
 | 9 | P9 — cosmetic sweep | — | S | pending — anytime after P0 |
 | 10 | P8 — PlayerProfile full v1 | R-DM-3 (c) | M | **BLOCKED — owner must supply the R15 text** |
@@ -610,3 +610,239 @@ list).
 
 `dm3/p5-pair-intake` was **merged to `main` 2026-08-25** (fast-forward, per Kyle's standing
 merge-and-proceed instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call).
+
+### 2026-08-25 — P6 slice executed (the bracket person stops being their name, subagent-driven, opus)
+
+Branch `dm3/p6-person-demotion` off `main` @ `ca15d7d7`. Six tasks, each implementer+reviewer
+dispatched separately (Tasks 1-5 reviewed clean, three of them after one fix round; this closing
+task's review follows it); SDD working ledger — rulings, per-task lines, deviations, deferred minors —
+at `.superpowers/sdd/2026-08-25-sp-dm-3-p6-person-demotion/progress.md`.
+
+**Commit chain.** `637ea8df` detailed plan · `c96ea959` **T1** the characterization pins (NC 1,
+NC 2, and the controller's guard pin) · `caf96c22` **T1** fix round (pin placement) · `88c2aefa`
+**T2** the decode-from-label deleted · `757ffeff` **T3** the `p.name === p.id` repair deleted ·
+`5eb5dbf4` **T3** fix round (a discriminating partial-TEAM fixture; NC 3 narrowed to MINTING) ·
+`e4d9bc6c` **T4** the column/blob agreement assertion · `eb0155dd` **T4** fix round (the reverse
+mixed case) · `458e42c5` **T5** the seam recognises a person by key · `e1a3ca2b` **T5** the leg-7b
+TEAM-path pin · plus this ledger commit (the `BLOB_VERSIONS` owner comments, two docstrings, the
+DTO regen, six debt rows and the design-doc gate amendment).
+
+**P6 is a DELETION slice, and the deliverable is what is gone.** Four production files changed
+(`bracketMigration.ts`, `BracketTab.tsx`, `DrawView.tsx`, `entries/entries.py`); the console half is
+net **negative** (+46/-114, and `bracketMigration.ts` alone is +22/-90). Two name→person decoders are deleted outright: `nameFromSlug` (de-slugging
+`p-alexei-sorokin` back into "Alexei Sorokin") and the split-and-zip that recovered a TEAM's members
+by cutting its label on `" / "` positionally — F-DM-04 and F-DM-14's read half. `healBracketRosterNames`
+is deleted with them: it decided a stored row was corrupt by testing `p.name === p.id` and
+**persisted its guess** (F-DM-15), which is identity repair keyed on a name equalling a slug.
+
+**The mint SURVIVES on both tiers, by ruling — this slice demotes the id, it does not remove it.**
+R-DM-7(a) chose option (a): keep `bracket_participants.id` and let P4's `entry_player_id` be the
+identity for everything that resolves to a person. So there is **no re-key and no migration**, and
+`lib/playerSlug.ts` keeps its single caller (`BracketRosterTab.tsx:137`, the hand-add path) — the
+ruling accepts the same-name collision for hand-added rows **in writing**, and a pinned test says so
+(`BracketRosterTab.test.tsx:148`, "silently discards a second hand-added player with the same name
+(ruled residual)"). The plan's judgment call 1 proposed demoting `playerSlug` to "at most a URL
+helper" and was **declined at ratification**: overruling it reopens R-DM-7 itself, and no URL
+consumer of a slug exists anywhere in the tree. `entries/entries.py::roster_id` likewise survives as
+the backend's one `entry-{uuid}` spelling. What changed is what the id **means**: `BracketPlayerDTO`'s
+docstring no longer claims the id is a slug produced by `playerSlug()` — it is a locally-unique row
+key whose provenance depends on who made the row, and the identity is `entryPlayerId`.
+
+**Negative controls — all three green, and NC 3 passed BEFORE the deletion it authorises.**
+**NC 1** ("two participants named 'Li Wei' in one draw are two rows") is delivered in two halves:
+the backend's `test_two_people_with_the_SAME_NAME_are_two_participants_with_two_keys` (T1 Steps 3+4,
+and re-verified as T5's control at `test_entries_commit_seam.py:1139`) and the console's ruled-residual
+pin above (T1 Step 4). **NC 2** ("renaming a participant changes no id and orphans no match or
+result") is `BracketRosterTab.test.tsx:184`, "a rename keeps the id and every reference to it"
+(T1 Step 5). **NC 3** is T3 Step 1, the `bracketMigration.test.ts:160` describe, and it is the one
+that carries the slice's safety argument: it was run **against the pre-deletion code and passed**,
+so removing the repair is evidence-backed rather than asserted. Its title was **narrowed at review**
+and that narrowing matters: the property is not "no row is ever self-named" — `bracketMigration.ts`
+copies a PLAYER participant's name verbatim, so a snapshot that is *already* self-named still
+propagates one. The property proven, and the only one the deletion needs, is **"reconcile never
+MINTS a name out of an id."** The input side of the repair is dead, so nothing will newly create a
+row that needs healing.
+
+**The D3 citation moved, and the register warning moved with it.** `bracketMigration.ts:8-14` used
+to carry it, on `nameFromSlug`'s docstring — "it exists because the alternative shipped the raw slug
+into the roster's Player column and the draw picker (defect D3): every name on the Bracket roster of
+a doubles-only draw read `alexei-sorokin`". That function is deleted, so the citation now lives at
+`bracketMigration.test.ts:144`, on NC 3's doc-comment, restated with the warning intact: **that is
+the bracket DEFECT SERIES D3, not debt-log D3 — two registers, same number.** The defect it names is
+the reason NC 3 exists at all: removing the repair must not resurrect it.
+
+**Named behavior change — a legacy workspace never reopened since the heal shipped keeps its
+slug-style names PERMANENTLY** (recorded here the way P5's `BD` widening and P4's CASCADE were).
+`healBracketRosterNames` ran on **every poll**, against a populated roster, and would have fixed
+those rows on the next open. It is gone, so retyping the name on the Roster tab is the only
+remaining path. **It does not block**: the damage is cosmetic, it is recoverable by rename,
+participants are untouched, and the residual is **unmeasurable from the repo** — it is data on
+directors' laptops. The safety argument that made the deletion ratifiable is narrow and holds:
+the property "reconcile never MINTS a name out of an id" was already true *before* the deletion
+(verified by a negative control, not by inspection), so the post-deletion failure mode is **fewer
+rows, never wrong names**. Cost if wrong: those operators retype names they would otherwise have had
+healed for them.
+
+**The second residual, ruled rather than discovered: a pre-roster-blob doubles-ONLY draw now
+migrates to an EMPTY roster.** With the decode gone, a TEAM member no PLAYER participant can name is
+**omitted** rather than guessed at — F-DM-19's don't-invent posture. This is safe by structure, and
+the structural reason is the correction the controller made to its own first reading: the roster
+blob is **not** a derived projection (it is where remarks and availability live, as P5's invariant
+says), so "it's cosmetic" would have been the wrong justification. The right one is that the
+reconcile effect runs only behind `if (bracketRosterMigrated || bracketPlayers.length > 0) return;`
+— **only ever against an EMPTY roster** — so omission declines to *create* a row and can never
+destroy one or its operator remarks. T1 added a dedicated pin for exactly that guard, proven RED by
+temporarily dropping `&& bracketPlayers.length === 0` (the reconciled roster replaced the seeded row
+**and its `notes`**). One fact from the tree sharpened the story: the guard was **not** the whole
+effect — the heal pass ran *unguarded* beside it, so "the migration is wholly empty-roster-only" is
+a sentence **T3's deletion made true**, not one that was already true.
+
+**T5 LANDED — the commit seam now recognises a person by key, not by participant id.** It was the
+plan's cuttable task (judgment call 5) and it was not cut. `entries/entries.py` carries a per-draw
+set of `bracket_participants.entry_player_id` values alongside the id set, so a manual or legacy
+participant row that itself carries the person key now blocks a duplicate entry that the id-only
+dedupe let through. The key is read off the **COLUMN**, never the roster blob — the correct side of
+the `_adoptable` divergence below — and a `NULL` column is not a person, so an unkeyed legacy row
+blocks nobody and the guard degrades to today's id-only floor rather than crashing. **No refusal was
+lost**: legs 1–8 all still fire with their original text, and the one excusal (`already_ours`, which
+lets a pair recognise *itself* on a re-run) is provably incapable of landing a row, because it is the
+byte-identical expression to the TEAM insert's id and the id-dedupe always catches it. Two brief
+deviations were both **anti-weakening** and both ratified: the brief's snippet would have
+short-circuited legs 6/7/8 rather than only leg 7b, and the brief's Step-1 idempotency test would
+have been a **false green** (a clean second run has no candidates at all, because `_candidates`
+filters `committed_player_id IS NULL`) — rebuilt on the crash-recovery shape, where a naive probe
+reddens five tests.
+
+**T4 characterized a live defect rather than agreeing with a false premise.** The brief said the
+column/blob agreement assertion had no live divergence to find. It has one: `entries.py:741` builds
+the roster payload but appends it only `if adopted is None` (`:746-748`), while the participant
+insert carries `entry.entry_player_id` **unconditionally** (`:866`) — so `_adoptable`'s
+`sourceEntryId` branch produces a keyed column under an unkeyed blob row **on every adoption, today,
+with no backfill**. The reviewer's central question was whether an agreement assertion that ships
+alongside a live divergence is thereby weakened. It is not: the assertion **reports** the divergence
+(column-present/blob-absent is one of three disagreement shapes, each with its own test) rather than
+tolerating it, and the characterization test drives the real `commit_entries` over a producible
+pre-state. **Ruled: P6 would not hot-patch the seam** — the repair is a write to an *existing* roster
+row, which the seam's "never mutates an existing player" invariant does not make, so it is a design
+call and repairing it late in this slice without its own plan was the riskier move. The test carries
+a signpost — *"If this test reds, read it as FIXED, not broken"* — instructing its own deletion, and
+that deletion is the release condition for widening the agreement helper across the suite.
+
+**Deletion gates — THREE of the five brief patterns cannot fire, and nothing was reworded to make
+them.** This is the **third** slice in a row to inherit gate text that cannot fire (P5 found four of five
+stale, one of them a `" / "` pattern grepped against an f-string), so the design doc's P6 gate line
+was amended in place — the same move P5 made at `:160`. Verbatim results: `nameFromSlug`
+→ **0, exit 1** — the only gate that fires clean. `split(' / ')` across
+`apps/console/src apps/entrant/app packages` → **exactly one**, `DrawView.tsx:995` (the plan said
+`:989`; re-anchored by symbol, `membersOf`), the presentation-only split ratified as judgment call 3
+— it splits the participant's OWN stored display name purely to line-break a card, persists nothing
+and recovers no member id. `p.name === p.id` → **three matches, all deliberate**: the plan-mandated
+comment at `BracketTab.tsx:126` recording what was deleted, NC 3's own **negative** assertion
+`expect(rows.some((p) => p.name === p.id)).toBe(false)` at `bracketMigration.test.ts:172`, and the
+tombstone at `:187`. `healBracketRosterNames` → **three matches, all tombstone comments**. A gate
+that a negative control cannot pass is a gate that punishes the evidence, so it was corrected, not
+satisfied. `playerSlug` → **eight matches**, of which the **three production sites are exactly the
+expected set** (the definition, `BracketRosterTab`'s import, its one call); the other five are this
+program's own tests and `lib/README.md`'s table row. The brief's "expect exactly 3" counted
+production only. Related correction carried into the design doc: F-DM-14's "five presentation-
+direction splits" is **one** — four of the five cited sites are `join(' / ')`, the correct id→name
+direction.
+
+**Gates.** `make check` **green across both tiers**, no step errored — console lint (0 errors,
+117 warnings, the standing downgraded set) / `tsc -b` / vitest **204 files, 1840 tests** /
+depcruise **16 warnings, 0 errors** (the pre-ratchet `KNOWN_CROSS_MODULE` set, unchanged); entrant
+lint / typecheck / vitest **37 files, 760 tests** / depcruise **clean**; ruff `All checks passed!`;
+import-linter **15 kept, 0 broken**; pytest
+**`1923 passed, 66 skipped, 9 warnings in 751.63s (0:12:31)`** — twelve above P5's 1911, which is
+T1's, T4's and T5's new seam tests and nothing else. Nothing was red at any point in this task, so
+nothing had to be argued pre-existing; **no `git stash` was used anywhere in this slice**. One
+disclosure: a comment-only divider line in `blob_version.py` was corrected *after* the gate
+launched, so it was re-verified on its own — `ruff check apps/api/src/db/blob_version.py` →
+`All checks passed!`, `test_blob_version_inventory.py` → 3 passed, and
+`test_the_tournament_document_is_the_one_wired_column_today` → 1 passed.
+
+**Deviations from the plan, all reviewed:**
+- **Judgment call 1 was DECLINED at ratification** — `playerSlug()` survives untouched. The plan
+  proposed demoting it; the ruling keeps it, and the design-doc gate was corrected instead.
+- **The brief was wrong about T3's expected test state, twice.** There were **two** heal describes,
+  not one — `bracketMigration.test.ts`'s heal case reddens too, because the heal derives its repair
+  map from the now-trimmed reconcile and its fixture is doubles-only. T2 flagged it forward; T3 did
+  not mistake the red for a regression.
+- **The branch was deliberately RED between T2 and T3** (TDD-shaped: T2 deletes the decode, T3
+  deletes the heal that consumed it). Recorded because a mid-slice merge in that window would have
+  shipped a broken suite; T3 was mandatory, not cuttable.
+- **T2 FLIPPED the zip pin rather than deleting it** (controller override of the brief), and forced
+  one verified trim-neutral fixture change: `flattens TEAM members and dedupes by id` needed a
+  `p-ben` PLAYER participant, because Ben's name previously came from the zip.
+- **T3 edited four comment sentences inside the guard-pin describe** the dispatch said to leave
+  untouched. Judged **justified** at review: three were future-tense claims the commit makes false,
+  and the fourth vouched for "the name repair that runs after the guard" — a repair that no longer
+  exists. Every `+`/`-` inside that describe is a comment line; assertions, fixture and placement
+  are provably unchanged.
+- **T3's rider 3 was a controller defect, conceded in full.** The mixed-TEAM assertion as first
+  written could not fail under the per-member→per-participant regression it claimed to pin, because
+  `playerNames` comes only from PLAYER participants and every one is unconditionally emitted — the
+  id SET is invariant and only ORDER differs. Rebuilt on a discriminating fixture and proved the
+  right way: injecting the regression made the case go RED as the file's only failure.
+- **T5 skipped one brief test as strictly weaker than a pre-existing control** and replaced it with
+  two better ones (a legacy-NULL crash/refusal test and the leg-7b TEAM-path pin).
+- **T5's implementer was terminated mid-finish by a session usage limit**, resumed, and
+  **re-verified rather than trusting the pre-interruption run**; its reviewer was told to watch for
+  interruption-induced inconsistency and found none.
+- **T6 (this task) refused the brief's Step-4 instruction to STRIKE the leg-7 debt row** and
+  narrowed it instead, per the later T5 review finding; and refused the brief's Step-5 verbatim
+  amendment text, which would have written two *more* unachievable gate clauses into the design doc.
+
+**Deferred minors, rolled up:** T1's Step-6 pin duplicates the pre-existing `returns the SAME array
+reference when nothing needs repair` input-for-input (added verbatim anyway — T3's deletion commit
+cites its docstring, and T3 deletes the whole describe) · the tombstone comment's EOF placement ·
+T4's unused session fixture, and the agreement helper not yet applied suite-wide (gated on the
+adoption divergence closing) · T5's `test_a_participant_with_NO_key_never_blocks_an_entry` exercises
+only the set-build NULL filter, not the candidate-side `is None` arms (likely unreachable —
+`adopt_or_mint` always keys an entry) · the repo-wide `StarletteDeprecationWarning` and the
+pre-existing `act(...)` stderr, both untouched.
+
+**Six debt rows touched — four new, one narrowed, one amended.** **Amended:** the blob-vs-column double-store row —
+its sentence *"Today that cannot happen (no backfill ⇒ no keyed column under an unkeyed blob row)"*
+is **empirically false** and T4 proved it, so the sentence is struck and the strike is explained in
+place; the row's conclusion is unchanged, but its "not reachable yet" premise is gone. The reviewer
+called this "the most consequential outcome of the task; do not let it close with the row
+unamended." **Narrowed, not struck:** the leg-7 "already in this draw" row — T5 closed the singleton
+case and the `members[0]` case, and what remains is that a seam-built TEAM carries only
+`member_ids[0]`'s key, so the person guard is blind to the **second** member of an existing team and
+a third entry naming `members[1]` is still admitted (not fixable without a second column or keys on
+member rows — the migration R-DM-4(a) and R-DM-7(a) both declined). **Added:** every Entries
+adoption writes a keyed column under an unkeyed roster-blob row (live, pinned, owner unassigned
+pending a ruling) · a person-refusal leaves an **orphan roster-blob row** and `committed_player_id`
+points at it rather than at the seated row — the blob append sits *above* the dedupe guard;
+pre-existing for the id-based refusal, reachable more often now that T5 added the person arm; not
+repaired because re-pointing the back-reference would be a **resolution**, which I4 forbids, and
+explicitly flagged so nobody mistakes it for a T4 key disagreement (T4's check iterates
+**participants**, so an orphan blob row with no participant is invisible to it and it will **not**
+fire) · the pre-roster-blob doubles-only empty-roster residual above · `DrawView.tsx:995` renders a
+raw member id as a card line when `nameById` misses (pre-existing, deferred from T3 — the mirror
+image of the defect P6 deleted: this one *shows* the id and persists nothing).
+
+**No migration, no FK, no re-key, no slot-blob rewrite, no `BLOB_VERSIONS` flip, no
+`tournaments.data` version bump, allow-list cap still 19.** The registry edit this task carried is
+**comment-only**: five `bracket_matches` list blobs (`side_a`, `side_b`, `dependencies`, `slot_a`,
+`slot_b`) named **P6** as their owner, for a reshape R-DM-7(a) forbids P6 to do. They are now marked
+**UNOWNED**, with a paragraph in the `None`-family note saying a reshape needs its own ruling rather
+than a phase pickup. Two neighbouring comments were corrected to match rather than left
+contradicting it one screen apart: the header note's "P5/P6 work" pointer, and the dict's own
+`list-shaped` divider, which said "owned by a later phase" over a group whose other member
+(`member_ids`) P5's paragraph already calls unowned.
+`test_the_tournament_document_is_the_one_wired_column_today` is untouched and green. The DTO regen
+changed **only** the `BracketPlayerDTO` comment block — no field, so `dto.ts` needed no hand
+reconcile and the parity allow-list and cap were not touched.
+
+**Standing caveat, restated:** all migration and FK evidence in this program is **SQLite only**;
+Postgres is untested. P6 carries **no migration**, so it adds nothing to that debt.
+
+**Next.** **P7** inherits two things that P6 did not touch, both already recorded: F-DM-08's
+server-route half (correctly re-attributed to P7 in the design doc at P5's ratification) and P5's
+Meet rank-disconnect row — Meet's intake is disconnected from Meet's generation twice over, at the
+rank level and at the group level. P7 is **program-scale and R-DM-5-gated**; do not start it without
+reading this note. Two of P6's new rows also want a ruling before anyone builds on them: the
+adoption-path divergence and the orphan roster-blob row are both **unassigned on purpose** — they
+need a decision, not a phase.

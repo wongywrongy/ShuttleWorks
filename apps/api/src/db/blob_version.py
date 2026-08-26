@@ -105,8 +105,8 @@ class VersionedJSON(TypeDecorator):
 # A ``None`` is not an oversight - it is an enumerated debt, and the
 # phase that reshapes the blob flips it. Two families are None today:
 # LIST-SHAPED blobs (nowhere to put a key without reshaping the value -
-# P5/P6 work) and ROUND-TRIP-SENSITIVE blobs (an extra key reaches a
-# consumer that did not ask for it).
+# unowned; see the P6 paragraph below) and ROUND-TRIP-SENSITIVE blobs (an
+# extra key reaches a consumer that did not ask for it).
 #
 # P5 taught the commit seam to write real ``member_ids`` for a confirmed pair.
 # The value is still a bare ``list[str]`` - nowhere to put a ``v`` key without
@@ -114,6 +114,13 @@ class VersionedJSON(TypeDecorator):
 # engine and the console - so the entry stays ``None`` and the reshape is
 # unowned. R-DM-4.x's rationale said P2 would give ``member_ids`` a versioned
 # home; P2 gave it this enumerated slot instead.
+#
+# P6 was named as the owner of the five ``bracket_matches`` list blobs
+# (``side_a``, ``side_b``, ``dependencies``, ``slot_a``, ``slot_b``). It is
+# NOT: R-DM-7(a) ruled against the slot-blob rewrite in those words, choosing
+# ``bracket_participants.entry_player_id`` as the identity instead of a
+# re-key, so P6 shipped without opening any of them. They are UNOWNED - a
+# reshape needs its own ruling, not a phase pickup.
 #
 # P4 added ``bracket_participants.entry_player_id`` as a real COLUMN, not a
 # blob key - the roster shapes it typed live inside ``tournaments.data``,
@@ -129,11 +136,11 @@ class VersionedJSON(TypeDecorator):
 BLOB_VERSIONS: dict[str, Optional[int]] = {
     # -- versioned ----------------------------------------------------
     "tournaments.data": CURRENT_TOURNAMENT_SCHEMA_VERSION,
-    # -- list-shaped: needs a reshape, owned by a later phase ----------
+    # -- list-shaped: needs a reshape, UNOWNED (see the notes above) ---
     "bracket_participants.member_ids": None,  # Pair membership; P5 FILLED it (still a bare list)
-    "bracket_matches.side_a": None,  # resolved participants; P6
+    "bracket_matches.side_a": None,  # resolved participants; see the R-DM-7(a) note
     "bracket_matches.side_b": None,  # same
-    "bracket_matches.dependencies": None,  # draw topology; P6
+    "bracket_matches.dependencies": None,  # draw topology; see the R-DM-7(a) note
     "bracket_matches.child_unit_ids": None,  # draw topology
     "entries.pending_reasons": None,  # entry lifecycle state (list of codes)
     # -- round-trip-sensitive: an extra key would reach a consumer -----
@@ -148,7 +155,7 @@ BLOB_VERSIONS: dict[str, Optional[int]] = {
     "tournament_backups.snapshot": None,  # see the recorded edge above
     "commands.payload": None,  # operator command args
     "bracket_events.config": None,  # per-draw format knobs (SP-P11)
-    "bracket_matches.slot_a": None,  # draw slot pointers; P6
+    "bracket_matches.slot_a": None,  # draw slot pointers; see the R-DM-7(a) note
     "bracket_matches.slot_b": None,  # same
     "solve_jobs.result": None,  # ScheduleDTO
     "solve_jobs.error": None,  # {code,message,detail}

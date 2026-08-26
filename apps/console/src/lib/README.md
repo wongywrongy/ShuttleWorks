@@ -27,7 +27,7 @@ with no rule for which one to open is worse than one drawer.
 | `matchUtils.ts` | `getMatchLabel()` and formatting that depends only on the match DTO. |
 | `names.ts` | Person and school name formatting. |
 | `pageVisibility.ts` | Page-visibility helper for pause-when-hidden polling. |
-| `playerSlug.ts` | The stable player slug both tiers derive. |
+| `playerSlug.ts` | Row key for a HAND-ADDED bracket roster player, slugged from the typed name. Not an identity — that is `entryPlayerId` (R-DM-7(a)); the backend mints its own ids and derives no slug. |
 | `pollPolicy.ts` | Poll intervals and backoff policy. |
 | `schoolAccent.ts` | Per-school accent colour. |
 | `selectableRow.ts` | Shared selectable-row behaviour for banded lists. |
