@@ -1,0 +1,198 @@
+"""R-DM-11(b) — a PUBLISHED ``eventCode`` is unrenameable (SP-DM-3 P7a Task 3).
+
+The ruling keeps ``eventCode`` as the entrant tier's public event key rather
+than re-keying two tiers onto ids (102 ``eventCode`` sites across 33 files),
+and pays for that by making a published code impossible to rename.
+
+**The API has no rename path at all today**, which is why this file is a PIN
+and not a guard. Audited 2026-08-25 over ``apps/api/src``:
+
+- ``entry_events.code`` is written in exactly one place — the create at
+  ``entries/entries_routes.py`` (``POST /{tournament_id}/entry-events``).
+  There is no PATCH/PUT/DELETE on ``/entry-events``, no ``UPDATE`` statement
+  against the table, no ``.code =`` assignment on a row, and none of the
+  repository's five bulk ``setattr`` loops (``repositories/local.py``) reach
+  an ``EntryEvent`` — they patch ``Tournament``, ``Match``, ``BracketMatch``
+  and ``MatchState``.
+- The draws/seeds/winners projections key on ``bracket_events.id`` instead
+  (``entries/entries_site.py``: ``drawKey=event.id, eventCode=event.id``),
+  which is half of a composite PRIMARY KEY and is addressed by path param on
+  every write route — structurally unrenameable.
+
+Writing a refusal with no caller would be a rule that cannot fire. What can
+rot silently is the *absence*: a later slice adds an event-update route and
+nothing notices. So the pin is derived from the live route table
+(``app.openapi()``) in the manner of ``test_tenant_isolation.py`` — a
+hand-written list of routes would go stale exactly when it mattered.
+
+Route registration hazard: newer FastAPI keeps each ``include_router`` as a
+nested ``_IncludedRouter`` (``path=None``), so the route table must be read
+from ``app.openapi()["paths"]``, never ``app.routes``.
+
+- **P7a-NC3** — no route exists that could rename a published event code,
+  asserted from the derived route table (two independent derivations: by
+  path, and by request-body shape).
+- **P7a-NC4** — every public URL and projection that resolves today still
+  resolves afterwards: the characterization the ruling is actually buying.
+"""
+from __future__ import annotations
+
+import pytest
+
+from tests.backend._helpers import isolate_test_database
+
+# Reused rather than re-seeded: these build a published workspace through the
+# real bracket API, which is what NC4 has to read against.
+from tests.backend.test_entries_site_api import (
+    _make_workspace,
+    _se4_bracket,
+    _seed_person,
+)
+
+CSRF = {"X-ShuttleWorks-CSRF": "1"}
+
+# The ONLY operation allowed to put a value in ``entry_events.code``.
+# Creation is not a rename: the row does not exist yet, so nothing public
+# points at the old value.
+_CODE_WRITERS = {("POST", "/tournaments/{tournament_id}/entry-events")}
+
+_VIOLATION = (
+    "R-DM-11(b): a PUBLISHED entry event's ``code`` is the entrant tier's "
+    "public event key and must not be renameable. If you are adding an "
+    "event-update route, the code field must be refused whenever any "
+    "``entry_pages`` publication flag for the workspace is on "
+    "(entrants_published / draws_published / results_published) — an "
+    "unpublished draft event stays renameable, or directors lose their "
+    "correction path. Put the refusal in the SERVICE that owns the write, "
+    "not in a DTO validator, then add the operation here with a reason."
+)
+
+
+@pytest.fixture
+def app(tmp_path, monkeypatch):
+    isolate_test_database(tmp_path, monkeypatch)
+    from core.main import app as fastapi_app
+
+    return fastapi_app
+
+
+@pytest.fixture
+def client(app):
+    from fastapi.testclient import TestClient
+
+    return TestClient(app)
+
+
+def _body_properties(spec, schema, seen=()):
+    """Property names of a request-body schema, following ``$ref``."""
+    if not isinstance(schema, dict):
+        return set()
+    if "$ref" in schema:
+        name = schema["$ref"].rsplit("/", 1)[-1]
+        if name in seen:
+            return set()
+        components = spec.get("components", {}).get("schemas", {})
+        return _body_properties(spec, components.get(name, {}), seen + (name,))
+    names = set(schema.get("properties") or {})
+    for combinator in ("allOf", "anyOf", "oneOf"):
+        for member in schema.get(combinator) or []:
+            names |= _body_properties(spec, member, seen)
+    return names
+
+
+# ---- P7a-NC3: no route can rename an event code ---------------------------
+
+
+def test_entry_event_paths_carry_only_the_create(app):
+    """Derivation 1 — by path. Any PATCH/PUT/DELETE landing on an
+    entry-event path fails here, whatever its body looks like."""
+    spec = app.openapi()
+    found = {
+        (method.upper(), path)
+        for path, operations in spec["paths"].items()
+        if "entry-event" in path
+        for method in operations
+    }
+    assert found == _CODE_WRITERS, f"{_VIOLATION}\nfound: {sorted(found)}"
+
+
+def test_no_request_body_outside_the_create_carries_a_code_field(app):
+    """Derivation 2 — by wire shape, so a rename route escapes the pin
+    above only by also renaming itself off the ``entry-event`` path AND
+    calling the field something other than ``code``."""
+    spec = app.openapi()
+    found = set()
+    for path, operations in spec["paths"].items():
+        for method, operation in operations.items():
+            body = operation.get("requestBody") or {}
+            for media in (body.get("content") or {}).values():
+                if "code" in _body_properties(spec, media.get("schema") or {}):
+                    found.add((method.upper(), path))
+    assert found == _CODE_WRITERS, f"{_VIOLATION}\nfound: {sorted(found)}"
+
+
+def test_the_derivation_is_not_vacuous(app):
+    """Meta-test, the tenant suite's precedent: a derivation that silently
+    matched nothing would pass both assertions above forever."""
+    spec = app.openapi()
+    assert len(spec["paths"]) > 100
+    assert all(
+        path in spec["paths"] and method.lower() in spec["paths"][path]
+        for method, path in _CODE_WRITERS
+    )
+
+
+# ---- P7a-NC4: the public surface still resolves ---------------------------
+
+
+def test_every_public_projection_still_resolves_by_event_code(client):
+    """The property R-DM-11 buys, asserted rather than assumed: with the
+    codes fixed, every public address and every code-bearing projection
+    answers. Both sources are covered — ``bracket_events.id`` on the draw
+    address, ``entry_events.code`` on the entrant and player rows."""
+    tid = _make_workspace(
+        client,
+        slug="nc4-open",
+        draws_published=True,
+        entrants_published=True,
+        results_published=True,
+    )
+    ada = _seed_person(tid, "Ada Chen", "Riverside BC", event_code="MS")
+    bo = _seed_person(tid, "Bo Lee", "Northside SC", event_code="MS")
+    _se4_bracket(
+        client,
+        tid,
+        [
+            {"id": "entry-" + ada, "name": "Ada Chen", "seed": 1},
+            {"id": "entry-" + bo, "name": "Bo Lee", "seed": 2},
+            {"id": "P3", "name": "Cass Doe"},
+            {"id": "P4", "name": "Dev Roy"},
+        ],
+    )
+
+    # The entry-page projection: ``entry_events.code`` on the form and on
+    # the published entrant list.
+    page = client.get("/e/api/page/nc4-open")
+    assert page.status_code == 200, page.text
+    page = page.json()
+    assert [event["code"] for event in page["events"]] == ["MS"]
+    assert [row["eventCodes"] for row in page["entrants"]] == [["MS"], ["MS"]]
+
+    # The draw address: ``bracket_events.id``, which is both ``drawKey``
+    # (the public URL segment) and ``eventCode``.
+    index = client.get("/e/api/page/nc4-open/draws").json()
+    (card,) = index["draws"]
+    assert card["drawKey"] == card["eventCode"] == "MS"
+    detail = client.get("/e/api/page/nc4-open/draws/" + card["drawKey"])
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["eventCode"] == "MS"
+
+    seeds = client.get("/e/api/page/nc4-open/seeds").json()
+    assert [event["eventCode"] for event in seeds["events"]] == ["MS"]
+    winners = client.get("/e/api/page/nc4-open/winners").json()
+    assert [event["eventCode"] for event in winners["events"]] == ["MS"]
+
+    # The player page: keyed by person id, carrying ``entry_events.code``.
+    player = client.get("/e/api/page/nc4-open/players/" + ada)
+    assert player.status_code == 200, player.text
+    assert [event["code"] for event in player.json()["events"]] == ["MS"]

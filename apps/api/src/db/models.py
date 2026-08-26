@@ -496,6 +496,12 @@ class BracketEvent(Base):
     is the tournament product's ``"se"`` (single-elimination) or
     ``"rr"`` (round-robin) tag; ``config`` is the catch-all blob for
     format-specific knobs (randomize-seed flag, optional metadata).
+
+    ``id`` is the entrant tier's public draw address — it is both ``drawKey``
+    (the ``/e/{slug}/draws/{drawKey}`` URL segment) and ``eventCode`` on the
+    draws, seeds and winners projections. Being half of the PK, and addressed
+    by path param on every write route, it is unrenameable by construction;
+    R-DM-11(b) says keep it that way.
     """
 
     __tablename__ = "bracket_events"
@@ -1495,6 +1501,17 @@ class EntryEvent(Base):
     code is skipped and reported, never guessed", so a dangling pointer is a
     handled state — whereas a real FK would have to cascade, letting a draw
     rebuild silently destroy entry configuration and every entry under it.
+
+    **``code`` is also the entrant tier's public event key** (R-DM-11(b)):
+    it is what the public page groups entrants by and what the player page
+    names events with, so once the workspace's ``entry_pages`` row has any
+    publication flag on, renaming it changes what a published address
+    describes. There is no update route today and there must not be one that
+    can rename a *published* code — a draft one stays renameable, or a
+    director loses their correction path. The absence is pinned, derived
+    from the live route table, by
+    ``tests/backend/test_event_code_unrenameable.py``; add a refusal in the
+    owning service before you add the route.
     """
 
     __tablename__ = "entry_events"
