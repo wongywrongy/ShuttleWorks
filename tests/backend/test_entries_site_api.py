@@ -330,11 +330,14 @@ def test_a_bracket_workspace_does_not_publish_divisions_it_never_configured(
     ``meet_events`` is derived for ANY workspace whose blob carries a
     ``config.rankCounts`` (Task 1 kept the derivation module-agnostic on
     purpose), and the console store seeds five division codes into every
-    fresh workspace, which the first autosave persists. So a bracket-only
+    fresh workspace, which the first autosave persists. So a bracket
     workspace really can hold rows nobody configured - and publishing those
-    would re-create F-DM-33 pointing the other way. The projection therefore
-    gates on the ``meet`` module being ENABLED, which ``kind='bracket'``
-    leaves at ``available``.
+    would re-create F-DM-33 pointing the other way.
+
+    The projection therefore gates on ``tournaments.kind`` (ruling P7b-14,
+    applying R-DM-10: ``kind`` is the single domain authority,
+    CHECK-constrained since P7a; ``workspace_modules`` is UI enablement
+    only). The two toggle controls below are the other half of that ruling.
     """
     tid = _make_workspace(
         client, slug="bracket-with-junk", kind="bracket", draws_published=True
@@ -343,6 +346,62 @@ def test_a_bracket_workspace_does_not_publish_divisions_it_never_configured(
 
     body = client.get("/e/api/page/bracket-with-junk/draws").json()
     assert body["divisions"] == []
+
+
+def test_enabling_the_meet_module_on_a_bracket_workspace_changes_nothing_public(
+    client,
+):
+    """**P7b-NC9e.** The reachable half NC9c did not cover.
+
+    ``available -> enabled`` on ``meet`` is ONE PATCH a bracket director can
+    make just to look at the module, and the console store has already
+    autosaved five default division codes. Under a ``workspace_modules``
+    gate that single click would have made a bracket event's public page
+    read "Played as a meet, not by draws. Divisions: MD, MS, WD, WS, XD."
+    Under R-DM-10's authority it cannot: ``kind`` did not move, so the wire
+    did not move.
+    """
+    tid = _make_workspace(
+        client, slug="bracket-toggled", kind="bracket", draws_published=True
+    )
+    _declare_divisions(client, tid, {"MS": 3, "WS": 3, "MD": 2, "WD": 2, "XD": 2})
+    before = client.get("/e/api/page/bracket-toggled/draws").json()
+
+    r = client.patch(
+        f"/tournaments/{tid}/modules/meet", json={"status": "enabled"}, headers=CSRF
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "enabled"
+
+    assert client.get("/e/api/page/bracket-toggled/draws").json() == before
+    assert before["divisions"] == []
+
+
+def test_disabling_the_meet_module_on_a_meet_workspace_changes_nothing_public(
+    client,
+):
+    """**P7b-NC9f.** The other toggle direction, and the reason concern 3 of
+    the first round is retired: module state no longer reaches the public
+    wire, so a control-plane toggle has no undisclosed public effect.
+
+    Disabling the last enabled operational module is refused, so ``bracket``
+    is enabled first - which leaves the workspace's UI describing a bracket
+    while ``kind`` still says meet. The public answer follows ``kind``.
+    """
+    tid = _make_workspace(client, slug="meet-toggled", draws_published=True)
+    _declare_divisions(client, tid, {"MS": 3, "WS": 3})
+    before = client.get("/e/api/page/meet-toggled/draws").json()
+    assert before["divisions"] == ["MS", "WS"]
+
+    for module_id, status in (("bracket", "enabled"), ("meet", "disabled")):
+        r = client.patch(
+            f"/tournaments/{tid}/modules/{module_id}",
+            json={"status": status},
+            headers=CSRF,
+        )
+        assert r.status_code == 200, r.text
+
+    assert client.get("/e/api/page/meet-toggled/draws").json() == before
 
 
 def test_divisions_are_withheld_while_draws_are_unpublished(client):

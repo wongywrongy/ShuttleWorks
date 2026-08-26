@@ -41,7 +41,6 @@ from db.models import (
     EntryPlayer,
     MeetEvent,
     Tournament,
-    WorkspaceModule,
 )
 from repositories import LocalRepository, get_repository
 
@@ -81,7 +80,7 @@ def _bracket(repo: LocalRepository, tournament_id):
     return payload
 
 
-def _meet_divisions(repo: LocalRepository, tournament_id) -> List[str]:
+def _meet_divisions(repo: LocalRepository, tournament: Tournament) -> List[str]:
     """The workspace's declared Meet divisions (``meet_events.id``), ordered.
 
     F-DM-33: without this, a Meet workspace's draws index is the SAME BYTES
@@ -91,32 +90,32 @@ def _meet_divisions(repo: LocalRepository, tournament_id) -> List[str]:
     states. A Meet workspace has never created a ``bracket_events`` row and
     never will; with ``meet_events`` it can finally say what it does have.
 
-    **Gated on the ``meet`` module being ENABLED, not on the rows alone.**
-    ``meet_events`` is derived from ``config.rankCounts`` for every workspace
-    that carries one - the derivation is deliberately module-agnostic - and
-    the console store seeds five division codes into every fresh workspace's
-    blob, which the first autosave persists. So a bracket-only workspace can
-    hold rows nobody configured, and publishing those would re-create exactly
-    the ambiguity this field removes.
+    **Gated on ``tournaments.kind``, and on nothing else (ruling P7b-14).**
+    The rows alone will not do: ``meet_events`` is derived from
+    ``config.rankCounts`` for every workspace that carries one - Task 1 kept
+    the derivation module-agnostic on purpose - and the console store seeds
+    five division codes into every fresh workspace's blob, which the first
+    autosave persists. So a bracket workspace really can hold division rows
+    nobody configured.
 
-    A plain SELECT, never ``repo.modules.ensure_modules``: that helper seeds
-    and commits rows, and this is an anonymous public GET.
+    **``workspace_modules`` will not do either, and that is the ruled part.**
+    R-DM-10: ``kind`` is the single DOMAIN authority (CHECK-constrained since
+    P7a); ``workspace_modules`` governs UI enablement only. "This is played
+    as a meet" is a domain claim, so it answers to ``kind``. Keying it off
+    module state would also have made a one-PATCH UI toggle (``available ->
+    enabled`` on ``meet``, which a bracket director might do just to look at
+    the module) publish "Played as a meet" on a bracket event's public page -
+    exactly the falsehood this gate exists to prevent, reachable from the
+    control plane. Toggling a module now changes nothing public at all.
+
+    No query: ``_page`` already resolved the row.
     """
-    enabled = repo.session.scalar(
-        select(WorkspaceModule.id)
-        .where(
-            WorkspaceModule.tournament_id == tournament_id,
-            WorkspaceModule.module_id == "meet",
-            WorkspaceModule.status == "enabled",
-        )
-        .limit(1)
-    )
-    if enabled is None:
+    if tournament.kind != "meet":
         return []
     return list(
         repo.session.scalars(
             select(MeetEvent.id)
-            .where(MeetEvent.tournament_id == tournament_id)
+            .where(MeetEvent.tournament_id == tournament.id)
             .order_by(MeetEvent.id.asc())
         )
     )
@@ -599,7 +598,7 @@ def draws_index(
         published=True,
         resultsPublished=bool(page.results_published),
         draws=draws,
-        divisions=_meet_divisions(repo, tournament.id),
+        divisions=_meet_divisions(repo, tournament),
     )
 
 
