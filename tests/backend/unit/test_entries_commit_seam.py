@@ -1222,6 +1222,55 @@ def test_a_person_already_in_the_draw_under_ANOTHER_id_is_not_entered_twice(
     assert entry.committed_player_id is not None
 
 
+def test_a_member_already_in_the_draw_under_ANOTHER_id_blocks_the_team_too(
+    repo, session
+):
+    """Leg 7b doing its own job — ``test_a_member_already_entered_by_hand_is_
+    not_double_entered_as_a_team`` (:1087) asked by ID; this asks by PERSON.
+
+    The director seated one half through the picker under an id the seam
+    would never mint, but the row carries the person key (the console puts it
+    there). Leg 7 cannot see that row, so without leg 7b the seam emits a
+    TEAM - and then one of two silent wrongs follows: if the seated human is
+    ``members[0]`` the TEAM insert dies on the key dedupe and the OTHER half
+    vanishes from the draw entirely; if it is ``members[1]`` the TEAM lands
+    and that human is in the draw twice.
+
+    I4 again: the seam declines the team and both halves commit as
+    singletons, exactly as :1087 leaves them. The director pairs them.
+    """
+    tid = _bracket_workspace(repo)
+    ev = _doubles_draw(repo, session, tid)
+    nominator, partner = _pair(session, tid, ev)
+    repo.brackets.add_participants(
+        tid,
+        "XD",
+        [
+            {
+                "id": "p-ana",
+                "name": "Ana Reyes",
+                "type": "PLAYER",
+                "member_ids": [],
+                "entry_player_id": nominator.entry_player_id,
+                "seed": None,
+                "meta": {},
+            }
+        ],
+    )
+
+    commit_entries(repo, tid)
+
+    session.expire_all()
+    participants = repo.brackets.list_participants(tid, "XD")
+    assert {p.type for p in participants} == {"PLAYER"}, "no TEAM may be built"
+    assert sorted(p.id for p in participants) == sorted(
+        ["p-ana", roster_id(partner.entry_player_id)]
+    ), "the seated human keeps their one row; the other half gets their own"
+    # Neither entry is lost: both still commit against their own roster seat.
+    assert nominator.committed_player_id == roster_id(nominator.entry_player_id)
+    assert partner.committed_player_id == roster_id(partner.entry_player_id)
+
+
 def test_a_participant_with_NO_key_never_blocks_an_entry(repo, session):
     """The legacy path. ``entry_player_id`` is nullable and no backfill was
     taken, so a pre-P4 participant row reads NULL. A NULL is not a person,
