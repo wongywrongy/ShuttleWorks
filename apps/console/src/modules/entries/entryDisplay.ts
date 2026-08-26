@@ -159,7 +159,6 @@ const SKIP_REASON_LABEL: Record<string, string> = {
   DRAW_NOT_EDITABLE: 'The draw for that event is already generated',
   STATE_CONFLICT: 'Roster changed underneath the commit. Try again',
   INVALID_PLAYER: 'Entry is missing a usable player name',
-  NO_FREE_SLOT: 'That school has no free slot left in this event',
 };
 
 /** Human explanation for a commit skip; unknown codes show verbatim. */
