@@ -522,8 +522,8 @@ async def get_schedule_advisories(
     match_states_dict: dict = {}
     try:
         rows = repo.match_states.list_for_tournament(tournament_row.id)
-        from operations.match_state_routes import _row_to_dto
-        match_states_dict = {row.match_id: _row_to_dto(row).model_dump() for row in rows}
+        from operations.match_state_routes import row_to_dto
+        match_states_dict = {row.match_id: row_to_dto(row).model_dump() for row in rows}
     except Exception as e:  # noqa: BLE001
         log.warning("advisories: match state unreadable: %s", e)
         match_states_dict = {}

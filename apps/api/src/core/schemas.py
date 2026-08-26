@@ -642,12 +642,6 @@ class Advisory(BaseModel):
     detectedAt: str                                  # ISO timestamp
 
 
-# Match State (for Match Desk)
-class MatchScore(BaseModel):
-    sideA: int
-    sideB: int
-
-
 # NOTE: The canonical MatchStateDTO lives in operations/match_state_routes.py — that
 # module owns persistence and field-validation. Importing it from there
 # everywhere ensures Pydantic's class-identity validation doesn't reject

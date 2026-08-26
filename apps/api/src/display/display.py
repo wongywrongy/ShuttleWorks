@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Path, Response
 from pydantic import BaseModel, Field
 
-from operations.match_state_routes import MatchStateDTO, _row_to_dto
+from operations.match_state_routes import MatchStateDTO, row_to_dto
 from bracket.brackets import TournamentOut, _hydrate_session, _serialize_session
 from core.dependencies import require_tournament_access
 from core.error_codes import ErrorCode, http_error
@@ -256,7 +256,7 @@ def display_match_states(
 ):
     t = _resolve(repo, token)
     rows = repo.match_states.list_for_tournament(t.id)
-    return {row.match_id: _row_to_dto(row) for row in rows}
+    return {row.match_id: row_to_dto(row) for row in rows}
 
 
 @public_router.get("/{token}/bracket", response_model=TournamentOut)

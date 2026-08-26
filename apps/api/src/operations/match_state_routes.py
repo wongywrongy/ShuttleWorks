@@ -157,7 +157,13 @@ def _dto_to_fields(update: MatchStateDTO) -> dict:
     return fields
 
 
-def _row_to_dto(row: MatchState) -> MatchStateDTO:
+def row_to_dto(row: MatchState) -> MatchStateDTO:
+    """Project one ``match_states`` row onto the wire DTO.
+
+    Public because ``display/`` and ``meet/`` both project match state from rows;
+    the leading underscore claimed a privacy that four importers already ignored
+    (F-DM-54).
+    """
     score = None
     if row.score_side_a is not None and row.score_side_b is not None:
         score = MatchScore(sideA=row.score_side_a, sideB=row.score_side_b)
@@ -326,7 +332,7 @@ def get_all_match_states(
     """Get all match states for the tournament."""
     tid = _ensure_tournament(repo, tournament_id)
     rows = repo.match_states.list_for_tournament(tid)
-    return {row.match_id: _row_to_dto(row) for row in rows}
+    return {row.match_id: row_to_dto(row) for row in rows}
 
 
 @router.get("/{match_id}", response_model=MatchStateDTO, dependencies=[_VIEWER])
@@ -349,7 +355,7 @@ def get_match_state(
     row = repo.match_states.get(tid, match_id)
     if row is None:
         return MatchStateDTO(matchId=match_id, status="scheduled")
-    return _row_to_dto(row)
+    return row_to_dto(row)
 
 
 @router.put("/{match_id}", response_model=MatchStateDTO, dependencies=[_OPERATOR])
@@ -409,7 +415,7 @@ def update_match_state(
 
     new_version = _current_match_version(repo, tid, match_id)
     response.headers["ETag"] = f'"{new_version}"'
-    return _row_to_dto(row)
+    return row_to_dto(row)
 
 
 @router.delete("/{match_id}", dependencies=[_OPERATOR])
@@ -474,7 +480,7 @@ def export_match_states(
     rows: Iterable[MatchState] = repo.match_states.list_for_tournament(tid)
     payload = {
         "matchStates": {
-            row.match_id: _row_to_dto(row).model_dump() for row in rows
+            row.match_id: row_to_dto(row).model_dump() for row in rows
         },
         "lastUpdated": now_iso(),
         "version": "1.0",

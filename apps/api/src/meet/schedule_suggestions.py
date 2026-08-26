@@ -122,8 +122,8 @@ async def _handle_optimize(
         match_states: dict = {}
         try:
             rows = repo.match_states.list_for_tournament(tournament_id)
-            from operations.match_state_routes import _row_to_dto
-            match_states = {row.match_id: _row_to_dto(row) for row in rows}
+            from operations.match_state_routes import row_to_dto
+            match_states = {row.match_id: row_to_dto(row) for row in rows}
         except Exception:
             log.exception("suggestions: failed to read match_states")
             match_states = {}
@@ -285,8 +285,8 @@ async def _handle_repair(
         match_states: dict = {}
         try:
             rows = repo.match_states.list_for_tournament(tournament_id)
-            from operations.match_state_routes import _row_to_dto
-            match_states = {row.match_id: _row_to_dto(row) for row in rows}
+            from operations.match_state_routes import row_to_dto
+            match_states = {row.match_id: row_to_dto(row) for row in rows}
         except Exception:
             log.exception("suggestions: failed to read match_states")
             match_states = {}
