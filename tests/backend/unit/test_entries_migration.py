@@ -45,8 +45,9 @@ ENTRIES_REVISION = "s3d8f2b5c0e1"
 # E3 (Phase 8) the doubles partner-invite trio. SP-DM-3 P4 then added the
 # ``bracket_participants.entry_player_id`` person key and the ``match_states``
 # composite FK, and P7a the schema's first four CHECK constraints — one of
-# them on ``entries.state``.
-HEAD_REVISION = "z0f5a1b3c9d2"
+# them on ``entries.state``. P7b added the ``meet_events`` table and the
+# ``entry_events.meet_event_id`` mapping column.
+HEAD_REVISION = "aa1b6c4e0d3f"
 PREVIOUS_REVISION = "r2c7e1f4a9b3"
 
 # Every table the Entries family owns after the R13 reshape. The account

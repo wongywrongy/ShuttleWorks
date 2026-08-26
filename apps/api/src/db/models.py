@@ -712,6 +712,56 @@ class BracketResult(Base):
     )
 
 
+# ---- Meet schema (SP-DM-3 P7b) ------------------------------------------
+
+
+class MeetEvent(Base):
+    """One division within a Meet workspace: ``MS``, ``XD`` — never ``MS1``.
+
+    Meet has never had an Event entity; a division lived only as a key in
+    the state blob's ``config.rankCounts`` dict, which is why the Entries
+    commit seam had to invent the fields it needed. This table is that
+    entity, and R-DM-5 binds its grain to the **division**: a numbered rank
+    (``MS1``) is a generated *position* label, regenerated from
+    ``{prefix, count}`` at every site that shows one, with no row, no label
+    and no lifecycle of its own. ``slot_count`` is that count, so
+    ``{BS: 20, GS: 20}`` is two rows carrying 20, not forty.
+
+    **Derived, never authored.** The only writer is
+    ``repositories.local._LocalTournamentRepo.upsert_data``, which re-syncs
+    these rows from the blob it is persisting — the same place the
+    denormalised ``name`` / ``tournament_date`` columns are kept in step.
+    That is the single funnel every blob write reaches, so a row cannot
+    drift from the config no matter which of the nine writers supplied it.
+    ``label`` is the one field the blob has no source for: it is seeded to
+    the code on INSERT and never rewritten, so it stays available to a
+    future editor without the funnel clobbering it on the next save.
+
+    Composite PK ``(tournament_id, id)`` follows ``BracketEvent``, and
+    inherits its hazard: ``id`` is half the PK, so a division cannot be
+    renamed in place. That costs nothing today — the derivation reads a
+    dict keyed by code and cannot tell a rename from a delete-plus-add
+    either way — but it is the same shape as debt-log **D24**.
+    """
+
+    __tablename__ = "meet_events"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    #: The division code, e.g. ``"MS"``. Bounded like ``entry_events.code``.
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    #: How many numbered positions the division expands to (``rankCounts``).
+    slot_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
 # ---- Workspace modules (workspace-modules program, sub-project #1) -------
 #
 # First-class per-workspace module state, tied to ``tournaments.id``. The
@@ -1535,6 +1585,15 @@ class EntryEvent(Base):
         String(20), default="singles", nullable=False
     )
     bracket_event_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    #: The mapped ``meet_events.id`` (a division code, R-DM-5). FK-LESS for
+    #: the same reason as ``bracket_event_id`` above, and more forcefully:
+    #: ``meet_events`` rows are DERIVED from the state blob and are deleted
+    #: whenever a code leaves ``config.rankCounts`` — so a cascading FK would
+    #: let one config edit (or a backup restore) destroy every entry under a
+    #: division, and a restricting one would make the blob write itself fail.
+    #: A dangling pointer is the already-handled state: an unmappable code is
+    #: skipped and reported, never guessed.
+    meet_event_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     cap: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # R14: the PER-EVENT FALLBACK, kept rather than replaced. It is how
     # flight-tiered pricing (CAN-AM: $50 A flight, $30 all others) is
@@ -1569,6 +1628,7 @@ class EntryEvent(Base):
 
     __table_args__ = (
         Index("ix_entry_events_bracket_event", "tournament_id", "bracket_event_id"),
+        Index("ix_entry_events_meet_event", "tournament_id", "meet_event_id"),
     )
 
 

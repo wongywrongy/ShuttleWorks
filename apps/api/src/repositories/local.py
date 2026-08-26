@@ -71,6 +71,7 @@ from db.models import (
     Match,
     MatchState,
     MatchStatus,
+    MeetEvent,
     Tournament,
     TournamentBackup,
     TournamentMember,
@@ -122,6 +123,31 @@ def _extract_name(payload: dict) -> Optional[str]:
 def _extract_date(payload: dict) -> Optional[str]:
     cfg = payload.get("config") if isinstance(payload.get("config"), dict) else None
     return cfg.get("tournamentDate") if cfg else None
+
+
+def _rank_counts(payload: dict) -> dict:
+    """``config.rankCounts`` from a blob, coerced to ``{code: int}``.
+
+    Absent config, absent key and ``{}`` all mean the same thing — **zero
+    divisions** — because ``POST /tournaments`` seeds a config with no
+    ``rankCounts`` key at all, so "missing" is a state real workspaces are
+    in, not a signal to skip the sync. Junk entries are dropped rather than
+    raised on: this runs inside the blob write, and a malformed count in a
+    restored backup must not make the write itself fail.
+    """
+    cfg = payload.get("config") if isinstance(payload.get("config"), dict) else None
+    counts = cfg.get("rankCounts") if cfg else None
+    if not isinstance(counts, dict):
+        return {}
+    out: dict = {}
+    for code, count in counts.items():
+        if not isinstance(code, str) or not code or len(code) > 40:
+            continue
+        try:
+            out[code] = int(count)
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def _stamp_payload(payload: dict) -> dict:
@@ -204,6 +230,57 @@ class _LocalTournamentRepo:
         self.session.commit()
         return True
 
+
+    def _sync_meet_events(self, tournament_id: uuid.UUID, payload: dict) -> None:
+        """Re-derive ``meet_events`` from the blob this write is persisting.
+
+        Hung on ``upsert_data`` and NOT on ``commit_tournament_state``: the
+        comment below on ``row.state_version`` records that an earlier author
+        assumed the latter was the funnel and shipped three bugs from it.
+        ``row.data`` is assigned in exactly one place, here, so every one of
+        the nine blob writers — the state PUT, the proposal commit (which
+        replaces ``config`` wholesale from a client body), the create-seed,
+        both entries seams, backup restore, two bracket paths, plan-finalized
+        — re-derives, and it does not matter which of them supplied the
+        config. Last-write-wins on the field is exactly the property wanted.
+
+        This is a persistence-layer concern by construction: ``.importlinter``
+        forbids ``repositories`` reaching up into ``meet``, so it reads the
+        payload and writes ``db.models`` rows — the same shape the
+        denormalised ``name`` / ``tournament_date`` sync uses.
+
+        **Idempotent, and non-destructive with it.** Unchanged rows are not
+        touched at all — not deleted and recreated, not re-UPDATEd — because
+        ``entry_events.meet_event_id`` points at them and a churned row would
+        silently break that mapping (and reset ``created_at``). ``label`` is
+        seeded from the code on INSERT and never rewritten: the blob has no
+        label to derive it from, so re-deriving it would clobber any label a
+        later editor sets.
+        """
+        desired = _rank_counts(payload)
+        existing = {
+            row.id: row
+            for row in self.session.execute(
+                select(MeetEvent).where(MeetEvent.tournament_id == tournament_id)
+            ).scalars()
+        }
+        for code, slots in desired.items():
+            row = existing.pop(code, None)
+            if row is None:
+                self.session.add(
+                    MeetEvent(
+                        tournament_id=tournament_id,
+                        id=code,
+                        label=code,
+                        slot_count=slots,
+                    )
+                )
+            elif row.slot_count != slots:
+                row.slot_count = slots
+        # Whatever is left named a code the config no longer declares.
+        for row in existing.values():
+            self.session.delete(row)
+
     def upsert_data(
         self,
         tournament_id: uuid.UUID,
@@ -262,6 +339,7 @@ class _LocalTournamentRepo:
         # Any response that rewrites the blob must feed the new value back to
         # the client, or the client's next save spuriously conflicts.
         row.state_version = (row.state_version or 0) + 1
+        self._sync_meet_events(tournament_id, stamped)
         self.session.commit()
         self.session.refresh(row)
         return row
