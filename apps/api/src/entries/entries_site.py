@@ -34,7 +34,15 @@ from sqlalchemy import select
 
 from entries.entries import roster_id
 from entries.entries_public import _not_found, _resolve
-from db.models import Entry, EntryEvent, EntryPage, EntryPlayer, Tournament
+from db.models import (
+    Entry,
+    EntryEvent,
+    EntryPage,
+    EntryPlayer,
+    MeetEvent,
+    Tournament,
+    WorkspaceModule,
+)
 from repositories import LocalRepository, get_repository
 
 router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
@@ -71,6 +79,47 @@ def _bracket(repo: LocalRepository, tournament_id):
     payload = _serialize_session(session)
     response_cache.put(tournament_id, payload)
     return payload
+
+
+def _meet_divisions(repo: LocalRepository, tournament_id) -> List[str]:
+    """The workspace's declared Meet divisions (``meet_events.id``), ordered.
+
+    F-DM-33: without this, a Meet workspace's draws index is the SAME BYTES
+    as a bracket workspace that has no events yet - ``_hydrate_session``
+    returns ``None`` for both, the comprehension below falls to its ``else
+    []``, and the public tier renders one "No draws yet." for two unrelated
+    states. A Meet workspace has never created a ``bracket_events`` row and
+    never will; with ``meet_events`` it can finally say what it does have.
+
+    **Gated on the ``meet`` module being ENABLED, not on the rows alone.**
+    ``meet_events`` is derived from ``config.rankCounts`` for every workspace
+    that carries one - the derivation is deliberately module-agnostic - and
+    the console store seeds five division codes into every fresh workspace's
+    blob, which the first autosave persists. So a bracket-only workspace can
+    hold rows nobody configured, and publishing those would re-create exactly
+    the ambiguity this field removes.
+
+    A plain SELECT, never ``repo.modules.ensure_modules``: that helper seeds
+    and commits rows, and this is an anonymous public GET.
+    """
+    enabled = repo.session.scalar(
+        select(WorkspaceModule.id)
+        .where(
+            WorkspaceModule.tournament_id == tournament_id,
+            WorkspaceModule.module_id == "meet",
+            WorkspaceModule.status == "enabled",
+        )
+        .limit(1)
+    )
+    if enabled is None:
+        return []
+    return list(
+        repo.session.scalars(
+            select(MeetEvent.id)
+            .where(MeetEvent.tournament_id == tournament_id)
+            .order_by(MeetEvent.id.asc())
+        )
+    )
 
 
 def _clubs_by_roster_id(repo: LocalRepository, tournament_id) -> Dict[str, Optional[str]]:
@@ -114,6 +163,13 @@ class DrawsIndexDTO(BaseModel):
     published: bool
     resultsPublished: bool
     draws: List[DrawCardDTO] = []
+    #: Meet division codes ("MS", "XD"), empty for anything that is not a
+    #: Meet workspace. NOT draw cards: a division has no bracket, no
+    #: ``/draws/{key}`` document to link to, and no participant count -
+    #: ``slot_count`` is lineup positions, not entries. It is the reason an
+    #: empty ``draws`` list is empty (F-DM-33), stated in the vocabulary the
+    #: entity already uses (``db.models.MeetEvent``).
+    divisions: List[str] = []
 
 
 class TeamDTO(BaseModel):
@@ -543,6 +599,7 @@ def draws_index(
         published=True,
         resultsPublished=bool(page.results_published),
         draws=draws,
+        divisions=_meet_divisions(repo, tournament.id),
     )
 
 

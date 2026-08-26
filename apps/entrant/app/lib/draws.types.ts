@@ -28,6 +28,13 @@ export interface DrawsIndexDTO {
   published: boolean;
   resultsPublished: boolean;
   draws: DrawCardDTO[];
+  /** Meet division codes (`MS`, `XD`), empty for anything that is not a Meet
+   *  workspace. F-DM-33: an empty `draws` list used to be the same bytes for
+   *  a meet and for a bracket nobody has drawn yet, so this tier rendered one
+   *  answer for two unrelated states. These are NOT draw cards - a division
+   *  has no `/draws/{key}` document to link to and no entry count - which is
+   *  why they arrive beside `draws` rather than inside it. */
+  divisions: string[];
 }
 
 export interface TeamDTO {

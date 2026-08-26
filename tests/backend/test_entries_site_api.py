@@ -38,8 +38,10 @@ def client(tmp_path, monkeypatch):
 # ---- seeding helpers ------------------------------------------------------
 
 
-def _make_workspace(client, name="Draws Open", slug="draws-open", **flags):
-    tid = client.post("/tournaments", json={"name": name}, headers=CSRF).json()["id"]
+def _make_workspace(client, name="Draws Open", slug="draws-open", kind="meet", **flags):
+    tid = client.post(
+        "/tournaments", json={"name": name, "kind": kind}, headers=CSRF
+    ).json()["id"]
 
     from db.models import EntryPage
     from db.session import SessionLocal
@@ -137,6 +139,29 @@ def _set_flags(tid, **flags):
         session.close()
 
 
+def _declare_divisions(client, tid, counts):
+    """Declare Meet divisions the way an operator does: ``config.rankCounts``
+    through the real state PUT, which is the one blob funnel the
+    ``meet_events`` derivation hangs on. Seeding rows by hand would test a
+    hand-built imitation of the table instead of the table."""
+    r = client.put(
+        f"/tournaments/{tid}/state",
+        json={
+            "config": {
+                "intervalMinutes": 30,
+                "dayStart": "09:00",
+                "dayEnd": "17:00",
+                "courtCount": 4,
+                "defaultRestMinutes": 30,
+                "freezeHorizonSlots": 0,
+                "rankCounts": counts,
+            }
+        },
+        headers=CSRF,
+    )
+    assert r.status_code == 200, r.text
+
+
 def _se4_bracket(client, tid, participants):
     body = {
         "courts": 2,
@@ -218,7 +243,12 @@ def bracket_page(client):
 def test_unpublished_draws_answer_an_explicit_false_envelope(client):
     _make_workspace(client, slug="quiet-open")
     body = client.get("/e/api/page/quiet-open/draws").json()
-    assert body == {"published": False, "resultsPublished": False, "draws": []}
+    assert body == {
+        "published": False,
+        "resultsPublished": False,
+        "draws": [],
+        "divisions": [],
+    }
 
 
 def test_the_draws_index_lists_the_draw_with_exact_card_keys(client, bracket_page):
@@ -243,6 +273,86 @@ def test_a_meet_only_workspace_publishes_an_empty_draws_list(client):
     body = client.get("/e/api/page/meet-only/draws").json()
     assert body["published"] is True
     assert body["draws"] == []
+
+
+# ---- F-DM-33: an empty draws list says WHY it is empty (P7b-NC9) ----------
+
+
+def test_a_meet_with_divisions_is_distinguishable_from_a_bracket_with_no_events(
+    client,
+):
+    """**P7b-NC9a.** Before ``meet_events``, these two bodies were the same
+    bytes: a Meet workspace has never created a ``bracket_events`` row, so
+    ``_hydrate_session`` answered ``None`` for it exactly as it does for a
+    bracket workspace nobody has added an event to, and both fell to the
+    draws comprehension's ``else []``. ``divisions`` is what makes the two
+    answerable apart, and it carries the reason rather than a flag naming it.
+    """
+    meet = _make_workspace(client, slug="the-meet", draws_published=True)
+    _declare_divisions(client, meet, {"MS": 3, "WS": 3, "MD": 2})
+    _make_workspace(client, slug="the-bracket", kind="bracket", draws_published=True)
+
+    meet_body = client.get("/e/api/page/the-meet/draws").json()
+    bracket_body = client.get("/e/api/page/the-bracket/draws").json()
+
+    assert meet_body["draws"] == [] and bracket_body["draws"] == []
+    assert meet_body["divisions"] == ["MD", "MS", "WS"]
+    assert bracket_body["divisions"] == []
+    assert meet_body != bracket_body
+
+
+def test_a_draft_bracket_event_still_emits_its_card(client):
+    """**P7b-NC9b.** The already-distinguishable case stays distinguishable.
+    ``status`` defaults to ``'draft'`` and nothing filters on it, so a created
+    but ungenerated event has always produced a card (with ``size`` = its
+    participant count, here 0). This slice must not quietly start hiding it
+    behind the new field."""
+    tid = _make_workspace(client, slug="drafty", kind="bracket", draws_published=True)
+    r = client.post(
+        f"/tournaments/{tid}/bracket/events/MS",
+        json={"discipline": "Men's Singles", "format": "se"},
+        headers=CSRF,
+    )
+    assert r.status_code == 200, r.text
+
+    body = client.get("/e/api/page/drafty/draws").json()
+    (card,) = body["draws"]
+    assert card["eventCode"] == "MS"
+    assert card["size"] == 0
+    assert body["divisions"] == []
+
+
+def test_a_bracket_workspace_does_not_publish_divisions_it_never_configured(
+    client,
+):
+    """**P7b-NC9c.** The gate that keeps the new field honest.
+
+    ``meet_events`` is derived for ANY workspace whose blob carries a
+    ``config.rankCounts`` (Task 1 kept the derivation module-agnostic on
+    purpose), and the console store seeds five division codes into every
+    fresh workspace, which the first autosave persists. So a bracket-only
+    workspace really can hold rows nobody configured - and publishing those
+    would re-create F-DM-33 pointing the other way. The projection therefore
+    gates on the ``meet`` module being ENABLED, which ``kind='bracket'``
+    leaves at ``available``.
+    """
+    tid = _make_workspace(
+        client, slug="bracket-with-junk", kind="bracket", draws_published=True
+    )
+    _declare_divisions(client, tid, {"MS": 3, "WS": 3})
+
+    body = client.get("/e/api/page/bracket-with-junk/draws").json()
+    assert body["divisions"] == []
+
+
+def test_divisions_are_withheld_while_draws_are_unpublished(client):
+    """The gate gates at the source (§4): an unpublished tier leaks no
+    division list, the same way it leaks no draw card."""
+    tid = _make_workspace(client, slug="quiet-meet")
+    _declare_divisions(client, tid, {"MS": 3})
+    body = client.get("/e/api/page/quiet-meet/draws").json()
+    assert body["published"] is False
+    assert body["divisions"] == []
 
 
 # ---- draw detail (§3.4) ---------------------------------------------------

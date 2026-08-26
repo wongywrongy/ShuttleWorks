@@ -39,6 +39,7 @@ const DRAWS_INDEX = {
       hasConsolation: false,
     },
   ],
+  divisions: [],
 };
 
 const SEEDS = {
@@ -283,9 +284,30 @@ describe('the Draws tab (§3.4)', () => {
   });
 
   it('says plainly when a published tier has no draws', async () => {
-    stubApi({ '/draws': { published: true, resultsPublished: false, draws: [] } });
+    stubApi({
+      '/draws': { published: true, resultsPublished: false, draws: [], divisions: [] },
+    });
     const html = await render('/e/spring-open?tab=draws');
     expect(html).toContain('No draws yet.');
+  });
+
+  // F-DM-33 (P7b-NC9): the two causes of an empty `draws` list are told apart
+  // HERE, at the tier that renders them, not only on the wire. Above and below
+  // are the same empty list; only `divisions` differs.
+  it('says a meet is a meet instead of telling it to wait for a draw', async () => {
+    stubApi({
+      '/draws': {
+        published: true,
+        resultsPublished: false,
+        draws: [],
+        divisions: ['MD', 'MS', 'WS'],
+      },
+    });
+    const html = await render('/e/spring-open?tab=draws');
+
+    expect(html).toContain('Played as a meet, not by draws.');
+    expect(html).toContain('MD, MS, WS');
+    expect(html).not.toContain('No draws yet.');
   });
 });
 

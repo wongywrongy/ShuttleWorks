@@ -1937,6 +1937,16 @@ export interface paths {
          *     workspace running the same discipline in two age bands maps both onto
          *     the same rank — and the desk shows the discipline alongside.
          *
+         *     **This is the only route that may write ``code`` (R-DM-11(b)).** The
+         *     code is the entrant tier's public event key, so renaming it under a
+         *     published page changes what an already-public address describes. There
+         *     is deliberately no update route; if you add one it must refuse a ``code``
+         *     change while any ``entry_pages`` publication flag is on (a draft event
+         *     stays renameable — that is the director's correction path), and the
+         *     refusal belongs in the service, not in a DTO validator. The absence is
+         *     pinned from the live route table by
+         *     ``tests/backend/test_event_code_unrenameable.py``.
+         *
          *     **``genderConstraint`` and ``withdrawsUntil`` are set here** (SP-E1-2,
          *     finding F-E1-2-D1). Both columns exist and are read — the first drives
          *     the public form's default event filter (R12), the second is R14 §3's
@@ -3795,6 +3805,11 @@ export interface components {
              * @default []
              */
             draws: components["schemas"]["DrawCardDTO"][];
+            /**
+             * Divisions
+             * @default []
+             */
+            divisions: string[];
         };
         /**
          * EntrantConfigDTO
