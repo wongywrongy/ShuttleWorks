@@ -22,10 +22,11 @@ Three things this module is written around:
   is asserted separately, by reflection.
 - **``batch_alter_table`` REBUILDS the table from reflection.** Four tables are
   rebuilt here; anything the reflection loses — a foreign key, an index, a
-  server default — would be invisible everywhere else in the suite, which
-  builds its schema with ``create_all`` from the models. So the whole shape of
-  those four tables is snapshotted at the previous revision and compared
-  either side of the migration, in both directions. Derived, not hand-listed:
+  server default, a ``NOT NULL`` — would be invisible everywhere else in the
+  suite, which builds its schema with ``create_all`` from the models. So those
+  four kinds are snapshotted at the previous revision and compared either side
+  of the migration, in both directions (column type, PK and unique constraints
+  are NOT covered — ``_schema_shapes`` says so). Derived, not hand-listed:
   the first version of this file listed the FKs by hand and missed
   ``tournaments.org_id`` -> ``orgs`` outright.
 - **A downgrade that does not run is not a downgrade.** The round-trip test
@@ -115,7 +116,22 @@ def _upgraded(alembic_cfg):
 
 
 def _schema_shapes(engine):
-    """Everything ``batch_alter_table`` could silently drop, per rebuilt table.
+    """Four of the things ``batch_alter_table`` could silently drop, per table.
+
+    Not "everything" — the four captured are **foreign keys, indexes, server
+    defaults and nullability**. What is NOT captured, said plainly so a green
+    here is not read as more than it is: **column type**, **primary key**, and
+    **unique constraints** — the four rebuilt tables carry no
+    ``UniqueConstraint`` at all today (produced by reflection, not assumed),
+    so there is nothing yet to lose, but one added later would land outside
+    this snapshot.
+
+    **Nullability is here because P7a Task 2 leans on it.** Deleting the
+    ``or "meet"`` fallback in ``entries/entries.py`` is sound only while
+    ``tournaments.kind`` stays ``NOT NULL``; a rebuild that quietly relaxed it
+    would make that deleted branch reachable again and nothing else in the
+    suite would say so. It is its own key rather than a widened ``defaults``
+    tuple, so the anti-vacuity assertions below keep asserting what they say.
 
     Derived from the live database rather than hand-listed: a hand-maintained
     expectation is only as complete as whoever last edited it, and the first
@@ -145,6 +161,10 @@ def _schema_shapes(engine):
             },
             "defaults": {
                 (col["name"], col["default"])
+                for col in inspector.get_columns(table)
+            },
+            "nullability": {
+                (col["name"], col["nullable"])
                 for col in inspector.get_columns(table)
             },
         }
@@ -246,12 +266,14 @@ def test_a_value_outside_the_vocabulary_is_refused(
 def test_the_batch_rebuilds_changed_nothing_but_the_checks(alembic_cfg):
     """``batch_alter_table`` rebuilds from reflection, and this revision
     rebuilds four tables. Anything the reflection loses — a foreign key, an
-    index, a server default — would be invisible to every other suite, which
-    builds its schema with ``create_all`` from the models.
+    index, a server default, a ``NOT NULL`` — would be invisible to every
+    other suite, which builds its schema with ``create_all`` from the models.
 
-    So this compares the WHOLE shape of those four tables either side of the
-    migration, in both directions, instead of asserting a list someone has to
-    remember to extend."""
+    So this compares those four kinds across the four tables either side of
+    the migration, in both directions, instead of asserting a list someone has
+    to remember to extend. It is not the whole table shape: column type,
+    primary key and unique constraints are NOT covered — ``_schema_shapes``
+    says which and why."""
     from alembic import command
 
     cfg, url = alembic_cfg
@@ -275,6 +297,9 @@ def test_the_batch_rebuilds_changed_nothing_but_the_checks(alembic_cfg):
         False,
     ) in before["matches"]["indexes"]
     assert ("kind", "'meet'") in before["tournaments"]["defaults"]
+    # The fourth kind, and the one Task 2 depends on: deleting the
+    # ``or "meet"`` fallback is only sound while this column cannot be NULL.
+    assert ("kind", False) in before["tournaments"]["nullability"]
 
     command.upgrade(cfg, "head")
     assert _schema_shapes(engine) == before, "the upgrade rebuild lost something"

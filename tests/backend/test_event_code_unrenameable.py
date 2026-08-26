@@ -88,7 +88,28 @@ def client(app):
 
 
 def _body_properties(spec, schema, seen=()):
-    """Property names of a request-body schema, following ``$ref``."""
+    """Every property name a request-body schema carries, at ANY depth.
+
+    Follows ``$ref``, ``allOf``/``anyOf``/``oneOf``, each property's own
+    schema, and an array's ``items`` — so ``{"event": {"code": ...}}`` and
+    ``{"events": [{"code": ...}]}`` are derived rather than missed. The
+    descent and the ``$ref`` hop have to compose, because a nested Pydantic
+    model reaches the spec as a ``$ref``-*valued property*, never as an
+    inline object.
+
+    ``seen`` is the cycle guard, threaded through every branch: a
+    self-referencing model (``Node.children: list[Node]``) is legal OpenAPI
+    and would otherwise recurse forever. No depth cap is added on top of
+    it — every unbounded path through a JSON Schema graph must revisit a
+    ``$ref``, which ``seen`` cuts.
+
+    The remaining ceiling, stated plainly because the pin below is only as
+    wide as this function: it derives **names**, so a rename field called
+    anything other than ``code`` is invisible to it; and a body typed as a
+    free-form ``dict``/``Any`` — ``PUT /tournaments/{id}/state`` ships the
+    whole workspace blob that way — declares no ``properties`` at all, so
+    nothing inside such a body is derivable by any traversal.
+    """
     if not isinstance(schema, dict):
         return set()
     if "$ref" in schema:
@@ -97,7 +118,12 @@ def _body_properties(spec, schema, seen=()):
             return set()
         components = spec.get("components", {}).get("schemas", {})
         return _body_properties(spec, components.get(name, {}), seen + (name,))
-    names = set(schema.get("properties") or {})
+    names = set()
+    for prop, subschema in (schema.get("properties") or {}).items():
+        names.add(prop)
+        names |= _body_properties(spec, subschema, seen)
+    if "items" in schema:  # the ``{}`` sentinel would recurse on itself
+        names |= _body_properties(spec, schema["items"], seen)
     for combinator in ("allOf", "anyOf", "oneOf"):
         for member in schema.get(combinator) or []:
             names |= _body_properties(spec, member, seen)
@@ -123,7 +149,9 @@ def test_entry_event_paths_carry_only_the_create(app):
 def test_no_request_body_outside_the_create_carries_a_code_field(app):
     """Derivation 2 — by wire shape, so a rename route escapes the pin
     above only by also renaming itself off the ``entry-event`` path AND
-    calling the field something other than ``code``."""
+    calling the field something other than ``code``. Nesting is not an
+    escape either: the derivation descends into nested objects and array
+    ``items``, so ``{"event": {"code": ...}}`` is caught too."""
     spec = app.openapi()
     found = set()
     for path, operations in spec["paths"].items():
@@ -133,6 +161,46 @@ def test_no_request_body_outside_the_create_carries_a_code_field(app):
                 if "code" in _body_properties(spec, media.get("schema") or {}):
                     found.add((method.upper(), path))
     assert found == _CODE_WRITERS, f"{_VIOLATION}\nfound: {sorted(found)}"
+
+
+def test_the_body_derivation_descends_into_nested_and_array_shapes():
+    """The recursion itself, proven directly rather than trusted.
+
+    Every shape here goes through a ``$ref``, because that is how FastAPI
+    emits a nested model — an inline-object fixture would pass even with the
+    ``$ref`` hop broken, and so would prove nothing. The third case is the
+    termination proof: a self-referencing schema must return, not hang."""
+    spec = {
+        "components": {
+            "schemas": {
+                "Inner": {"properties": {"code": {"type": "string"}}},
+                "Node": {
+                    "properties": {
+                        "leaf": {"type": "string"},
+                        "kids": {
+                            "type": "array",
+                            "items": {"$ref": "#/components/schemas/Node"},
+                        },
+                    }
+                },
+            }
+        }
+    }
+    nested = {"properties": {"event": {"$ref": "#/components/schemas/Inner"}}}
+    array = {
+        "properties": {
+            "events": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/Inner"},
+            }
+        }
+    }
+    assert _body_properties(spec, nested) == {"event", "code"}
+    assert _body_properties(spec, array) == {"events", "code"}
+    assert _body_properties(spec, {"$ref": "#/components/schemas/Node"}) == {
+        "leaf",
+        "kids",
+    }
 
 
 def test_the_derivation_is_not_vacuous(app):
