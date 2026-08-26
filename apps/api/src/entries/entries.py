@@ -45,7 +45,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import logging
-import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Optional
@@ -98,12 +97,6 @@ class SkipReason:
 
     UNMAPPABLE_EVENT = "UNMAPPABLE_EVENT"
     DRAW_NOT_EDITABLE = "DRAW_NOT_EDITABLE"
-    # Every declared slot of the entry's division is already held in
-    # that entrant's school. Its own code rather than UNMAPPABLE_EVENT
-    # because the event maps perfectly well — what is full is the
-    # school's lineup, and the two are fixed by different actions
-    # (declare more slots vs. move somebody).
-    NO_FREE_SLOT = "NO_FREE_SLOT"
     STATE_CONFLICT = "STATE_CONFLICT"
     INVALID_PLAYER = "INVALID_PLAYER"
 
@@ -433,50 +426,35 @@ def _plan_meet(
     Recomputed from scratch on every attempt, because the document it is
     planning against is a different one each time.
 
-    **This is where an entry becomes something the meet can actually play
-    (F-DM-23 / R-DM-5).** A roster player reaches a match through exactly
-    one reader — ``modules/meet/matches/RegenerateMenu.tsx`` — and that
-    reader asks two questions: is this player's ``groupId`` one of two
-    DIFFERENT groups (``:85-86``, ``for i … for j = i + 1``), and does
-    their ``ranks[]`` contain the NUMBERED rank it expanded from the
-    division counts (``:24-30``, ``${prefix}${i}``, filtered at ``:88`` and
-    ``:91``). Until P7b this seam answered neither: it wrote ``ranks =
-    [event.code]`` — never a numbered rank — and invented one group per
-    event code, so every entrant of an event sat in the single group named
-    after it and could never be ``groups[i]`` and ``groups[j]``. Both
-    halves had to close together; either one alone leaves a committed
-    entry exactly as unplayable as it was.
+    **What P7b changed here, and the line it deliberately does not cross.**
+    An entry maps onto a **division** — ``ranks = [code]``, where the code
+    comes from the entry event's Meet Event — and lands in a **school**.
+    R-DM-5 draws the line: *"entry events map onto a division (MS), never a
+    slot (MS1); slot assignment is an operator-side action."* Seating an
+    entrant in ``MS1`` at intake IS slot assignment, so this seam does not
+    do it. The console generator's inability to read a bare division code
+    (``RegenerateMenu.tsx:24-30`` expands ``${prefix}${i}`` and filters on
+    it) is therefore the GENERATOR's gap, not intake's, and closing it
+    belongs to the slice that moves that generator to the server.
 
-    So:
-
-    - **the school is the entrant's club** (``entry_players.club``), which
+    - **The school is the entrant's club** (``entry_players.club``), which
       is what a group row has always meant — ``PlayerDTO.groupId``'s own
-      comment says "this is school vs school scheduling". Nothing is minted
-      to stand in for a school: a club that names an existing group adopts
-      it, and a club-less entry joins the shared ``Unassigned`` bucket.
-    - **the rank is a numbered slot of the entry's Meet Event**, taken as
-      the first slot of that division standing EMPTY in the player's
-      school. Empty rather than "not yet full": filling the second seat of
-      a half-occupied doubles slot would pair two people who never agreed
-      to partner, which is the same guess R-DM-4(a) refuses on names.
-
-    **Declared pairs are seated together**, through ``_pair_batch`` — the
-    mutual, accepted partner link, never a name match. A pair whose halves
-    resolve to two different schools is not a pair the meet can express (a
-    lineup slot belongs to one school), and neither is one whose half the
-    operator has already ranked by hand. Both degrade to singletons and
-    commit exactly as they would have alone, which is ``_pair_batch``'s own
-    posture: every leg is a refusal to pair, never a decision to un-pair.
-
-    **The vocabulary is the Meet Event table, and an empty one accepts.**
-    An entry event whose code names no declared division is unmappable and
-    is skipped-and-reported, never mapped onto the nearest match. A
-    workspace that has declared NO divisions has declared nothing to
-    contradict, so it accepts, and numbers the ranks anyway — refusing
-    there would make the seam unusable on a workspace whose configuration
-    has not been filled in yet, which is exactly when public entries
-    arrive, and a numbered rank goes live the moment the director declares
-    the counts.
+      comment says "this is school vs school scheduling". This is the
+      invention R-DM-5 names: the seam used to mint one group per event
+      code, so every entrant of an event sat in the single group named
+      after it and could never be ``groups[i]`` and ``groups[j]`` in the
+      generator's strictly-cross-group pairing (``:85-86``). Nothing is
+      minted to stand in for a school now: a club that names an existing
+      group adopts it, and a club-less entry joins the shared
+      ``Unassigned`` bucket.
+    - **The division is the Meet Event's**, resolved through
+      ``entry_events.meet_event_id`` and falling back to the code. An entry
+      event whose code names no declared division is unmappable and is
+      skipped-and-reported, never mapped onto the nearest match. A
+      workspace that has declared NO divisions has declared nothing to
+      contradict, so it accepts — refusing there would make the seam
+      unusable on a workspace whose configuration has not been filled in
+      yet, which is exactly when public entries arrive.
     """
     players = list(document.get("players") or [])
     groups = list(document.get("groups") or [])
@@ -488,22 +466,19 @@ def _plan_meet(
     # land in one group, or the school is split in two — in the roster
     # switcher, in the standings and in both exports. Exact equality on the
     # only identity a free-text field carries is not the "nearest-looking
-    # thing" this seam refuses to guess at.
+    # thing" this seam refuses to guess at, and fuzzy club matching would be
+    # the ``looks_duplicate`` problem in a new place (ruling P7b-9).
     school_ids = {
         str(g.get("name") or "").strip().casefold(): g.get("id")
         for g in groups
         if isinstance(g, dict) and g.get("id")
     }
-    pairs = _pair_batch(candidates, events)
 
     planned: list[tuple[Entry, str]] = []
     skipped: list[SkippedEntry] = []
     mutated = False
-    seated: set[uuid.UUID] = set()
 
     for entry in candidates:
-        if entry.id in seated:
-            continue  # already placed as the other half of a pair
         event = events.get(entry.entry_event_id)
         division = (
             divisions.get(event.meet_event_id or event.code)
@@ -517,80 +492,48 @@ def _plan_meet(
             # division), so a dangling pointer is a handled state and takes
             # the same reported skip an unknown code does.
             skipped.append(SkippedEntry(str(entry.id), SkipReason.UNMAPPABLE_EVENT))
-            seated.add(entry.id)
             continue
         code = division.id if division is not None else event.code
-        slot_count = division.slot_count if division is not None else None
 
-        unit = [entry]
-        partner = pairs.get(entry.id)
-        if partner is not None and _is_doubles_code(code):
-            unit.append(partner)
+        row, school = _seat(players, school_ids, entry)
+        if row is not None:
+            # The person is already on the roster from an earlier event.
+            # ``ranks[]`` is where a meet player carries the events they are
+            # in, so this entry extends that list rather than minting a
+            # second player under the same name. Never removes a rank, and
+            # never re-seats the operator's own school assignment: this
+            # row's edits are not this seam's to undo.
+            if code not in (row.get("ranks") or []):
+                row["ranks"] = [*(row.get("ranks") or []), code]
+                mutated = True
+            planned.append((entry, row["id"]))
+            continue
 
-        # (member, its roster row if it already has one, the school it goes in).
-        seats = [(member, *_seat(players, school_ids, member)) for member in unit]
-        if len(seats) == 2 and (
-            seats[0][2] != seats[1][2]
-            or any(_holds_event(row, code) for _m, row, _s in seats)
-        ):
-            seats = seats[:1]
+        payload = {
+            "id": _player_id(entry),
+            "name": entry.player_name,
+            "groupId": school,
+            "ranks": [code],
+            "availability": [],
+            "sourceEntryId": str(entry.id),
+            "entryPlayerId": (
+                str(entry.entry_player_id) if entry.entry_player_id else None
+            ),
+        }
+        if entry.remarks:
+            payload["remarks"] = entry.remarks
+        if not _valid(PlayerDTO, payload, entry):
+            skipped.append(SkippedEntry(str(entry.id), SkipReason.INVALID_PLAYER))
+            continue
 
-        rank = None
-        if any(not _holds_event(row, code) for _m, row, _s in seats):
-            rank = _free_slot(players, seats[0][2], code, slot_count)
-            if rank is None:
-                # Every declared slot of this division is taken in this
-                # school. Numbering past the declared count would write a
-                # rank the generator never expands — F-DM-23 again, one
-                # level down — so this is reported and the operator decides
-                # (invariant I4).
-                for member, _row, _s in seats:
-                    skipped.append(
-                        SkippedEntry(str(member.id), SkipReason.NO_FREE_SLOT)
-                    )
-                    seated.add(member.id)
-                continue
-
-        for member, row, school in seats:
-            seated.add(member.id)
-            if row is not None:
-                # The person is already on the roster from an earlier event.
-                # ``ranks[]`` is where a meet player carries the events they
-                # are in, so this entry extends that list rather than minting
-                # a second player under the same name. Never removes a rank,
-                # and never re-seats the operator's own school assignment —
-                # this row's edits are not this seam's to undo.
-                if rank is not None and not _holds_event(row, code):
-                    row["ranks"] = [*(row.get("ranks") or []), rank]
-                    mutated = True
-                planned.append((member, row["id"]))
-                continue
-
-            payload = {
-                "id": _player_id(member),
-                "name": member.player_name,
-                "groupId": school,
-                "ranks": [rank],
-                "availability": [],
-                "sourceEntryId": str(member.id),
-                "entryPlayerId": (
-                    str(member.entry_player_id) if member.entry_player_id else None
-                ),
-            }
-            if member.remarks:
-                payload["remarks"] = member.remarks
-            if not _valid(PlayerDTO, payload, member):
-                skipped.append(SkippedEntry(str(member.id), SkipReason.INVALID_PLAYER))
-                continue
-
-            players.append(payload)
-            if school not in group_ids:
-                name = _school_name(member)
-                groups.append({"id": school, "name": name})
-                group_ids.add(school)
-                school_ids[name.casefold()] = school
-            planned.append((member, payload["id"]))
-            mutated = True
+        players.append(payload)
+        if school not in group_ids:
+            name = _school_name(entry)
+            groups.append({"id": school, "name": name})
+            group_ids.add(school)
+            school_ids[name.casefold()] = school
+        planned.append((entry, payload["id"]))
+        mutated = True
 
     if mutated:
         document["players"] = players
@@ -607,8 +550,6 @@ def _plan_meet(
 # with each other, which is a true statement about the data rather than a
 # defect in this seam.
 _UNKNOWN_SCHOOL = "Unassigned"
-
-_TRAILING_DIGITS = re.compile(r"\d+$")
 
 
 def _school_name(entry: Entry) -> str:
@@ -650,79 +591,6 @@ def _seat(
             return row, row.get("groupId")
     name = _school_name(entry)
     return None, school_ids.get(name.casefold()) or _school_id(name)
-
-
-def _is_doubles_code(code: str) -> bool:
-    """Does a rank slot of this division seat two players?
-
-    Mirrors the CONSOLE's ``lib/doubles.ts::isDoublesCode`` — strip
-    trailing digits, ends with ``D`` — and NOT ``partners.is_doubles``,
-    which reads ``entry_events.entry_type``. The two can disagree on a
-    director's own code, and the string convention wins here because the
-    consumer of a rank slot is the generator, which asks
-    ``isDoublesRank(rank)`` about the string: seating a pair by the entry
-    type into a slot the generator treats as singles would put two players
-    somewhere only one of them is ever read from. F-DM-13 records that this
-    is one question with two implementations; closing that is not this
-    slice's work.
-    """
-    return _TRAILING_DIGITS.sub("", code).endswith("D")
-
-
-def _same_event(rank: str, code: str) -> bool:
-    """Is ``rank`` a slot of the division ``code``?
-
-    ``"XD2"`` is. So is the bare ``"XD"`` — that is what this seam wrote
-    before P7b, and a roster committed by an older build still carries it.
-
-    **Inherited ambiguity, not introduced here:** the numbered-rank format
-    is the console's ``${prefix}${i}``, which cannot separate two codes
-    where one digit-extends the other — a junior league configuring both
-    ``U1`` and ``U10`` (``roster/positionGrid/helpers.ts`` documents
-    exactly that vocabulary) reads ``U10`` as ``U1``'s tenth slot. Every
-    reader of a rank in the product shares it; changing the format is a
-    slice of its own, on both tiers at once.
-    """
-    return rank == code or (rank.startswith(code) and rank[len(code) :].isdigit())
-
-
-def _holds_event(row: Optional[dict], code: str) -> bool:
-    """Is this roster player already ranked in this division?"""
-    if row is None:
-        return False
-    return any(
-        isinstance(rank, str) and _same_event(rank, code)
-        for rank in row.get("ranks") or []
-    )
-
-
-def _free_slot(
-    players: list, school: Optional[str], code: str, slot_count: Optional[int]
-) -> Optional[str]:
-    """The first EMPTY numbered slot of ``code`` in ``school``, or ``None``.
-
-    Occupancy is read from the whole roster, not just from this run's own
-    placements: the operator's hand-assignments hold slots too, and
-    ignoring them double-books ``MS1`` the first time a committed entrant
-    lands beside a hand-entered one.
-
-    ``slot_count`` is ``None`` only where the workspace has declared no
-    divisions at all (the fail-open above). There is no declared ceiling to
-    respect there, and a slot past every occupied one always exists within
-    ``len(players) + 1``.
-    """
-    taken = {
-        rank
-        for player in players
-        if isinstance(player, dict) and player.get("groupId") == school
-        for rank in player.get("ranks") or []
-        if isinstance(rank, str) and _same_event(rank, code)
-    }
-    limit = slot_count if slot_count is not None else len(players) + 1
-    for slot in range(1, limit + 1):
-        if f"{code}{slot}" not in taken:
-            return f"{code}{slot}"
-    return None
 
 
 def _valid(model, payload: dict, entry: Entry) -> bool:

@@ -55,7 +55,14 @@ from core.schemas import (
     EntryPagePublicationPatchDTO,
     EntryPageUpsertDTO,
 )
-from db.models import Entry, EntryEvent, EntryPage, Submission, Tournament
+from db.models import (
+    Entry,
+    EntryEvent,
+    EntryPage,
+    MeetEvent,
+    Submission,
+    Tournament,
+)
 from repositories import LocalRepository, get_repository
 from entries import lifecycle, money, retention
 from entries.entries import commit_entries
@@ -823,6 +830,38 @@ def patch_entry_page_publication(
     return EntryPageDTO.from_row(row)
 
 
+def _meet_event_id(
+    repo: LocalRepository, tournament_id: uuid.UUID, code: str
+) -> Optional[str]:
+    """The Meet division this entry event maps onto, resolved at creation.
+
+    **R-DM-5 requires a real mapping column, and a column nothing populates
+    is not a mapping — it is a comment with a type.** This is its writer
+    (ruling P7b-8). It is a LOOKUP rather than an operator choice, unlike
+    ``bracket_event_id``: a bracket event is a draw the director picks from
+    a list, while a Meet division IS the code space (``meet_events.id`` is
+    "MS", "XD"), so asking the operator to restate the code they just typed
+    would be a field with one correct answer.
+
+    ``None`` when the workspace has not declared that division — including
+    every workspace that has declared none, which is the ordinary state of
+    a fresh one. The commit seam falls back to the code for a ``None``
+    (``entries/entries.py::_plan_meet``), and that fallback is what keeps
+    both every entry event created before this slice and every event
+    created ahead of its division working. **Deliberately not a
+    reconciler:** nothing re-resolves this later, because ``meet_events``
+    rows are derived and routinely deleted, and a column that chased them
+    would flip an operator's mapping on a config edit.
+
+    There is no update route for ``code`` (R-DM-11(b): the code is the
+    entrant tier's public event key), so creation is the only moment this
+    can be written. If a rename route is ever added it must rewrite this
+    column with it.
+    """
+    found = repo.session.get(MeetEvent, (tournament_id, code))
+    return code if found is not None else None
+
+
 @router.post(
     "/{tournament_id}/entry-events",
     response_model=EntryEventDTO,
@@ -878,6 +917,7 @@ def create_entry_event(
         discipline=discipline,
         entry_type=body.entryType,
         bracket_event_id=body.bracketEventId,
+        meet_event_id=_meet_event_id(repo, tournament_id, code),
         cap=body.cap,
         fee_cents=body.feeCents,
         gender_constraint=body.genderConstraint,

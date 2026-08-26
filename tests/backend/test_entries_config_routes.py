@@ -530,6 +530,64 @@ def test_an_event_is_created_with_its_optional_fields(client, workspace):
     assert row.opens_at is not None and row.closes_at is not None
 
 
+def _declare_division(tid, code):
+    """Declare one Meet division on the workspace.
+
+    Written through ``upsert_data`` rather than by inserting a
+    ``meet_events`` row, because that IS how the rows come to exist: the
+    derivation hangs on the blob's one persistence funnel (SP-DM-3 P7b
+    Task 1). Inserting the row directly would test a state the product
+    cannot reach.
+    """
+    from db.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        row = repo.tournaments.get_by_id(uuid.UUID(tid))
+        document = dict(row.data or {})
+        document["config"] = {
+            **(document.get("config") or {}),
+            "rankCounts": {code: 2},
+        }
+        repo.tournaments.upsert_data(uuid.UUID(tid), document)
+    finally:
+        session.close()
+
+
+def test_creating_an_event_writes_the_meet_event_mapping(client, workspace):
+    """Ruling P7b-8: ``entry_events.meet_event_id`` has a WRITER.
+
+    R-DM-5 requires a real mapping column, and a column nothing populates
+    is not a mapping — it is a comment with a type. This is the only moment
+    it can be written: there is deliberately no update route for ``code``
+    (R-DM-11(b), pinned by ``test_event_code_unrenameable.py``).
+    """
+    _declare_division(workspace, "MS")
+
+    assert _post_event(client, workspace).status_code == 201
+
+    (row,) = _events(workspace)
+    assert row.meet_event_id == "MS"
+
+
+def test_an_event_whose_division_is_not_declared_maps_to_nothing(
+    client, workspace
+):
+    """Negative control for the writer above — same route, no division.
+
+    NULL rather than a guess, and NULL is not a broken state: the commit
+    seam falls back to the entry event's own code, which is what keeps both
+    every event created before this slice and every event created ahead of
+    its division working.
+    """
+    assert _post_event(client, workspace, code="ZZ").status_code == 201
+
+    (row,) = _events(workspace)
+    assert row.meet_event_id is None
+
+
 def test_an_event_defaults_to_singles_with_everything_optional_omitted(
     client, workspace
 ):
