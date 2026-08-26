@@ -173,6 +173,7 @@ describe('commit skip reasons', () => {
       'DRAW_NOT_EDITABLE',
       'STATE_CONFLICT',
       'INVALID_PLAYER',
+      'NO_FREE_SLOT',
     ]) {
       expect(skipReasonLabel(code)).not.toBe(code);
       expect(skipReasonLabel(code).length).toBeGreaterThan(0);

@@ -27,6 +27,7 @@ whose characterization pass (SP-E1-1 Task 1) is what this seam is built on.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -163,6 +164,7 @@ def _entry(
     player_name="Alice Chen",
     state="confirmed",
     remarks=None,
+    club=None,
     player=None,
     partner_entry_id=None,
     partner_accepted_at=None,
@@ -188,6 +190,7 @@ def _entry(
             account_id=_account(session).id,
             full_name=player_name,
             gender="F",
+            club=club,
             remarks=remarks,
         )
         session.add(player)
@@ -213,6 +216,7 @@ def _pair(
     *,
     names=("Ana Reyes", "Bo Lin"),
     states=("confirmed", "confirmed"),
+    clubs=(None, None),
 ):
     """Two confirmed entries mutually linked, as ``partners.accept()`` leaves them.
 
@@ -235,10 +239,20 @@ def _pair(
     """
     now = datetime.now(timezone.utc)
     first = _entry(
-        session, tournament_id, entry_event, player_name=names[0], state=states[0]
+        session,
+        tournament_id,
+        entry_event,
+        player_name=names[0],
+        state=states[0],
+        club=clubs[0],
     )
     second = _entry(
-        session, tournament_id, entry_event, player_name=names[1], state=states[1]
+        session,
+        tournament_id,
+        entry_event,
+        player_name=names[1],
+        state=states[1],
+        club=clubs[1],
     )
     first.submitted_at = now
     second.submitted_at = now + timedelta(seconds=1)
@@ -253,6 +267,67 @@ def _pair(
 def _players(repo, tournament_id):
     repo.session.expire_all()
     return repo.tournaments.get_by_id(tournament_id).data.get("players") or []
+
+
+def _generate_matches(document):
+    """A transcription of the ONLY Meet match generator, which is CONSOLE code.
+
+    **The coupling is stated rather than hidden.** ``RegenerateMenu.tsx``
+    runs in the browser, so no backend test can call it; a test that
+    paraphrased its rule instead would be asserting the paraphrase. Every
+    line below is a transcription of a line printed from
+    ``apps/console/src/modules/meet/matches/RegenerateMenu.tsx`` while this
+    test was written:
+
+    ``:24-30``  ``expandRanks`` — for each ``[prefix, count]`` of
+                ``rankCounts``, the ranks ``${prefix}${i}`` for i in 1..count
+    ``:62``     ``ranks = expandRanks(config?.rankCounts)``
+    ``:84``     ``needed = isDoublesRank(rank) ? 2 : 1``
+                (``lib/doubles.ts:26`` — strip trailing digits, ends with D)
+    ``:85-86``  ``for (i…) for (j = i + 1…)`` — strictly ACROSS two groups
+    ``:87-91``  each side is ``players.filter(p => p.groupId === groups[x].id
+                && (p.ranks ?? []).includes(rank))``
+    ``:93``     a side short of ``needed`` skips the pairing entirely
+    ``:96-97``  the sides are the first ``needed`` of each filtered list
+
+    **The cost of that coupling:** if the generator changes, this mirror
+    goes stale silently — there is no cross-tier gate that would catch it.
+    It is worth paying because the alternative is asserting a weaker claim
+    ("the rank looks numbered") and calling it the control that a committed
+    entry reaches a match.
+    """
+    counts = (document.get("config") or {}).get("rankCounts") or {}
+    groups = document.get("groups") or []
+    players = document.get("players") or []
+    out = []
+    for prefix, count in counts.items():
+        for i in range(1, count + 1):
+            rank = f"{prefix}{i}"
+            needed = 2 if re.sub(r"\d+$", "", rank).endswith("D") else 1
+            for a in range(len(groups)):
+                for b in range(a + 1, len(groups)):
+                    side_a = [
+                        p
+                        for p in players
+                        if p["groupId"] == groups[a]["id"]
+                        and rank in (p.get("ranks") or [])
+                    ]
+                    side_b = [
+                        p
+                        for p in players
+                        if p["groupId"] == groups[b]["id"]
+                        and rank in (p.get("ranks") or [])
+                    ]
+                    if len(side_a) < needed or len(side_b) < needed:
+                        continue
+                    out.append(
+                        {
+                            "eventRank": rank,
+                            "sideA": [p["id"] for p in side_a[:needed]],
+                            "sideB": [p["id"] for p in side_b[:needed]],
+                        }
+                    )
+    return out
 
 
 # ---- Meet ---------------------------------------------------------------
@@ -276,7 +351,11 @@ def test_a_confirmed_entry_becomes_a_roster_player_with_both_back_references(
     assert len(players) == 1
     player = players[0]
     assert player["name"] == "Alice Chen"
-    assert player["ranks"] == ["MS"], "ranks[] is derived from entry_events.code"
+    assert player["ranks"] == ["MS1"], (
+        "ranks[] is a NUMBERED slot of the entry's Meet Event (P7b). It was "
+        "the bare event code until this slice, which is the one value the "
+        "match generator never expands"
+    )
     assert player["remarks"] == "can't play before 6pm Saturday"
     # Back-reference, both halves.
     assert player["sourceEntryId"] == str(entry.id)
@@ -284,25 +363,197 @@ def test_a_confirmed_entry_becomes_a_roster_player_with_both_back_references(
     assert entry.committed_player_id == player["id"]
 
 
-def test_the_default_group_is_the_event_code_and_the_group_row_is_created(
-    repo, session
-):
-    """``PlayerDTO.groupId`` is REQUIRED and an entry has no school.
+def test_the_school_is_the_entrants_club_not_the_event_code(repo, session):
+    """``PlayerDTO.groupId`` is REQUIRED, and a group row IS a school.
 
-    The seam defaults it to the entry event's code — the same string it
-    already puts in ``ranks[]`` — and materializes the matching group row.
-    A player pointing at a group that does not exist would be invisible in
-    a roster grouped by school, which is how the Meet roster renders.
+    ``core/schemas.py``'s own comment on the field says so — "this is
+    school vs school scheduling" — and every consumer reads it that way
+    (the roster switcher, the standings, both exports, the per-school
+    accent). So the value comes from the one school the entry actually
+    carries, ``entry_players.club``, and the group row materializes with
+    the club's name on it.
+
+    **This test REPLACES ``test_the_default_group_is_the_event_code_and_
+    the_group_row_is_created``, removed by ruling P7b-3.** That test
+    asserted ``groupId == "MS"`` plus a group row named "MS", and its
+    docstring argued for it. F-DM-23 names that value as the defect and
+    R-DM-5 says the Meet Event exists to retire it, so the ruling deleted
+    the test with its argument rather than editing the assertions
+    underneath a rationale that would then be false.
     """
     tid = _meet_workspace(repo)
     ev = _entry_event(session, tid, code="MS")
-    _entry(session, tid, ev)
+    _entry(session, tid, ev, club="Kingsway BC")
 
     commit_entries(repo, tid)
 
     document = repo.tournaments.get_by_id(tid).data
-    assert document["players"][0]["groupId"] == "MS"
-    assert [g["id"] for g in document["groups"]] == ["MS"]
+    school = document["groups"][0]
+    assert school["name"] == "Kingsway BC"
+    assert document["players"][0]["groupId"] == school["id"]
+    assert [g["name"] for g in document["groups"]] == ["Kingsway BC"]
+
+
+def test_an_entry_with_no_club_joins_one_shared_unassigned_school(repo, session):
+    """The club is optional, and what is NOT known must not be invented.
+
+    One bucket for everyone without a club, never one per entrant: a school
+    per person would be the invented ``groupId`` again under a new name,
+    and it would make every club-less entrant pairable with every other on
+    evidence that does not exist. The honest consequence — two club-less
+    entrants cannot be paired with each other until the director assigns
+    them a school — is asserted here rather than left implicit.
+    """
+    tid = _meet_workspace(repo)
+    ev = _entry_event(session, tid, code="MS")
+    _entry(session, tid, ev, player_name="Ana Reyes")
+    _entry(session, tid, ev, player_name="Bo Lin")
+
+    commit_entries(repo, tid)
+
+    document = repo.tournaments.get_by_id(tid).data
+    assert [g["name"] for g in document["groups"]] == ["Unassigned"]
+    assert len({p["groupId"] for p in document["players"]}) == 1
+    assert _generate_matches(document) == [], (
+        "one school cannot play itself — the generator pairs strictly ACROSS "
+        "groups, so this is the true state of the data, not a defect"
+    )
+
+
+def test_a_club_that_names_an_existing_school_adopts_it_rather_than_splitting_it(
+    repo, session
+):
+    """Exact normalized name, and only exact.
+
+    A director who pre-built "Kingsway BC" and an entrant who typed it must
+    land in ONE group, or the school is split in two everywhere it renders.
+    Matching on exact equality after trim+casefold is not the
+    "nearest-looking thing" the seam refuses to guess at — it is the only
+    identity a free-text club field carries.
+    """
+    tid = _meet_workspace(repo)
+    row = repo.tournaments.get_by_id(tid)
+    document = dict(row.data)
+    document["groups"] = [{"id": "g-1", "name": "Kingsway BC"}]
+    repo.tournaments.upsert_data(tid, document)
+
+    ev = _entry_event(session, tid, code="MS")
+    _entry(session, tid, ev, club="  kingsway bc ")
+
+    commit_entries(repo, tid)
+
+    document = repo.tournaments.get_by_id(tid).data
+    assert document["groups"] == [{"id": "g-1", "name": "Kingsway BC"}]
+    assert document["players"][0]["groupId"] == "g-1"
+
+
+def test_re_running_does_not_mint_a_second_copy_of_the_same_school(repo, session):
+    """Idempotency, asked of the group rows and not only of the players.
+
+    The seam is re-runnable by design, so a club has to resolve to the same
+    group id on every run. A random group id would pass every player-level
+    idempotency test in this file and still double the school list on the
+    second run.
+    """
+    tid = _meet_workspace(repo)
+    ev = _entry_event(session, tid, code="MS")
+    _entry(session, tid, ev, player_name="Ana Reyes", club="Kingsway BC")
+    commit_entries(repo, tid)
+
+    late = _entry(session, tid, ev, player_name="Bo Lin", club="Kingsway BC")
+    result = commit_entries(repo, tid)
+
+    assert [c.entry_id for c in result.committed] == [str(late.id)]
+    document = repo.tournaments.get_by_id(tid).data
+    assert [g["name"] for g in document["groups"]] == ["Kingsway BC"]
+    assert len({p["groupId"] for p in document["players"]}) == 1
+
+
+def test_the_second_entrant_of_a_school_takes_the_next_slot_not_the_first(
+    repo, session
+):
+    """Slots are positions within a school, so they cannot double-book.
+
+    Occupancy is read from the WHOLE roster — including the operator's own
+    hand-assignments, which this fixture makes, because a seam that counted
+    only its own placements would put a committed entrant on top of a
+    hand-entered one at ``MS1``.
+    """
+    tid = _meet_workspace(repo)
+    row = repo.tournaments.get_by_id(tid)
+    document = dict(row.data)
+    document["groups"] = [{"id": "g-1", "name": "Kingsway BC"}]
+    document["players"] = [
+        {
+            "id": "p-hand",
+            "name": "Hand Entered",
+            "groupId": "g-1",
+            "ranks": ["MS1"],
+            "availability": [],
+        }
+    ]
+    repo.tournaments.upsert_data(tid, document)
+
+    ev = _entry_event(session, tid, code="MS")
+    _entry(session, tid, ev, player_name="Ana Reyes", club="Kingsway BC")
+
+    commit_entries(repo, tid)
+
+    players = _players(repo, tid)
+    assert [p["ranks"] for p in players] == [["MS1"], ["MS2"]]
+
+
+def test_a_school_with_every_slot_taken_is_reported_not_numbered_past_the_count(
+    repo, session
+):
+    """P7b-NC5 sibling: the overflow is REPORTED, never silently invented.
+
+    ``rankCounts`` declares two MS slots per school. A third entrant from
+    one school has nowhere to stand, and writing ``MS3`` would be defect
+    F-DM-23 one level down — a rank the generator never expands, invisible
+    for exactly the reason this slice exists to remove. Invariant I4:
+    software flags, operators decide (declare more slots, or move
+    somebody).
+    """
+    tid = _meet_workspace(repo, ranks=("MS",))  # rankCounts = {"MS": 2}
+    ev = _entry_event(session, tid, code="MS")
+    first = _entry(session, tid, ev, player_name="One", club="Kingsway BC")
+    second = _entry(session, tid, ev, player_name="Two", club="Kingsway BC")
+    third = _entry(session, tid, ev, player_name="Three", club="Kingsway BC")
+
+    result = commit_entries(repo, tid)
+
+    assert [c.entry_id for c in result.committed] == [str(first.id), str(second.id)]
+    assert [(s.entry_id, s.reason) for s in result.skipped] == [
+        (str(third.id), SkipReason.NO_FREE_SLOT)
+    ]
+    assert sorted(r for p in _players(repo, tid) for r in p["ranks"]) == ["MS1", "MS2"]
+    session.expire_all()
+    assert third.committed_player_id is None
+
+
+def test_a_fourth_slot_on_the_same_fixture_takes_the_third_entrant(repo, session):
+    """Negative control for the overflow skip above — same shape, more slots."""
+    tid = _meet_workspace(repo)
+    row = repo.tournaments.get_by_id(tid)
+    document = dict(row.data)
+    document["config"] = {**document["config"], "rankCounts": {"MS": 3}}
+    repo.tournaments.upsert_data(tid, document)
+
+    ev = _entry_event(session, tid, code="MS")
+    _entry(session, tid, ev, player_name="One", club="Kingsway BC")
+    _entry(session, tid, ev, player_name="Two", club="Kingsway BC")
+    third = _entry(session, tid, ev, player_name="Three", club="Kingsway BC")
+
+    result = commit_entries(repo, tid)
+
+    assert str(third.id) in [c.entry_id for c in result.committed]
+    assert result.skipped == []
+    assert sorted(r for p in _players(repo, tid) for r in p["ranks"]) == [
+        "MS1",
+        "MS2",
+        "MS3",
+    ]
 
 
 def test_re_running_the_seam_commits_nothing_new(repo, session):
@@ -403,7 +654,11 @@ def test_an_existing_roster_player_is_never_touched(repo, session):
     assert survivor == hand_added
     # The pre-existing group keeps its name — the seam adds, never renames.
     groups = repo.tournaments.get_by_id(tid).data["groups"]
-    assert groups == [{"id": "MS", "name": "Men's Singles"}]
+    assert groups[0] == {"id": "MS", "name": "Men's Singles"}
+    # What it adds is the club-less entrant's school, NOT a group named
+    # after the event code (P7b). The hand-added player's own "MS" group is
+    # untouched, which is what this test is about.
+    assert [g["name"] for g in groups] == ["Men's Singles", "Unassigned"]
 
 
 def test_an_unmappable_code_is_skipped_and_reported_not_guessed(repo, session):
@@ -434,7 +689,7 @@ def test_a_mappable_code_on_the_same_fixture_commits(repo, session):
     result = commit_entries(repo, tid)
 
     assert [c.entry_id for c in result.committed] == [str(entry.id)]
-    assert _players(repo, tid)[0]["ranks"] == ["WS"]
+    assert _players(repo, tid)[0]["ranks"] == ["WS1"]
 
 
 def test_one_bad_code_does_not_roll_back_the_good_entries(repo, session):
@@ -479,43 +734,207 @@ def test_a_workspace_with_no_rank_vocabulary_accepts_any_code(repo, session):
     result = commit_entries(repo, row.id)
 
     assert [c.entry_id for c in result.committed] == [str(entry.id)]
+    # **P7b-NC5(d).** The rank is numbered here too, off ONE code path —
+    # there is no declared ceiling to respect, and the slot goes live the
+    # moment the director declares the counts rather than needing a
+    # re-commit. Ruling C: this fail-open is a correctness guarantee for a
+    # window the console closes on first load (``tournamentStore.ts`` seeds
+    # a default ``rankCounts``), so it protects less than it looks like it
+    # does — and it is still the honest behaviour for the state that occurs.
+    assert _players(repo, row.id)[0]["ranks"] == ["XD11"]
 
 
-def test_a_committed_meet_entry_cannot_reach_a_generated_match(repo, session):
-    """Recorded, not fixed — P7 owns it (see the P5 plan, "What the tree
-    says that the card does not" §4).
+def test_a_committed_meet_entry_reaches_a_generated_match(repo, session):
+    """**P7b-NC5(a) — the control this whole slice exists for.**
 
-    ``_plan_meet`` writes ``groupId = event.code`` and ``ranks =
-    [event.code]`` (``entries/entries.py:418-419``), e.g. ``"XD"``. The
-    only Meet match generator, ``RegenerateMenu.expandRanks``, expands
-    ``config.rankCounts`` into NUMBERED ranks ``"XD1".."XDn"`` and filters
-    players with ``(p.ranks ?? []).includes(rank)`` - and ``"XD" !=
-    "XD1"``. It also pairs only ACROSS groups, while every committed
-    entrant lands in the single group named for their event code. So a
-    committed Meet entry is invisible to match generation whether or not
-    it has a partner, which is why P5 does NOT put a pair field on the
-    Meet roster: there is no reader for it until P7 gives Meet an Event.
+    This is the inversion of
+    ``test_a_committed_meet_entry_cannot_reach_a_generated_match``, which
+    documented itself as *"Recorded, not fixed — P7 owns it"*. P7b is that
+    owner (ruling P7b-4), so the characterization and its docstring are
+    gone and this asserts the fixed behaviour instead.
+
+    It is asserted against ``_generate_matches`` — a transcription of the
+    console generator, whose coupling that helper states in full — rather
+    than against a paraphrase like "the rank looks numbered". The two
+    disconnects were independent, so a paraphrase could pass with either
+    one still open.
     """
-    tid = _meet_workspace(repo, ranks=("XD",))
-    ev = _entry_event(session, tid, code="XD", entry_type="doubles")
-    _entry(session, tid, ev, player_name="Ana Reyes")
+    tid = _meet_workspace(repo, ranks=("MS",))
+    ev = _entry_event(session, tid, code="MS")
+    ana = _entry(session, tid, ev, player_name="Ana Reyes", club="Kingsway BC")
+    bo = _entry(session, tid, ev, player_name="Bo Lin", club="Riverside HS")
 
     commit_entries(repo, tid)
 
-    player = _players(repo, tid)[0]
-    assert player["ranks"] == ["XD"]
-    assert player["groupId"] == "XD"
+    document = repo.tournaments.get_by_id(tid).data
+    matches = _generate_matches(document)
 
-    # Two-line mirror of ``RegenerateMenu.tsx:23-29`` (``expandRanks``):
-    # every declared prefix, numbered 1..count.
-    counts = repo.tournaments.get_by_id(tid).data["config"]["rankCounts"]
-    expanded = [
-        f"{prefix}{i}" for prefix, count in counts.items() for i in range(1, count + 1)
+    assert len(matches) == 1, "one MS1 lineup slot, Kingsway vs Riverside"
+    assert matches[0]["eventRank"] == "MS1"
+    assert matches[0]["sideA"] == [roster_id(ana.entry_player_id)]
+    assert matches[0]["sideB"] == [roster_id(bo.entry_player_id)]
+
+
+def test_the_same_fixture_generates_nothing_under_the_pre_p7b_shape(repo, session):
+    """Negative control for the mirror above: prove it can say no.
+
+    ``_generate_matches`` is a transcription, so a transcription that
+    matched everything would make P7b-NC5(a) vacuous. This feeds it the
+    exact shape the seam wrote before this slice — one group named for the
+    event code, ``ranks = ["MS"]`` — and it must produce nothing, for BOTH
+    of the reasons the old characterization gave.
+    """
+    tid = _meet_workspace(repo, ranks=("MS",))
+    row = repo.tournaments.get_by_id(tid)
+    document = dict(row.data)
+    document["groups"] = [{"id": "MS", "name": "MS"}]
+    document["players"] = [
+        {"id": "a", "name": "Ana", "groupId": "MS", "ranks": ["MS"]},
+        {"id": "b", "name": "Bo", "groupId": "MS", "ranks": ["MS"]},
     ]
-    assert expanded == ["XD1", "XD2"]
-    assert not set(expanded) & set(player["ranks"]), (
-        "a committed entry's rank is not one the match generator ever emits"
+
+    assert _generate_matches(document) == []
+
+    # And each disconnect alone is still fatal: numbered ranks in one group,
+    # then two groups holding the bare code.
+    one_group = {
+        **document,
+        "players": [{**p, "ranks": ["MS1"]} for p in document["players"]],
+    }
+    assert _generate_matches(one_group) == []
+    bare_code = {
+        **document,
+        "groups": [{"id": "g-1", "name": "A"}, {"id": "g-2", "name": "B"}],
+        "players": [
+            {**document["players"][0], "groupId": "g-1"},
+            {**document["players"][1], "groupId": "g-2"},
+        ],
+    }
+    assert _generate_matches(bare_code) == []
+
+
+def test_two_declared_pairs_in_one_division_are_paired_with_each_other(
+    repo, session
+):
+    """**P7b-NC5(b)** — same division, and a doubles slot seats the pair
+    the entrants actually declared.
+
+    Four entrants, two schools, two accepted partner links. Both halves of
+    a pair must land in ONE school at ONE rank or the generator (which
+    takes the first ``needed`` players of each side) reads them as two
+    unrelated singletons and emits nothing. The pairing comes from
+    ``_pair_batch`` — the mutual, accepted link — never from adjacency in
+    the candidate list.
+    """
+    tid = _meet_workspace(repo, ranks=("XD",))
+    ev = _entry_event(session, tid, code="XD", entry_type="doubles")
+    home = _pair(
+        session,
+        tid,
+        ev,
+        names=("Ana Reyes", "Bo Lin"),
+        clubs=("Kingsway BC", "Kingsway BC"),
     )
+    away = _pair(
+        session,
+        tid,
+        ev,
+        names=("Cy Doran", "Di Marsh"),
+        clubs=("Riverside HS", "Riverside HS"),
+    )
+
+    commit_entries(repo, tid)
+
+    document = repo.tournaments.get_by_id(tid).data
+    assert {p["ranks"][0] for p in document["players"]} == {"XD1"}
+    matches = _generate_matches(document)
+
+    assert len(matches) == 1
+    assert matches[0]["eventRank"] == "XD1"
+    assert set(matches[0]["sideA"]) == {roster_id(e.entry_player_id) for e in home}
+    assert set(matches[0]["sideB"]) == {roster_id(e.entry_player_id) for e in away}
+
+
+def test_a_pair_split_across_two_schools_commits_as_singletons(repo, session):
+    """A lineup slot belongs to one school, so a cross-school pair is not
+    one the meet can express.
+
+    Same posture as every other leg of ``_pair_batch``: a refusal to pair
+    is never a decision to un-pair. Both halves commit exactly as they
+    would have alone, in their own schools, and the director pairs them by
+    hand if that is what they meant.
+    """
+    tid = _meet_workspace(repo, ranks=("XD",))
+    ev = _entry_event(session, tid, code="XD", entry_type="doubles")
+    _pair(
+        session,
+        tid,
+        ev,
+        names=("Ana Reyes", "Bo Lin"),
+        clubs=("Kingsway BC", "Riverside HS"),
+    )
+
+    result = commit_entries(repo, tid)
+
+    assert len(result.committed) == 2
+    document = repo.tournaments.get_by_id(tid).data
+    assert sorted(g["name"] for g in document["groups"]) == [
+        "Kingsway BC",
+        "Riverside HS",
+    ]
+    assert len({p["groupId"] for p in document["players"]}) == 2
+    # Each is alone in their school's XD1, so the doubles slot is short a
+    # body on both sides and the generator emits nothing — which is what
+    # ``RegenerateMenu``'s own ``incompletePairs`` surfaces to the operator.
+    assert _generate_matches(document) == []
+
+
+def test_a_dangling_meet_event_id_is_skipped_and_reported_not_guessed(
+    repo, session
+):
+    """**P7b-NC5(c) sibling** — the FK-less pointer's handled state.
+
+    ``entry_events.meet_event_id`` carries no FK on purpose (ruling R2's
+    precedent: a cascade would let one ``rankCounts`` edit destroy every
+    entry under a division). So a pointer at a division that no longer
+    exists is a HANDLED state, and it takes the same reported skip an
+    unknown code does — never a fall back to the code, which would be the
+    guess the seam exists to refuse.
+    """
+    tid = _meet_workspace(repo, ranks=("MS",))
+    ev = _entry_event(session, tid, code="MS")
+    ev.meet_event_id = "GONE"
+    session.commit()
+    entry = _entry(session, tid, ev)
+
+    result = commit_entries(repo, tid)
+
+    assert result.committed == []
+    assert [(s.entry_id, s.reason) for s in result.skipped] == [
+        (str(entry.id), SkipReason.UNMAPPABLE_EVENT)
+    ]
+    assert _players(repo, tid) == []
+
+
+def test_a_meet_event_id_pointing_at_another_division_wins_over_the_code(
+    repo, session
+):
+    """Negative control for the skip above, and the mapping column's point.
+
+    The entry event's own code is ``MXD``, which no division declares. The
+    pointer says the division is ``XD``, and the rank the entrant gets is a
+    slot of ``XD`` — so the column is genuinely read, not merely present.
+    """
+    tid = _meet_workspace(repo, ranks=("XD",))
+    ev = _entry_event(session, tid, code="MXD", entry_type="doubles")
+    ev.meet_event_id = "XD"
+    session.commit()
+    _entry(session, tid, ev, club="Kingsway BC")
+
+    result = commit_entries(repo, tid)
+
+    assert len(result.committed) == 1
+    assert _players(repo, tid)[0]["ranks"] == ["XD1"]
 
 
 # ---- Meet: the CAS contract --------------------------------------------
@@ -1609,7 +2028,7 @@ def test_one_person_in_two_meet_events_is_one_player_carrying_both_ranks(
 
     players = _players(repo, tid)
     assert [p["name"] for p in players] == ["Alice Chen"]
-    assert players[0]["ranks"] == ["MS", "XD"]
+    assert players[0]["ranks"] == ["MS1", "XD1"]
     session.expire_all()
     assert first.committed_player_id == second.committed_player_id == players[0]["id"]
 

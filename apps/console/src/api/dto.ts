@@ -765,7 +765,7 @@ export interface EntryCommitOutcomeDTO {
 /** One skipped entry + the stable reason code. Spec §5: partial success is
  *  reported per-entry, not rolled back — so this is a normal outcome, not an
  *  error body. Codes: `UNMAPPABLE_EVENT` | `DRAW_NOT_EDITABLE` |
- *  `STATE_CONFLICT` | `INVALID_PLAYER`. */
+ *  `STATE_CONFLICT` | `INVALID_PLAYER` | `NO_FREE_SLOT`. */
 export interface EntrySkipDTO {
   id: string;
   reason: string;
