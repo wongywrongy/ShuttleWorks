@@ -499,9 +499,16 @@ class BracketEvent(Base):
 
     ``id`` is the entrant tier's public draw address — it is both ``drawKey``
     (the ``/e/{slug}/draws/{drawKey}`` URL segment) and ``eventCode`` on the
-    draws, seeds and winners projections. Being half of the PK, and addressed
-    by path param on every write route, it is unrenameable by construction;
-    R-DM-11(b) says keep it that way.
+    draws, seeds and winners projections. Being half of the PK it cannot be
+    UPDATEd in place, and ``PATCH``/``DELETE /bracket/events/{event_id}`` are
+    path-keyed — **but ``POST /bracket`` and ``POST /bracket/import`` take the
+    id from the request BODY, and neither checks publication.** The 409 on
+    ``POST /bracket`` instructs ``DELETE /bracket`` first, so a
+    delete-and-recreate can re-key a published draw and silently break every
+    public URL that pointed at it. That gap is real, deliberately unclosed in
+    P7a (blocking it after publication would block a legitimate draw
+    *rebuild*, not just a rename) and logged as debt-log **D24**; it is
+    characterized by ``tests/backend/test_event_code_unrenameable.py``.
     """
 
     __tablename__ = "bracket_events"
