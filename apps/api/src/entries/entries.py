@@ -162,7 +162,7 @@ def commit_entries(
         )
     }
 
-    if (tournament.kind or "meet") == "bracket":
+    if tournament.kind == "bracket":
         return _commit_bracket(repo, tournament_id, candidates, events, max_attempts)
     return _commit_meet(repo, tournament_id, candidates, events, max_attempts)
 

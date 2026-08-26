@@ -600,7 +600,7 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
     """Compute the control-plane signals for one workspace. Pure — no DB."""
     statuses = {m.moduleId: m.status for m in modules}
     module_counts = _module_counts(modules)
-    kind = getattr(row, "kind", "meet") or "meet"
+    kind = getattr(row, "kind", "meet")
 
     if kind == "bracket":
         setup = _bracket_setup(counts)
