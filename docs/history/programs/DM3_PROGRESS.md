@@ -2182,3 +2182,50 @@ this wave touches neither the console nor a lint surface:
 **17 passed** (15 + the two new), `ruff check apps/api tests/backend` clean, **import-linter 15 kept
 / 0 broken**, and `npm run test:entrant` **37 files / 761 tests** — identical to the branch baseline,
 as a one-character entrant change should be.
+
+**Final whole-branch review and its fix wave.** The review returned **Ready to merge: No** on two
+Important findings, 0 Critical — one wave from Yes. The first is the finding of the slice, and the
+reason it survived four task reviews is instructive: `_rank_counts` bounded the **keys** of
+`rankCounts` and left the **value** unbounded into `MeetEvent.slot_count`, an int4 column. `{"MS":
+10**12}` validates against `core/schemas.py`'s `Dict[Code, int]` (whose `max_length` bounds the key
+count and key length only), reaches the blob, and on **Postgres** raises `DataError` on INSERT
+*inside the write* — turning a previously-succeeding config save into a **500**, and, because
+nothing bounded that value before this slice either, potentially **crashing the Alembic upgrade** on
+a cloud tenant that already holds one. **SQLite accepts arbitrary-width integers, which is exactly
+why every test was green.** This program has restated its SQLite-only caveat in every slice; this is
+the first time it produced a finding rather than a disclaimer.
+
+The bound is **int4, `-(2**31) <= n < 2**31`** — the column's own range — mirrored
+character-for-character in the migration's backfill so its "mirrors `_rank_counts` exactly" docstring
+stays true, and the re-review printed both copies to confirm it. **Negatives were kept:** the bound
+narrows the range, never the vocabulary, because `slot_count`'s absent CHECK is a ruling (a CHECK
+there would 500 the blob write, which is the defect being fixed).
+
+**The wave found a second live crash outside its own findings list.** `json.loads` accepts
+`Infinity`, and `int(float("inf"))` raises `OverflowError`, which the existing `(TypeError,
+ValueError)` tuple never caught — so that path was **already crashing the blob write before this
+slice**. Verified live by the re-review (`json.loads("Infinity")` succeeds; `int(float("inf"))`
+raises). `OverflowError` now joins both copies.
+
+**Coverage is stated rather than implied:** neither new test can reproduce the Postgres `DataError`,
+because SQLite takes arbitrary-width integers. They assert the blob write **still succeeds** with the
+out-of-range keys intact and the division simply **absent** from `meet_events` — and the re-review
+independently stripped the bound from both copies and confirmed both tests go red *specifically on
+the absence assertion*, then restored to a clean tree.
+
+**The citation rule bit the fix wave itself, and it caught its own tail.** Six `local.py` anchors in
+this P7b section were staled by the wave's own diff and corrected (`:243`, `:293`, `:327`, `:347`,
+`:351`, `:1895`), alongside D24's `entries_site.py:530 → 585` — the finding that prompted it. The
+re-review spot-checked all six rather than the four it was asked for. **One anchor was deliberately
+left stale:** the **P7a** entry above still cites `entries_site.py:530-531`, now `585-586`.
+`history/` is a **dated working record and is never rewritten** — an entry describing what was true
+on its date is dated, not wrong, and editing it would make an older record silently claim knowledge
+of a later slice. The correction belongs here, in the newer dated entry, which is where you are
+reading it.
+
+**One inaccuracy in the wave's own report, corrected here:** it recorded 214 insertions; the diff is
+**216 insertions / 18 deletions**. Recorded because a permanent record that rounds its own numbers is
+the beginning of the rot this slice spent two rounds fixing.
+
+`dm3/p7b-meet-event` was **merged to `main` 2026-08-26** (fast-forward, per the standing
+merge-and-proceed instruction).
