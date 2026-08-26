@@ -2229,3 +2229,67 @@ the beginning of the rot this slice spent two rounds fixing.
 
 `dm3/p7b-meet-event` was **merged to `main` 2026-08-26** (fast-forward, per the standing
 merge-and-proceed instruction).
+
+---
+
+## 2026-08-26 — SESSION HANDOFF (read this first next session)
+
+**Tree state.** `main` @ the P7b ledger commit, **pushed**, CI green on all five jobs (frontend,
+entrant, backend, interaction smoke, compose) — including the interaction-smoke `npm run build` that
+`make check` never runs. Working tree clean; only `main` and `infra/host-split` exist locally. Every
+slice branch and SDD workspace was deleted at its merge.
+
+**This session shipped two slices and closed the program's oldest blocker.** The 99-commit backlog
+was pushed after its gate was re-run (the single `make check` had died at exit 2 for a **PATH**
+reason — `ruff` is not on `PATH` in a bare bash shell — not a failure). **F-DM-25 was ruled** (keep
+all four workspace key kinds, declare the mapping, no re-key → `docs/reference/workspace-keys.md`).
+Then **P7 was split into P7a/P7b/P7c** and the first two shipped.
+
+### What P7c inherits — and it is now the ONLY implementation slice left
+
+1. **The rank disconnect, in full.** `_plan_meet` writes the **division** code, which is what R-DM-5
+   says it should write. `RegenerateMenu.tsx` expands `{prefix}{i}` and filters on the expanded
+   string. **P7c owns the generator**, so P7c owns the disconnect. Until then a committed Meet entry
+   generates no match without operator work — and **commit `67941920`'s subject line claims
+   otherwise and is false** (superseded by `f2d8fea9`, ruling P7b-13).
+2. **The operator slot-assignment surface**, which R-DM-5 requires and which does not exist. This is
+   the largest piece of net-new UI left in SP-DM-3 and it has **no prior art in the repo**.
+3. **D24** — ruled to P7c on 2026-08-26 because P7b turned out to touch no bracket draw key, and
+   because locking a published draw's key is only affordable once regeneration has a first-class
+   path, which P7c builds.
+4. **The proposal already recorded by P7b's implementer:** when P7c lands, re-invert
+   `test_a_committed_meet_entry_cannot_reach_a_generated_match` to "reaches a generated match"
+   against the **real server-side generator**, and **delete the console-generator mirror** in the
+   backend tests with it. That mirror is a deliberate, disclosed staleness risk with no cross-tier
+   gate; P7c is what retires it.
+
+### The three traps this session paid for, in the order they will bite again
+
+- **`make check` needs the venv on `PATH`** (`export PATH="$PWD/.venv/Scripts:$PATH"`), or it exits 2
+  at the first backend line for an environmental reason that looks exactly like a failure.
+- **`pytest | tail` reports *tail's* exit status.** An exit code cannot prove a suite green. Read the
+  summary line. This is now stated in two plans and a memory.
+- **SQLite-only evidence hides int-range bugs.** P7b's headline finding — an unbounded `rankCounts`
+  value into an int4 column, which 500s a config save on Postgres and could crash an Alembic upgrade
+  mid-tenant — was invisible to four task reviews and a fully green suite, because **SQLite accepts
+  arbitrary-width integers**. Every migration this program has shipped is still SQLite-verified only.
+  That caveat has been restated in every slice; this is the first time it produced a finding.
+
+### Standing conventions added this session
+
+- **No line anchor enters a permanent document unless it was printed from the tree in the session
+  that writes it** (the citation half of *produced, not predicted*). It failed **four** times in two
+  days before being written down, and twice more afterwards — including once where a fix wave staled
+  its own anchors and caught them, and once where an implementer corrected the **controller's**
+  baseline number. Treat it as load-bearing, not as hygiene.
+- **`history/` is a dated working record and is never rewritten.** When an anchor in an older dated
+  entry goes stale, the correction belongs in the newer dated entry, not in an edit to the old one.
+
+### Six open owner rulings — unchanged in number, one swapped
+
+D22 (gender on adoption) · the adoption-path divergence · the orphan roster-blob row on a
+person-refusal · F-DM-55 (`match_states` String→DateTime) · F-DM-47 (may `api/dto.ts` name domain
+types) · **D24**, which replaced F-DM-25 on this list when F-DM-25 was ruled.
+
+**P8 stays owner-blocked on the R15 text.** **R-DM-2(c) Meet-roster extraction** remains a committed
+follow-on **program**, not a slice.
