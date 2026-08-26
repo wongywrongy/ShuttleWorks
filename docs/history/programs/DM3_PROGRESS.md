@@ -24,7 +24,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 4 | P2 — blob version discipline | R-DM-8 (a) | M | **DONE 2026-08-25** — 93f41250..0098ee46 (incl. final-review fix wave f673ea2e + Dockerfile source COPY 0098ee46) — **merged to main 2026-08-25** (ff to 0098ee46) |
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to the branch tip incl. the closing ledger commits, Kyle's standing instruction) |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | **DONE 2026-08-25** — `9e81ca68`..branch tip (incl. final-review fix wave `f94c85ce`+`4f049a45`), final review "Ready to merge, with fixes" → fixes landed and re-reviewed clean — **merged to main 2026-08-25** (fast-forward, Kyle's standing instruction). Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
-| 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | **DONE 2026-08-25** — `637ea8df`..branch tip on `dm3/p6-person-demotion` (six tasks; Tasks 1-5 reviewed clean, at most one fix round each) — **not yet merged**; the closing task stops at the ledger commit, per the slice's own instruction |
+| 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | **DONE 2026-08-25** — `637ea8df`..branch tip on `dm3/p6-person-demotion` (six tasks, each reviewed clean after at most one fix round), final whole-branch review **"Ready to merge: Yes", 0 Critical / 0 Important** — **merged to main 2026-08-25** (fast-forward, Kyle's standing merge-and-proceed instruction) |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
 | 9 | P9 — cosmetic sweep | — | S | pending — anytime after P0 |
 | 10 | P8 — PlayerProfile full v1 | R-DM-3 (c) | M | **BLOCKED — owner must supply the R15 text** |
@@ -849,3 +849,22 @@ rank level and at the group level. P7 is **program-scale and R-DM-5-gated**; do 
 reading this note. Two of P6's new rows also want a ruling before anyone builds on them: the
 adoption-path divergence and the orphan roster-blob row are both **unassigned on purpose** — they
 need a decision, not a phase.
+
+**Final whole-branch review (`ca15d7d7`..`c250dbac`): "Ready to merge: Yes", 0 Critical, 0
+Important.** The reviewer re-ran all five deletion gates independently rather than relaying the
+task reports, and confirmed the two deletions **compose** into a stronger invariant than either
+alone: with the heal gone the migration effect is wholly empty-roster-only, so the trimmed
+reconcile can only ever decline to CREATE a row against an empty roster — it can never destroy a
+row, its remarks, or its availability. It also verified the `already_ours` excusal is provably
+incapable of landing a row (it is the byte-identical expression to the TEAM insert's id, so the
+id-dedupe always catches it) and that leg 7b plus the singleton key-dedupe are new **conjuncts**,
+which can only turn more inserts into refusals, never fewer. The two deliberately-unowned defects
+were re-verified code-true line by line. Its three Minors are all comment-wording; the only one
+worth carrying is that the guard pin's preamble still narrates a placement relative to a describe
+that no longer exists above it — fold that into whichever slice next touches
+`BracketTab.test.tsx`. **Release condition already encoded:** when the adoption-divergence ruling
+lands, delete `test_adopting_a_legacy_roster_row_keys_the_column_and_not_the_blob` and widen
+`_person_key_disagreements` suite-wide **in the same pass** — the test's own signpost says so.
+
+`dm3/p6-person-demotion` was **merged to `main` 2026-08-25** (fast-forward, per Kyle's standing
+merge-and-proceed instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call).
