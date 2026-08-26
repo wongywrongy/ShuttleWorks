@@ -1,9 +1,12 @@
 /**
  * The `GET /e/api/page/{slug}` projection, mirrored in TypeScript.
  *
- * Mirrored from `backend/api/entries_json.py:97-188` — the NESTED
+ * Mirrored from `apps/api/src/entries/entries_json.py` — the NESTED
  * `EntryPageProjection`, not the flat shape the brief drafted. One loader, one
  * call: everything the page renders, meta and OG tags included, arrives here.
+ * Cited by file and symbol, not by line range: the old `:97-188` suffix had
+ * already rotted (`EntryPageProjection` is at :332 today), and a file-only
+ * citation that stays true beats a line citation that silently does not.
  *
  * Every derived flag is computed Python-side and shipped as data: `isOpen`
  * (`_event_is_open`), `ageBracketed` (`_is_age_bracketed`) and `entryCount`
@@ -25,9 +28,16 @@ export interface EntryEventDTO {
   discipline: string;
   feeCents: number | null;
   genderConstraint: string | null;
-  /** E3: 'singles' | 'doubles'. The server's answer, not a guess from the
-   *  discipline string — "Mixed Doubles" is a name a director typed. */
-  entryType?: string;
+  /** E3: the server's answer, not a guess from the discipline string —
+   *  "Mixed Doubles" is a name a director typed.
+   *
+   *  Closed (F-DM-60): the column carries no CHECK, but the only route that
+   *  ever writes it (`entries_routes.py`, the single `EntryEvent(...)`
+   *  construction) takes its value from `core/schemas.py`'s
+   *  `EntryEventCreateDTO.entryType: Literal["singles", "doubles"]`, and no
+   *  update path assigns the column at all. The emitter
+   *  (`entries_json.py`) additionally folds null/empty to `'singles'`. */
+  entryType?: 'singles' | 'doubles';
   /** Display strings, stated in UTC and saying so (`_moment`, pinned wire
    * format `"%Y-%m-%d %H:%M UTC"` — `parseMoment` parses exactly this). */
   opensAt: string | null;

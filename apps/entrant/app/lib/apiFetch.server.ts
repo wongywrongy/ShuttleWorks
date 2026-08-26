@@ -55,8 +55,10 @@ export function apiBaseUrl(): string {
 }
 
 /** The `code` from `http_error`'s payload, which FastAPI nests under `detail`
- * (backend/app/error_codes.py:171-183). Anything else — a plain-string
- * `detail`, a 422 list, an empty body — is not a code we know. */
+ * (`apps/api/src/core/error_codes.py`, `http_error`). Anything else — a
+ * plain-string `detail`, a 422 list, an empty body — is not a code we know.
+ * Cited by symbol, not by line range: the old `:171-183` suffix had already
+ * drifted, and a file-only citation that stays true beats one that rots. */
 function errorCode(body: unknown): string {
   const detail = (body as { detail?: unknown } | null)?.detail;
   const code = (detail as { code?: unknown } | null)?.code;

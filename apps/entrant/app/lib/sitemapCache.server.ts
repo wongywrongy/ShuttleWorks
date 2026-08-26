@@ -31,7 +31,7 @@ interface CacheEntry {
  * document below.
  *
  * Neither interpolation point is trusted here. `slug` is held to
- * `[a-z0-9-]{3,60}` by `_SLUG_RE` in `backend/api/entries.py` — a REMOTE
+ * `[a-z0-9-]{3,60}` by `_SLUG_RE` in `apps/api/src/entries/entries_routes.py` — a REMOTE
  * invariant this module cannot see, that this module never asserts, and
  * whose own comment explicitly invites widening ("widening an accepted
  * alphabet later is additive"). `baseUrl` is not held at all: it is

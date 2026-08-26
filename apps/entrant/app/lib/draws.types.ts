@@ -1,17 +1,25 @@
 /**
  * The draws/seeds/winners projections mirrored in TypeScript
- * (`backend/api/entries_site.py`). Result data arrives pre-gated: with
+ * (`apps/api/src/entries/entries_site.py`). Result data arrives pre-gated: with
  * `results_published` off, nodes carry no `result`, standings are null,
  * and winners answer `published: false` — the renderer never decides what
  * may be shown.
  */
 
+/** The format tag — the keys of the API's `FORMAT_REGISTRY`
+ *  (`apps/api/src/bracket/formats/__init__.py`). Every write path validates
+ *  against that registry (`FormatId = Annotated[str, AfterValidator(...)]`),
+ *  so an unregistered tag never reaches a row. F-DM-61: this union used to
+ *  live in a docstring beside `kind: string`. The LABEL map below is still a
+ *  third copy of the vocabulary; deduping it across packages is D23
+ *  (cross-package types), not this slice. */
+export type DrawKind = 'se' | 'de' | 'rr' | 'swiss' | 'compass' | 'monrad';
+
 export interface DrawCardDTO {
   drawKey: string;
   eventCode: string;
   discipline: string;
-  /** The format tag: 'se' | 'rr' | 'de' | 'swiss' | 'compass' | 'monrad'. */
-  kind: string;
+  kind: DrawKind;
   size: number;
   hasConsolation: boolean;
 }
@@ -78,7 +86,7 @@ export interface DrawDetailDTO {
   drawKey: string;
   eventCode: string;
   discipline: string;
-  kind: string;
+  kind: DrawKind;
   size: number;
   resultsPublished: boolean;
   teams: TeamDTO[];
@@ -122,8 +130,11 @@ export interface WinnersDTO {
   events: WinnersEventDTO[];
 }
 
-/** The human name of a format tag — shown on draw cards. */
-export function kindLabel(kind: string): string {
+/** The human name of a format tag — shown on draw cards. Keyed by `DrawKind`,
+ *  so dropping an entry here is a compile error rather than a raw tag on a
+ *  card. The `?? kind` tail stays: it is what an off-union value renders as
+ *  at runtime, and TypeScript does not police the wire. */
+export function kindLabel(kind: DrawKind): string {
   return (
     {
       se: 'Elimination',

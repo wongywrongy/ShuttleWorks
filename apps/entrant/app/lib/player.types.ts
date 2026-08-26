@@ -1,6 +1,6 @@
 /**
  * `GET /e/api/page/{slug}/players/{personKey}` mirrored in TypeScript
- * (`backend/api/entries_site.py` — PlayerPageDTO and friends).
+ * (`apps/api/src/entries/entries_site.py` — PlayerPageDTO and friends).
  *
  * `record` is null while results are unpublished — a 0-0 record would be a
  * claim (§4); `score`/`decided` arrive already gated server-side, so the

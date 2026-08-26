@@ -34,7 +34,7 @@
  * security primitive:
  *   - `tests/backend/unit/test_form_csrf_cross_tier.py` reads THIS
  *     FILE, extracts every constant below, and asserts each equals its
- *     `backend/app/form_csrf.py` counterpart — then recomputes the golden
+ *     `apps/api/src/core/form_csrf.py` counterpart — then recomputes the golden
  *     digests through the extracted prefix. Change the prefix on either side
  *     and it goes red.
  *   - `tests/formCsrf.server.test.ts` asserts this derivation's output against
@@ -46,7 +46,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 /**
  * Domain separator. **Byte-identical to `_FORM_CSRF_PREFIX` in
- * `backend/app/form_csrf.py`**, and held there by the cross-tier test above.
+ * `apps/api/src/core/form_csrf.py`**, and held there by the cross-tier test above.
  * Changing it invalidates every form a browser currently holds.
  */
 const FORM_CSRF_PREFIX = 'sw-play-form-csrf:';
