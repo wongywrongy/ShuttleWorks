@@ -42,6 +42,7 @@ from typing import Optional
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -191,6 +192,21 @@ class Tournament(Base):
         back_populates="tournament", cascade="all, delete-orphan"
     )
 
+    __table_args__ = (
+        # SP-DM-3 P7a (F-DM-37): the schema's first CHECK constraints.
+        # Vocabulary source: the route validator in
+        # ``workspaces/tournaments.py`` ("kind must be 'meet' or 'bracket'").
+        # Hardcoded rather than imported — ``db`` may not reach up into a
+        # domain package (import-linter's persistence-direction contract).
+        # ``status`` is deliberately NOT constrained here: its comment above
+        # says enforcement lives at the application layer, and no validator
+        # in the API produces its allowed set. It is on P7a's deferred list.
+        CheckConstraint(
+            "kind IN ('meet', 'bracket')",
+            name="ck_tournaments_kind",
+        ),
+    )
+
 
 class Match(Base):
     """Per-match operational row.
@@ -231,6 +247,13 @@ class Match(Base):
 
     __table_args__ = (
         Index("ix_matches_tournament_status", "tournament_id", "status"),
+        # SP-DM-3 P7a (F-DM-37). Vocabulary source: ``MatchStatus`` above.
+        # Spelled out rather than derived from the enum so this string is
+        # character-identical to the one in migration ``z0f5a1b3c9d2``.
+        CheckConstraint(
+            "status IN ('scheduled', 'called', 'playing', 'finished', 'retired')",
+            name="ck_matches_status",
+        ),
     )
 
 
@@ -408,7 +431,16 @@ class TournamentMember(Base):
 
     tournament: Mapped[Tournament] = relationship(back_populates="members")
 
-    __table_args__ = (Index("ix_tournament_members_user", "user_id"),)
+    __table_args__ = (
+        Index("ix_tournament_members_user", "user_id"),
+        # SP-DM-3 P7a (F-DM-37). Vocabulary source: ``identity/members.py``
+        # ``ROLES = ("viewer", "operator", "owner")``, the same three the
+        # ``_ROLE_LEVELS`` ladder in ``core/dependencies.py`` ranks.
+        CheckConstraint(
+            "role IN ('viewer', 'operator', 'owner')",
+            name="ck_tournament_members_role",
+        ),
+    )
 
 
 class InviteLink(Base):
@@ -1650,6 +1682,16 @@ class Entry(Base):
         Index("ix_entries_submission", "submission_id"),
         # The public, unauthenticated preview resolves a token through this.
         Index("ix_entries_partner_invite", "partner_invite_hash"),
+        # SP-DM-3 P7a (F-DM-37). Vocabulary source: the six module-level
+        # constants in ``entries/lifecycle.py`` — the four ``LIVE_STATES``
+        # plus the two terminals that file writes (``REJECTED`` at
+        # ``reject``, ``WITHDRAWN`` at ``withdraw``). Hardcoded, not
+        # imported: ``db`` may not reach up into a domain package.
+        CheckConstraint(
+            "state IN ('unverified', 'pending', 'waitlisted', 'confirmed',"
+            " 'rejected', 'withdrawn')",
+            name="ck_entries_state",
+        ),
     )
 
     # ---- read-through to the levels above and below ------------------
