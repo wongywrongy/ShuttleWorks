@@ -25,7 +25,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to the branch tip incl. the closing ledger commits, Kyle's standing instruction) |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | **DONE 2026-08-25** — `9e81ca68`..branch tip (incl. final-review fix wave `f94c85ce`+`4f049a45`), final review "Ready to merge, with fixes" → fixes landed and re-reviewed clean — **merged to main 2026-08-25** (fast-forward, Kyle's standing instruction). Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | **DONE 2026-08-25** — `637ea8df`..branch tip on `dm3/p6-person-demotion` (six tasks, each reviewed clean after at most one fix round), final whole-branch review **"Ready to merge: Yes", 0 Critical / 0 Important** — **merged to main 2026-08-25** (fast-forward, Kyle's standing merge-and-proceed instruction) |
-| 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
+| 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | **P7a DONE 2026-08-26** — `143f3286`..branch tip on `dm3/p7a-constraints` (four tasks; T1 and T3 reviewed clean after one fix round each, T2 clean with zero findings), `make check` green — **not yet merged**. P7 was split into three shippable slices at plan time: **P7a** (four CHECK constraints, the `or "meet"` deletion, a published `eventCode` unrenameable) is done; **P7b** (a Meet Event + the division-level mapping) and **P7c** (server-side Meet lineup + the slot-assignment surface) are **pending** and get their own plans at phase start |
 | 9 | P9 — cosmetic sweep | — | S | **DONE 2026-08-25** — `b5f9e298`..branch tip on `dm3/p9-cosmetic-sweep` (four tasks, each reviewed clean; T3 one fix round, T4 two plus the final fix wave), final whole-branch review **"Ready to merge: Yes", 0 Critical / 0 Important** — **merged to main 2026-08-25** (fast-forward, Kyle's standing merge-and-proceed instruction). **Small because the sweep is mostly not sweepable** — 22 cited · 3 already closed · 7 swept · **9 routed out** · 3 refused; see the P9 session-log section |
 | 10 | P8 — PlayerProfile full v1 | R-DM-3 (c) | M | **BLOCKED — owner must supply the R15 text** |
 | 11 | Meet-roster extraction (R-DM-2 (c), ratified) | R-DM-2 | L | pending — committed follow-on after P4 |
@@ -1365,3 +1365,234 @@ re-verified in code rather than inherited: `_plan_meet` writes `ranks=["XD"]` wh
 group while the generator only pairs across groups (`for j = i+1`). Two independent breaks; Meet
 match generation itself lives in `RegenerateMenu.tsx`, on the **client**, which is what makes P7c a
 port rather than an edit.
+
+### 2026-08-26 — P7a slice executed (the schema's first CHECK constraints, subagent-driven, opus)
+
+Branch `dm3/p7a-constraints` off `main` @ `41a85821`. Four tasks, each implementer and reviewer
+dispatched separately — T1 and T3 reviewed clean after one fix round each, T2 clean with **zero**
+findings, T4 is the gate-and-record task that wrote this section. The slice's working SDD ledger was
+git-ignored scratch and is deleted with the slice, so **everything load-bearing from it is carried
+into this entry** rather than cited by path. That is the program's permanent-source rule
+(`git check-ignore` is the mechanical test), and it is why this section is long.
+
+**Commit chain.** `143f3286` **T1** four `CheckConstraint`s + migration `z0f5a1b3c9d2` + six tests,
+in **one** commit per F-DM-11 · `32a628a6` **T1** fix round (the batch-rebuild expectation stopped
+being hand-maintained) · `b4ebcdb5` **T2** the two `or "meet"` fallbacks deleted · `d6a7517e` **T3**
+the machine-derived pin that no route can rename a published event code · `2a606741` **T3** fix round
+(a falsely reassuring docstring corrected, D24 characterized and logged) · plus this ledger commit
+(this section, four debt-log rows, and the CRLF hazard added to `CLAUDE.md`).
+
+**F-DM-37 said the schema has zero CHECK constraints. It now has four, and every allowed-value set
+was PRODUCED from an authority in code rather than invented in the migration.** That sourcing rule
+is the whole discipline of the task: a CHECK is a vocabulary declaration, and a vocabulary nothing in
+code owns is a constant smuggled into a schema where no reader will ever find it. The four:
+
+| Column | Constraint | Allowed set | The authority that produces it |
+| --- | --- | --- | --- |
+| `tournaments.kind` | `ck_tournaments_kind` | `meet`, `bracket` | `apps/api/src/workspaces/tournaments.py:356` — `if body.kind not in ("meet", "bracket")` → 400 `"kind must be 'meet' or 'bracket'"`; the DTO defaults at `:92`/`:113` agree |
+| `matches.status` | `ck_matches_status` | `scheduled`, `called`, `playing`, `finished`, `retired` | the `MatchStatus` enum, `apps/api/src/db/models.py:62-76` — the column's own default is `MatchStatus.SCHEDULED.value` |
+| `entries.state` | `ck_entries_state` | `unverified`, `pending`, `waitlisted`, `confirmed`, `rejected`, `withdrawn` | the six module constants at `apps/api/src/entries/lifecycle.py:53-58` |
+| `tournament_members.role` | `ck_tournament_members_role` | `viewer`, `operator`, `owner` | `ROLES = ("viewer", "operator", "owner")` at `apps/api/src/identity/members.py:58`; the same three rank in `_ROLE_LEVELS` (`core/dependencies.py:163`, `identity/invites.py:111`) |
+
+Two sourcing subtleties worth keeping. `entries.state` is the **six**, not the four in `LIVE_STATES`
+(`lifecycle.py:64`) — the two terminals are written at `:268` (`entry.state = WITHDRAWN`) and `:337`
+(`= REJECTED`), so a set derived from `LIVE_STATES` would have rejected a legitimate withdrawal. And
+none of the four sets is *imported* into `db/models.py`: import-linter's persistence-direction
+contract forbids `db` reaching up into a domain package, so the literals are hardcoded with the
+source named in a comment beside each one. The constraint names are spelled identically in the models
+and in the revision, because SQLite batch mode has nothing to drop on the way down otherwise — and
+`downgrade()` had to actually work, which is tested.
+
+**No backfill was needed, and that measurement — not an assurance — is why this migration is safe on
+a director's laptop.** Every `.db` on this box was copied into scratch with its `-wal`/`-shm` and
+grouped read-only; the live files were never opened for write. `data/local.db` (4.0 MB) held
+`kind` bracket 10 / meet 4, `state` confirmed 84 / pending 59, `status` finished 86 / scheduled 17 /
+playing 2 / called 2, `role` owner 27. `apps/api/local.db` (2.4 MB) held meet 4 / bracket 1,
+scheduled 36, owner 5. `data/_probe2/local.db` (4.4 MB) held meet 8 / bracket 2, scheduled 9 /
+playing 2 / finished 2, owner 10. **Every distinct value on disk was inside its derived set**, so
+unlike `u5f0b4d7e2a3` this revision touches no data — it only rebuilds four tables. Had one value
+been outside, the slice would have owed a pre-enforcement sweep before the CHECK, and it did not.
+
+**The migration is `z0f5a1b3c9d2`, down-revision `y9e4f0a2b7c8`, and models + revision landed in the
+same commit per F-DM-11** — with the negative controls running against a **migration-built** schema
+(`alembic upgrade head` onto a throwaway SQLite file; nothing in the new tests uses
+`Base.metadata.create_all`). Each case first asserts the constraint **exists by name** through
+`inspect(engine).get_check_constraints(table)` before asserting an out-of-vocabulary insert raises,
+because an `IntegrityError` alone cannot tell "CHECK present" from "test set up wrong"; and the
+positive half of the same test inserts a legal value and asserts the row landed, so a test that
+raised for any reason at all cannot pass. **The batch rebuild of four tables was verified to lose no
+FK, index or server default in EITHER direction** — upgrade *and* downgrade — and it is verified by a
+**reflected snapshot**, not a hand-maintained list. The first version of that test did carry a hand
+list of seven FKs; review found the four rebuilt tables have **eight**, the missing one being
+`tournaments.org_id → orgs.id ON DELETE RESTRICT` (`db/models.py:100-102`, `fk_tournaments_org`) —
+which was `tournaments`' *only* FK, so the one rebuilt table with a single foreign key had **zero**
+coverage. The fix deleted the list rather than correcting it: the test now snapshots FK shape (with
+`ondelete` in the tuple, never the name, since SQLite auto-names unnamed constraints), indexes and
+server defaults at `y9e4f0a2b7c8`, then asserts the snapshot unchanged after `upgrade head` and
+unchanged again after `downgrade`. Three anti-vacuity assertions guard the empty-snapshot failure
+mode, one of them finding 1's own tuple, so the specific gap that was reported cannot reopen
+silently. It went green first try. `test_entries_migration.py`'s `HEAD_REVISION` pin was bumped
+`y9e4f0a2b7c8` → `z0f5a1b3c9d2` — that pin exists precisely so a new migration is noticed, and it
+was.
+
+**The `or "meet"` deletion produced 2 → 0 with ZERO test edits, which is the evidence it was dead
+code rather than a behavior change** (F-DM-34 / R-DM-10). Two files, two lines. But the two sites are
+**not** the same case, and the ruling that separated them is the substance.
+`apps/api/src/entries/entries.py:165` was `(tournament.kind or "meet") == "bracket"` where
+`tournament` is a real `Tournament` ORM row loaded inside `commit_entries` — with `ck_tournaments_kind`
+plus `nullable=False` on the column, both the `None` and the empty-string case are genuinely
+unreachable, so **that fallback was deleted whole**. `apps/api/src/workspaces/workspace_signals.py:603`
+was `kind = getattr(row, "kind", "meet") or "meet"` inside `build_signals(row, ...)`, whose docstring
+declares it **"Pure — no DB"** and whose `row` is duck-typed (the unit tests pass a
+`SimpleNamespace`). **A database CHECK cannot make a `getattr` default on a duck-typed object dead**,
+so deleting that default would have weakened a documented contract to satisfy a grep. It **kept the
+`getattr` default** and lost only the trailing `or "meet"` — the empty-string guard, which the CHECK
+*does* make impossible for a real row and which a test double would never need. The gate
+`grep -rn 'or "meet"' apps/api/src` → **0** is met honestly, because the surviving default contains
+no `or "meet"`. Caller work backed it: the only production caller of `commit_entries` loads the row
+from the DB, every test fixture passes an explicit `kind=`, and a repo-wide search for `kind=None` /
+`kind=""` found nothing. `_board_kind`'s `"hybrid"` answer was not touched (UI-only notion under
+R-DM-10); it lives in `display/display.py:122`, **not** `workspace_signals.py` as the plan prose
+implied.
+
+**R-DM-11(b) turned out to have nothing to forbid: no rename path exists, so the deliverable is a
+PIN derived from the live OpenAPI route table, not a guard with no caller.** The investigation was
+run before any code was written, and it is the reason the slice shipped a test instead of a service
+refusal. `entry_events.code` is **create-only**: one writer (`entries/entries_routes.py:875`,
+`row = EntryEvent(...)` in `create_entry_event`), no update/upsert/replace function, no
+`update(EntryEvent)`, no `.code =` on any ORM row (the two hits are exception constructors), none of
+the five bulk `setattr` loops in `repositories/local.py` reaches an `EntryEvent`, and no PATCH/PUT/
+DELETE exists on any `/entry-events` path. Backup/restore cannot rewrite one either — `entry_events`
+is a real table, while `tournament_backups` snapshots the `tournaments.data` JSON blob.
+`bracket_events` has **no `code` column at all**: its `id` is half of the composite primary key
+`(tournament_id, id)` and is never assigned after construction, and every `/events/{event_id}` write
+is keyed by that id in the *path*, which cannot rename its own key. So the property R-DM-11(b) asks
+for already held by construction, and building a refusal for a caller that does not exist was
+explicitly forbidden. What shipped is `tests/backend/test_event_code_unrenameable.py`, shaped after
+`test_tenant_isolation.py` and reading `app.openapi()["paths"]` rather than `app.routes` (the nested
+`_IncludedRouter` hazard): **two independent derivations** — every operation on a path containing
+`entry-event` must equal the single create, and every operation whose request body declares a `code`
+property (resolved through `$ref`, `allOf`/`anyOf`/`oneOf`) must be that same one — plus a
+non-vacuity meta-test, because a derivation that matched nothing would pass both forever. Its failure
+message is the teeth: it names R-DM-11(b), states the rule (refuse a `code` change while any
+`entry_pages` publication flag is on; a draft event stays renameable), and says the refusal belongs
+in the owning service, not a DTO validator. **It was mutation-checked, twice and independently** —
+implementer and reviewer each registered a synthetic `PATCH /entry-events/{event_id}` with a `code`
+body on the live app and confirmed **both** derivations raise with `R-DM-11` in the message, one
+resolving the body through `$ref`. The rule is also stated in the `EntryEvent` and
+`create_entry_event` docstrings, where the next author to add an event-update route will actually
+read it.
+
+**New information for P7b/P7c: the entrant tier's `eventCode` has THREE sources, not one.** This was
+produced by tracing `apps/entrant/app/lib/draws.types.ts` and `entryPage.types.ts` back through the
+API, and it is the fact that makes "the public event key" a misleading singular. (1)
+**`bracket_events.id`** feeds `DrawCardDTO.eventCode`/`.drawKey`, `DrawDetailDTO`, `SeedsEventDTO`,
+`WinnersEventDTO` and bracket-origin `PlayerMatchDTO` — `entries_site.py` literally writes
+`drawKey=event.id, eventCode=event.id` at `:531`, `:656`, `:693`, `:748`, `:1022`. (2)
+**`entry_events.code`** feeds `EntrantListRowDTO.eventCodes`, `ReserveRowDTO.eventCode`, the entry
+form's `EventDTO.code` and `PlayerEventDTO.code` (`entries_json.py:439`, `:482`, `:495`;
+`entries_site.py:931`). (3) **`match["eventRank"]` out of the `tournaments.data` blob** feeds
+`PlayerMatchDTO.eventCode` on **meet-origin** matches (`entries_site.py:1136`) — which the whole-state
+`PUT /tournaments/{id}/state` can rewrite, though it is a display label with no public URL resolving
+by it. The consequence that matters for the next slice: **`entry_events.code` is a naming and
+grouping dimension, NOT a URL or submit key.** The public URL keys are `slug`, `personKey` and
+`drawKey`; the entry form posts `eventId` (`apps/entrant/app/lib/echo.ts:197`) and
+`entries_public.py:461-468` resolves an event by UUID, never by code. Renaming an
+`entry_events.code` would silently relabel published entrant lists, reserve queues and player pages —
+real harm, and exactly what R-DM-11(b) names — but it would break no address.
+
+**D24 — a published draw can still be re-keyed, and it is routed to an owner ruling rather than
+fixed.** The review found the reassuring half of the slice's own docstring was false, and it was
+right. `bracket_events.id` is the entrant tier's *other* public key: `entries_site.py:530-531` writes
+`drawKey=event.id`, the `/e/{slug}/draws/{drawKey}` URL segment. `POST /bracket`
+(`brackets.py:1455`) takes each event id from the **request body**, and `POST /bracket/import`
+(`:3157`) installs a parsed payload wholesale by the same mechanism; `DELETE /bracket` (`:1657`)
+clears the bracket that stands in their way. **None of the three looks at the workspace's
+publication flags**, and the 409 at `:1481` ("bracket already exists; DELETE /bracket first to
+recreate") **instructs that very sequence**. R-DM-11(b)'s window opens at **publication**, which
+precedes play, so the "pre-play a replace is lossless" defence does not cover it. Three things
+followed and only two were P7a's. The false docstring was **corrected the same round** — a docstring
+asserting a safety property the code does not have is worse than none, because it is what a future
+author trusts instead of reading the routes; the implementer found the same false claim a second time
+in the pin module's own docstring, which the finding had not named, by checking rather than assuming.
+The gap got a **characterization test, not a widened pin**: the pin cannot be extended over the
+bracket write surface because it would not pass — the property genuinely does not hold there — so
+`test_a_published_draw_can_still_be_re_keyed_by_delete_and_recreate` pins the *actual* behaviour
+(publish a draw, confirm `/draws/MS` resolves, run the exact sequence the 409 instructs with
+`id: "MS-A"`, assert the old public URL **404s**), carrying the program's signpost for a deliberately
+unowned defect: ***if this test reds, read it as FIXED — delete it.*** And **locking the draw key at
+publication was NOT P7a's call**: R-DM-11 accepted one live-surface consequence — a published event
+code can no longer be renamed — but blocking `DELETE`+`POST /bracket` after publication would block a
+legitimate draw **rebuild**, not merely a rename, which is a bigger consequence than the one the
+ruling accepted, and draw identity is precisely what P7b/P7c redesign. It is logged as **D24** under
+*Open — needs an owner decision*, naming the routes, the 409, publication as the window, and the
+rebuild-versus-rename cost.
+
+**The standing caveat, restated honestly: all migration evidence in this program is SQLite-only, and
+P7a ADDS to that debt.** Postgres is untested. This slice is not neutral on the point — it carries a
+revision that **rebuilds four tables**, and the rebuild is the SQLite-specific path: on Postgres
+`batch_alter_table` issues a plain `ALTER TABLE ... ADD CONSTRAINT` with no rebuild, so the
+FK-survival risk the snapshot test covers is SQLite's, while the Postgres path is the one nothing has
+exercised. Do not read the snapshot test as cross-dialect coverage. Second, smaller caveat from the
+same test: it snapshots the four **rebuilt** tables only, and FK enforcement is off on the migration
+connection, so a child table whose FK points into a rebuilt one could be left dangling without
+raising. Not observed, not covered — logged.
+
+**What P7a deliberately did NOT do**, so the next author does not go looking for it:
+
+- **No public re-key.** R-DM-11 means **(b)**, not (a). The P7 card's body still describes (a) — a
+  stable key with `eventCode` demoted to a label — and the plan settled it on the ruling's own
+  arithmetic: **one constraint** versus **102 `eventCode` sites across 33 files** plus a redirect
+  story. The conversion stays deferred until a consumer needs it, where F-DM-31/32 already sit.
+- **No Meet Event, no mapping column, no operator surface.** Those are P7b and P7c. P7a adds **no UI
+  and no wire-shape change** at all.
+- **`tournaments.status` was left unconstrained on purpose, and the reason is the same discipline
+  that produced the other four sets: NOTHING IN CODE PRODUCES ITS ALLOWED SET.** It is a
+  `String(20)` with an apparent vocabulary (`draft`/`active`/`archived`) whose own column comment
+  says *"Stored as plain string for ease of evolution; enforcement lives at the application layer"*,
+  and no validator anywhere produces the set. A CHECK there would be a constant invented in a
+  migration. The asymmetry it leaves — an unconstrained `status` beside a constrained `kind` on the
+  same table — reads as an oversight, which is why it is written down here and in the debt log: the
+  next constraint batch must give that column an authority in code **before** constraining it.
+- **The remaining enum columns stay unconstrained.** The card said "~19 unconstrained enum Strings";
+  the AST-produced list is **22** `String(<=32)` columns, of which four are now done and several are
+  not enums at all (`tournaments.tournament_date` is an ISO date string — a CHECK there would be a
+  format regex, a different decision). The cheapest next one is `invite_links.role`, which shares the
+  `ROLES` vocabulary already used above; `workspace_modules.module_id` has backend `MODULE_IDS`;
+  `bracket_events.format` has `FORMAT_REGISTRY`. The rest need a vocabulary source first.
+
+**Gates.** `make check` green across both tiers, run with the repo `.venv/Scripts` on `PATH` (without
+it the target dies at exit **2** for a purely environmental reason — `ruff`, `lint-imports` and
+`pytest` all live there — which is not a failure and must not be reported as one). Console lint 0
+errors / 117 warnings (the standing downgraded set), `tsc -b` clean, vitest **204 files, 1840
+tests**; depcruise **16 warnings, 0 errors** (the pre-ratchet `KNOWN_CROSS_MODULE` set, unchanged);
+entrant lint / typecheck / vitest **37 files, 760 tests**, entrant depcruise **clean**; ruff
+**"All checks passed!"**; import-linter **15 kept, 0 broken**; pytest **`1934 passed, 66 skipped, 50 warnings in 811.37s (0:13:31)`**.
+**Every frontend count is identical to the P6/P9 baseline**, which is what a backend-only slice must
+produce. **pytest rose by exactly 11, and all eleven are this slice's own new tests**: **six** in
+`tests/backend/unit/test_check_constraints_migration.py` (the out-of-vocabulary refusal parametrized
+over all four columns = 4, plus the batch-rebuild snapshot and the downgrade round-trip) and **five**
+in `tests/backend/test_event_code_unrenameable.py` (the two OpenAPI derivations, the non-vacuity
+meta-test, the public-projection characterization, and D24's re-key characterization added in T3's
+fix round). T2 added none — it is a two-line deletion with zero test edits, which is its own evidence.
+`npm run docs:freshness` reports **3 areas BEHIND** — State management (6 source commits since
+`2bb99fda`), Modules (17 since `e7e7221a`) and Entrant tier (15 since `7adc6820`) — which is
+**advisory by the Makefile's own declaration** (`Makefile:287`, "advisory — never fails the gate";
+make prefixes the recipe with `-` and prints `[Makefile:252: check] Error 1 (ignored)`), so it is
+reported, not treated as red. **None of the three can be P7a's**: this slice changed no console
+and no entrant source at all, and all three lag commits dated 2026-08-25 or earlier. `make check`
+exited **0**.
+
+**Four debt rows written** (`docs/reference/debt-log.md`, *Open — small and unscheduled*), in
+addition to D24 above: `tournaments.status` has no authority in code for its allowed set; Alembic
+revision ids have reached `z0f5a1b3c9d2` and the single-letter prefix scheme is **exhausted**, so the
+next slice adding a migration picks a new one (renaming a shipped revision id is a migration-history
+rewrite and is not on the table); the schema snapshot covers the four rebuilt tables only, not child
+tables whose FKs point into them; and `db/models.py:756` `derive_modules(kind: Optional[str])` still
+tolerates a `None` kind now that the column cannot be null or off-vocabulary.
+
+**One hazard was hit during this slice and is now in `CLAUDE.md`.** The repo is `core.autocrlf=true`
+with CRLF working-tree files, so a tool that writes LF shows a **clean, small `git diff` while having
+rewritten the whole file on disk**. T2's implementer hit it on a two-line change, caught it before
+committing, and restored the file. Every subsequent task checked `git diff --stat` for
+proportionality before committing, and none showed a deletions-heavy stat on a barely-touched file.
