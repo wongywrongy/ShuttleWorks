@@ -641,9 +641,11 @@ identity for everything that resolves to a person. So there is **no re-key and n
 `lib/playerSlug.ts` keeps its single caller (`BracketRosterTab.tsx:137`, the hand-add path) — the
 ruling accepts the same-name collision for hand-added rows **in writing**, and a pinned test says so
 (`BracketRosterTab.test.tsx:148`, "silently discards a second hand-added player with the same name
-(ruled residual)"). The plan's judgment call 1 proposed demoting `playerSlug` to "at most a URL
-helper" and was **declined at ratification**: overruling it reopens R-DM-7 itself, and no URL
-consumer of a slug exists anywhere in the tree. `entries/entries.py::roster_id` likewise survives as
+(ruled residual)"). The demotion was the **design card's** proposal — `…-design.md:168`,
+"`lib/playerSlug.ts` stops being an identity mint and becomes at most a URL helper". The **plan
+declined it** (judgment call 1: "`playerSlug()` survives, unchanged, as the hand-add id mint. P6
+does not demote it"), and that declining was **RATIFIED**: overruling it reopens R-DM-7 itself, and
+no URL consumer of a slug exists anywhere in the tree. `entries/entries.py::roster_id` likewise survives as
 the backend's one `entry-{uuid}` spelling. What changed is what the id **means**: `BracketPlayerDTO`'s
 docstring no longer claims the id is a slug produced by `playerSlug()` — it is a locally-unique row
 key whose provenance depends on who made the row, and the identity is `entryPlayerId`.
@@ -762,8 +764,9 @@ launched, so it was re-verified on its own — `ruff check apps/api/src/db/blob_
 `test_the_tournament_document_is_the_one_wired_column_today` → 1 passed.
 
 **Deviations from the plan, all reviewed:**
-- **Judgment call 1 was DECLINED at ratification** — `playerSlug()` survives untouched. The plan
-  proposed demoting it; the ruling keeps it, and the design-doc gate was corrected instead.
+- **Judgment call 1 was RATIFIED** — `playerSlug()` survives untouched. It is the plan's own
+  deviation *from the card*: the card proposed the demotion, the plan declined it, and the
+  controller upheld the plan. The design-doc gate was corrected to match rather than the code.
 - **The brief was wrong about T3's expected test state, twice.** There were **two** heal describes,
   not one — `bracketMigration.test.ts`'s heal case reddens too, because the heal derives its repair
   map from the now-trimmed reconcile and its fixture is doubles-only. T2 flagged it forward; T3 did
