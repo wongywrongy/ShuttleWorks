@@ -1390,7 +1390,7 @@ code owns is a constant smuggled into a schema where no reader will ever find it
 | Column | Constraint | Allowed set | The authority that produces it |
 | --- | --- | --- | --- |
 | `tournaments.kind` | `ck_tournaments_kind` | `meet`, `bracket` | `apps/api/src/workspaces/tournaments.py:356` — `if body.kind not in ("meet", "bracket")` → 400 `"kind must be 'meet' or 'bracket'"`; the DTO defaults at `:92`/`:113` agree |
-| `matches.status` | `ck_matches_status` | `scheduled`, `called`, `playing`, `finished`, `retired` | the `MatchStatus` enum, `apps/api/src/db/models.py:62-76` — the column's own default is `MatchStatus.SCHEDULED.value` |
+| `matches.status` | `ck_matches_status` | `scheduled`, `called`, `playing`, `finished`, `retired` | the `MatchStatus` enum, `apps/api/src/db/models.py:63-77` (the five members at `:73-77`) — the column's own default is `MatchStatus.SCHEDULED.value` |
 | `entries.state` | `ck_entries_state` | `unverified`, `pending`, `waitlisted`, `confirmed`, `rejected`, `withdrawn` | the six module constants at `apps/api/src/entries/lifecycle.py:53-58` |
 | `tournament_members.role` | `ck_tournament_members_role` | `viewer`, `operator`, `owner` | `ROLES = ("viewer", "operator", "owner")` at `apps/api/src/identity/members.py:58`; the same three rank in `_ROLE_LEVELS` (`core/dependencies.py:163`, `identity/invites.py:111`) |
 
@@ -1496,8 +1496,14 @@ form's `EventDTO.code` and `PlayerEventDTO.code` (`entries_json.py:439`, `:482`,
 `PUT /tournaments/{id}/state` can rewrite, though it is a display label with no public URL resolving
 by it. The consequence that matters for the next slice: **`entry_events.code` is a naming and
 grouping dimension, NOT a URL or submit key.** The public URL keys are `slug`, `personKey` and
-`drawKey`; the entry form posts `eventId` (`apps/entrant/app/lib/echo.ts:197`) and
-`entries_public.py:461-468` resolves an event by UUID, never by code. Renaming an
+`drawKey`; the entry form submits an event **by id, never by code** — `enter.tsx:280`/`:291`
+render one checkbox per offered event, named `events`, whose value is `` `${index}:${event.id}` ``
+(`entries/entry_form.py:35` and `:102` document that wire shape as `"<player index>:<event id>"`
+/ `"0:<uuid>"`), the native POST goes to `/e/api/submit/{slug}` (`enter.tsx:499-500`), and
+`_resolve_selections` (`entries_json.py:735`) hands each raw id to `_lookup_event`
+(`entries_public.py:459-468`), which parses it as a **UUID** and fetches the `EntryEvent` by
+composite key. The same checkbox row *displays* `event.code` beside it (`enter.tsx:293`) — shown,
+never submitted, which is the whole distinction in one line of JSX. Renaming an
 `entry_events.code` would silently relabel published entrant lists, reserve queues and player pages —
 real harm, and exactly what R-DM-11(b) names — but it would break no address.
 
