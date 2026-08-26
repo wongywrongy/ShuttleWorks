@@ -1472,8 +1472,10 @@ explicitly forbidden. What shipped is `tests/backend/test_event_code_unrenameabl
 `test_tenant_isolation.py` and reading `app.openapi()["paths"]` rather than `app.routes` (the nested
 `_IncludedRouter` hazard): **two independent derivations** — every operation on a path containing
 `entry-event` must equal the single create, and every operation whose request body declares a `code`
-property (resolved through `$ref`, `allOf`/`anyOf`/`oneOf`) must be that same one — plus a
-non-vacuity meta-test, because a derivation that matched nothing would pass both forever. Its failure
+property — at **any depth**, resolving `$ref`, `allOf`/`anyOf`/`oneOf`, each property's own schema and
+an array's `items` (the descent was added by the final review's fix wave; see below) — must be that
+same one, plus a non-vacuity meta-test, because a derivation that matched nothing would pass both
+forever. Its failure
 message is the teeth: it names R-DM-11(b), states the rule (refuse a `code` change while any
 `entry_pages` publication flag is on; a draft event stays renameable), and says the refusal belongs
 in the owning service, not a DTO validator. **It was mutation-checked, twice and independently** —
@@ -1580,7 +1582,8 @@ produce. **pytest rose by exactly 11, and all eleven are this slice's own new te
 over all four columns = 4, plus the batch-rebuild snapshot and the downgrade round-trip) and **five**
 in `tests/backend/test_event_code_unrenameable.py` (the two OpenAPI derivations, the non-vacuity
 meta-test, the public-projection characterization, and D24's re-key characterization added in T3's
-fix round). T2 added none — it is a two-line deletion with zero test edits, which is its own evidence.
+fix round) — **the final review's fix wave below adds a sixth to that file, after this gate episode
+was measured**, so `1934` is this run's produced figure and not a claim about the branch tip. T2 added none — it is a two-line deletion with zero test edits, which is its own evidence.
 `npm run docs:freshness` reports **3 areas BEHIND** — State management (6 source commits since
 `2bb99fda`), Modules (17 since `e7e7221a`) and Entrant tier (15 since `7adc6820`) — which is
 **advisory by the Makefile's own declaration** (`Makefile:287`, "advisory — never fails the gate";
@@ -1602,3 +1605,107 @@ with CRLF working-tree files, so a tool that writes LF shows a **clean, small `g
 rewritten the whole file on disk**. T2's implementer hit it on a two-line change, caught it before
 committing, and restored the file. Every subsequent task checked `git diff --stat` for
 proportionality before committing, and none showed a deletions-heavy stat on a barely-touched file.
+
+
+**The final whole-branch review's fix wave (2026-08-26).** The review returned **Ready to merge:
+yes, 0 Critical**, so nothing here was a rescue: one Important and three Minor items, fixed in a
+single wave scoped to the two test files plus these two documents. **No production code was touched**,
+which is also why the gate run was the two files and `ruff`, not `make check` — the frontend and the
+lint surface cannot be reached from here, and re-running a 13-minute suite to observe one new test is
+cost without a property.
+
+**The pin's body derivation was widened, not documented — because the thing that breaks it is the
+NEXT slice.** `_body_properties` read only top-level `properties`, `$ref` targets and
+`allOf`/`anyOf`/`oneOf` members, so a request body shaped `{"event": {"code": ...}}` or
+`{"events": [{"code": ...}]}` evaded derivation 2 entirely. **P7b's whole purpose is to add event
+shapes**, so writing the hole down would have been writing down that the pin stops working immediately
+before the thing that breaks it. It now descends into each property's own schema and into an array's
+`items`, resolving `$ref` as it goes, with the existing `seen` tuple threaded through every branch as
+the cycle guard — a self-referencing model (`Node.children: list[Node]`) is legal OpenAPI. **No depth
+cap was added on top of it**, and the reason is worth keeping: every unbounded path through a JSON
+Schema graph must revisit a `$ref`, which `seen` already cuts, so a cap would be a second mechanism
+guarding nothing. One real trap was hit and is recorded: recursing on `schema.get("items") or {}`
+loops on the `{}` sentinel **forever** — `{}.get("items") or {}` is `{}` — and it took a
+`RecursionError` on the first run to see it. The guard is `if "items" in schema`, with the reason in a
+comment beside it.
+
+**The STOP condition was resolved by producing it, before the change was written.** The instruction
+was explicit: if the recursion reds the pin on an existing nested body, stop and report — do not
+loosen the assertion, do not add an exemption to `_CODE_WRITERS` — because a red there would mean a
+`code` field already rides a request body nobody knew about. A throwaway probe walked every request
+body in `app.openapi()` at every depth and printed one hit: `('POST',
+'/tournaments/{tournament_id}/entry-events', 'code')`, the known create. Clean, so the change was safe
+to write; the probe file was deleted and `git status` confirmed it gone.
+
+**Re-mutation-checked over three body shapes, and the new one is the point.** A synthetic
+`PATCH /tournaments/{tournament_id}/entry-events/{event_id}` was registered on the live app carrying,
+in turn, `FlatBody{code}`, `NestedBody{event: Inner{code}}` and `ArrayBody{events: [Inner{code}]}` —
+real `BaseModel`s, because FastAPI emits a nested model as a **`$ref`-valued property** and an
+inline-dict fixture would pass even with the `$ref` hop broken. All three red **both** derivations with
+`R-DM-11` in the message; the routes were removed and the scratch file deleted. The old
+implementation, run against the same two nested fixtures, returns `{'event'}` and `{'events'}` — it
+finds no `code` in either, which is the hole measured rather than asserted. A **permanent** case now
+holds the recursion itself: `test_the_body_derivation_descends_into_nested_and_array_shapes` is a pure
+function test over a minimal spec dict with a `$ref`-valued property, a `$ref`'d array `items`, and a
+self-referencing schema as the termination proof.
+
+**The remaining ceiling, which is what the docstring now says**, and it is smaller than the old one
+rather than absent: the derivation matches on the **name** `code`, so a rename field called anything
+else is invisible to it; and a body typed as a free-form `dict`/`Any` — `PUT /tournaments/{id}/state`
+ships the whole workspace blob that way — declares no `properties` at all, so nothing inside such a
+body is derivable by any traversal. **D24 was checked and states no ceiling at all**: it is entirely
+about the bracket re-key gap, and a grep of `docs/reference/debt-log.md` for
+`derivation|top-level|allOf|_body_properties` plus `R-DM-11` returns only that row, matching on
+`R-DM-11` in its prose. So the debt log had nothing describing the *old* ceiling to correct; the new
+one is stated in the derivation-2 debt row this wave added, where the next person to trip the pin will
+be looking.
+
+**The snapshot test's docstring overclaimed, and one of its omissions was load-bearing.**
+`_schema_shapes` said it captured "everything `batch_alter_table` could silently drop" while capturing
+FKs, indexes and defaults only. **Nullability was added** — the same `get_columns` call already
+returns it — because **Task 2's deletion of the `or "meet"` fallback in `entries/entries.py` depends on
+`tournaments.kind` keeping `NOT NULL` across the rebuild, and nothing asserted that.** It is its own
+key rather than a widened `defaults` tuple, so the existing anti-vacuity assertions keep asserting
+exactly what they say; a sibling `assert ("kind", False) in before["tournaments"]["nullability"]` joins
+them. The three docstrings that enumerated the old list (the module's, `_schema_shapes`', and the
+test's) now say **four** kinds and name what is still uncovered: **column type, primary key and unique
+constraints**. The unique-constraint claim is produced, not assumed — reflection over the migrated
+schema returns `[]` for all four rebuilt tables (`tournaments`, `matches`, `entries`,
+`tournament_members`), so there is nothing yet to lose, and one added later would land outside the
+snapshot.
+
+**Three debt rows were written** (`docs/reference/debt-log.md`, *Open — small and unscheduled*), each
+attributed to this review: `repositories/local.py:399` `set_status(status: "str | MatchStatus")` is the
+one typed opening to the 500-at-runtime class the four CHECKs created, with **no caller passing a raw
+string today** (all four production sites and all three test sites pass a `MatchStatus` member) — a row
+and not a fix because narrowing a repository signature is a production change outside this wave's
+charter; derivation 2 is a **repo-wide** pin that will red on any unrelated future `code` with a
+message that reads as a non-sequitur, so the row names the `_CODE_WRITERS` escape hatch where someone
+will find it fast; and `tournaments.kind` carries `server_default=sa.text("'meet'")` in
+`alembic/versions/a8b2d5e9f1c3_step_t_i_tournament_kind.py:40` while `db/models.py:124` has only a
+Python-side `default="meet"` — a **pre-existing** create_all-vs-migration divergence, observed not
+introduced, and exactly the class F-DM-11's negative-control rule exists to catch.
+
+**A program-level convention, binding P7b and P7c, and it is the citation half of the rule the program
+already carries for counts.** "Produced, not predicted" was written for gate numbers; this is the same
+rule pointed at line anchors:
+
+> **No line anchor enters a permanent document unless it was printed from the tree in the session that
+> writes it.**
+
+**Three bad anchors reached the permanent docs during this slice, every one of them by trusting a
+prior task's report instead of printing the line.** The failure mode is the one this program already
+named at a different altitude: a citation that arrives via a summary is a *predicted* citation no
+matter how authoritative the summariser, and it is worse than a predicted count — a wrong path that
+happens to exist converts a guess into evidence, because the reader checks it, finds a file, and
+stops. The mechanical test is cheap and non-negotiable: `grep -n` the symbol, paste what prints. Every
+anchor in this wave's additions was produced that way, including the ones that turned out to be right.
+
+**One correction this wave owes its own rule.** The CRLF hazard recorded above is real but is **not
+uniform across the tree**: `tests/backend/unit/test_check_constraints_migration.py` and this file are
+CRLF on disk, while `tests/backend/test_event_code_unrenameable.py` and `docs/reference/debt-log.md`
+are **LF** — a previous tool wrote them that way, and `git diff` is clean either way because
+`core.autocrlf=true` normalizes on the way in. So "the repo is CRLF" is the wrong generalisation; the
+right one is **read the file's bytes and write back what was there**, then check `git diff --stat` for
+proportionality regardless. Every file this wave edited was checked, and none showed a
+deletions-heavy stat on a barely-touched file.
