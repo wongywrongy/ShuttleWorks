@@ -1472,9 +1472,9 @@ explicitly forbidden. What shipped is `tests/backend/test_event_code_unrenameabl
 `test_tenant_isolation.py` and reading `app.openapi()["paths"]` rather than `app.routes` (the nested
 `_IncludedRouter` hazard): **two independent derivations** — every operation on a path containing
 `entry-event` must equal the single create, and every operation whose request body declares a `code`
-property — at **any depth**, resolving `$ref`, `allOf`/`anyOf`/`oneOf`, each property's own schema and
-an array's `items` (the descent was added by the final review's fix wave; see below) — must be that
-same one, plus a non-vacuity meta-test, because a derivation that matched nothing would pass both
+property — at **any depth**, resolving `$ref`, `allOf`/`anyOf`/`oneOf`, each property's own schema,
+an array's `items` and a mapping's `additionalProperties` (the descent was added by the final
+review's fix wave; see below) — must be that same one, plus a non-vacuity meta-test, because a derivation that matched nothing would pass both
 forever. Its failure
 message is the teeth: it names R-DM-11(b), states the rule (refuse a `code` change while any
 `entry_pages` publication flag is on; a draft event stays renameable), and says the refusal belongs
@@ -1619,8 +1619,15 @@ NEXT slice.** `_body_properties` read only top-level `properties`, `$ref` target
 `allOf`/`anyOf`/`oneOf` members, so a request body shaped `{"event": {"code": ...}}` or
 `{"events": [{"code": ...}]}` evaded derivation 2 entirely. **P7b's whole purpose is to add event
 shapes**, so writing the hole down would have been writing down that the pin stops working immediately
-before the thing that breaks it. It now descends into each property's own schema and into an array's
-`items`, resolving `$ref` as it goes, with the existing `seen` tuple threaded through every branch as
+before the thing that breaks it. It now descends into each property's own schema, an array's `items`
+and a mapping's `additionalProperties` — the last of those caught on a second pass, because the
+first version's own ceiling sentence ("a free-form `dict` declares no `properties`") was itself an
+overclaim: a **typed** `dict[str, Model]` emits `additionalProperties: {"$ref": ...}`, whose values
+very much are derivable. Same overclaim class as the snapshot docstring this wave was fixing, one
+paragraph over. **The STOP ruling was re-applied to it** — the original probe had not walked
+`additionalProperties` either, so running the widened derivation 2 against the live spec *was* the
+probe, and it stayed green: no route ships a `dict[str, ModelWithCode]` body today. The walk resolves
+`$ref` as it goes, with the existing `seen` tuple threaded through every branch as
 the cycle guard — a self-referencing model (`Node.children: list[Node]`) is legal OpenAPI. **No depth
 cap was added on top of it**, and the reason is worth keeping: every unbounded path through a JSON
 Schema graph must revisit a `$ref`, which `seen` already cuts, so a cap would be a second mechanism
@@ -1650,10 +1657,12 @@ function test over a minimal spec dict with a `$ref`-valued property, a `$ref`'d
 self-referencing schema as the termination proof.
 
 **The remaining ceiling, which is what the docstring now says**, and it is smaller than the old one
-rather than absent: the derivation matches on the **name** `code`, so a rename field called anything
-else is invisible to it; and a body typed as a free-form `dict`/`Any` — `PUT /tournaments/{id}/state`
-ships the whole workspace blob that way — declares no `properties` at all, so nothing inside such a
-body is derivable by any traversal. **D24 was checked and states no ceiling at all**: it is entirely
+rather than absent. The derivation matches on the **name** `code`, so a rename field called anything
+else is invisible to it. It walks `properties`/`items`/`additionalProperties` and no other subschema
+keyword — `prefixItems` and its relatives are not reachable from anything FastAPI emits today, and
+adding them speculatively would be guessing rather than measuring. And a body typed as a genuinely
+free-form `dict`/`Any` — `PUT /tournaments/{id}/state` ships the whole workspace blob that way —
+declares no subschema at all, so nothing inside one is derivable by any traversal. **D24 was checked and states no ceiling at all**: it is entirely
 about the bracket re-key gap, and a grep of `docs/reference/debt-log.md` for
 `derivation|top-level|allOf|_body_properties` plus `R-DM-11` returns only that row, matching on
 `R-DM-11` in its prose. So the debt log had nothing describing the *old* ceiling to correct; the new

@@ -91,8 +91,9 @@ def _body_properties(spec, schema, seen=()):
     """Every property name a request-body schema carries, at ANY depth.
 
     Follows ``$ref``, ``allOf``/``anyOf``/``oneOf``, each property's own
-    schema, and an array's ``items`` — so ``{"event": {"code": ...}}`` and
-    ``{"events": [{"code": ...}]}`` are derived rather than missed. The
+    schema, an array's ``items`` and a mapping's ``additionalProperties`` — so
+    ``{"event": {"code": ...}}``, ``{"events": [{"code": ...}]}`` and a
+    ``dict[str, Model]`` value are derived rather than missed. The
     descent and the ``$ref`` hop have to compose, because a nested Pydantic
     model reaches the spec as a ``$ref``-*valued property*, never as an
     inline object.
@@ -104,11 +105,15 @@ def _body_properties(spec, schema, seen=()):
     ``$ref``, which ``seen`` cuts.
 
     The remaining ceiling, stated plainly because the pin below is only as
-    wide as this function: it derives **names**, so a rename field called
-    anything other than ``code`` is invisible to it; and a body typed as a
-    free-form ``dict``/``Any`` — ``PUT /tournaments/{id}/state`` ships the
-    whole workspace blob that way — declares no ``properties`` at all, so
-    nothing inside such a body is derivable by any traversal.
+    wide as this function. It derives **names**, so a rename field called
+    anything other than ``code`` is invisible to it. It walks
+    ``properties``/``items``/``additionalProperties`` and no other
+    subschema keyword — ``prefixItems`` and friends are not reachable from
+    anything FastAPI emits today, and adding them speculatively would be
+    guessing. And a body typed as a genuinely free-form ``dict``/``Any`` —
+    ``PUT /tournaments/{id}/state`` ships the whole workspace blob that way —
+    declares no subschema at all, so nothing inside one is derivable by any
+    traversal.
     """
     if not isinstance(schema, dict):
         return set()
@@ -124,6 +129,9 @@ def _body_properties(spec, schema, seen=()):
         names |= _body_properties(spec, subschema, seen)
     if "items" in schema:  # the ``{}`` sentinel would recurse on itself
         names |= _body_properties(spec, schema["items"], seen)
+    extra = schema.get("additionalProperties")  # ``dict[str, Model]``
+    if isinstance(extra, dict):  # legally a bool, hence the type guard
+        names |= _body_properties(spec, extra, seen)
     for combinator in ("allOf", "anyOf", "oneOf"):
         for member in schema.get(combinator) or []:
             names |= _body_properties(spec, member, seen)
@@ -151,7 +159,8 @@ def test_no_request_body_outside_the_create_carries_a_code_field(app):
     above only by also renaming itself off the ``entry-event`` path AND
     calling the field something other than ``code``. Nesting is not an
     escape either: the derivation descends into nested objects and array
-    ``items``, so ``{"event": {"code": ...}}`` is caught too."""
+    ``items`` and a mapping's ``additionalProperties``, so
+    ``{"event": {"code": ...}}`` is caught too."""
     spec = app.openapi()
     found = set()
     for path, operations in spec["paths"].items():
@@ -187,6 +196,14 @@ def test_the_body_derivation_descends_into_nested_and_array_shapes():
         }
     }
     nested = {"properties": {"event": {"$ref": "#/components/schemas/Inner"}}}
+    mapping = {
+        "properties": {
+            "byCode": {
+                "type": "object",
+                "additionalProperties": {"$ref": "#/components/schemas/Inner"},
+            }
+        }
+    }
     array = {
         "properties": {
             "events": {
@@ -197,6 +214,7 @@ def test_the_body_derivation_descends_into_nested_and_array_shapes():
     }
     assert _body_properties(spec, nested) == {"event", "code"}
     assert _body_properties(spec, array) == {"events", "code"}
+    assert _body_properties(spec, mapping) == {"byCode", "code"}
     assert _body_properties(spec, {"$ref": "#/components/schemas/Node"}) == {
         "leaf",
         "kids",
