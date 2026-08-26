@@ -1251,6 +1251,11 @@ def test_a_seam_TEAM_carries_the_key_of_the_roster_row_it_names_first(repo, sess
     session.expire_all()
     team = repo.brackets.list_participants(tid, "XD")[0]
     assert team.type == "TEAM"
+    # Not-None first, for the same reason as the singles case above: the
+    # equality that follows passes on ``None == None``, and ``_pair`` cannot
+    # mint an unkeyed entry today only because ``_entry`` always sets
+    # ``entry_player_id``.
+    assert team.entry_player_id is not None
     assert team.entry_player_id == nominator.entry_player_id
     assert _person_key_disagreements(repo, tid, "XD") == []
 
@@ -1309,22 +1314,53 @@ def test_the_agreement_check_catches_a_blob_key_that_drifted(repo, session):
     assert [d[2] for d in _person_key_disagreements(repo, tid, "MS")] == [stale]
 
 
-def test_adopting_a_legacy_roster_row_keys_the_column_and_not_the_blob(repo, session):
-    """Non-vacuity's other half — one copy present, the other absent — and
-    the one place the CURRENT seam produces it.
+def test_a_keyed_blob_row_over_an_unkeyed_column_is_a_disagreement_too(repo):
+    """The mirror of the adoption divergence below: blob keyed, column NULL.
 
-    ``_adoptable``'s ``sourceEntryId`` branch attaches an entry to a legacy
-    entry-keyed roster row and then, on the adopted branch, does NOT write
-    the payload it built (``entries.py``, ``if adopted is None: roster.
-    append(payload)``). The participant insert still carries
+    The helper's ``!=`` is symmetric, but symmetry that nothing exercises is
+    an inspection claim rather than a pinned one — and this direction is the
+    one a *blob-first* repair would pass through, so it is the half most
+    likely to be met next.
+    """
+    tid = _bracket_workspace(repo)
+    _draft_event(repo, tid, "MS")
+    key = str(uuid.uuid4())
+    document = dict(repo.tournaments.get_by_id(tid).data)
+    document["bracketPlayers"] = [
+        {"id": "P1", "name": "Hand Added", "availability": [], "entryPlayerId": key}
+    ]
+    repo.tournaments.upsert_data(tid, document)
+    repo.brackets.bulk_create_participants(
+        tid, "MS", [{"id": "P1", "name": "Hand Added", "type": "PLAYER"}]
+    )
+
+    assert _person_key_disagreements(repo, tid, "MS") == [("P1", None, key)]
+
+
+def test_adopting_a_legacy_roster_row_keys_the_column_and_not_the_blob(repo, session):
+    """Non-vacuity's other half — one copy present, the other absent — in a
+    shape the CURRENT seam really produces.
+
+    ``if adopted is None: roster.append(payload)`` (``entries.py``) gates the
+    blob write for BOTH of ``_adoptable``'s branches; this exercises the
+    ``sourceEntryId`` one because that is the definitely-reachable case — a
+    legacy entry-keyed roster row, left by a build that keyed the roster on
+    the entry. The payload the loop built (which carries ``entryPlayerId``)
+    is discarded, while the participant insert still carries
     ``entry.entry_player_id``. So the column is keyed and the blob row it
     names is not — the very shape the debt row warns a column-only backfill
     would leave everywhere, here reachable by one operator with an old
-    roster.
+    roster, and with no backfill anywhere.
 
     Characterized, not fixed: P6 writes no backfill and no production code,
     and the repair is a blob write, which is a re-save the seam's "never
     mutates an existing roster player" invariant does not currently make.
+
+    **If this test reds, read it as FIXED, not broken.** A red here means the
+    seam has learned to key the adopted roster row, which is the repair — so
+    delete this test rather than restoring the divergence, and consider
+    widening ``_person_key_disagreements`` to run over every bracket fixture
+    (deferred today precisely because this path would red it).
     """
     tid = _bracket_workspace(repo)
     _draft_event(repo, tid, "MS")
