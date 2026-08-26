@@ -1041,11 +1041,13 @@ and no gate may be satisfiable by rewording a comment.**
 
 **And this paragraph proved its own rule at its own expense, which is the cheapest demonstration
 available, so it is recorded rather than quietly corrected.** It first read "now FIVE consecutive
-**slices**" — but the evidence it cites enumerates **four** (P4, P5, P6, P9). Five is the count of
-*gate episodes*; the working ledger says "the program's fifth unfireable-or-under-measuring
-**gate**", and the gate→slice conversion happened in a dispatch, one hop from the record. Caught at
-this task's review. **A meta-count about counts, predicted from a dispatch instead of produced from
-the record — the exact failure the rule names, committed inside the sentence stating the rule.**
+**slices**" — but the evidence it cites enumerates **four**: P4, P5, P6 and P9. **Five is the count
+of gate EPISODES, four is the count of SLICES**, and the two diverge because P9 alone contributes
+two — the three patterns this plan's author caught during their own self-review, and then T3's
+under-measuring F-DM-59 gate. The error came from predicting the figure from a dispatch summary
+instead of counting the slices the paragraph's own evidence names. Caught at this task's review.
+**A meta-count about counts, predicted from a summary instead of produced from the record — the
+exact failure the rule names, committed inside the sentence stating the rule.**
 The generalisation the program should carry: *"produced, not predicted" applies to the numbers in
 the prose as much as to the numbers in a grep*, and a count that arrives via a summary is a
 predicted count no matter how authoritative the summariser.
