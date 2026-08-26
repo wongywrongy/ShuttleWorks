@@ -25,7 +25,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 5 | P4 — people→competition key | R-DM-2 (a) | L | **DONE 2026-08-25** — `3bf049f7`..`7cf58d71` (incl. final-review fix wave `62ccbcab`+`7cf58d71`), final review "Ready to merge: Yes" — **merged to main 2026-08-25** (ff to the branch tip incl. the closing ledger commits, Kyle's standing instruction) |
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | **DONE 2026-08-25** — `9e81ca68`..branch tip (incl. final-review fix wave `f94c85ce`+`4f049a45`), final review "Ready to merge, with fixes" → fixes landed and re-reviewed clean — **merged to main 2026-08-25** (fast-forward, Kyle's standing instruction). Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | **DONE 2026-08-25** — `637ea8df`..branch tip on `dm3/p6-person-demotion` (six tasks, each reviewed clean after at most one fix round), final whole-branch review **"Ready to merge: Yes", 0 Critical / 0 Important** — **merged to main 2026-08-25** (fast-forward, Kyle's standing merge-and-proceed instruction) |
-| 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | **P7a DONE 2026-08-26** — `143f3286`..branch tip on `dm3/p7a-constraints` (four tasks; T1 and T3 reviewed clean after one fix round each, T2 clean with zero findings), `make check` green — **not yet merged**. P7 was split into three shippable slices at plan time: **P7a** (four CHECK constraints, the `or "meet"` deletion, a published `eventCode` unrenameable) is done; **P7b** (a Meet Event + the division-level mapping) and **P7c** (server-side Meet lineup + the slot-assignment surface) are **pending** and get their own plans at phase start |
+| 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | P7 was split into three shippable slices at plan time. **P7a DONE 2026-08-26** — `143f3286`..branch tip on `dm3/p7a-constraints` (four CHECK constraints, the `or "meet"` deletion, a published `eventCode` unrenameable) — **merged to main 2026-08-26** (fast-forward). **P7b DONE 2026-08-26** — `9c5ceb1f`..`c99b9047` on `dm3/p7b-meet-event` (five tasks; T1 one fix round, T2 two, T3 one, every re-review clean), full `make check` green at the tip (pytest 1965/66) — **not yet merged**. It ships `meet_events` at division grain + the `entry_events.meet_event_id` mapping column + the club-based grouping that retires the invented `groupId` + a public `divisions` field, and it deliberately does **NOT** close the rank disconnect — that is the generator's, and the generator moves in P7c. **P7c** (server-side Meet lineup + the slot-assignment surface) is **pending** and gets its own plan at phase start |
 | 9 | P9 — cosmetic sweep | — | S | **DONE 2026-08-25** — `b5f9e298`..branch tip on `dm3/p9-cosmetic-sweep` (four tasks, each reviewed clean; T3 one fix round, T4 two plus the final fix wave), final whole-branch review **"Ready to merge: Yes", 0 Critical / 0 Important** — **merged to main 2026-08-25** (fast-forward, Kyle's standing merge-and-proceed instruction). **Small because the sweep is mostly not sweepable** — 22 cited · 3 already closed · 7 swept · **9 routed out** · 3 refused; see the P9 session-log section |
 | 10 | P8 — PlayerProfile full v1 | R-DM-3 (c) | M | **BLOCKED — owner must supply the R15 text** |
 | 11 | Meet-roster extraction (R-DM-2 (c), ratified) | R-DM-2 | L | pending — committed follow-on after P4 |
@@ -1767,3 +1767,328 @@ slice close — the same permanent-source rule this slice added a convention for
     constraints stay uncovered, and are now described as uncovered.
 13. **`set_status`'s raw-string opening is debt, not P7a's to close.** Narrowing a repository
     signature is production work outside a slice chartered for constraints, a deletion and a pin.
+
+### 2026-08-26 — P7b slice executed (Meet gets a real Event — and the rank disconnect is NOT closed, subagent-driven, opus)
+
+Branch `dm3/p7b-meet-event` off `main` @ `9e2dcfc8` (P7a merged). Five tasks — T0 measurement-only,
+T1/T2/T3 implementation with a separate reviewer each, T4 the gate-and-record task that wrote this
+section. T1 took one fix round, T2 two, T3 one; every re-review came back clean. As in P7a, the
+slice's working SDD ledger was git-ignored scratch and is deleted with the slice, so **everything
+load-bearing from it is carried into this entry** rather than cited by path — that is the program's
+permanent-source rule, and it is why this section is long.
+
+**Commit chain.** `9c5ceb1f` **T1** `MeetEvent` + `entry_events.meet_event_id` + migration
+`aa1b6c4e0d3f` + 15 tests, in **one** commit per F-DM-11 · `962f7bac` **T1** fix round (the downgrade
+control's baseline derived from the target revision instead of from head) · `67941920` **T2**
+implementer — **its subject line is false; see ruling P7b-13 below** · `f2d8fea9` **T2** fix round 1,
+the seam maps to a division and never a slot · `c74c3725` **T2** the matching console revert, kept a
+separate commit so "the console is untouched" is one `git show` away · `202874ec` **T2** fix round 2,
+the `MAX_GROUPS` guard · `679a9786` **T3** the public `divisions` field · `c99b9047` **T3** fix round,
+re-gated on `tournaments.kind` · plus this ledger commit.
+
+**What shipped: Meet has a real Event entity, at the grain R-DM-5 ruled.** `meet_events`
+(`apps/api/src/db/models.py:718`) is one row per **division** — a rank *prefix* with a slot count,
+`slot_count` at `:756` — not one row per numbered rank. On the real workspace whose config carries
+`{BS:20, GS:20, BD:11, GD:11, XD:11}` that is **5 rows, not 73**, and the slice's reviewer produced
+that number by running the backfill against a copy of `data/local.db` rather than against a fixture.
+`entry_events.meet_event_id` (`models.py:1596`, indexed at `:1631`) is the mapping column R-DM-5
+asks for. It is **FK-less, copying R2**, and the choice is forced rather than merely precedented:
+derived rows are deleted whenever a code leaves `rankCounts`, so a cascade would let one config edit
+destroy every entry under a division and a RESTRICT would 500 the blob write; `ON DELETE SET NULL` is
+also unavailable, because `meet_events`' PK is composite and SQLite cannot SET NULL a subset of a
+composite FK whose `tournament_id` half is NOT NULL and part of `entry_events`' own PK.
+
+**The migration is `aa1b6c4e0d3f`, down-revision `z0f5a1b3c9d2`** (revision ids at
+`apps/api/src/alembic/versions/aa1b6c4e0d3f_meet_events.py:59-60`), **and models + revision landed in
+the same commit per F-DM-11**, with the negative controls running against a migration-built schema.
+P7a left the single-letter Alembic prefix exhausted at `z`; this slice answers it with a **two-letter
+prefix advancing alphabetically plus ten hex**, unambiguous because all 30 older revision ids have a
+**digit** as their second character — printed, not assumed — recorded in the revision docstring and
+pinned by a test. The `batch_alter_table` was verified to resolve to a plain `ADD COLUMN`, the
+`tournaments` FK intact, and all four of P7a's CHECKs surviving (`entry_events` was never one of
+P7a's four targets).
+
+**The derivation hangs on `_LocalTournamentRepo.upsert_data`, and the reason that is safe is a
+measurement, not a judgement.** `upsert_data` (`apps/api/src/repositories/local.py:284`) contains the
+**only** assignment to `Tournament.data` anywhere in `apps/api/src` — `row.data = stamped` at `:318`,
+and a repo-wide grep for `.data = ` under `apps/api/src` returns exactly that one hit. There is **no
+`MutableDict` and no `flag_modified` anywhere in `apps/api/src`**, so an in-place mutation of the blob
+cannot persist, which is what makes the assignment-site grep *total* coverage rather than a spot
+check. All nine blob writers reach it — the state PUT, the proposal commit, the create-seed, both
+entries seams, backup restore, two bracket paths and plan-finalized — so
+`self._sync_meet_events(tournament_id, stamped)` at `:342` (the method itself at `:234`) sees every
+persisted config. A test proves it live rather than by argument: restoring a pre-division snapshot
+**removes** the row, which is impossible if the derivation hung one level up.
+
+**It was deliberately NOT hung on `commit_tournament_state` (`local.py:1886`), and the cheapest
+lesson in this slice is a comment already in the file.** `upsert_data`'s own comment records that a
+prior author assumed `commit_tournament_state` was the funnel and that **three writers shipped
+without returning the new concurrency token because of it** (`local.py:338`). Hanging a second
+derivation off the same false premise would have repeated a bug the file already documents. The
+`repositories/` package may not import `meet.*` (import-linter, blocking in CI), so the derivation
+reads `payload["config"]["rankCounts"]` and writes through `db.models`, following the prior art of
+the denormalised `name` / `tournament_date` sync a few lines below rather than inventing a service
+hop. **Absent and `{}` both mean zero events** — `POST /tournaments` seeds a config with no
+`rankCounts` key at all. Idempotency is proved by **identity, not count**: a second identical write
+must leave an out-of-band `label` sentinel intact and `created_at`/`updated_at` byte-identical, which
+a delete-and-recreate cannot pass, and the control was proved non-vacuous by sabotage (rewriting the
+derivation as delete-and-recreate reds two tests).
+
+**The headline honesty item: P7b did NOT close the rank disconnect, and a committed Meet entry still
+generates no match without operator work.** The plan framed the slice as "both disconnects or
+neither" and was right that half is worthless — and wrong that both halves were reachable here. What
+`_plan_meet` (`apps/api/src/entries/entries.py:419`) writes into `ranks[]` is the **division** code,
+which is exactly what R-DM-5 says it should write. The console generator is what cannot read a bare
+division: `RegenerateMenu.tsx:27` expands `` `${prefix}${i}` `` into `MS1`, `MS2`, … and `:88`/`:91`
+filter players on `(p.ranks ?? []).includes(rank)` against those expanded strings. **So the gap is
+the generator's, not intake's**, and the generator's move to the server is **P7c's** charter. Saying
+it plainly: after this slice a director must still do the mapping work by hand, and P7b's claim is
+the narrower one — a committed entry is **mappable to a division and lands in a pairable group**.
+
+### Ruling P7b-13 — commit `67941920`'s subject line is FALSE and is superseded by `f2d8fea9`
+`67941920` reads **"feat(entries): a committed Meet entry can reach a generated match"**. It closed
+the disconnect by seating each entry in the first empty numbered slot of its division in that school,
+with a `NO_FREE_SLOT` refusal when the declared count ran out. That is **slot assignment at intake**,
+and R-DM-5 forecloses it in terms: *"entry events map onto a division (MS), never a slot (MS1); slot
+assignment is an operator-side action on a surface P7 builds."* The refusal was its symptom — intake
+making a consequential competition decision, against I4's spirit as well. `f2d8fea9` removed the
+seating, the `NO_FREE_SLOT` wire code (with the console revert isolated in `c74c3725`) and
+`_is_doubles_code`, a *third* answer to "is this doubles" that existed only to share a slot between
+declared pairs — so **F-DM-13's count is back to two, not three**. `git diff 962f7bac -- apps/console`
+is empty and a repo-wide case-insensitive grep for `NO_FREE_SLOT|noFreeSlot|no_free_slot` returns
+nothing outside review artifacts, so there is no half-removed wire code. **The subject line is left
+in history rather than rewritten** — rewording it means rewriting three commits that already build on
+it, for a message rather than for code — so the correction lives here, where a reader who meets the
+claim in `git log --oneline` can find the retraction.
+
+**The club grouping is what actually retires the invention, and it is justified rather than being a
+second invention.** Before this slice `_plan_meet` minted one group per **event code**, so `groupId`
+was `"MS"`. A group row means a **school** — `PlayerDTO.groupId`'s own comment says so
+(`apps/api/src/core/schemas.py:247`, *"School group ID (REQUIRED - this is school vs school
+scheduling)"*) — and `entry_players.club` **is** a school, so grouping by club makes the field finally
+carry what its comment says. The old behaviour was the exact inverse: a **division** stored in a
+**school** field. Clubs are adopted by exact trim+casefold name or minted (`_seat`,
+`entries.py:589`); a club-less entry joins the shared `Unassigned` bucket (`_UNKNOWN_SCHOOL` at
+`:566`). Fuzzy matching was ruled out — it is the `looks_duplicate` problem in a new place, and this
+program has already ruled that identity is never merged by guesswork; two spellings of one club
+become two groups, which is visible and fixable by an operator rename rather than by a migration.
+
+**And the payoff nobody predicted is in the standings.** `compute_meet_standings` skips any match
+where both sides resolve to the same group (`apps/api/src/meet/standings.py:100`,
+`side_a_group == side_b_group`). Under the invention **every** entrant of one event shared one group,
+so every such pair **self-cancelled** and scored nothing. With clubs as groups, entrants of one event
+in different schools now count. The same change makes `RegenerateMenu`'s strictly-cross-group pairing
+loop (`RegenerateMenu.tsx:85-86`, `i` / `j`) reachable at all, gives the roster switcher and
+`PositionGrid` real school names instead of a fake `"MS"` school, and gives exports and `schoolAccent`
+a real name and colour.
+
+**A trust-boundary bug came in with the grouping, and it was found and fixed inside the slice.**
+`club` is **entrant-supplied free text on a public entry page**, and the seam minted one group per
+distinct spelling. `TournamentStateDTO.groups` is capped at `MAX_GROUPS = 200`
+(`apps/api/src/core/limits.py:98`), while `_valid` (`entries.py:640`) guards `PlayerDTO` only —
+nothing guarded the group list. 201 distinct trim+casefold club spellings, well inside the
+2000-player cap, **commit successfully and then poison the blob**: `GET /state` still loads because
+values pass through unvalidated, but every save 422s against `response_model=TournamentStateDTO` and
+`state_dto_from_document` raises in schedule proposals, advisories and **both backup paths**. That is
+precisely the failure `_valid`'s own docstring exists to prevent, reached through the one field it
+did not guard. The fix (`_room_for`, `entries.py:610`) **seats rather than refuses**: mint only while
+`len(groups) < MAX_GROUPS`, with **one slot reserved for the `Unassigned` bucket while it does not yet
+exist**, and past that seat the entrant into `Unassigned`. Seating keeps the entry (I4: intake does
+not refuse what it can handle) and leaves the operator a visible re-assignment, where skip-and-report
+would lose it. The test was **written before the fix** (205 group rows committing clean, then
+`state_dto_from_document` raising `too_long`), it binds to `MAX_GROUPS` rather than to the literal
+200, and — the part that matters — **it asserts the document validates through
+`state_dto_from_document`**, the projection proposals, advisories and both backup paths use, rather
+than asserting the list got shorter. A shorter list is a symptom; a validating document is the
+property. The reservation was proved load-bearing by sabotage (`reserved = 0` reds the
+"seated, not orphaned" assertion) and the boundary was verified empirically at
+n = 198/199/200/201/202 distinct clubs, with `committed == n` and `skipped == 0` throughout.
+
+**`meet_event_id` got a writer, because a column nothing populates is not a mapping.** It is resolved
+in `create_entry_event` (`apps/api/src/entries/entries_routes.py:833`, called at `:920`) as a
+**lookup, not a DTO field** — a Meet division *is* the code space, so asking the client for it would
+invent a second way to say the same thing. `NULL` keeps the code fallback for rows written before
+this slice. Deliberately **not** a reconciler, because `meet_events` rows are derived and routinely
+deleted.
+
+### Ruling P7b-14 — the public `divisions` field is gated on `tournaments.kind`, not on `workspace_modules`
+T3 added `DrawsIndexDTO.divisions: List[str]` (`apps/api/src/entries/entries_site.py:171`, filled at
+`:601` from `_meet_divisions` at `:83`) so a Meet workspace's public draws index says why it is empty
+instead of rendering the same "No draws yet." a bracket workspace with zero events renders. The
+determination that this is an **addition and not a change** was made *before* the public tier was
+touched, and it holds: the field is a pydantic default, so the key is unconditionally present on both
+branches including the unpublished early return, and no existing key's meaning, type, nullability or
+presence moved. Reusing `DrawCardDTO` would have been the cheap-looking answer and would have shipped
+a **broken public link** — `drawKey` is a live URL segment `draw_detail` would 404 on, and `size` is
+a participant count a division has no value for.
+
+The first gate was on the **`meet` module being enabled**, and review reproduced its failure rather
+than reasoning about it: `available → enabled` is one PATCH, and a **bracket** workspace whose console
+had autosaved the five default codes then published *"Played as a meet, not by draws. Divisions: MD,
+MS, WD, WS, XD."* on a bracket event's public page. **R-DM-10 names the right authority:**
+*"`tournaments.kind` is the single domain authority, with a CHECK constraint; `workspace_modules`
+governs UI enablement only. Hybrid workspaces are foreclosed."* A public projection saying "this is
+played as a meet" is a **domain** claim, so keying it off module state was the wrong authority from
+the start. `c99b9047` re-gates on `tournament.kind != "meet"` (`entries_site.py:113`). **And `kind` is
+trustworthy only because P7a put a CHECK on it** — one slice of this program paying for the next,
+which is worth stating because it is the return on P7a's constraint work.
+
+The re-gate **retired** two of its own round-one concerns rather than trading them: the public tier no
+longer reads `workspace_modules` at all, and the gate is a field read on a row `_page` had already
+resolved — no extra query, no import on the public path. Two controls were kept, one per toggle
+direction, and **both were proved to bite by reverting the gate**: enabling `meet` on a bracket
+workspace leaves the whole public envelope byte-identical (full-dict equality, not the `divisions`
+key alone), and so does disabling `meet` on a meet workspace. The original module-gate control was
+**kept rather than replaced**, its docstring re-pointed at `kind` and R-DM-10 with its assertion
+unchanged — precisely because **it passed under both gates**, which is what made it insufficient on
+its own. A control that cannot distinguish two designs is not evidence for either.
+
+**Disclosure, not a defect: a declared-but-unopened division code is newly public.** The premise that
+these codes were "already rendered on the entry form" is not right —
+`apps/entrant/app/routes/enter.tsx:293` renders `entry_events.code`, a **separately authored** set, so
+a division declared in `rankCounts` and never opened for entry was not public before. The exposure is
+benign (the vocabulary is short `[A-Z]+`, length-capped in the console editor and ≤40 chars in
+`_rank_counts`) but it **is** an exposure and is stated rather than explained away. It was
+deliberately not gated further: inventing a "published divisions" notion would be the expensive second
+way of saying a thing, which is the failure mode this program keeps finding. The rendered string on
+the public tier is `apps/entrant/app/routes/tournament.tsx:238-241`, off
+`draws.divisions` (`apps/entrant/app/lib/draws.types.ts:37`).
+
+**Recorded, not fixed: `kind` is create-time immutable.**
+`_ALLOWED_UPDATE_FIELDS = frozenset({"name", "status", "tournament_date"})`
+(`apps/api/src/repositories/local.py:115`) is what makes `kind` a stable authority, and it also means
+a bracket-born workspace that genuinely becomes a meet **can never say so publicly**. That is ruled
+behaviour under R-DM-10's foreclosure of hybrids; it is recorded because this route is the first
+place a director could actually notice it.
+
+**Ruling C stands, and this ledger will not overstate it.** `_rank_vocabulary`'s fail-open on an
+empty vocabulary is a correctness guarantee for a window the console closes on first load: the store
+autosaves `{MS: 3, WS: 3, MD: 2, WD: 2, XD: 2}` (`apps/console/src/store/tournamentStore.ts:104`) and
+the first debounced PUT persists it, which is why five on-disk workspaces carry that exact dict. The
+same fact reappeared as a *design constraint* in T3 — rows alone cannot mean "this is a meet", because
+every fresh workspace gets five of them — and is the reason the public gate had to answer to `kind`.
+
+**Two standing caveats, both of them measurements this slice owes its reader.** First, **all
+migration evidence in this program is SQLite-only**; Postgres is untested, and P7b adds a table *and*
+a backfill to that debt. Second, and sharper: **the backfill's on-disk target set was EMPTY, not
+clean.** All 31 `entry_events` rows on this box sit in workspaces whose `rankCounts` is absent or
+`{}`, and **zero players in any local database carry `sourceEntryId`** — meaning `_plan_meet` has
+never run on real local data at all. Validation is therefore constructed-fixture plus one
+real-database backfill run, and "no rows needed changing" here means "there were no rows", not "the
+rows were already right". A related consequence, ruled acceptable: because the console autosaves five
+default codes into every fresh workspace, the backfill gives those workspaces **five `meet_events`
+rows nobody configured** (20 rows across `apps/api/local.db` alone). That is a pre-existing client
+default surfacing into a table, not the backfill inventing anything — the derivation would produce
+the same five rows on their next save, and suppressing it would require the backfill and the
+derivation to disagree.
+
+**Merge gate, produced at the branch tip `c99b9047` — full `make check`, exit 0.** Console vitest
+**204 files / 1840 tests**, `tsc -b` clean, depcruise **16 warnings / 0 errors** — all three exactly
+at the baseline this slice started from, which is the expected reading, because `git diff
+962f7bac -- apps/console` is empty and the only console change on the branch is the regenerated
+`dto.generated.ts`. Entrant vitest **37 files / 761 tests** against a 760 baseline (**+1**, the
+draws-index case in `apps/entrant/tests/draw.render.test.ts`), entrant depcruise clean, `ruff` clean,
+**import-linter 15 kept / 0 broken** — the contract the funnel derivation could have broken, since
+`repositories/` may not reach into `meet.*`. **pytest 1965 passed / 66 skipped** (758 s) against
+**1935 / 66**: **+30, skips unchanged, and every one of the thirty is accounted for** —
+`test_entries_commit_seam.py` 52 → **59** (+7, T2), `test_entries_config_routes.py` 57 → **59** (+2,
+T2's mapping-writer cases), `test_entries_site_api.py` 15 → **21** (+6, T3 including the two
+toggle-direction controls), and two new files from T1, `test_meet_event_derivation.py` (**9**) and
+`test_meet_events_migration.py` (**6**). `test_entries_migration.py` was edited twice on this branch
+and is **10 both before and after** — the `HEAD_REVISION` bump and the `pre_existing` re-derivation
+changed what a test asserts, not how many there are. Head counts were produced with
+`pytest --collect-only` per file, and the six per-file deltas sum to exactly the suite's +30, so
+nothing arrived unexplained. `docs:freshness` reports **3 areas BEHIND** (State management, Modules,
+Entrant tier) — advisory by construction (`Makefile`: *"advisory — never fails the gate"*, and its
+non-zero exit is `-`-prefixed), reported rather than treated as red.
+
+**What P7b did NOT do**, stated so the next slice inherits the truth rather than the headline: no
+rank-disconnect fix and **no server-side generation** (P7c); no operator slot-assignment surface
+(P7c, and R-DM-5 puts it there); no retirement of `rankCounts` in the console's six readers, which
+still expand `${prefix}${i}` client-side; no public re-key of anything; and no change to any existing
+public entrant wire key — the one public change is the additive `divisions` field.
+
+**D24 moves to P7c, and the reason is not a punt.** The owner ruled 2026-08-26 that D24 (should
+publication lock a draw's public key) be decided **inside P7b**, on the grounds that draw identity is
+what this slice touches. **In the event, it is not.** P7b's content turned out to be entirely
+Meet-side — `meet_events`, the mapping column, the club grouping and a Meet-only public field. It
+touched **no bracket draw key**, and nothing it built informs whether a *bracket* draw's public key
+should freeze at publication. D24's cost is that a lock blocks a legitimate draw **rebuild**, not
+merely a rename, and that cost is only affordable once regeneration has a first-class path — **P7c is
+the slice that builds one** (server-side generation plus the operator surface). Deciding it now would
+either ship a lock with no rebuild affordance beside it, or rule against a lock on evidence this slice
+did not produce. The debt-log row is updated accordingly.
+
+### The fifteen rulings this slice made
+
+Recorded here because the SDD working ledger they were written in is git-ignored scratch, deleted at
+slice close.
+
+1. **T3's public-wire add-vs-change question is answered before T3 writes, not after.** The entrant
+   tier is SSR with a page-weight gate and source-scan contracts — the most expensive place in the
+   repo to discover a mistake late. The answer was **addition**, and it was produced before the file
+   was opened.
+2. **D24 is decided inside this slice, and Task 4 owns saying so** — an unremarked D24 at slice close
+   is a failure of the slice, not a deferral. See ruling 15 for what was actually decided.
+3. **The test pinning the invented `groupId` is REPLACED by ruling, not edited into agreement.**
+   `test_the_default_group_is_the_event_code_and_the_group_row_is_created` asserted `groupId == "MS"`
+   **and its docstring argued for it**. The spec is the binding authority and rules against it:
+   F-DM-23 names the invented `groupId` as the defect and R-DM-5 says the Meet Event exists to
+   *retire* it. Deleted **with its docstring argument** and replaced by a test of the intended
+   behaviour — editing the assertions would have left a false rationale standing above them, which is
+   how an invention outlives the thing that justified it.
+4. **The characterization test is INVERTED, on its own instruction.**
+   `test_a_committed_meet_entry_cannot_reach_a_generated_match` documented itself *"Recorded, not
+   fixed — P7 owns it"*. P7b is that owner, so rewriting it is the test doing what it was written to
+   do — though ruling 7 then re-scoped what it may claim.
+5. **T3 states the narrower truth it found rather than repeating F-DM-33.** Meet-with-no-events and
+   bracket-with-no-events are byte-identical, but bracket-**with-a-draft-event** was already
+   distinguishable, because nothing filters `status="draft"`. The audit is corrected, for the fourth
+   time in this program.
+6. **The red downgrade control's INTENT is right and its derivation is wrong — fix the derivation,
+   and do not hardcode an exclusion.** `pre_existing` was captured at head, conflating "predated the
+   entries revision" with "existed at head". A hand-listed `- {"meet_events"}` is the
+   silently-staling pattern this program has ruled against twice. The fix snapshots the table set at
+   the *target* revision, so **no exclusion was needed at all** — and the control got **stronger**,
+   21 → 23 tables, because the old `- set(ENTRIES_TABLES)` subtraction had been excluding three
+   tables that genuinely predate the revision while leaving `meet_events` wrongly inside. It was
+   wrong in both directions at once.
+7. **Intake does NOT assign slots; the plan's "both disconnects" was not reachable in P7b.** R-DM-5
+   binds over the plan. Remove the seating, the `NO_FREE_SLOT` refusal and `_is_doubles_code`; keep
+   the group fix, which is genuinely intake's business. Doing **neither** disconnect — while removing
+   the invention that blocks both — is the shape R-DM-5 permits. Logged as a plan defect found by
+   implementation, which is what the review loop is for.
+8. **The mapping column must have a WRITER, or it is decoration.** A column nothing populates is not
+   a mapping, it is a comment with a type. Populated at creation, with the code fallback kept as the
+   migration path.
+9. **Adopt-by-exact-name stands.** Fuzzy club matching is the `looks_duplicate` problem in a new
+   place; identity is never merged by guesswork.
+10. **The group list needs the guard the player list already has** — a trust-boundary bug, not a
+    tidiness one, and the fix **seats rather than refuses**.
+11. **A superseded scratch report is corrected in place**, because Task 4 carries it into this
+    permanent ledger and a reader who stopped at its middle would get a false picture of shipped
+    behaviour.
+12. **The `MAX_GROUPS` guard's residual is accepted and debt-logged, not engineered away.** A group
+    list already **at** 200 with no `Unassigned` row leaves a committed entrant pointing at a group
+    that does not exist yet; they render *unassigned* rather than not at all. Both alternatives are
+    worse — refusing contradicts ruling 10, and minting a 201st group *is* the bug.
+13. **Commit `67941920`'s subject line is FALSE and superseded by `f2d8fea9`** — stated above in
+    those terms, because `git log --oneline` is where a reader meets it first.
+14. **The public `divisions` field is gated on `tournaments.kind`, not `workspace_modules`** —
+    R-DM-10 says which authority answers a domain claim, and P7a's CHECK is what makes that authority
+    trustworthy.
+15. **D24 does not get decided here, and the reason is stated rather than deferred** — P7b touched no
+    bracket draw key, so nothing it built informs the question. It moves to P7c, the slice that gives
+    regeneration a first-class path and so makes the lock affordable.
+
+**One more line-anchor lesson, and it is P7a's own convention earning its keep.** The anchors in this
+slice's task reports went stale **three separate times**, one set twice within the slice — a fix
+round moved the lines a reviewer had just corrected, and the implementer caught it only by printing
+them again rather than copying either the reviewer's or the plan's. Every anchor in this section was
+printed from the tree in the session that wrote it, and several of them differ from what the scratch
+ledger recorded: `upsert_data` is at `local.py:284`, not `:207`, and `row.data = stamped` at `:318`,
+not `:241`. A citation that arrives via a summary is a *predicted* citation no matter how
+authoritative the summariser.
+
+`dm3/p7b-meet-event` is **not merged** at the time this section was written; the gate above was
+produced at its tip.
