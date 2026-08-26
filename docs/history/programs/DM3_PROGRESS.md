@@ -1001,10 +1001,10 @@ quotation shorter.
 **Deletion gates — all five FIRED, all five verified against the tree by this task, and nothing was
 reworded to satisfy one.** Verbatim, re-run at `187b3dd9`: `rg "class MatchScore" apps/api/src` →
 **1** (`operations/match_state_routes.py`, the still-live local class), was 2. `rg "_row_to_dto"
-apps/ tests/` → **0**, exit 1, was 13. `rg "'scheduled' | 'called' | 'started' | 'finished'"
+apps/ tests/` → **0**, exit 1, was 13. `rg "'scheduled' \| 'called' \| 'started' \| 'finished'"
 apps/console/src` → **2** — exactly the intended survivors, `platform/domain/match.ts:26` (the one
 declaration) and `api/dto.ts` (the deliberate wire copy) — was 8. `rg
-"BracketTournamentDTO['events']" apps/console/src` → **0**, exit 1, was 1. `rg -n "backend/"
+"BracketTournamentDTO\['events'\]" apps/console/src` → **0**, exit 1, was 1. `rg -n "backend/"
 apps/entrant/app apps/entrant/public` → **3**, and they are exactly the three named-in-advance
 **correct** `tests/backend/unit/…` citations (`formField.ts:16`, `formCsrf.server.ts:35`,
 `formCsrf.server.ts:41`), was 11. **On fireability, which is the program's own standard:** the two
@@ -1025,18 +1025,30 @@ gate, because it certifies the opposite of the truth.** Logged with its decompos
 patterns, and the warning that any widened gate must not count the three correct
 `tests/backend/unit/` citations as stale. S, mechanical — the same repoint T3 Step 1 already did.
 
-**The program-level pattern, now FIVE consecutive slices: a gate pattern in this program is
-unreliable until it has been RUN against the tree.** P4, P5 and P6 each inherited at least one
-pattern that could never fire (P5 found four of five stale, one of them a `" / "` pattern grepped
-against an f-string; P6 found three of five). **This plan's own author caught three of their own
-during self-review** and rewrote each against a full, unfiltered listing rather than trusting the
-audit or a partial grep: the status union was drafted "3→2" from the audit's declaration count and
-actually returns **8**; `_row_to_dto` was drafted **7** from an `--include=*.py`-limited grep and
-actually returns **13**; and the entrant `backend/` decomposition was drafted from **two different
-greps merged by eye**, which invented a `session.server.ts` residue that is not in the 11 at all.
-Then T3 found the F-DM-59 gate under-measuring. **The rule, written down here so the next plan
-inherits it: a gate's expected count must be PRODUCED by running the pattern against the tree,
-never predicted from the audit — and no gate may be satisfiable by rewording a comment.**
+**The program-level pattern — the FIFTH gate episode across FOUR consecutive slices: a gate
+pattern in this program is unreliable until it has been RUN against the tree.** P4, P5 and P6 each
+inherited at least one pattern that could never fire (P5 found four of five stale, one of them a
+`" / "` pattern grepped against an f-string; P6 found three of five). **This plan's own author
+caught three of their own during self-review** and rewrote each against a full, unfiltered listing
+rather than trusting the audit or a partial grep: the status union was drafted "3→2" from the
+audit's declaration count and actually returns **8**; `_row_to_dto` was drafted **7** from an
+`--include=*.py`-limited grep and actually returns **13**; and the entrant `backend/`
+decomposition was drafted from **two different greps merged by eye**, which invented a
+`session.server.ts` residue that is not in the 11 at all. Then T3 found the F-DM-59 gate
+under-measuring. **The rule, written down here so the next plan inherits it: a gate's expected
+count must be PRODUCED by running the pattern against the tree, never predicted from the audit —
+and no gate may be satisfiable by rewording a comment.**
+
+**And this paragraph proved its own rule at its own expense, which is the cheapest demonstration
+available, so it is recorded rather than quietly corrected.** It first read "now FIVE consecutive
+**slices**" — but the evidence it cites enumerates **four** (P4, P5, P6, P9). Five is the count of
+*gate episodes*; the working ledger says "the program's fifth unfireable-or-under-measuring
+**gate**", and the gate→slice conversion happened in a dispatch, one hop from the record. Caught at
+this task's review. **A meta-count about counts, predicted from a dispatch instead of produced from
+the record — the exact failure the rule names, committed inside the sentence stating the rule.**
+The generalisation the program should carry: *"produced, not predicted" applies to the numbers in
+the prose as much as to the numbers in a grep*, and a count that arrives via a summary is a
+predicted count no matter how authoritative the summariser.
 
 **A plan-defect class T3 found, and it is nastier than a wrong line number.** The brief's path
 translation `backend/api/entries.py → apps/api/src/entries/entries.py` was **wrong** — `_SLUG_RE`
@@ -1078,8 +1090,13 @@ vitest **204 files, 1840 tests** · depcruise **16 warnings, 0 errors** (the pre
 `KNOWN_CROSS_MODULE` set, unchanged); entrant lint clean · typecheck clean · entrant vitest
 **37 files, 760 tests** · entrant depcruise **0 violations** (93 modules); ruff
 `All checks passed!`; import-linter **15 kept, 0 broken**; pytest
-**`1923 passed, 66 skipped, 7 warnings in 758.90s (0:12:38)`**. **Every count is IDENTICAL to
-P6's** — console 204/1840, entrant 37/760, pytest 1923 — and that identity is the check worth
+**`1923 passed, 66 skipped, 7 warnings in 758.90s (0:12:38)`**. **The warning count is the one
+number that differs from P6's line (7 here, 9 there), and it is race noise, not a change:** three
+of the seven are `test_concurrent_requests.py::test_parallel_writes_never_500` SAWarnings whose
+text is literally row-count-dependent ("expected to delete 3 row(s); 1 were matched"), so that
+suite emits a different number of them per run. Nothing was silenced; the full warnings summary is
+in the log and every entry is pre-existing. **Every count that means something is IDENTICAL to
+P6's** — console 204/1840, entrant 37/760, pytest 1923 passed / 66 skipped — and that identity is the check worth
 making rather than a coincidence worth glossing: **P9 added zero tests on any tier.** T1's
 "16 passed" was a suite the implementer *ran* because the brief named none, not tests added; T3's
 fix round changed helper **types** only, and its entrant count was identical before and after, so
