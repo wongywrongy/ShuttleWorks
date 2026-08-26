@@ -26,7 +26,7 @@ Implementation happens on `<type>/<slug>` branches off `main` (first: `dm3/p3-mi
 | 6 | P5 — pair survives intake | R-DM-4 (a) | L | **DONE 2026-08-25** — `9e81ca68`..branch tip (incl. final-review fix wave `f94c85ce`+`4f049a45`), final review "Ready to merge, with fixes" → fixes landed and re-reviewed clean — **merged to main 2026-08-25** (fast-forward, Kyle's standing instruction). Ships the **Bracket** half only — the Meet half was cut at ratification (see the P5 section) |
 | 7 | P6 — bracket person key demotion | R-DM-7 (a) | M | **DONE 2026-08-25** — `637ea8df`..branch tip on `dm3/p6-person-demotion` (six tasks, each reviewed clean after at most one fix round), final whole-branch review **"Ready to merge: Yes", 0 Critical / 0 Important** — **merged to main 2026-08-25** (fast-forward, Kyle's standing merge-and-proceed instruction) |
 | 8 | P7 — Event key + Meet Event | R-DM-5/10/11 | L | pending — blocked by P0; program-scale |
-| 9 | P9 — cosmetic sweep | — | S | pending — anytime after P0 |
+| 9 | P9 — cosmetic sweep | — | S | **DONE 2026-08-25** — `b5f9e298`..`187b3dd9` plus this closing ledger commit, on `dm3/p9-cosmetic-sweep` (four tasks, T1/T2 reviewed clean, T3 clean after one fix round; this closing task's review follows it). **Small because the sweep is mostly not sweepable** — 22 cited · 3 already closed · 7 swept · **9 routed out** · 3 refused; see the P9 session-log section |
 | 10 | P8 — PlayerProfile full v1 | R-DM-3 (c) | M | **BLOCKED — owner must supply the R15 text** |
 | 11 | Meet-roster extraction (R-DM-2 (c), ratified) | R-DM-2 | L | pending — committed follow-on after P4 |
 
@@ -868,3 +868,254 @@ lands, delete `test_adopting_a_legacy_roster_row_keys_the_column_and_not_the_blo
 
 `dm3/p6-person-demotion` was **merged to `main` 2026-08-25** (fast-forward, per Kyle's standing
 merge-and-proceed instruction; `main` remains ahead of `origin/main` — pushing stays Kyle's call).
+
+### 2026-08-25 — P9 slice executed (cosmetic sweep — and the sweep is mostly NOT SWEEPABLE, subagent-driven, opus)
+
+Branch `dm3/p9-cosmetic-sweep` off `main` @ `b86162e2`. Four tasks, each implementer+reviewer
+dispatched separately (T1 and T2 reviewed clean first pass, T3 clean after one fix round; this
+closing task's review follows it); SDD working ledger — rulings, per-task lines, deviations,
+deferred minors — at `.superpowers/sdd/2026-08-25-sp-dm-3-p9-cosmetic-sweep/progress.md`.
+
+**Commit chain.** `b5f9e298` detailed plan (538 lines, four tasks, all S) · `698f7d91` **T1** the
+dead `MatchScore` twin deleted, `row_to_dto` stops lying about privacy · `a0be2118` **T2** one
+match-status union declaration, bracket `EventDTO` exported · `bab61b07` **T3** the pre-reorg
+citations repointed and the unions the emitters already close · `187b3dd9` **T3** fix round (the
+last two F-DM-60 members; the my-entries test helpers typed) · plus this ledger commit (the nine
+routed-out debt rows, the new F-DM-78 row, and the three refused no-ops).
+
+**THE HEADLINE — P9 is small because the sweep is mostly NOT SWEEPABLE.** Of the **22** cited
+findings — the `F-DM-43..61` remainder (19) plus `F-DM-21/25/42` (3) — **3 were already closed**
+by earlier slices, **7 were live and genuinely cosmetic** (swept, T1–T3), **9 were live but NOT
+cosmetic** (routed out to the debt log, each with a destination), and **3 were refused as no-ops**.
+3 + 7 + 9 + 3 = 22. **"Cosmetic" banded the SYMPTOM, not the fix.** Nine of these findings read as
+a type tidy or a rename and every one of them carries behavior, schema or public-wire risk behind
+it. That triage is the most useful thing this slice produced and it is **not a footnote**: a
+cosmetic sweep that quietly changed behavior would have been the worst outcome available, and
+silence about the nine would have been the second-worst. The routing — not the seven edits — is
+this slice's deliverable.
+
+**The three already closed.** F-DM-45 by **P0** (`MatchStateOut` → 0 hits in `apps/api/src`);
+F-DM-53 by **P2** (`packages/shared-contract/` is now a versioned `{$schema, version, keys}`
+workspace package the console imports by package name); and **F-DM-49 closed BY MECHANISM, not
+renamed — RATIFIED**: R-DM-9 names F-DM-49 under "Resolves", and `dtoParity.test.ts` declares the
+`EntryDTO ↔ EntryDeskRowDTO` alias with a test holding it. A finding closed by a mechanism someone
+else shipped is closed; re-doing it as a rename would have been work that unpicked a ruling.
+
+**The seven swept.** *T1 (backend).* **F-DM-43** was re-anchored from the audit's "two divergent
+declarations" to a **deletion**: `core/schemas.py::MatchScore` is dead tree-wide — proved **three
+ways** (grep, no wildcard `core.schemas` import anywhere, and an empty `make generate-api` diff) —
+so the validation reconciliation the audit implies (`ge=0, le=99` vs unbounded) would have been
+*behavioral* and was never needed. That re-anchoring is what moved the finding from behavioral to
+cosmetic. **F-DM-54**: `_row_to_dto`'s leading underscore claimed a privacy that three other
+modules already ignored; swept at the definition across four modules, and the audit's "display's
+one import" undercounted — the fix touches **six** sites, ratified. *T2 (console).* **F-DM-46**,
+the four-member match-status union: the audit counted **three** declarations and the tree returned
+**eight**. **F-DM-48**: `bracketDto.ts::EventDTO` exported so the one remaining structural alias
+can name it (already down from the audit's four consumers to one). *T3 (entrant).* **F-DM-59**
+(8 stale pre-SP-REORG-1 citations repointed — the audit said 14), **F-DM-60** (all three
+vocabulary unions closed) and **F-DM-61**. **F-DM-61 is the union half ONLY** — the 3-copy label
+dedup remains **D23**'s cross-package-types question, so DONE does not overclaim it.
+
+**The nine routed out** are now debt rows under *"Routed out of SP-DM-3 P9's cosmetic sweep"*
+(the log is append-in-the-middle — cite by title, never by line). In brief, with the reason each
+one is not cosmetic: **F-DM-21** — a source discriminator on `Match.playerIds` changes what the
+D20 double-booking guard *sees*; needs a slice with a caught-collision negative control.
+**F-DM-25** — four workspace key kinds with no mapping layer; the fix is a layer or a reference
+page, and it sits against ADR 0014's fence → P7 or an owner ruling. **F-DM-42** — routed out
+**despite the card naming it**, because a public-tier type rename crosses a shipped browser module
+and the P0 parity pair map; **the card's banding was wrong**. **F-DM-47** — **blocked on a
+direction ruling**: its only fix makes `api/dto.ts` (whose sole import today is `./dto.generated`)
+name a `platform/domain` type, the first non-generated import in the hand mirror. **F-DM-50** —
+the **write side** of P0's charter; R-DM-9's oracle covers responses only, so 11 request shapes
+local to `api/client.ts` are unpoliced. **F-DM-51** — collapsing the three `entry_pages` views
+changes public entrant wire keys, which **P1 established this program will not do**. **F-DM-55** —
+see the ruling below. **F-DM-56** — three FK-less operator-identity pointers; a schema change with
+F-DM-11 binding and an `ondelete` decision inside it → P7's F-DM-37 constraint work. **F-DM-57** —
+**already owned by R-DM-11, which names it under "Resolves"; P7 carries it. Recorded as routed,
+NOT as new debt, and P9 was instructed not to touch it** — removing `drawKey` would drop a public
+entrant wire key.
+
+**The one real decision: the `match_states` `String`→`DateTime` migration is OUT — RATIFIED.**
+Those strings reach the **public** capability-token wire (`operations/match_state_routes.py` reads
+`row.called_at` into `MatchStateDTO.calledAt`, a string field, and `display/display.py` re-serves
+that DTO on `GET /display/{token}/match-states`), the roundtrip is **test-pinned**
+(`test_called_at_and_original_slot_court_roundtrip`), and `MatchStateDTO` is a
+`StrictIgnoringModel` *specifically* so it doubles as the import shape for match-state files older
+builds wrote — it must keep accepting their timestamp strings. Every migration this program shipped
+was **SQLite-verified only**, and a column type change is the single worst place to first meet
+Postgres, which enforces the type on every existing row at `ALTER`. It is also a **schema** change
+inside a slice chartered as cosmetics. The harm the finding names is **latent, not shipped**: no
+query in the tree compares those columns in SQL today. **Cost if overruled**, stated concretely: it
+becomes its **own M-sized slice-let with its own plan** — F-DM-11's same-commit rule, a negative
+control against migration-built schema, and a Postgres run — and it would change a test the working
+practices say to **flag rather than edit**. Never folded into a cosmetic commit stack.
+
+**Three refused as no-ops — F-DM-44, F-DM-52, F-DM-58 — RATIFIED, and this is the right instinct.**
+The common reason is the whole ruling: **each is already explained *in situ*, so "de-duplicating"
+it deletes a rationale, not a duplication. A comment explaining why something looks duplicated is
+not duplication.** F-DM-44's meet/bracket score split names ADR 0006 at the declaration and its
+`Assignment`×4 spans `scheduler_core`, which the import contracts keep pure; F-DM-52's two
+`entryPlayerId` rationales were made **different** by P4 on purpose (the bracket half explains why
+the key is stored twice), so a mixin would flatten per-shape rationale and rename an OpenAPI schema;
+F-DM-58's `lib/names.ts` already carries a `ponytail:` comment naming the exact ceiling and its
+upgrade path, which is roster/P8 work — the comment **is** the finding. All three are recorded under
+*Recorded deliberately* in the debt log so nobody re-opens them.
+
+**Both verify-then-decide steps answered CONSTRAINED — checks, not assumptions.** The schema has
+**zero** `CheckConstraint`s (F-DM-37), so T3 was told to verify rather than assume. `entry_type` has
+exactly ONE write path, fed by `EntryEventCreateDTO.entryType: Literal["singles","doubles"]`, with
+no update path. `bracket_events.format` routes every writer through `FormatId`'s `AfterValidator`
+against the 6-key `FORMAT_REGISTRY`, applied on all four DTOs including `EventConfigPatchIn` — so
+`DrawKind` was introduced. Both closures were **independently re-proven from source at review**
+rather than relayed, including the third F-DM-60 member via `_ENTRY_STATE`'s `.get(raw,"awaiting")`
+default and `_card_status`'s exactly-four returns. `kindLabel`'s `?? kind` runtime fallback is
+confirmed untouched, so an off-registry format tag still renders its raw string exactly as before.
+
+**T3's one-line bound was OVERRUN to three lines and ACCEPTED — the mechanism is worth knowing.**
+The controller ruled all three F-DM-60 members into scope including the test file (Step 7's commit
+path excluding it was a plan oversight, not a boundary) and bounded the fix at **one line**, with
+the reason stated: *"I am not paying 26 test-line edits for a cosmetic finding."* `over:
+Partial<MyEntryLine>` alone took 26 errors → 12, and the survivors were **not** the spread: a
+literal property in a **mutable object literal** (`status: 'entered'`) widens to `string` on its own,
+*before* `over` is considered, and the spread then unions with that — so the **return-type
+annotation** is also required, to supply the contextual type that stops the widening. Both are
+needed together. Final test-file diff is **3 lines** (two signatures + one `import type`), **zero
+test bodies, zero assertions** — an overrun in degree, not in kind, comfortably inside the bound's
+stated reason. The implementer **stated the overrun plainly and offered the revert** rather than
+proceeding quietly. The bound's second half was checked explicitly: all 13 distinct override keys
+enumerated across 313 lines, every one a real interface member with an in-type value, no test
+passing an off-union state, and the XSS negative control still typechecks (it sits on plain `string`
+fields). **Coverage is strictly BETTER** — `Record<string, unknown>` silently accepted a typo'd key
+or a wrong-typed value; `Partial<…>` makes both compile errors. Cost if wrong: `git revert 187b3dd9`.
+
+**T2's gate-comment episode — RATIFIED.** The implementer's first draft of a replacement comment
+**quoted the retired expression verbatim**, which tripped their own gate; they removed their own
+quotation and flagged it, because the dispatch forbids rewording to satisfy a grep. That handling
+is correct: removing a quote you introduced yourself *in the same edit* is not rewording code to
+satisfy a gate — the indirection the gate measures was already gone. The offered alternative (keep
+the quote, raise gate B's expected count to 1) was **rejected as strictly worse**: a gate whose
+expected count is "1, and that 1 is a comment quoting the thing we removed" is **precisely the
+unfireable-gate pattern** this program keeps meeting. Cost of the ruling if wrong: a comment one
+quotation shorter.
+
+**Deletion gates — all five FIRED, all five verified against the tree by this task, and nothing was
+reworded to satisfy one.** Verbatim, re-run at `187b3dd9`: `rg "class MatchScore" apps/api/src` →
+**1** (`operations/match_state_routes.py`, the still-live local class), was 2. `rg "_row_to_dto"
+apps/ tests/` → **0**, exit 1, was 13. `rg "'scheduled' | 'called' | 'started' | 'finished'"
+apps/console/src` → **2** — exactly the intended survivors, `platform/domain/match.ts:26` (the one
+declaration) and `api/dto.ts` (the deliberate wire copy) — was 8. `rg
+"BracketTournamentDTO['events']" apps/console/src` → **0**, exit 1, was 1. `rg -n "backend/"
+apps/entrant/app apps/entrant/public` → **3**, and they are exactly the three named-in-advance
+**correct** `tests/backend/unit/…` citations (`formField.ts:16`, `formCsrf.server.ts:35`,
+`formCsrf.server.ts:41`), was 11. **On fireability, which is the program's own standard:** the two
+absence gates are meaningful precisely because their patterns were measured non-zero at
+`b86162e2` (13 and 1), so a 0 is evidence rather than a pattern that never matched; the three
+count gates name their expected survivors individually, so none of them is written against an
+unreachable 0. The entrant gate's residue was deliberately set at **3, not 0** for that reason — a
+gate a correct citation cannot pass is a gate that punishes the evidence.
+
+**A gate that reads GREEN over 29 live instances — new finding F-DM-78, and the id is minted here
+because the audit's sequence ends at F-DM-77.** T3 found that the F-DM-59 gate **under-measures**.
+It is right about its own residue; the defect is its pattern's **scope**. **29 further stale
+pre-SP-REORG-1 citations carry no `backend/` prefix and are invisible to it** — verified by this
+task, not relayed: **25** bare `api/*.py`, **1** `app/form_csrf.py` (`formCsrf.server.ts:20`), and
+**3** `frontend/src/…`. All three roots were confirmed **nonexistent** (`apps/api/src/api`,
+`apps/api/src/app`, `frontend/`). **A gate that reads green over 29 live instances is worse than no
+gate, because it certifies the opposite of the truth.** Logged with its decomposition, the three
+patterns, and the warning that any widened gate must not count the three correct
+`tests/backend/unit/` citations as stale. S, mechanical — the same repoint T3 Step 1 already did.
+
+**The program-level pattern, now FIVE consecutive slices: a gate pattern in this program is
+unreliable until it has been RUN against the tree.** P4, P5 and P6 each inherited at least one
+pattern that could never fire (P5 found four of five stale, one of them a `" / "` pattern grepped
+against an f-string; P6 found three of five). **This plan's own author caught three of their own
+during self-review** and rewrote each against a full, unfiltered listing rather than trusting the
+audit or a partial grep: the status union was drafted "3→2" from the audit's declaration count and
+actually returns **8**; `_row_to_dto` was drafted **7** from an `--include=*.py`-limited grep and
+actually returns **13**; and the entrant `backend/` decomposition was drafted from **two different
+greps merged by eye**, which invented a `session.server.ts` residue that is not in the 11 at all.
+Then T3 found the F-DM-59 gate under-measuring. **The rule, written down here so the next plan
+inherits it: a gate's expected count must be PRODUCED by running the pattern against the tree,
+never predicted from the audit — and no gate may be satisfiable by rewording a comment.**
+
+**A plan-defect class T3 found, and it is nastier than a wrong line number.** The brief's path
+translation `backend/api/entries.py → apps/api/src/entries/entries.py` was **wrong** — `_SLUG_RE`
+lives in `entries_routes.py` — and **because the wrong target exists, the brief's own `ls` check
+would have PASSED while installing a fresh stale citation.** Independently confirmed at review.
+**A verification step that can confirm a wrong answer is worse than none**, because it converts a
+guess into evidence. The generalisation for future briefs: a path check must assert the *symbol* is
+there, not merely that the file is.
+
+**Two brief gaps, both closed by the implementer rather than shipped.** T1's Step 5 test list named
+**no suite** for `meet/schedule_suggestions.py`, a file the task edits **twice** — the checklist as
+written would have shipped it unverified; the implementer ran `test_schedule_suggestions.py`
+themselves (16 passed). T3's Step 7 commit path **excluded the test file** the controller then ruled
+into scope. Neither is a code defect; both are the same class — a task's verification surface
+derived from the audit rather than from the diff the task actually produces.
+
+**Named risks, all three handled, and the handling is the transferable part.** T1's
+`match_state_routes.py` had the definition **plus four in-module call sites**; swept via a
+file-scoped `replace_all` — *"exhaustive by construction, not by counting"*, which is the right
+instinct and the one that survives a miscount. T1's `meet/` imports are **function-scoped** to avoid
+a cycle; all three were kept function-scoped with **byte-identical placement** and no hoist
+attempted, justified against `schedule_proposals.py:458` as the house pattern. T2's `LegacyStatus`
+had five inline copies (`useCommandQueue.ts` ×3, `runModel.ts`, `runMachine.ts`); swept the same
+way, with a loose-variant grep and a **permuted-member-order** re-run at review confirming nothing
+hid under a different spelling.
+
+**Both console substitutions are IDENTITY substitutions, re-derived at review rather than trusted.**
+The union is character-for-character identical in members **and order**; and the reviewer chased the
+indexed-access chain themselves — `BracketTournamentDTO['events'][number]` ≡
+`TournamentDTO['events'][number]` ≡ `EventDTO[][number]` ≡ `EventDTO`. Nothing narrowed, nothing
+widened; the whole T2 diff is type-position and erases at emit. The **partial** status unions in
+`trafficLight.ts` and two test files were deliberately left alone — substituting there would
+**widen** a type, which is behavioral, not cosmetic.
+
+**Gates.** `make check` **green across both tiers, exit 0** — nothing was red at any point, so
+nothing had to be argued pre-existing and **no `git stash` was used anywhere in this slice**.
+Console lint **0 errors / 117 warnings** (the standing downgraded set) · `tsc -b` clean · console
+vitest **204 files, 1840 tests** · depcruise **16 warnings, 0 errors** (the pre-ratchet
+`KNOWN_CROSS_MODULE` set, unchanged); entrant lint clean · typecheck clean · entrant vitest
+**37 files, 760 tests** · entrant depcruise **0 violations** (93 modules); ruff
+`All checks passed!`; import-linter **15 kept, 0 broken**; pytest
+**`1923 passed, 66 skipped, 7 warnings in 758.90s (0:12:38)`**. **Every count is IDENTICAL to
+P6's** — console 204/1840, entrant 37/760, pytest 1923 — and that identity is the check worth
+making rather than a coincidence worth glossing: **P9 added zero tests on any tier.** T1's
+"16 passed" was a suite the implementer *ran* because the brief named none, not tests added; T3's
+fix round changed helper **types** only, and its entrant count was identical before and after, so
+nothing was skipped into green. The one non-green line in the log is `docs:freshness` reporting
+3 areas BEHIND — **advisory by construction** (`Makefile:252`, "never fails the gate",
+`Error 1 (ignored)`); it flags docs lagging code and this slice changed code, and its coarse-glob
+over-reporting is already its own debt row.
+
+**The slice changed no behavior, verified against `main` rather than asserted.** `git diff main
+--stat`: 5 backend files (`-6` in `core/schemas.py`, the rest pure renames), 6 console files (all
+type-position), 7 entrant files (comments, three type annotations, one erased `export type`), plus
+one test file and the plan document. **Zero** changes under `alembic/`, **zero** in
+`dtoParity.allowlist.json`, **zero** `dto.generated.ts` diff — each confirmed by a path-limited
+`git diff main --stat`, not by inspection. **One test file appears** and it is the ruled-in-scope
+`myEntries.script.test.ts`: 1 `import type` + 2 rewritten helper signatures, **zero test bodies and
+zero assertions changed** (Task 1's `_row_to_dto` → `row_to_dto` rename, which the brief anticipated
+in tests, turned out to touch **no** test file at all). Nothing in the sweep stopped being cosmetic.
+
+**Deferred minors, rolled up:** T1's brief-dictated docstring phrase "four importers already
+ignored" is loose (there are 3 external importing modules + 4 in-module call sites) · T2's
+`runModel.ts:29` `as MatchStatus` is a **provably dead cast** (`OpsBlock['status']` is already
+`MatchStatus`), left for a brief-literal minimal diff · T3's `sitemapCache.server.ts:34` is now ~99
+chars, which no lint gate enforces · the `DrawKind` hand-maintenance-vs-extensible-registry
+tradeoff, logged rather than fixed.
+
+**No migration, no schema change, no re-key, no FK, no `BLOB_VERSIONS` flip, no
+`tournaments.data` version bump, no DTO regen, no allow-list edit — cap still 19, and the
+allow-list's `git diff --stat` against `main` is empty.** The standing caveat needs no addition:
+P9 carries no migration, so it adds nothing to the SQLite-only evidence debt. Neither
+deliberately-unowned defect (the `_adoptable` adoption-path divergence, the orphan roster-blob row)
+is adjacent to any file this slice touched — checked, not assumed.
+
+**Next.** **P7** remains the large one and is untouched here: it inherits F-DM-57 (which P9 was
+forbidden to touch), F-DM-25 and F-DM-56 from this slice's routing, on top of what P6 handed it.
+It is **program-scale and R-DM-5-gated** — do not start it without reading P6's closing note.
+**P8 stays owner-blocked on the R15 text.** Of the nine routed-out rows, three want an **owner
+decision** before anyone can build on them (F-DM-55 the migration, F-DM-47 the `dto.ts` direction
+ruling, F-DM-25 the key-mapping question) — they are unassigned on purpose, exactly like P6's
+adoption-divergence and orphan-row pair.
