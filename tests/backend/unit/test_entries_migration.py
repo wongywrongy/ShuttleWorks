@@ -377,9 +377,19 @@ def test_downgrade_one_step_lands_back_on_the_previous_revision(alembic_cfg):
     from alembic import command
 
     cfg, url = alembic_cfg
-    command.upgrade(cfg, "head")
+    # DERIVED, not captured at head: the control below is "every table that
+    # PREDATED this revision survives", and head-minus-a-literal conflates
+    # that with "existed at head". A table created ABOVE r2c7e1f4a9b3 is
+    # legitimately dropped by this downgrade (meet_events, aa1b6c4e0d3f, was
+    # the first), so the comparison set is the schema at the revision being
+    # downgraded TO. Do not "simplify" this back to a snapshot at head plus a
+    # hand-listed exclusion — every future table above r2 would need an edit
+    # from an author with no reason to know it, and the control would pass
+    # vacuously until someone noticed.
+    command.upgrade(cfg, PREVIOUS_REVISION)
     before, _ = _inspector(url)
-    pre_existing = set(before.get_table_names()) - set(ENTRIES_TABLES)
+    pre_existing = set(before.get_table_names())
+    command.upgrade(cfg, "head")
 
     # Named rather than stepped: "-1" stopped meaning r2c7e1f4a9b3 the day a
     # revision was added on top of the entries family.
