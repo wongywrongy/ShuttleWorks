@@ -1718,3 +1718,52 @@ are **LF** — a previous tool wrote them that way, and `git diff` is clean eith
 right one is **read the file's bytes and write back what was there**, then check `git diff --stat` for
 proportionality regardless. Every file this wave edited was checked, and none showed a
 deletions-heavy stat on a barely-touched file.
+
+**Merge gate, produced at the branch tip after the fix wave: pytest 1935 passed / 66 skipped**
+(807 s) — the 1934 above is that earlier episode's figure, and the +1 is the wave's own
+`additionalProperties` case. The rest of `make check` was green at `9f894266` and nothing after it
+touched console, entrant, lint or import-linter surfaces: the three fix-wave commits are two test
+files and two documents.
+
+`dm3/p7a-constraints` was **merged to `main` 2026-08-26** (fast-forward, per the standing
+merge-and-proceed instruction).
+
+### The thirteen rulings this slice made
+
+Recorded here because the SDD working ledger they were written in is git-ignored scratch, deleted at
+slice close — the same permanent-source rule this slice added a convention for.
+
+1. **T2's deletion gate cannot be met literally.** `entries/entries.py:165` is a real ORM row and the
+   fallback is dead; `workspace_signals.py:603` is a duck-typed `row` inside a function documented
+   "Pure — no DB", where a database CHECK cannot make a `getattr` default dead. Delete the trailing
+   `or "meet"` only, keep the default. The gate reads 0 honestly rather than by weakening a contract.
+2. **Negative controls are cited `P7a-NC1..NC4`**, so nobody implements the design card's own NC 3 —
+   the `rankCounts` control this plan explicitly refuses — by number collision.
+3. **Exactly the four named columns are constrained**, not the card's vague "~19": ~24 short-`String`
+   columns exist and several (`tournament_date`, `called_at`, `phone`) are not enums at all.
+4. **`tournaments.status` stays unconstrained** — *nothing in code produces its allowed set*, so a
+   CHECK there would invent a constant in a migration. The next batch must give it an authority first.
+5. **The exhausted Alembic single-letter prefix (`z0f5a1b3c9d2`) is the next slice's problem.**
+   Renaming a shipped revision id is a migration-history rewrite.
+6. **"Record the produced list in the ledger" is Task 4's job, not a Task 1 gap** — and it is
+   load-bearing, because the scratch ledger is deleted at slice close.
+7. **One Minor rode along with a fix round** rather than being deferred: it was one assertion in the
+   file already open, closing the other half of the hazard the brief itself named.
+8. **Task 3's deliverable was determined by the tree, not the plan.** No rename path exists, so the
+   deliverable is a machine-derived pin — building a refusal with no caller was explicitly forbidden.
+9. **The `BracketEvent` docstring gets corrected, the gap gets characterized, and the decision gets
+   routed — but the publication lock is NOT built here.** Blocking `DELETE`+`POST /bracket` after
+   publication would block a legitimate draw *rebuild*, a bigger live-surface consequence than the
+   one R-DM-11 accepted, and draw identity is what P7b/P7c redesign. That is D24.
+10. **No line anchor enters a permanent document unless printed from the tree in the session that
+    writes it** — the citation half of "produced, not predicted". Three bad anchors got in during
+    this slice, every one by trusting a prior task's report.
+11. **Close the pin's derivation hole, do not merely document it.** The failure scenario named
+    **P7b** — the next slice, which exists to add event shapes. The mutation evidence settled it: the
+    old implementation returned `{'event'}` / `{'events'}` for nested and array bodies, i.e. **would
+    have passed them**.
+12. **The rebuild snapshot gains nullability** — Task 2's deletion depends on `tournaments.kind`
+    keeping `NOT NULL` across the batch rebuild and nothing asserted it. Column type, PK and unique
+    constraints stay uncovered, and are now described as uncovered.
+13. **`set_status`'s raw-string opening is debt, not P7a's to close.** Narrowing a repository
+    signature is production work outside a slice chartered for constraints, a deletion and a pin.
