@@ -305,6 +305,15 @@ grep -rn "partnerPlayerId\|partner_player_id" apps/api/src apps/console/src apps
 Expected: nothing outside `entries` tables' `partner_entry_id`. If something exists, reuse it
 (ladder rung 2) and say so rather than adding a second field.
 
+- [ ] **Step 4b: Determine whether a pair's two halves can land in different schools.**
+
+`_seat` (`entries/entries.py:589`) groups by the entrant's own free-text `club`, so two partners who
+typed different spellings commit into two groups. Read `_pair_batch`'s predicate (`:750-825`) and
+`_seat`, and record **yes or no**: can a mutually-accepted pair reach the document with two
+different `groupId`s? Task 5's stated rule (seat such a pair as two singletons) assumes yes. If the
+answer is no — some leg of the predicate or of intake forces one club — say so, and Task 5's rule
+becomes a one-line assertion instead of a branch.
+
 - [ ] **Step 5: Commit the measurements.** No code changed; the record is the deliverable.
 
 ```bash
@@ -513,14 +522,40 @@ from meet.lineup import build_lineup, expand_ranks, is_doubles_rank
 
 
 def _state(**over) -> TournamentStateDTO:
-    """A minimal valid meet document. Config fields are REQUIRED by the DTO
-    (intervalMinutes, dayStart, dayEnd, courtCount, defaultRestMinutes,
-    freezeHorizonSlots) -- read core/schemas.py and fill every one, or the
-    fixture 422s and every test below fails for the wrong reason."""
-    raise NotImplementedError(
-        "Build this from core/schemas.py's TournamentStateDTO at implementation "
-        "time; copy an existing document fixture from tests/backend if one fits."
-    )
+    """A minimal valid meet document, projected the way the real path does.
+
+    ``TournamentStateDTO`` (core/schemas.py:1041) nests the config:
+    ``config: Optional[TournamentConfig]`` at :1050, with ``rankCounts`` on
+    TournamentConfig at :118 -- so the generator reads
+    ``state.config.rankCounts``, not ``state.rankCounts``.
+
+    TournamentConfig (:99) REQUIRES intervalMinutes, dayStart, dayEnd,
+    courtCount, defaultRestMinutes and freezeHorizonSlots; omit any one and
+    the projection raises, and every test below fails for the wrong reason.
+    The block below is copied from
+    ``test_entries_commit_seam.py::_meet_workspace`` (:97-117) so the two
+    fixtures cannot drift on what a valid meet config is.
+    """
+    document: dict = {
+        "config": {
+            "tournamentName": "Spring Invitational",
+            "intervalMinutes": 15,
+            "dayStart": "08:00",
+            "dayEnd": "18:00",
+            "courtCount": 4,
+            "defaultRestMinutes": 20,
+            "freezeHorizonSlots": 0,
+            "rankCounts": {},
+        },
+        "groups": [],
+        "players": [],
+        "matches": [],
+    }
+    config_over = over.pop("config", None)
+    if config_over:
+        document["config"] = {**document["config"], **config_over}
+    document.update(over)
+    return state_dto_from_document(document)
 
 
 def test_expand_ranks_numbers_each_division():
@@ -815,6 +850,12 @@ it('regenerates from the API response, not from a local computation', async () =
 
   render(<RegenerateMenu />);
   await userEvent.click(screen.getByTestId('regenerate-toggle'));
+  // The fetch happens ON OPEN and `canGenerate` gates the confirm on the
+  // response, so clicking confirm immediately no-ops against a disabled
+  // button and the waitFor below times out. Wait for the enable first.
+  await waitFor(() =>
+    expect(screen.getByTestId('regenerate-confirm')).toBeEnabled(),
+  );
   await userEvent.click(screen.getByTestId('regenerate-confirm'));
 
   await waitFor(() => {
@@ -1104,6 +1145,15 @@ it('does not touch another school', () => {
    seat a singleton into the first slot with one free place. When nothing is free, leave the bare
    code alone and do not count it.
 4. Replace the bare division code with the slot rank in the player's `ranks`.
+
+**A pair whose halves sit in DIFFERENT schools is seated as two singletons.** `partnerPlayerId`
+comes from `_pair_batch`, but each half's `groupId` comes from their **own free-text `club`** — two
+partners who typed different club spellings commit into two groups, and a slot belongs to one
+school, so seating them together is not expressible. Treat the pointer as actionable **only when
+both halves share a `groupId`**; otherwise seat each as a singleton. This is the same posture as
+P7b's two-spellings-of-one-club ruling: visible in the grid and fixable by an operator moving one
+player's school, rather than guessed at here. **Do not build handling beyond this rule** — no
+cross-school slot, no auto-move, no refusal.
 
 **The stale-closure trap is already documented in this file** (`useRankAssignment.ts:61-67`, on
 `moveRank`): a naive loop of `assignRank` calls all read the same `players` closure, so the second
