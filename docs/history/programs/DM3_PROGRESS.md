@@ -2293,3 +2293,39 @@ types) · **D24**, which replaced F-DM-25 on this list when F-DM-25 was ruled.
 
 **P8 stays owner-blocked on the R15 text.** **R-DM-2(c) Meet-roster extraction** remains a committed
 follow-on **program**, not a slice.
+
+### 2026-08-27 — P7c plan authored (no code yet)
+
+Plan: `docs/history/superpowers/plans/2026-08-27-sp-dm-3-p7c-meet-lineup-and-slots.md`, authored
+against `main` @ `cc38abc8`, Alembic head `aa1b6c4e0d3f`. **This slice adds no migration**, so
+F-DM-11 does not apply and the program's SQLite-only caveat does not attach to its evidence.
+
+Four things the authoring pass found that change what P7c is, all produced from the tree:
+
+1. **F-P7c-1, a live defect.** `RosterTab.tsx:105-137`'s one-shot singles cleanup iterates every
+   value in `p.ranks ?? []` with no slot filter, and `isDoublesCode` (`lib/doubles.ts:25-27`) reads
+   a bare division code as a singles slot because the digit strip is a no-op on a prefix. Two
+   entrants of one club in one **singles** division — the ordinary school-meet shape — cost the
+   second entrant the division mapping P7b writes, silently, on the next autosave. Reproduced by
+   transcription; the plan's Task 1 replaces that with a mounted-component test
+   (`__tests__/positionGrid.test.tsx:170` already mounts `RosterTab`). **Task 1, before anything
+   else**, and it makes division-awareness in the roster defensive rather than cosmetic.
+2. **The slot-assignment surface has prior art, so this entry corrects the P7b handoff above.**
+   "No prior art in the repo" is wrong against the tree: `PositionGrid.tsx:1-19` documents drag /
+   click-to-pick / `×`-to-unassign against numbered ranks, `positionGrid/useRankAssignment.ts:26-59`
+   is already the single home for the assignment invariant, and `hooks/useRankValidation.ts:73-100`
+   already computes per-slot capacity and occupancy. P7c **extends** that surface with an explicit
+   seat action; it does not build a new one. (Correction lives here, per the standing convention —
+   P7b's entry is not edited.)
+3. **The endpoint shape is settled by prior art.** `meet/schedule_proposals.py:227,375` take
+   `state: TournamentStateDTO` in the request body, because the console's store runs ahead of the
+   persisted blob. `POST /tournaments/{tournament_id}/meet/lineup` does the same and writes nothing,
+   so the slice adds no second writer and inherits no concurrency-token story.
+4. **D24's re-ruling premise does not hold.** It moved here on "P7c builds a first-class
+   regeneration path" — but the path P7c builds is **Meet's**, and D24 is `bracket_events.id`.
+   Nothing in the plan touches a bracket route, draw key or table. The plan returns D24 to the owner
+   with a one-line recommendation (accept and document) rather than deciding or absorbing it; the
+   count of open owner rulings stays six.
+
+**Next session:** branch `dm3/p7c-meet-lineup` off `main` and execute the plan via
+`superpowers:subagent-driven-development`. Half A (Tasks 0–3) is shippable on its own.
