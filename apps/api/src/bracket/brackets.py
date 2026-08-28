@@ -730,35 +730,25 @@ def _bracket_solver_options(
     return SolverOptions(time_limit_seconds=time_limit_seconds, log_progress=False)
 
 
-def _hydrate_session(
-    repo: LocalRepository, tournament_id: uuid.UUID
-) -> Optional[BracketSession]:
-    """Reconstruct the in-memory bracket session from persisted rows.
-
-    Returns ``None`` if no bracket events exist for this tournament.
-    """
-    event_rows = repo.brackets.list_events(tournament_id)
-    if not event_rows:
-        return None
-
-    participants_by_event = repo.brackets.list_participants_by_event(tournament_id)
-    matches_by_event = repo.brackets.list_matches_by_event(tournament_id)
-    results_by_event = repo.brackets.list_results_by_event(tournament_id)
-
-    tournament = repo.tournaments.get_by_id(tournament_id)
-    data_blob = (tournament.data or {}) if tournament else {}
+def _hydrated_session_config(data_blob: dict):
+    """Build the session-wide config values stored outside bracket rows."""
     camel_cfg = data_blob.get("config") or {}
     session_cfg = data_blob.get("bracket_session") or {}
-
     court_count = int(_pick(camel_cfg, session_cfg, "courtCount", "courts", 2))
-    interval_minutes = int(_pick(camel_cfg, session_cfg, "intervalMinutes", "interval_minutes", 30))
-    # total_slots is a derived scheduler constant, not a TournamentConfig field — bracket_session only
+    interval_minutes = int(
+        _pick(camel_cfg, session_cfg, "intervalMinutes", "interval_minutes", 30)
+    )
+    # total_slots is a derived scheduler constant, not a TournamentConfig field.
     total_slots = int(session_cfg.get("total_slots", 128))
-    rest = int(_pick(camel_cfg, session_cfg, "restBetweenRounds", "rest_between_rounds", 1))
-
-    # Full shared assembly (rest / freeze / breaks / objective weights),
-    # with the session-owned structural overrides on top. camel_cfg may be
-    # sparse on old blobs — merge over the same defaults the meet uses.
+    rest = int(
+        _pick(
+            camel_cfg,
+            session_cfg,
+            "restBetweenRounds",
+            "rest_between_rounds",
+            1,
+        )
+    )
     cfg_model = TournamentConfig.model_validate(
         {
             "intervalMinutes": interval_minutes,
@@ -776,27 +766,157 @@ def _hydrate_session(
         court_count=court_count,
         total_slots=total_slots,
         interval_minutes=interval_minutes,
-        # Hybrid coordination: schedule bracket matches AROUND the meet
-        # schedule so the two engines never double-book a court.
         closed_court_windows=_meet_occupied_windows(data_blob, court_count),
     )
-
     start_time_iso = session_cfg.get("start_time")
     start_time = (
         datetime.fromisoformat(start_time_iso)
         if isinstance(start_time_iso, str) and start_time_iso
         else None
     )
-
-    # SP-D7 S2: roster availability windows + per-player rest, converted
-    # to slot-native extras here (the one place that knows the session's
-    # wall-clock base + slot geometry) and threaded into every solve via
-    # ``TournamentDriver(player_extras=...)``.
     player_extras = _load_bracket_player_extras(
         data_blob,
         start_time=start_time,
         interval_minutes=interval_minutes,
         total_slots=total_slots,
+    )
+    return config, rest, start_time, player_extras, session_cfg
+
+
+def _participant_from_row(row) -> Participant:
+    metadata = dict(row.meta) if row.meta else {}
+    if row.seed is not None:
+        metadata["seed"] = row.seed
+    if row.entry_player_id is not None:
+        metadata["entryPlayerId"] = str(row.entry_player_id)
+    return Participant(
+        id=row.id,
+        name=row.name,
+        type=_parse_participant_type(row.type),
+        member_ids=list(row.member_ids or []),
+        metadata=metadata,
+    )
+
+
+def _hydrate_participants(participant_rows, state: TournamentState):
+    event_participants: Dict[str, Participant] = {}
+    for row in participant_rows:
+        participant = _participant_from_row(row)
+        state.participants[row.id] = participant
+        event_participants[row.id] = participant
+    return event_participants
+
+
+def _play_unit_from_row(row, event_id: str) -> PlayUnit:
+    return PlayUnit(
+        id=row.id,
+        event_id=event_id,
+        side_a=list(row.side_a) if row.side_a else None,
+        side_b=list(row.side_b) if row.side_b else None,
+        expected_duration_slots=row.expected_duration_slots,
+        duration_variance_slots=row.duration_variance_slots,
+        dependencies=list(row.dependencies or []),
+        metadata=dict(row.meta or {}),
+        kind=_parse_play_unit_kind(row.kind),
+        child_unit_ids=list(row.child_unit_ids or []),
+    )
+
+
+def _hydrate_draw(event_row, participant_rows, match_rows, state, match_versions):
+    event_participants = _hydrate_participants(participant_rows, state)
+    engine_event = EngineEvent(
+        id=event_row.id,
+        type_tags=[],
+        format_plugin_name=event_row.format,
+        parameters=dict(event_row.config or {}),
+    )
+    state.events[event_row.id] = engine_event
+
+    slots: Dict[str, Tuple[BracketSlot, BracketSlot]] = {}
+    round_buckets: Dict[int, List[Tuple[int, str]]] = defaultdict(list)
+    event_play_units: Dict[str, PlayUnit] = {}
+    for row in match_rows:
+        play_unit = _play_unit_from_row(row, event_row.id)
+        state.play_units[row.id] = play_unit
+        event_play_units[row.id] = play_unit
+        match_versions[row.id] = row.version
+        slots[row.id] = (_dict_to_slot(row.slot_a), _dict_to_slot(row.slot_b))
+        round_buckets[row.round_index].append((row.match_index, row.id))
+
+    rounds = [
+        [play_unit_id for _, play_unit_id in sorted(round_buckets[index])]
+        for index in sorted(round_buckets)
+    ]
+    return Draw(
+        event=engine_event,
+        participants=event_participants,
+        play_units=event_play_units,
+        slots=slots,
+        rounds=rounds,
+        segments=_segments_from_match_meta(event_row.format, match_rows),
+    )
+
+
+def _event_meta_from_row(event_row, participant_count: int) -> EventMeta:
+    return EventMeta(
+        id=event_row.id,
+        discipline=event_row.discipline,
+        format=event_row.format,
+        duration_slots=event_row.duration_slots,
+        bracket_size=event_row.bracket_size,
+        participant_count=participant_count,
+        status=event_row.status or "draft",
+        seeded_count=event_row.seeded_count,
+        rr_rounds=event_row.rr_rounds,
+        config=dict(event_row.config or {}),
+    )
+
+
+def _hydrate_results(result_rows, state: TournamentState) -> None:
+    for row in result_rows:
+        state.results[row.bracket_match_id] = Result(
+            winner_side=WinnerSide(row.winner_side),
+            score=row.score,
+            finished_at_slot=row.finished_at_slot,
+            walkover=row.walkover,
+            reason=row.reason,
+        )
+
+
+def _hydrate_assignments(session_cfg: dict, state: TournamentState) -> None:
+    for assignment in session_cfg.get("assignments") or []:
+        if not isinstance(assignment, dict) or "play_unit_id" not in assignment:
+            continue
+        play_unit_id = assignment["play_unit_id"]
+        state.assignments[play_unit_id] = TournamentAssignment(
+            play_unit_id=play_unit_id,
+            slot_id=int(assignment.get("slot_id", 0)),
+            court_id=int(assignment.get("court_id", 0)),
+            duration_slots=int(assignment.get("duration_slots", 1)),
+            actual_start_slot=assignment.get("actual_start_slot"),
+            actual_end_slot=assignment.get("actual_end_slot"),
+        )
+
+
+def _hydrate_session(
+    repo: LocalRepository, tournament_id: uuid.UUID
+) -> Optional[BracketSession]:
+    """Reconstruct the in-memory bracket session from persisted rows.
+
+    Returns ``None`` if no bracket events exist for this tournament.
+    """
+    event_rows = repo.brackets.list_events(tournament_id)
+    if not event_rows:
+        return None
+
+    participants_by_event = repo.brackets.list_participants_by_event(tournament_id)
+    matches_by_event = repo.brackets.list_matches_by_event(tournament_id)
+    results_by_event = repo.brackets.list_results_by_event(tournament_id)
+
+    tournament = repo.tournaments.get_by_id(tournament_id)
+    data_blob = (tournament.data or {}) if tournament else {}
+    config, rest, start_time, player_extras, session_cfg = (
+        _hydrated_session_config(data_blob)
     )
 
     state = TournamentState()
@@ -805,127 +925,25 @@ def _hydrate_session(
     match_versions: Dict[str, int] = {}
 
     for event_row in event_rows:
-        # Participants for this event.
         participant_rows = participants_by_event.get(event_row.id, [])
-        event_participants: Dict[str, Participant] = {}
-        for p in participant_rows:
-            participant = Participant(
-                id=p.id,
-                name=p.name,
-                type=_parse_participant_type(p.type),
-                member_ids=list(p.member_ids or []),
-                metadata={
-                    **(dict(p.meta) if p.meta else {}),
-                    **({"seed": p.seed} if p.seed is not None else {}),
-                    # Columns ride in ``metadata`` between hydration and
-                    # persist because the engine ``Participant`` is the only
-                    # thing the generate/regenerate round trip preserves —
-                    # see the three persist dicts, which rebuild rows FROM
-                    # these objects. Same mechanism as ``seed``; a column
-                    # not lifted here is destroyed by every regenerate.
-                    **(
-                        {"entryPlayerId": str(p.entry_player_id)}
-                        if p.entry_player_id is not None
-                        else {}
-                    ),
-                },
-            )
-            state.participants[p.id] = participant
-            event_participants[p.id] = participant
-
-        # Engine Event placeholder (the format generators set this up
-        # when first run; we keep it consistent here for round-trip).
-        # ``event_row.config`` round-trips any format-specific knobs
-        # the original generator stored (randomize-seed flag, etc.) so
-        # the rebuilt state matches the original.
-        engine_event = EngineEvent(
-            id=event_row.id,
-            type_tags=[],
-            format_plugin_name=event_row.format,
-            parameters=dict(event_row.config or {}),
-        )
-        state.events[event_row.id] = engine_event
-
-        # Matches → PlayUnits + Draw slots + rounds.
         match_rows = matches_by_event.get(event_row.id, [])
-        slots: Dict[str, Tuple[BracketSlot, BracketSlot]] = {}
-        round_buckets: Dict[int, List[Tuple[int, str]]] = defaultdict(list)
-        event_play_units: Dict[str, PlayUnit] = {}
-        for m in match_rows:
-            pu = PlayUnit(
-                id=m.id,
-                event_id=event_row.id,
-                side_a=list(m.side_a) if m.side_a else None,
-                side_b=list(m.side_b) if m.side_b else None,
-                expected_duration_slots=m.expected_duration_slots,
-                duration_variance_slots=m.duration_variance_slots,
-                dependencies=list(m.dependencies or []),
-                metadata=dict(m.meta or {}),
-                kind=_parse_play_unit_kind(m.kind),
-                child_unit_ids=list(m.child_unit_ids or []),
-            )
-            state.play_units[m.id] = pu
-            event_play_units[m.id] = pu
-            match_versions[m.id] = m.version
-            slots[m.id] = (
-                _dict_to_slot(m.slot_a),
-                _dict_to_slot(m.slot_b),
-            )
-            round_buckets[m.round_index].append((m.match_index, m.id))
-
-        rounds = [
-            [pu_id for _, pu_id in sorted(round_buckets[r])]
-            for r in sorted(round_buckets.keys())
-        ]
-
-        draws[event_row.id] = Draw(
-            event=engine_event,
-            participants=event_participants,
-            play_units=event_play_units,
-            slots=slots,
-            rounds=rounds,
-            segments=_segments_from_match_meta(event_row.format, match_rows),
+        draws[event_row.id] = _hydrate_draw(
+            event_row,
+            participant_rows,
+            match_rows,
+            state,
+            match_versions,
         )
-
-        events_meta[event_row.id] = EventMeta(
-            id=event_row.id,
-            discipline=event_row.discipline,
-            format=event_row.format,
-            duration_slots=event_row.duration_slots,
-            bracket_size=event_row.bracket_size,
-            participant_count=len(participant_rows),
-            status=event_row.status or "draft",
-            seeded_count=event_row.seeded_count,
-            rr_rounds=event_row.rr_rounds,
-            config=dict(event_row.config or {}),
+        events_meta[event_row.id] = _event_meta_from_row(
+            event_row, len(participant_rows)
         )
-
-        # Results.
-        result_rows = results_by_event.get(event_row.id, [])
-        for r in result_rows:
-            state.results[r.bracket_match_id] = Result(
-                winner_side=WinnerSide(r.winner_side),
-                score=r.score,
-                finished_at_slot=r.finished_at_slot,
-                walkover=r.walkover,
-                reason=r.reason,
-            )
+        _hydrate_results(results_by_event.get(event_row.id, []), state)
 
     # Assignments live in tournaments.data["bracket_session"]["assignments"]
     # rather than a normalised ``bracket_assignments`` table. Nothing
     # queries inside them, so the blob is enough; promote them only if
     # something needs to filter or order on individual assignments.
-    for a in session_cfg.get("assignments") or []:
-        if not isinstance(a, dict) or "play_unit_id" not in a:
-            continue
-        state.assignments[a["play_unit_id"]] = TournamentAssignment(
-            play_unit_id=a["play_unit_id"],
-            slot_id=int(a.get("slot_id", 0)),
-            court_id=int(a.get("court_id", 0)),
-            duration_slots=int(a.get("duration_slots", 1)),
-            actual_start_slot=a.get("actual_start_slot"),
-            actual_end_slot=a.get("actual_end_slot"),
-        )
+    _hydrate_assignments(session_cfg, state)
 
     # SP-G1 Seam C: applied_command_ids is stored as a sorted list in the
     # JSON blob (Python sets are not JSON-serialisable) and hydrated back
@@ -1103,6 +1121,127 @@ def _participant_persist_fields(metadata: Optional[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _participant_out(participant: Participant) -> ParticipantOut:
+    metadata = participant.metadata
+    return ParticipantOut(
+        id=participant.id,
+        name=participant.name,
+        members=(
+            list(participant.member_ids)
+            if participant.type == ParticipantType.TEAM and participant.member_ids
+            else None
+        ),
+        seed=metadata.get("seed"),
+        entryPlayerId=(
+            metadata.get("entryPlayerId") if isinstance(metadata, dict) else None
+        ),
+        sourceEntryId=(
+            metadata.get("sourceEntryId") if isinstance(metadata, dict) else None
+        ),
+    )
+
+
+def _slot_out(slot: BracketSlot) -> BracketSlotOut:
+    return BracketSlotOut(
+        participant_id=slot.participant_id,
+        feeder_play_unit_id=slot.feeder_play_unit_id,
+        feeder_take=(
+            "loser"
+            if slot.feeder_play_unit_id is not None
+            and slot.feeder_take == "loser"
+            else None
+        ),
+    )
+
+
+def _play_unit_out(
+    session: BracketSession,
+    draw: Draw,
+    play_unit_id: str,
+    round_index: int,
+    match_index: int,
+) -> PlayUnitOut:
+    play_unit = session.state.play_units[play_unit_id]
+    slot_a, slot_b = draw.slots[play_unit_id]
+    return PlayUnitOut(
+        id=play_unit.id,
+        event_id=play_unit.event_id,
+        round_index=round_index,
+        match_index=match_index,
+        side_a=list(play_unit.side_a) if play_unit.side_a else None,
+        side_b=list(play_unit.side_b) if play_unit.side_b else None,
+        duration_slots=play_unit.expected_duration_slots or 1,
+        dependencies=list(play_unit.dependencies),
+        slot_a=_slot_out(slot_a),
+        slot_b=_slot_out(slot_b),
+        version=session.match_versions.get(play_unit_id, 1),
+        segment=(play_unit.metadata.get("segment") if play_unit.metadata else None),
+    )
+
+
+def _draw_play_units_out(
+    session: BracketSession, draw: Draw
+) -> List[PlayUnitOut]:
+    output: List[PlayUnitOut] = []
+    for round_index, round_play_unit_ids in enumerate(draw.rounds):
+        for match_index, play_unit_id in enumerate(round_play_unit_ids):
+            output.append(
+                _play_unit_out(
+                    session,
+                    draw,
+                    play_unit_id,
+                    round_index,
+                    match_index,
+                )
+            )
+    return output
+
+
+def _segments_out(draw: Draw) -> Optional[List[SegmentOut]]:
+    if not draw.segments:
+        return None
+    return [
+        SegmentOut(
+            id=segment.id,
+            label=segment.label,
+            order=segment.order,
+            rounds=[list(round_ids) for round_ids in segment.rounds],
+            positions=segment_positions(segment.id, segment.metadata),
+        )
+        for segment in draw.segments
+    ]
+
+
+def _event_out(session: BracketSession, event_id: str, draw: Draw) -> EventOut:
+    meta = session.events.get(event_id)
+    spec = get_format(meta.format) if meta else None
+    standings: Optional[List[StandingRow]] = None
+    if spec is not None and spec.has_standings:
+        standings = compute_standings(
+            draw.play_units,
+            session.state.results,
+            list(draw.participants),
+        )
+    return EventOut(
+        id=event_id,
+        discipline=meta.discipline if meta else event_id,
+        format=meta.format if meta else "se",
+        bracket_size=meta.bracket_size if meta else None,
+        participant_count=meta.participant_count if meta else 0,
+        rounds=list(draw.rounds),
+        segments=_segments_out(draw),
+        standings=standings,
+        status=meta.status if meta else None,
+        seeded_count=meta.seeded_count if meta else None,
+        rr_rounds=meta.rr_rounds if meta else None,
+        config=dict(meta.config) if meta else {},
+        participants=[
+            _participant_out(participant)
+            for participant in draw.participants.values()
+        ],
+    )
+
+
 def _serialize_session(session: BracketSession) -> TournamentOut:
     state = session.state
     started_ids = _started_play_unit_ids(state)
@@ -1112,106 +1251,8 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
     events_out: List[EventOut] = []
 
     for event_id, draw in session.draws.items():
-        meta = session.events.get(event_id)
-        for round_index, round_pu_ids in enumerate(draw.rounds):
-            for match_index, pu_id in enumerate(round_pu_ids):
-                pu = state.play_units[pu_id]
-                slot_a, slot_b = draw.slots[pu_id]
-                play_units_out.append(
-                    PlayUnitOut(
-                        id=pu.id,
-                        event_id=pu.event_id,
-                        round_index=round_index,
-                        match_index=match_index,
-                        side_a=list(pu.side_a) if pu.side_a else None,
-                        side_b=list(pu.side_b) if pu.side_b else None,
-                        duration_slots=pu.expected_duration_slots or 1,
-                        dependencies=list(pu.dependencies),
-                        slot_a=BracketSlotOut(
-                            participant_id=slot_a.participant_id,
-                            feeder_play_unit_id=slot_a.feeder_play_unit_id,
-                            feeder_take=(
-                                "loser"
-                                if slot_a.feeder_play_unit_id is not None
-                                and slot_a.feeder_take == "loser"
-                                else None
-                            ),
-                        ),
-                        slot_b=BracketSlotOut(
-                            participant_id=slot_b.participant_id,
-                            feeder_play_unit_id=slot_b.feeder_play_unit_id,
-                            feeder_take=(
-                                "loser"
-                                if slot_b.feeder_play_unit_id is not None
-                                and slot_b.feeder_take == "loser"
-                                else None
-                            ),
-                        ),
-                        version=session.match_versions.get(pu_id, 1),
-                        segment=(
-                            pu.metadata.get("segment") if pu.metadata else None
-                        ),
-                    )
-                )
-        # Standings ride the poll for has_standings formats (rr, swiss).
-        # compute_standings is one pass over the results + a sort, so the
-        # per-request cost stays negligible.
-        spec = get_format(meta.format) if meta else None
-        standings_out: Optional[List[StandingRow]] = None
-        if spec is not None and spec.has_standings:
-            standings_out = compute_standings(
-                draw.play_units, state.results, list(draw.participants)
-            )
-        events_out.append(
-            EventOut(
-                id=event_id,
-                discipline=meta.discipline if meta else event_id,
-                format=meta.format if meta else "se",
-                bracket_size=meta.bracket_size if meta else None,
-                participant_count=meta.participant_count if meta else 0,
-                rounds=list(draw.rounds),
-                segments=(
-                    [
-                        SegmentOut(
-                            id=seg.id,
-                            label=seg.label,
-                            order=seg.order,
-                            rounds=[list(r) for r in seg.rounds],
-                            positions=segment_positions(seg.id, seg.metadata),
-                        )
-                        for seg in draw.segments
-                    ]
-                    if draw.segments
-                    else None
-                ),
-                standings=standings_out,
-                status=meta.status if meta else None,
-                seeded_count=meta.seeded_count if meta else None,
-                rr_rounds=meta.rr_rounds if meta else None,
-                config=dict(meta.config) if meta else {},
-                participants=[
-                    ParticipantOut(
-                        id=p.id,
-                        name=p.name,
-                        members=list(p.member_ids)
-                        if p.type == ParticipantType.TEAM and p.member_ids
-                        else None,
-                        seed=p.metadata.get("seed"),
-                        entryPlayerId=(
-                            p.metadata.get("entryPlayerId")
-                            if isinstance(p.metadata, dict)
-                            else None
-                        ),
-                        sourceEntryId=(
-                            p.metadata.get("sourceEntryId")
-                            if isinstance(p.metadata, dict)
-                            else None
-                        ),
-                    )
-                    for p in draw.participants.values()
-                ],
-            )
-        )
+        play_units_out.extend(_draw_play_units_out(session, draw))
+        events_out.append(_event_out(session, event_id, draw))
 
     assignments_out = [
         AssignmentOut(
@@ -1240,25 +1281,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
     ]
 
     participants_out = [
-        ParticipantOut(
-            id=p.id,
-            name=p.name,
-            members=list(p.member_ids)
-            if p.type == ParticipantType.TEAM and p.member_ids
-            else None,
-            seed=p.metadata.get("seed"),
-            entryPlayerId=(
-                p.metadata.get("entryPlayerId")
-                if isinstance(p.metadata, dict)
-                else None
-            ),
-            sourceEntryId=(
-                p.metadata.get("sourceEntryId")
-                if isinstance(p.metadata, dict)
-                else None
-            ),
-        )
-        for p in state.participants.values()
+        _participant_out(participant) for participant in state.participants.values()
     ]
 
     return TournamentOut(

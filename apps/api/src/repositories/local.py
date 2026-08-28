@@ -2115,56 +2115,137 @@ class LocalRepository:
         conditional ``UPDATE ... WHERE version = :seen``; flagged for
         Step H follow-up if the deployment topology ever widens.
         """
-        from operations.match_state import assert_valid_transition
-
         ce_cls = _conflict_error_class()
 
-        # Step 1 & 2 — idempotency / duplicate rejection check.
         existing = self.session.get(Command, command_id)
-        if existing is not None:
-            if existing.applied_at is not None:
-                # Step 1: replay of an already-applied command.
-                match = self.session.get(Match, (tournament_id, match_id))
-                if match is None:
-                    # Match row deleted between original apply and
-                    # replay — unusual but possible after schedule
-                    # regeneration. Surface a normal 409 conflict; the
-                    # operator can re-sync.
-                    raise ce_cls(
-                        match_id=match_id,
-                        message=(
-                            f"Match {match_id} no longer exists; "
-                            "the schedule may have been regenerated."
-                        ),
-                    )
-                return ProcessedCommand(
-                    match=match, command=existing, is_replay=True
-                )
-            if existing.rejected_at is not None:
-                # Step 2: replay of a previously-rejected command.
-                raise ce_cls(
+        replay = self._replay_existing_command(
+            existing,
+            tournament_id=tournament_id,
+            match_id=match_id,
+            conflict_error=ce_cls,
+        )
+        if replay is not None:
+            return replay
+        command_row = existing
+
+        match = self.session.get(Match, (tournament_id, match_id))
+        error = self._validate_command_match(
+            match,
+            command_row,
+            command_id=command_id,
+            tournament_id=tournament_id,
+            match_id=match_id,
+            action=action,
+            payload=payload,
+            submitted_by=submitted_by,
+            seen_version=seen_version,
+            conflict_error=ce_cls,
+        )
+        if error is not None:
+            self.session.commit()
+            raise error
+
+        error = self._validate_assign_court(
+            match,
+            command_row,
+            command_id=command_id,
+            tournament_id=tournament_id,
+            match_id=match_id,
+            action=action,
+            payload=payload,
+            submitted_by=submitted_by,
+            conflict_error=ce_cls,
+        )
+        if error is not None:
+            self.session.commit()
+            raise error
+
+        error = self._validate_command_transition(
+            match,
+            command_row,
+            command_id=command_id,
+            tournament_id=tournament_id,
+            match_id=match_id,
+            action=action,
+            payload=payload,
+            submitted_by=submitted_by,
+            target_status=target_status,
+            conflict_error=ce_cls,
+        )
+        if error is not None:
+            self.session.commit()
+            raise error
+
+        self._apply_command_mutation(match, action, payload, target_status)
+        self._mirror_command_state(tournament_id, match_id, target_status)
+        command_row = self._finalize_applied_command(
+            command_row,
+            command_id=command_id,
+            tournament_id=tournament_id,
+            match_id=match_id,
+            action=action,
+            payload=payload,
+            submitted_by=submitted_by,
+        )
+
+        self.session.commit()
+        self.session.refresh(match)
+        self.session.refresh(command_row)
+        return ProcessedCommand(
+            match=match, command=command_row, is_replay=False
+        )
+
+    def _replay_existing_command(
+        self,
+        existing: Optional[Command],
+        *,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        conflict_error,
+    ) -> Optional[ProcessedCommand]:
+        """Return an applied replay or raise for a rejected command."""
+        if existing is None:
+            return None
+        if existing.applied_at is not None:
+            match = self.session.get(Match, (tournament_id, match_id))
+            if match is None:
+                raise conflict_error(
                     match_id=match_id,
                     message=(
-                        existing.rejection_reason
-                        or "Command was previously rejected."
+                        f"Match {match_id} no longer exists; "
+                        "the schedule may have been regenerated."
                     ),
                 )
-            # Row exists with neither applied_at nor rejected_at — the
-            # processor crashed mid-flight on a prior call. Treat as a
-            # transient retry-friendly state and fall through to
-            # re-evaluate; the writes below will fail-loud on the PK
-            # collision if we try to insert another row, so we update
-            # the existing one in place via the apply / reject branches.
-            command_row = existing
-        else:
-            command_row = None
+            return ProcessedCommand(
+                match=match, command=existing, is_replay=True
+            )
+        if existing.rejected_at is not None:
+            raise conflict_error(
+                match_id=match_id,
+                message=(
+                    existing.rejection_reason
+                    or "Command was previously rejected."
+                ),
+            )
+        # A row with neither timestamp represents a retry after a crash.
+        return None
 
-        # Step 3 — version check.
-        match = self.session.get(Match, (tournament_id, match_id))
+    def _validate_command_match(
+        self,
+        match: Optional[Match],
+        command_row: Optional[Command],
+        *,
+        command_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        action: str,
+        payload: Optional[dict],
+        submitted_by: uuid.UUID,
+        seen_version: int,
+        conflict_error,
+    ):
+        """Stamp and return a version/missing-match rejection, if any."""
         if match is None:
-            # No match row to act against — reject the command. The
-            # PK collision case above doesn't apply because we already
-            # checked existing; this is a fresh insert.
             self._stamp_rejection(
                 command_row,
                 command_id=command_id,
@@ -2175,12 +2256,10 @@ class LocalRepository:
                 submitted_by=submitted_by,
                 reason="match_not_found",
             )
-            self.session.commit()
-            raise ce_cls(
+            return conflict_error(
                 match_id=match_id,
                 message=f"Match {match_id} not found in tournament {tournament_id}.",
             )
-
         if match.version != seen_version:
             self._stamp_rejection(
                 command_row,
@@ -2192,8 +2271,7 @@ class LocalRepository:
                 submitted_by=submitted_by,
                 reason="stale_version",
             )
-            self.session.commit()
-            raise ce_cls(
+            return conflict_error(
                 match_id=match_id,
                 current_version=match.version,
                 seen_version=seen_version,
@@ -2202,113 +2280,125 @@ class LocalRepository:
                     "Reload and retry."
                 ),
             )
+        return None
 
-        # Precondition guards for assign_court (checked before the transition
-        # guard and mutation below so rejection short-circuits cleanly).
-        #
-        # Guard 1: assign_court is only valid on a currently-scheduled match.
-        # Without this, CALLED→SCHEDULED is a valid 'uncall' edge so
-        # assert_valid_transition would let it through and silently demote
-        # the match while setting court+slot — an unintended implicit uncall.
-        #
-        # Guard 2: both court_id and time_slot must be supplied in the payload.
-        # Without this, a caller omitting one key silently retains the old
-        # value (partial assign). The frontend always sends both; this guard
-        # hardens the API contract.
-        if action == "assign_court":
-            if match.status != MatchStatus.SCHEDULED.value:
-                reason = "assign_court is only valid on scheduled matches"
-                self._stamp_rejection(
-                    command_row,
-                    command_id=command_id,
-                    tournament_id=tournament_id,
-                    match_id=match_id,
-                    action=action,
-                    payload=payload,
-                    submitted_by=submitted_by,
-                    reason=reason,
-                )
-                self.session.commit()
-                raise ce_cls(
-                    match_id=match_id,
-                    current_status=match.status,
-                    attempted_status=MatchStatus.SCHEDULED.value,
-                    message=reason,
-                )
-            _p = payload or {}
-            if "court_id" not in _p or "time_slot" not in _p:
-                reason = "assign_court requires both court_id and time_slot in payload"
-                self._stamp_rejection(
-                    command_row,
-                    command_id=command_id,
-                    tournament_id=tournament_id,
-                    match_id=match_id,
-                    action=action,
-                    payload=payload,
-                    submitted_by=submitted_by,
-                    reason=reason,
-                )
-                self.session.commit()
-                raise ce_cls(match_id=match_id, message=reason)
+    def _validate_assign_court(
+        self,
+        match: Match,
+        command_row: Optional[Command],
+        *,
+        command_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        action: str,
+        payload: Optional[dict],
+        submitted_by: uuid.UUID,
+        conflict_error,
+    ):
+        """Stamp and return an assign-court precondition rejection, if any."""
+        if action != "assign_court":
+            return None
+        if match.status != MatchStatus.SCHEDULED.value:
+            reason = "assign_court is only valid on scheduled matches"
+            self._stamp_rejection(
+                command_row,
+                command_id=command_id,
+                tournament_id=tournament_id,
+                match_id=match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+                reason=reason,
+            )
+            return conflict_error(
+                match_id=match_id,
+                current_status=match.status,
+                attempted_status=MatchStatus.SCHEDULED.value,
+                message=reason,
+            )
+        command_payload = payload or {}
+        if "court_id" not in command_payload or "time_slot" not in command_payload:
+            reason = "assign_court requires both court_id and time_slot in payload"
+            self._stamp_rejection(
+                command_row,
+                command_id=command_id,
+                tournament_id=tournament_id,
+                match_id=match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+                reason=reason,
+            )
+            return conflict_error(match_id=match_id, message=reason)
+        return None
 
-        # Step 4 — transition guard. Raises ConflictError on illegal
-        # transitions; we catch, stamp the rejection, commit, re-raise.
-        #
-        # ASSIGN_COURT and POSTPONE_MATCH both target SCHEDULED; when the
-        # match is already SCHEDULED this is a SCHEDULED→SCHEDULED
-        # self-transition that ``assert_valid_transition`` rejects (same-state
-        # moves are not in VALID_TRANSITIONS by design — see the docstring in
-        # operations/match_state.py).  We short-circuit for exactly these two
-        # actions so they can act as pure side-effect commands without
-        # changing the status machine's strictness for the other five actions.
-        # postpone from playing/called still reaches assert_valid_transition
-        # because target != current; PLAYING→SCHEDULED is a valid edge.
-        _SELF_NOOP_ACTIONS = {"assign_court", "postpone_match"}
-        current_status_enum = MatchStatus(match.status) if isinstance(match.status, str) else match.status
-        if not (action in _SELF_NOOP_ACTIONS and current_status_enum == target_status):
-            try:
-                assert_valid_transition(match_id, match.status, target_status)
-            except ce_cls as exc:
-                self._stamp_rejection(
-                    command_row,
-                    command_id=command_id,
-                    tournament_id=tournament_id,
-                    match_id=match_id,
-                    action=action,
-                    payload=payload,
-                    submitted_by=submitted_by,
-                    reason=exc.message,
-                )
-                self.session.commit()
-                raise
+    def _validate_command_transition(
+        self,
+        match: Match,
+        command_row: Optional[Command],
+        *,
+        command_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        action: str,
+        payload: Optional[dict],
+        submitted_by: uuid.UUID,
+        target_status: MatchStatus,
+        conflict_error,
+    ):
+        """Stamp and return an illegal-transition rejection, if any."""
+        from operations.match_state import assert_valid_transition
 
-        # Step 5 — apply. Update match status + version; insert/finalise
-        # the applied command row; commit once.
+        self_transition_actions = {"assign_court", "postpone_match"}
+        current_status = (
+            MatchStatus(match.status)
+            if isinstance(match.status, str)
+            else match.status
+        )
+        if action in self_transition_actions and current_status == target_status:
+            return None
+        try:
+            assert_valid_transition(match_id, match.status, target_status)
+        except conflict_error as exc:
+            self._stamp_rejection(
+                command_row,
+                command_id=command_id,
+                tournament_id=tournament_id,
+                match_id=match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+                reason=exc.message,
+            )
+            return exc
+        return None
+
+    @staticmethod
+    def _apply_command_mutation(
+        match: Match,
+        action: str,
+        payload: Optional[dict],
+        target_status: MatchStatus,
+    ) -> None:
+        """Apply canonical match status and command side effects."""
         match.status = target_status.value
-
-        # Court/slot side-effects for non-solver live-ops commands.
-        # Applied BEFORE flush so the sync service serialises the new values.
         if action == "assign_court":
-            _p = payload or {}
-            # Both keys are guaranteed present by the precondition guard above.
-            match.court_id = _p["court_id"]
-            match.time_slot = _p["time_slot"]
+            command_payload = payload or {}
+            match.court_id = command_payload["court_id"]
+            match.time_slot = command_payload["time_slot"]
         elif action == "postpone_match":
             match.court_id = None
             match.time_slot = None
-
         match.version = match.version + 1
 
-        # Mirror the transition into the legacy ``match_states`` row — the
-        # live Run surface polls GET /match-states, and the PUT/DELETE
-        # routes there dual-write in the other direction. Without this
-        # write a command-applied call/start is invisible after reload:
-        # the board re-reads ``scheduled`` while the transition guard
-        # holds the canonical status, so the retried command 409s
-        # forever. Same transaction, same single commit below.
-        # ``retired`` has no legacy spelling; the floor reads it as
-        # ``finished`` (the match is over either way).
-        _canonical_to_legacy = {
+    def _mirror_command_state(
+        self,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        target_status: MatchStatus,
+    ) -> None:
+        """Mirror an applied command into the legacy match-state row."""
+        canonical_to_legacy = {
             MatchStatus.SCHEDULED: "scheduled",
             MatchStatus.CALLED: "called",
             MatchStatus.PLAYING: "started",
@@ -2319,21 +2409,31 @@ class LocalRepository:
         if state_row is None:
             state_row = MatchState(tournament_id=tournament_id, match_id=match_id)
             self.session.add(state_row)
-        state_row.status = _canonical_to_legacy[target_status]
-        _stamp = now_iso()
+        state_row.status = canonical_to_legacy[target_status]
+        stamp = now_iso()
         if target_status == MatchStatus.CALLED:
-            state_row.called_at = _stamp
+            state_row.called_at = stamp
         elif target_status == MatchStatus.PLAYING:
-            state_row.actual_start_time = state_row.actual_start_time or _stamp
+            state_row.actual_start_time = state_row.actual_start_time or stamp
         elif target_status in (MatchStatus.FINISHED, MatchStatus.RETIRED):
-            state_row.actual_end_time = state_row.actual_end_time or _stamp
+            state_row.actual_end_time = state_row.actual_end_time or stamp
         else:
-            # uncall / postpone / assign land back on ``scheduled`` —
-            # clear live timing so the match re-enters the queue clean.
             state_row.called_at = None
             state_row.actual_start_time = None
             state_row.actual_end_time = None
 
+    def _finalize_applied_command(
+        self,
+        command_row: Optional[Command],
+        *,
+        command_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        action: str,
+        payload: Optional[dict],
+        submitted_by: uuid.UUID,
+    ) -> Command:
+        """Create or re-stamp the command row before the caller commits."""
         if command_row is None:
             command_row = Command(
                 id=command_id,
@@ -2345,20 +2445,13 @@ class LocalRepository:
             )
             self.session.add(command_row)
         else:
-            # Pre-existing row from a crashed prior call — re-stamp.
             command_row.action = action
             command_row.payload = payload
             command_row.submitted_by = submitted_by
         command_row.applied_at = datetime.now(timezone.utc)
         command_row.rejected_at = None
         command_row.rejection_reason = None
-
-        self.session.commit()
-        self.session.refresh(match)
-        self.session.refresh(command_row)
-        return ProcessedCommand(
-            match=match, command=command_row, is_replay=False
-        )
+        return command_row
 
     def _stamp_rejection(
         self,
