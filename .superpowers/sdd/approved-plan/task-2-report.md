@@ -72,9 +72,35 @@ as a reason to weaken the tier or its tests.
   navigation response per page.
 - CI coverage and production behavior were not changed.
 
+## Review fixes
+
+The contract suite was strengthened after review:
+
+- `check-full` and `check-fast` are parsed into isolated recipe command arrays;
+  required commands are matched as exact normalized lines, so `pytest` cannot
+  satisfy a `pytest tests/backend/unit ...` requirement by substring.
+- Entrant unit/SSR scripts now assert their exact config filenames. The SSR
+  list is compared dynamically with every entrant test containing an actual
+  `createServer({ ... })` call, and the discovered unit complement is checked
+  as a complete disjoint partition. The contract currently verifies 19 SSR and
+  18 unit files.
+- Each e2e target is required to have a nonempty recipe and a Playwright test
+  command before the no-`npm install` assertion runs.
+
+For mutation/red evidence, `npm --prefix apps/entrant run test:run --
+tests/launch-scripts.test.ts` was run after temporarily removing the
+`npm run depcruise` line from `check-full`. It failed with 2 tests failing: the
+isolated full-recipe assertion reported the missing line, and the dynamic SSR
+oracle initially caught the contract test's own literal matcher. The recipe
+line was restored and the matcher narrowed to actual `createServer({ ... })`
+calls. The focused suite then passed `8/8` in `0.54s`; entrant lint passed in
+`1.83s` and entrant typecheck passed in `2.61s`.
+
 ## Commit
 
-Implementation commit SHA: `91352364`
+Initial implementation commit SHA: `91352364`
+
+Review-fix commit SHA: `28b58b00`
 
 The report is committed separately as a Task 2 documentation commit so this
-report can record the implementation SHA without a self-referential hash.
+report can record the implementation SHAs without a self-referential hash.
