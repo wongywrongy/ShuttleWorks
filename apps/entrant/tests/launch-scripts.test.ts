@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
+import { SSR_TEST_FILES } from '../vitest.test-files';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 
@@ -10,6 +11,33 @@ function rootScripts(): Record<string, string> {
 
 function entrantScripts(): Record<string, string> {
   return JSON.parse(readFileSync(join(REPO_ROOT, 'apps/entrant/package.json'), 'utf8')).scripts;
+}
+
+function recipeCommands(makefile: string, target: string): string[] {
+  const lines = makefile.split('\n');
+  const start = lines.findIndex((line) => new RegExp(`^${target}:`).test(line));
+  if (start < 0) return [];
+
+  const commands: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith('\t')) {
+      commands.push(line.slice(1).replace(/^[@-]+/, ''));
+    } else if (line.trim() === '' || line.startsWith('#')) {
+      continue;
+    } else {
+      break;
+    }
+  }
+  return commands;
+}
+
+function entrantTestsContainingCreateServer(): string[] {
+  const testDir = join(REPO_ROOT, 'apps/entrant/tests');
+  return readdirSync(testDir)
+    .filter((name) => name.endsWith('.test.ts'))
+    .filter((name) => /\bcreateServer\s*\(\s*\{/.test(readFileSync(join(testDir, name), 'utf8')))
+    .map((name) => `tests/${name}`)
+    .sort();
 }
 
 test('each surface has a launch script named after it', () => {
@@ -48,19 +76,35 @@ test('exposes explicit entrant test tiers while retaining the complete suite', (
 
   expect(root['test:entrant:unit']).toBe('npm --prefix apps/entrant run test:unit');
   expect(root['test:entrant:ssr']).toBe('npm --prefix apps/entrant run test:ssr');
-  expect(entrant['test:unit']).toContain('vitest run');
-  expect(entrant['test:unit']).toContain('--config');
-  expect(entrant['test:ssr']).toContain('vitest run');
-  expect(entrant['test:ssr']).toContain('--config');
+  expect(entrant['test:unit']).toBe('vitest run --config vitest.unit.config.ts');
+  expect(entrant['test:ssr']).toBe('vitest run --config vitest.ssr.config.ts');
   expect(entrant['test:run']).toBe('vitest run');
+});
+
+test('keeps the entrant SSR list tied to every createServer test and partitions all tests', () => {
+  const all = readdirSync(join(REPO_ROOT, 'apps/entrant/tests'))
+    .filter((name) => name.endsWith('.test.ts'))
+    .map((name) => `tests/${name}`)
+    .sort();
+  const ssr: string[] = [...SSR_TEST_FILES].sort();
+  const discoveredSsr = entrantTestsContainingCreateServer();
+  const unit = all.filter((name) => !ssr.includes(name));
+
+  expect(ssr).toEqual(discoveredSsr);
+  expect(ssr).toHaveLength(19);
+  expect(new Set([...unit, ...ssr])).toEqual(new Set(all));
+  expect(unit).not.toEqual([]);
+  expect(new Set(unit).size + new Set(ssr).size).toBe(all.length);
 });
 
 test('keeps check full and defines the narrower fast developer gate', () => {
   const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
 
   expect(makefile).toMatch(/^check: check-full$/m);
-  expect(makefile).toContain('check-full:');
-  expect(makefile).toContain('check-fast:');
+  const full = recipeCommands(makefile, 'check-full');
+  const fast = recipeCommands(makefile, 'check-fast');
+  expect(full.length).toBeGreaterThan(0);
+  expect(fast.length).toBeGreaterThan(0);
 
   for (const command of [
     'npm run lint:scheduler',
@@ -74,21 +118,42 @@ test('keeps check full and defines the narrower fast developer gate', () => {
     'ruff check $(PY_SOURCES)',
     'cd apps/api/src && lint-imports --config ../.importlinter',
     'pytest',
+    'npm run docs:freshness',
   ]) {
-    expect(makefile).toContain(command);
+    expect(full).toContain(command);
   }
 
-  expect(makefile).toContain('npm run test:entrant:unit');
-  expect(makefile).toContain("pytest tests/backend/unit -m 'not slow'");
-  expect(makefile).toContain('npm run docs:freshness');
+  for (const command of [
+    'npm run lint:scheduler',
+    'cd apps/console && npx tsc -b',
+    'npm --prefix apps/console run test:run',
+    'npm run depcruise',
+    'npm run lint:entrant',
+    'npm run typecheck:entrant',
+    'npm run test:entrant:unit',
+    'npm run depcruise:entrant',
+    'ruff check $(PY_SOURCES)',
+    'cd apps/api/src && lint-imports --config ../.importlinter',
+    "pytest tests/backend/unit -m 'not slow'",
+    'npm run docs:freshness',
+  ]) {
+    expect(fast).toContain(command);
+  }
+  expect(fast).not.toContain('npm run test:entrant');
+  expect(fast).not.toContain('pytest');
 });
 
 test('installs e2e dependencies only through the explicit bootstrap target', () => {
   const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
 
-  expect(recipe(makefile, 'test-e2e-install')).toContain('npm install');
+  const install = recipeCommands(makefile, 'test-e2e-install');
+  expect(install.length).toBeGreaterThan(0);
+  expect(install).toContain('cd tests/e2e && npm install && npx playwright install --with-deps chromium');
   for (const target of ['test-e2e', 'test-e2e-rebuild', 'test-e2e-dev']) {
-    expect(recipe(makefile, target)).not.toContain('npm install');
+    const recipe = recipeCommands(makefile, target);
+    expect(recipe.length).toBeGreaterThan(0);
+    expect(recipe.some((line) => line.includes('npx playwright test'))).toBe(true);
+    expect(recipe).not.toContain('npm install');
   }
 });
 
