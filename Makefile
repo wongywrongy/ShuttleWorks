@@ -3,7 +3,7 @@
         entrant-dev local-dev \
         dev-postgres dev-postgres-stop \
         stop logs ps clean \
-        test test-e2e test-e2e-install test-e2e-rebuild test-e2e-dev check \
+        test test-e2e test-e2e-install test-e2e-rebuild test-e2e-dev check check-full check-fast \
         sim sim-ephemeral sim-all sim-test \
         generate-api engine-readme
 
@@ -47,7 +47,9 @@ help:
 	@echo "  make test               Run the backend pytest suite"
 	@echo "  make test-e2e           Run Playwright e2e (boots stack)"
 	@echo "  make test-e2e-dev       Run e2e against http://localhost:5173 (requires 'make scheduler-dev')"
-	@echo "  make check              Run all local checks, both tiers (lint, types, vitest, depcruise, ruff, import-linter, pytest)"
+	@echo "  make check              Run the complete local check gate"
+	@echo "  make check-full         Alias for the complete local check gate"
+	@echo "  make check-fast         Run the fast local feedback checks"
 	@echo ""
 	@echo "Tournament simulator (internal dev tool, not in CI):"
 	@echo "  make sim                Run a scenario vs a running API (SCENARIO=, SEED=, SIM_URL=)"
@@ -165,13 +167,13 @@ test-e2e-install:
 	cd tests/e2e && npm install && npx playwright install --with-deps chromium
 
 test-e2e:
-	cd tests/e2e && npm install --silent && npx playwright test
+	cd tests/e2e && npx playwright test
 
 test-e2e-rebuild:
-	cd tests/e2e && npm install --silent && E2E_REBUILD=1 npx playwright test
+	cd tests/e2e && E2E_REBUILD=1 npx playwright test
 
 test-e2e-dev:
-	cd tests/e2e && npm install --silent && E2E_BASE_URL=http://localhost:5173 E2E_MANAGE_STACK=0 npx playwright test
+	cd tests/e2e && E2E_BASE_URL=http://localhost:5173 E2E_MANAGE_STACK=0 npx playwright test
 
 # === Tournament simulator (internal dev tool) ===
 # Full-tournament workflow simulation over the real HTTP API. NOT part of
@@ -235,7 +237,9 @@ engine-readme:
 
 # === Local CI checks ===
 
-check:
+check: check-full
+
+check-full:
 	npm run lint:scheduler
 # The TYPE gate, and the reason it is spelled out here rather than left to
 # `npm run build`. Until 2026-08-10 `make check` ran lint, vitest, depcruise,
@@ -283,6 +287,25 @@ check:
 # suite.
 	cd apps/api/src && lint-imports --config ../.importlinter
 	pytest
+	@echo ""
+	@echo "--- docs freshness (advisory — never fails the gate) ---"
+	-npm run docs:freshness
+
+# Fast local feedback keeps the complete gate's command coverage visible while
+# replacing the entrant SSR tier and full backend suite with their iteration
+# sized counterparts.
+check-fast:
+	npm run lint:scheduler
+	cd apps/console && npx tsc -b
+	npm --prefix apps/console run test:run
+	npm run depcruise
+	npm run lint:entrant
+	npm run typecheck:entrant
+	npm run test:entrant:unit
+	npm run depcruise:entrant
+	ruff check $(PY_SOURCES)
+	cd apps/api/src && lint-imports --config ../.importlinter
+	pytest tests/backend/unit -m 'not slow'
 	@echo ""
 	@echo "--- docs freshness (advisory — never fails the gate) ---"
 	-npm run docs:freshness

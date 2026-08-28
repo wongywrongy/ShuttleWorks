@@ -45,6 +45,8 @@ The two surfaces read **different** variables, and swapping them fails silently:
 ## Tests
 
 ```bash
-npm --prefix apps/entrant run test:run     # vitest
+npm --prefix apps/entrant run test:unit    # pure/unit tests (fast feedback)
+npm --prefix apps/entrant run test:ssr     # request-level SSR tests
+npm --prefix apps/entrant run test:run     # every entrant test
 npm --prefix apps/entrant run typecheck     # react-router typegen + tsc
 ```

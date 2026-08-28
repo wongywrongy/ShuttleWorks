@@ -8,6 +8,10 @@ function rootScripts(): Record<string, string> {
   return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).scripts;
 }
 
+function entrantScripts(): Record<string, string> {
+  return JSON.parse(readFileSync(join(REPO_ROOT, 'apps/entrant/package.json'), 'utf8')).scripts;
+}
+
 test('each surface has a launch script named after it', () => {
   const scripts = rootScripts();
   // The operator product and the public entrant site are launched by name.
@@ -36,6 +40,56 @@ test('the Makefile targets invoke the scripts that actually exist', () => {
   const invoked = [...recipes.matchAll(/npm run ([a-z:.-]+)/g)].map((m) => m[1]);
   const missing = invoked.filter((name) => !(name in scripts));
   expect(missing).toEqual([]);
+});
+
+test('exposes explicit entrant test tiers while retaining the complete suite', () => {
+  const root = rootScripts();
+  const entrant = entrantScripts();
+
+  expect(root['test:entrant:unit']).toBe('npm --prefix apps/entrant run test:unit');
+  expect(root['test:entrant:ssr']).toBe('npm --prefix apps/entrant run test:ssr');
+  expect(entrant['test:unit']).toContain('vitest run');
+  expect(entrant['test:unit']).toContain('--config');
+  expect(entrant['test:ssr']).toContain('vitest run');
+  expect(entrant['test:ssr']).toContain('--config');
+  expect(entrant['test:run']).toBe('vitest run');
+});
+
+test('keeps check full and defines the narrower fast developer gate', () => {
+  const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
+
+  expect(makefile).toMatch(/^check: check-full$/m);
+  expect(makefile).toContain('check-full:');
+  expect(makefile).toContain('check-fast:');
+
+  for (const command of [
+    'npm run lint:scheduler',
+    'cd apps/console && npx tsc -b',
+    'npm --prefix apps/console run test:run',
+    'npm run depcruise',
+    'npm run lint:entrant',
+    'npm run typecheck:entrant',
+    'npm run test:entrant',
+    'npm run depcruise:entrant',
+    'ruff check $(PY_SOURCES)',
+    'cd apps/api/src && lint-imports --config ../.importlinter',
+    'pytest',
+  ]) {
+    expect(makefile).toContain(command);
+  }
+
+  expect(makefile).toContain('npm run test:entrant:unit');
+  expect(makefile).toContain("pytest tests/backend/unit -m 'not slow'");
+  expect(makefile).toContain('npm run docs:freshness');
+});
+
+test('installs e2e dependencies only through the explicit bootstrap target', () => {
+  const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
+
+  expect(recipe(makefile, 'test-e2e-install')).toContain('npm install');
+  for (const target of ['test-e2e', 'test-e2e-rebuild', 'test-e2e-dev']) {
+    expect(recipe(makefile, target)).not.toContain('npm install');
+  }
 });
 
 /** The recipe lines of a Makefile target (everything indented under it). */

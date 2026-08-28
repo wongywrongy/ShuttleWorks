@@ -10,7 +10,7 @@ import { defineConfig } from 'vitest/config';
 //
 // vitest itself is resolved from the ROOT node_modules (CLAUDE.md hazard: it
 // must stay hoisted there); it is intentionally absent from this package.json.
-export default defineConfig({
+export const baseConfig = {
   // The automatic JSX runtime, matching tsconfig's `jsx: "react-jsx"`. The
   // request-level tests never need this (their modules load through the real
   // Vite pipeline, which sets it), but `tests/components.test.ts` imports
@@ -38,4 +38,6 @@ export default defineConfig({
     // .react-router/types at a time.
     fileParallelism: false,
   },
-});
+};
+
+export default defineConfig(baseConfig);

@@ -122,6 +122,15 @@ npm run test:run        # vitest + jsdom + React Testing Library
 npx tsc -b              # type gate
 npm run build           # build gate
 
+# Entrant tests — from the repo root
+npm run test:entrant:unit  # pure/unit tests (fast feedback)
+npm run test:entrant:ssr   # request-level SSR tests
+npm run test:entrant       # every entrant test
+
+# Local check tiers — from the repo root
+make check-fast            # iteration-sized lint, type, unit, and backend checks
+make check                 # complete local compatibility gate
+
 # End-to-end (Playwright against the compose stack) — from the repo root
 make test-e2e-install   # one-time, downloads browsers
 make test-e2e           # boots stack, runs specs, tears down

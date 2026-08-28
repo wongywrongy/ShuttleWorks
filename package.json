@@ -32,6 +32,8 @@
     "knip:entrant": "npm --prefix apps/entrant run knip",
     "test:scheduler": "npm --prefix apps/console run test:run",
     "test:entrant": "npm --prefix apps/entrant run test:run",
+    "test:entrant:unit": "npm --prefix apps/entrant run test:unit",
+    "test:entrant:ssr": "npm --prefix apps/entrant run test:ssr",
     "test:cov": "npm --prefix apps/console run test:cov"
   },
   "devDependencies": {

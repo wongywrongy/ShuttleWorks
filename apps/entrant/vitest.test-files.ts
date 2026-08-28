@@ -1,0 +1,22 @@
+/** Entrant tests that boot a React Router/Vite server in middleware mode. */
+export const SSR_TEST_FILES = [
+  'tests/design-system.test.ts',
+  'tests/discovery.render.test.ts',
+  'tests/draw.render.test.ts',
+  'tests/enter.loader.test.ts',
+  'tests/enter.quote.test.ts',
+  'tests/enter.render.test.ts',
+  'tests/headerSession.test.ts',
+  'tests/health.test.ts',
+  'tests/login.test.ts',
+  'tests/logout.test.ts',
+  'tests/myEntries.render.test.ts',
+  'tests/pageSystem.test.ts',
+  'tests/player.render.test.ts',
+  'tests/receipt.test.ts',
+  'tests/robots.test.ts',
+  'tests/signup.test.ts',
+  'tests/sitemap.test.ts',
+  'tests/tournament.meta.test.ts',
+  'tests/tournament.render.test.ts',
+] as const;

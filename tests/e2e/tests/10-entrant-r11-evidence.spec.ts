@@ -542,13 +542,14 @@ test.describe('entrant app — R11 evidence', () => {
    */
   test('only the signup page trusts challenges.cloudflare.com', async ({ page }) => {
     const slug = await seed(page);
-    const csp = async (path: string) =>
-      (await page.goto(path))!.headers()['content-security-policy'];
+    const headersFor = async (path: string) => (await page.goto(path))!.headers();
 
-    expect(await csp('/e/signup')).toContain(
+    const signupHeaders = await headersFor('/e/signup');
+    const signupCsp = signupHeaders['content-security-policy'];
+    expect(signupCsp).toContain(
       "script-src 'self' https://challenges.cloudflare.com",
     );
-    expect(await csp('/e/signup')).toContain(
+    expect(signupCsp).toContain(
       "frame-src 'self' https://challenges.cloudflare.com",
     );
     // Every other public page, plus the operator SPA at `/`. Sweeping the
@@ -559,8 +560,9 @@ test.describe('entrant app — R11 evidence', () => {
       .map(([, path]) => path)
       .filter((path) => path !== '/e/signup');
     for (const path of [...others, '/']) {
-      expect(await csp(path), path).not.toContain('challenges.cloudflare.com');
-      expect(await csp(path), path).toContain("script-src 'self';");
+      const csp = (await headersFor(path))['content-security-policy'];
+      expect(csp, path).not.toContain('challenges.cloudflare.com');
+      expect(csp, path).toContain("script-src 'self';");
     }
   });
 

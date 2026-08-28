@@ -11,6 +11,8 @@
     "lint": "eslint .",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:ssr": "vitest run --config vitest.ssr.config.ts",
     "depcruise": "depcruise app",
     "knip": "knip"
   },
