@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -15,8 +15,10 @@ export default async function globalTeardown(): Promise<void> {
   // apps; the stack directory and the suite's own parent are no longer the
   // same place, so it is spelled out rather than derived from one `..`.
   const stackDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'infra', 'compose');
-  console.log('[e2e] docker-compose down');
-  execSync('docker-compose down', {
+  // Match global setup: Docker Compose v2 is a `docker compose` plugin, not
+  // necessarily the separately installed legacy `docker-compose` binary.
+  console.log('[e2e] docker compose down');
+  execFileSync('docker', ['compose', 'down'], {
     cwd: stackDir,
     stdio: 'inherit',
   });

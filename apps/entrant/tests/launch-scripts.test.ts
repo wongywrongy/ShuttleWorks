@@ -184,6 +184,7 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   const e2e = e2eScripts();
   const ci = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
   const setup = readFileSync(join(REPO_ROOT, 'tests/e2e/global-setup.ts'), 'utf8');
+  const teardown = readFileSync(join(REPO_ROOT, 'tests/e2e/global-teardown.ts'), 'utf8');
   const factories = readFileSync(
     join(REPO_ROOT, 'simulator/tournament_sim/factories.py'),
     'utf8',
@@ -208,10 +209,10 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   const rebuild = recipeCommands(makefile, 'test-e2e-rebuild');
   const dev = recipeCommands(makefile, 'test-e2e-dev');
   expect(managed).toEqual([
-    'cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 npm run test:entrant-evidence',
+    'cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 DOCS_HOST_PORT=8092 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 npm run test:entrant-evidence',
   ]);
   expect(rebuild).toEqual([
-    'cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 E2E_REBUILD=1 npm run test:entrant-evidence',
+    'cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 DOCS_HOST_PORT=8092 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 E2E_REBUILD=1 npm run test:entrant-evidence',
   ]);
   expect(dev).toEqual([
     'cd tests/e2e && E2E_BASE_URL=http://localhost:5173 E2E_PLAY_BASE_URL=http://localhost:5174 E2E_MANAGE_STACK=0 npm run test:entrant-evidence',
@@ -234,6 +235,10 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   expect(setup).toMatch(/npm_lifecycle_event/);
   expect(setup).toMatch(/\/e\/api\/config/);
   expect(setup).toMatch(/E2E_PLAY_BASE_URL/);
+  expect(setup).toMatch(/execFileSync\('docker', \['compose'/);
+  expect(teardown).toMatch(/execFileSync\('docker', \['compose'/);
+  expect(setup).not.toMatch(/execSync\(\s*['"]docker-compose/);
+  expect(teardown).not.toMatch(/execSync\(\s*['"]docker-compose/);
   expect(factories).not.toContain('e2e/fixtures/seed.ts');
 });
 

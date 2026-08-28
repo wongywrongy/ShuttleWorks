@@ -154,9 +154,9 @@ services:
 
   # Docs - the VitePress documentation site, built to static HTML and served by
   # nginx (non-root, listens on 8080). Brought up with the stack so
-  # `make scheduler` also publishes the docs at http://localhost:8081. It is a
-  # self-contained static site: no API, no depends_on — hence host port 8081,
-  # clear of the app (:80).
+  # `make scheduler` also publishes the docs at http://localhost:8082. It is a
+  # self-contained static site: no API, no depends_on — and 8082 is kept
+  # distinct from the public entrant listener on 8081.
   docs:
     build:
       # Context = repo root (matches the other services) so the Dockerfile can
@@ -164,7 +164,7 @@ services:
       context: ../..
       dockerfile: docs/Dockerfile
     ports:
-      - "${DOCS_HOST_PORT:-8081}:8080"
+      - "${DOCS_HOST_PORT:-8082}:8080"
     restart: unless-stopped
     read_only: true
     tmpfs:

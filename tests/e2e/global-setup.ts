@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -76,16 +76,19 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
-  const upFlags = FORCE_REBUILD ? '-d --build' : '-d';
-  // URL.pathname encodes spaces as %20 — use fileURLToPath so `execSync`
+  // Use the Compose v2 plugin through the Docker CLI. The legacy
+  // `docker-compose` executable is not installed on a standard Linux Docker
+  // Engine host, and passing an argv array keeps paths/flags out of a shell.
+  const upArgs = FORCE_REBUILD ? ['up', '-d', '--build'] : ['up', '-d'];
+  // URL.pathname encodes spaces as %20 — use fileURLToPath so `execFileSync`
   // gets a real decoded filesystem path when the project dir contains a space.
   // The compose stack lives in infra/compose/ since SP-REORG-1. This used to
   // resolve `..` (products/scheduler), where the compose file sat beside the
   // apps; the stack directory and the suite's own parent are no longer the
   // same place, so it is spelled out rather than derived from one `..`.
   const stackDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'infra', 'compose');
-  console.log(`[e2e] docker-compose up ${upFlags}`);
-  execSync(`docker-compose up ${upFlags}`, {
+  console.log(`[e2e] docker compose ${upArgs.join(' ')}`);
+  execFileSync('docker', ['compose', ...upArgs], {
     cwd: stackDir,
     stdio: 'inherit',
   });

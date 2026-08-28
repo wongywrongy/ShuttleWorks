@@ -32,7 +32,7 @@ help:
 	@echo ""
 	@echo "Run:"
 	@echo "  make scheduler          Build + start the scheduler stack"
-	@echo "                          (console :80, api :8000, docs :8081)"
+	@echo "                          (console :80, api :8000, entrant :8081, docs :8082)"
 	@echo "  make scheduler-dev      API in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
 	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host API on :8600"
@@ -75,7 +75,8 @@ scheduler:
 	@echo "  Console:  http://localhost"
 	@echo "  API:      http://localhost:8000"
 	@echo "  API docs: http://localhost:8000/docs"
-	@echo "  Docs:     http://localhost:8081"
+	@echo "  Entrant:  http://localhost:8081"
+	@echo "  Docs:     http://localhost:8082"
 	@echo ""
 	@echo "Run 'make logs' to view logs"
 
@@ -171,10 +172,10 @@ test-e2e-install:
 	cd tests/e2e && npm install && npx playwright install --with-deps chromium
 
 test-e2e:
-	cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 npm run test:entrant-evidence
+	cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 DOCS_HOST_PORT=8092 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 npm run test:entrant-evidence
 
 test-e2e-rebuild:
-	cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 E2E_REBUILD=1 npm run test:entrant-evidence
+	cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 DOCS_HOST_PORT=8092 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 E2E_REBUILD=1 npm run test:entrant-evidence
 
 test-e2e-dev:
 	cd tests/e2e && E2E_BASE_URL=http://localhost:5173 E2E_PLAY_BASE_URL=http://localhost:5174 E2E_MANAGE_STACK=0 npm run test:entrant-evidence
