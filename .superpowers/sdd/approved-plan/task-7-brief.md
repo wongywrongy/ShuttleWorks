@@ -50,4 +50,3 @@ documentation and remains untouched per repository guidance.
 4. Script/Make contract tests and `make -n check{,-fast}`.
 5. Repository search confirms no live doc references deleted historical paths.
 6. Full product gates run in Task 8.
-

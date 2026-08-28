@@ -61,4 +61,3 @@ moving command logic.
    comparably complex helper.
 5. Run the non-slow backend unit gate, followed by the complete program gate in
    Task 8.
-

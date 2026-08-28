@@ -188,8 +188,14 @@ test.describe('interaction smoke — real flows against real stores', () => {
     await page.goto(`/display?token=${encodeURIComponent(DISPLAY_TOKEN)}`, {
       waitUntil: 'domcontentloaded',
     });
-    await expect(page.getByText('Player 2')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Player 6')).toBeVisible();
+    // Venue boards intentionally render surname-only labels. The synthetic
+    // fixtures are named `Player 2` / `Player 6`, so their surname lines are
+    // the exact visible labels `2` / `6` (the full names belong on operator
+    // surfaces, not the hall display).
+    await expect(page.getByText('2', { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText('6', { exact: true })).toBeVisible();
     await expect(page.getByText('Configure display')).toHaveCount(0);
     await expect(page.getByText('Open fullscreen')).toHaveCount(0);
     await expect(page.getByText('Workspace')).toHaveCount(0);

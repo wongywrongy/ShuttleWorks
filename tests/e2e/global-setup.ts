@@ -6,7 +6,10 @@ import { dirname, resolve } from 'node:path';
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost';
 const HEALTH_URL = `${BASE_URL}/api/health`;
 const PLAY_BASE_URL = process.env.E2E_PLAY_BASE_URL ?? 'http://localhost:8081';
-const PLAY_CONFIG_URL = `${PLAY_BASE_URL}/e/api/config`;
+// This must traverse nginx to the entrant SSR process itself. `/e/api/config`
+// is served directly by FastAPI, so polling it can report the public origin
+// ready while nginx still returns 502 for the first real entrant page.
+const PLAY_HEALTH_URL = `${PLAY_BASE_URL}/e/health`;
 const STARTUP_TIMEOUT_MS = 120_000;
 const POLL_INTERVAL_MS = 2_000;
 
@@ -51,9 +54,9 @@ async function waitForEntrantOrigin(): Promise<void> {
 
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(PLAY_CONFIG_URL);
+      const res = await fetch(PLAY_HEALTH_URL);
       if (res.ok) {
-        console.log(`[e2e] entrant origin ready at ${PLAY_CONFIG_URL}`);
+        console.log(`[e2e] entrant origin ready at ${PLAY_HEALTH_URL}`);
         return;
       }
       lastError = new Error(`unhealthy response: ${res.status}`);

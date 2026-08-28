@@ -239,7 +239,10 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   expect(ci).toContain('SMOKE_VIEWER_TID: ${{ steps.seed.outputs.viewerTid }}');
   expect(setup).toMatch(/E2E_REQUIRE_PLAY/);
   expect(setup).toMatch(/npm_lifecycle_event/);
-  expect(setup).toMatch(/\/e\/api\/config/);
+  // The readiness path must hit entrant SSR. `/e/api/config` is owned by
+  // FastAPI and can be healthy while nginx still returns 502 for `/e/`.
+  expect(setup).toMatch(/\/e\/health/);
+  expect(setup).not.toMatch(/PLAY_CONFIG_URL/);
   expect(setup).toMatch(/E2E_PLAY_BASE_URL/);
   expect(setup).toMatch(/execFileSync\('docker', \['compose'/);
   expect(teardown).toMatch(/execFileSync\('docker', \['compose'/);

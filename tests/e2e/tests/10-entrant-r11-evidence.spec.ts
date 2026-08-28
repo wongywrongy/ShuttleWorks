@@ -520,8 +520,9 @@ test.describe('entrant app — R11 evidence', () => {
       // silently unprotected location, never as an error.
       expect(headers['content-security-policy'], path).toContain("script-src 'self'");
       expect(headers['content-security-policy'], path).toContain(
-        "frame-ancestors 'self'",
+        "frame-ancestors 'none'",
       );
+      expect(headers['x-frame-options'], path).toBe('DENY');
       expect(headers['x-content-type-options'], path).toBe('nosniff');
     }
   });

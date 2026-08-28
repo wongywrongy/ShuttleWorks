@@ -58,4 +58,3 @@ and distributed rather than transferred to another comparable hotspot.
 
 - Characterization + brief: `e327cc11`
 - Implementation: `2704a50c`
-
