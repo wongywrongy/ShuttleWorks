@@ -21,7 +21,7 @@ from db.models import (
 
 # Note: ``List[Tournament]`` rendered as ``list[Tournament]`` below uses
 # PEP 585 generics (Python 3.9+); kept consistent with the rest of the
-# backend code which targets 3.11.
+# backend code which targets 3.12.
 
 
 class TournamentRepository(Protocol):

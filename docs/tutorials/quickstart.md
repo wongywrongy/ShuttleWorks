@@ -7,7 +7,7 @@ reference (dev mode, ports, cloud mirror, tests) see
 ## Prerequisites
 
 - **Docker** with Compose v2.
-- (Dev mode + docs only) **Node 22+**.
+- (Dev mode + docs only) **Node 24+**.
 
 ## Run it
 

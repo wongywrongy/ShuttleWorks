@@ -46,7 +46,7 @@ tests/
 └── e2e/                       Playwright specs incl. the required interaction smoke
 
 simulator/                     internal full-workflow HTTP simulator (not in CI)
-tools/                         generate_openapi.py · docs-freshness.mjs · audit_input_surface.py · codanna-serve.ps1
+tools/                         generate_openapi.py · docs-freshness.mjs · audit_input_surface.py
 legacy/                        sealed pre-merge deployment files (never edited)
 archive/
 └── tournament-pre-merge/      frozen snapshot of the legacy tournament product

@@ -441,12 +441,13 @@ describe('the images build on the node CI tests on', () => {
    * `node:20-alpine` while `frontend/vite.config.ts` imported
    * `rollup-plugin-visualizer`, whose `engines.node` is `>=22` with no `^20`
    * branch — the production bundle was being built on an engine its own build
-   * plugin excludes. CI could not catch it: CI runs node 22 and never builds
-   * these images, so the only two places the version is written never met.
+   * plugin excludes. CI could not catch it: CI runs a separate Node version
+   * and never builds these images, so the only two places the version is written
+   * never met.
    *
    * Both sides are DERIVED — CI's `node-version` and each `FROM node:` — so
-   * this fails on drift in EITHER direction. Hardcoding 22 on both sides would
-   * only assert that this test agrees with itself, and bumping CI alone would
+   * this fails on drift in EITHER direction. Hardcoding a version on both sides
+   * would only assert that this test agrees with itself, and bumping CI alone would
    * leave the images behind exactly as before.
    */
   const ciWorkflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');

@@ -7,8 +7,8 @@ FastAPI backend that embeds the CP-SAT solver. In **dev mode** the frontend is s
 ## Prerequisites
 
 - **Docker** with Compose v2 — for the production-shape stack.
-- **Node 22+** — only needed for the Vite dev server and the docs site.
-- (Backend tests) Python 3.11.
+- **Node 24+** — only needed for the Vite dev server and the docs site.
+- (Backend tests) Python 3.12.
 
 ## The two ways to run
 

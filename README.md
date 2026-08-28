@@ -83,20 +83,11 @@ Start here:
 | [Entrant tier](./docs/explanation/architecture/entrant-tier.md) | The public site under `/e/` — and the three constraints it is built within |
 | [Progress reports](./docs/history/progress/index.md) | What has been built, program by program, and what is still open |
 
-### Code intelligence (codanna)
+### Code intelligence (Zed)
 
-Optional, per-developer local MCP server (semantic search / find-callers) that Claude
-Code uses to navigate the monorepo before grep. Keep the HTTP server up with the
-self-healing script — leave the terminal open:
-
-```powershell
-.	oolsdanna-serve.ps1     # self-restarting `codanna serve --http --watch`
-codanna index                   # rebuild the index after a big pull / refactor
-```
-
-Auth is per-machine (`/mcp` → authorize once). codanna's OAuth keys are in-memory, so
-re-auth ~once per reboot is expected; if the on-click flow errors, run
-`claude mcp logout codanna` then re-auth. Full setup + reliability notes:
+Zed provides project search, symbol navigation, and language-server references
+without a repository-specific index or MCP server. Open the repository as a Zed
+project and use its built-in navigation; the workflow and useful commands are in:
 [Code intelligence](./docs/how-to/code-intelligence.md).
 
 ---
@@ -104,7 +95,7 @@ re-auth ~once per reboot is expected; if the on-click flow errors, run
 ## Quick start
 
 Requires Docker (with Compose v2) for the production-shape stack.
-For dev-server mode, also Node 22+.
+For dev-server mode, also Node 24+ (the pinned version is in `.node-version`).
 
 ```bash
 make scheduler          # → http://localhost (console), api on :8000
@@ -227,7 +218,7 @@ pyproject.toml                 pytest + ruff config for the whole repo
 
 ## Tech stack
 
-- **Engine** — Python 3.11 · Google OR-Tools (CP-SAT) · pure dataclasses
+- **Engine** — Python 3.12 · Google OR-Tools (CP-SAT) · pure dataclasses
 - **Backend** — FastAPI (sync via threadpool) · SQLAlchemy 2.0 · Alembic · single store: SQLite (local mode) or Postgres 16 (cloud mode) · cookie sessions + Argon2id · DB-backed solve-job queue · SSE for bracket solver progress
 - **Frontend** — React 19 · TypeScript · Vite · Zustand · Tailwind · dnd-kit · Radix · IndexedDB command queue · polling (no push channel by design) · Vitest + jsdom + RTL
 - **Shell** — Docker Compose (`make scheduler`); Tauri packaging is a known follow-up

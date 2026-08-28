@@ -2,7 +2,7 @@
 name = "scheduler-core"
 version = "1.0.0"
 description = "CP-SAT scheduling engine — domain models, constraint plugins, solver entry points."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "ortools>=9.8.0",
     "pydantic>=2.5.0",
@@ -23,7 +23,7 @@ include = ["scheduler_core*"]
 exclude = ["scheduler_core.tests*", "scheduler_core.benchmarks*"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 100
 extend-exclude = ["benchmarks", "tests"]
 

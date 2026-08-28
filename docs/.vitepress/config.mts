@@ -150,7 +150,7 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: 'Running locally', link: '/how-to/running-locally' },
-          { text: 'Code intelligence (codanna)', link: '/how-to/code-intelligence' },
+          { text: 'Code intelligence (Zed)', link: '/how-to/code-intelligence' },
           { text: 'Deploy: start to finish', link: '/how-to/deploy' },
           { text: 'Install: local (offline)', link: '/how-to/install-local' },
           { text: 'Install: self-hosted', link: '/how-to/install-selfhost' },

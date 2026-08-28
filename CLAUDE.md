@@ -60,18 +60,15 @@ ShuttleWorks is a **workspace control plane**, not a stack of apps: the Hub (`/`
 
 The authoritative deeper reference is the VitePress docs site (`docs/`), organised in **Diataxis quadrants** since SP-REORG-1 Phase 5: `tutorials/` (learning), `how-to/` (task), `reference/` (lookup — modules, contracts, api, glossary, repo-layout, **debt-log**), `explanation/` (understanding — `architecture/`, `decisions/`). Anything that cannot name a quadrant is `history/`, which is excluded from the built site and never rewritten. Start at `explanation/architecture/system-overview`, `explanation/architecture/data-flow`, `reference/contracts/`, and the `how-to/` guides. `docs/README.md` states the rule.
 
-## Code navigation — codanna first
-Before grep/Read on anything in `apps/` or `packages/`, use codanna:
-1. `codanna mcp semantic_search_with_context query:"..." limit:5` — start here for "where is X" / "how does X work". Use specific technical terms, not vague phrases.
-2. Read only the returned line range (`limit = end_line - start_line + 1`), not the whole file.
-3. `codanna retrieve describe symbol_id:N` — full signature, docs, calls, callers.
-4. `codanna retrieve callers <symbol>` / `codanna retrieve calls <symbol>` — trace usage before changing or removing anything.
+## Code navigation — Zed and language-server first
+When working interactively, use Zed's project search, file finder, symbol outline,
+and language-server definition/reference navigation to locate the smallest relevant
+surface before opening a broad file. The same approach works in any editor with an
+active language server. For command-line or agent sessions, use rg for targeted
+searches and read only the relevant line ranges. Markdown, YAML, and other config
+files are searched directly because they are not language-server indexed.
 
-Fall back to grep/Read for non-indexed files (markdown, YAML, config) or when semantic search returns nothing above ~0.6 relevance.
-
-**One-time setup** (the index is per-machine; `.codanna/` is gitignored): install codanna **0.9.22**, add `~/.local/bin` to PATH, then from the repo root run `codanna index apps/api/src apps/console/src apps/entrant/app packages/design-system packages/scheduler-core`. On Windows set `parallelism = 4` + `tantivy_heap_mb = 25` in `.codanna/settings.toml` and keep `index_path` outside any OneDrive-synced folder (Defender locks Tantivy writes otherwise). Re-index after large pulls with `codanna index`.
-
-**The MCP server runs in HTTP mode** (`.mcp.json` → `http://127.0.0.1:8080/mcp`) so multiple CLIs share one index. **It must be running or no CLI connects** — simplest is the self-healing `.	oolsdanna-serve.ps1` (a restart loop around `codanna serve --http --watch`; leave the terminal open), or run that command bare. If codanna tools fail with `ConnectionRefused at …:8080/mcp` the server is down; a CLI still on the pre-switch stdio config instead shows `-32000` and needs a restart. Then per session run `/mcp` → authorize `codanna` (browser approval). codanna's OAuth keys are **in-memory** (nothing persisted under `~/.codanna`), so a cached token dies whenever the server restarts → re-auth ≈once per reboot is the floor (0.9.22 has no on-disk OAuth persistence and no no-auth HTTP mode). If re-auth is *more* frequent, the Scheduled Task is probably not registered (`Get-ScheduledTaskInfo -TaskName codanna-http-mcp`) so the server dies with its terminal; an on-click auth error in `/mcp` is a stale cred → `claude mcp logout codanna`, then re-auth. Keep it always-on with a per-user logon Scheduled Task (`codanna-http-mcp`) — reproducible snippet + troubleshooting live in the docs at `getting-started/code-intelligence`. Don't fall back to stdio `serve`: it takes an exclusive per-index `serve.lock`, so a second concurrent CLI's server dies with `-32000`; HTTP excludes via port binding, no lock.
+No external code-index service or MCP server is required for repository navigation.
 
 ## Architecture boundaries (enforced by dependency-cruiser)
 - `apps/console/src/platform/` is the foundation layer — it must NOT import from `modules/` or `pages/` (**ERROR**, clean), nor from `app/` (**ERROR** since the `workspaceNav` relocation, clean — the nav model now lives in `platform/product-shell/`).

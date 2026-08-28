@@ -22,8 +22,9 @@ hand. Incremental cleanup is welcome; incidental behavior change is not.
 
 ### 1. Consistency over cleverness — follow prior art
 Before implementing anything, find how the codebase already solves a similar
-problem (use codanna) and follow that pattern, even if a "better" approach
-occurs to you. An inconsistent codebase — three ways to do the same thing — is
+problem (use Zed's project search and language-server navigation) and follow
+that pattern, even if a "better" approach occurs to you.
+An inconsistent codebase — three ways to do the same thing — is
 the primary long-term killer of maintainability, because it makes every future
 general improvement partial. If you genuinely believe the existing pattern is
 wrong, propose changing it everywhere (a real refactor task), not just in the
@@ -124,8 +125,9 @@ after the fact, from memory, are how drift happens (this project already caught
 itself doing that once).
 
 ### 9. Dead code gets removed, deliberately
-When codanna shows a symbol with zero callers, don't leave it "just in case" —
-remove it in its own small commit, verified against the test suite. Accumulated
+When the editor's language server shows a symbol with zero callers,
+don't leave it "just in case" — remove it in its own small commit,
+verified against the test suite. Accumulated
 dead code is one of the most measurable, low-risk forms of debt to clear as you
 go.
 
@@ -211,7 +213,8 @@ Once covered and seamed, apply standard decomposition:
   instead of deep nesting.
 - Extract repeated logic blocks (copy-paste is one of the most common
   legacy-code complexity generators) into a single shared function — but verify
-  with codanna that you're not duplicating something that already exists
+  with Zed's project search and language-server references that you're not
+duplicating something that already exists
   elsewhere under a different name first.
 - Split god functions/classes — ones doing intake, transformation, AND emission
   in one place — along the same intake → engine → emit boundaries the rest of

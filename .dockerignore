@@ -56,7 +56,6 @@ htmlcov/
 .claude/
 .serena/
 .agents/
-.codanna/
 *.swp
 *.swo
 .DS_Store

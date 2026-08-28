@@ -3,7 +3,7 @@
 #
 # Multi-stage:
 # - `builder` resolves Python deps into /install. ortools 9.8+ ships
-#   manylinux wheels for cp311 on linux/amd64, so no compiler toolchain
+#   manylinux wheels for cp312 on linux/amd64, so no compiler toolchain
 #   is needed; if a future dep starts requiring gcc, add it here only,
 #   not in runtime. A BuildKit cache mount keeps the ~120MB ortools
 #   wheel around between builds.
@@ -14,7 +14,7 @@
 # scheduler_core changes often, backend source changes most. Each gets
 # its own layer so iterating on the engine doesn't reinstall ortools.
 
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     pip install --prefix=/install --no-deps ./scheduler-core
 
 
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 # PYTHONDONTWRITEBYTECODE — keeps a read-only root filesystem actually
 #   read-only by stopping the interpreter from scattering .pyc files
@@ -55,7 +55,7 @@ RUN useradd --create-home --uid 1001 app \
     && chown app:app /app/data
 
 # Installed Python packages from the builder stage. scheduler_core lives
-# under /usr/local/lib/python3.11/site-packages/scheduler_core and is
+# under /usr/local/lib/python3.12/site-packages/scheduler_core and is
 # importable from anywhere — no sys.path bootstrap required.
 COPY --from=builder /install /usr/local
 

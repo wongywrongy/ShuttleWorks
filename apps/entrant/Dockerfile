@@ -28,7 +28,7 @@
 # appending a contradicting line is exactly how this protection would be lost.
 # ─────────────────────────────────────────────────────────────────────────
 
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -53,7 +53,7 @@ COPY apps/entrant ./apps/entrant
 RUN npm run -w apps/entrant build
 
 
-FROM node:22-alpine
+FROM node:24-alpine
 
 ENV NODE_ENV=production
 

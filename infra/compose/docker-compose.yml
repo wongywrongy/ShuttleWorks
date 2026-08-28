@@ -156,7 +156,7 @@ services:
   # nginx (non-root, listens on 8080). Brought up with the stack so
   # `make scheduler` also publishes the docs at http://localhost:8081. It is a
   # self-contained static site: no API, no depends_on — hence host port 8081,
-  # clear of the app (:80) and the codanna MCP server (:8080).
+  # clear of the app (:80).
   docs:
     build:
       # Context = repo root (matches the other services) so the Dockerfile can

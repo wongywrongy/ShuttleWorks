@@ -447,7 +447,6 @@ _EXEMPT_DIRS = {
     "build",
     "archive",
     ".claude",
-    ".codanna",
     "docs",
     "__pycache__",
     ".pytest_cache",

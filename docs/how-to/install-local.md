@@ -21,7 +21,7 @@ If you want the multi-tenant deployment instead, see
 
 ## Prerequisites
 
-Docker, or Python 3.11 + Node for a from-source run.
+Docker, or Python 3.12 + Node for a from-source run.
 
 ## Run it
 
