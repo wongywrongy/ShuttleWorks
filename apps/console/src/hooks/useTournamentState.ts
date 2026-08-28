@@ -168,7 +168,7 @@ export async function forceSaveNow(): Promise<void> {
   flushPromise = (async () => {
     const ui = useUiStore.getState();
     ui.setPersistStatus('saving');
-    const payload = snapshot(useTournamentStore.getState());
+    const payload = serializeTournamentState(useTournamentStore.getState());
     try {
       // Only the sanctioned path passes options — an ordinary save keeps the
       // plain two-argument call it has always made.
@@ -275,7 +275,7 @@ export function _resetSaveStateForTests(): void {
   clearScheduleNext = false;
 }
 
-function snapshot(
+export function serializeTournamentState(
   state: ReturnType<typeof useTournamentStore.getState>,
 ): TournamentStateDTO {
   // Schema v2 adds ``scheduleVersion`` + ``scheduleHistory`` for the

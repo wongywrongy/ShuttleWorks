@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useTournamentStore } from '../../../../store/tournamentStore';
 import type { PlayerDTO } from '../../../../api/dto';
 import { DISCIPLINE_NAMES } from '../../../../lib/disciplineNames';
-import { isDoublesRank } from '../positionGrid/helpers';
+import { configuredRankCount, rankCapacity } from '../positionGrid/helpers';
 
 interface RankOption {
   value: string;
@@ -81,19 +81,19 @@ export function useRankValidation(schoolId: string | null, currentPlayerId?: str
 
     const rankCounts = config.rankCounts;
 
-    Object.entries(rankCounts).forEach(([rankKey, count]) => {
-      if (count > 0) {
+    Object.keys(rankCounts).forEach((rankKey) => {
+      const count = configuredRankCount(rankCounts, rankKey);
+      if (count !== undefined) {
         const ranks: RankOption[] = [];
         const named = disciplineName(rankKey);
 
         for (let i = 1; i <= count; i++) {
           const rankValue = `${rankKey}${i}`;
           const assignedPlayers = assignedRanks.get(rankValue) || [];
-          const isDoubles = isDoublesRank(rankValue);
+          const maxPlayers = rankCapacity(rankValue);
 
           // Singles: disable if 1+ players assigned
           // Doubles: disable if 2+ players assigned
-          const maxPlayers = isDoubles ? 2 : 1;
           const isFull = assignedPlayers.length >= maxPlayers;
 
           // Show assigned player names (or count for doubles)
@@ -134,8 +134,7 @@ export function useRankValidation(schoolId: string | null, currentPlayerId?: str
    */
   const isRankFull = (rank: string): boolean => {
     const assignedPlayers = assignedRanks.get(rank) || [];
-    const maxPlayers = isDoublesRank(rank) ? 2 : 1;
-    return assignedPlayers.length >= maxPlayers;
+    return assignedPlayers.length >= rankCapacity(rank);
   };
 
   /**
@@ -149,7 +148,7 @@ export function useRankValidation(schoolId: string | null, currentPlayerId?: str
    * Check if a doubles rank has an incomplete pair (only 1 player)
    */
   const hasIncompletePair = (rank: string): boolean => {
-    if (!isDoublesRank(rank)) return false;
+    if (rankCapacity(rank) !== 2) return false;
     const players = assignedRanks.get(rank) || [];
     // assignedRanks excludes current player, so length === 0 means only current player has this rank
     return players.length === 0;

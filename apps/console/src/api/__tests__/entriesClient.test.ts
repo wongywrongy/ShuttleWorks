@@ -13,6 +13,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AxiosInstance } from 'axios';
 import { apiClient } from '../client';
+import type { TournamentStateDTO } from '../dto';
 
 const axiosOf = (): AxiosInstance =>
   (apiClient as unknown as { client: AxiosInstance }).client;
@@ -87,6 +88,24 @@ describe('apiClient.commitEntries', () => {
       '/tournaments/t-1/entries/commit',
       undefined,
       { params: { entry_event_id: 'ev-9' } },
+    );
+  });
+});
+
+describe('apiClient.generateMeetLineup', () => {
+  it('POSTs the current state to the meet lineup preview route and forwards abort signals', async () => {
+    const post = vi
+      .spyOn(axiosOf(), 'post')
+      .mockResolvedValue({ data: { matches: [], incompletePairs: [] } } as never);
+    const state = { version: 2, config: null, groups: [], players: [], matches: [], schedule: null, scheduleIsStale: false } as TournamentStateDTO;
+    const controller = new AbortController();
+
+    await apiClient.generateMeetLineup('t-1', state, controller.signal);
+
+    expect(post).toHaveBeenCalledWith(
+      '/tournaments/t-1/meet/lineup',
+      state,
+      { signal: controller.signal },
     );
   });
 });

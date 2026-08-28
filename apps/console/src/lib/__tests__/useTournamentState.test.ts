@@ -10,7 +10,11 @@
  * debounce timer if the flag is set.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { forceSaveNow, _resetSaveStateForTests } from '../../hooks/useTournamentState';
+import {
+  forceSaveNow,
+  serializeTournamentState,
+  _resetSaveStateForTests,
+} from '../../hooks/useTournamentState';
 import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
 import * as clientModule from '../../api/client';
@@ -86,6 +90,29 @@ describe('forceSaveNow — the viewer write gate (audit A2)', () => {
     await forceSaveNow();
 
     expect(putSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('serializeTournamentState', () => {
+  it('serializes the current store shape for both saves and preview requests', () => {
+    const state = useTournamentStore.getState();
+    expect(serializeTournamentState(state)).toEqual(
+      expect.objectContaining({
+        version: 2,
+        config: state.config,
+        groups: state.groups,
+        players: state.players,
+        matches: state.matches,
+        schedule: state.schedule,
+        scheduleStats: null,
+        scheduleIsStale: state.scheduleIsStale,
+        scheduleVersion: state.scheduleVersion,
+        scheduleHistory: state.scheduleHistory,
+        bracketPlayers: state.bracketPlayers,
+        bracketRosterMigrated: state.bracketRosterMigrated,
+        planFinalized: false,
+      }),
+    );
   });
 });
 

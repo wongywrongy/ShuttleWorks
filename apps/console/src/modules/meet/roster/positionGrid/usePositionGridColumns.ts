@@ -10,7 +10,7 @@
  * whole-component compilation.
  */
 import { useTournamentStore } from '../../../../store/tournamentStore';
-import { defaultEventOrder } from './helpers';
+import { configuredRankCount, defaultEventOrder } from './helpers';
 
 export function usePositionGridColumns() {
   const config = useTournamentStore((s) => s.config);
@@ -28,7 +28,7 @@ export function usePositionGridColumns() {
   const _visible = config?.eventVisible;
   const events = allConfiguredEvents
     .filter((ev) => _visible?.[ev] !== false)
-    .map((ev) => ({ prefix: ev, count: _counts[ev] ?? 0 }));
+    .map((ev) => ({ prefix: ev, count: configuredRankCount(_counts, ev) ?? 0 }));
 
   const moveColumn = (prefix: string, direction: -1 | 1) => {
     if (!config) return;

@@ -20,6 +20,7 @@
  * discipline names; this table adds only the per-event color styling.
  */
 import { DISCIPLINE_NAMES } from '../../../../lib/disciplineNames';
+import { isDoublesCode } from '../../../../lib/doubles';
 
 // Canonical order lives in lib/eventColors (shared with the bracket's
 // matches list); re-exported here for the meet's existing import sites.
@@ -92,6 +93,62 @@ export const EVENT_LABEL: Record<
  */
 export const ROSTER_DRAG_ACTIVATION_DISTANCE = 8;
 
+/** Meet Setup's supported per-event position limit. */
+export const MAX_POSITION_COUNT = 20;
+
+/**
+ * A configured count safe for interactive roster consumers.
+ *
+ * The source-of-truth blob deliberately tolerates out-of-range legacy/junk
+ * values, while Meet Setup only permits 0..20. Clamp here so a persisted
+ * value cannot make the grid or player picker allocate an unbounded array.
+ */
+export function configuredRankCount(
+  counts: Record<string, number> | undefined,
+  division: string,
+): number | undefined {
+  const count = counts?.[division];
+  return count !== undefined && Number.isSafeInteger(count) && count > 0
+    ? Math.min(count, MAX_POSITION_COUNT)
+    : undefined;
+}
+
+/**
+ * Return a rank's configured position for one division, without producing
+ * every position in that division. The numeric suffix must be canonical so
+ * `MS01` does not alias the generated `MS1` slot.
+ */
+export function configuredSlotPosition(
+  rank: string,
+  division: string,
+  counts: Record<string, number> | undefined,
+): number | undefined {
+  const count = configuredRankCount(counts, division);
+  if (count === undefined || !rank.startsWith(division)) return undefined;
+  const suffix = rank.slice(division.length);
+  if (!/^[1-9]\d*$/.test(suffix)) return undefined;
+  const position = Number(suffix);
+  return Number.isSafeInteger(position) && position <= count ? position : undefined;
+}
+
+/** Whether a rank names any configured numbered position. */
+export function isConfiguredSlot(
+  rank: string,
+  counts: Record<string, number> | undefined,
+): boolean {
+  return Object.keys(counts ?? {}).some(
+    (division) => configuredSlotPosition(rank, division, counts) !== undefined,
+  );
+}
+
+/** Whether a rank is a configured bare division awaiting position assignment. */
+export function isConfiguredBareDivision(
+  rank: string,
+  counts: Record<string, number> | undefined,
+): boolean {
+  return configuredRankCount(counts, rank) !== undefined && !isConfiguredSlot(rank, counts);
+}
+
 /**
  * `isDoubles(prefix)` — true when an event prefix ("MD", "WS") is doubles.
  * `isDoublesRank(rank)` — the same question about a rank (prefix+digits,
@@ -103,4 +160,9 @@ export const ROSTER_DRAG_ACTIVATION_DISTANCE = 8;
  * is a no-op for a prefix. The two names survive so the ~15 meet call sites
  * do not churn; there is no second rule behind them.
  */
-export { isDoublesCode as isDoubles, isDoublesCode as isDoublesRank } from '../../../../lib/doubles';
+export { isDoublesCode as isDoubles, isDoublesCode as isDoublesRank };
+
+/** Maximum number of players a lineup position can hold. */
+export function rankCapacity(rank: string): 1 | 2 {
+  return isDoublesCode(rank) ? 2 : 1;
+}

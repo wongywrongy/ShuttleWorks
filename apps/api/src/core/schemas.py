@@ -273,6 +273,20 @@ class PlayerDTO(StrictModel):
     # unreadable by a pre-P4 build (db/blob_version.py) in exchange for
     # nothing: an older reader ignores an unknown optional key.
     entryPlayerId: Optional[Identifier] = None
+    # R-DM-4's Meet half (SP-DM-3 P7c). Other roster rows of confirmed
+    # doubles pairs, keyed by bare division. A person can play several
+    # doubles events with different partners, and each Meet doubles slot
+    # holds two players rather than one merged row.
+    #
+    # Written only by the commit seam, and only when ``_pair_batch``'s full
+    # mutual-acceptance predicate holds. A director's hand-made pairing does
+    # not set it; hand pairing stays the operator's action.
+    #
+    # ADDITIVE ONLY - no ``CURRENT_TOURNAMENT_SCHEMA_VERSION`` bump, for the
+    # reason written on ``entryPlayerId`` above.
+    partnerPlayerIds: Dict[Code, Identifier] = Field(
+        default_factory=dict, max_length=MAX_RANKS
+    )
     # The entrant's own free-text availability sentence, carried verbatim
     # from ``entries.remarks``. Kept distinct from ``notes`` (the
     # operator's own field) so the seam never overwrites what an operator

@@ -41,6 +41,8 @@ import { DraggablePlayerChip, PositionGrid } from './PositionGrid';
 import {
   EVENT_LABEL,
   ROSTER_DRAG_ACTIVATION_DISTANCE,
+  isConfiguredBareDivision,
+  isConfiguredSlot,
   isDoublesRank,
 } from './positionGrid/helpers';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
@@ -70,7 +72,8 @@ export function RosterTab() {
   const addPlayer = useTournamentStore((s) => s.addPlayer);
   const deletePlayer = useTournamentStore((s) => s.deletePlayer);
   const updatePlayer = useTournamentStore((s) => s.updatePlayer);
-  const { assignRank, moveRank } = useRankAssignment();
+  const { assignRank, moveRank, seatUnslotted } = useRankAssignment();
+  const canEditWorkspace = useCanEdit();
 
   const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
   // Detail drawer targets — a clicked grid position (rank) OR a clicked
@@ -93,7 +96,7 @@ export function RosterTab() {
     }
   }, [groups, activeSchoolId]);
 
-  // One-shot singles-invariant cleanup. Singles ranks must have ≤1
+  // Singles-invariant cleanup. Singles ranks must have ≤1
   // player per school; existing demo/seed data and historic state
   // from before invariant enforcement may violate this. Strip the
   // duplicates so the grid shows what the data model actually
@@ -101,12 +104,11 @@ export function RosterTab() {
   // matches the visual stacking order in PositionGrid's `byRank`
   // iteration. Doubles ranks (MD/WD/XD) are untouched: they legit-
   // imately allow up to 2 partners.
-  const didCleanupRef = useRef(false);
   useEffect(() => {
-    if (didCleanupRef.current) return;
-    if (players.length === 0 || groups.length === 0) return;
-    didCleanupRef.current = true;
+    if (!canEditWorkspace || players.length === 0 || groups.length === 0) return;
 
+    // Bare division codes are intake mappings awaiting an operator-assigned
+    // position. Only configured numbered positions can be over-occupied.
     type Strip = { playerId: string; ranks: string[] };
     const strips = new Map<string, Strip>();
     for (const group of groups) {
@@ -119,6 +121,7 @@ export function RosterTab() {
         }
       }
       for (const [r, occupants] of byRank.entries()) {
+        if (!isConfiguredSlot(r, config?.rankCounts)) continue;
         if (isDoublesRank(r)) continue;
         if (occupants.length <= 1) continue;
         for (let i = 1; i < occupants.length; i++) {
@@ -137,7 +140,7 @@ export function RosterTab() {
         ranks: (p.ranks ?? []).filter((r) => !drop.has(r)),
       });
     }
-  }, [players, groups, updatePlayer]);
+  }, [canEditWorkspace, players, groups, config?.rankCounts, updatePlayer]);
 
   // Clear selected player if they leave the active school.
   useEffect(() => {
@@ -221,6 +224,16 @@ export function RosterTab() {
   }, [schoolPlayers, query]);
   const selectedPlayer =
     players.find((p) => p.id === selectedPlayerId) ?? null;
+
+  // A committed entrant carries its bare division until an operator chooses
+  // a numbered position. Count players, not division values, so one entrant
+  // awaiting multiple events still gets one actionable affordance.
+  const configuredRankCounts = config?.rankCounts ?? {};
+  const unslottedCount = schoolPlayers.filter((player) =>
+    (player.ranks ?? []).some(
+      (rank) => isConfiguredBareDivision(rank, configuredRankCounts),
+    ),
+  ).length;
 
   // Occupants of the open position (active school, this rank). Drives the
   // position drawer — singles = 1, doubles = up to 2.
@@ -397,6 +410,22 @@ export function RosterTab() {
               data-testid="roster-right-panel"
               className="flex min-w-[320px] flex-1 flex-col overflow-hidden"
             >
+              {unslottedCount > 0 && activeSchoolId && (
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
+                  <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
+                    {unslottedCount} entrant{unslottedCount === 1 ? '' : 's'} awaiting a position
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => seatUnslotted(activeSchoolId)}
+                    disabled={!canEditWorkspace}
+                    title={!canEditWorkspace ? READ_ONLY_MESSAGE : undefined}
+                    className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border-control bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    Seat entrants
+                  </button>
+                </div>
+              )}
               <div className="min-h-0 flex-1 overflow-auto">
                 {activeSchoolId ? (
                   <PositionGrid
@@ -789,4 +818,3 @@ function PlayerListSection({
     </ul>
   );
 }
-

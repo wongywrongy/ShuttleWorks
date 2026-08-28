@@ -312,6 +312,8 @@ export interface PlayerDTO {
    *  `entry-{uuid}` id encodes, typed instead of parsed out of a prefix.
    *  Declared here for the same StrictModel reason as `sourceEntryId`. */
   entryPlayerId?: string;
+  /** Other confirmed Meet doubles partners, keyed by bare division. */
+  partnerPlayerIds?: Record<string, string>;
   /** The entrant's own free-text availability sentence, carried verbatim from
    *  `entries.remarks`. Deliberately NOT `notes` — that is the operator's own
    *  field, and overwriting it would destroy what the operator wrote and lose
@@ -361,6 +363,13 @@ export interface MatchDTO {
   durationSlots: number;
   preferredCourt?: number | null;
   tags?: string[]; // Optional tags like ['School A', 'School B']
+}
+
+/** Server-generated Meet lineup preview. Custom matches from the posted
+ * state are returned alongside freshly generated lineup matches. */
+export interface LineupDTO {
+  matches: MatchDTO[];
+  incompletePairs: string[];
 }
 
 // Tournament Export/Import (Complete tournament data - v2.0 format)
@@ -1085,4 +1094,3 @@ export interface ConstraintViolation {
   matchIds: string[];
   description: string;
 }
-

@@ -48,4 +48,11 @@ describe('useRankValidation labels', () => {
     expect(ranks().MS.label).toBe("Men's Singles");
     expect(ranks().MS.ranks[0].label).toBe("MS1 - Men's Singles 1");
   });
+
+  it('bounds persisted counts to the 20-position configuration limit', () => {
+    useTournamentStore.setState({
+      config: { rankCounts: { BS: 2_000_000_000 } } as unknown as TournamentConfig,
+    });
+    expect(ranks().BS.ranks).toHaveLength(20);
+  });
 });

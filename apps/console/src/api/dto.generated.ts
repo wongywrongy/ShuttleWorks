@@ -70,6 +70,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/meet/lineup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Lineup
+         * @description Generate from the posted state only; persistence remains caller-owned.
+         */
+        post: operations["generate_lineup_tournaments__tournament_id__meet_lineup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/solve-jobs": {
         parameters: {
             query?: never;
@@ -4701,6 +4721,16 @@ export interface components {
             /** Email */
             email?: string | null;
         };
+        /**
+         * LineupDTO
+         * @description Generated lineup plus custom matches retained from the posted state.
+         */
+        LineupDTO: {
+            /** Matches */
+            matches?: components["schemas"]["MatchDTO"][];
+            /** Incompletepairs */
+            incompletePairs?: string[];
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -5267,6 +5297,10 @@ export interface components {
             sourceEntryId?: string | null;
             /** Entryplayerid */
             entryPlayerId?: string | null;
+            /** Partnerplayerids */
+            partnerPlayerIds?: {
+                [key: string]: string;
+            };
             /** Remarks */
             remarks?: string | null;
         };
@@ -6798,6 +6832,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ValidationResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_lineup_tournaments__tournament_id__meet_lineup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TournamentStateDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LineupDTO"];
                 };
             };
             /** @description Validation Error */

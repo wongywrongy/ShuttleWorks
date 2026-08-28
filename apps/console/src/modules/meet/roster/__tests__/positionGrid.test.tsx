@@ -9,6 +9,7 @@ import type { PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../../../ap
 import { useTournamentStore } from '../../../../store/tournamentStore';
 import { usePositionGridColumns } from '../positionGrid/usePositionGridColumns';
 import { ROSTER_DRAG_ACTIVATION_DISTANCE } from '../positionGrid/helpers';
+import * as positionGridHelpers from '../positionGrid/helpers';
 import { PositionGrid } from '../PositionGrid';
 
 const cfg = (over: Partial<TournamentConfig> = {}): TournamentConfig =>
@@ -21,6 +22,23 @@ const S1 = [{ id: 'S1', name: 'School 1' }] as RosterGroupDTO[];
 
 beforeEach(() => {
   useTournamentStore.setState({ config: cfg(), groups: S1, players: [] });
+});
+
+describe('configured slot parsing', () => {
+  it('recognizes U10 slots without expanding a huge configured count', () => {
+    const helpers = positionGridHelpers as typeof positionGridHelpers & {
+      isConfiguredBareDivision: (rank: string, counts: Record<string, number>) => boolean;
+      isConfiguredSlot: (rank: string, counts: Record<string, number>) => boolean;
+    };
+    const rankCounts = { U10: 2_000_000_000 };
+
+    expect(typeof helpers.isConfiguredSlot).toBe('function');
+    expect(typeof helpers.isConfiguredBareDivision).toBe('function');
+    expect(helpers.isConfiguredBareDivision('U10', rankCounts)).toBe(true);
+    expect(helpers.isConfiguredSlot('U10', rankCounts)).toBe(false);
+    expect(helpers.isConfiguredSlot('U101', rankCounts)).toBe(true);
+    expect(helpers.isConfiguredSlot('U102000000001', rankCounts)).toBe(false);
+  });
 });
 
 describe('usePositionGridColumns', () => {
@@ -38,6 +56,14 @@ describe('usePositionGridColumns', () => {
     useTournamentStore.setState({ config: cfg({ rankCounts: { U10: 5, U11: 5 } }) });
     const { result } = renderHook(() => usePositionGridColumns());
     expect(result.current.events.map((e) => e.prefix)).toEqual(['U10', 'U11']);
+  });
+
+  it('bounds a persisted position count to the configuration UI limit', () => {
+    useTournamentStore.setState({
+      config: cfg({ rankCounts: { U10: 2_000_000_000 } }),
+    });
+    const { result } = renderHook(() => usePositionGridColumns());
+    expect(result.current.events).toEqual([{ prefix: 'U10', count: 20 }]);
   });
 
   it('orders canonical disciplines first, then the rest', () => {
@@ -100,6 +126,13 @@ describe('PositionGrid structure', () => {
     expect(screen.queryByText(/No events configured/i)).toBeNull();
     // U10, U11 + the "#" stub = 3
     expect(screen.getAllByRole('columnheader')).toHaveLength(3);
+  });
+
+  it('does not render positions beyond the configuration UI limit', () => {
+    useTournamentStore.setState({ config: cfg({ rankCounts: { U10: 21 } }) });
+    renderGrid();
+    expect(screen.getByTestId('pos-cell-S1-U1020')).toBeInTheDocument();
+    expect(screen.queryByTestId('pos-cell-S1-U1021')).toBeNull();
   });
 
   it('disables cells beyond an event count (dash, no add button)', () => {

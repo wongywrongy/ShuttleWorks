@@ -23,6 +23,7 @@ from identity import auth_routes as auth_api  # SP-CLOUD-2 — self-hosted accou
 from identity import entrants_routes as entrants_api  # SP-E1-2 — the entrant principal's auth surface
 from identity import invites  # Step 7 — invite-link generate / resolve / accept / revoke
 from meet import (
+    lineup,
     schedule,
     schedule_advisories,
     schedule_director,
@@ -423,6 +424,7 @@ app.add_middleware(
 _AUTH_DEP = [Depends(get_current_user)]
 
 app.include_router(schedule.router, dependencies=_AUTH_DEP)
+app.include_router(lineup.router, dependencies=_AUTH_DEP)
 app.include_router(solve_jobs_api.router)  # carries its own auth + role deps
 app.include_router(schedule_repair.router, dependencies=_AUTH_DEP)
 app.include_router(schedule_warm_restart.router, dependencies=_AUTH_DEP)

@@ -11,33 +11,60 @@
  * custom matches survive as overrides. (Edits to a standard lineup slot
  * are rebuilt from the roster, since the grid is the source of truth.)
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { v4 as uuid } from 'uuid';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowsClockwise } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import { useMeetResultsLock } from '../../../hooks/useMeetResultsLock';
+import { useTournamentId } from '../../../hooks/useTournamentId';
+import { serializeTournamentState } from '../../../hooks/useTournamentState';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
-import { isDoublesRank } from '../roster/positionGrid/helpers';
-import type { MatchDTO } from '../../../api/dto';
-
-function expandRanks(counts: Record<string, number> | undefined): string[] {
-  const out: string[] = [];
-  for (const [prefix, count] of Object.entries(counts ?? {})) {
-    for (let i = 1; i <= count; i++) out.push(`${prefix}${i}`);
-  }
-  return out;
-}
+import { apiClient } from '../../../api/client';
+import type { LineupDTO } from '../../../api/dto';
+import { useCanEdit } from '../../../hooks/useCanEdit';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 
 export function RegenerateMenu() {
+  const tid = useTournamentId();
   const config = useTournamentStore((s) => s.config);
-  const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
+  const players = useTournamentStore((s) => s.players);
   const importMatches = useTournamentStore((s) => s.importMatches);
   const matches = useTournamentStore((s) => s.matches);
+  const schedule = useTournamentStore((s) => s.schedule);
+  const scheduleIsStale = useTournamentStore((s) => s.scheduleIsStale);
+  const scheduleVersion = useTournamentStore((s) => s.scheduleVersion);
+  const scheduleHistory = useTournamentStore((s) => s.scheduleHistory);
+  const bracketPlayers = useTournamentStore((s) => s.bracketPlayers);
+  const bracketRosterMigrated = useTournamentStore((s) => s.bracketRosterMigrated);
+  const planFinalized = useTournamentStore((s) => s.planFinalized);
+  const canEditWorkspace = useCanEdit();
 
   const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<LineupDTO | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [customIds, setCustomIds] = useState<ReadonlySet<string>>(new Set());
   const ref = useRef<HTMLDivElement | null>(null);
+  const requestRef = useRef<{ id: number; controller: AbortController } | null>(null);
+  const requestIdRef = useRef(0);
+  const previewInputKeyRef = useRef<string | null>(null);
+  const previewInputKey = useMemo(
+    () => JSON.stringify(serializeTournamentState(useTournamentStore.getState())),
+    [
+      bracketPlayers,
+      bracketRosterMigrated,
+      config,
+      groups,
+      matches,
+      planFinalized,
+      players,
+      schedule,
+      scheduleHistory,
+      scheduleIsStale,
+      scheduleVersion,
+    ],
+  );
 
   // Two tiers of guard, unified with the rest of the app (MAT-2 / O-4):
   //
@@ -59,82 +86,68 @@ export function RegenerateMenu() {
     [matchStates],
   );
 
-  const ranks = useMemo(() => expandRanks(config?.rankCounts), [config?.rankCounts]);
-  const groupByPlayer = useMemo(
-    () => new Map(players.map((p) => [p.id, p.groupId])),
-    [players],
-  );
+  const closePreview = useCallback(() => {
+    requestIdRef.current += 1;
+    requestRef.current?.controller.abort();
+    requestRef.current = null;
+    previewInputKeyRef.current = null;
+    setOpen(false);
+    setPreview(null);
+    setPreviewError(null);
+    setPreviewLoading(false);
+  }, []);
 
-  // A lineup slot's identity: rank + the two schools (order-independent).
-  const slotKey = (m: {
-    eventRank?: string | null;
-    sideA: string[];
-    sideB: string[];
-  }) => {
-    const rank = m.eventRank ?? '';
-    const a = groupByPlayer.get(m.sideA[0] ?? '') ?? '?';
-    const b = groupByPlayer.get(m.sideB[0] ?? '') ?? '?';
-    const [s1, s2] = [a, b].sort();
-    return `${rank}|${s1}|${s2}`;
-  };
+  const requestPreview = useCallback(() => {
+    const state = serializeTournamentState(useTournamentStore.getState());
+    requestRef.current?.controller.abort();
+    const controller = new AbortController();
+    const requestId = ++requestIdRef.current;
+    requestRef.current = { id: requestId, controller };
+    previewInputKeyRef.current = JSON.stringify(state);
+    setCustomIds(new Set(state.matches.map((match) => match.id)));
+    setPreview(null);
+    setPreviewError(null);
+    setPreviewLoading(true);
+    setOpen(true);
 
-  const generated = useMemo(() => {
-    const out: MatchDTO[] = [];
-    for (const rank of ranks) {
-      const needed = isDoublesRank(rank) ? 2 : 1;
-      for (let i = 0; i < groups.length; i++) {
-        for (let j = i + 1; j < groups.length; j++) {
-          const sideAPlayers = players.filter(
-            (p) => p.groupId === groups[i].id && (p.ranks ?? []).includes(rank),
-          );
-          const sideBPlayers = players.filter(
-            (p) => p.groupId === groups[j].id && (p.ranks ?? []).includes(rank),
-          );
-          if (sideAPlayers.length < needed || sideBPlayers.length < needed) continue;
-          out.push({
-            id: uuid(),
-            sideA: sideAPlayers.slice(0, needed).map((p) => p.id),
-            sideB: sideBPlayers.slice(0, needed).map((p) => p.id),
-            matchType: 'dual',
-            eventRank: rank,
-            durationSlots: 1,
-          });
-        }
-      }
-    }
-    return out;
-  }, [ranks, groups, players]);
+    apiClient
+      .generateMeetLineup(tid, state, controller.signal)
+      .then((result) => {
+        if (requestRef.current?.id !== requestId || controller.signal.aborted) return;
+        setPreview(result);
+        setPreviewLoading(false);
+        requestRef.current = null;
+      })
+      .catch((error: unknown) => {
+        if (requestRef.current?.id !== requestId || controller.signal.aborted) return;
+        setPreviewError(error instanceof Error ? error.message : 'Preview unavailable');
+        setPreviewLoading(false);
+        requestRef.current = null;
+      });
+  }, [tid]);
 
-  const incompletePairs = useMemo(() => {
-    const out: string[] = [];
-    for (const rank of ranks) {
-      if (!isDoublesRank(rank)) continue;
-      for (let i = 0; i < groups.length; i++) {
-        const count = players.filter(
-          (p) => p.groupId === groups[i].id && (p.ranks ?? []).includes(rank),
-        ).length;
-        if (count === 1) out.push(`${groups[i].name} ${rank}`);
-      }
-    }
-    return out;
-  }, [ranks, groups, players]);
+  useEffect(() => {
+    return () => {
+      requestIdRef.current += 1;
+      requestRef.current?.controller.abort();
+    };
+  }, []);
 
-  // Existing matches that aren't a regenerated lineup slot — kept as
-  // custom overrides.
-  const generatedKeys = useMemo(
-    () => new Set(generated.map(slotKey)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [generated, groupByPlayer],
-  );
-  const keptCustom = matches.filter((m) => !generatedKeys.has(slotKey(m)));
+  useEffect(() => {
+    if (open && previewInputKeyRef.current !== previewInputKey) closePreview();
+  }, [closePreview, open, previewInputKey]);
+
+  useEffect(() => {
+    if (open && (!canEditWorkspace || resultsLocked)) closePreview();
+  }, [canEditWorkspace, closePreview, open, resultsLocked]);
 
   useEffect(() => {
     if (!open) return;
     const click = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) closePreview();
     };
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') closePreview();
     };
     document.addEventListener('mousedown', click);
     document.addEventListener('keydown', key);
@@ -142,26 +155,46 @@ export function RegenerateMenu() {
       document.removeEventListener('mousedown', click);
       document.removeEventListener('keydown', key);
     };
-  }, [open]);
+  }, [open, closePreview]);
 
-  const canGenerate = generated.length > 0;
+  const previewMatches = useMemo(() => preview?.matches ?? [], [preview]);
+  const keptCustomCount = useMemo(
+    () => previewMatches.filter((match) => customIds.has(match.id)).length,
+    [customIds, previewMatches],
+  );
+  const incompletePairs = preview?.incompletePairs ?? [];
+  const generatedCount = Math.max(0, previewMatches.length - keptCustomCount);
+  const canGenerate =
+    canEditWorkspace &&
+    !resultsLocked &&
+    preview !== null &&
+    !previewLoading &&
+    !previewError &&
+    generatedCount > 0;
 
   const regenerate = () => {
-    importMatches([...generated, ...keptCustom]);
-    setOpen(false);
+    if (!canEditWorkspace || resultsLocked || !canGenerate || !preview) return;
+    importMatches(preview.matches);
+    closePreview();
   };
 
-  const infoLine = !canGenerate
-    ? ranks.length === 0
-      ? 'No events configured. Set them in Configuration.'
-      : groups.length < 2
-        ? 'Need at least 2 schools to generate matches.'
-        : 'No feasible pairings with the current roster.'
-    : `Rebuild ${generated.length} lineup match${generated.length === 1 ? '' : 'es'} from the roster${
-        keptCustom.length > 0
-          ? ` · keeps ${keptCustom.length} custom match${keptCustom.length === 1 ? '' : 'es'}`
-          : ''
-      }.`;
+  const infoLine = previewLoading
+    ? 'Generating preview…'
+    : previewError
+      ? 'Could not generate a lineup preview.'
+      : preview === null
+        ? 'Generating preview…'
+        : generatedCount === 0
+          ? Object.keys(config?.rankCounts ?? {}).length === 0
+            ? 'No events configured. Set them in Configuration.'
+            : groups.length < 2
+              ? 'Need at least 2 schools to generate matches.'
+              : 'No feasible pairings with the current roster.'
+          : `Rebuild ${generatedCount} lineup match${generatedCount === 1 ? '' : 'es'} from the roster${
+              keptCustomCount > 0
+                ? ` · keeps ${keptCustomCount} custom match${keptCustomCount === 1 ? '' : 'es'}`
+                : ''
+            }.`;
 
   return (
     <div ref={ref} className="relative">
@@ -171,17 +204,19 @@ export function RegenerateMenu() {
           be the most prominent button on the surface. */}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={open ? closePreview : requestPreview}
         aria-haspopup="dialog"
         aria-expanded={open}
-        disabled={resultsLocked}
+        disabled={resultsLocked || !canEditWorkspace}
         title={
-          resultsLocked
+          !canEditWorkspace
+            ? READ_ONLY_MESSAGE
+            : resultsLocked
             ? 'Results are recorded. Regenerating would destroy them; the action unlocks when the results lock does.'
             : undefined
         }
         data-testid="regenerate-toggle"
-        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border-control bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50`}
       >
         <ArrowsClockwise aria-hidden="true" className="h-3.5 w-3.5" />
         Regenerate from roster
@@ -196,6 +231,14 @@ export function RegenerateMenu() {
             Regenerate from roster
           </div>
           <p className="text-xs text-muted-foreground">{infoLine}</p>
+          {previewError ? (
+            <p
+              data-testid="regenerate-error"
+              className="mt-2 border-l-2 border-destructive/50 bg-destructive/5 px-2 py-1 text-xs text-destructive"
+            >
+              {previewError}
+            </p>
+          ) : null}
           {isLiveDay ? (
             <p
               data-testid="regenerate-live-warning"

@@ -44,6 +44,7 @@ import type {
   ScheduleDTO,
   MatchStateDTO,
   TournamentStateDTO,
+  LineupDTO,
   EntryDTO,
   EntryCommitResultDTO,
 } from '../../api/dto';
@@ -75,6 +76,7 @@ interface DtoRegistry {
   ScheduleDTO: ScheduleDTO;
   MatchStateDTO: MatchStateDTO;
   TournamentStateDTO: TournamentStateDTO;
+  LineupDTO: LineupDTO;
   BracketTournamentDTO: BracketTournamentDTO;
   BracketCreateIn: BracketCreateIn;
   EventIn: EventIn;
@@ -159,6 +161,7 @@ export const meetContract: ModuleContract = {
     apiClient.getSolveJob,
     apiClient.listSolveJobs,
     apiClient.cancelSolveJob,
+    apiClient.generateMeetLineup,
     apiClient.runSolveJob,
     apiClient.validateMove,
     apiClient.createWarmRestartProposal,

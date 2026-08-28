@@ -44,6 +44,7 @@ import type {
   DisplayTokenDTO,
   EntryPageDTO,
   EntryPagePublicationPatchDTO,
+  LineupDTO,
 } from './dto';
 import { SOLVE_JOB_TERMINAL_STATUSES } from './dto';
 import type {
@@ -638,6 +639,22 @@ class ApiClient {
   async cancelSolveJob(tid: string, jobId: string): Promise<SolveJobDTO> {
     const response = await this.client.post<SolveJobDTO>(
       `/tournaments/${tid}/solve-jobs/${jobId}/cancel`,
+    );
+    return response.data;
+  }
+
+  /** Preview a Meet lineup from the caller's current (possibly dirty) state.
+   *  This route is intentionally read-only: the normal state autosave remains
+   *  the only writer for imported matches. */
+  async generateMeetLineup(
+    tid: string,
+    state: TournamentStateDTO,
+    signal?: AbortSignal,
+  ): Promise<LineupDTO> {
+    const response = await this.client.post<LineupDTO>(
+      `/tournaments/${tid}/meet/lineup`,
+      state,
+      { signal },
     );
     return response.data;
   }
