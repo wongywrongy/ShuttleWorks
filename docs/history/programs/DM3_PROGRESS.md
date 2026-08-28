@@ -2329,3 +2329,56 @@ Four things the authoring pass found that change what P7c is, all produced from 
 
 **Next session:** branch `dm3/p7c-meet-lineup` off `main` and execute the plan via
 `superpowers:subagent-driven-development`. Half A (Tasks 0–3) is shippable on its own.
+
+### 2026-08-27 — P7c slice completed (Meet lineup server-owned; seating remains explicit)
+
+**Commit chain.** Task 1 fixed the roster cleanup's division/slot confusion; Task 2 added the pure
+`meet.lineup.build_lineup` builder and operator-only POST preview; Task 3 routed console regeneration
+through that preview; Task 4 projected confirmed Meet partners as two mutually linked roster rows;
+Task 5 extended the existing position-grid assignment surface with explicit seating; Task 6 retired
+the backend `_generate_matches` transcription and points the seam assertion at the real builder; Task
+7 is this record and the debt-log update. (The integrator supplies the final commit ids when the
+shared working tree is committed.)
+
+**F-P7c-1, found and fixed.** The mounted `RosterTab` shape reproduced the defect: two same-school
+singles entrants carrying the committed bare division `BS` caused the second row's rank mapping to
+be stripped by the one-shot duplicate-slot cleanup. The cleanup now uses non-expanding configured-slot
+parsing, preserving bare divisions while retaining duplicate numbered slot cleanup. A digit check was
+rejected because `U10` is a valid division that ends in a digit. The debt-log row marks F-P7c-1 closed
+in this slice.
+
+**What the slice now guarantees.** Authorization reads workspace membership, then lineup generation
+is a pure POST over the caller's `TournamentStateDTO`: generation itself does not load or write
+tournament state, persistence, or a state version, and invokes no CP-SAT. Operators seat bare
+divisions before previewing and importing a lineup. Only configured numbered positions (`MS1`, `XD1`)
+generate matches; a bare division (`MS`, `U10`) stays unseated until the operator uses the roster's
+explicit seating action. Confirmed doubles are two `PlayerDTO` rows with mutual division-keyed
+`partnerPlayerIds` values and must occupy one numbered doubles position together. The measured
+`meetMode` scan found no tri-generation path in the tree, so the server builder emits dual matches
+only. A mutually accepted pair can still land in different schools when its two free-text club
+spellings differ; the seating hook treats those halves as singletons, preserving operator control.
+Duplicate entry-event codes that would assign one roster player two partners under one division key
+are left unlinked for the same reason: the seam refuses an ambiguous overwrite. The position grid,
+player picker, and seating action all apply Meet Setup's 20-position limit to legacy or externally
+posted larger counts, preventing unbounded browser allocation.
+
+**Correction to P7b's handoff.** The slot surface was not new: `PositionGrid`, `useRankAssignment`,
+and `useRankValidation` already owned drag/click assignment, capacity, and occupancy. P7c extended
+that surface with the seating action rather than creating a second surface. Seating remains
+client-owned, so the backend seam test simulates the operator action by substituting numbered ranks
+in the posted document before calling the real builder; it does not imply a server-side seating
+endpoint.
+
+**No migration.** P7c adds no column or migration revision. `partnerPlayerIds` is an additive blob
+field and does not bump the blob schema version, so F-DM-11 and the program's SQLite-only migration
+caveat do not apply to this slice's evidence.
+
+**Produced counts and gates.** The final console run is **205 files / 1868 tests passed**. The final
+backend P7c gate is **86 passed** across the lineup, Entries seam, tenant-isolation, and generated-DTO
+tests; `_generate_matches` is absent (**0 hits**). Ruff passes, all **15 import contracts** are kept,
+the production console build succeeds, and `npm run docs:build` exits 0. A broader backend run passed
+**1956 tests** with **66 skipped**; its three solver-child failures were environmental
+(`ValueError: current limit exceeds maximum limit` while raising the child resource limit), and the
+Turnstile lifecycle file cannot run in the restricted network environment. The three solver tests
+pass with the local cap disabled (`SOLVE_MEMORY_LIMIT_MB=0`), and all **27** lifecycle tests pass
+when allowed to reach Cloudflare's official test verifier.

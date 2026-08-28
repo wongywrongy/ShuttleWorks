@@ -46,6 +46,21 @@ ownership by *referencing* existing seams, not by rewiring them. No slice moves;
 edit. This is why it can be "honest, not aspirational": it describes what the code does today.
 :::
 
+### Meet lineup boundary
+
+Meet owns `apiClient.generateMeetLineup`, which posts the caller's current
+`TournamentStateDTO` to `POST /tournaments/{tournament_id}/meet/lineup`. The endpoint is a pure
+preview over that posted state: authorization reads workspace membership, while generation itself
+does not load or write tournament state, persist anything, change a state version, or invoke CP-SAT.
+It considers configured numbered positions (`MS1`, `XD1`, and so on), while a bare division code
+(`MS`, `U10`) remains unseated until the operator explicitly uses the roster's seating action.
+Confirmed doubles are projected across two `PlayerDTO` rows linked by mutual division-keyed
+`partnerPlayerIds`; the pair occupies one numbered doubles position rather than becoming a merged
+roster row. Ambiguous same-division partner projections are refused rather than overwritten, and
+interactive roster consumers cap persisted position counts at Meet Setup's 20-position limit. The
+current generator emits dual matches only because no tri-generation path exists in the tree. This
+contract keeps seating before the server's pure lineup preview as two distinct steps.
+
 ## The five descriptors and the seams
 
 The descriptors are `meetContract`, `bracketContract`, `operationsContract`, `displayContract` and

@@ -27,7 +27,6 @@ whose characterization pass (SP-E1-1 Task 1) is what this seam is built on.
 from __future__ import annotations
 
 import logging
-import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -52,6 +51,7 @@ from entries.entries import (
     commit_entries,
     roster_id,
 )
+from meet.lineup import build_lineup
 
 
 @pytest.fixture
@@ -276,67 +276,6 @@ def _players(repo, tournament_id):
     return repo.tournaments.get_by_id(tournament_id).data.get("players") or []
 
 
-def _generate_matches(document):
-    """A transcription of the ONLY Meet match generator, which is CONSOLE code.
-
-    **The coupling is stated rather than hidden.** ``RegenerateMenu.tsx``
-    runs in the browser, so no backend test can call it; a test that
-    paraphrased its rule instead would be asserting the paraphrase. Every
-    line below is a transcription of a line printed from
-    ``apps/console/src/modules/meet/matches/RegenerateMenu.tsx`` while this
-    test was written:
-
-    ``:24-30``  ``expandRanks`` — for each ``[prefix, count]`` of
-                ``rankCounts``, the ranks ``${prefix}${i}`` for i in 1..count
-    ``:62``     ``ranks = expandRanks(config?.rankCounts)``
-    ``:84``     ``needed = isDoublesRank(rank) ? 2 : 1``
-                (``lib/doubles.ts:26`` — strip trailing digits, ends with D)
-    ``:85-86``  ``for (i…) for (j = i + 1…)`` — strictly ACROSS two groups
-    ``:87-91``  each side is ``players.filter(p => p.groupId === groups[x].id
-                && (p.ranks ?? []).includes(rank))``
-    ``:93``     a side short of ``needed`` skips the pairing entirely
-    ``:96-97``  the sides are the first ``needed`` of each filtered list
-
-    **The cost of that coupling:** if the generator changes, this mirror
-    goes stale silently — there is no cross-tier gate that would catch it.
-    It is worth paying because the alternative is asserting a weaker claim
-    ("the rank looks numbered") and calling it the control that a committed
-    entry reaches a match.
-    """
-    counts = (document.get("config") or {}).get("rankCounts") or {}
-    groups = document.get("groups") or []
-    players = document.get("players") or []
-    out = []
-    for prefix, count in counts.items():
-        for i in range(1, count + 1):
-            rank = f"{prefix}{i}"
-            needed = 2 if re.sub(r"\d+$", "", rank).endswith("D") else 1
-            for a in range(len(groups)):
-                for b in range(a + 1, len(groups)):
-                    side_a = [
-                        p
-                        for p in players
-                        if p["groupId"] == groups[a]["id"]
-                        and rank in (p.get("ranks") or [])
-                    ]
-                    side_b = [
-                        p
-                        for p in players
-                        if p["groupId"] == groups[b]["id"]
-                        and rank in (p.get("ranks") or [])
-                    ]
-                    if len(side_a) < needed or len(side_b) < needed:
-                        continue
-                    out.append(
-                        {
-                            "eventRank": rank,
-                            "sideA": [p["id"] for p in side_a[:needed]],
-                            "sideB": [p["id"] for p in side_b[:needed]],
-                        }
-                    )
-    return out
-
-
 # ---- Meet ---------------------------------------------------------------
 
 
@@ -421,7 +360,7 @@ def test_an_entry_with_no_club_joins_one_shared_unassigned_school(repo, session)
     document = repo.tournaments.get_by_id(tid).data
     assert [g["name"] for g in document["groups"]] == ["Unassigned"]
     assert len({p["groupId"] for p in document["players"]}) == 1
-    assert _generate_matches(document) == [], (
+    assert build_lineup(state_dto_from_document(document)).matches == [], (
         "one school cannot play itself — the generator pairs strictly ACROSS "
         "groups, so this is the true state of the data, not a defect"
     )
@@ -663,30 +602,15 @@ def test_a_workspace_with_no_rank_vocabulary_accepts_any_code(repo, session):
     assert _players(repo, row.id)[0]["ranks"] == ["XD1"]
 
 
-def test_committed_entries_land_in_pairable_groups(repo, session):
+def test_a_seated_meet_entry_reaches_a_generated_match(repo, session):
     """**P7b-NC5(a) and (b), re-scoped by ruling P7b-7.**
 
-    What P7b delivers is that an entry maps onto a **division** and lands
-    in a group it can be paired OUT of. It does NOT deliver "reaches a
-    generated match": that needs numbered ranks, R-DM-5 rules slot
-    assignment an operator-side action, and the generator that cannot read
-    a bare division code lives in the console — so the remaining half is
-    the generator's gap and the slice that moves it owns closing it.
-
-    **This replaces two tests, and neither replacement is a softening.**
-    ``test_a_committed_meet_entry_cannot_reach_a_generated_match`` was
-    inverted under ruling P7b-4 into "…reaches a generated match", which
-    P7b-7 then made an untrue claim for this slice; and NC5(b) ("two
-    entrants in the same division can be paired with each other") is the
-    same property asked of the same fixture, so it folds in here rather
-    than being asserted twice.
-
-    The group property is asserted against the generator's OWN
-    cross-group rule rather than by counting groups: the mirror is run over
-    the committed document with the ONE remaining difference substituted —
-    the rank format — and it pairs these two entrants. The inline control
-    below then substitutes the same rank onto the PRE-P7b invented group
-    and gets nothing, so this cannot pass on the substitution alone.
+    The commit seam writes a bare division code; seating is an explicit
+    operator action, so this backend test simulates that action by substituting
+    the numbered rank in the posted document. The assertion then calls the
+    real server-owned pure builder, not a test transcription. The control
+    below keeps the pre-P7b invented group shape and proves the builder still
+    refuses a same-school pairing.
     """
     tid = _meet_workspace(repo, ranks=("MS",))
     ev = _entry_event(session, tid, code="MS")
@@ -711,10 +635,10 @@ def test_committed_entries_land_in_pairable_groups(repo, session):
         **document,
         "players": [{**p, "ranks": ["MS1"]} for p in document["players"]],
     }
-    matches = _generate_matches(seated)
-    assert len(matches) == 1, "one MS1 lineup slot, Kingsway vs Riverside"
-    assert matches[0]["sideA"] == [roster_id(ana.entry_player_id)]
-    assert matches[0]["sideB"] == [roster_id(bo.entry_player_id)]
+    lineup = build_lineup(state_dto_from_document(seated))
+    assert len(lineup.matches) == 1, "one MS1 lineup slot, Kingsway vs Riverside"
+    assert lineup.matches[0].sideA == [roster_id(ana.entry_player_id)]
+    assert lineup.matches[0].sideB == [roster_id(bo.entry_player_id)]
 
     # The control that keeps the substitution honest: the same seating over
     # the group shape this slice retired pairs nobody, because the generator
@@ -725,17 +649,147 @@ def test_committed_entries_land_in_pairable_groups(repo, session):
         "groups": [{"id": "MS", "name": "MS"}],
         "players": [{**p, "groupId": "MS"} for p in seated["players"]],
     }
-    assert _generate_matches(invented) == []
+    assert build_lineup(state_dto_from_document(invented)).matches == []
+
+
+def test_a_confirmed_meet_pair_commits_as_two_players_who_point_at_each_other(
+    repo, session
+):
+    """A Meet doubles pair remains two roster rows with mutual pointers."""
+    tid = _meet_workspace(repo, ranks=("XD",))
+    ev = _entry_event(session, tid, code="XD", entry_type="doubles")
+    a, b = _pair(
+        session,
+        tid,
+        ev,
+        names=("Ana Reyes", "Bo Lin"),
+        clubs=("Kingsway BC", "Kingsway BC"),
+    )
+
+    commit_entries(repo, tid)
+
+    players = repo.tournaments.get_by_id(tid).data["players"]
+    by_name = {p["name"]: p for p in players}
+    assert len(players) == 2, "a Meet pair is two roster rows, never one"
+    assert by_name["Ana Reyes"]["partnerPlayerIds"] == {
+        "XD": by_name["Bo Lin"]["id"]
+    }
+    assert by_name["Bo Lin"]["partnerPlayerIds"] == {
+        "XD": by_name["Ana Reyes"]["id"]
+    }
+    assert all(p["ranks"] == ["XD"] for p in players)
+    assert a.committed_player_id == by_name["Ana Reyes"]["id"]
+    assert b.committed_player_id == by_name["Bo Lin"]["id"]
+
+
+def test_a_skipped_meet_pair_half_does_not_leave_a_dangling_partner_pointer(
+    repo, session
+):
+    """A pair recognized by ``_pair_batch`` gets no one-sided pointer."""
+    tid = _meet_workspace(repo, ranks=("XD",))
+    ev = _entry_event(session, tid, code="XD", entry_type="doubles")
+    a, b = _pair(
+        session,
+        tid,
+        ev,
+        names=("A" * 201, "Bo Lin"),
+        clubs=("Kingsway BC", "Kingsway BC"),
+    )
+
+    result = commit_entries(repo, tid)
+
+    assert [c.entry_id for c in result.committed] == [str(b.id)]
+    players = repo.tournaments.get_by_id(tid).data["players"]
+    assert [p["name"] for p in players] == ["Bo Lin"]
+    assert players[0].get("partnerPlayerIds") is None
+    session.expire_all()
+    assert a.committed_player_id is None
+
+
+def test_a_person_can_keep_a_different_meet_partner_per_event(repo, session):
+    """Partner projection is keyed by division, not overwritten per person."""
+    tid = _meet_workspace(repo, ranks=("XD", "MD"))
+    xd = _entry_event(session, tid, code="XD", entry_type="doubles")
+    md = _entry_event(session, tid, code="MD", entry_type="doubles")
+    ana = EntryPlayer(
+        tournament_id=tid,
+        account_id=_account(session).id,
+        full_name="Ana Reyes",
+        gender="F",
+        club="Kingsway BC",
+    )
+    session.add(ana)
+    session.commit()
+    ana_xd = _entry(session, tid, xd, player=ana)
+    bo_xd = _entry(session, tid, xd, player_name="Bo Lin", club="Kingsway BC")
+    ana_md = _entry(session, tid, md, player=ana)
+    cal_md = _entry(session, tid, md, player_name="Cal Park", club="Kingsway BC")
+    now = datetime.now(timezone.utc)
+    for first, second in ((ana_xd, bo_xd), (ana_md, cal_md)):
+        first.partner_entry_id = second.id
+        second.partner_entry_id = first.id
+        first.partner_accepted_at = now
+        second.partner_accepted_at = now
+    session.commit()
+
+    commit_entries(repo, tid)
+
+    by_name = {p["name"]: p for p in _players(repo, tid)}
+    assert by_name["Ana Reyes"]["ranks"] == ["XD", "MD"]
+    assert by_name["Ana Reyes"]["partnerPlayerIds"] == {
+        "XD": by_name["Bo Lin"]["id"],
+        "MD": by_name["Cal Park"]["id"],
+    }
+    assert by_name["Bo Lin"]["partnerPlayerIds"] == {
+        "XD": by_name["Ana Reyes"]["id"]
+    }
+    assert by_name["Cal Park"]["partnerPlayerIds"] == {
+        "MD": by_name["Ana Reyes"]["id"]
+    }
+
+
+def test_duplicate_division_codes_do_not_project_ambiguous_partner_links(
+    repo, session
+):
+    """One roster division cannot identify two partners for one person."""
+    tid = _meet_workspace(repo, ranks=("XD",))
+    first = _entry_event(session, tid, code="XD", entry_type="doubles")
+    second = _entry_event(session, tid, code="XD", entry_type="doubles")
+    ana = EntryPlayer(
+        tournament_id=tid,
+        account_id=_account(session).id,
+        full_name="Ana Reyes",
+        gender="F",
+        club="Kingsway BC",
+    )
+    session.add(ana)
+    session.commit()
+    ana_first = _entry(session, tid, first, player=ana)
+    bo = _entry(session, tid, first, player_name="Bo Lin", club="Kingsway BC")
+    ana_second = _entry(session, tid, second, player=ana)
+    cal = _entry(session, tid, second, player_name="Cal Park", club="Kingsway BC")
+    now = datetime.now(timezone.utc)
+    for left, right in ((ana_first, bo), (ana_second, cal)):
+        left.partner_entry_id = right.id
+        right.partner_entry_id = left.id
+        left.partner_accepted_at = now
+        right.partner_accepted_at = now
+    session.commit()
+
+    commit_entries(repo, tid)
+
+    by_name = {p["name"]: p for p in _players(repo, tid)}
+    assert by_name["Ana Reyes"]["ranks"] == ["XD"]
+    assert all("partnerPlayerIds" not in player for player in by_name.values())
 
 
 def test_the_same_fixture_generates_nothing_under_the_pre_p7b_shape(repo, session):
-    """Negative control for the mirror: prove it can say no.
+    """Negative control for the real builder: prove it can say no.
 
-    ``_generate_matches`` is a transcription, so a transcription that
-    matched everything would make NC5(a) vacuous. This feeds it the exact
-    shape the seam wrote before this slice — one group named for the event
-    code, ``ranks = ["MS"]`` — and it must produce nothing, for BOTH of the
-    reasons the old characterization gave, each shown alone.
+    This feeds it the exact shape the seam wrote before this slice — one group
+    named for the event code, ``ranks = ["MS"]`` — and it must produce
+    nothing, for BOTH of the reasons the old characterization gave, each
+    shown alone.
     """
     tid = _meet_workspace(repo, ranks=("MS",))
     row = repo.tournaments.get_by_id(tid)
@@ -746,7 +800,7 @@ def test_the_same_fixture_generates_nothing_under_the_pre_p7b_shape(repo, sessio
         {"id": "b", "name": "Bo", "groupId": "MS", "ranks": ["MS"]},
     ]
 
-    assert _generate_matches(document) == []
+    assert build_lineup(state_dto_from_document(document)).matches == []
 
     # Each disconnect alone is still fatal: numbered ranks in one group,
     # then two groups holding the bare division code. **The second one is
@@ -756,7 +810,7 @@ def test_the_same_fixture_generates_nothing_under_the_pre_p7b_shape(repo, sessio
         **document,
         "players": [{**p, "ranks": ["MS1"]} for p in document["players"]],
     }
-    assert _generate_matches(one_group) == []
+    assert build_lineup(state_dto_from_document(one_group)).matches == []
     bare_code = {
         **document,
         "groups": [{"id": "g-1", "name": "A"}, {"id": "g-2", "name": "B"}],
@@ -765,7 +819,7 @@ def test_the_same_fixture_generates_nothing_under_the_pre_p7b_shape(repo, sessio
             {**document["players"][1], "groupId": "g-2"},
         ],
     }
-    assert _generate_matches(bare_code) == []
+    assert build_lineup(state_dto_from_document(bare_code)).matches == []
 
 
 def test_more_distinct_clubs_than_the_group_cap_still_write_a_valid_document(

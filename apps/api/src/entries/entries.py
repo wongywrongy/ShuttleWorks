@@ -478,6 +478,8 @@ def _plan_meet(
     planned: list[tuple[Entry, str]] = []
     skipped: list[SkippedEntry] = []
     mutated = False
+    pairs = _pair_batch(candidates, events)
+    planned_rows: dict[uuid.UUID, dict] = {}
 
     for entry in candidates:
         event = events.get(entry.entry_event_id)
@@ -507,6 +509,7 @@ def _plan_meet(
             if code not in (row.get("ranks") or []):
                 row["ranks"] = [*(row.get("ranks") or []), code]
                 mutated = True
+            planned_rows[entry.id] = row
             planned.append((entry, row["id"]))
             continue
 
@@ -542,12 +545,75 @@ def _plan_meet(
             continue
 
         players.append(payload)
+        planned_rows[entry.id] = payload
         if school not in group_ids and len(groups) < MAX_GROUPS:
             groups.append({"id": school, "name": name})
             group_ids.add(school)
             school_ids[name.casefold()] = school
         planned.append((entry, payload["id"]))
         mutated = True
+
+    # Pair links are projected only after every candidate has had a chance to
+    # produce a valid row. This keeps a skipped half from leaving its partner
+    # pointing at a roster row that was never written. Build the complete
+    # proposal first: duplicate entry-event codes can otherwise overwrite one
+    # person's division key and leave two partners pointing at them.
+    entries_by_id = {entry.id: entry for entry in candidates}
+    link_candidates: dict[tuple[str, str], set[str]] = {}
+    rows_by_id = {
+        str(player["id"]): player
+        for player in planned_rows.values()
+        if player.get("id") is not None
+    }
+    for entry_id, player in planned_rows.items():
+        entry = entries_by_id[entry_id]
+        partner = pairs.get(entry_id)
+        if partner is None:
+            continue
+        partner_player = planned_rows.get(partner.id)
+        if partner_player is None:
+            continue
+        event = events.get(entry.entry_event_id)
+        division = (
+            divisions.get(event.meet_event_id or event.code)
+            if event is not None
+            else None
+        )
+        if event is None or (divisions and division is None):
+            continue
+        code = division.id if division is not None else event.code
+        player_id = player.get("id")
+        partner_id = partner_player.get("id")
+        if player_id is None or partner_id is None:
+            continue
+        link_candidates.setdefault((str(player_id), code), set()).add(
+            str(partner_id)
+        )
+
+    for (player_id, code), partner_ids in link_candidates.items():
+        if len(partner_ids) != 1:
+            continue
+        partner_id = next(iter(partner_ids))
+        if link_candidates.get((partner_id, code)) != {player_id}:
+            continue
+        player = rows_by_id.get(player_id)
+        partner = rows_by_id.get(partner_id)
+        if player is None or partner is None:
+            continue
+        current = dict(player.get("partnerPlayerIds") or {})
+        partner_current = dict(partner.get("partnerPlayerIds") or {})
+        if current.get(code) not in (None, partner_id):
+            continue
+        if partner_current.get(code) not in (None, player_id):
+            continue
+        if current.get(code) != partner_id:
+            current[code] = partner_id
+            player["partnerPlayerIds"] = current
+            mutated = True
+        if partner_current.get(code) != player_id:
+            partner_current[code] = player_id
+            partner["partnerPlayerIds"] = partner_current
+            mutated = True
 
     if mutated:
         document["players"] = players

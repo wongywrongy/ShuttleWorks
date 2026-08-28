@@ -49,6 +49,32 @@ Roster / Matches / Config  ─▶  POST …/solve-jobs (202) ─▶ worker  ─�
 `tournaments/` + `TournamentSetupPage` (Configuration) surfaces author the three solver inputs and
 hold them in `tournamentStore`: a `TournamentConfig`, a `PlayerDTO[]`, and a `MatchDTO[]`.
 
+### Lineup preview and seating
+
+Meet lineup generation is a separate, server-owned preview boundary. The console posts its current
+(possibly unsaved) `TournamentStateDTO` to `POST /tournaments/{id}/meet/lineup`; the response contains
+freshly generated lineup matches, incomplete doubles pairs, and custom matches retained from the
+posted state. Authorization first reads the caller's workspace membership; generation itself is a
+pure operation over the posted state: it does not load or write tournament state, change the state
+version, or invoke CP-SAT. The operator explicitly **Seats entrants** first, then requests a preview,
+confirms its import, and the normal state autosave persists that explicit import.
+
+The Entries commit seam writes a player's bare division code, such as `MS` or `U10`, into `ranks`.
+That is division identity, not a numbered lineup position. Seating is an operator decision that
+maps it to a configured position such as `MS1`; the lineup builder considers numbered positions only,
+so an unseated bare division produces no match. A confirmed doubles partner is projected as two
+`PlayerDTO` rows with mutual division-keyed `partnerPlayerIds` values. Both rows must occupy the
+same numbered doubles position (for example, `XD1`) for the builder to produce a two-player side;
+pairing is never hidden inside a merged roster row. If duplicate entry-event codes would give one
+person two partners under the same division key, the commit seam projects none of those ambiguous
+links and leaves the operator to resolve the roster manually. Meet Setup supports at most 20
+positions per event; roster rendering, selection, and automatic seating apply that same bound even
+when an older or externally posted blob contains a larger count.
+
+The current builder emits dual matches only. `meetMode` remains part of configuration for the
+existing UI, but the tree has no tri-generation path, and lineup generation does not add one or
+delegate this preview to CP-SAT.
+
 **2. CP-SAT solve (as a job).** The frontend submits `{ config, players, matches,
 previousAssignments }` (the `GenerateScheduleRequest`) to `POST /tournaments/{id}/solve-jobs` with
 a client-minted `Idempotency-Key` and polls the job to a terminal status (`apiClient.runSolveJob`;
@@ -108,8 +134,8 @@ Two read-only feeds sit alongside the proposal flow:
 | Kind | Owned |
 | --- | --- |
 | **Nav surfaces** | Roster · Matches · Configuration (`ownedSegments: ['roster', 'matches', 'setup']`) |
-| **Backend routes** | `/tournaments/{id}/solve-jobs*` (submit / list / get / cancel — the async solve rail), `/schedule/validate`, `/schedule/warm-restart` (`/schedule` + `/schedule/stream` are `410 Gone`); and under `/tournaments/{id}/schedule/`: `advisories`, `proposals/*`, `suggestions/*`, `director-action` |
-| **`apiClient` methods** | `submitSolveJob`, `getSolveJob`, `listSolveJobs`, `cancelSolveJob`, `runSolveJob`, `validateMove`, `createWarmRestartProposal`, `createRepairProposal`, `createManualEditProposal`, `createDirectorActionProposal`, `commitProposal`, `cancelProposal`, `getProposal`, `getAdvisories`, `getSuggestions`, `applySuggestion`, `dismissSuggestion` |
+| **Backend routes** | `/tournaments/{id}/solve-jobs*` (submit / list / get / cancel — the async solve rail), `POST /tournaments/{id}/meet/lineup` (pure lineup preview over posted state), `/schedule/validate`, `/schedule/warm-restart` (`/schedule` + `/schedule/stream` are `410 Gone`); and under `/tournaments/{id}/schedule/`: `advisories`, `proposals/*`, `suggestions/*`, `director-action` |
+| **`apiClient` methods** | `submitSolveJob`, `getSolveJob`, `listSolveJobs`, `cancelSolveJob`, `generateMeetLineup`, `runSolveJob`, `validateMove`, `createWarmRestartProposal`, `createRepairProposal`, `createManualEditProposal`, `createDirectorActionProposal`, `commitProposal`, `cancelProposal`, `getProposal`, `getAdvisories`, `getSuggestions`, `applySuggestion`, `dismissSuggestion` |
 | **Store slices** | the editable document in `tournamentStore` (config, roster, matches, schedule, `scheduleVersion` + history); the review pipeline in `uiStore` (`activeProposal`, `advisories`, `suggestions`) |
 | **Frontend code** | `modules/meet/` — `roster/`, `matches/`, `TournamentSetupPage` (Configuration), `exports/` (roster + matches XLSX). The Plan/Run surfaces are Operations-owned code since SP-CONSOLE-4 (`modules/operations/`); the meet-resident `SchedulePage` / `MatchControlCenterPage` were deleted at its B4 |
 | **Backend services** | `adapters/badminton.py` (DTO ↔ engine boundary), `services/solve_jobs.py` + `solve_worker.py` + `solve_runner.py` + `solve_child.py` (the job rail), `services/suggestions_worker.py` (background re-optimisation), `services/schedule_impact.py` (impact scoring) |
