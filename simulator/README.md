@@ -12,7 +12,7 @@ Display read-models against the simulator's own ledger.
 
 The simulator talks to the backend **only over HTTP**. It never imports
 `app`, `api`, `services`, `database`, `repositories`, `adapters`, or
-`scheduler_core` — enforced by `tests/test_import_boundary.py` (ast-walks
+`scheduler_core` — enforced by `simulator/tests/test_import_boundary.py` (ast-walks
 the package; even a TYPE_CHECKING import fails). The ephemeral-server mode
 launches uvicorn as a *subprocess*, which keeps the process boundary intact.
 
@@ -128,7 +128,7 @@ a neighbour's workspace. See "Auth" below.
   `entrant_signup_max_per_ip`; 130 entry players reach the desk in **10**
   club-ordered squad submissions against `entries_max_per_ip`'s 20 per 10
   minutes, because one form legitimately carries a squad
-  (`services/entry_form.parse_players`). Only `REGISTRATION_MAX_PER_IP`
+  (`apps/api/src/entries/entry_form.py::parse_players`). Only `REGISTRATION_MAX_PER_IP`
   still binds — six organisations against a shipped budget of five — and
   that is raised on the deployment, never bypassed here.
 
@@ -175,7 +175,8 @@ both situations:
 Seeding six organisations from one host needs `REGISTRATION_MAX_PER_IP` raised
 on the *deployment* (the default 5 locks on the fifth), never bypassed here.
 
-`EphemeralServer` runs uvicorn with `cwd=backend/`, so it reads `backend/.env`
+`EphemeralServer` runs uvicorn with `cwd=apps/api/src/`, so it reads the API
+environment from that working directory
 — on a machine configured for cloud mode, `--ephemeral` is cloud mode too.
 That is handled by the same runner check, so nothing needs to know.
 
@@ -255,7 +256,7 @@ that seeds one big tournament and prints its tid. Uncomment `locust` in
 ## Troubleshooting
 
 - **`connect refused`** — no backend at the target. Start one (`uvicorn
-  app.main:app --port 8600` from `backend/`, repo venv) or use `--ephemeral`.
+  core.main:app --port 8600` from `apps/api/src/`, repo venv) or use `--ephemeral`.
 - **INFEASIBLE solve** — reported as a violation with the backend's
   reasons echoed; usually a factory config too tight (courts × day window
   vs match count).

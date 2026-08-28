@@ -55,7 +55,7 @@ jar — and `Path=` is not enforced against same-origin script.
 :::
 
 This split is declared, and **test-enforced**, in
-`frontend/src/platform/contracts/moduleContract.ts` (against its colocated
+`apps/console/src/platform/contracts/moduleContract.ts` (against its colocated
 `moduleContract.test.ts`) — see [Module contracts](/reference/contracts/).
 
 ## What each module owns

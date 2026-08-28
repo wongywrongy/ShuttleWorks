@@ -17,13 +17,13 @@ comments are relative to those roots.
 
 Meet and Bracket have different native models, but Operations speaks **one**
 interactive row. `meetToOpsBlocks` / `bracketToOpsBlocks`
-(`products/operations/opsBlock.ts`) are the two adapters that fold each engine's
+(`apps/console/src/modules/operations/opsBlock.ts`) are the two adapters that fold each engine's
 shape into an `OpsBlock`.
 
 ```ts
-// products/operations/opsBlock.ts
+// apps/console/src/modules/operations/opsBlock.ts
 import { meetToOpsBlocks, bracketToOpsBlocks, type OpsBlock } from
-  './products/operations/opsBlock';
+  './modules/operations/opsBlock';
 
 // Meet's native model → uniform blocks. Live match-state overlays the
 // committed schedule (postpone/actual-slot win over the planned assignment).
@@ -51,13 +51,13 @@ and [Unified Operations view](/explanation/architecture/unified-operations-view)
 
 The Run surface is built from `OpsBlock`s in two steps: convert to the Run
 view-model with `toRunMatches`, then derive per-court lanes and the global queue
-(`products/operations/runtime/runModel.ts`). Order is **derived, never persisted**,
+(`apps/console/src/modules/operations/runtime/runModel.ts`). Order is **derived, never persisted**,
 so a refresh never loses the floor.
 
 ```ts
-// products/operations/runtime/runModel.ts
+// apps/console/src/modules/operations/runtime/runModel.ts
 import { toRunMatches, deriveCourtLanes, deriveQueue } from
-  './products/operations/runtime/runModel';
+  './modules/operations/runtime/runModel';
 
 // 1. Fold engine blocks into the Run view-model. Bracket has no persisted
 //    `called`, so the Operations-local overlay sets are injected here.
@@ -154,7 +154,7 @@ drive CP-SAT. Hand it a `ScheduleRequest` (config + players + matches); it retur
 a `ScheduleResult`.
 
 ```python
-# scheduler_core/schedule.py
+# packages/scheduler-core/scheduler_core/schedule.py
 from scheduler_core import (
     schedule, ScheduleRequest, ScheduleConfig, Player, Match, SolverStatus,
 )
@@ -185,12 +185,12 @@ random_seed=...)`; `result.solver_seed` echoes the seed actually used. See
 
 Meet and Bracket solve the same physical courts independently
 ([ADR 0006](/explanation/decisions/0006-unified-scheduling-core)), so they can double-book one
-`(court, slot)`. `packBlockLanes` (`products/operations/opsBlock.ts`) assigns each
+`(court, slot)`. `packBlockLanes` (`apps/console/src/modules/operations/opsBlock.ts`) assigns each
 colliding block a sub-lane so they render side-by-side instead of z-fighting.
 
 ```ts
-// products/operations/opsBlock.ts
-import { packBlockLanes } from './products/operations/opsBlock';
+// apps/console/src/modules/operations/opsBlock.ts
+import { packBlockLanes } from './modules/operations/opsBlock';
 
 const lanes = packBlockLanes([...meetBlocks, ...bracketBlocks]);
 // Map keyed by OpsBlock.key → { laneIndex, laneCount }

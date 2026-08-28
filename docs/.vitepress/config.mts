@@ -20,20 +20,13 @@ function gitStamp() {
 const STAMP = gitStamp()
 
 // ShuttleWorks documentation — the single source of truth for architecture,
-// module contracts, and data flow. Authored 2026-06 against branch
-// `dev/workspace-suite`.
+// module contracts, and data flow.
 //
 // `srcDir` is the docs/ directory itself (the default when VitePress is run as
 // `vitepress build docs`). `outDir` is docs/.vitepress/dist. The dead-link
 // checker is left ON (`ignoreDeadLinks: false`) on purpose — a broken internal
 // link should fail `docs:build`, which is our verification gate.
 //
-// IMPORTANT: docs/ already holds a large legacy tree (design records, audits,
-// dated change logs, the historical roadmap). With `srcDir: '.'` VitePress
-// would otherwise parse every one of those `.md` files as a page and fail the
-// build on their GitHub-style relative links. `srcExclude` keeps them on disk
-// (nothing is deleted) but out of the site. Useful prose from them has been
-// consolidated into the pages below; the originals remain the design archive.
 export default defineConfig({
   title: 'ShuttleWorks',
   description:
@@ -63,35 +56,8 @@ export default defineConfig({
   // cannot reach at build time and would otherwise flag.
   ignoreDeadLinks: [/^https?:\/\/localhost/],
 
-  // Legacy/scratch trees: kept on disk, excluded from the site. These are the
-  // design record and historical logs — not part of the curated IA.
-  // ---------------------------------------------------------------------
-  // THE ACCEPTANCE TEST (SP-REORG-1 Phase 5)
-  //
-  // Every page on this site names a Diataxis quadrant by the directory it
-  // lives in: tutorials/ how-to/ reference/ explanation/. Anything that
-  // cannot name one is history, and history/ is excluded from the site
-  // rather than curated into it.
-  //
-  // That is the whole rule. A page that does not fit a quadrant is not a
-  // page that needs a fifth quadrant; it is a dated record, and dated
-  // records are read in the repository, not browsed on a site.
-  // ---------------------------------------------------------------------
+  // Repository metadata is not a reader-facing site page.
   srcExclude: [
-    // The single history home: program ledgers, audits, dated change logs,
-    // the superpowers design record, the progress board, the retired
-    // roadmap and tech-stack pages, and the two product records SP-REORG-1
-    // relocated. All kept on disk; none of it is curated IA.
-    'history/**',
-    // Ownership maps and import boundaries: working notes against a tree,
-    // not reader documentation.
-    'explanation/architecture/workspace-suite/**',
-    // Superseded drafts kept as record. Each duplicates a LIVE page, and
-    // rendering both would put two competing versions of one subject on the
-    // site with nothing linking to the stale one.
-    '**/*.superseded-draft-*.md',
-    // Meta-material: templates and recipes are inputs to the product, not
-    // pages about it. Kept at the top level deliberately.
     'README.md',
   ],
 
@@ -247,8 +213,7 @@ export default defineConfig({
     ],
 
     editLink: {
-      pattern:
-        'https://github.com/wongywrongy/ShuttleWorks/edit/dev/workspace-suite/docs/:path',
+      pattern: 'https://github.com/wongywrongy/ShuttleWorks/edit/main/docs/:path',
       text: 'Edit this page on GitHub',
     },
 

@@ -31,14 +31,14 @@ docs should **link here** instead of redefining a term locally.
   the internal name is unchanged, so "workspace" (UI) and "tournament" (DB/API)
   refer to the same thing. See [Workspace model](/explanation/architecture/workspace-model).
 - **Hub** — the pre-workspace control plane at `/`: the workspace list, create /
-  import, and global settings. Lives in `products/hub/`.
-- **Module** *(workspace module)* — one of **Meet**, **Bracket**, or **Display**,
+  import, and global settings. Lives in `apps/console/src/modules/hub/`.
+- **Module** *(workspace module)* — one of **Meet**, **Bracket**, **Display**, or **Entries**,
   *enabled inside a workspace* (a UniFi-style control plane, not separate apps).
   Enablement is persisted state in the `workspace_modules` table; the frontend
   vocabulary is the `ModuleId` union. See [Settings](/reference/modules/settings) and
   [Enable a module](/how-to/enable-a-module).
 - **Tier-1 vs Tier-2 module** — **Tier-1** modules are user-enableable and belong
-  to the `ModuleId` union (Meet, Bracket, Display). **Operations** is the sole
+  to the `ModuleId` union (Meet, Bracket, Display, Entries). **Operations** is the sole
   **Tier-2** module: always-on, architectural, *not* user-enableable — it has no
   enable flag and no `workspace_modules` row. Types encode this as
   `ArchModuleId = ModuleId | 'operations'`.
@@ -46,7 +46,7 @@ docs should **link here** instead of redefining a term locally.
   enablement, sharing). **Not** a `ModuleId` — it is chrome, not an engine. See
   [Settings](/reference/modules/settings).
 - **Module contract** — the typed, **test-enforced** descriptor in
-  `frontend/src/platform/contracts/moduleContract.ts` that declares, per module,
+  `apps/console/src/platform/contracts/moduleContract.ts` that declares, per module,
   what it owns / produces / consumes and which seams it touches. Honest, not
   aspirational. See [What a module contract is](/reference/contracts/).
 
@@ -66,7 +66,8 @@ Five modules share one anatomy — **intake → engine → emit**:
   *live court layout*, and owns the match-state machine + command queue. See
   [Operations](/reference/modules/operations).
 - **Display** — the **read-only output**: projects live results to a public TV
-  view. Owns no backend route; polls. See [Display](/reference/modules/display).
+  view. Owns the public capability-token projection routes and otherwise polls.
+  See [Display](/reference/modules/display).
 - **intake → engine → emit** — the common module shape: gather inputs (roster /
   draw / config), run a pure transform (the CP-SAT engine, or a draw resolve),
   emit fully-formed match records. Notably, **neither Meet lineup nor Bracket
@@ -144,7 +145,7 @@ Five modules share one anatomy — **intake → engine → emit**:
   are composed, not hard-coded.
 - **`ScheduleConfig`** — the single dataclass that scheduling parameters become,
   built in one place by `build_schedule_config`
-  (`backend/services/scheduling/params.py`). Both engines route params through it.
+  (`apps/api/src/shared/scheduling/params.py`). Both engines route params through it.
   See [Unified configuration](/explanation/architecture/unified-configuration).
 - **Match** — the engine-agnostic unit both engines emit and Operations operates,
   folded into the canonical `Match` / `OpsBlock` row (ADR 0009). A Meet match and
@@ -163,7 +164,7 @@ Five modules share one anatomy — **intake → engine → emit**:
   Operations: `scheduled → called → playing → finished | retired`, with back-edges
   `uncall` (`called → scheduled`) and `postpone` (`playing → scheduled`).
   `finished` and `retired` are terminal. The transition table
-  (`VALID_TRANSITIONS`) lives in `backend/services/match_state.py`; an illegal
+  (`VALID_TRANSITIONS`) lives in `apps/api/src/operations/match_state.py`; an illegal
   move raises `ConflictError` → HTTP 409. See
   [Data flow](/explanation/architecture/data-flow#the-match-state-machine).
 - **Locked status** — a status that pins a match's court + time slot for the
@@ -172,7 +173,7 @@ Five modules share one anatomy — **intake → engine → emit**:
   the floor.
 - **Match action** — the *operator-facing* command vocabulary that maps to a state
   transition: `call_to_court`, `start_match`, `finish_match`, `retire_match`,
-  `uncall`, `assign_court`, `postpone_match` (`app/constants.py`,
+  `uncall`, `assign_court`, `postpone_match` (`apps/api/src/core/constants.py`,
   `ACTION_TO_TARGET_STATUS`). The operator names the *action*; the processor
   derives the target status and verifies the transition is legal.
 - **Non-solver command** — `assign_court` / `postpone_match` (and the bracket
@@ -185,14 +186,14 @@ Five modules share one anatomy — **intake → engine → emit**:
   [Data flow](/explanation/architecture/data-flow#the-command-pipeline-write-path).
 - **Lane** *(court lane)* — a single court's derived **Now / Next / Later** view:
   the **Now** match is the one on court, with queued matches (**Next / Later**)
-  waiting behind it. Derived in `products/operations/runtime/runModel.ts` from
+  waiting behind it. Derived in `apps/console/src/modules/operations/runtime/runModel.ts` from
   `court + slot + status` (so a page refresh never loses the floor).
 - **Auto-pull** — when recording a result empties a court lane and the queue has a
   waiting match, the Run surface pulls the next match onto that court
   automatically (`RunSurface.tsx`).
 - **Advisory** — a *computed* operational warning surfaced to the director —
   `overrun`, `no-show`, etc. — from `GET …/schedule/advisories`
-  (`backend/api/schedule_advisories.py`). Advisories are derived, not stored
+  (`apps/api/src/meet/schedule_advisories.py`). Advisories are derived, not stored
   state: **no-show is an advisory, not a persisted check-in field.**
 - **Overrun grace** — `OVERRUN_GRACE_MINUTES` (5 min): a started match whose
   elapsed time exceeds *expected + grace* fires an `overrun` advisory. This is the
@@ -241,9 +242,9 @@ no longer exists. Reads are plain polling; there is no push channel.
 
 ## Docs & decisions
 
-- **ADR** — an Architecture Decision Record under `docs/decisions/` (0001–0011),
+- **ADR** — an Architecture Decision Record under the [decisions](/explanation/decisions/) section (0001–0015),
   each with a status header. See the [ADR log](/explanation/decisions/).
-- **Contract page** — a per-seam page under `docs/contracts/` documenting a wired
+- **Contract page** — a per-seam page under [module contracts](/reference/contracts/) documenting a wired
   cross-module boundary as an explicit requirement (payload, transport,
   criticality, risk).
 

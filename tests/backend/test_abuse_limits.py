@@ -11,8 +11,9 @@ Two controls, both about volume rather than correctness:
   dual-dialect in ``tests/unit/test_solve_jobs.py``; what is pinned here is
   the HTTP contract.
 
-Negative controls are recorded in ``SEC_PROGRESS.md``. A control whose test
-still passes once the control is removed is not a control (CODE_HEALTH 3b).
+The controls were mutation-verified during SP-SEC-1; Git history retains that
+record. A control whose test still passes once removed is not a control
+(CODE_HEALTH 3b).
 """
 from __future__ import annotations
 

@@ -18,7 +18,7 @@ govern everything below:
 | Account surface | **Account** (rail item + chrome title + H1) | R-A's other half. The rail gear owns the word; the avatar chip below it names the *person* (`aria-label` = display name, email fallback), because two rail links to `/settings` both announcing "Account" is the ambiguity the rename would otherwise have created. |
 | Backups surface | **Backups** (nav + H1) | Retires "Sync and backups". There is no sync: the Supabase mirror was removed entirely in SP-CLOUD-3 (ADR 0012), so the nav promised a feature the page could not contain. |
 | Module state at creation | **On / Off** on `/new`; **On / Available / Off** in the Modules catalog | SP-CONSOLE-2 R-B. "Available" and "Off" are the same answer before a workspace exists — neither module is on, and both are one click apart in Modules afterwards — so `/new` asks the question that has a consequence and seeds everything not-On as `available`. The catalog keeps the full tri-state. |
-| Conjunctions | **"and"**, never "&" | "Venue and schedule", "Members and roles", "Sync and backups", "Court order and visibility", "Alerts and activity". Applies to nav labels, H1s, and section titles. Player-pair name joins ("A / B" or "A & B") are name formatting, not conjunctions, and are governed by the match-presentation rules instead. |
+| Conjunctions | **"and"**, never "&" | "Venue and schedule", "Members and roles", "Court order and visibility", "Alerts and activity". Applies to nav labels, H1s, and section titles. Player-pair name joins ("A / B" or "A & B") are name formatting, not conjunctions, and are governed by the match-presentation rules instead. |
 | Participant entry (bracket picker) | **"Save participants"** / **"Save pairs"** | Retires "Commit" / "Commit pairs" (git vocabulary). Verified against behavior: these buttons replace the event's participant list only — they do **not** generate or lock the draw, so the directive's suggested "Lock draw" label would have mislabeled them. The action that creates the bracket is the row-level **Generate draw**. |
 | Solver actions (Plan toolbar) | **"Re-plan day"** (full re-solve, replaces the plan); **"Generate meet"** (first solve) | Retires "Re-solve meet" as button copy. Composes with the existing warm-restart action **"Re-plan from here"** (mid-day, keeps started/finished fixed, stays close): *day* = the whole plan from scratch, *from here* = the rest of the day, minimally disturbed. |
 | Module tri-state | **On / Available / Off** (Modules catalog) | Retires "Later". Matches the backend statuses (`enabled` / `available` / `disabled`). The workspace builder no longer offers all three — see "Module state at creation" above. |
@@ -81,7 +81,7 @@ expressed in minutes would never once appear on screen.
 | 1 | Late | `--status-late` (amber) |
 | 2 or more | Late | `--status-overdue` (red) |
 
-`deriveTimeliness` in `products/operations/runtime/runMachine.ts` is the one
+`deriveTimeliness` in `apps/console/src/modules/operations/runtime/runMachine.ts` is the one
 implementation. `deriveLate` survives as the wide "past its planned start at
 all" boolean the summary band and the Plan chips already counted; it is now
 expressed in terms of `deriveTimeliness` so the two cannot disagree.

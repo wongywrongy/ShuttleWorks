@@ -5,10 +5,10 @@ with two open items deferred (below).
 
 ## Context
 
-dependency-cruiser's `no-cross-product` rule (a product under
-`src/products/{X}/` importing another product's internals) sat at **warn** with a
+dependency-cruiser's `no-cross-product` rule (one product module importing another
+product's internals) sat at **warn** with a
 pile of violations and a plan to "ratchet to error after cleanup." The
-debt-paydown program triaged every edge (`docs/history/audits/02-review-2-3.md`) and
+debt-paydown program triaged every edge and
 found the pile is not uniform: some edges are legitimate composition, some are
 genuinely misplaced shared code, and a few are real architectural debt that needs
 a design decision. Ratcheting blindly to error would have forced bad couplings
@@ -30,7 +30,7 @@ just to make a linter green.
    (`components/`, `lib/`, …):
    - `SourceChip` (used by 3 products) → `components/` (prior work).
    - `AppearanceSettings` (a global theme/density setting, only settings used it)
-     → `products/settings/` (ADR-adjacent; F-ARCH-2/A).
+     → the settings module (ADR-adjacent; F-ARCH-2/A).
    - Discipline display names → `lib/disciplineNames.ts` so Bracket stops
      importing Meet's PositionGrid `EVENT_LABEL` for a name lookup (F-ARCH-2/C).
      The shared map is **null-prototype** so a lookup of any non-own key
@@ -46,7 +46,7 @@ just to make a linter green.
      is unresolved.
    - **`matchStateStore` ownership.** A prior audit proposed moving it from the
      shared `store/` layer to Operations. But it is consumed cross-cutting by
-     **Meet + Operations + Bracket**; relocating it under `products/operations/`
+     **Meet + Operations + Bracket**; relocating it under the Operations module
      would *create* new `no-cross-product` violations from Meet and Bracket. It
      stays in the shared `store/` layer (which the layer conventions permit)
      until a deliberate ownership decision is made. (F-ARCH-3.)
@@ -69,5 +69,5 @@ remain. Progress so far: 17 → 11 warnings.
 
 ## See also
 
-- `docs/history/audits/01-findings.md` (F-ARCH-2, F-ARCH-3) · `02-review-2-3.md`
+- The archived review findings (F-ARCH-2, F-ARCH-3) are superseded by this accepted decision.
 - [ADR 0006 — Unified scheduling core, non-merged match record](/explanation/decisions/0006-unified-scheduling-core) · [ADR 0010 — Nav model in platform](/explanation/decisions/0010-nav-model-in-platform)

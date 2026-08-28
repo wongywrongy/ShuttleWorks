@@ -1,75 +1,57 @@
 # Workspace templates
 
-The presets behind the **New workspace** builder (route `/new`). This page is for
-anyone who needs to know what each template enables, when to pick it, and how a
-template's choice maps onto the backend's per-workspace module state. It also
-points to the "build your own product on the engine" starter story.
+The module choices behind the **New workspace** builder (route `/new`). The current
+surface is a custom tri-state builder, not a preset gallery: it lets an operator
+choose which shipped modules start enabled, available, or off.
 
-## What a template actually is
+## What a workspace module choice is
 
 A workspace is a [control plane](/explanation/architecture/workspace-model): a name, a legacy
-`kind`, and a first-class set of **module rows** (`meet`, `bracket`, `display`),
-each in one lifecycle status. A template is just a **named, explicit module seed**
-plus a display title — nothing more. Picking one on `/new` pre-fills the
-`modules[]` array that the create call persists; the modules, not the template
-name, are what the rest of the app reads.
+`kind`, and a first-class set of **module rows** (`meet`, `bracket`, `display`,
+`entries`), each in one lifecycle status. The module choices become an explicit
+`modules[]` array that the create call persists; the modules, not the legacy `kind`,
+are what the rest of the app reads.
 
-The presets live in one file —
-`apps/console/src/modules/hub/newWorkspaceTemplates.ts` — and the
-`/new` surface that renders them is
-`apps/console/src/modules/hub/NewWorkspacePage.tsx`.
+The `/new` surface is implemented by
+`apps/console/src/modules/hub/NewWorkspacePage.tsx`, with seed conversion in
+`apps/console/src/modules/hub/customModules.ts`. There is no preset registry in the
+current tree.
 
 ```ts
-// newWorkspaceTemplates.ts — the shape every preset carries
-export interface Template {
-  id: TemplateId;            // 'meet-day' | 'bracket-tournament' | 'hybrid' | 'blank'
-  title: string;
-  blurb: string;
-  kind: 'meet' | 'bracket';  // legacy schema-family selector (see below)
-  seed: WorkspaceModuleDTO[]; // the explicit modules[] persisted on create
-}
+// customModules.ts — tri-state choices become persisted module statuses
+type ModuleChoice = 'enabled' | 'available' | 'off';
 ```
 
 The module statuses a seed can carry are the control-plane lifecycle vocabulary
-(`backend/database/models.py`): `enabled` (active now), `available` (installable
+(`apps/api/src/db/models.py`): `enabled` (active now), `available` (installable
 later, off for now), `disabled` (present but off). `coming_soon` is retired —
 every module is fully built, and seeding it is rejected (see
 [ADR 0005](/explanation/decisions/0005-coming-soon-elimination)).
 
-## The four presets
+## The custom module choices
 
-| Template | `kind` | Meet | Bracket | Display | Pick it when… |
-|---|---|---|---|---|---|
-| **Meet Day** | `meet` | `enabled` | `available` | `enabled` | You're running a round-robin / pooled meet with a CP-SAT schedule, a live cockpit, and a venue display. |
-| **Bracket Tournament** | `bracket` | `available` | `enabled` | `available` | You're running an elimination event — events, seeding, draw generation, advancement, and results. |
-| **Hybrid Event** | `meet` | `enabled` | `enabled` | `enabled` | One workspace runs both a meet and brackets together, sharing courts and a display. |
-| **Blank Workspace** | `meet` | `available` | `available` | `disabled` | You want to start empty and turn modules on from Settings as you go. |
+| Module | `enabled` | `available` | `off` |
+|---|---|---|---|
+| Meet, Bracket, Display, or Entries | on immediately | installable later | present but off |
 
-A few things the table makes precise:
+A few things the builder makes precise:
 
-- **Meet Day turns the display on; the lazy fallback does not.** The Meet Day seed
-  is `display: enabled`, deliberately. That is *not* the same as a meet workspace
-  created without a seed — see [derive_modules](#templates-vs-derive_modules-the-lazy-fallback)
-  below.
-- **Hybrid is a real two-engine workspace**, not a label: both operational modules
-  are `enabled`, so both appear in the sidebar and both can feed
-  [Operations](/reference/modules/operations) and the [display](/reference/modules/display).
-- **Blank enables nothing.** Both operators are `available` and display is
-  `disabled`, so there is no enabled module to land on — the builder routes Blank
-  to the Modules admin instead of a module home (see [Landing](#after-create-where-you-land)).
+- **Entries is cloud-only.** It is part of the catalog and can be seeded by the
+  server, but the local `/new` builder currently offers Meet, Bracket, and Display.
+- **Display depends on an operational module.** Display may be enabled only when
+  Meet or Bracket is enabled.
 
 ::: info Display can't be enabled without an operator
-The Meet Day, Bracket Tournament, and Hybrid seeds all keep display valid: display
-is only `enabled` where an operational module (`meet` or `bracket`) is also
-`enabled`. This is the **display-dependency rule** — enforced on the seed at
-create time, covered under [Custom](#the-custom-path) below.
+Display is only `enabled` where an operational module (`meet` or `bracket`) is also
+`enabled`. This is the **display-dependency rule**, enforced on the seed at create
+time.
 :::
 
 ## The Custom path
 
-Below the four cards, **Custom** opens a per-module tri-state builder
-(`CustomModulesBuilder.tsx`, state in `customModules.ts`). Each of the three
-modules is set independently to **Enabled**, **Available**, or **Off**, and that
+**Custom** opens a per-module tri-state builder
+(`CustomModulesBuilder.tsx`, state in `customModules.ts`). Each local-builder
+module is set independently to **Enabled**, **Available**, or **Off**, and that
 maps straight onto seed statuses:
 
 ```ts
@@ -88,24 +70,23 @@ because the backend will reject that seed:
 
 ::: warning A display-only seed is a 400
 `POST /tournaments` validates the seed with `normalize_module_seed` and then
-`display_dependency_satisfied` (`backend/database/models.py`). If `display` is
+`display_dependency_satisfied` (`apps/api/src/db/models.py`). If `display` is
 `enabled` with neither `meet` nor `bracket` `enabled`, the create is rejected with
 `400 INVALID_INPUT` *before* any workspace row is written — no orphan workspace is
 left behind. The Custom builder's inline hint exists to keep you out of that state.
 :::
 
 Any module you leave unnamed in a custom seed is backfilled to `available` by
-`normalize_module_seed`, so a partial seed is always completed to the full
-three-module set.
+`normalize_module_seed`, so a partial seed is always completed to the module set.
 
-## How a template reaches the backend
+## How a module choice reaches the backend
 
 The builder sends one call regardless of which path you took:
 
 ```ts
 // NewWorkspacePage.tsx
-const modules = isCustom ? customSeed(custom) : tpl.seed;
-const kind    = isCustom ? kindForSeed(custom) : tpl.kind;
+const modules = customSeed(custom);
+const kind    = kindForSeed(custom);
 const created = await apiClient.createTournament({
   name: name.trim() || null,    // name + date are optional
   kind,
@@ -114,19 +95,17 @@ const created = await apiClient.createTournament({
 });
 ```
 
-On the backend (`create_tournament`, `backend/api/tournaments.py`), a present
+On the backend (`create_tournament`, `apps/api/src/workspaces/tournaments.py`), a present
 `modules[]` is normalised, dependency-checked, and persisted as real
 `workspace_modules` rows. Because the rows exist up front, the lazy seeding path
-never runs for a templated/custom workspace.
+never runs for an explicitly seeded workspace.
 
 ### `kind` vs the module seed
 
 `kind` is **not** the module set — it is a legacy classifier that selects the
 backend **schema/table family** (`meet_*` vs `bracket_*`), independent of which
-modules a workspace enables. That is why three of the four presets are `kind:
-'meet'` under the hood (Meet Day, Hybrid, Blank) and only Bracket Tournament is
-`kind: 'bracket'`. Post-create routing is derived from the **returned modules**,
-never from `kind`.
+modules a workspace enables. Post-create routing is derived from the **returned
+modules**, never from `kind`.
 
 ### Templates vs `derive_modules`: the lazy fallback
 
@@ -136,7 +115,7 @@ lazily the first time anyone reads the workspace's modules, then persists the
 result as real rows.
 
 ```python
-# backend/database/models.py — the no-seed fallback, NOT the template seeds
+# apps/api/src/db/models.py — the no-seed fallback, not the explicit custom seed
 def derive_modules(kind):
     if kind == "bracket":
         return {"bracket": "enabled", "display": "available", "meet": "available"}
@@ -145,25 +124,22 @@ def derive_modules(kind):
 
 The asymmetry worth internalising:
 
-- `derive_modules("bracket")` matches the **Bracket Tournament** preset exactly.
-- `derive_modules("meet")` does **not** match **Meet Day** — the fallback leaves
-  `display: available`, whereas the Meet Day template deliberately ships
-  `display: enabled`. A meet workspace created through the API without a seed comes
-  up with its venue display *off*; the template turns it on for you.
+- `derive_modules("bracket")` enables Bracket and leaves the other modules available.
+- `derive_modules("meet")` enables Meet and leaves the other modules available.
 
-So: presets always send an explicit seed (`normalize_module_seed` validates it and
+So: custom builds send an explicit seed (`normalize_module_seed` validates it and
 `derive_modules` is never consulted); `derive_modules` only fills the gap when no
 seed was sent.
 
 ## After create: where you land
 
-The returned modules decide the landing route, not the template id
+The returned modules decide the landing route, not a preset id
 (`workspaceCreateFlow.ts`):
 
 | Returned state | Lands on |
 |---|---|
 | Any module `enabled` | `/tournaments/{id}/overview` (the workspace readiness Overview) |
-| Nothing `enabled` (Blank / available-only Custom) | `/tournaments/{id}/ws-modules` (the Modules admin, to turn one on) |
+| Nothing `enabled` (available-only Custom) | `/tournaments/{id}/ws-modules` (the Modules admin, to turn one on) |
 
 This keeps the entry point honest: a workspace with an active engine opens on its
 readiness Overview; a workspace with nothing on opens where you can enable
@@ -172,7 +148,7 @@ see [How to enable a module](/how-to/enable-a-module).
 
 ## Building your own product on the engine
 
-The templates above all assemble the **shipped** modules. If you want to go further
+The builder assembles the **shipped** modules. If you want to go further
 — a brand-new enableable module, or your own scheduling product built on the pure
 CP-SAT core — that is a code change, not a template:
 

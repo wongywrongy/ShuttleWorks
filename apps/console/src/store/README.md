@@ -7,8 +7,8 @@ mutation can never accidentally cross one.
 
 | Store | File | Persistence | Scope |
 |---|---|---|---|
-| `useTournamentStore` | `tournamentStore.ts` | server-side `/tournament-state` (debounced PUTs from `useTournamentState`) | the working tournament |
-| `useMatchStateStore` | `matchStateStore.ts` | server-side `/match-state` (immediate PUTs per transition) | live operator state |
+| `useTournamentStore` | `tournamentStore.ts` | server-side `/tournaments/{id}/state` (debounced PUTs from `useTournamentState`) | the working tournament |
+| `useMatchStateStore` | `matchStateStore.ts` | server-side `/tournaments/{id}/match-states` (immediate PUTs per transition) | live operator state |
 | `useUiStore` | `uiStore.ts` | none — never serialised | toasts, solver HUD, drag pins, generation progress, advisory review |
 | `usePreferencesStore` | `preferencesStore.ts` | localStorage key `scheduler-app-preferences` | per-device theme + density |
 
@@ -50,7 +50,7 @@ composes all three resets and keeps the stores independent.
   from the server snapshot on mount and debounces a PUT back ~500 ms
   after any persisted-field change.
 - `useLiveTracking` / `useLiveOperations` (in `../hooks/`) round-trip
-  `useMatchStateStore` against `/match-state` immediately on every
+  `useMatchStateStore` against `/tournaments/{id}/match-states` immediately on every
   transition.
 - `useUiStore` is never serialised. A refresh always lands the operator
   on a clean ephemeral slate; that's deliberate.

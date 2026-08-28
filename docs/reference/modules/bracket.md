@@ -18,7 +18,7 @@ loser-routing / `feeder_take` mechanics, see [Draw formats](/explanation/archite
   (`walkover` / `retired` / `forfeit`); a **retired or forfeit loser is routed to BYE downstream**
   (its consolation / `feeder_take='loser'` slot becomes a BYE, exactly like a walkover for the loser
   feed) while the stored result keeps `walkover=False` — the single predicate
-  `services/bracket/advancement.py::loser_cannot_continue` gates it. Winner advancement is unchanged,
+  `apps/api/src/bracket/advancement.py::loser_cannot_continue` gates it. Winner advancement is unchanged,
   and there is deliberately **no** automatic withdrawal from the player's other draws (the operator
   decides that per draw).
 - **Schedule the next ready round** through the shared CP-SAT engine, with drag-validation and
@@ -35,7 +35,7 @@ inline conflict surfacing — the parallel-to-Meet design in
 
 :::info The recording route is `/bracket/commands`
 The live UI records via `apiClient.recordBracketResultCommand` →
-`POST /tournaments/{tid}/bracket/commands` (`backend/api/brackets.py::submit_bracket_command`),
+`POST /tournaments/{tid}/bracket/commands` (`apps/api/src/bracket/brackets.py::submit_bracket_command`),
 carrying a client-minted UUID as a first-class idempotency key checked **before** the
 `seen_version` guard. The legacy `POST …/bracket/results` (`record_match_result`, the
 `apiClient.recordBracketResult` method) still exists for older callers, but the frontend no longer
@@ -58,8 +58,8 @@ advancement — downstream slot resolution stays bracket-owned and arrives with 
 | **Backend routes** | everything under `/tournaments/{id}/bracket`: create (`POST ""`) / read (`GET ""`) / delete (`DELETE ""`); `schedule-next`(+`/stream`, `/commit`); `commands` (record result) and legacy `results`; `match-action`; `validate`; `pin`; `assign` / `unassign`; `import`(+`.csv`); `export.{json,csv,ics}`; `events/{id}`(+`/generate`, delete) |
 | **`apiClient` methods** | `getBracket`, `createBracket`, `deleteBracket`, `scheduleNextBracketRound`, `recordBracketResult`, `bracketMatchAction`, `validateBracketMove`, `pinBracketMatch`, `importBracketJson`, `importBracketCsv`, `bracketEventUpsert`, `bracketEventGenerate`, `bracketEventDelete` |
 | **Store slices** | the isolated `bracketPlayers` roster (+ `bracketRosterMigrated`) in `tournamentStore`; bracket UI state in `uiStore` (`bracketDataReady`, `bracketSelectedMatchId`, `bracketScheduleEventFilter`) |
-| **Frontend code** | `modules/bracket/` — draw canvas (`DrawView`, `PanZoomCanvas`, `bwf.ts`), Draws/Roster/Matches tabs, schedule/live views, score entry, and the result queue (`hooks/useBracketResultQueue.ts` + `lib/bracketCommandQueue.ts`) |
-| **Backend** | `api/brackets.py` + `services/bracket/` (draws + advancement + I/O); tables `bracket_events`, `bracket_participants`, `bracket_matches`, `bracket_results` |
+| **Frontend code** | `apps/console/src/modules/bracket/` — draw canvas (`DrawView`, `PanZoomCanvas`, `bwf.ts`), Draws/Roster/Matches tabs, schedule/live views, score entry, and the result queue |
+| **Backend** | `apps/api/src/bracket/brackets.py` + `apps/api/src/bracket/` (draws + advancement + I/O); tables `bracket_events`, `bracket_participants`, `bracket_matches`, `bracket_results` |
 
 The `apiClient` cell mirrors the test-enforced `bracketContract.ownedEndpoints`
 (`platform/contracts/moduleContract.ts`) verbatim. A few newer client methods exist but are **not**
@@ -85,7 +85,7 @@ while the upstream match is unplayed, or "Bye" — via `sideLabel` in
 `modules/bracket/bracketLabels.ts`.
 
 Seeding is **BWF-conformant.** `bwf.ts::bwfPositions(size)` is the client-side mirror of the
-backend's `_bwf_positions` (`services/bracket/formats/single_elimination`): it maps each bracket
+backend's `_bwf_positions` (`apps/api/src/bracket/formats/single_elimination.py`): it maps each bracket
 position to the seed the backend places there, so clicking a slot lands the player at the BWF
 position by assigning the matching seed. A test pins the two implementations in lockstep.
 
@@ -168,10 +168,10 @@ Bracket's inputs are its own create/seed/result shapes — **`BracketCreateIn`, 
   earlier "commandQueue integration deferred" note is resolved for *recording*. The other live
   actions (`match-action` start/finish/reset, `assign` / `unassign`, `pin`) still use direct API
   calls plus a ~2.5 s polling hook (`hooks/useBracket.ts`), parallel to Meet's optimistic queue.
-- **Ported backend, heavy hydration — now cache-bounded.** `api/brackets.py` was ported from the
+- **Ported backend, heavy hydration — now cache-bounded.** `apps/api/src/bracket/brackets.py` was ported from the
   standalone tournament backend; the N+1 hydration loop and full-tournament re-serialisation flagged
   in the audit still live in this file. The per-request cost is now bounded by a **short-TTL
-  in-process response cache** (`services/bracket/response_cache.py`): `GET …/bracket` serves the
+  in-process response cache** (`apps/api/src/bracket/response_cache.py`): `GET …/bracket` serves the
   cached serialized `TournamentOut` when younger than `TTL_SECONDS` (2.0 s — below the frontend's
   ~2.5 s poll, so staleness never exceeds existing poll latency) and rebuilds via `_hydrate_session`
   on a miss. Every mutating bracket route (and a `clearSchedule` bracket-clear) calls

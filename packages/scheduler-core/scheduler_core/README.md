@@ -1,7 +1,7 @@
 # scheduler_core/
 
-The CP-SAT scheduling engine. Pure Python, no HTTP — invoked from
-`apps/api/api/schedule*.py` and from the unit tests in `tests/backend/`.
+The CP-SAT scheduling engine. Pure Python, no HTTP — invoked from the schedule
+modules under `apps/api/src/meet/` and from the unit tests in `tests/backend/`.
 
 ## Layout
 
@@ -68,7 +68,7 @@ no migration. Adapters that want a custom plugin set construct
    adapter).
 4. Surface any tunable knobs via `SolverOptions` in
    `domain/models.py`, then through
-   `apps/api/app/schemas.py` and
+   `apps/api/src/core/schemas.py` and
    `apps/console/src/api/dto.ts`.
 5. Add a unit test under `tests/backend/` that constructs a
    minimal instance and asserts the new behaviour.
@@ -77,7 +77,7 @@ no migration. Adapters that want a custom plugin set construct
 
 `domain/models.SolverOptions` collects tournament-wide weights, time
 limits, and feature flags. The frontend's tournament config maps onto
-this dataclass in `backend/api/schedule.py`. Defaults live alongside
+this dataclass in `apps/api/src/meet/schedule.py`. Defaults live alongside
 the field declarations.
 
 ## Extraction

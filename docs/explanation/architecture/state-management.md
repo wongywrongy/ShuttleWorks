@@ -111,7 +111,7 @@ Hooks under `apps/console/src/hooks/` are the only code that talks to the backen
 and the only code that mutates a store from outside the store file. The convention:
 
 - **Components dispatch intent**, hooks own the round-trip. A component calls `submit('call_to_court', …)`;
-  the hook applies the optimistic store update, fires the API call through `api/client.ts`, and
+  the hook applies the optimistic store update, fires the API call through `apps/console/src/api/client.ts`, and
   reverts the store on failure.
 - **Hooks never accept `setState` callbacks** from components — they read and write the store
   directly, and components subscribe to the resulting state.

@@ -17,7 +17,7 @@ If you are an LLM agent writing code in this monorepo, treat this file as a hard
 > | §1.2, §1.8.b | No soft shadows; hard offset only | Real Gaussian `--shadow-sm/md/lg` in light; none in dark (elevation = luminance) |
 > | §1.3 | 90° corners; `rounded-sm` = 2px | Radius ladder 4→14px; `rounded-sm` = 6px; cards `rounded-lg`, pills `rounded-full` |
 > | §1.9, §1.10, §1.11 | Accent = Signal Orange `#FF6B1A` | Accent = `--action-primary` azure; `--accent` is an alias of it |
-> | §0 "both products" | `products/tournament/frontend` is a consumer | That product is frozen under `archive/`; the scheduler is the only consumer |
+> | §0 "both products" | the retired tournament frontend is a consumer | That product is frozen under `archive/tournament-pre-merge/`; the current consumers are the console and entrant apps |
 >
 > Everything else here (no raw hex, no default Tailwind palette colors, the spacing ladder,
 > the type ladder, the one-font-family rule, mono reserved for tabular data) is **still
@@ -30,10 +30,10 @@ If you are an LLM agent writing code in this monorepo, treat this file as a hard
 
 ## 0. What this package is
 
-`@scheduler/design-system` is the single source of design truth for both products:
+`@scheduler/design-system` is the shared source of design truth for both current frontends:
 
-- `apps/console`
-- `products/tournament/frontend`
+- `apps/console/`
+- `apps/entrant/`
 
 It exports:
 - `tokens.css` — CSS custom properties (palette light + dark, type scale, spacing ladder, animation keyframes)
@@ -170,7 +170,8 @@ arrived as eight files each centring their own column.
 
 ## 2. Consumption pattern (how products import this)
 
-Both products' top-level CSS file (scheduler `src/index.css`, tournament `src/styles.css`) becomes:
+The top-level CSS files (`apps/console/src/index.css` and `apps/entrant/app/app.css`)
+import the same package layers:
 
 ```css
 @import '@scheduler/design-system/tokens.css';
@@ -182,7 +183,7 @@ Both products' top-level CSS file (scheduler `src/index.css`, tournament `src/st
 /* product-specific styles go below — keep them tiny */
 ```
 
-Both products' `tailwind.config.js`:
+Both `apps/console/tailwind.config.js` and `apps/entrant/tailwind.config.js` use the preset:
 
 ```js
 const preset = require('@scheduler/design-system/tailwind-preset');
@@ -245,7 +246,7 @@ Rendering ladder for dense operator lists and panels:
 | Error / blocked | chip, error token |
 
 The one match-list renderer is `MatchStatus`
-(`frontend/src/components/control-plane/matchStatus.tsx`); its property test
+(`apps/console/src/components/control-plane/matchStatus.tsx`); its property test
 asserts the rendered DOM, with a demonstrated negative control. **Exemption:**
 glance-at-distance operator surfaces — Live day court cards, Plan grid fills,
 the venue TV — keep their high-contrast fills (SP-CONSOLE-2 PLAN-1 rationale);

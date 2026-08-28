@@ -5,8 +5,8 @@
  * above the Gantt. Renders nothing when zero suggestions.
  *
  * Owns the expanded-row state, the per-row Apply/Dismiss
- * lifecycle, and the "+ N more" overflow tail. Visuals per
- * Appendix A of docs/history/superpowers/plans/2026-05-04-suggestions-inbox.md.
+ * lifecycle, and the "+ N more" overflow tail. Visual rules are kept with
+ * the component and the design-system tokens it consumes.
  */
 import { useState } from 'react';
 

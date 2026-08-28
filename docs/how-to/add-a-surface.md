@@ -65,9 +65,8 @@ them. Add an internal surface to `AppTab` only; route to it from its parent.
 ## Verify
 
 ```bash
-cd apps/console
-npx vitest run src/platform/contracts   # ownedSegments must match the nav
-npx tsc -b
+npx vitest run apps/console/src/platform/contracts  # ownedSegments must match the nav
+npx tsc -b apps/console/tsconfig.json
 ```
 
 ## See also

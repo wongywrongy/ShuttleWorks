@@ -30,7 +30,7 @@ workspace state (config, roster, matches, schedule). `schema_version` defaults t
 ### Ownership & membership (SP-CLOUD-2)
 
 Since the tenancy migration, **orgs own workspaces**: `tournaments.org_id` is a non-null FK to
-`orgs`, and every user gets a **personal org** at creation (`services/auth.ensure_personal_org`)
+`orgs`, and every user gets a **personal org** at creation (`apps/api/src/identity/auth.ensure_personal_org`)
 so the UI can ignore orgs entirely while the data model never hangs workspaces directly off
 users. Day-to-day access stays **per-workspace** in `tournament_members`
 (`role: viewer | operator | owner`, `user_id` FK → `users`). Every workspace route is gated by
@@ -53,7 +53,7 @@ Each workspace's enabled modules live in the **`workspace_modules`** table — o
 | `id`, `created_at`, `updated_at` | surrogate PK + audit; unique on `(tournament_id, module_id)` |
 
 Rows are **lazily seeded** the first time a workspace's modules are read, by `derive_modules(kind)`
-in `database/models.py`:
+in `apps/api/src/db/models.py`:
 
 - `kind == "bracket"` → `{ bracket: enabled, display: available, meet: available }`
 - otherwise (meet / null / unknown) → `{ meet: enabled, display: available, bracket: available }`
@@ -76,7 +76,7 @@ read time (ruling R6), mirroring the seed logic. See [Entries](/reference/module
 
 ## Module status lifecycle
 
-The status values (constants in `database/models.py`) are:
+The status values (constants in `apps/api/src/db/models.py`) are:
 
 | Status | Meaning |
 | --- | --- |
@@ -117,14 +117,14 @@ last-operational rule.
 
 Once a workspace is open, the **workspace shell** renders the common chrome: workspace
 identity/status, the **module dock** (which switches between enterable modules), role and
-connection indicators, and sync health. The left sidebar is built by `buildWorkspaceNav(kind,
+connection indicators. The left sidebar is built by `buildWorkspaceNav(kind,
 enabled)` in `platform/product-shell/workspaceNav.ts`, which emits:
 
 - **Overview** (always, top).
 - One **section per enabled module** — Meet / Bracket (engines), Operations (shared), Display
   (output) — each tagged with a role badge.
 - A **Workspace** admin block (always, bottom): Venue and schedule, Members, Sharing, Modules,
-  Sync and backups, Settings.
+  Backups, Settings.
 
 The Operations section points at the *active engine's* schedule/live surfaces (single-engine ships
 today; a hybrid cross-engine merge is a planned follow-on). See the [Settings page](/reference/modules/settings)

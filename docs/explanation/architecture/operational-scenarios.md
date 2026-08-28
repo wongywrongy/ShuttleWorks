@@ -20,7 +20,7 @@ The goal of Plan day is to turn rosters and formats into a laid-out floor. You r
 once, ahead of time; you do **not** re-run it live.
 
 1. **Create the workspace.** In the [Hub](/reference/glossary#control-plane-workspaces), create
-   a workspace from a module template (Meet Day / Bracket / Hybrid / Blank). Enabling
+   a workspace by choosing its module mix in the New Workspace builder. Enabling
    a module writes a `workspace_modules` row — real persisted state
    ([Enable a module](/how-to/enable-a-module)).
 2. **Set the venue.** In [Settings](/reference/modules/settings): courts, schedule window, and

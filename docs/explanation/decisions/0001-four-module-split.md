@@ -10,8 +10,8 @@ descriptor, and `entriesCommitted` is a fourth named `SeamEdge`. The two-tier sp
 enableable-versus-always-on distinction, and the test-enforced descriptor layer all survived the
 addition without change — which is the outcome this record was betting on. Entries adds one wrinkle
 the original set did not have: it is Tier-1 but **cloud-only** (`CLOUD_ONLY_MODULES`), so
-"user-enableable" is now conditioned on deployment mode. See [Entries](/reference/modules/entries) and the program ledger
-`docs/history/programs/ENTRIES_PROGRESS.md` (repo working record, outside this site).
+"user-enableable" is now conditioned on deployment mode. See [Entries](/reference/modules/entries)
+for the current behavior; program ledgers are repository working records outside this site.
 :::
 
 ## Context
@@ -38,7 +38,7 @@ Describe the architecture as **four modules across two tiers**:
   routes, and a store slice, but has no enable flag — `ArchModuleId = ModuleId | 'operations'`.
 
 Make the split **explicit and test-enforced** via the additive descriptor layer
-`frontend/src/platform/contracts/moduleContract.ts`, which declares each module's owned/consumed
+`apps/console/src/platform/contracts/moduleContract.ts`, which declares each module's owned/consumed
 endpoints, produced/consumed DTOs, and the named cross-module edges, asserted honest by a colocated
 test. See [Module contracts](/reference/contracts/).
 
@@ -50,7 +50,7 @@ test. See [Module contracts](/reference/contracts/).
 - **Positive** — the user-facing surface stays simple (three enableable modules), while the
   always-on live-ops layer is still a first-class architectural citizen.
 - **Negative / cost** — Operations is currently a *logical* module whose code still lives under
-  `products/meet/` and Meet-named handlers; the descriptor names the ownership ahead of the folder
+  the Meet module and Meet-named handlers; the descriptor names the ownership ahead of the folder
   move. Whether Operations should become a separately installable module or remain an always-on
   concern is an open product question (documented as a structural bet in the audit). For now it is
   Tier-2, always-on.

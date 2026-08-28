@@ -146,7 +146,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | Cloudflare's **dummy always-pass pair** | leave | **real keys, once entries are public** | not read | The defaults always pass, which is right while nothing routes to `/e/` and wrong the moment something does — an always-pass challenge is no challenge. Get a pair from Cloudflare → Turnstile; the secret belongs in a secret file (`TURNSTILE_SECRET_KEY_FILE`), not in `.env`. |
 | `ENTRIES_MAX_PER_IP` / `ENTRIES_WINDOW_SECONDS` / `ENTRIES_LOCK_SECONDS` | `20` / `600` / `300` | ✓ | ✓ | not read | The durable per-IP budget for public entry submissions, on its own `entry:` namespace so an entry flood cannot lock a venue out of signing in. Too low interrupts a club secretary entering a squad. |
 | `DATA_DIR` | `/app/data` | ✓ | ✓ | ✓ | Runtime scratch; the readiness probe checks it is writable. |
-| `LOG_LEVEL` / `HOST` / `PORT` | `info` / `0.0.0.0` / `8000` | ✓ | ✓ | ✓ | The image hardcodes its bind; `HOST`/`PORT` only affect `python -m app.main`. |
+| `LOG_LEVEL` / `HOST` / `PORT` | `info` / `0.0.0.0` / `8000` | ✓ | ✓ | ✓ | The image hardcodes its bind; `HOST`/`PORT` only affect the API entrypoint. |
 | `POSTGRES_DATA_DIR` | `./data/postgres` | – | compose-only | – | Must be a real local filesystem. `initdb` fails on synced/network paths. |
 | `POSTGRES_BIND_ADDR` | none — **required** | – | compose-only | – | See §5. |
 | `APP_HOSTNAME`, `PLAY_HOSTNAME`, `CLOUDFLARE_TUNNEL_TOKEN` | none — **required** | – | compose-only | – | Compose refuses to start without them. `APP_HOSTNAME` is the operator console (Access on it); `PLAY_HOSTNAME` is the public entrant site (no Access, ever). They replaced a single `PUBLIC_HOSTNAME` — no alias is kept, so a stale `.env` fails loudly rather than booting half-split. |
@@ -374,15 +374,14 @@ Steps 1 and 3 are where things stand:
    third-party script source it has no use for; the tiers are separate origins
    now, and the map stays keyed on `$uri` anyway because the scope it wants is
    narrower than a tier — `/e/signup` is the one page with a widget on it. Nothing about your Cloudflare account, DNS, tunnel or Access config
-   changes — this is our own nginx header. `e2e/tests/10-entrant-r11-evidence.spec.ts`
+   changes — this is our own nginx header. `tests/e2e/tests/10-entrant-r11-evidence.spec.ts`
    holds both halves: the widget must render with zero CSP violations, and no
    path other than `/e/signup` may name that host.
 :::
 
-Once the remediation in `SEC_PROGRESS.md` has landed and you want public
-signup, the intended end state is **open registration with rate limiting**
-(already implemented: a per-IP registration bucket, a per-user concurrent-solve
-cap, and `limit_req` zones at the edge) rather than invite-only. Invite-only is
+Public signup uses **open registration with rate limiting**: a per-IP
+registration bucket, a per-user concurrent-solve cap, and `limit_req` zones at
+the edge. Invite-only is
 held in reserve for if abuse actually appears.
 
 ## 5. Postgres binding

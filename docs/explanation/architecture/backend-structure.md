@@ -14,10 +14,10 @@ workspace route runs behind the tenancy seam described below.
 
 ```
 apps/api/
-├── alembic.ini            points at src/alembic; prepend_sys_path = src
+├── alembic.ini            points at apps/api/src/alembic; prepend_sys_path = apps/api/src
 ├── .importlinter          the architecture contracts (15, all blocking)
 ├── Dockerfile             mirrors this tree into the image at /app/src
-└── src/                   the sys.path ROOT - packages import by bare name
+└── apps/api/src/          the sys.path ROOT - packages import by bare name
     ├── core/              the shared kernel
     │   ├── main.py        FastAPI app, CORS, lifespan (Alembic upgrade on startup), middleware
     │   ├── schemas.py     Pydantic DTOs (mirror apps/console/src/api/dto.ts)
@@ -48,7 +48,7 @@ you change when you change that domain is in one directory. Where a router and
 a service shared a name, the router carries a `_routes` suffix
 (`operations/match_state_routes.py` beside `operations/match_state.py`).
 
-`src/` is a sys.path ROOT rather than a package, so imports read
+`apps/api/src/` is a sys.path ROOT rather than a package, so imports read
 `from meet.schedule import ...`, never `from src.meet...`. The boundaries
 between these packages are not a convention: `apps/api/.importlinter` holds 15
 contracts over them and `make check` fails on a violation.
@@ -64,7 +64,7 @@ Routes are grouped by the **architectural module** that owns them. The full endp
 | Route family | Owner | Notes |
 | --- | --- | --- |
 | `/tournaments/{id}/solve-jobs*` | **Meet** | the async solve rail (submit / poll / cancel); `POST /schedule` + `/schedule/stream` are `410 Gone` |
-| `/schedule/validate`, `/schedule/warm-restart`, `/schedule/repair` | **Meet** | request-shaped solver utilities (drag check, warm restart, repair) |
+| `/schedule/validate`, tenant-scoped `/tournaments/{id}/schedule/proposals/*` | **Meet** | solver utilities and proposal flow; unscoped repair/warm-restart are `410 Gone` |
 | `/tournaments/{id}/schedule/{advisories,proposals/*,suggestions/*,director-action}` | **Meet** | the live-planning pipeline |
 | `/tournaments/{id}/bracket*` | **Bracket** | draws, schedule-next, results, match-action, import/export |
 | `/tournaments/{id}/match-states*` | **Operations** | live match status + optimistic-concurrency (`ETag` / `If-Match`) |
@@ -75,34 +75,34 @@ Routes are grouped by the **architectural module** that owns them. The full endp
 | `/tournaments`, `/tournaments/{id}`, `…/state`, `…/state/backups`, `…/members`, `…/invites` | **Control plane** | workspace CRUD + shared state + collaboration |
 | `/tournaments/{id}/modules`, `…/modules/{moduleId}` | **Control plane** | the `workspace_modules` API |
 | `/invites/*` | **Control plane** | public + authenticated invite endpoints |
-| `/auth/*` | **Control plane** | self-hosted accounts & cookie sessions (`api/auth.py`) |
+| `/auth/*` | **Control plane** | self-hosted accounts & cookie sessions (`apps/api/src/identity/auth_routes.py`) |
 
-Every router is registered in `app/main.py` with an auth dependency, **except** `invites`
+Every router is registered in `apps/api/src/core/main.py` with an auth dependency, **except** `invites`
 (its public `GET /invites/{token}` lookup declares per-endpoint auth), `auth` (login while
 logged out), the public display projection router, `solve-jobs` (carries its own auth +
 per-route role deps), and the two entrant routers (`/e/api/*`, `/e/account/*` — public by
 design for the same reason `auth` is: an entrant with no account must be able to get one).
-Each public endpoint is enumerated with a written reason in `tests/test_auth_surface.py`'s
+Each public endpoint is enumerated with a written reason in `tests/backend/test_auth_surface.py`'s
 `PUBLIC_BY_DESIGN`, and a route that answers an anonymous caller without appearing there fails
 that test.
 
 ### Auth & tenancy (SP-CLOUD-2)
 
-`get_current_user` (`app/dependencies.py`) is the single identity seam: it resolves the opaque
+`get_current_user` (`apps/api/src/core/dependencies.py`) is the single identity seam: it resolves the opaque
 session cookie against `auth_sessions`; with no session, `AUTH_MODE=local` (the default) falls
 back to the zero-UUID **bootstrap operator** (`local@dev`, ensured at startup), while
 `AUTH_MODE=cloud` answers `401`. Passwords are Argon2id, policy is NIST length-bounds-only, and
 state-changing cookie-authenticated requests must carry `X-ShuttleWorks-CSRF: 1` (middleware).
 
 Tenancy: **orgs own workspaces** (`tournaments.org_id`); every user gets a personal org
-(`services/auth.ensure_personal_org`), and per-workspace membership stays in
+(`apps/api/src/identity/auth.ensure_personal_org`), and per-workspace membership stays in
 `tournament_members`. `require_tournament_access(min_role)` is the enforcement seam — it binds
 to the `tournament_id` path param, answers a **uniform 404** (`TOURNAMENT_NOT_FOUND`) for
 non-members and nonexistent ids, and `403` only for real members with an insufficient role. It
 has no bypass: local mode records real member rows, so the same code path runs everywhere. The
-self-maintaining isolation suite (`tests/test_tenant_isolation.py`) derives every
+self-maintaining isolation suite (`tests/backend/test_tenant_isolation.py`) derives every
 `{tournament_id}` operation from the OpenAPI schema, so a new endpoint that forgets the
-dependency fails CI. Full mechanics: `backend/README.md` § "Auth & tenancy".
+dependency fails CI. Full mechanics: `apps/api/BACKEND.md` § "Auth & tenancy".
 
 ### The solve-job rail (SP-CLOUD-1)
 
@@ -113,19 +113,19 @@ the primary database (`solve_jobs` table; `FOR UPDATE SKIP LOCKED` claims on Pos
 `UPDATE` on SQLite) — no broker, which buys *transactional enqueue* plus one thing to back up.
 Two dedup layers: an `Idempotency-Key` unique index and a partial unique index enforcing at
 most one active job per `(tournament, type)`. The solve itself runs in a **child subprocess**
-(`services/solve_child.py`) because CP-SAT cannot be preempted in-process — a kill is the only
+(`apps/api/src/solve_rail/solve_child.py`) because CP-SAT cannot be preempted in-process — a kill is the only
 reliable cancel; the child also takes the memory cap.
 Determinism is a product guarantee (same input + params ⇒ same schedule on any host): fixed
 seed, one search worker, `max_deterministic_time` as the binding stop criterion, an exact
 `ortools` pin, and **stable sorted iteration in the engine's model build**. Gated end-to-end by
-`tests/test_solve_job_determinism.py` plus `tests/unit/test_engine_build_order.py`, which
+`tests/backend/test_solve_job_determinism.py` plus `tests/backend/unit/test_engine_build_order.py`, which
 asserts one identical CP-SAT model fingerprint across four different `PYTHONHASHSEED` values.
 
-The child used to run with `PYTHONHASHSEED=0`, and a `services/determinism.py` guard warned
+The child used to run with `PYTHONHASHSEED=0`, and a former determinism guard warned
 whenever a solve happened outside that pinned environment. Both were masks for hash-ordered
 iteration in `get_player_ids`; SP-CLOUD-3 fixed the iteration and removed the pin, the guard,
 and the child's hard-refusal together — determinism is now a property of the code rather than of
-the launch environment. The full env matrix and rationale live in `backend/README.md`
+the launch environment. The full env matrix and rationale live in `apps/api/BACKEND.md`
 § "Dual-mode runtime".
 
 ### Request lifecycle
@@ -194,34 +194,34 @@ than touching the session directly.
 
 ## Migrations
 
-Alembic migrations live in `backend/alembic/` and cover both SQLite and Postgres. The app runs
+Alembic migrations live in `apps/api/src/alembic/` and cover both SQLite and Postgres. The app runs
 `alembic upgrade` on startup (in the FastAPI lifespan), so a fresh database is migrated to head
 automatically. In cloud mode only the **API** container migrates; standalone workers **wait**
 for the schema instead of racing it. The SP-CLOUD-2 tenancy migration is a **lossless
 backfill**: existing users get personal orgs, existing workspaces get `org_id`, and
 `tournament_members.user_id` gains its FK to `users` without dropping rows. The database URL is
-`settings.database_url`, read in `database/session.py`.
+`settings.database_url`, read in `apps/api/src/db/session.py`.
 
 ## Signals computation
 
 The Hub's per-workspace operational signal — `health`, an `attention[]` list, a `setup` readiness
 checklist, module counts, collaboration counts — is computed by `build_signals` in
-`api/workspace_signals.py`. It is a **pure function** fed from one batched pass of grouped row
+`apps/api/src/workspaces/workspace_signals.py`. It is a **pure function** fed from one batched pass of grouped row
 counts (no N+1). This is the most important cross-cutting backend feature and has its own page:
 [API reference → Signals](/reference/api/signals).
 
 ## Adding a route
 
-1. Add a Pydantic model to `app/schemas.py`, then run `make generate-api` from
+1. Add a Pydantic model to `apps/api/src/core/schemas.py`, then run `make generate-api` from
    the repo root to refresh `apps/console/src/api/dto.generated.ts` from the OpenAPI schema.
-2. Create the handler under `api/<feature>.py` with `router = APIRouter(prefix=…, tags=[…])`.
-3. Register it in `app/main.py` via `app.include_router(...)`.
+2. Create the handler under `apps/api/src/<package>/<feature>.py` with `router = APIRouter(prefix=…, tags=[…])`.
+3. Register it in `apps/api/src/core/main.py` via `app.include_router(...)`.
 4. **Workspace-scoped?** Take the tenant id from a path param named exactly `tournament_id` and
    attach `Depends(require_tournament_access("viewer|operator|owner"))` — otherwise the
-   OpenAPI-driven isolation suite (`tests/test_tenant_isolation.py`) fails CI. See
+   OpenAPI-driven isolation suite (`tests/backend/test_tenant_isolation.py`) fails CI. See
    [How to add an API endpoint](/how-to/add-an-api-endpoint).
 5. Use `error_codes.http_error(...)` for any `HTTPException`.
-6. Add a method on `frontend/src/api/client.ts` and call it from the relevant feature hook.
+6. Add a method on `apps/console/src/api/client.ts` and call it from the relevant feature hook.
 
 The curated `dto.ts` mirrors the generated `dto.generated.ts` (the authority) plus a hand-written
 section for frontend-private shapes. Drift between the two is a bug.

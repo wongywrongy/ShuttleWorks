@@ -1,6 +1,6 @@
 /**
  * Tournament data — persisted to the server-side snapshot at
- * ``/tournament-state`` via ``useTournamentState`` (debounced ~1s PUTs).
+ * ``/tournaments/{id}/state`` via ``useTournamentState`` (debounced ~1s PUTs).
  *
  * Holds config, roster, matches, schedule, plus the two-phase commit
  * pipeline's version + history slices. Hydration on mount restores

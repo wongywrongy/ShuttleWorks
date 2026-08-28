@@ -1,5 +1,6 @@
 /**
- * Match state — persisted to /match-state on every mutation (no debounce).
+ * Match state — persisted to /tournaments/{id}/match-states on every
+ * mutation (no debounce).
  *
  * Live-ops match transitions (called / started / finished + actual
  * start/end timestamps + scores) flush immediately because the

@@ -60,7 +60,7 @@ it reads is a poll of endpoints other modules own.
 The intended interface today is the **named, typed, read-only seam**: `matchStateChanged`, payload
 `MatchStateDTO` (with the supporting `TournamentStateDTO` / `BracketTournamentDTO`), Operations as the
 producer, Display as a strictly read-only consumer that owns no route and writes nothing. The design
-proposes **no transport change** — the dual poll (and the Realtime path in cloud mode) is accepted
+proposes **no transport change** — the dual poll is accepted; there is no Realtime transport
 as-is.
 
 The value of the contract is the guarantee it pins: Display **only reacts** and **emits nothing**

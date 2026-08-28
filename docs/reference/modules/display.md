@@ -45,7 +45,7 @@ call no-ops and the page shows a "missing parameter" message rather than crashin
 | Kind | Owned |
 | --- | --- |
 | **Nav surfaces** | Preview (`tv`) · Configuration (`display-config`) — both declared in `displayContract.ownedSegments` and rendered by the workspace shell |
-| **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`api/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist (the meet projection omits operator material like `scheduleHistory`); plus the owner-side `GET·POST /tournaments/{id}/display-token(/rotate)` |
+| **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`apps/api/src/display/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist (the meet projection omits operator material like `scheduleHistory`); plus the owner-side `GET·POST /tournaments/{id}/display-token(/rotate)` |
 | **`apiClient` methods** | owned: `getDisplaySummary`, `getDisplayState`, `getDisplayMatchStates`, `getDisplayBracket` (`displayContract.ownedEndpoints`); it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
 | **Frontend code** | `modules/display/` — `DisplayProduct.tsx`, `PublicDisplayPage.tsx` (the kind-router), `MeetDisplayPage.tsx`, `bracketDisplay/`, the `publicDisplay/` view components + `useDisplaySync`, and the TV presets (`publicDisplay/displayPresets.ts`) |
 
@@ -107,13 +107,13 @@ Display is an **output**, not an engine, so the control plane enforces that it c
 when there is something to show: **enabling `display` requires ≥1 enabled operational module**
 (`meet` or `bracket`). The backend computes `display_dependency_satisfied` and, on a violating
 `PATCH …/modules/display`, returns **`409 MODULE_DEPENDENCY_UNMET`**
-(`api/workspace_modules.py`; covered by `tests/unit/test_workspace_modules.py`). See
+(`apps/api/src/workspaces/workspace_modules.py`; covered by `tests/backend/unit/test_workspace_modules.py`). See
 [Enable a module](/how-to/enable-a-module).
 
 ## Display configuration & TV presets
 
 What the TV renders is driven by **UI-only fields on `TournamentConfig`** (preserved across `/state`
-PUTs in `app/schemas.py`), set from the `display-config` surface — there is no separate display store:
+PUTs in `apps/api/src/core/schemas.py`), set from the `display-config` surface — there is no separate display store:
 
 | Config field | Effect |
 | --- | --- |
@@ -142,7 +142,7 @@ preset-driven, not theme-locked.
   (~10 s) each run on their own timer. This is simple and robust but makes freshness poll-bounded:
   the `matchStateChanged` seam is named without a push transport.
 - **`matchStateStore` is shared infra.** The store the meet display hydrates lives in the global
-  `src/store/`, not under `modules/operations/`. Display reads it as a mirror; see
+  `apps/console/src/store/`, not under `modules/operations/`. Display reads it as a mirror; see
   [State management](/explanation/architecture/state-management) for the ownership nuance.
 
 ## See also

@@ -57,16 +57,17 @@ result. Intake, engine and emit are one product.
 ## Capabilities and Constraints
 
 **Built today:** discovery with status/date/text filters · a tournament page (Overview, Events,
-Entrants) · a dedicated entry flow with a server-computed running total · entrant accounts
-(sign-up/sign-in) · receipts · sitemap and robots.
+Entrants, draws, seeds, winners and player pages) · a dedicated entry flow with a
+server-computed running total · entrant accounts (sign-up/sign-in, verification and reset) ·
+My Entries · receipts · sitemap and robots.
 
-**Intended but NOT built:** public **draws, matches and results**. SP-P6-2 excluded them deliberately
-— the tab bar ships as Overview | Events | Entrants and is built so new tabs are data additions,
-pending the migration of Display's projections under the public site. The positioning above depends
-on this arriving; it is the largest open gap between what the product claims and what it does.
+The public tier now publishes draws, matches and results behind the organiser's independent
+publication flags. The positioning above therefore describes the shipped public surface; future
+profile and cross-tournament identity work remains separately owner-scoped.
 
-**Deferred to E2:** any signed-in surface — "my tournaments", a profile, withdraw. The tier
-structurally cannot know who is reading (see below), and the my-entries API does not exist.
+Signed-in entrant surfaces are account-scoped (`/e/account` and `/e/api/me`): verification,
+password reset, My Entries, withdrawal and erasure. Server-rendered public pages still cannot
+know who is reading, by design.
 
 **Hard constraints that future work must design within, not around:**
 
@@ -96,7 +97,8 @@ is not available.
 ## Evidence on Hand
 
 - A live, seeded local deployment: eight tournaments, ~390 people, 788 matches, six draw formats.
-- Screenshots of every public page at 390px and 1280px in `docs/screenshots/sp-p6-2/`.
+- Maintained 390px and 1280px viewport evidence in
+  `tests/e2e/tests/10-entrant-r11-evidence.spec.ts`.
 - **The seed data uses real organisation names** (USA Badminton, Bellevue Badminton Club, and
   others). It is local demo data only. It must never be published, deployed, or presented as
   endorsement, and no claim of use, partnership or adoption by any of them may be made.

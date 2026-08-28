@@ -30,7 +30,7 @@ components/
 ├── SolverHud.tsx         # docked solver HUD shown above schedule + live tabs
 ├── StatusPill.tsx        # status colour pill (live / called / blocked / done)
 ├── Toast.tsx             # ToastStack rendered once at the app shell level
-└── UnsavedBanner.tsx     # red banner when /tournament-state PUTs are failing
+└── UnsavedBanner.tsx     # red banner when /tournaments/{id}/state PUTs are failing
 ```
 
 ## Conventions

@@ -1,13 +1,13 @@
 # Ongoing Code Health — Standing Practice
 
-This is **not** a one-time workflow like the four-phase SP-REFACTOR program
-(that one paid down the backlog; its record lives in `REFACTOR_PROGRESS.md`).
+This is **not** a one-time workflow like the completed SP-REFACTOR program
+(Git history retains that program record).
 This is how **every** regular session should operate going forward, feature
 work included. Big codebases stay healthy through continuous small discipline,
 not periodic heroics — the four-phase program fixed the backlog; this keeps
 new backlog from forming.
 
-**Before anything else, read `REFACTOR_PROGRESS.md` and `CLAUDE.md`.**
+**Before anything else, read `CLAUDE.md` and the current debt log.**
 When you spot debt out of your current scope, log it in
 [`docs/reference/debt-log.md`](docs/reference/debt-log.md) — that file is the
 visible backlog this practice feeds.
@@ -166,7 +166,7 @@ get these numbers instead of eyeballing it. Record the worst offenders in
 `docs/reference/debt-log.md` with their actual complexity score, not just "this
 file is messy." Re-measure with:
 ```
-python -m radon cc packages/scheduler-core apps/api/{app,adapters,services,repositories,api} -nc -s --total-average -e "*/tests/*,*/migrations/*,*/alembic/*"
+python -m radon cc packages/scheduler-core apps/api/src -nc -s --total-average -e "*/tests/*,*/migrations/*,*/alembic/*"
 ```
 
 ### 11. Cover before you modify (Feathers' cover-and-modify)
@@ -244,8 +244,7 @@ principle applied at function level instead of module level.
 
 ## How this differs from the four-phase program
 SP-REFACTOR-1 through 4 was a deliberate, bounded, paused-development
-debt-paydown effort with formal audits and checkpoints (`REFACTOR_PROGRESS.md`,
-`docs/history/audits/`). This document is the ongoing discipline that runs *during*
+debt-paydown effort with formal audits and checkpoints. This document is the ongoing discipline that runs *during*
 normal feature work afterward, so the codebase doesn't drift back to needing
 another one. If debt accumulates faster than this steady-state discipline can
 absorb (visible in the debt log growing faster than it shrinks), or if you keep

@@ -1,6 +1,6 @@
 /**
  * The match-state machine, client side — a MIRROR of the backend contract in
- * `backend/services/match_state.py::VALID_TRANSITIONS`.
+ * `apps/api/src/operations/match_state.py::VALID_TRANSITIONS`.
  *
  * These two tables were once authored independently and drifted: the client
  * offered `started→called`, `finished→started`, and after-the-fact scoring from

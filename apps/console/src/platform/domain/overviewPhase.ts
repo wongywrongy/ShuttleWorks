@@ -4,7 +4,7 @@
  * The Overview is a PHASE-KEYED PANEL SYSTEM: what it shows is a function of
  * where the event is in its lifecycle. The phase itself is NOT derived here —
  * `signals.phase` is computed server-side from real play state
- * (`backend/api/workspace_signals.py::_derive_phase`), which is the same value
+ * (`apps/api/src/workspaces/workspace_signals.py::_derive_phase`), which is the same value
  * the Hub row action and the shell badge already key on. Deriving it a second
  * time on the client is exactly how those three surfaces would drift apart.
  *

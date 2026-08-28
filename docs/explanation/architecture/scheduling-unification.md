@@ -36,13 +36,13 @@ Two things above the engine were genuinely duplicated and are now shared:
 
 ### 1. One scheduling-parameter builder
 
-`backend/services/scheduling/params.py` owns the single mapping from the
+`apps/api/src/shared/scheduling/params.py` owns the single mapping from the
 structural scheduling parameters — courts, time window (`total_slots`),
 slot duration, rest, breaks, court closures, freeze horizon — onto a
 `ScheduleConfig`:
 
 ```python
-from services.scheduling.params import SchedulingParams, build_schedule_config
+from shared.scheduling.params import SchedulingParams, build_schedule_config
 
 config = build_schedule_config(
     SchedulingParams(court_count=4, total_slots=20, interval_minutes=15)
@@ -63,7 +63,7 @@ config = build_schedule_config(
 Both batch paths invoke the solver through the engine's single entry,
 `scheduler_core.schedule(request, *, options=None, candidate_pool_size=0)`:
 
-- **Meet** — the solve-job subprocess (`services/solve_child.py`, claimed off the
+- **Meet** — the solve-job subprocess (`apps/api/src/solve_rail/solve_child.py`, claimed off the
   `solve_jobs` queue; SP-CLOUD-1 retired the synchronous `POST /schedule`) calls it
   with the candidate pool for the near-optimal collector.
 - **Bracket** `TournamentDriver` already called it.

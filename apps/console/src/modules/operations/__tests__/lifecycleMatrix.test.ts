@@ -3,7 +3,7 @@
  * table, asserted cell by cell so a matrix edit cannot silently reroute a
  * lifecycle. Negative control (CODE_HEALTH 3b): flip any cell (e.g. make
  * `opsPlanMode('complete')` return 'plan') and the corresponding assertion
- * fails — demonstrated and recorded in docs/history/programs/CONSOLE4_PROGRESS.md.
+ * fails.
  */
 import { describe, it, expect } from 'vitest';
 import { defaultOperationsSegment, opsPlanMode } from '../lifecycleMatrix';

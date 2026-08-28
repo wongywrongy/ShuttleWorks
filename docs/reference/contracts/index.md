@@ -3,7 +3,7 @@
 A **module contract** is an explicit, typed statement of what one architectural module *owns*,
 what it *consumes*, and what crosses the boundary between two modules. In ShuttleWorks these are
 not prose conventions — they are a **test-enforced descriptor layer** in
-`frontend/src/platform/contracts/moduleContract.ts`. This page is for developers who need to see the
+`apps/console/src/platform/contracts/moduleContract.ts`. This page is for developers who need to see the
 module seams without tracing every import.
 
 ## Why it matters

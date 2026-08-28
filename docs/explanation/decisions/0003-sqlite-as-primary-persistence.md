@@ -8,7 +8,7 @@ The **primary decision below still stands**: local SQLite is the canonical sourc
 of truth in local mode, and the day cannot stop because the network did.
 
 What no longer exists is the **Supabase mirror** — the `sync_queue` outbox,
-`services/sync_service.py`, and the Supabase Realtime read path. It was removed
+the former sync service and the Supabase Realtime read path. They were removed
 entirely in SP-CLOUD-3 / 0.E: it was one-way with no restore path, its consumers
 had already been replaced (the public display now polls capability-token
 projection routes), and it was never operated — no project was ever populated.
@@ -17,8 +17,7 @@ See [ADR 0012](/explanation/decisions/0012-remove-the-supabase-mirror).
 The **Tauri packaging end-state** named below is also not the plan. It was never
 scaffolded — no `src-tauri/`, no CLI dependency, no build script — and the deployment
 story is now Docker: [Install: local](/how-to/install-local) for one machine,
-[Install: self-hosted](/how-to/install-selfhost) for a team. The `docs/history/deploy/cloud.md`
-it cites is a tombstone as of 2026-08-06.
+[Install: self-hosted](/how-to/install-selfhost) for a team.
 
 The text below is preserved as the record of what was decided at the time.
 :::
@@ -41,14 +40,14 @@ Make the **director's local SQLite (via SQLAlchemy 2.0, with Alembic migrations)
 of truth.** Supabase Postgres is a **mirror**, not the primary, populated asynchronously:
 
 - All reads/writes for the event go to local SQLite, fronted by `repositories/local.py`.
-- A crash-safe **outbox** (`services/sync_service.py`) drains a `sync_queue` table to Supabase; the
+- A crash-safe **outbox** (the former sync service) drained a `sync_queue` table to Supabase; the
   queue row is inserted *in the same transaction* as the data write, so a write can never go unmirrored
   and recovery is idempotent.
 - Operators and the public TV read mirrored writes via **Supabase Realtime** (with polling fallback);
   `commands`, `sync_queue`, and `match_states` stay local-only.
 
 The packaging end-state is a Tauri desktop app shipping the FastAPI backend as a sidecar (today:
-Docker Compose). See `docs/history/deploy/cloud.md`.
+Docker Compose). See [Deploy](/how-to/deploy).
 
 ## Consequences
 

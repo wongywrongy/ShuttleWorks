@@ -19,7 +19,7 @@ its own.
 ## Decision
 
 Use **Google OR-Tools CP-SAT** with an **interval-variable formulation**, packaged as a pure-Python
-engine in **`scheduler_core/`** — no HTTP, no I/O. Its shape:
+engine in **`packages/scheduler-core/scheduler_core/`** — no HTTP, no I/O. Its shape:
 
 - **Decision variables** enumerated explicitly (the interval/court/slot formulation).
 - A **constraint-plugin architecture** (`engine/constraints/`, each implementing the `Constraint`
@@ -32,7 +32,7 @@ engine in **`scheduler_core/`** — no HTTP, no I/O. Its shape:
   prefer keeping the current schedule — the basis of the live proposal/repair pipeline.
 
 The FastAPI layer keeps CP-SAT out of the request path. Since SP-CLOUD-1 the meet batch solve
-runs as an **async job** in a child subprocess (`services/solve_child.py`) claimed off the
+runs as an **async job** in a child subprocess (`apps/api/src/solve_rail/solve_child.py`) claimed off the
 `solve_jobs` queue — a kill is the only reliable cancel for CP-SAT — while the bracket
 `schedule-next` routes still solve off the request thread. The solve input stays self-contained
 (the full problem rides in the job's `input_snapshot`).
@@ -40,7 +40,7 @@ runs as an **async job** in a child subprocess (`services/solve_child.py`) claim
 ### The determinism knob (SP-CLOUD-1)
 
 The one engine change the solve rail required: `SolverOptions` gained an **additive, optional
-`max_deterministic_time`** field (`scheduler_core/domain/models.py`), and `CPSATScheduler.solve`
+`max_deterministic_time`** field (`packages/scheduler-core/scheduler_core/domain/models.py`), and `CPSATScheduler.solve`
 sets `solver.parameters.max_deterministic_time` when — and only when — it is provided
 (`engine/cpsat_backend.py`). Deterministic time is a host-speed-independent budget: a solve
 stopped by it halts at the same search point on any machine, so the result stays reproducible
@@ -63,4 +63,4 @@ in `scheduler_core` is untouched by SP-CLOUD-1/2.
 
 ## See also
 
-- `scheduler_core/README.md` (engine internals: variables, constraints, soft penalties) · [Meet module](/reference/modules/meet)
+- `packages/scheduler-core/scheduler_core/engine/README.md` (engine internals: variables, constraints, soft penalties) · [Meet module](/reference/modules/meet)

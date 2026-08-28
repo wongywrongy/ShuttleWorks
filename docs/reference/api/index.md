@@ -10,7 +10,7 @@ It is for backend and frontend engineers wiring or consuming a route.
 - **OpenAPI JSON:** <http://localhost:8000/openapi.json>
 
 (Replace the host/port if you remapped `BACKEND_HOST_PORT`.) The frontend's typed client
-(`frontend/src/api/dto.generated.ts`) is generated from this same OpenAPI schema, so it never
+(`apps/console/src/api/dto.generated.ts`) is generated from this same OpenAPI schema, so it never
 drifts from the routes.
 
 The [Signals API](/reference/api/signals) is documented separately because it is the most important
@@ -18,7 +18,7 @@ cross-cutting backend feature.
 
 ## Base URL
 
-The frontend resolves the API base URL as (`frontend/src/api/README.md`):
+The frontend resolves the API base URL as (`apps/console/src/api/README.md`):
 
 ```ts
 import.meta.env.VITE_API_BASE_URL || '/api'
@@ -38,13 +38,13 @@ origin than its API.
 ## Route-ownership model
 
 Routes are grouped by the [architectural module](/explanation/architecture/system-overview) that owns them.
-Every router is registered in `app/main.py` under a single auth dependency (`get_current_user`),
+Every router is registered in `apps/api/src/core/main.py` under a single auth dependency (`get_current_user`),
 with six deliberate exceptions: `invites` (its public resolve endpoint declares per-endpoint
 auth), `auth` (you must be able to log in while logged out), the **public display projection**
 (`/display/{token}/*`, resolved by a capability token), `solve-jobs` (carries its own auth +
 per-route role deps), and — since SP-PROGRAM-1 Phase 6 — the two **entrant** routers,
 `/e/api/*` and `/e/account/*` (their own section below). Every one of
-those public endpoints is enumerated with a written reason in `tests/test_auth_surface.py`'s
+those public endpoints is enumerated with a written reason in `tests/backend/test_auth_surface.py`'s
 `PUBLIC_BY_DESIGN`, and a route that answers an anonymous caller without being in it fails
 that test — so the list above is derived, not maintained by hand. Workspace-scoped routes
 additionally attach the tenancy seam `require_tournament_access(min_role)` — see
@@ -146,7 +146,7 @@ architectural module with no enable flag.
 ### Display — the public capability link
 
 Display's board is still poll-only, but since SP-CLOUD-2 the public link is a **capability
-token**, not a raw workspace id (`api/display.py`). The `/display/{token}/*` routes are one of
+token**, not a raw workspace id (`apps/api/src/display/display.py`). The `/display/{token}/*` routes are one of
 two unauthenticated data planes in the app (the other is the entrant surface below), and the
 only **capability-keyed** one. They serve a *projection* — exactly the fields the
 board renders, never the raw state blob (which carries operator material such as the
@@ -205,13 +205,13 @@ Entrants are **not** `users`: they live in their own tables with their own `sw_p
 cookie and never reach an operator route. Cookie-carrying writes here prove themselves with
 `X-ShuttleWorks-CSRF: 1` **or** a cookie-derived double-submit token (ruling R8-B), so a form
 that ships no JavaScript can still submit — there is no path-based CSRF exemption anywhere in
-the app, and `tests/test_csrf_cookie_registry.py` asserts that from source.
+  the app, and `tests/backend/test_csrf_cookie_registry.py` asserts that from source.
 
 ::: tip Resolved: the CSP now admits Turnstile, on `/e/signup` only
 Entrant signup used to answer `403 AUTH_CHALLENGE_FAILED` in every deployed stack: the signup
 page loads Turnstile's script from `challenges.cloudflare.com`, the nginx CSP sent
 `script-src 'self'`, the browser blocked it, and the form posted no `cf-turnstile-response`.
-Fixed by the `$sw_turnstile_origin` map in `frontend/nginx.conf`, which adds that origin to
+Fixed by the `$sw_turnstile_origin` map in `infra/nginx/play.conf`, which adds that origin to
 `script-src` and `frame-src` — Cloudflare's
 [documented requirement](https://developers.cloudflare.com/turnstile/reference/content-security-policy/)
 — for `/e/signup` and no other path, so the operator console on the same origin still gets
@@ -222,7 +222,7 @@ Held by `e2e/tests/10-entrant-r11-evidence.spec.ts`, which fails if the widget s
 
 ### Auth — self-hosted accounts & sessions
 
-Self-hosted cookie-session auth (`api/auth.py`). Passwords are
+Self-hosted cookie-session auth (`apps/api/src/identity/auth_routes.py`). Passwords are
 Argon2id; the policy is NIST 800-63B length-bounds-only plus a small blocklist. Sessions are
 opaque 256-bit tokens in an `httpOnly; SameSite=Lax` cookie — only their SHA-256 lands in
 `auth_sessions`. Credential endpoints are throttled per-account and per-IP
@@ -281,7 +281,7 @@ header, every state write answers `412`.
 
 | `POST /tournaments/{id}/plan-finalized` | toggle the persisted `planFinalized` flag (Run surface). Writes the blob, so the response carries a fresh `ETag` |
 | `GET /tournaments/{id}/modules`, `PATCH …/modules/{moduleId}` | the `workspace_modules` control plane |
-| `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members. `POST` with an `email` makes an **email invite**: delivered via the email seam (`services/email.py` — console backend locally, SMTP in cloud) with a bounded lifetime (`invite_ttl_days`); without `email` it stays a copy-the-URL link invite with no expiry |
+| `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members. `POST` with an `email` makes an **email invite**: delivered via the email seam (`apps/api/src/core/email.py` — console backend locally, SMTP in cloud) with a bounded lifetime (`invite_ttl_days`); without `email` it stays a copy-the-URL link invite with no expiry |
 | `GET /invites/{token}` (public) · `POST …/accept` (auth) · `DELETE …/{token}` (owner, revoke) | resolve / accept / revoke an invite link |
 
 :::info The schedule lock on `PUT …/state`
@@ -336,7 +336,7 @@ Error fields (`databaseError`, `dataDirError`, `solverError`) carry the exceptio
 ## Operator command vocabulary
 
 `POST /tournaments/{id}/commands` takes a wire-format `action` string; the processor maps it to a
-target `MatchStatus` (`app/constants.py`, `ACTION_TO_TARGET_STATUS`) and verifies the transition is
+target `MatchStatus` (`apps/api/src/operations/commands.py`, `ACTION_TO_TARGET_STATUS`) and verifies the transition is
 legal from the *current* status — the caller never names `next_status` directly.
 
 | `action` | Transition | Notes |
@@ -358,7 +358,7 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
   minted as a uuid4 by `request_id_middleware`), echoed on the response and into error bodies for
   bug reports.
 - **Error codes** — `HTTPException`s built via `error_codes.http_error(...)` carry a structured
-  `{code, message}` body. `ErrorCode` (in `app/error_codes.py`) is the authoritative list the
+  `{code, message}` body. `ErrorCode` (in `apps/api/src/core/error_codes.py`) is the authoritative list the
   frontend branches on (e.g. `MODULE_DEPENDENCY_UNMET`, `MODULE_HAS_DATA`,
   `SCHEDULE_VERSION_CONFLICT`, `BACKUP_NOT_FOUND`, the schedule-lock codes `CONFIG_LOCKED` /
   `DRAW_STARTED` / `ROSTER_LOCKED`, the solve-job codes `SOLVE_JOB_NOT_FOUND` /
@@ -375,7 +375,7 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
     `409` with `error: "conflict"`. See
     [Data flow](/explanation/architecture/data-flow#the-command-pipeline-write-path).
 - **Auth** — identity is the self-hosted session cookie resolved by `get_current_user`
-  (`app/dependencies.py`). In `AUTH_MODE=local` a request without a session becomes the bootstrap
+  (`apps/api/src/core/dependencies.py`). In `AUTH_MODE=local` a request without a session becomes the bootstrap
   operator; in `AUTH_MODE=cloud` it is `401`. Unauthenticated by design: `/auth/*` credential
   endpoints, the public invite resolve (`GET /invites/{token}`), the public display projection
   (`GET /display/{token}/*`), and `GET /health` (liveness only — the other health
@@ -388,7 +388,7 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
   `tournament_id` and attaches `Depends(require_tournament_access("viewer|operator|owner"))`.
   Non-members and nonexistent ids get the **uniform 404** (`TOURNAMENT_NOT_FOUND`) — existence is
   information; a real member with an insufficient role gets `403`. The cross-tenant isolation
-  suite (`tests/test_tenant_isolation.py`) derives every `{tournament_id}` operation from the
+  suite (`tests/backend/test_tenant_isolation.py`) derives every `{tournament_id}` operation from the
   OpenAPI schema, so an endpoint that forgets the dependency fails CI automatically.
 - **SSE** — only `POST /bracket/schedule-next/stream` still returns `text/event-stream`
   (the meet solve's SSE progress went away with the `410`'d `/schedule/stream`). Each `data:`

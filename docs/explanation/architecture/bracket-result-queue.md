@@ -14,14 +14,14 @@ decision.
 
 ## Why a parallel queue, not the shared one
 
-Meet's queue (`frontend/src/lib/commandQueue.ts`) carries operational
+Meet's queue (`apps/console/src/lib/commandQueue.ts`) carries operational
 verbs and settles each command against a small status/version envelope.
 Bracket's success response is a different shape: the result route returns
 the **full tournament DTO** (`BracketTournamentDTO`) — every play unit,
 assignment, and result post-write, because a single result can cascade
 advancement across the draw. Forcing both into one discriminated union
 would couple two genuinely different ok-outcomes, so Bracket gets a
-parallel module — `frontend/src/lib/bracketCommandQueue.ts` — that reuses
+parallel module — `apps/console/src/lib/bracketCommandQueue.ts` — that reuses
 the same IndexedDB plumbing pattern rather than the same store.
 
 The bracket queue opens its own database (`scheduler-bracket-result-queue`,
@@ -32,7 +32,7 @@ the `seenVersion` the client last observed.
 
 ::: info The recording route is the command endpoint
 Result writes go through `POST /tournaments/{tid}/bracket/commands`
-(`backend/api/brackets.py::submit_bracket_command`), **not** the legacy
+(`apps/api/src/bracket/brackets.py::submit_bracket_command`), **not** the legacy
 `POST …/bracket/results` (`record_match_result`). The command endpoint
 carries the queue's UUID as a first-class idempotency key and checks it
 **before** the version guard. The legacy `/results` route still exists for
@@ -114,7 +114,7 @@ authoritative tokens, and the next client write starts from a fresh
 
 ## Optimistic UI and conflict surfacing
 
-`applyOptimisticResult` (`frontend/src/modules/bracket/optimisticResult.ts`)
+`applyOptimisticResult` (`apps/console/src/modules/bracket/optimisticResult.ts`)
 splices a provisional `ResultDTO` into the tournament DTO so the operator
 sees the result land instantly, replacing the old poll. It deliberately
 does **not** simulate advancement — downstream slot resolution stays

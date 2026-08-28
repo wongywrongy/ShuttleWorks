@@ -48,7 +48,7 @@ always-present `nav.overview` item), and the six `ws-*` segments form the
 | **Members** | `ws-members` | `PeopleAccessTab` | People & Access — lists members with **real identity** (names/emails from the `users` table since SP-CLOUD-2) and their roles |
 | **Sharing** | `ws-sharing` | `SharingTab` | the public display **capability link** (mint / copy / rotate via `…/display-token`) plus collaborator invites — copy-URL link invites (no expiry) and email invites (delivered via the email seam, TTL-bounded) |
 | **Modules** | `ws-modules` | `ModulesSettingsTab` | the module catalog — enable / disable per the dependency rules |
-| **Sync and backups** | `ws-sync` | `SyncBackupsTab` | state-snapshot list / create / restore |
+| **Backups** | `ws-sync` | `SyncBackupsTab` | state-snapshot list / create / restore |
 | **Settings** | `ws-settings` | `GeneralSettingsTab` + `DangerZoneTab` | general details (name / date / status) + the danger zone (archive, delete) |
 
 (`display-config` is also a shell-rendered surface, but it belongs to the
@@ -82,27 +82,28 @@ The **Modules** surface (`ModulesSettingsTab` → `ModuleCatalogRow`) renders th
 workspace's module catalog. Each row's status chip and Enable/Disable action go
 through the `useWorkspaceModules` hook, which reads
 `GET /tournaments/{id}/modules` and PATCHes a status change. The catalog the tab
-shows is the frontend `ModuleId` set — **Meet**, **Bracket**, **Display** — with
+shows is the frontend `ModuleId` set — **Meet**, **Bracket**, **Display**, and
+**Entries** (cloud-only) — with
 capability/dependency copy from `modules/settings/moduleCatalog.ts`.
 
 Enablement is **not** a Settings concept; it is first-class state in the
 `workspace_modules` table, and every rule (allowed transitions, the Display
 dependency, no-data-loss disable, last-operational guard) is enforced server-side
-in `backend/api/workspace_modules.py`. Backend 409s surface as toasts — the UI
+in `apps/api/src/workspaces/workspace_modules.py`. Backend 409s surface as toasts — the UI
 never fakes success. For the full transition table and guards, see
 [How to enable a module](/how-to/enable-a-module).
 
-:::tip Why the catalog only shows three
-`moduleCatalog.ts` describes the user-facing engines/outputs. The backend may
-hold additional rows (e.g. a foreign-operator row) that the catalog deliberately
-does not surface — the tab renders what an operator can act on, not the raw
-table.
+:::tip Why the local builder shows three
+`moduleCatalog.ts` includes Entries, but Entries is seeded only for cloud workspaces.
+The local `/new` builder offers Meet, Bracket, and Display; the tab renders what an
+operator can act on, not merely the raw table.
 :::
 
 ## What it owns (backend)
 
 The admin surfaces are served by the **control-plane** routes
-(`backend/api/tournaments.py`, `workspace_modules.py`, `invites.py`), not a
+(`apps/api/src/workspaces/tournaments.py`, `apps/api/src/workspaces/workspace_modules.py`,
+`apps/api/src/identity/invites.py`), not a
 module router:
 
 | Concern | Routes |

@@ -30,8 +30,8 @@ proportionate here. Where a finding sits above the target level but had a live
 exploit path, it was remediated anyway — CSV formula injection (`v5.0.0-1.2.10`,
 L3) is the example.
 
-Findings register: `docs/history/audits/11-sp-sec-1-phase0.md`. Remediation record and
-negative controls: `SEC_PROGRESS.md`.
+Current residual debt is tracked in `docs/reference/debt-log.md`; this document is the
+current security policy and control record.
 
 ## Threat model
 
@@ -78,7 +78,7 @@ service against Cloudflare's edge, and social engineering of tournament staff.
 | Registration abuse | Separate per-IP registration bucket charging **successful** signups, plus `limit_req` at the edge |
 | Solver abuse | One active job per workspace (DB partial index) and a per-user cap across all their workspaces |
 | Tenancy | Every workspace route requires `Depends(require_tournament_access(role))` and answers a uniform 404 to non-members; a test derives all such routes from the OpenAPI schema and fails CI on a missing seam |
-| Input bounds | One central layer (`app/limits.py`): `extra="forbid"` plus an explicit size vocabulary across every request model |
+| Input bounds | One central layer (`apps/api/src/core/limits.py`): `extra="forbid"` plus an explicit size vocabulary across every request model |
 | Request size | 4 MB ceiling enforced as pure ASGI middleware that counts bytes as they arrive, so omitting `Content-Length` does not bypass it |
 | Output encoding | CSV formula-injection prefixing, ICS CR/LF escaping, email header flattening |
 | Response headers | CSP (`script-src 'self'`, no `unsafe-inline`), `nosniff`, `Referrer-Policy`, `Permissions-Policy`, `frame-ancestors`, conditional HSTS |
@@ -98,8 +98,8 @@ database-keyed, not filesystem paths), and no privilege-field mass assignment.
 ### Every control is adversarially tested
 
 A control asserted but not tested is not a control. Each security test in this
-repository has been demonstrated **failing** with its control removed, and the
-failure counts are recorded in `SEC_PROGRESS.md`. This practice exists because
+repository has been demonstrated **failing** with its control removed; the
+original mutation records remain in Git history. This practice exists because
 this codebase has caught itself three times shipping tests that passed while
 checking nothing.
 

@@ -4,8 +4,8 @@ ShuttleWorks is an npm-workspaces monorepo with a Python solver package alongsid
 
 Deployable applications live under `apps/`, shared libraries under `packages/`, and
 deployment orchestration under `infra/` — the layout Turborepo, Nx and pnpm workspaces all
-converge on. SP-REORG-1 moved the tree here on 2026-08-19; before that everything sat under
-`products/scheduler/`, which named a directory rather than a boundary.
+converge on. SP-REORG-1 moved the tree here on 2026-08-19; the former nested product directory
+named a directory rather than a boundary.
 
 ```
 apps/                          the deployable surfaces
@@ -24,12 +24,12 @@ apps/                          the deployable surfaces
 │   └── tests/                 vitest, incl. source-scan contracts (no truncation, no em dash, no client fee rules)
 └── api/                       FastAPI + persistence + command log
     ├── alembic/               SQLite + Postgres schema migrations
-    ├── api/                   route handlers (one APIRouter per resource)
-    ├── app/                   app, schemas, error codes, auth deps
-    ├── database/              SQLAlchemy models + session
-    ├── repositories/          LocalRepository + per-entity sub-repos
-    ├── services/              auth, email, match_state, bracket/, suggestions_worker
-    └── BACKEND.md             FastAPI routes, request lifecycle, how to add an endpoint
+    ├── src/                   sys.path root (not a package)
+    │   ├── core / shared      composition kernel and cross-domain logic
+    │   ├── db / repositories  SQLAlchemy models, sessions, persistence facade
+    │   └── workspaces / identity / meet / bracket / operations / display /
+    │       entries / solve_rail / ops  domain routers and services
+    └── README.md              routes, auth/tenancy, request lifecycle
 
 packages/                      shared libraries (npm workspaces + one pip package)
 ├── design-system/             shared React components + the Tailwind preset
@@ -46,12 +46,12 @@ tests/
 └── e2e/                       Playwright specs incl. the required interaction smoke
 
 simulator/                     internal full-workflow HTTP simulator (not in CI)
-tools/                         generate_openapi.py · docs-freshness.mjs · audit_input_surface.py
+tools/                         OpenAPI, documentation, and audit tooling
 legacy/                        sealed pre-merge deployment files (never edited)
 archive/
 └── tournament-pre-merge/      frozen snapshot of the legacy tournament product
 examples/                      engine usage examples (product-agnostic)
-docs/                          this VitePress site + the design archive
+docs/                          current VitePress documentation
 Makefile                       every target (the former product Makefile folded in)
 pyproject.toml                 pytest + ruff config for the whole repo
 ```
@@ -75,26 +75,23 @@ workspace, and the entrant tier has its own pair of each (`dev:entrant`, `build:
 CommonJS**, which is why the VitePress config is `docs/.vitepress/config.mts` (the `.mts`
 extension forces ESM loading regardless of the root package type).
 
-## The three source-of-truth docs
+## Source-of-truth docs
 
 For working in the code, the per-product markdown is the most current authority. This site
 consolidates from them; when in doubt, the code and these files win:
 
-- `docs/SCHEDULER.md` — features, dev workflow, the proposal pipeline.
-- `apps/api/BACKEND.md` — FastAPI routes, request lifecycle, how to add an endpoint or a constraint.
+- `apps/api/README.md` — FastAPI routes, auth/tenancy, and request lifecycle.
 - `apps/console/FRONTEND.md` — shell + tabs, the Zustand store split, theme system.
 - `packages/scheduler-core/scheduler_core/README.md` — engine internals: variables, constraints, soft penalties.
 
-Each major directory under `apps/console/src/` (`store/`, `hooks/`, `api/`, …) also carries its own
+Each major directory under `apps/console/src/` (`apps/console/src/store/`,
+`apps/console/src/hooks/`, `apps/console/src/api/`, …) also carries its own
 `README.md` for local conventions.
 
 ## Branch strategy
 
-- **`main`** — the default integration branch; PRs target it.
-- **`dev/workspace-suite`** — the live branch where the **workspace-suite control-plane redesign**
-  (Hub dashboard, workspace + module model, the module dock, redesigned per-workspace Settings,
-  and the additive module-contract layer) is built and reviewed. Everything documented here
-  reflects this branch.
+- **`main`** is the default integration branch; short-lived `<type>/<slug>`
+  branches target it through PRs.
 - The legacy two-product layout (a separate scheduler and a separate bracket app) was folded into
   one product during the **backend-merge arc**; the old bracket product is frozen under
   `archive/tournament-pre-merge/`.
@@ -106,49 +103,29 @@ This site lives in `docs/` and is built by VitePress (`config.mts`, `srcDir: doc
 [Architecture](/explanation/architecture/system-overview), [Modules](/reference/modules/meet),
 [Module contracts](/reference/contracts/), [API reference](/reference/api/), and [Decisions](/explanation/decisions/).
 
-Everything that is a **dated working record** rather than curated IA lives under
-`docs/history/`, which SP-REORG-1 Phase 5 made the single home for it. The whole tree is
-**excluded from the site** by one `srcExclude` entry (`history/**`) — it carries
-GitHub-relative links and implementation scratch, and it is never rewritten. Three other
-things are excluded alongside it: the workspace-suite ownership maps
-(`explanation/architecture/workspace-suite/**`, labelled historical snapshots),
-superseded drafts (`**/*.superseded-draft-*.md`), and `README.md`. **A page that
-`srcExclude` drops cannot be linked to from a rendered page** — the dead-link gate fails
-the build — so refer to those by backticked path, never by link:
-
-| On-disk tree | What it holds |
-| --- | --- |
-| `docs/history/superpowers/specs/` · `plans/` | Per-slice design specs + implementation roadmaps (incl. the workspace-suite redesign, the module-architecture modernization, and the Entries design). |
-| `docs/history/programs/` | Program ledgers — `CLOUD_PROGRESS.md`, `SEC_PROGRESS.md`, `REFACTOR_PROGRESS.md`, `FRONTEND_PROGRESS.md`, `ENTRIES_PROGRESS.md` and the rest — each read at session start and updated at session end, plus the master plans and the `design-plan/` working notes. |
-| `docs/history/audits/` | Dated audits + surface reports. |
-| `docs/history/changes/` | Dated decision logs. |
-| `docs/history/progress/` | The progress board. |
-| `docs/history/tech-stack.md` · `architectural-roadmap.md` | The post-merge architecture reference and the backend-merge arc roadmap, both retired as curated pages. |
-| `docs/history/PRODUCT.md` · `SCHEDULER.md` | The two product records SP-REORG-1 relocated. |
-| `docs/history/deploy/cloud.md` | Tombstone. The Supabase-era deployment guide was removed 2026-08-06; use the `how-to/` runbooks. |
-
-Nothing there is deleted — it is the archive. The one exception is `history/deploy/cloud.md`,
-whose body was removed on 2026-08-06 because it was a runbook for a topology that never
-existed; the path survives as a tombstone and the text is in git history. The curated pages
-here are the single source of truth going forward.
-
-**Program ledgers moved twice and both moves are load-bearing to remember**: off the repo
-root on 2026-08-06 (so the root holds only files a tool or convention reads by path), then
-under `history/` in SP-REORG-1 Phase 5. `docs/programs/` no longer exists; any reference to
-it is stale.
+Current architecture, decisions, contracts, and open debt live in the built
+quadrants. Historical plans, audits, and dated logs were distilled and removed
+from HEAD; Git history retains their provenance without leaving competing
+current documentation in the tree.
 
 ## Keeping these docs current
 
-Docs drift. Two mechanisms make drift visible instead of silent.
+Docs drift. Three mechanisms make drift visible instead of silent.
 
-### 1. Build provenance (in the footer)
+### 1. Repository path check — `npm run docs:paths`
 
-Every built page footer shows the commit the site was generated from, e.g.
-*"Built from `dev/workspace-suite@ab770ed` · 2026-06-26"*. This is computed at build time from
+The path checker scans live Markdown and fails when a repository-relative code
+path no longer exists. It is independent of Git timestamps and runs in local
+and CI gates.
+
+### 2. Build provenance (in the footer)
+
+Every built page footer shows the branch and commit the site was generated from.
+This is computed at build time from
 `git` (three one-off calls in `config.mts`, not per page), so a reader can always see how fresh the
 site is.
 
-### 2. The freshness check — `npm run docs:freshness`
+### 3. The freshness check — `npm run docs:freshness`
 
 This is the "are the docs behind the code?" signal. It compares, **per area**, the last commit that
 touched the doc pages against the last commit that touched the source those pages document, using

@@ -4,11 +4,12 @@
  * This file declares, per architectural module, what it OWNS and CONSUMES
  * today — nothing aspirational. It is the typed, test-enforced spine of the
  * "module-contract modernization" design
- * (docs/history/superpowers/plans/2026-06-25-module-architecture-modernization-design.md).
+ * (docs/reference/contracts/index.md).
  *
  * ## Honesty is the invariant
  *
- * Every field encodes what the code ACTUALLY does on `dev/workspace-suite`,
+ * Every field encodes what the code ACTUALLY does in the current workspace
+ * shell,
  * not what it might do later. The colocated test
  * (`__tests__/moduleContract.test.ts`) turns that honesty into a checked
  * invariant:

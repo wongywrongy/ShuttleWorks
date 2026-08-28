@@ -105,7 +105,7 @@ literals — and because `workspaces` may not name `entries` (see
 
 ## Seam A — commit to roster
 
-`entries/entries.py:commit_entries`: every confirmed entry with no
+`apps/api/src/entries/entries.py:commit_entries`: every confirmed entry with no
 `committed_player_id` becomes a roster player exactly once —
 re-runnable, additive, idempotent (R3). The deterministic roster id
 `entry-{entry_player_id}` is one person one row, however many events
@@ -119,7 +119,7 @@ Backend, all under `apps/api/src/`:
 | Path | Owns |
 |---|---|
 | `entries/entries_routes.py` | Operator desk + page config (`/tournaments/{tournament_id}/…`) |
-| `entries/entries.py` | The commit seam |
+| `apps/api/src/entries/entries.py` | The commit seam |
 | `entries/lifecycle.py` | States, transitions, caps, withdrawal, erasure |
 | `entries/partners.py` + `partner_routes.py` | Doubles nomination, invites, acceptance |
 | `entries/money.py` | Paid/unpaid at the submission level |
@@ -136,6 +136,5 @@ publication card on `modules/settings/SharingTab.tsx`; the public tier's
 pages at `apps/entrant/app/routes/` (`enter` · `myEntries` · `verify` ·
 `resetPassword` · `partner` · `tournament`).
 
-Program ledgers: `docs/history/programs/ENTRIES_PROGRESS.md`
-(SP-PROGRAM-1) and `docs/history/programs/P7_PROGRESS.md` (SP-P7) —
-working records in the repo, deliberately outside this site.
+Program ledgers are repository working records outside this site; this page
+documents the current shipped behavior.

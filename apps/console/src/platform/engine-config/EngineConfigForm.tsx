@@ -85,7 +85,7 @@ export const ENGINE_CONFIG_FIELDS = [
   { key: 'breaks', group: 'timing', modules: ['meet', 'bracket'] },
   { key: 'restBetweenRounds', group: 'timing', modules: ['bracket'] },
   { key: 'deterministic', group: 'solver', modules: ['meet', 'bracket'] },
-  // Meet-only: C10's `_bracket_solver_options` (backend/api/brackets.py)
+  // Meet-only: C10's `_bracket_solver_options` (apps/api/src/bracket/brackets.py)
   // deliberately does NOT read `solverTimeLimitSeconds` — bracket keeps
   // its own per-request budget. Rendering the control on bracket would be
   // decorative (it changes nothing), so the schema — and the gated render

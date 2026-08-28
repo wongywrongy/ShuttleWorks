@@ -1,6 +1,6 @@
 """Application settings loaded from environment variables.
 
-Per ``docs/history/tech-stack.md``: a Pydantic ``BaseSettings`` model
+This module defines the Pydantic ``BaseSettings`` model
 that reads ``DATABASE_URL`` / ``ENVIRONMENT`` / ``CORS_ORIGINS`` and
 friends from the process environment, falling back to a ``.env`` file in
 the working directory.

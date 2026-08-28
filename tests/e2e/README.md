@@ -9,9 +9,9 @@ a prepared harness-enabled preview fixture in CI.
 
 | layer | validates | owner and runner |
 |---|---|---|
-| **unit** (vitest) | LOGIC — a reducer, a selector, a component given props | `apps/console/src/**/__tests__`, `apps/entrant/tests/` |
-| **entrant evidence** | public entrant layout, IA, CSP and security headers at real widths | `tests/10-entrant-r11-evidence.spec.ts`, managed compose / local dev origins |
-| **interaction smoke** | operator/Operations UI presses, live transitions, viewer read-only behavior and public display | `tests/interaction-smoke.spec.ts`, CI prepared fixture |
+| **unit** (vitest) | LOGIC — a reducer, a selector, a component given props | tests below `apps/console/src/`, plus `apps/entrant/tests/` |
+| **entrant evidence** | public entrant layout, IA, CSP and security headers at real widths | `tests/e2e/tests/10-entrant-r11-evidence.spec.ts`, managed compose / local dev origins |
+| **interaction smoke** | operator/Operations UI presses, live transitions, viewer read-only behavior and public display | `tests/e2e/tests/interaction-smoke.spec.ts`, CI prepared fixture |
 
 The interaction layer exists because the unit layer **structurally cannot** catch
 its bug class: unit tests mock the handlers and the stores, so a component can be
@@ -23,8 +23,8 @@ rejected roster delete poisoned the whole-blob autosave so *all* later edits
 failed until reload, and a Plan-timeline chip's selection was wiped by the 2.5 s
 poll so it looked like a dead button.
 
-Write-up: `docs/history/programs/design-plan/INTERACTION_FINDINGS.md`. Static census of
-every interactive element: `docs/history/programs/design-plan/INTERACTION_INVENTORY.md`.
+The interaction findings and static control census are summarized by this runner's
+fatal/non-fatal contract and the maintained `interaction-smoke.spec.ts` assertions below.
 
 ### Running the interaction smoke suite
 
@@ -39,7 +39,8 @@ node tests/e2e/interaction-sweep/seed-smoke.mjs http://localhost:8600
 # 2. there is no HTTP path to a viewer role (the creator is always written as
 #    `owner`, and no endpoint mutates a member's role), so the fixture writes
 #    the row the API won't. Run it AFTER seeding, never before.
-python tests/e2e/interaction-sweep/make-viewer.py apps/api/src/smoke.db <viewerTid>
+API_DIR=apps/api/src
+python tests/e2e/interaction-sweep/make-viewer.py "$API_DIR/smoke.db" <viewerTid>
 
 # 3. the suite asserts on the error harness (apps/console/src/platform/errorHarness.ts),
 #    which must be compiled in — that's what lets a failure name the button that
@@ -136,5 +137,5 @@ tests/e2e/
 
 The two maintained specs are invoked explicitly and serially by their owner
 scripts. The retired numbered operator specs and screenshot capture are not
-discovered by any runner; their unique behavior remains owned by backend/unit
+discovered by any runner; their unique behavior remains owned by `tests/backend/unit`
 tests or the interaction smoke flows described above.

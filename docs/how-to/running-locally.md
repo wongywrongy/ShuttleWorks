@@ -95,7 +95,8 @@ to the zero-friction bootstrap identity. Copy
 
 ### Cloud mode
 
-Drop an `apps/api/.env` with `ENVIRONMENT=cloud` to flip into the multi-tenant cloud runtime:
+Drop a deployment `.env` (for example, copy `infra/compose/.env.selfhost.example`) with
+`ENVIRONMENT=cloud` to flip into the multi-tenant cloud runtime:
 Postgres instead of SQLite, standalone `python -m worker` containers instead of the embedded
 worker, and real accounts instead of the bootstrap identity. It fails closed at startup without
 Postgres, `AUTH_MODE=cloud`, `SESSION_COOKIE_SECURE=true`, and SMTP — see

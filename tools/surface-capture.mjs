@@ -2,9 +2,8 @@
  * Surface capture — walks every page of one tier and writes a self-contained
  * HTML report with an embedded screenshot per surface.
  *
- * Same shape as the earlier console reports in docs/history/audits/: one card
- * per surface, base64 PNGs inline so the file opens anywhere with no asset
- * directory beside it.
+ * One card per surface, with base64 PNGs inline so the file opens anywhere
+ * without an asset directory beside it.
  *
  *   node tools/surface-capture.mjs console  http://127.0.0.1:5173  out.html
  *   node tools/surface-capture.mjs entrant  http://127.0.0.1:5180  out.html

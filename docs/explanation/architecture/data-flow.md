@@ -3,7 +3,7 @@
 This page traces how data moves **between** modules and **out** to operators and the public
 display. There are three wired cross-module seams in the module graph (plus the Entries commit
 seam, which is a different shape — see below), a match-state machine, an idempotent command
-pipeline, and a crash-safe outbox. The per-seam detail lives in [Module contracts](/reference/contracts/);
+pipeline, and primary-store persistence. The per-seam detail lives in [Module contracts](/reference/contracts/);
 this page is the whole-system picture.
 
 ## The three wired seams
@@ -49,8 +49,8 @@ which are seams A, B, and D.
 ## The match-state machine
 
 Operations owns the live status of every match. The canonical transitions live in
-`backend/services/match_state.py` (`VALID_TRANSITIONS`), over the `MatchStatus` enum from
-`database/models.py`. Edge labels are the operator **command actions**:
+`apps/api/src/operations/match_state.py` (`VALID_TRANSITIONS`), over the `MatchStatus` enum from
+`apps/api/src/db/models.py`. Edge labels are the operator **command actions**:
 
 ```
 scheduled ──call──▶ called ──start──▶ playing ──finish──▶ finished

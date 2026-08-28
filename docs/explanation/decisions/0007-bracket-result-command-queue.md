@@ -37,7 +37,7 @@ merging the match models.**
 
 Shared (implemented):
 
-- **A parallel queue** — `frontend/src/lib/bracketCommandQueue.ts` with
+- **A parallel queue** — `apps/console/src/lib/bracketCommandQueue.ts` with
   its own IndexedDB database (`scheduler-bracket-result-queue`). It reuses
   Meet's queue *pattern* (UUID idempotency key, persisted pending
   commands, immediate best-effort flush, `applied` status so a row never
@@ -46,7 +46,7 @@ Shared (implemented):
   add the optimistic apply and inline conflict surfacing in
   `MatchDetailPanel`.
 - **An optional `seen_version` on `RecordResultIn`.** The result route
-  (`backend/api/brackets.py`) checks it **before** any mutation: a token
+  (`apps/api/src/bracket/brackets.py`) checks it **before** any mutation: a token
   that doesn't match the match's current `version` raises `ConflictError`,
   which serialises to HTTP 409 `error: stale_version`. A stale write
   therefore records nothing and advances nothing. Omitting `seen_version`

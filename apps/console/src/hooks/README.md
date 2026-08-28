@@ -11,7 +11,7 @@ folder. The convention: anything used by ≥2 features lives here.
 |---|---|
 | `useTournament.ts` | Read-only convenience selectors over the tournament config. |
 | `useTournamentState.ts` | Hydrate `tournamentStore` from `/tournaments/{id}/state` on mount; debounce PUTs back on change. The single owner of that round-trip. |
-| `useSchedule.ts` | Trigger `/schedule/stream` (SSE), feed events into the solver-HUD slice, and write the final result into `tournamentStore.schedule`. |
+| `useSchedule.ts` | Submit `/tournaments/{id}/solve-jobs`, poll the job, feed progress into the solver HUD, and write the final result into `tournamentStore.schedule`. |
 | `useLiveTracking.ts` | Match status state machine (`scheduled` → `called` → `playing` → `finished` \| `retired`). Validates transitions and writes through to `/tournaments/{id}/match-states`. |
 | `useLiveOperations.ts` | Drag-target validation + optimistic pin during the live ops flow. |
 | `useCurrentSlot.ts` | Wall-clock slot index for the current tournament config, refreshed every minute. |
@@ -37,9 +37,9 @@ folder. The convention: anything used by ≥2 features lives here.
 
 ## Adding a hook
 
-1. Drop it under `frontend/src/hooks/`.
+1. Drop it under `apps/console/src/hooks/`.
 2. If it talks to the backend, route through
-   `frontend/src/api/client.ts` so the request-id middleware + toast
+   `apps/console/src/api/client.ts` so the request-id middleware + toast
    plumbing wires up automatically.
 3. If it mutates a store (`tournamentStore` / `matchStateStore` / `uiStore` /
    `preferencesStore`), call store actions — never `set(...)` from outside the

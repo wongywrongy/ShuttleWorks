@@ -2,7 +2,7 @@
 
 **Goal:** stand up a new enableable module — its own section in the workspace
 sidebar, its own surfaces, and an honest entry in the test-enforced module
-contract — wired the same way Meet, Bracket, and Display are.
+contract — wired the same way Meet, Bracket, Operations, Display, and Entries are.
 
 This is the longest of the how-to guides because a module touches the most
 seams. Every other "add a …" guide ([a surface](/how-to/add-a-surface),
@@ -13,7 +13,7 @@ subset of the steps below.
 - You can run the app locally ([Quickstart](/tutorials/quickstart)) and
   the frontend test suite (`cd apps/console && npx vitest run`).
 - You've read [System overview](/explanation/architecture/system-overview) for the
-  four-module model and [Module contracts](/reference/contracts/) for what a contract is.
+  five-module architecture and [Module contracts](/reference/contracts/) for what a contract is.
 - You have a module **id** in mind. This guide adds a fictional `scoreboard`
   module; substitute your own throughout.
 :::
@@ -53,7 +53,7 @@ The backend is the source of truth for which modules a workspace has. Add the id
 to `MODULE_IDS` and decide its lazy-seed default in `derive_modules`.
 
 ```python
-# apps/api/database/models.py
+# apps/api/src/db/models.py
 MODULE_IDS = ("meet", "bracket", "display", "scoreboard")   # ~line 619
 # OPERATIONAL_MODULES stays ("meet", "bracket") unless your module is an engine.
 ```
@@ -62,7 +62,7 @@ MODULE_IDS = ("meet", "bracket", "display", "scoreboard")   # ~line 619
 access. Add your module to the returned status map (`available` unless it should
 be on by default). Enablement transitions and their guards (display-dependency,
 last-operational, data-loss) live in
-[`api/workspace_modules.py`](/how-to/enable-a-module) — you get those for free.
+[`apps/api/src/workspaces/workspace_modules.py`](/how-to/enable-a-module) — you get those for free.
 
 ## 3 · Add its surface segments
 
@@ -102,8 +102,10 @@ The section `id` **must equal** the `ModuleId` — the contract test asserts it.
 
 ## 5 · Build the product component
 
-Add `products/scoreboard/ScoreboardProduct.tsx`. It reads `activeTab` and renders
-the surface that owns it — copy the shape of `modules/meet/MeetProduct.tsx`. Keep
+<!-- docs-paths-ignore-next-line: fictional module path used by this recipe -->
+Add `apps/console/src/modules/scoreboard/ScoreboardProduct.tsx` (a fictional new
+module for this recipe). It reads `activeTab` and renders the surface that owns it.
+Keep
 intake/engine/emit in their own subfolders so the anatomy stays legible.
 
 ## 6 · Mount it and register it in the dock
@@ -120,11 +122,11 @@ const MODULE_LABELS: Record<ModuleId, string> = { /* … */ scoreboard: 'Scorebo
 const MODULE_ORDER: ModuleId[] = ['meet', 'bracket', 'display', 'scoreboard'];
 // moduleForTab(): map your segments → 'scoreboard'
 
-// app/workspace/ModuleOutlet.tsx — add the branch:
+// apps/console/src/app/workspace/ModuleOutlet.tsx — add the branch:
 if (module === 'scoreboard') return <ScoreboardProduct />;
 ```
 
-`ModuleOutlet` (`app/workspace/ModuleOutlet.tsx:22`) is the single mount point; it
+`ModuleOutlet` (`apps/console/src/app/workspace/ModuleOutlet.tsx:22`) is the single mount point; it
 calls `moduleForTab(activeTab, kind)` and renders the owning product.
 
 ## 7 · Declare the contract
@@ -170,9 +172,8 @@ new `apiClient` methods in the contract's `ownedEndpoints` (step 7).
 ## Verify
 
 ```bash
-cd apps/console
-npx vitest run src/platform/contracts        # the contract test must pass
-npx tsc -b                                    # the AppTab/ModuleId unions must type-check
+npx vitest run apps/console/src/platform/contracts  # the contract test must pass
+npx tsc -b apps/console/tsconfig.json               # the AppTab/ModuleId unions must type-check
 ```
 
 A green contract test means every declaration agrees with the running app — your

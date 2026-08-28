@@ -6,8 +6,8 @@ which is where a tournament director runs the event. Both talk to the same FastA
 
 ## Running it locally
 
-This app is **local-dev only** for now — no nginx, no compose, no tunnel (those land later, see
-`docs/history/programs/CLOUD_PROGRESS.md`). The port map, kept consistent everywhere it's documented:
+This app runs locally as an SSR development server and in the managed Docker Compose
+stack used by the entrant evidence suite. The local port map is:
 
 | Surface | Port | Command |
 | --- | --- | --- |
@@ -24,11 +24,13 @@ make full-dev        # both surfaces at once: operator :5173 + entrant :5174
 
 Either way, **start the backend first** — a host `uvicorn core.main:app --port 8600` from
 `apps/api/src` with the repo `.venv` active. `make entrant-dev` and `make full-dev`
-only launch the frontend surfaces. `make full-dev` backgrounds with `&`, so **run it from Git
-Bash** (under `cmd.exe` `&` sequences instead of backgrounding and the first server blocks forever).
+only launch the frontend surfaces. `make full-dev` backgrounds both processes with `&`,
+so run it from a POSIX-compatible shell; on `cmd.exe`, use separate terminals.
 
-Stop the Docker stack first: see the Docker-vs-host-backend trap in
-[docs/how-to/running-locally.md](../../../docs/how-to/running-locally.md#running-both-surfaces-locally-operator-product--public-entrant-site).
+For managed Compose evidence, use `make test-e2e` (the Makefile assigns
+non-conflicting host ports) or `make test-e2e-rebuild`. Stop the Docker stack first
+when switching to host-backed development: see the Docker-vs-host-backend trap in
+[docs/how-to/running-locally.md](../../docs/how-to/running-locally.md#running-both-surfaces-locally-operator-product--public-entrant-site).
 
 ### Which backend variable is which
 
@@ -36,7 +38,7 @@ The two surfaces read **different** variables, and swapping them fails silently:
 
 | Variable | Read by | Effect |
 | --- | --- | --- |
-| `API_BASE_URL` | this app's SSR server (`app/lib/apiFetch.server.ts`) | The API origin. Unset **throws** — every API-backed route 500s. |
+| `API_BASE_URL` | this app's SSR server (`apps/entrant/app/lib/apiFetch.server.ts`) | The API origin. Unset **throws** — every API-backed route 500s. |
 | `VITE_API_PROXY_TARGET` | the operator SPA only (`apps/console/vite.config.ts`) | Retargets the SPA's `/api` dev proxy. Does nothing here. |
 
 `make entrant-dev` sets `API_BASE_URL=http://localhost:8600`; `make full-dev` sets that plus

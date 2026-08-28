@@ -70,3 +70,13 @@
     constant-query and full-response parity coverage.
   - Focused bracket suites passed 79 tests; command/match-state suites passed
     63 tests; Ruff and all 15 API import contracts passed.
+- Task 7: complete
+  - Added blocking, fail-closed live-document path checks and repaired freshness
+    validation to use current roots and Git ancestry.
+  - Updated current architecture, runbooks, product guidance, ADRs, and open debt.
+  - Removed 185 superseded documentation files (about 29 MiB / 126,000 lines)
+    after distillation; Git retains their provenance.
+  - Expanded live-doc checks reduced all discovered stale references to zero;
+    focused tests, mutation probes, docs build, and Make/CI contracts passed.
+- Task 8: in progress
+  - Full product/browser gates, same-host comparison, and final review remain.

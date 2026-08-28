@@ -2,8 +2,8 @@
 
 Every test here asserts that an *attack-shaped* payload is refused, not
 merely that a well-formed one is accepted. The negative controls each
-test carries are recorded in ``SEC_PROGRESS.md``: for each control,
-which line to break and how many tests fail when you break it. A control
+test carries were mutation-verified during SP-SEC-1; Git history retains
+the original break-point and failure-count record. A control
 whose test still passes with the control removed is not a control
 (CODE_HEALTH rule 3b).
 

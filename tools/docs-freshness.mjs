@@ -19,36 +19,43 @@
  *   node tools/docs-freshness.mjs --list     # + list the source commits behind
  *   node tools/docs-freshness.mjs --json      # machine-readable output
  *
- * Exit code: 1 if any area is BEHIND (so CI can gate), else 0.
+ * Exit code: 1 if any area is BEHIND, 2 for a stale manifest or Git failure,
+ * else 0.
  *
  * To extend: add an entry to AREAS mapping doc paths -> the source paths they
  * document. Keep it honest — that mapping is the whole point.
  */
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const AREAS = [
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+const IS_MAIN = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+
+export const AREAS = [
   {
     name: 'API reference',
     docs: ['docs/reference/api'],
-    src: ['apps/api/api', 'apps/api/app/schemas.py'],
+    src: ['apps/api/src'],
   },
   {
     name: 'Backend structure & data flow',
     docs: ['docs/explanation/architecture/backend-structure.md', 'docs/explanation/architecture/data-flow.md'],
     src: [
-      'apps/api/database',
-      'apps/api/repositories',
-      'apps/api/services',
-      'apps/api/alembic',
+      'apps/api/src',
+      'packages/scheduler-core/scheduler_core',
     ],
   },
   {
     name: 'Workspace model',
     docs: ['docs/explanation/architecture/workspace-model.md'],
     src: [
-      'apps/api/api/workspace_modules.py',
-      'apps/api/api/workspace_signals.py',
-      'apps/api/database/models.py',
+      'apps/api/src/db/models.py',
+      'apps/api/src/workspaces',
+      'apps/console/src/platform/product-shell',
+      'apps/console/src/platform/domain',
+      'apps/console/src/store/tournamentStore.ts',
     ],
   },
   {
@@ -61,7 +68,8 @@ const AREAS = [
     docs: ['docs/reference/contracts', 'docs/explanation/architecture/system-overview.md'],
     src: [
       'apps/console/src/platform/contracts',
-      'apps/console/src/app/workspace/workspaceNav.ts',
+      'apps/console/src/platform/product-shell/workspaceNav.ts',
+      'apps/console/src/platform/domain/moduleModel.ts',
     ],
   },
   {
@@ -74,19 +82,19 @@ const AREAS = [
     docs: ['docs/how-to'],
     src: [
       'apps/console/src/platform/product-shell/types.ts',
-      'apps/console/src/app/workspace/workspaceNav.ts',
+      'apps/console/src/platform/product-shell/workspaceNav.ts',
       'apps/console/src/store/uiStore.ts',
       'apps/console/src/platform/contracts/moduleContract.ts',
       'apps/console/src/api/client.ts',
-      'apps/api/database/models.py',
-      'apps/api/api/workspace_modules.py',
-      'scheduler_core/engine/constraints',
+      'apps/api/src/db/models.py',
+      'apps/api/src/workspaces/workspace_modules.py',
+      'packages/scheduler-core/scheduler_core/engine/constraints',
     ],
   },
   {
     name: 'Engine (ADR 0004)',
     docs: ['docs/explanation/decisions/0004-ortools-cpsat-engine.md'],
-    src: ['scheduler_core'],
+    src: ['packages/scheduler-core/scheduler_core'],
   },
   {
     // The public tier is a whole second frontend with its own rules (zero
@@ -100,11 +108,10 @@ const AREAS = [
     name: 'Entries module',
     docs: ['docs/reference/modules/entries.md'],
     src: [
-      'apps/api/services/entries.py',
-      'apps/api/api/entries.py',
-      'apps/api/api/entries_json.py',
-      'apps/api/api/entrants.py',
-      'apps/console/src/products/entries',
+      'apps/api/src/entries',
+      'apps/api/src/identity/entrants_routes.py',
+      'apps/api/src/workspaces/entries_facts.py',
+      'apps/console/src/modules/entries',
     ],
   },
 ]
@@ -115,9 +122,22 @@ const wantJson = args.has('--json')
 
 function git(argv) {
   try {
-    return execFileSync('git', argv, { encoding: 'utf8' }).trim()
-  } catch {
-    return ''
+    return execFileSync('git', argv, { cwd: REPO_ROOT, encoding: 'utf8' }).trim()
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`git ${argv.join(' ')} failed: ${detail}`)
+  }
+}
+
+/** Fail before consulting history if the manifest itself is stale. */
+export function validateManifest(areas = AREAS, root = REPO_ROOT) {
+  const missing = areas.flatMap((area) =>
+    [...area.docs, ...area.src]
+      .filter((path) => !existsSync(`${root}/${path}`))
+      .map((path) => `${area.name}: ${path}`),
+  )
+  if (missing.length) {
+    throw new Error(`configured docs/source path(s) do not exist:\n- ${missing.join('\n- ')}`)
   }
 }
 
@@ -134,6 +154,12 @@ function hasUncommitted(paths) {
   return git(['status', '--porcelain', '--', ...paths]).length > 0
 }
 
+/** Whether the latest source commit follows the latest docs commit in Git. */
+export function sourceIsNewer(docsSha, sourceSha, runGit = git) {
+  if (docsSha === sourceSha) return false
+  return Number(runGit(['rev-list', '--count', `${docsSha}..${sourceSha}`])) > 0
+}
+
 /** Source commits that landed since the docs' last commit. */
 function commitsBehind(docsSha, srcPaths) {
   if (!docsSha) return []
@@ -148,37 +174,49 @@ const STATUS = {
   EDITED: { label: 'LOCAL EDITS (uncommitted docs)', mark: 'EDIT' },
 }
 
-const results = AREAS.map((area) => {
-  const docsCommit = lastCommit(area.docs)
-  const srcCommit = lastCommit(area.src)
-  const docsDirty = hasUncommitted(area.docs)
-  const srcDirty = hasUncommitted(area.src)
+if (IS_MAIN) {
+  let results
+  try {
+    validateManifest()
+    results = AREAS.map((area) => {
+      const docsCommit = lastCommit(area.docs)
+      const srcCommit = lastCommit(area.src)
+      if (!srcCommit) {
+        throw new Error(`${area.name}: no Git commit found for configured source path(s): ${area.src.join(', ')}`)
+      }
+      const docsDirty = hasUncommitted(area.docs)
+      const srcDirty = hasUncommitted(area.src)
 
-  let status
-  let behind = []
-  if (!docsCommit) {
-    status = STATUS.NEW // docs exist only locally (never committed) or path empty
-  } else if (srcCommit && srcCommit.ts > docsCommit.ts) {
-    status = STATUS.BEHIND
-    behind = commitsBehind(docsCommit.sha, area.src)
-  } else if (docsDirty) {
-    status = STATUS.EDITED
-  } else {
-    status = STATUS.CURRENT
-  }
+      let status
+      let behind = []
+      if (!docsCommit) {
+        status = STATUS.NEW // docs exist only locally (never committed)
+      } else if (docsDirty) {
+        status = STATUS.EDITED
+      } else if (sourceIsNewer(docsCommit.sha, srcCommit.sha)) {
+        status = STATUS.BEHIND
+        behind = commitsBehind(docsCommit.sha, area.src)
+      } else {
+        status = STATUS.CURRENT
+      }
 
-  return {
-    name: area.name,
-    status: status.label,
-    mark: status.mark,
-    isBehind: status === STATUS.BEHIND,
-    docs: docsCommit ? `${docsCommit.sha} ${docsCommit.date}` : '(uncommitted)',
-    source: srcCommit ? `${srcCommit.sha} ${srcCommit.date}` : '(none)',
-    docsDirty,
-    srcDirty,
-    behind,
+      return {
+        name: area.name,
+        status: status.label,
+        mark: status.mark,
+        isBehind: status === STATUS.BEHIND,
+        docs: docsCommit ? `${docsCommit.sha} ${docsCommit.date}` : '(uncommitted)',
+        source: srcCommit ? `${srcCommit.sha} ${srcCommit.date}` : '(none)',
+        docsDirty,
+        srcDirty,
+        behind,
+      }
+    })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    console.error(`\ndocs:freshness configuration error: ${detail}`)
+    process.exit(2)
   }
-})
 
 if (wantJson) {
   console.log(JSON.stringify({ results }, null, 2))
@@ -231,4 +269,5 @@ for (const r of behindAreas) {
 }
 if (!wantList) console.log('\n  Re-run with --list to see the commits.')
 console.log('')
-process.exit(1)
+  process.exit(1)
+}

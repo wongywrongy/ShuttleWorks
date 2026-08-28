@@ -20,12 +20,12 @@ component — `platform/engine-config/EngineConfigForm.tsx` — passed a `module
 | Meet | `EngineConfigForm module="meet"` | `MeetStructureForm` (Meet) |
 | Bracket | `EngineConfigForm module="bracket"` | `BracketStructureSection` (Structure) |
 
-- **Meet** — `products/meet/TournamentSetupPage.tsx` hosts the switcher and a
+- **Meet** — `apps/console/src/modules/meet/TournamentSetupPage.tsx` hosts the switcher and a
   single page-level Save button. Only the active section's form is mounted;
   both carry the same `id` (`meet-config-form`), so the actions-bar
   `type="submit" form=…` button submits whichever form is showing
   (`TournamentSetupPage.tsx:145`).
-- **Bracket** — `products/bracket/BracketTab.tsx` hosts the same `Seg` switcher
+- **Bracket** — `apps/console/src/modules/bracket/BracketTab.tsx` hosts the same `Seg` switcher
   (labels **Engine** / **Structure**) and renders the shared form at
   `BracketTab.tsx:208`. Bracket's Engine tab is now **Save-on-submit like
   Meet** — it no longer writes each field immediately. Batching to a Save step
@@ -33,9 +33,8 @@ component — `platform/engine-config/EngineConfigForm.tsx` — passed a `module
   keystroke.
 
 ::: info The old per-module Engine components are gone
-`products/meet/settings/EngineSettings.tsx` and
-`products/bracket/BracketEngineSection.tsx` no longer exist — both engines
-render the single `EngineConfigForm`. Any doc or memory still naming them is
+The old per-module Engine components are historical names; both engines
+render the single `apps/console/src/platform/engine-config/EngineConfigForm.tsx`.
 stale.
 :::
 
@@ -63,7 +62,7 @@ Only two fields are asymmetric:
 
 - **`solverTimeLimitSeconds` is Meet-only.** Bracket solves run on a per-request
   time budget (default 5 s), not a persisted config field — `_bracket_solver_options`
-  deliberately ignores `config.solverTimeLimitSeconds` (`api/brackets.py:690`),
+  deliberately ignores `config.solverTimeLimitSeconds` (`apps/api/src/bracket/brackets.py:690`),
   which is exactly why the control is withheld from the Bracket tab.
 - **`restBetweenRounds` is Bracket-only** — the one draw-specific timing knob
   (rest, in slots, between a draw's rounds). Courts, slot duration, and the day
@@ -98,12 +97,12 @@ label; it is unrelated to the three scoring discipline codes used elsewhere.
 
 The shared *form* is only half the story — Bracket's **solver** now consumes the
 same engine-config fields the form writes. `schedule_config_for_bracket`
-(`adapters/badminton.py:206`) builds a bracket `ScheduleConfig` by calling the
+(`apps/api/src/shared/sport/badminton.py:206`) builds a bracket `ScheduleConfig` by calling the
 full meet mapping `schedule_config_from_dto(config)` as its base, then
 `replace(...)`-ing only the bracket-owned structural fields (court count, total
 slots, interval, closed-court windows). So a bracket solve inherits the shared
 **rest, freeze horizon, breaks, and solver objective weights** rather than
-ignoring them. The bracket API wires it at `api/brackets.py:751`, coordinating
+ignoring them. The bracket API wires it at `apps/api/src/bracket/brackets.py:751`, coordinating
 around meet-occupied court windows so the two engines don't double-book a court.
 
 ## The second tab stays module-specific
@@ -126,10 +125,10 @@ Alembic migration was needed, because the shape it writes into already existed.
 
 1. **The scoring config already lived on the shared `TournamentConfig`.**
    `scoringFormat`, `pointsPerSet`, `setsToWin`, and `deuceEnabled` are optional
-   fields on `TournamentConfig` (`api/dto.ts`) and persist inside the
+fields on `TournamentConfig` (`apps/console/src/api/dto.ts`) and persist inside the
    `tournaments.data` JSON blob. Surfacing them on the Bracket Engine tab adds
    reads/writes of existing keys — no new column.
-2. **`bracket_results.score` is already a JSON column.** `database/models.py`
+2. **`bracket_results.score` is already a JSON column.** `apps/api/src/db/models.py`
    declares `score: Mapped[Optional[dict]]` as a `JSON` column, documented as
    "format-specific (sets, points, etc.)". A Sets result writes its set-by-set
    blob into that column unchanged.
@@ -137,7 +136,7 @@ Alembic migration was needed, because the shape it writes into already existed.
 So Bracket persists a result exactly as before — a `winner_side` plus the opaque
 JSON `score` — and Sets scoring just populates the previously-empty `score`
 blob. On the API surface, both `RecordResultIn` and `ResultOut`
-(`api/brackets.py`) carry `score: Optional[dict]`, omitted for winner-only
+(`apps/api/src/bracket/brackets.py`) carry `score: Optional[dict]`, omitted for winner-only
 ("Simple") results.
 
 ::: warning Shared config, not a shared score record
@@ -153,12 +152,12 @@ see [ADR 0006](/explanation/decisions/0006-unified-scheduling-core) and
 
 Once a schedule is committed, changing a **scheduling-relevant** config field
 would invalidate it. The lock is enforced at the single write funnel
-`PUT /tournaments/{id}/state` (`api/tournaments.py` `put_tournament_state`) so a
+`PUT /tournaments/{id}/state` (`apps/api/src/workspaces/tournaments.py` `put_tournament_state`) so a
 stale browser tab or a raw API client is caught too — not only the in-app UI.
 
 ### What counts as a scheduling field
 
-`services/config_lock.py` classifies changes. `changed_scheduling_fields(prior,
+`apps/api/src/workspaces/config_lock.py` classifies changes. `changed_scheduling_fields(prior,
 incoming)` returns the changed keys that are **not** in `NON_SCHEDULING_KEYS` —
 a 15-key exempt set loaded from `packages/shared-contract/non-scheduling-keys.json`
 (the *single* source of truth; the frontend's copy in `store/tournamentStore.ts`

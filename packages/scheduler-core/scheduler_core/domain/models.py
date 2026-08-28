@@ -134,7 +134,7 @@ class ScheduleConfig:
     # afterwards by colouring — which is how a real desk runs the day.
     #
     # Default is "pinned": no existing solve changes until a workspace asks
-    # (ruling CP2). See docs/history/programs/SP-COURT-1.md.
+    # (ruling CP2). See docs/explanation/decisions/0015-court-policy.md.
     court_policy: str = "pinned"  # "pinned" | "queue"
 
     # Per-court override, court_id -> "pinned" | "pool". A court absent from

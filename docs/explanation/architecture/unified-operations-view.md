@@ -13,7 +13,7 @@ navigation change.
 
 ## The engine-agnostic block
 
-`products/operations/opsBlock.ts` defines `OpsBlock` — the uniform interactive
+`apps/console/src/modules/operations/opsBlock.ts` defines `OpsBlock` — the uniform interactive
 shape both Operations surfaces speak, regardless of source. It carries a stable
 `key` (`${source}:${id}`), a `source` (`'meet' | 'bracket'`), `court` / `slot` /
 `span`, resolved `sideA` / `sideB` names, a `colorKey`, an engine `status`, and
@@ -35,7 +35,7 @@ they can double-book a `(court, slot)`).
 `OpsBlock` is the single engine-agnostic shape both Plan and Run speak; the
 earlier lighter `OperationalMatch` read-only chip projection (and its
 `lib/operations/operationalMatch.ts`) has been removed. The surviving
-write-direction module is `products/operations/operationalWriteback.ts`
+write-direction module is `apps/console/src/modules/operations/operationalWriteback.ts`
 (`OperationalAction` · `OperationalWritebackRouter` · `routeOperationalAction`),
 which routes an operator action to the right engine's write path — not a chip
 projection. See [Operations § the write router](/reference/modules/operations#the-run-surface).
@@ -50,7 +50,7 @@ build and adjust the plan before the day starts.
 
 ## The Run surface — an Operations-owned state machine
 
-`Run` is the live, day-of control surface: `products/operations/run/RunSurface.tsx`
+`Run` is the live, day-of control surface: `apps/console/src/modules/operations/run/RunSurface.tsx`
 composes a summary band, a court board, a global queue, and a match inspector,
 **all derived from one Operations-owned state machine**.
 

@@ -17,7 +17,7 @@ your own data by constructing these; no framework, no base classes.
 ## 2 · Call the public entry
 
 ```python
-from scheduler_core import schedule          # scheduler_core/schedule.py
+from scheduler_core import schedule          # packages/scheduler-core/scheduler_core/schedule.py
 
 result = schedule(matches, players, config)  # → ScheduleResult
 ```

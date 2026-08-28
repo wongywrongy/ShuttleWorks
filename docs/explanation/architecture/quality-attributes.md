@@ -7,7 +7,7 @@ code or config**, not an aspiration. This page is for anyone weighing a design c
 against how the system is meant to behave under stress.
 
 > Honesty rule (same as the rest of these docs): every claim here is grounded in
-> current code on `dev/workspace-suite`. Where ShuttleWorks has **no** formal stance
+> the current repository tree. Where ShuttleWorks has **no** formal stance
 > (e.g. throughput SLOs), this page says so rather than inventing one — see
 > [what we deliberately don't claim](#what-we-deliberately-dont-claim).
 
@@ -57,7 +57,7 @@ touch the repo.
   equivalent and dual-dialect parity is a product rule — one enforcement path that
   behaves identically on both. (A Supabase mirror once carried its own RLS policies;
   it was removed in [ADR 0012](/explanation/decisions/0012-remove-the-supabase-mirror).)
-- **Secret hygiene.** Credentials live in `backend/.env` (git-ignored; the image
+- **Secret hygiene.** Credentials live in the deployment `.env` (git-ignored; the image
   build excludes `**/.env`) and are never committed. `CORS_ORIGINS` gates which
   browser origins may call the director's FastAPI.
 - **Local-only caveat.** In `AUTH_MODE=local` (the default) a credential-less request
@@ -125,12 +125,12 @@ event, not a fleet.
 
 - **Bounded solves.** CP-SAT solves are capped by a configurable time limit carried in
   `ScheduleConfig`, so a hard instance returns the **best solution found** rather than
-  hanging (the bracket CLI, for example, defaults to a 5 s limit). Long solves stream
-  intermediate solutions and phase transitions over **SSE**
-  (`presolve → search → proving`), so the UI shows live progress
+  hanging (the bracket CLI, for example, defaults to a 5 s limit). Bracket scheduling
+  streams intermediate solutions and phase transitions over **SSE**; Meet scheduling
+  reports progress through async job polling
   ([Bracket schedule streaming](/explanation/architecture/bracket-schedule-streaming)).
-- **Observable cadences (not SLOs).** The outbox drains ~5 s; the Operations Run
-  surface polls match-states ~5 s; Operations polls the bracket ~2.5 s; Display
+- **Observable cadences (not SLOs).** The Operations Run surface polls match-states
+  ~5 s; Operations polls the bracket ~2.5 s; Display
   dual-polls ~5 s / ~10 s. These are the real refresh intervals, documented on the
   [contract pages](/reference/contracts/) — treat them as *staleness bounds*, not guarantees.
 - **Capacity target.** One director + browser operators for a single event on one
@@ -142,7 +142,7 @@ event, not a fleet.
 - **Request id.** Every request carries `X-Request-ID` (honoured or minted by
   `request_id_middleware`), echoed on the response and into error bodies.
 - **Structured error codes.** `HTTPException`s carry a `{code, message}` body; the
-  `ErrorCode` enum (`app/error_codes.py`) is the authoritative list the frontend
+  `ErrorCode` enum (`apps/api/src/core/error_codes.py`) is the authoritative list the frontend
   branches on. See [API reference → Conventions](/reference/api/#conventions).
 - **Build provenance.** The docs site footer stamps the commit it was built from; run
   `npm run docs:freshness` to detect code drift since.
@@ -166,5 +166,5 @@ event, not a fleet.
 - [Glossary](/reference/glossary) — outbox, mirror, local-only tables, source of truth
 - [Deploy](/how-to/deploy) · [Operations](/how-to/operations) — the current deployment
   and day-two runbooks
-- Historical infra note: `docs/history/deploy/cloud.md` is a tombstone — the Supabase-era
-  deployment guide was removed 2026-08-06; it points at the ADRs that hold the record
+- The former Supabase-era deployment guide is retired; current deployment guidance is
+  [Deploy](/how-to/deploy), with rationale in [ADR 0012](/explanation/decisions/0012-remove-the-supabase-mirror).

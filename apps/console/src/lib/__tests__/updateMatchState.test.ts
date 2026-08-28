@@ -1,10 +1,9 @@
 /**
  * Tests for the If-Match header round trip on match-state mutations.
  *
- * Audit finding: docs/history/audits/2026-05-15_user-audit_meet-vs-bracket.md §1.6
- *
  * The legacy match-state route (PUT /tournaments/{tid}/match-states/{id})
- * requires If-Match per `apps/api/api/match_state.py:_enforce_if_match`.
+ * requires If-Match per
+ * `apps/api/src/operations/match_state_routes.py:_enforce_if_match`.
  * `apiClient.updateMatchState` previously omitted the header — every
  * Call/Start/Post mutation 412'd.
  */

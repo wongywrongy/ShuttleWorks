@@ -40,7 +40,7 @@ build — a merge of the layer that is not.**
 
 Shared (implemented):
 
-- **One scheduling-parameter builder** — `services/scheduling/params.py`
+- **One scheduling-parameter builder** — `apps/api/src/shared/scheduling/params.py`
   (`SchedulingParams` + `build_schedule_config`). Both modules read
   courts / time window / slot duration / rest / breaks / closures /
   freeze through it. The meet adapter layers its module-specific solver

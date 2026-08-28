@@ -7,7 +7,7 @@
 There are now two frontends — the operator console (`apps/console`) and the
 public entrant tier (`apps/entrant`) — and a shared component library
 (`packages/design-system`) that both consume. Inside the console there are nine
-modules under `src/modules/`.
+modules under `apps/console/src/modules/`.
 
 That gives three different meanings for "shared", and until now no written rule
 for which one applies. The consequences showed up as two separate problems:

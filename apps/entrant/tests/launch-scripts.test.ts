@@ -140,6 +140,9 @@ test('keeps check full and defines the narrower fast developer gate', () => {
     'ruff check $(PY_SOURCES)',
     'cd apps/api/src && lint-imports --config ../.importlinter',
     'pytest',
+    'npm run test:docs',
+    'npm run docs:paths',
+    'npm run docs:build',
     'npm run docs:freshness',
   ]) {
     expect(full).toContain(command);
@@ -157,6 +160,9 @@ test('keeps check full and defines the narrower fast developer gate', () => {
     'ruff check $(PY_SOURCES)',
     'cd apps/api/src && lint-imports --config ../.importlinter',
     "pytest tests/backend/unit -m 'not slow'",
+    'npm run test:docs',
+    'npm run docs:paths',
+    'npm run docs:build',
     'npm run docs:freshness',
   ]) {
     expect(fast).toContain(command);

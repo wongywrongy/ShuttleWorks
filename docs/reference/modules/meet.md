@@ -78,11 +78,11 @@ delegate this preview to CP-SAT.
 **2. CP-SAT solve (as a job).** The frontend submits `{ config, players, matches,
 previousAssignments }` (the `GenerateScheduleRequest`) to `POST /tournaments/{id}/solve-jobs` with
 a client-minted `Idempotency-Key` and polls the job to a terminal status (`apiClient.runSolveJob`;
-a reload mid-solve re-adopts the active job). The route (`backend/api/solve_jobs.py`) persists the
+a reload mid-solve re-adopts the active job). The route (`apps/api/src/solve_rail/solve_jobs_routes.py`) persists the
 input snapshot plus determinism params — seed, one search worker, `max_deterministic_time` — and a
-worker (`services/solve_worker.py`) claims the job and executes it in a child subprocess
-(`services/solve_child.py`), where the DTO ↔ engine conversion still lives in
-`backend/adapters/badminton.py` (`prepare_solver_input`, `result_to_dto`). The subprocess is what
+worker (`apps/api/src/solve_rail/solve_worker.py`) claims the job and executes it in a child subprocess
+(`apps/api/src/solve_rail/solve_child.py`), where the DTO ↔ engine conversion still lives in
+`apps/api/src/shared/sport/badminton.py` (`prepare_solver_input`, `result_to_dto`). The subprocess is what
 makes Cancel real — CP-SAT cannot be preempted in-process, so cancel kills the child. The shared
 engine is the same `scheduler_core` core that Bracket schedules through — see
 [Scheduling unification](/explanation/architecture/scheduling-unification) and
@@ -119,26 +119,26 @@ proposal was built, forcing a re-review).
 Two read-only feeds sit alongside the proposal flow:
 
 - **Advisories** (`getAdvisories` → `GET …/schedule/advisories`, polled on a 15 s cadence) are the
-  live-ops alert heuristics computed in `backend/api/schedule_advisories.py`: `overrun`, `no_show`,
+  live-ops alert heuristics computed in `apps/api/src/meet/schedule_advisories.py`: `overrun`, `no_show`,
   `running_behind`, and the director-aware `start_delay_detected` / `approaching_blackout`. An
   advisory carries a suggested follow-up action (e.g. a repair or warm-restart) but commits nothing.
 - **Suggestions** (`getSuggestions` / `applySuggestion` / `dismissSuggestion`) are pre-computed
-  re-optimisation proposals stamped by the background `services/suggestions_worker.py`. The worker
+  re-optimisation proposals stamped by the background `apps/api/src/solve_rail/suggestions_worker.py`. The worker
   consumes `OPTIMIZE` / `REPAIR` / `PERIODIC` (90 s heartbeat) trigger events and fires speculative
   solves, with cooldown dedup and in-flight cancellation so a stale solve is superseded before the
   operator ever sees it. `applySuggestion` commits the underlying proposal atomically; `dismiss`
-  cancels it. Impact scoring for the diff lives in `services/schedule_impact.py`.
+  cancels it. Impact scoring for the diff lives in `apps/api/src/meet/schedule_impact.py`.
 
 ## What it owns
 
 | Kind | Owned |
 | --- | --- |
 | **Nav surfaces** | Roster · Matches · Configuration (`ownedSegments: ['roster', 'matches', 'setup']`) |
-| **Backend routes** | `/tournaments/{id}/solve-jobs*` (submit / list / get / cancel — the async solve rail), `POST /tournaments/{id}/meet/lineup` (pure lineup preview over posted state), `/schedule/validate`, `/schedule/warm-restart` (`/schedule` + `/schedule/stream` are `410 Gone`); and under `/tournaments/{id}/schedule/`: `advisories`, `proposals/*`, `suggestions/*`, `director-action` |
+| **Backend routes** | `/tournaments/{id}/solve-jobs*` (submit / list / get / cancel — the async solve rail), `POST /tournaments/{id}/meet/lineup` (pure lineup preview over posted state), `/schedule/validate`; unscoped `/schedule/warm-restart`, `/schedule/repair`, `/schedule` and `/schedule/stream` are `410 Gone`. Tenant-scoped proposals live under `/tournaments/{id}/schedule/`: `advisories`, `proposals/*`, `suggestions/*`, `director-action` |
 | **`apiClient` methods** | `submitSolveJob`, `getSolveJob`, `listSolveJobs`, `cancelSolveJob`, `generateMeetLineup`, `runSolveJob`, `validateMove`, `createWarmRestartProposal`, `createRepairProposal`, `createManualEditProposal`, `createDirectorActionProposal`, `commitProposal`, `cancelProposal`, `getProposal`, `getAdvisories`, `getSuggestions`, `applySuggestion`, `dismissSuggestion` |
 | **Store slices** | the editable document in `tournamentStore` (config, roster, matches, schedule, `scheduleVersion` + history); the review pipeline in `uiStore` (`activeProposal`, `advisories`, `suggestions`) |
-| **Frontend code** | `modules/meet/` — `roster/`, `matches/`, `TournamentSetupPage` (Configuration), `exports/` (roster + matches XLSX). The Plan/Run surfaces are Operations-owned code since SP-CONSOLE-4 (`modules/operations/`); the meet-resident `SchedulePage` / `MatchControlCenterPage` were deleted at its B4 |
-| **Backend services** | `adapters/badminton.py` (DTO ↔ engine boundary), `services/solve_jobs.py` + `solve_worker.py` + `solve_runner.py` + `solve_child.py` (the job rail), `services/suggestions_worker.py` (background re-optimisation), `services/schedule_impact.py` (impact scoring) |
+| **Frontend code** | `apps/console/src/modules/meet/` — `roster/`, `matches/`, `TournamentSetupPage` (Configuration), `exports/` (roster + matches XLSX). The Plan/Run surfaces are Operations-owned code since SP-CONSOLE-4 (`apps/console/src/modules/operations/`) |
+| **Backend services** | `apps/api/src/shared/sport/badminton.py` (DTO ↔ engine boundary), `apps/api/src/solve_rail/solve_jobs_routes.py` + `solve_worker.py` + `solve_runner.py` + `solve_child.py` (the job rail), `apps/api/src/solve_rail/suggestions_worker.py` (background re-optimisation), `apps/api/src/meet/schedule_impact.py` (impact scoring) |
 
 These owned facts are pinned by the `meetContract` descriptor in
 `platform/contracts/moduleContract.ts`, whose colocated test asserts every endpoint by function

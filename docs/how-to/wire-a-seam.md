@@ -61,8 +61,7 @@ canonical seam naming (A/B/C/D) lives in
 ## Verify
 
 ```bash
-cd apps/console
-npx vitest run src/platform/contracts   # the seam literals must match the honest set
+npx vitest run apps/console/src/platform/contracts  # the seam literals must match the honest set
 ```
 
 ## See also

@@ -1,6 +1,6 @@
 # Tutorial: build a module
 
-A guided, build-it-together walkthrough that teaches the four-module architecture
+A guided, build-it-together walkthrough that teaches the five-module architecture
 by adding a fifth section to the workspace. We will stand up a small fictional
 module called **Standings** — a read-only board that ranks teams from live match
 results — and wire it the same way Meet, Bracket, and Display are wired. The
@@ -40,7 +40,7 @@ the lesson:
 | Tool | Catches | Why |
 | --- | --- | --- |
 | `npx tsc -b` | type-level gaps | exhaustive `Record<ModuleId, …>` maps demand an entry the moment you name a new module |
-| `npx vitest run src/platform/contracts` | dishonest declarations | the contract test compares your declarations to the real nav, real API client, and real seam set |
+| `npx vitest run apps/console/src/platform/contracts` | dishonest declarations | the contract test compares your declarations to the real nav, real API client, and real seam set |
 
 Vitest does **not** type-check (esbuild just transpiles), so type-only edits never
 show up as a test failure — they show up under `tsc`. Keep that split in mind and
@@ -98,7 +98,7 @@ The backend is the source of truth for *which modules a workspace has*. Add the 
 to `MODULE_IDS` and decide its lazy-seed default in `derive_modules`.
 
 ```python
-# apps/api/database/models.py
+# apps/api/src/db/models.py
 MODULE_IDS = ("meet", "bracket", "display", "standings")   # ~line 619
 
 def derive_modules(kind):                                   # ~line 633
@@ -186,13 +186,15 @@ is wired; the mount is not. That gap is the next two milestones.
 
 ## Milestone 5 · Build the product component
 
-Add `products/standings/StandingsProduct.tsx`. It reads `activeTab` and renders the
+<!-- docs-paths-ignore-next-line: fictional module path used by this tutorial -->
+Add `apps/console/src/modules/standings/StandingsProduct.tsx` (a fictional new module). It reads `activeTab` and renders the
 surface that owns it — exactly the shape of `modules/display/DisplayProduct.tsx`
 and `modules/meet/MeetProduct.tsx`. Keep intake and emit in their own files so the
 anatomy stays legible.
 
 ```tsx
-// apps/console/src/modules/standings/StandingsProduct.tsx
+<!-- docs-paths-ignore-next-line: fictional module path used by this tutorial -->
+// a future apps/console/src/modules/standings/StandingsProduct.tsx
 import { lazy, Suspense } from 'react';
 import { useUiStore } from '../../store/uiStore';
 import { TabSkeleton } from '../../components/TabSkeleton';
@@ -226,7 +228,7 @@ blank — a built-but-unmounted surface. One more milestone connects it.
 
 ## Milestone 6 · Mount it
 
-`ModuleOutlet` (`app/workspace/ModuleOutlet.tsx:22`) is the single mount point: it
+`ModuleOutlet` (`apps/console/src/app/workspace/ModuleOutlet.tsx:22`) is the single mount point: it
 calls `moduleForTab(activeTab, kind)` and renders the owning product. Two small
 edits route your segments to your product.
 
@@ -236,8 +238,8 @@ if (tab.startsWith('standings-')) return 'standings';
 ```
 
 ```tsx
-// app/workspace/ModuleOutlet.tsx
-import { StandingsProduct } from '../../products/standings/StandingsProduct';
+// apps/console/src/app/workspace/ModuleOutlet.tsx
+import { StandingsProduct } from '../../modules/standings/StandingsProduct';
 // …
 if (module === 'standings') return <StandingsProduct />;
 ```
@@ -319,8 +321,7 @@ the invariant."*
 Run the finish-line test:
 
 ```bash
-cd apps/console
-npx vitest run src/platform/contracts
+npx vitest run apps/console/src/platform/contracts
 # ✓ moduleContract — descriptor set
 # ✓ moduleContract — ownedSegments match buildWorkspaceNav
 # ✓ moduleContract — endpoints are real apiClient methods (by reference)
@@ -356,11 +357,11 @@ Each milestone added one declaration at one seam. This is the whole map:
 | --- | --- | --- |
 | `platform/product-shell/types.ts` | the `ModuleId` name | `tsc` (via `MODULE_LABELS`) |
 | `platform/domain/moduleModel.ts` | dock label + order, `moduleForTab` route | `tsc` + the blank board |
-| `backend/database/models.py` | `MODULE_IDS`, `derive_modules` seed | the seeded `available` row |
+| `apps/api/src/db/models.py` | `MODULE_IDS`, `derive_modules` seed | the seeded `available` row |
 | `store/uiStore.ts` | the `AppTab` surface segments | (inert until referenced) |
 | `platform/product-shell/workspaceNav.ts` | the sidebar section | the appearing section |
-| `products/standings/StandingsProduct.tsx` | the product component | the rendering board |
-| `app/workspace/ModuleOutlet.tsx` | the mount branch | the rendering board |
+| fictional Standings product component | the product component | the rendering board |
+| `apps/console/src/app/workspace/ModuleOutlet.tsx` | the mount branch | the rendering board |
 | `platform/contracts/moduleContract.ts` (+ its test) | the honest contract + roster | the green contract test |
 
 Two ideas carry across all of them: a **name is just vocabulary** until something

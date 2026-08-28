@@ -37,10 +37,10 @@ operator decides *which event to work on* or *creates a new one*.
 
 ### 2. Create a workspace
 
-From the Hub, **New Workspace** (`/new`) creates one event's control plane. You start from a template —
-**Meet Day**, **Bracket Tournament**, **Hybrid**, or **Blank** — or a **custom** module mix. The
-template seeds which [modules](/explanation/architecture/system-overview) start enabled (e.g. a Meet Day enables
-Meet + Display; Bracket enables Bracket + Display). See the
+From the Hub, **New Workspace** (`/new`) creates one event's control plane. You choose a
+custom mix of Meet, Bracket, and Display modules; Entries is seeded server-side only in
+cloud mode. The choices determine which [modules](/explanation/architecture/system-overview)
+start enabled. See the
 [workspace model](/explanation/architecture/workspace-model) for how that seed is persisted.
 
 ### 3. Open the workspace — the shell
@@ -56,7 +56,7 @@ Two setup surfaces, both under the **Workspace** admin block:
 
 - **Venue and schedule** — courts, slot duration, and the day's start/end window. This is shared by both
   engines (it writes the same `config` the engines read), so you set it once.
-- **Modules** — the module catalog: enable / disable Meet, Bracket, and Display. The control plane
+- **Modules** — the module catalog: enable / disable Meet, Bracket, Display, and Entries. The control plane
   enforces the rules here: **Display can't be enabled without an operational engine**, a workspace keeps
   **at least one** of Meet/Bracket enabled, and a module **with data can't be disabled**. (Details:
   [workspace model](/explanation/architecture/workspace-model#server-enforced-transition-rules).)
@@ -130,7 +130,7 @@ Throughout, the **Workspace** admin block supports the rest of the operation:
 - **Members** & **Sharing** — invite assistant operators (copy-URL invite links, or email invites
   that expire) and share the read-only public display capability link (rotate it to revoke).
   Members show with real names/emails.
-- **Sync and backups** — watch sync health and snapshot / restore the workspace state.
+- **Backups** — snapshot / restore the workspace state.
 
 ## The public viewer flow
 
@@ -144,8 +144,8 @@ The token resolves through the unauthenticated `/display/{token}/*` projection r
 by construction); the operator can rotate it at any time to kill an old link.
 
 Assistant operators on the LAN get a richer, read-mostly view of the same live state and can submit
-commands back to the director's machine. The director's laptop stays the source of truth; everyone else
-reads a mirror. (See [data flow](/explanation/architecture/data-flow) and
+commands through the backend. The director's laptop (or cloud database) stays the source of truth;
+there is no mirror. (See [data flow](/explanation/architecture/data-flow) and
 [ADR 0003](/explanation/decisions/0003-sqlite-as-primary-persistence).)
 
 ## Where this maps in the docs

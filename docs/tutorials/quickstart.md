@@ -1,7 +1,7 @@
 # Quickstart
 
 ShuttleWorks running on your machine in a couple of minutes. For the full
-reference (dev mode, ports, cloud mirror, tests) see
+reference (dev mode, ports, cloud deployment, tests) see
 [Running locally](/how-to/running-locally).
 
 ## Prerequisites

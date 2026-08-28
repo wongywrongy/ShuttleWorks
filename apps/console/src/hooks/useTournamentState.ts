@@ -50,7 +50,7 @@ export function requestClearScheduleOnNextSave(): void {
  *
  * `useTournamentState` is mounted on the meet side, so from here "the
  * other module" is always the bracket. The backend's `schedules` extra
- * (`backend/api/tournaments.py`) names every module whose committed
+ * (`apps/api/src/workspaces/tournaments.py`) names every module whose committed
  * schedule the sanctioned clearSchedule PUT will actually clear — when
  * it includes `'bracket'`, silently confirming the meet-worded unlock
  * modal would also wipe a bracket draw's committed schedule without the

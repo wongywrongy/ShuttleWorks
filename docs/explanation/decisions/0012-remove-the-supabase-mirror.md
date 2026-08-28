@@ -9,7 +9,7 @@ retired here.
 ## Context
 
 ADR 0003 established a crash-safe outbox: a `sync_queue` table drained by
-`services/sync_service.py` into a Supabase Postgres project, with the queue row
+the former sync service into a Supabase Postgres project, with the queue row
 written in the same transaction as the data write. Operators and the public TV
 display were to read mirrored writes via Supabase Realtime.
 
@@ -44,7 +44,7 @@ Auth was retired. Their effect could not be verified from the repository.
 
 **Remove the mirror entirely.** Not "disable in cloud mode" — remove.
 
-Deleted: `services/sync_service.py`, the eleven enqueue call sites in
+Deleted: the former sync service and the eleven enqueue call sites in
 `repositories/local.py`, the `SyncQueue` model, the lifespan start/stop hooks,
 the `supabase` dependency (with `postgrest`, `realtime`, `storage3`,
 `supabase-auth`, `supabase-functions`, `yarl`), both `SUPABASE_*` settings, and

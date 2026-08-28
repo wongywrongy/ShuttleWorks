@@ -4,8 +4,8 @@ The HTTP boundary. Two files:
 
 - `client.ts` — singleton axios client with toast/error plumbing and
   one method per backend route.
-- `dto.ts` — TypeScript twins of every Pydantic model in
-  `backend/app/schemas.py`. **Keep them in lock-step.**
+- `dto.ts` — TypeScript twins of the API models in
+  `apps/api/src/core/schemas.py`. **Keep them in lock-step.**
 
 ## Base URL
 
@@ -38,9 +38,9 @@ want to add domain-specific handling on top.
 1. Add the request/response types to `dto.ts`. Match the Pydantic
    model field-for-field.
 2. Add a method on `ApiClient` in `client.ts`.
-3. Call it from the relevant feature hook in `frontend/src/hooks/`.
-4. Mirror on the backend in `backend/api/<feature>.py` and register
-   the router in `backend/app/main.py`.
+3. Call it from the relevant feature hook in `apps/console/src/hooks/`.
+4. Mirror it in the relevant router under `apps/api/src/` and register
+   that router from `apps/api/src/core/main.py`.
 
 ## SSE
 

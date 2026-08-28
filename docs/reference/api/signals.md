@@ -12,7 +12,7 @@ carries them.
 def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO
 ```
 
-`build_signals` (in `api/workspace_signals.py`) is a **pure function** — no database access. It takes
+`build_signals` (in `apps/api/src/workspaces/workspace_signals.py`) is a **pure function** — no database access. It takes
 a tournament row, its module DTOs, and a pre-fetched `RowCounts` slice, and returns a
 `WorkspaceSignalsDTO`. Setup readiness reads the tournament's `data` blob; everything relational comes
 from the counts.

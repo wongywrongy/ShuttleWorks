@@ -38,10 +38,11 @@ Meet, Bracket, Display and Entries are the user-enableable modules. Create a wor
 from a template (Meet Day / Bracket Tournament / Hybrid / Blank) or a **Custom**
 module mix. Per-workspace **Settings** cover Overview,
 the module catalog, People & Access, Sharing (public display link vs
-collaborator invites), and Sync & Backups. A module dock switches the running
-module; module status (enabled / available / disabled) drives the chrome and
-routing. The design record for this control-plane redesign lives in
-[`docs/history/superpowers/specs/`](./docs/history/superpowers/specs) (the `2026-06-*` specs).
+collaborator invites), and Sync & Backups. The workspace sidebar switches the
+running module; module status (enabled / available / disabled) drives the chrome and
+routing. The current module model and its rationale live in the
+[system overview](./docs/explanation/architecture/system-overview.md) and
+[accepted ADRs](./docs/explanation/decisions/index.md).
 
 ### The public tier
 
@@ -67,7 +68,8 @@ extend the codebase.
 
 ```bash
 npm run docs:dev     # browse the docs locally (hot reload)
-npm run docs:build   # static build; fails on broken internal links (the CI gate)
+npm run docs:paths   # fail on stale repository paths in live documentation
+npm run docs:build   # static build; fails on broken internal links
 ```
 
 Start here:
@@ -81,7 +83,7 @@ Start here:
 | [Build a module (tutorial)](./docs/tutorials/build-a-module.md) | A guided, build-it-together walkthrough |
 | [Data flow](./docs/explanation/architecture/data-flow.md) | Seams, the match-state machine, the command pipeline, persistence |
 | [Entrant tier](./docs/explanation/architecture/entrant-tier.md) | The public site under `/e/` — and the three constraints it is built within |
-| [Progress reports](./docs/history/progress/index.md) | What has been built, program by program, and what is still open |
+| [Debt log](./docs/reference/debt-log.md) | Current known gaps and deferred work |
 
 ### Code intelligence (Zed)
 
@@ -107,7 +109,7 @@ make help               # full target list
 The Compose stack uses local mode by default — SQLite source of
 truth, the solve worker embedded in the API process, and the
 zero-friction bootstrap identity (no signup, no email, offline).
-Drop a `backend/.env` with `ENVIRONMENT=cloud` to flip into the
+Use the matching example under `infra/compose/` when configuring the
 multi-tenant cloud runtime (Postgres, standalone worker
 containers, real accounts); it fails closed at startup without
 Postgres, `AUTH_MODE=cloud`, HTTPS-only cookies, and SMTP. See
@@ -118,13 +120,13 @@ Postgres, `AUTH_MODE=cloud`, HTTPS-only cookies, and SMTP. See
 ## Architecture
 
 ```
-Director's laptop — Tauri desktop app (today: Docker Compose)
-  ├── FastAPI sidecar (uvicorn, local port)
+Director's host — Docker Compose
+  ├── FastAPI service (uvicorn)
   │     ├── CP-SAT solver (OR-Tools)
   │     ├── SQLite via SQLAlchemy (source of truth)
   │     └── Embedded solve worker (async job rail)
   │
-  └── Tauri WebView (React frontend)
+  └── nginx-served React console
         ├── Meet · Bracket: roster · configuration · matches (the engines)
         ├── Operations: Plan (court board) · Run (live match control)
         └── Display: read-only public TV view
@@ -147,7 +149,8 @@ In-product recovery is `tournament_backups`.
 > alongside this. It was removed entirely in SP-CLOUD-3 — see
 > [ADR 0012](./docs/explanation/decisions/0012-remove-the-supabase-mirror.md).
 
-Full breakdown: [`docs/history/tech-stack.md`](./docs/history/tech-stack.md).
+Full breakdown: [system overview](./docs/explanation/architecture/system-overview.md)
+and [data flow](./docs/explanation/architecture/data-flow.md).
 
 ---
 
@@ -160,8 +163,7 @@ deployment orchestration under `infra/`.
 apps/
 ├── console/                   OPERATOR SPA — React 19 + Zustand + IndexedDB command queue
 │   └── src/
-│       ├── products/          per module: hub (the workspace Hub), meet,
-│       │                      bracket, operations (live-ops), display, settings, entries
+│       ├── modules/           hub, meet, bracket, operations, display, settings, entries
 │       ├── platform/          cross-module: product-shell (workspace chrome + nav model),
 │       │                      domain (module model), contracts, auth, settings
 │       ├── components/        shared UI incl. control-plane/ (HealthDot /
@@ -170,10 +172,9 @@ apps/
 ├── entrant/                   PUBLIC tier — React Router 7 SSR, zero client JS, under /e/
 └── api/                       FastAPI + state machine + command log
     ├── alembic/               SQLite + Postgres schema migrations
-    ├── api/                   route handlers — tournaments, workspace_modules, match-states, commands, brackets, …
-    ├── app/                   app + exceptions + constants + auth dependencies
-    ├── repositories/          LocalRepository + per-entity sub-repos (members, modules, brackets, backups, …)
-    └── services/              match_state, bracket/ (draws + advancement + I/O), solve rail
+    └── src/                   sys.path root: core, db, repositories, shared,
+                               workspaces, identity, meet, bracket, operations,
+                               display, entries, solve_rail, ops
 
 packages/
 ├── design-system/             shared React components + the Tailwind preset
@@ -183,14 +184,14 @@ packages/
 
 infra/
 ├── compose/                   the six stacks + their .env.*.example files
-└── nginx/                     console.conf · docs.conf · security-headers.conf
+└── nginx/                     http-shared.conf · console.conf · play.conf · docs.conf
 
 tests/
 ├── backend/                   API + solver tests (pytest)
 └── e2e/                       Playwright specs
 
 simulator/                     internal full-workflow HTTP simulator (not in CI)
-tools/                         generate_openapi.py · docs-freshness.mjs · audit_input_surface.py
+tools/                         OpenAPI, documentation, and audit tooling
 legacy/                        sealed pre-merge deployment files (never edited)
 
 archive/
@@ -198,18 +199,8 @@ archive/
                                (replaced by the Bracket tab; see ARCHIVED.md)
 
 examples/                      engine usage examples (product-agnostic)
-docs/                          project planning artifacts
-├── tech-stack.md              post-merge architecture + data model + flows
-├── how-to/install-*.md        the deploy runbooks (local / self-host / worker)
-├── deploy/cloud.md            tombstone — the retired Supabase-era guide, removed 2026-08-06
-├── architectural-roadmap.md   the backend-merge arc roadmap (historical)
-├── superpowers/specs|plans/   per-slice design record (incl. the 2026-06 workspace-suite
-│                              control-plane redesign: SP-A backend → SP-D Settings/Dock)
-├── audits/                    historical UI/UX audit notes + screenshots
-├── changes/                   dated decision log
-└── programs/                  program ledgers — read at session start, updated at session
-                               end (CLOUD / SEC / REFACTOR / FRONTEND _PROGRESS.md) plus
-                               design-plan/ working notes. Moved off the root 2026-08-06.
+docs/                          current VitePress site: tutorials, how-to,
+                               reference, explanation, examples, templates
 Makefile                       every target (the former product Makefile folded in)
 pyproject.toml                 pytest + ruff config for the whole repo
 ```
@@ -228,14 +219,9 @@ pyproject.toml                 pytest + ruff config for the whole repo
 
 ## Working in the code
 
-- [`docs/SCHEDULER.md`](./docs/SCHEDULER.md) — scheduler features, dev workflow, proposal pipeline, suggestions inbox
-- [`apps/api/BACKEND.md`](./apps/api/BACKEND.md) — FastAPI routes, request lifecycle, how to add an endpoint or a constraint
+- [`apps/api/README.md`](./apps/api/README.md) — FastAPI routes, auth/tenancy, and request lifecycle
 - [`apps/console/FRONTEND.md`](./apps/console/FRONTEND.md) — shell + tabs, store split, theme system
-- [`docs/history/tech-stack.md`](./docs/history/tech-stack.md) — full architecture + data model + state machine + command flows + conflict UX
-- **Deploying?** [`docs/how-to/install-local.md`](./docs/how-to/install-local.md) (one machine) or [`docs/how-to/install-selfhost.md`](./docs/how-to/install-selfhost.md) (cloud, Cloudflare Tunnel) — plus [`add-a-worker.md`](./docs/how-to/add-a-worker.md) for a second compute host. `docs/history/deploy/cloud.md` is now only a tombstone — the Supabase-era guide it held was removed on 2026-08-06 (it documented three surfaces that never existed); the full text remains in git history.
-- [`docs/history/superpowers/specs/`](./docs/history/superpowers/specs) — per-slice design record, incl. the workspace-suite control-plane redesign (`2026-06-23-workspace-suite-architecture-design.md` → the SP-A…SP-D specs)
-- [`docs/history/architectural-roadmap.md`](./docs/history/architectural-roadmap.md) — the (historical) backend-merge arc roadmap
-- [`docs/history/changes/`](./docs/history/changes/) — dated decision log
+- **Deploying?** [`docs/how-to/install-local.md`](./docs/how-to/install-local.md) (one machine) or [`docs/how-to/install-selfhost.md`](./docs/how-to/install-selfhost.md) (cloud, Cloudflare Tunnel) — plus [`add-a-worker.md`](./docs/how-to/add-a-worker.md) for a second compute host.
 - [`packages/scheduler-core/scheduler_core/README.md`](./packages/scheduler-core/scheduler_core/README.md) — engine internals: variables, constraints, soft penalties
 
 ---
@@ -244,25 +230,20 @@ pyproject.toml                 pytest + ruff config for the whole repo
 
 The scheduler (meet surface) is production-ready for the documented
 operating envelope — Docker Compose stack on the director's laptop
-with browser operators on the LAN or via a tunnel, public TV
-display via Vercel. Operates correctly even if Supabase is
-unreachable for the entire tournament; the cloud mirror catches up
-via the outbox when connectivity returns.
+with browser operators on the LAN or via a tunnel and public TV display over
+its capability-token URL. Nothing in the local write path depends on the
+network, and in-product backups provide recovery.
 
 The Bracket module is feature-complete (create draws, import/export,
 schedule rounds, record results, advance winners) with backend + frontend
 test coverage. Bracket result recording now flows through an idempotent
 command path (`POST /bracket/commands`), matching the meet surface's
-command-queue model. A read-side `subscribeToBracketMatches` Realtime
-subscription (to replace the 2.5 s polling fallback) remains a follow-up.
+command-queue model. Read surfaces deliberately use bounded polling.
 
-The **workspace-suite control-plane redesign** (Hub dashboard, workspace +
-module model, New Workspace builder, redesigned per-workspace Settings, and
-the module dock) is built and reviewed on branch `dev/workspace-suite`. The
-full design record + per-slice plans are in
-[`docs/history/superpowers/`](./docs/superpowers).
+The workspace control plane, module model, Settings surface, and current
+navigation shell are shipped on the main product line.
 
 Multi-worker / Postgres-as-primary deployments need additional work
 (check-then-write on `matches.version` would need
-`SELECT … FOR UPDATE` under multi-worker) — flagged in
-[`docs/history/changes/2026-05-13.md`](./docs/history/changes/2026-05-13.md).
+`SELECT … FOR UPDATE` under multi-worker) — tracked in the
+[debt log](./docs/reference/debt-log.md).

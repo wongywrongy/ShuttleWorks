@@ -5,7 +5,7 @@ freeze the *current* behavior of the greedy backend — bugs and quirks included
 so any future decomposition has a tripwire. They are scaffolding (Feathers),
 brittle by design; expect to rewrite some if/when the function is decomposed.
 
-Context (see docs/history/audits/07-locked-functions.md): ``GreedyBackend`` is a
+Context: ``GreedyBackend`` is a
 pluggable *fallback* backend with no in-repo production caller (the live path
 uses ``CPSATBackend``). ``solve`` is a pure, deterministic function of its
 ``request`` — it iterates ``request.matches`` in list order and mutates only

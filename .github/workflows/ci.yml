@@ -11,6 +11,28 @@ on:
   push:
 
 jobs:
+  docs:
+    name: Documentation (paths + links)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - name: Install workspaces
+        run: npm ci
+      # Path validation is filesystem-only and intentionally runs before the
+      # VitePress build. The checker tests and both documentation checks are
+      # blocking: a page must name existing repository paths and resolve every
+      # internal site link.
+      - name: Documentation checker tests
+        run: npm run test:docs
+      - name: Documentation paths
+        run: npm run docs:paths
+      - name: Documentation build
+        run: npm run docs:build
+
   frontend:
     name: Frontend (lint + tests + boundaries)
     runs-on: ubuntu-latest
@@ -223,8 +245,7 @@ jobs:
     # real UI works. A fully green 1100-test suite coexisted with a viewer who
     # could not edit anything, Run-view Undo buttons that 409'd on every press,
     # and a rejected roster delete that killed all further saving.
-    # See tests/e2e/README.md and
-    # docs/history/programs/design-plan/INTERACTION_FINDINGS.md.
+    # See tests/e2e/README.md for the maintained owner and execution contract.
     #
     # Unlike the older e2e specs this does NOT boot the Docker stack — it runs a
     # preview build against a local uvicorn + SQLite, which is why it can be a

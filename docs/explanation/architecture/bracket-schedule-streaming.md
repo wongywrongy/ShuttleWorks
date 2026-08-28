@@ -24,7 +24,7 @@ split solving from persisting:
 The stream computes a candidate pool but writes nothing. The operator
 chooses a candidate, then `commit` persists exactly that choice
 (candidate-selection-before-commit). Both routes are operator-gated and
-live in `backend/api/brackets.py`.
+live in `apps/api/src/bracket/brackets.py`.
 
 ### The stream — `schedule-next/stream`
 
@@ -143,14 +143,14 @@ Clicking it opens `BracketScheduleModal.tsx`, which walks three phases:
 - **committing** — selecting a candidate posts it via `api.commitRound`,
   toasts the count of scheduled matches, and re-fetches the bracket.
 
-The client (`scheduleNextBracketRoundWithProgress` in `api/client.ts`)
+The client (`scheduleNextBracketRoundWithProgress` in `apps/console/src/api/client.ts`)
 talks to the stream with a raw `fetch` + `ReadableStream` reader and
 parses `data:` frames by hand — not the browser `EventSource`. It posts to
 `${API_BASE_URL}/.../schedule-next/stream`, i.e. the backend URL directly.
 
 ::: warning Live progress needs the backend directly in dev
 The Vite dev proxy (`/api` → `http://localhost:8000` in
-`frontend/vite.config.ts`) buffers `text/event-stream` responses, so live
+`apps/console/vite.config.ts`) buffers `text/event-stream` responses, so live
 progress only streams when the frontend talks to the backend URL directly.
 In production the frontend already points at the backend URL, so the
 stream flows. In local dev, point `API_BASE_URL` at the backend rather

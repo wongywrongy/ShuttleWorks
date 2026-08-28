@@ -1,7 +1,8 @@
 /**
  * One row in the SuggestionsRail. Dumb: props in, callbacks out.
  *
- * Visual spec: Appendix A of docs/history/superpowers/plans/2026-05-04-suggestions-inbox.md
+ * Visual rules: semantic tokens, wrapping titles, tabular metrics, and
+ * explicit Apply/Dismiss actions.
  *   - 6px semantic dot
  *   - eyebrow ("REPAIR" / "OPTIMIZE" / "DIRECTOR" / "ALT")
  *   - title (wraps; the row grows rather than ellipsising it)

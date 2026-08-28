@@ -4,7 +4,7 @@ SP-REFACTOR Phase 7 (CODE_HEALTH.md Part 2, "cover before you modify"). These
 freeze the *current* behavior of the DTO/state -> engine-request bridge — bugs
 and quirks included — so any future decomposition has a tripwire.
 
-Context (see docs/history/audits/07-locked-functions.md): ``build`` is a library
+Context: ``build`` is a library
 convenience reachable only via ``live_ops.reschedule`` (no in-repo production
 caller — the Meet/Bracket paths build ``ScheduleRequest`` directly). It is a pure
 function of its arguments. One test pins a **latent bug** (config field-drop) —

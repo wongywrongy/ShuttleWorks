@@ -24,7 +24,7 @@ slot) and to seed the per-match rows its **Run** surface tracks. (Plan and Run w
 The reverse direction is also part of this seam: Operations owns **`MatchStateDTO`**, and Meet
 **consumes it back** (`getMatchStates`) as a solve input — a re-plan must respect matches that are
 already `called` / `playing` / `finished`, which the solver pins via `LOCKED_STATUSES`
-(`backend/services/match_state.py`). So the boundary carries a schedule *out* of Meet and live status
+(`apps/api/src/operations/match_state.py`). So the boundary carries a schedule *out* of Meet and live status
 *back in*.
 
 ## Which side owns what
@@ -50,7 +50,7 @@ plane (it co-lives with the control-plane CRUD in the tournaments router).
 3. Operations' Run surface also runs an independent **~5 s poll** of `GET …/match-states`
    (`useLiveTracking`) for the live status it owns.
 4. `meetToOpsBlocks(matches, schedule, matchStates, nameById, config)` in
-   `products/operations/opsBlock.ts` folds the `MatchDTO` + `ScheduleDTO` + `MatchStateDTO` into the
+   `apps/console/src/modules/operations/opsBlock.ts` folds the `MatchDTO` + `ScheduleDTO` + `MatchStateDTO` into the
    canonical engine-agnostic `Match` / `OpsBlock` row (ADR 0009). A live court override beats the
    planned court (`matchStates[id].actualCourtId ?? assignment.courtId`), and a `postponed` flag
    forces the row back into the queue.

@@ -30,7 +30,7 @@ Hub  ──lists──▶  Workspace  ──enables──▶  Modules
   [workspace model](/explanation/architecture/workspace-model) for why the names differ.
 - **Modules** — the installable product systems you enable inside a workspace.
 
-You create a workspace from a template (Meet Day / Bracket Tournament / Hybrid / Blank) or a
+You create a workspace by choosing its module mix in the `/new` builder or by using a
 custom module mix, then switch between enabled modules with the **module dock**.
 
 ## The module model
@@ -51,12 +51,12 @@ the module catalog and have a row in the `workspace_modules` table (the `ModuleI
 `'meet' | 'bracket' | 'display' | 'entries'`). **Operations is an *architectural* module**: it owns real
 nav, routes, and a store slice, but it is always-on and has no enable flag. In code this is the
 `ArchModuleId = ModuleId | 'operations'` distinction in
-`frontend/src/platform/contracts/moduleContract.ts`. See the
+`apps/console/src/platform/contracts/moduleContract.ts`. See the
 [system overview](/explanation/architecture/system-overview) and [module contracts](/reference/contracts/).
 :::
 
 There is also a per-workspace **Settings** surface (Overview, Modules, People & Access, Sharing,
-Sync and backups, Venue and schedule). It is the workspace's admin chrome, not a `ModuleId` — see
+Backups, Venue and schedule). It is the workspace's admin chrome, not a `ModuleId` — see
 the [Settings page](/reference/modules/settings).
 
 ::: tip The public site is a tier, not a module

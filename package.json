@@ -28,6 +28,8 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "test:docs": "node --test tools/tests/*.test.mjs",
+    "docs:paths": "node tools/docs-paths.mjs",
     "docs:freshness": "node tools/docs-freshness.mjs",
     "depcruise": "npm --prefix apps/console run depcruise",
     "depcruise:entrant": "npm --prefix apps/entrant run depcruise",

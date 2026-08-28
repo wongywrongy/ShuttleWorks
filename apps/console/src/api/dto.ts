@@ -2,7 +2,7 @@
  * Data Transfer Objects (DTOs).
  *
  * Contract types here mirror Pydantic models in
- * ``backend/app/schemas.py``. The auto-generated ``dto.generated.ts``
+ * ``apps/api/src/core/schemas.py``. The auto-generated ``dto.generated.ts``
  * (produced by ``make generate-api`` from FastAPI's OpenAPI schema) is
  * the authoritative reference — when schemas.py changes, regenerate
  * dto.generated.ts and reconcile every drift in this file by hand.
@@ -403,7 +403,7 @@ export interface SolverPhaseEvent {
 }
 
 // ---- Solve jobs (SP-CLOUD-1 async solve rail) --------------------------
-// Mirrors backend/app/schemas.py SolveJobDTO / SolveJobErrorDTO.
+// Mirrors apps/api/src/core/schemas.py SolveJobDTO / SolveJobErrorDTO.
 
 export type SolveJobStatus =
   | 'queued'

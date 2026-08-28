@@ -17,9 +17,8 @@ and real Gaussian shadows in light mode.
 
 Two authoritative-sounding brand documents that disagree is worse than one
 imperfect one — anyone reading this file, human or agent, pulled the UI back
-toward a design that was replaced. The 2026-08-06 frontend design review
-(`docs/history/audits/15-frontend-design-review.md`) found that drift as the root cause
-of the product's incoherent visual identity.
+toward a design that was replaced. The design review that retired this direction
+identified that conflict as the root cause of the product's incoherent visual identity.
 
 ## Where the current direction lives
 

@@ -3,8 +3,8 @@
 The Bracket module speaks six draw formats — single elimination (`se`), round robin
 (`rr`), double elimination (`de`), Monrad (`monrad`), compass (`compass`), and Swiss
 (`swiss`) — dispatched through a format registry on both sides of the wire
-(`FORMAT_REGISTRY` in `backend/services/bracket/formats/`, `DRAW_FORMATS` in
-`frontend/src/modules/bracket/formatRegistry.tsx`). This page catalogs the format
+(`FORMAT_REGISTRY` in `apps/api/src/bracket/formats/`, `DRAW_FORMATS` in
+`apps/console/src/modules/bracket/formatRegistry.tsx`). This page catalogs the format
 vocabulary, records how each maps onto the data model, and tracks the remaining
 roadmap (group stage, qualifying, ladder).
 
@@ -20,18 +20,18 @@ and Operations/Display consumption.
 
 ## Where formats live today
 
-- **Generators** — `backend/services/bracket/formats/` holds
+- **Generators** — `apps/api/src/bracket/formats/` holds
   `generate_single_elimination` (BWF-conformant seeding: seed 1 top, seed 2 bottom,
   seeds 3–4 in opposite quarters recursively; byes placed opposite the top seeds) and
   `generate_round_robin` (circle method). Both return a `Draw`: play units, a
   round-major `rounds` list, and a `slots` map.
-- **The slot model** — `BracketSlot` (in `services/bracket/draw.py`) is one side of a
+- **The slot model** — `BracketSlot` (in `apps/api/src/bracket/draw.py`) is one side of a
   play unit and holds *exactly one of* `participant_id` or `feeder_play_unit_id`. A
   feeder reference means **"the winner of that play unit takes this slot"** — there
   is no loser reference. `advancement.py` propagates winners (and cascades `__BYE__`
   walkovers) into downstream slots when a result lands.
 - **Dispatch** — generation and validation go **through the registry**, not a binary
-  branch: `generate_event_route` in `api/brackets.py` resolves `spec = get_format(body.format)`
+  branch: `generate_event_route` in `apps/api/src/bracket/brackets.py` resolves `spec = get_format(body.format)`
   and generates via that format's generator, with `body.format` validated against
   `FORMAT_REGISTRY`. The frontend `DrawView.tsx` picks a renderer by the format's
   `renderer` key (`bracket | grid | segments | swiss`), not a hardcoded `se`/`rr` split.
@@ -175,7 +175,7 @@ surface (a persistent ranking board), not a Bracket draw type. Deliberately last
 4. **Progressive generation** — `POST /bracket/events/{id}/rounds/next` appends a
    standings-paired Swiss round with no wipe and no solver call; the new units are
    dependency-free and light up the existing *schedule next round* flow.
-5. **Standings** — `services/bracket/standings.py` (BWF chain: match wins → games
+5. **Standings** — `apps/api/src/bracket/standings.py` (BWF chain: match wins → games
    ratio → points ratio → head-to-head → id; walkovers win with zero games/points),
    embedded in `EventOut.standings` for `has_standings` formats.
 6. **Per-draw configuration** — the `BracketEvent.config` JSON column carries

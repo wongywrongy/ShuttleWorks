@@ -23,23 +23,19 @@ being scannable.
 **The acceptance test:** if you cannot say which quadrant a page is in, it is not
 a page. See rule 2.
 
-## 2. Anything that cannot name a quadrant is history
+## 2. Anything that cannot name a quadrant belongs in Git history
 
-`history/` holds the dated working record: program ledgers, audits, change logs,
-the superpowers design archive, the progress board, and retired pages kept for
-provenance. It is **excluded from the built site** (`srcExclude` in
-`.vitepress/config.mts`) and lives on disk, in the repository, where dated
-records are actually read.
+Dated program ledgers, audits, change logs, and retired pages are not maintained
+beside current product documentation. Distil active decisions and open debt into
+the live quadrants, then let Git retain the original record.
 
 History is a genre, not a claim about completion — an in-flight program ledger
 belongs there too, because it is a working record rather than a page about the
 product.
 
-**History is not rewritten.** An audit from May that describes a directory layout
-we have since changed is *correct*: that is where things were when it was
-written. Only its internal links are repaired mechanically, so the tree stays
-navigable. A dated record silently edited to describe a layout it never saw is
-worth less than no record.
+**Historical records are not rewritten.** A dated record silently edited to
+describe a layout it never saw is worth less than no record. Recover it from the
+commit that created it when provenance is needed.
 
 Two things that look like history and are not, and so live in `reference/`:
 
@@ -55,8 +51,10 @@ build and serve the site.
 
 ## Gates
 
-`npm run docs:build` fails on a broken internal link, which is what keeps a move
-like this honest. `npm run docs:freshness` compares each area's last doc commit
-against the last commit to the source it documents, and its area→source map is
-in `tools/docs-freshness.mjs` — extend it when a page starts documenting a new
-part of the tree, or it will silently report that area as never changing.
+`npm run docs:paths` fails on a missing repository-relative path named by a live
+page, and `npm run docs:build` fails on a broken internal link. Together they are
+the blocking docs gates in `make check` and CI. `npm run docs:freshness` compares
+each area's last doc commit against the last commit to the source it documents;
+it remains an advisory timestamp signal. Its area→source map is in
+`tools/docs-freshness.mjs` — extend it when a page starts documenting a new part
+of the tree, or the fail-closed manifest check will reject the missing root.

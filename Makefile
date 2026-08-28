@@ -137,7 +137,7 @@ entrant-dev:  ## Run the PUBLIC entrant site (SSR) at :5174 against a host API o
 	API_BASE_URL=http://localhost:8600 npm run dev:entrant -- --port 5174
 
 local-dev:  ## Run BOTH surfaces: operator console :5173 + public entrant site :5174
-	@echo "The API must already be running on :8600 — see docs/getting-started."
+	@echo "The API must already be running on :8600 — see docs/how-to/running-locally.md."
 	@echo "  operator console     http://localhost:5173"
 	@echo "  public entrant site  http://localhost:5174"
 	VITE_API_PROXY_TARGET=http://localhost:8600 npm run dev:scheduler -- --port 5173 & \
@@ -293,6 +293,10 @@ check-full:
 	cd apps/api/src && lint-imports --config ../.importlinter
 	pytest
 	@echo ""
+	@echo "--- docs paths + build (blocking) ---"
+	npm run test:docs
+	npm run docs:paths
+	npm run docs:build
 	@echo "--- docs freshness (advisory — never fails the gate) ---"
 	-npm run docs:freshness
 
@@ -312,5 +316,9 @@ check-fast:
 	cd apps/api/src && lint-imports --config ../.importlinter
 	pytest tests/backend/unit -m 'not slow'
 	@echo ""
+	@echo "--- docs paths + build (blocking) ---"
+	npm run test:docs
+	npm run docs:paths
+	npm run docs:build
 	@echo "--- docs freshness (advisory — never fails the gate) ---"
 	-npm run docs:freshness

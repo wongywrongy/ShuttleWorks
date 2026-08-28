@@ -9,7 +9,7 @@ being the bracket result command (`submit_bracket_command` →
 `recordBracketResultCommand`).
 
 ::: info The one rule
-`api/dto.ts` holds a TypeScript twin of **every** Pydantic model in
+`apps/console/src/api/dto.ts` holds a TypeScript twin of **every** Pydantic model in
 `apps/api/src/core/schemas.py`. Keep them field-for-field in lock-step — a drift here
 is the most common source of runtime surprises.
 :::
@@ -42,7 +42,7 @@ The seam answers a **uniform 404** (`TOURNAMENT_NOT_FOUND`) for non-members and
 nonexistent ids alike — existence is information; never hand-roll a 403 for
 "not yours". A real member with an insufficient *role* gets `403`. This is not
 merely convention: the cross-tenant isolation suite
-(`tests/test_tenant_isolation.py`) discovers every `{tournament_id}` operation
+(`tests/backend/test_tenant_isolation.py`) discovers every `{tournament_id}` operation
 from the OpenAPI schema and fails CI if any of them leaks — a new endpoint that
 forgets the dependency is caught automatically, with no test to hand-write.
 
@@ -57,12 +57,12 @@ and [Bracket result command queue](/explanation/architecture/bracket-result-queu
 
 ## 2 · Frontend — DTO twin
 
-Add the matching TypeScript types to `api/dto.ts` (or `api/bracketDto.ts` for
+Add the matching TypeScript types to `apps/console/src/api/dto.ts` (or `apps/console/src/api/bracketDto.ts` for
 bracket shapes), matching the Pydantic fields exactly.
 
 ## 3 · Frontend — `apiClient` method
 
-Add a method on `ApiClient` in `api/client.ts`. The axios response interceptor
+Add a method on `ApiClient` in `apps/console/src/api/client.ts`. The axios response interceptor
 already turns errors into toasts (with the `X-Request-ID` for bug reports), so you
 don't need a try/catch unless you want domain-specific handling:
 

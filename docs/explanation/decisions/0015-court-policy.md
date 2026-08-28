@@ -82,6 +82,6 @@ queue mode.
 
 ## Pointers
 
-Program plan and evidence: `docs/history/programs/SP-COURT-1.md` (research
-tables, phase ledger). Benchmark:
+Program plan and evidence are maintained outside this site (research tables and phase ledger).
+Benchmark:
 `packages/scheduler-core/benchmarks/bench_court_encoding.py`.

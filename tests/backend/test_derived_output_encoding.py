@@ -9,7 +9,8 @@ surfaces are not React, so they inherit nothing:
 
 Every test drives a hostile participant name (or workspace name) through
 the real renderer and asserts the payload is inert at the far end.
-Negative controls are recorded in ``SEC_PROGRESS.md``.
+The negative controls were mutation-verified during SP-SEC-1; Git history
+retains the original record.
 """
 from __future__ import annotations
 

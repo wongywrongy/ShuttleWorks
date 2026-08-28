@@ -59,9 +59,9 @@ SQL
 ### Why exactly these, and no more
 
 - **`solve_jobs` only.** The worker path touches one table. `worker.py`,
-  `services/solve_worker.py` and `services/solve_jobs.py` import only the
-  `SolveJob` model, and `services/solve_runner.py` and
-  `services/solve_child.py` have **no database imports at all** — the child
+  `apps/api/src/solve_rail/solve_worker.py` and `apps/api/src/solve_rail/solve_jobs_routes.py` import only the
+  `SolveJob` model, and `apps/api/src/solve_rail/solve_runner.py` and
+  `apps/api/src/solve_rail/solve_child.py` have **no database imports at all** — the child
   receives its entire problem as JSON in a temp file. The API writes the full
   solve input into `solve_jobs` at submit time, so the worker never needs to
   look up a tournament, a member, or a user.
@@ -192,7 +192,7 @@ Watch `/health/metrics` on the primary:
 
 That last step is the one that matters and the easy one to miss: the child
 process never touched the database, so it has no idea the queue moved on. Pinned
-by `tests/unit/test_lease_recovery.py`.
+by `tests/backend/unit/test_lease_recovery.py`.
 
 Reconnect with `docker network connect bridge shuttleworks-worker-worker-1`.
 

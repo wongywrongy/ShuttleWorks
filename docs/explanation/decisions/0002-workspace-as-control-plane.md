@@ -46,4 +46,4 @@ scheduler-core rename** in this phase.
 
 ## See also
 
-- [Workspace model](/explanation/architecture/workspace-model) · the on-disk `docs/explanation/architecture/workspace-suite/glossary.md`
+- [Workspace model](/explanation/architecture/workspace-model) · the current [glossary](/reference/glossary)

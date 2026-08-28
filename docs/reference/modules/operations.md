@@ -18,7 +18,7 @@ flag and no `workspace_modules` row** — it is the `'operations'` arm of
   `uncall` (`called → scheduled`) and `postpone` (`playing → scheduled`). Only
   `retired` is terminal (`RETIRED: []`); `finished` can **reopen** to `playing`
   to correct a mis-finished match (`VALID_TRANSITIONS` in
-  `services/match_state.py`). `LOCKED_STATUSES` (`called`, `playing`, `finished`,
+  `apps/api/src/operations/match_state.py`). `LOCKED_STATUSES` (`called`, `playing`, `finished`,
   `retired`) are the states the solver pins. See
   [Data flow](/explanation/architecture/data-flow#the-match-state-machine).
 - Runs the **idempotent command pipeline** (call / start / finish / retire /
@@ -57,7 +57,7 @@ schedule XLSX export lives in `exports/scheduleXlsx.ts`.
 | **`apiClient` methods** | `getMatchStates`, `getMatchState`, `getMatchVersion`, `updateMatchState`, `resetMatchStates`, `submitCommand`, `exportMatchStates`, `importMatchStates`, `importMatchStatesBulk` |
 | **Store slice** | `matchStateStore` (match states, optimistic command state, conflict records, canonical versions) |
 | **Frontend code** | `modules/operations/` — `opsBlock.ts` (the uniform block), `run/` + `runtime/` (the Run surface + its machine), `UnifiedOpsBoard.tsx` / `UnifiedOpsList.tsx` (the Plan board), `OpsDetailRail.tsx`, and `operationalWriteback.ts`. The shared `SourceChip.tsx` provenance badge lives in `components/` (used by 3 products), not here. |
-| **Backend** | `services/match_state.py`; tables `match_states`, `commands` |
+| **Backend** | `apps/api/src/operations/match_state.py`; tables `match_states`, `commands` |
 
 ## The uniform block
 
@@ -89,6 +89,6 @@ view-model.
   bet is done. It remains **Tier-2 by design**: always-on, `enableable: false`,
   no `WorkspaceModule` row — the answer to "separate installable module, or
   always-on cross-cutting concern?" is the latter.
-- **`matchStateStore` location.** The store lives in the global `src/store/`
+- **`matchStateStore` location.** The store lives in the global `apps/console/src/store/`
   rather than under `modules/operations/`, though only Operations-driving hooks
   write it — see [State management](/explanation/architecture/state-management#known-debt-matchstatestore).

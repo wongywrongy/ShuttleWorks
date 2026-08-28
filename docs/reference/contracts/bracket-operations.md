@@ -45,7 +45,7 @@ recorded as a `consumedEndpoint`, not a store-subscription edge it "reacts to".
 1. Bracket generates/updates a draw; the changes are persisted under `/tournaments/{id}/bracket`.
 2. Operations (and the bracket Run surface) **poll** `GET …/bracket` (~2.5 s, `useBracket`) and
    receive the `BracketTournamentDTO`.
-3. `bracketToOpsBlocks(data)` in `products/operations/opsBlock.ts` folds the snapshot into the
+3. `bracketToOpsBlocks(data)` in `apps/console/src/modules/operations/opsBlock.ts` folds the snapshot into the
    canonical engine-agnostic `Match` / `OpsBlock` rows (ADR 0009) — the *same* shape the meet engine
    folds into, so both engines interleave on one board. The row carries layout and status only; it has
    **no score field**, so a bracket's `winner_side` (and any format-specific score) stays in the

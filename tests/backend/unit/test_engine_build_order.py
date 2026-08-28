@@ -1,6 +1,6 @@
 """Model-build order is hash-seed independent (SP-CLOUD-3, audit 0.D).
 
-Replaces `services/determinism.py` and its `warn_if_unpinned` guard.
+Replaces the former determinism shim and its `warn_if_unpinned` guard.
 
 That module existed because the engine's model build iterated a
 hash-ordered set: `get_player_ids` returned a bare `set`, and
@@ -22,7 +22,7 @@ Measured at the time of the fix, on the doubles instance below:
   before, seeds 1..4       : four DIFFERENT fingerprints
   after,  any seed         : 88f2ee3552fa073d8436b1078c80ef00
 The fingerprint legitimately changed — constraint creation order changed
-— but it is now the same for every interpreter. See CLOUD_PROGRESS.md.
+— but it is now the same for every interpreter.
 """
 from __future__ import annotations
 

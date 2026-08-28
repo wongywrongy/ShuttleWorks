@@ -17,7 +17,7 @@ app, the same conceptual object — a scheduled unit of play — was represented
 | `MatchDTO` | meet API | engine-native (meet) |
 | `PlayUnitDTO` | bracket API | engine-native (bracket) |
 | `OperationalMatch` | `lib/operations/operationalMatch` | read-only cross-engine projection |
-| `OpsBlock` | `products/operations/opsBlock` | the richer cross-engine shape the boards/list/detail speak |
+| `OpsBlock` | `apps/console/src/modules/operations/opsBlock.ts` | the richer cross-engine shape the boards/list/detail speak |
 | `RunMatch` | `operations/runtime/runModel` | Run view-model (adds `late`/`eligible`) |
 | `BoardChip` | `operations/runtime/boardPlacements` | board placement view-model |
 
@@ -38,7 +38,7 @@ contract, `Match`, in the shared domain layer (`platform/domain/match.ts`):
   `colorKey`, `court`, `slot`, `span`, `status`, `sideA`/`sideB`, `done`,
   `started`, `actualStartSlot`/`actualEndSlot`.
 - The **only** seam where engine-native → canonical happens is the two adapters
-  in `products/operations/opsBlock.ts` (`meetToOpsBlocks` / `bracketToOpsBlocks`).
+  in `apps/console/src/modules/operations/opsBlock.ts` (`meetToOpsBlocks` / `bracketToOpsBlocks`).
 - `OpsBlock` becomes a deprecated **alias** of `Match` (no churn across its ~16
   importers); new code imports `Match`.
 - `RunMatch` and `BoardChip` stay as **view-models** derived from `Match` — they

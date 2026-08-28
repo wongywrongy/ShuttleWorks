@@ -112,7 +112,7 @@ describe('engineFieldAppliesTo (schema helper)', () => {
   });
 
   it('solverTimeLimitSeconds applies only to meet — bracket keeps its own per-request budget (C10)', () => {
-    // backend/api/brackets.py `_bracket_solver_options` deliberately does
+    // apps/api/src/bracket/brackets.py `_bracket_solver_options` deliberately does
     // not read solverTimeLimitSeconds; rendering it on bracket would be a
     // decorative control that changes nothing.
     expect(engineFieldAppliesTo('solverTimeLimitSeconds', 'meet')).toBe(true);

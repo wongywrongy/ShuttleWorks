@@ -10,11 +10,11 @@ pages, draws, seeds, and winners. It is a **separate frontend workspace**
 - **React Router 7, server-rendered.** A node process renders documents;
   each tab/page switch is a full document load. There is no Zustand, no
   client data store; state lives in URLs and loaders.
-- **`apiGet` is the only outbound seam** (`app/lib/apiFetch.server.ts`):
+- **`apiGet` is the only outbound seam** (`apps/entrant/app/lib/apiFetch.server.ts`):
   GET only, `/e/api/` paths only, a frozen `accept`-only header allowlist.
   Node never relays credentials (ruling R8-D), so an SSR document can never
   know who is signed in — `ViewerDTO.signedIn` is always `false` on the
-  server render, pinned by `tests/test_entrant_ssr_contract.py`.
+  server render, pinned by `tests/backend/test_entrant_ssr_contract.py`.
 - **Writes go browser → nginx → FastAPI directly** (form posts and, since
   SP-P7, cookie-carrying browser fetches). nginx routes `/e/api/` and
   `/e/account/` to the backend with a cookie allowlist that carries the
@@ -38,14 +38,14 @@ pages, draws, seeds, and winners. It is a **separate frontend workspace**
   'self'`, and a host-only `sw_play_session`.
 - **Two principals, two seams.** Entrant accounts (`entrant_accounts` +
   `entrant_sessions`) are structurally separate from operator users
-  (ruling D-A3). `tests/test_cross_principal_sessions.py` sweeps every
+(ruling D-A3). `tests/backend/test_cross_principal_sessions.py` sweeps every
   route with each cookie and holds the reachable sets to their allowlists.
 
 ## Public keys and the uniform 404
 
 The **slug** (`entry_pages.slug`, globally unique) is the only public key;
 raw tournament UUIDs never appear in public URLs. An unknown slug and a
-closed page answer byte-identically (`api/entries_public._resolve`), so
+closed page answer byte-identically (`apps/api/src/entries/entries_public.py::_resolve`), so
 existence is not enumerable. Person pages are keyed by **person id**
 (`entry_players.id` as an opaque `personKey`) — never by name; two
 entrants sharing a name is routine at a club.
@@ -104,7 +104,7 @@ session (`api/brackets._serialize_session`, through its short-TTL
 `response_cache`) — the same read the operator surface and Display
 consume, so the public tier cannot drift from the real draw. Meet
 matches come from the state blob + `match_states`, the Display
-precedent. Standings are `services/bracket/standings.py` (BWF chain),
+precedent. Standings are `apps/api/src/bracket/standings.py` (BWF chain),
 embedded by the same serializer.
 
 ## Privacy discipline

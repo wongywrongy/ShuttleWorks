@@ -1,9 +1,10 @@
 /**
  * Bracket-side DTOs — types that round-trip the
  * ``/tournaments/{tid}/bracket/*`` API surface added in PR 2 of the
- * backend-merge arc. Moved from ``products/tournament/frontend/src/types.ts``
- * in PR 3 of the same arc; the tournament-product frontend is retired in
- * this PR. The historical type names (CreateTournamentIn / TournamentDTO /
+ * backend-merge arc. The canonical backend source is
+ * ``apps/api/src/bracket/brackets.py``; the tournament-product frontend was
+ * retired in PR 3 of the same arc. The historical type names
+ * (CreateTournamentIn / TournamentDTO /
  * ScheduleNextOut) are kept as aliases for the bracket-prefixed ones so
  * any in-flight imports from before the move don't break — new code
  * should prefer the prefixed names.

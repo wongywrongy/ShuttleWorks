@@ -312,7 +312,7 @@ export function handleApiResponseError(error: any): never {
   let message: string;
   // Promoted alongside `code` for CONFIG_LOCKED payloads: the tournament
   // state PUT's schedule-lock guard ships `extra={"fields": [...],
-  // "schedules": [...]}` (backend/api/tournaments.py) so the frontend can
+  // "schedules": [...]}` (apps/api/src/workspaces/tournaments.py) so the frontend can
   // disclose exactly which committed schedule(s) a confirm-unlock will
   // clear, instead of guessing from its own module's local state.
   let fields: string[] | undefined;
@@ -345,7 +345,7 @@ export function handleApiResponseError(error: any): never {
   if (requestId) detailParts.push(`request ${requestId.slice(0, 8)}`);
 
   // CONFIG_LOCKED / DRAW_STARTED are raised ONLY by the tournament
-  // state PUT's schedule-lock guard (backend/api/tournaments.py) —
+  // state PUT's schedule-lock guard (apps/api/src/workspaces/tournaments.py) —
   // and that funnel (`useTournamentState.forceSaveNow`) now owns their
   // UX end to end: CONFIG_LOCKED opens the unlock-confirm modal (and
   // on decline re-syncs quietly), DRAW_STARTED shows its own friendly
