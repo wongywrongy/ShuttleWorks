@@ -8,8 +8,8 @@
  * detectable first. Baseline coverage was 35.95% lines / 16.66% funcs.
  *
  * Behavior-descriptive, not aspirational. Where the store calls `new Date()` /
- * `Date.now()` (buildLiveState currentTime/lastSynced, recordConflict
- * occurredAt) we pin STRUCTURE (present, right type), never the exact value.
+ * `Date.now()` (recordConflict occurredAt) we pin STRUCTURE (present, right
+ * type), never the exact value.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useMatchStateStore } from '../matchStateStore';
@@ -28,16 +28,16 @@ beforeEach(() => {
 });
 
 describe('matchStateStore — initial / reset', () => {
-  it('starts with empty maps and null liveState', () => {
+  it('starts with only empty consumed maps', () => {
     const s = get();
     expect(s.matchStates).toEqual({});
-    expect(s.liveState).toBeNull();
+    expect(s).not.toHaveProperty('liveState');
     expect(s.pendingCommandsByMatchId).toEqual({});
     expect(s.recentConflictsByMatchId).toEqual({});
     expect(s.canonicalVersionsByMatchId).toEqual({});
   });
 
-  it('reset() clears every map and nulls liveState', () => {
+  it('reset() clears every consumed map', () => {
     get().setMatchState('m1', mkState('m1', 'called'));
     get().setPendingCommand('m1', 'cmd-1');
     get().recordConflict('m1', 'conflict', 'boom');
@@ -47,7 +47,6 @@ describe('matchStateStore — initial / reset', () => {
 
     const s = get();
     expect(s.matchStates).toEqual({});
-    expect(s.liveState).toBeNull();
     expect(s.pendingCommandsByMatchId).toEqual({});
     expect(s.recentConflictsByMatchId).toEqual({});
     expect(s.canonicalVersionsByMatchId).toEqual({});
@@ -55,27 +54,31 @@ describe('matchStateStore — initial / reset', () => {
 });
 
 describe('matchStateStore — setMatchStates / setMatchState', () => {
-  it('setMatchStates replaces the map and builds liveState around it', () => {
+  it('setMatchStates replaces the map', () => {
     const states = { m1: mkState('m1', 'called'), m2: mkState('m2', 'scheduled') };
     get().setMatchStates(states);
 
     const s = get();
     expect(s.matchStates).toEqual(states);
-    expect(s.liveState).not.toBeNull();
-    expect(s.liveState!.matchStates).toEqual(states);
-    // buildLiveState stamps these from `new Date()` — pin type, not value.
-    expect(typeof s.liveState!.currentTime).toBe('string');
-    expect(typeof s.liveState!.lastSynced).toBe('string');
   });
 
-  it('setMatchState merges one entry, preserves others, rebuilds liveState', () => {
+  it('setMatchState merges one entry and preserves others', () => {
     get().setMatchStates({ m1: mkState('m1', 'called') });
     get().setMatchState('m2', mkState('m2', 'started'));
 
     const s = get();
     expect(Object.keys(s.matchStates).sort()).toEqual(['m1', 'm2']);
     expect(s.matchStates.m2.status).toBe('started');
-    expect(s.liveState!.matchStates.m2.status).toBe('started');
+  });
+
+  it('setMatchStates preserves the map reference when content is unchanged', () => {
+    const states = { m1: mkState('m1', 'called') };
+    get().setMatchStates(states);
+    const before = get().matchStates;
+
+    get().setMatchStates({ m1: mkState('m1', 'called') });
+
+    expect(get().matchStates).toBe(before);
   });
 
   it('setMatchState produces a NEW matchStates object (immutable update)', () => {
@@ -83,19 +86,6 @@ describe('matchStateStore — setMatchStates / setMatchState', () => {
     const before = get().matchStates;
     get().setMatchState('m2', mkState('m2', 'scheduled'));
     expect(get().matchStates).not.toBe(before);
-  });
-});
-
-describe('matchStateStore — setLastSynced', () => {
-  it('setLastSynced updates liveState.lastSynced when liveState exists', () => {
-    get().setMatchStates({ m1: mkState('m1', 'called') });
-    get().setLastSynced('2026-06-30T00:00:00.000Z');
-    expect(get().liveState!.lastSynced).toBe('2026-06-30T00:00:00.000Z');
-  });
-
-  it('setLastSynced is a no-op (stays null) when liveState is null', () => {
-    get().setLastSynced('2026-06-30T00:00:00.000Z');
-    expect(get().liveState).toBeNull();
   });
 });
 
@@ -122,7 +112,6 @@ describe('matchStateStore — applyOptimisticStatus', () => {
   it('creates a scheduled-based entry when the match is unknown', () => {
     get().applyOptimisticStatus('new1', 'called');
     expect(get().matchStates.new1).toEqual({ matchId: 'new1', status: 'called' });
-    expect(get().liveState!.matchStates.new1.status).toBe('called');
   });
 
   it('merges the new status over an existing entry, preserving other fields', () => {

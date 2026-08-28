@@ -16,7 +16,6 @@ folder. The convention: anything used by ≥2 features lives here.
 | `useLiveOperations.ts` | Drag-target validation + optimistic pin during the live ops flow. |
 | `useCurrentSlot.ts` | Wall-clock slot index for the current tournament config, refreshed every minute. |
 | `useTrafficLights.ts` | Memoised wrapper over `utils/trafficLight.ts` that computes per-match readiness lights. |
-| `useSmoothedAssignments.ts` | Smooth out solver-progress flicker when many partial solutions arrive in quick succession. |
 | `useLockGuard.ts` | Block destructive actions while a tournament is locked. |
 | `useSearchParamState.ts` | URL-backed local state with debounced history-replace; used by inline search/filter widgets. |
 | `useContainerWidth.ts` | ResizeObserver-measured width of an element's PARENT; drives `DetailDock`'s docked/overlay fallback. |

@@ -19,7 +19,6 @@ with no rule for which one to open is worse than one drawer.
 | `bracketTabs.ts` | Live tab-id and view helpers for the Bracket module. |
 | `commandQueue.ts` | The generic idempotent operator command queue, IndexedDB-backed. |
 | `constraintChecker.ts` | Client-side constraint pre-checks before a solve is requested. |
-| `courtClosures.ts` | Closed-court windows and the arithmetic over them. |
 | `disciplineNames.ts` | Discipline code to display name. |
 | `eventColors.ts` | Per-event colour assignment, shared by chips and boards. |
 | `getActiveAssignments.ts` | The currently-active assignment set for a match list. |

@@ -1,20 +1,16 @@
 /**
  * Perf pass 2 (render hotspots): useLiveTracking used to run a bare
- * `setInterval(1000)` that wrote a NEW `liveState` object into
- * `matchStateStore` every second via `setCurrentTime`. Because the hook
- * also subscribed to `liveState`, EVERY component calling `useLiveTracking()`
- * (e.g. the 746-line MatchControlCenterPage) re-rendered once a second
- * forever, independent of any real data change.
+ * `setInterval(1000)` that wrote a NEW aggregate object into `matchStateStore`
+ * every second via a clock setter. Because the hook also subscribed to that
+ * aggregate, EVERY component calling `useLiveTracking()` re-rendered once a
+ * second forever, independent of any real data change.
  *
- * Investigation found `liveState` (and its `currentTime` field) is dead
- * output — no component reads `useLiveTracking().liveState`, so there is
- * nothing to preserve a per-second render for. The fix removes the 1s
- * interval, the `setCurrentTime` store write, and the now-pointless
- * `liveState` subscription/return field.
+ * Investigation found that aggregate is dead output. The surviving
+ * `matchStates` map must remain reference-stable when no poll data changed.
  *
- * This test proves the store is untouched on a 1s cadence: with fake
- * timers, advance 3s (short of the unrelated 5s sync interval) and assert
- * `matchStateStore`'s `liveState` reference never changes.
+ * This test proves the store is untouched on a 1s cadence: with fake timers,
+ * advance 3s (short of the unrelated 5s sync interval) and assert the
+ * surviving `matchStates` reference never changes.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -53,11 +49,7 @@ afterEach(() => {
 });
 
 describe('useLiveTracking — no 1s store-driven render storm', () => {
-  it('does not write matchStateStore.liveState on a 1s cadence', async () => {
-    // Seed a non-null liveState first — the old `setCurrentTime` was a
-    // no-op while liveState was null, which would make this assertion
-    // pass vacuously. A populated liveState is the case that actually
-    // caught the per-second rewrite.
+  it('does not write matchStateStore.matchStates on a 1s cadence', async () => {
     useMatchStateStore.getState().setMatchState('m1', { matchId: 'm1', status: 'scheduled' });
 
     const { unmount } = renderHook(() => useLiveTracking(), { wrapper: wrap('t1') });
@@ -67,8 +59,7 @@ describe('useLiveTracking — no 1s store-driven render storm', () => {
       await Promise.resolve();
     });
 
-    const liveStateAfterMount = useMatchStateStore.getState().liveState;
-    expect(liveStateAfterMount).not.toBeNull();
+    const matchStatesAfterMount = useMatchStateStore.getState().matchStates;
 
     // Advance 3s — well short of the unrelated 5s sync interval — so the
     // only thing that could fire on this window is the old 1s clock tick.
@@ -76,12 +67,9 @@ describe('useLiveTracking — no 1s store-driven render storm', () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
 
-    expect(useMatchStateStore.getState().liveState).toBe(liveStateAfterMount);
+    expect(useMatchStateStore.getState().matchStates).toBe(matchStatesAfterMount);
 
     unmount();
   });
 
-  it('never calls the removed setCurrentTime store setter', () => {
-    expect((useMatchStateStore.getState() as unknown as Record<string, unknown>).setCurrentTime).toBeUndefined();
-  });
 });

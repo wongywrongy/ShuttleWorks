@@ -30,7 +30,7 @@ storage key.
 | Matches | `useTournamentStore` | `matches` |
 | Schedule | `useTournamentStore` | `schedule`, `scheduleIsStale`, `isScheduleLocked` |
 | Two-phase commit | `useTournamentStore` | `scheduleVersion`, `scheduleHistory` |
-| Live tracking | `useMatchStateStore` | `matchStates`, `liveState` |
+| Live tracking | `useMatchStateStore` | `matchStates` |
 | Shell / tabs | `useUiStore` | `activeTab` |
 | Solver HUD | `useUiStore` | `solverHud`, `solverLogs` |
 | Solver run state | `useUiStore` | `isGenerating`, `generationProgress`, `generationError`, `scheduleStats` |

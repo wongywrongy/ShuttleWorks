@@ -13,7 +13,7 @@
  * canonical server state lands later via ``setMatchState``.
  */
 import { create } from 'zustand';
-import type { LiveScheduleState, MatchStateDTO } from '../api/dto';
+import type { MatchStateDTO } from '../api/dto';
 import type { MatchStatus } from '../platform/domain/match';
 
 /** F-DM-46: the legacy four-member wire spelling IS the canonical domain
@@ -36,7 +36,6 @@ export interface ConflictRecord {
 
 interface MatchStateState {
   matchStates: Record<string, MatchStateDTO>;
-  liveState: LiveScheduleState | null;
   /** match_id → queued command_id for in-flight optimistic actions. */
   pendingCommandsByMatchId: Record<string, string>;
   /** match_id → last unresolved conflict (Step G). */
@@ -55,7 +54,6 @@ interface MatchStateState {
 
   setMatchStates: (states: Record<string, MatchStateDTO>) => void;
   setMatchState: (matchId: string, state: MatchStateDTO) => void;
-  setLastSynced: (time: string) => void;
   reset: () => void;
 
   // Step F: command-queue integration.
@@ -96,22 +94,8 @@ function matchStatesEqual(
   return true;
 }
 
-function buildLiveState(matchStates: Record<string, MatchStateDTO>): LiveScheduleState {
-  const now = new Date().toISOString();
-  return {
-    currentTime: new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }),
-    matchStates,
-    lastSynced: now,
-  };
-}
-
 export const useMatchStateStore = create<MatchStateState>((set) => ({
   matchStates: {},
-  liveState: null,
   pendingCommandsByMatchId: {},
   recentConflictsByMatchId: {},
   canonicalVersionsByMatchId: {},
@@ -120,7 +104,7 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
     set((prev) =>
       matchStatesEqual(prev.matchStates, matchStates)
         ? prev
-        : { matchStates, liveState: buildLiveState(matchStates) },
+        : { matchStates },
     ),
 
   setMatchState: (matchId, state) =>
@@ -128,19 +112,12 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
       const newMatchStates = { ...prev.matchStates, [matchId]: state };
       return {
         matchStates: newMatchStates,
-        liveState: buildLiveState(newMatchStates),
       };
     }),
-
-  setLastSynced: (time) =>
-    set((state) => ({
-      liveState: state.liveState ? { ...state.liveState, lastSynced: time } : null,
-    })),
 
   reset: () =>
     set({
       matchStates: {},
-      liveState: null,
       pendingCommandsByMatchId: {},
       recentConflictsByMatchId: {},
       canonicalVersionsByMatchId: {},
@@ -168,7 +145,6 @@ export const useMatchStateStore = create<MatchStateState>((set) => ({
       const newMatchStates = { ...prev.matchStates, [matchId]: next };
       return {
         matchStates: newMatchStates,
-        liveState: buildLiveState(newMatchStates),
       };
     }),
 

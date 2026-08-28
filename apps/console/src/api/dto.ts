@@ -264,12 +264,6 @@ export interface MatchStateDTO {
   updatedAt?: string;
 }
 
-export interface LiveScheduleState {
-  currentTime: string;
-  matchStates: Record<string, MatchStateDTO>;
-  lastSynced: string;
-}
-
 // Roster Group (for school grouping)
 export interface RosterGroupDTO {
   id: string;

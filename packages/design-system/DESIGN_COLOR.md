@@ -80,5 +80,5 @@ white/near-white base, subtle gray sunken wells, raised = white + hairline + sma
 | `globals.css` white-alpha sheen/scanlines | Theme-blind texture effects |
 
 Everything else resolves to semantic tokens (audit inventory: 2026-07-10; the 57 stock-Tailwind
-occurrences in shared components — Hint, AdvisoryBanner, ConflictBanner, ScheduleLockIndicator,
+occurrences in shared components — AdvisoryBanner, ConflictBanner, ScheduleLockIndicator,
 AppStatusPopover, SourceChip, RunInspector, `time.ts`, auth pages, StaleBanner, Toast — are gone).

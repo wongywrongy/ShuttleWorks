@@ -25,6 +25,7 @@ import { assertCanEdit } from './useCanEdit';
 import { useTournamentIdOrNull } from './useTournamentId';
 import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { isTerminalPollError } from '../lib/pollPolicy';
+import { mergeMatchStates } from '../lib/mergeMatchStates';
 
 // The transition table lives in `platform/domain/matchTransitions` — a mirror
 // of the backend contract, unit-tested against it. It used to be defined here
@@ -65,7 +66,6 @@ export function useLiveTracking() {
   const matchStates = useMatchStateStore((state) => state.matchStates);
   const setMatchStates = useMatchStateStore((state) => state.setMatchStates);
   const setMatchState = useMatchStateStore((state) => state.setMatchState);
-  const setLastSynced = useMatchStateStore((state) => state.setLastSynced);
   /**
    * The source (tid or display token) whose reads answered a TERMINAL status —
    * workspace deleted, access revoked, or an invalid capability token (shared
@@ -88,25 +88,7 @@ export function useLiveTracking() {
         : await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
-      // Merge backend with local, preserving local-only fields
-      const mergedStates: Record<string, MatchStateDTO> = {};
-
-      for (const [matchId, backendState] of Object.entries(backendStates)) {
-        const localState = localStates[matchId];
-        mergedStates[matchId] = {
-          ...backendState,
-          postponed: backendState.postponed ?? localState?.postponed,
-          playerConfirmations: backendState.playerConfirmations ?? localState?.playerConfirmations,
-        };
-      }
-
-      for (const [matchId, localState] of Object.entries(localStates)) {
-        if (!mergedStates[matchId]) {
-          mergedStates[matchId] = localState;
-        }
-      }
-
-      setMatchStates(mergedStates);
+      setMatchStates(mergeMatchStates(backendStates, localStates));
     } catch (error) {
       if (isTerminalPollError(error)) setTerminalFor(pollSource);
       console.error('Failed to load match states:', error);
@@ -121,34 +103,12 @@ export function useLiveTracking() {
         : await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
-      // Merge backend with local, preserving local-only fields
-      const mergedStates: Record<string, MatchStateDTO> = {};
-
-      // Start with all backend states
-      for (const [matchId, backendState] of Object.entries(backendStates)) {
-        const localState = localStates[matchId];
-        mergedStates[matchId] = {
-          ...backendState,
-          // Preserve local-only fields if backend doesn't have them
-          postponed: backendState.postponed ?? localState?.postponed,
-          playerConfirmations: backendState.playerConfirmations ?? localState?.playerConfirmations,
-        };
-      }
-
-      // Also include any local states that aren't in backend
-      for (const [matchId, localState] of Object.entries(localStates)) {
-        if (!mergedStates[matchId]) {
-          mergedStates[matchId] = localState;
-        }
-      }
-
-      setMatchStates(mergedStates);
-      setLastSynced(new Date().toISOString());
+      setMatchStates(mergeMatchStates(backendStates, localStates));
     } catch (error) {
       if (isTerminalPollError(error)) setTerminalFor(pollSource);
       console.error('Failed to sync match states:', error);
     }
-  }, [setMatchStates, setLastSynced, tid, tokenMode, displayToken, pollSource]);
+  }, [setMatchStates, tid, tokenMode, displayToken, pollSource]);
 
   // Lifecycle wiring — declared AFTER `loadMatchStates` / `syncMatchStates`
   // so the useEffect callbacks don't hit the temporal dead zone on the

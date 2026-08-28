@@ -3,7 +3,7 @@
  * visibility gate (perf pass 1) and the terminal-error stop. Only that
  * interval is in scope here.
  *
- * Perf pass 2 removed the 1s wall-clock tick (`setCurrentTime`) entirely —
+ * Perf pass 2 removed the 1s wall-clock tick entirely —
  * see `useLiveTracking.clock.test.tsx` for the regression test proving it's
  * gone.
  */

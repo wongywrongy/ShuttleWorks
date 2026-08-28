@@ -106,8 +106,6 @@ const ALIASES: Record<string, string> = {
 const UNPAIRED: Record<string, string> = {
   SetScore:
     'Client-local set score. Wire candidate twin `MatchScore` is field-identical ({sideA, sideB}); aliasing it is a naming ruling and is deliberately not forced in P0.',
-  LiveScheduleState:
-    'Client-local aggregate (currentTime + a matchId->MatchStateDTO map + lastSynced) assembled by the polling hooks; the wire never sends this envelope.',
   SolverProgressEvent:
     'SSE payload for the solver-progress stream. OpenAPI models the ROUTE, not the event bodies, so there is no schema to pair against.',
   SolverModelBuiltEvent:
@@ -151,7 +149,7 @@ const key = (e: { shape: string; field: string; side: string }) => `${e.shape}.$
 
 describe('console DTO parity oracle', () => {
   it('parses both files (guards the parsers themselves)', () => {
-    // Actuals today: 177 generated schemas, 63 hand shapes, 56 pairs.
+    // Actuals today: 177 generated schemas, 62 hand shapes, 56 pairs.
     // `hand` and `pairs` each dropped by one in SP-DM-3 P1:
     // `MeetStandingRowDTO` became a generated alias, so `parseHand`
     // correctly no longer sees it (an alias line has no `{`).
@@ -162,7 +160,7 @@ describe('console DTO parity oracle', () => {
     // A floor sits AT or BELOW the actual by design - it exists to catch a
     // parser that stopped seeing things, not to freeze the count.
     expect(Object.keys(generated).length).toBeGreaterThanOrEqual(175);
-    expect(Object.keys(hand).length).toBeGreaterThanOrEqual(63);
+    expect(Object.keys(hand).length).toBeGreaterThanOrEqual(62);
     // Every `export interface` HAS a body, so every one must have parsed -
     // a silently skipped shape is the parser's only fail-dangerous mode.
     for (const [, name] of handSource.matchAll(/^export interface ([A-Za-z_][A-Za-z0-9_]*)/gm)) {

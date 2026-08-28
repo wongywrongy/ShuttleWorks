@@ -40,7 +40,7 @@ frontend/src/
 │   ├── domain/               # module model (moduleModel, useWorkspaceModules)
 │   ├── auth/                 # LoginPage, InvitePage
 │   └── settings/             # shared settings primitives
-├── components/               # shared UI incl. control-plane/ (MetricStat / HealthDot / OverflowMenu / SectionCard / …)
+├── components/               # shared UI incl. control-plane/ (HealthDot / OverflowMenu / SectionCard / …)
 ├── hooks/                    # data + UI hooks (see frontend/src/hooks/README.md)
 ├── store/                    # Zustand stores (see frontend/src/store/README.md)
 ├── api/                      # axios client + DTO types (see frontend/src/api/README.md)

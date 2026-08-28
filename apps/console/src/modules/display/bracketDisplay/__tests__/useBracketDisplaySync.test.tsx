@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useBracketDisplaySync } from '../useBracketDisplaySync';
 import { apiClient } from '../../../../api/client';
@@ -42,6 +42,46 @@ describe('useBracketDisplaySync', () => {
     await waitFor(() => expect(result.current.data).not.toBeNull());
     expect(apiClient.getBracket).toHaveBeenCalledWith('t1');
     expect(result.current.syncError).toBeNull();
+  });
+
+  it('keeps the prior DTO reference when a successful poll is unchanged', async () => {
+    vi.useFakeTimers();
+    try {
+      const first = { ...emptyBracket };
+      const unchanged = { ...emptyBracket };
+      vi.mocked(apiClient.getBracket)
+        .mockResolvedValueOnce(first as never)
+        .mockRejectedValueOnce(new Error('Connection lost'))
+        .mockResolvedValueOnce(unchanged as never);
+      let now = new Date(0);
+      const { result, rerender } = renderHook(() => useBracketDisplaySync(now), {
+        wrapper: wrap('t-unchanged'),
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const prior = result.current.data;
+      expect(prior).toBe(first);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      now = new Date(10_000);
+      rerender();
+      expect(result.current.syncError).toBe('Connection lost');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      now = new Date(20_000);
+      rerender();
+      expect(result.current.data).toBe(prior);
+      expect(result.current.freshness).toBe('live');
+      expect(result.current.syncError).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('surfaces the missing-id error and does not poll', async () => {

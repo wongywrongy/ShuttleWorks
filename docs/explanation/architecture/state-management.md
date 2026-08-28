@@ -56,7 +56,7 @@ silently wipes the proposal-commit audit trail and the Run gate. See `snapshot()
 Owns live-ops state and the optimistic command machinery. It is written immediately on every
 transition (no debounce) because the mutations carry operator intent that must not be lost:
 
-- `matchStates` snapshots + the derived `liveState` (with `setCurrentTime` / `setLastSynced`).
+- `matchStates` snapshots, including the local optimistic command state.
 - `pendingCommandsByMatchId` — every match with an in-flight idempotent command;
   `applyOptimisticStatus` is the write-through path during an optimistic apply (the canonical server
   state lands later via `setMatchState`).

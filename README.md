@@ -173,7 +173,7 @@ apps/
 │       │                      bracket, operations (live-ops), display, settings, entries
 │       ├── platform/          cross-module: product-shell (workspace chrome + nav model),
 │       │                      domain (module model), contracts, auth, settings
-│       ├── components/        shared UI incl. control-plane/ (MetricStat / HealthDot /
+│       ├── components/        shared UI incl. control-plane/ (HealthDot /
 │       │                      OverflowMenu / SectionCard / EmptyState / Skeleton)
 │       └── api / store / hooks / lib …
 ├── entrant/                   PUBLIC tier — React Router 7 SSR, zero client JS, under /e/

@@ -19,7 +19,7 @@ Package: `@scheduler/design-system` (private, ESM). Exports:
   ("Swiss Industrial Print") + dark ("Tactical Telemetry") schemes.
 - **Components** (`components/index.ts`): `PageHeader`, `Card` (+ `CardHeader`,
   `CardFooter`, `CardTitle`, `CardDescription`, `CardContent`), `Input`, `Label`,
-  `Select`, `Button`, `Modal`, `Hint`, `Separator`, `StatusPill`, `StatusBar`
+  `Select`, `Button`, `Modal`, `Separator`, `StatusPill`, `StatusBar`
   (+ `StatusCount`), `Toast` (+ `ToastStack`), `GanttTimeline` (+ `GANTT_GEOMETRY`,
   `placementBox`).
 - **Tailwind preset** (`tailwind-preset.js`): maps tokens → Tailwind theme.

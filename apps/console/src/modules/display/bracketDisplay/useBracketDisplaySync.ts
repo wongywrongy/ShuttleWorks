@@ -20,6 +20,12 @@ import { deriveFreshness, type FreshnessState } from '../publicDisplay/freshness
 
 const POLL_MS = 10_000;
 
+/** Match `useBracket`'s bounded JSON comparison for polled DTOs. */
+function dtoEqual(a: BracketTournamentDTO | null, b: BracketTournamentDTO | null): boolean {
+  if (a === b) return true;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export interface UseBracketDisplaySyncResult {
   data: BracketTournamentDTO | null;
   freshness: FreshnessState;
@@ -56,7 +62,9 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
           ? await apiClient.getDisplayBracket(token)
           : await apiClient.getBracket(tid as string);
         if (cancelled) return;
-        if (remote) setData(remote);
+        if (remote) {
+          setData((previous) => (dtoEqual(remote, previous) ? previous : remote));
+        }
         setLastSyncMs(Date.now());
         setSyncError(null);
       } catch (err) {

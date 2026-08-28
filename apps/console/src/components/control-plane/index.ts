@@ -1,5 +1,4 @@
 export { Eyebrow } from './Eyebrow';
-export { MetricStat } from './MetricStat';
 export { HealthDot, healthColorClass, HEALTH_WORD, HEALTH_LEGEND } from './HealthDot';
 export { EmptyState } from './EmptyState';
 export { Skeleton } from './Skeleton';

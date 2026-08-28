@@ -3,7 +3,6 @@
  *
  * Phase-4 primitives. More to come in subsequent passes:
  *   - Modal (depends on @radix-ui/react-dialog)
- *   - Hint  (depends on @phosphor-icons/react)
  *   - Toast (notification stack)
  *
  * All exports here are framework-agnostic React components that consume
@@ -33,7 +32,6 @@ export {
 } from './StatusBar';
 export { Modal } from './Modal';
 export { Notice, type NoticeProps, type NoticeTone } from './Notice';
-export { Hint, useHint } from './Hint';
 export { Toast, ToastStack, type ToastData, type ToastLevel } from './Toast';
 export {
   GanttTimeline,

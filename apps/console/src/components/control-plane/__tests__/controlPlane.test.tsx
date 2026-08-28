@@ -1,14 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MetricStat, HealthDot, EmptyState, Skeleton, SectionCard, healthColorClass } from '../index';
+import { HealthDot, EmptyState, Skeleton, SectionCard, healthColorClass } from '../index';
 
 describe('control-plane primitives', () => {
-  it('MetricStat shows label + value', () => {
-    render(<MetricStat label="Active" value={3} testId="m-active" />);
-    // Eyebrow renders the label uppercased (design grammar).
-    expect(screen.getByTestId('m-active')).toHaveTextContent('ACTIVE');
-    expect(screen.getByTestId('m-active')).toHaveTextContent('3');
-  });
   it('healthColorClass maps health to a token class', () => {
     // good → live-green (dashboard redesign; was accent-azure), attention → amber.
     expect(healthColorClass('good')).toContain('live');

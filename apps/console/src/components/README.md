@@ -25,7 +25,6 @@ components/
 │   └── LockRibbon.tsx    # tiered lock chip (soft: edits clear schedule / hard: read-only, draw in play)
 ├── AppStatusPopover.tsx  # header status popover (last save, backups, etc.)
 ├── ErrorBoundary.tsx
-├── Hint.tsx              # dismissible inline tooltip / hint card
 ├── InlineSearch.tsx      # search input wired to useSearchParamState
 ├── SchoolDot.tsx         # per-school accent dot (uses lib/schoolAccent.ts)
 ├── SolverHud.tsx         # docked solver HUD shown above schedule + live tabs

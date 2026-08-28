@@ -19,13 +19,12 @@ import { useMatchStateStore } from '../store/matchStateStore';
 import { apiClient } from '../api/client';
 import { isTerminalPollError } from '../lib/pollPolicy';
 import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
-import type { MatchStateDTO } from '../api/dto';
+import { mergeMatchStates } from '../lib/mergeMatchStates';
 
 const POLL_MS = 5000;
 
 export function useMatchStateSync(tid: string | null | undefined): void {
   const setMatchStates = useMatchStateStore((s) => s.setMatchStates);
-  const setLastSynced = useMatchStateStore((s) => s.setLastSynced);
   // Set when a poll hits a terminal error (workspace deleted / access
   // revoked) — retrying every 5s can never succeed, so the loop stops.
   const stoppedRef = useRef(false);
@@ -36,24 +35,7 @@ export function useMatchStateSync(tid: string | null | undefined): void {
       const backendStates = await apiClient.getMatchStates(tid);
       const localStates = useMatchStateStore.getState().matchStates;
 
-      // Backend wins; local-only fields (postpone flag, confirmations) ride
-      // along; local entries the backend doesn't know yet are kept.
-      const merged: Record<string, MatchStateDTO> = {};
-      for (const [matchId, backendState] of Object.entries(backendStates)) {
-        const localState = localStates[matchId];
-        merged[matchId] = {
-          ...backendState,
-          postponed: backendState.postponed ?? localState?.postponed,
-          playerConfirmations:
-            backendState.playerConfirmations ?? localState?.playerConfirmations,
-        };
-      }
-      for (const [matchId, localState] of Object.entries(localStates)) {
-        if (!merged[matchId]) merged[matchId] = localState;
-      }
-
-      setMatchStates(merged);
-      setLastSynced(new Date().toISOString());
+      setMatchStates(mergeMatchStates(backendStates, localStates));
     } catch (err) {
       if (isTerminalPollError(err)) {
         // Workspace gone / access revoked — stop the loop for good.
@@ -63,7 +45,7 @@ export function useMatchStateSync(tid: string | null | undefined): void {
       // Transient failure is non-fatal — the next tick retries; the API
       // client's interceptor already surfaces persistent backend failures.
     }
-  }, [tid, setMatchStates, setLastSynced]);
+  }, [tid, setMatchStates]);
 
   useEffect(() => {
     stoppedRef.current = false; // new tid → fresh start
