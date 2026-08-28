@@ -47,4 +47,17 @@
     references while successful polls still advance freshness.
   - Independent review found two false-positive tests; both were mutation-fixed,
     and duplicate DTO equality logic was centralized.
-- Task E2E: in progress
+- Task E2E: complete
+  - Pruned nine stale browser specs and their stale-only fixtures after mapping
+    unique behavior to maintained owners.
+  - The entrant evidence and operator interaction smoke specs are now the two
+    explicit browser workflow owners.
+- Task 4: complete
+  - Bounded the shared in-process bracket/display cache at 256 entries with
+    deterministic expiry and oldest-entry eviction.
+  - Reduced five-event hydration from 16 bracket-table reads to 4; the cold
+    five-event route now performs 4 bracket reads and 7 total SELECTs.
+  - Constrained tournament listing in SQL to the caller's membership ids.
+  - Reduced Entries bracket-event reads from N distinct draws to one per retry.
+  - Focused suites passed 286 tests; the full non-slow backend unit gate passed
+    1,015 tests with 65 expected skips.
