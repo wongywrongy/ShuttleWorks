@@ -86,4 +86,4 @@ appropriate full-stack verification for that owner.
 
 Initial pruning commit: `3347effb`
 
-Review-fix implementation SHA: pending
+Review-fix implementation SHA: `d3775c3c`
