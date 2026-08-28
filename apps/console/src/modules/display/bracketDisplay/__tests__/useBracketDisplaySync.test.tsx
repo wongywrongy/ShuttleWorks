@@ -53,7 +53,8 @@ describe('useBracketDisplaySync', () => {
         .mockResolvedValueOnce(first as never)
         .mockRejectedValueOnce(new Error('Connection lost'))
         .mockResolvedValueOnce(unchanged as never);
-      let now = new Date(0);
+      vi.setSystemTime(new Date(0));
+      let now = new Date();
       const { result, rerender } = renderHook(() => useBracketDisplaySync(now), {
         wrapper: wrap('t-unchanged'),
       });
@@ -67,14 +68,15 @@ describe('useBracketDisplaySync', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(10_000);
       });
-      now = new Date(10_000);
+      now = new Date();
       rerender();
       expect(result.current.syncError).toBe('Connection lost');
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(10_000);
       });
-      now = new Date(20_000);
+      vi.setSystemTime(new Date(30_000));
+      now = new Date();
       rerender();
       expect(result.current.data).toBe(prior);
       expect(result.current.freshness).toBe('live');

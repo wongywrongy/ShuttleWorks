@@ -41,14 +41,9 @@ import { isTerminalPollError } from '../lib/pollPolicy';
 import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { useTournamentId } from './useTournamentId';
 import type { BracketTournamentDTO } from '../api/bracketDto';
+import { contentEqual } from '../lib/contentEqual';
 
 const POLL_MS = 2500;
-
-/** Bounded DTO — cheap to stringify at most once per poll tick (2.5s). */
-function dtoEqual(a: BracketTournamentDTO | null, b: BracketTournamentDTO | null): boolean {
-  if (a === b) return true;
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 type BracketGetFn = () => Promise<BracketTournamentDTO | null>;
 
@@ -166,7 +161,7 @@ async function runFetch(e: PollEntry): Promise<void> {
     // Content-guard: an unchanged DTO keeps the OLD reference so every
     // subscriber's snapshot stays reference-identical and React bails on
     // the re-render. Only replace `data` when the content actually moved.
-    if (!dtoEqual(d, e.data)) e.data = d;
+    if (!contentEqual(d, e.data)) e.data = d;
     e.error = null;
     if (d == null) {
       // No draw configured yet — pause to stop the repeated 404 network

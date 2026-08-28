@@ -16,15 +16,10 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../../api/client';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import { isTerminalPollError } from '../../../lib/pollPolicy';
+import { contentEqual } from '../../../lib/contentEqual';
 import { deriveFreshness, type FreshnessState } from '../publicDisplay/freshness';
 
 const POLL_MS = 10_000;
-
-/** Match `useBracket`'s bounded JSON comparison for polled DTOs. */
-function dtoEqual(a: BracketTournamentDTO | null, b: BracketTournamentDTO | null): boolean {
-  if (a === b) return true;
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 export interface UseBracketDisplaySyncResult {
   data: BracketTournamentDTO | null;
@@ -63,7 +58,7 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
           : await apiClient.getBracket(tid as string);
         if (cancelled) return;
         if (remote) {
-          setData((previous) => (dtoEqual(remote, previous) ? previous : remote));
+          setData((previous) => (contentEqual(remote, previous) ? previous : remote));
         }
         setLastSyncMs(Date.now());
         setSyncError(null);

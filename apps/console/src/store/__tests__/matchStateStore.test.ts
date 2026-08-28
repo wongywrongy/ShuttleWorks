@@ -35,6 +35,21 @@ describe('matchStateStore — initial / reset', () => {
     expect(s.pendingCommandsByMatchId).toEqual({});
     expect(s.recentConflictsByMatchId).toEqual({});
     expect(s.canonicalVersionsByMatchId).toEqual({});
+    expect(Object.keys(s).sort()).toEqual([
+      'applyOptimisticStatus',
+      'canonicalVersionsByMatchId',
+      'clearPendingCommand',
+      'dismissConflict',
+      'matchStates',
+      'pendingCommandsByMatchId',
+      'recentConflictsByMatchId',
+      'recordConflict',
+      'reset',
+      'setMatchState',
+      'setMatchStates',
+      'setMatchVersion',
+      'setPendingCommand',
+    ]);
   });
 
   it('reset() clears every consumed map', () => {
