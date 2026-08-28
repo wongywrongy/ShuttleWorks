@@ -32,12 +32,26 @@ function recipeCommands(makefile: string, target: string): string[] {
 }
 
 function entrantTestsContainingCreateServer(): string[] {
-  const testDir = join(REPO_ROOT, 'apps/entrant/tests');
-  return readdirSync(testDir)
-    .filter((name) => name.endsWith('.test.ts'))
-    .filter((name) => /\bcreateServer\s*\(\s*\{/.test(readFileSync(join(testDir, name), 'utf8')))
-    .map((name) => `tests/${name}`)
+  return entrantTestFiles()
+    .filter((name) =>
+      /\bcreateServer\s*\(\s*\{/.test(
+        readFileSync(join(REPO_ROOT, 'apps/entrant', name), 'utf8'),
+      ),
+    )
     .sort();
+}
+
+function entrantTestFiles(): string[] {
+  const testDir = join(REPO_ROOT, 'apps/entrant/tests');
+  const visit = (directory: string, prefix = ''): string[] =>
+    readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) return visit(path, relative);
+      return entry.isFile() && entry.name.endsWith('.test.ts') ? [`tests/${relative}`] : [];
+    });
+
+  return visit(testDir).sort();
 }
 
 test('each surface has a launch script named after it', () => {
@@ -82,10 +96,7 @@ test('exposes explicit entrant test tiers while retaining the complete suite', (
 });
 
 test('keeps the entrant SSR list tied to every createServer test and partitions all tests', () => {
-  const all = readdirSync(join(REPO_ROOT, 'apps/entrant/tests'))
-    .filter((name) => name.endsWith('.test.ts'))
-    .map((name) => `tests/${name}`)
-    .sort();
+  const all = entrantTestFiles();
   const ssr: string[] = [...SSR_TEST_FILES].sort();
   const discoveredSsr = entrantTestsContainingCreateServer();
   const unit = all.filter((name) => !ssr.includes(name));
@@ -153,7 +164,7 @@ test('installs e2e dependencies only through the explicit bootstrap target', () 
     const recipe = recipeCommands(makefile, target);
     expect(recipe.length).toBeGreaterThan(0);
     expect(recipe.some((line) => line.includes('npx playwright test'))).toBe(true);
-    expect(recipe).not.toContain('npm install');
+    expect(recipe.some((line) => line.includes('npm install'))).toBe(false);
   }
 });
 
