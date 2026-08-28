@@ -8,15 +8,23 @@
   poll installed a fresh DTO object.
 - The store absence test failed against a temporary baseline-shaped
   `liveState: null` entry, then passed after that entry was removed.
+- The strengthened bracket test failed under a temporary freshness-write
+  suppression (`delayed` instead of `live` at a fake 30-second clock).
+- The exact store-key assertion failed against the temporary baseline-shaped
+  store because it exposed `liveState`.
+- The shared `contentEqual` test initially failed because the helper did not
+  exist.
 - Focused green checks passed: 9 files, 41 tests; the final store/display
-  focused check passed 24 tests.
-- Full console suite passed: 206 files, 1,868 tests.
+  focused check passed 30 tests.
+- Final full console suite passed: 207 files, 1,870 tests.
 
 ## Implementation
 
 - Added pure `mergeMatchStates(backend, local)` and used it in both polling
   hooks. Backend fields win; `postponed`, `playerConfirmations`, and local-only
   rows are retained.
+- Extracted the shared generic `contentEqual` JSON comparison used by both
+  bracket polling hooks, preserving `useBracket`'s prior semantics.
 - Removed the dead `liveState`, `buildLiveState`, `setLastSynced`, and
   `LiveScheduleState` aggregate/type. `setMatchStates` remains a
   content-equality, reference-preserving no-op for unchanged data.
@@ -43,7 +51,7 @@ clear an earlier error.
 
 ## Verification
 
-- `npm --prefix apps/console run test:run`: pass, 206 files / 1,868 tests.
+- `npm --prefix apps/console run test:run`: pass, 207 files / 1,870 tests.
 - Focused `test:run` checks: pass, including DTO parity, merge helper, store,
   polling, clock, local-field, visibility, and bracket-display tests.
 - `npm --prefix apps/console run lint`: exit 0; repository retains its
@@ -59,3 +67,4 @@ clear an earlier error.
 ## Commit
 
 Implementation commit: `af74105e` (`refactor console polling and remove dead frontend code`).
+Review follow-up commit: `29367620` (`test shared polling equality and freshness`).
