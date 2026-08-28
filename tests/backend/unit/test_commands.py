@@ -151,6 +151,38 @@ def test_idempotent_replay_returns_same_state_no_double_write(client, tid):
     assert second_body["replay"] is True
 
 
+def test_apply_and_replay_preserve_commit_ownership(client, tid, monkeypatch):
+    """Fresh apply commits once; an idempotent replay remains read-only."""
+    _seed_match(client, tid)
+    command_id = uuid.uuid4()
+
+    from sqlalchemy.orm import Session as _Session
+
+    original_commit = _Session.commit
+    commits = {"count": 0}
+
+    def counted_commit(self):
+        commits["count"] += 1
+        return original_commit(self)
+
+    monkeypatch.setattr(_Session, "commit", counted_commit)
+
+    first = client.post(
+        _commands_url(tid),
+        json=_new_command_body(cmd_id=command_id, seen_version=1),
+    )
+    assert first.status_code == 200, first.text
+    assert commits["count"] == 1
+
+    replay = client.post(
+        _commands_url(tid),
+        json=_new_command_body(cmd_id=command_id, seen_version=1),
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["replay"] is True
+    assert commits["count"] == 1
+
+
 # ---- 3. Stale version -----------------------------------------------------
 
 
@@ -173,6 +205,29 @@ def test_stale_version_is_rejected_with_409_stale_version_body(client, tid):
     assert body["match_id"] == "m1"
     assert body["current_version"] == 2
     assert body["seen_version"] == 1
+
+
+def test_fresh_rejection_commits_once(client, tid, monkeypatch):
+    """A rejected command persists its audit row in one transaction."""
+    _seed_match(client, tid)
+
+    from sqlalchemy.orm import Session as _Session
+
+    original_commit = _Session.commit
+    commits = {"count": 0}
+
+    def counted_commit(self):
+        commits["count"] += 1
+        return original_commit(self)
+
+    monkeypatch.setattr(_Session, "commit", counted_commit)
+
+    rejected = client.post(
+        _commands_url(tid),
+        json=_new_command_body(action="finish_match", seen_version=1),
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert commits["count"] == 1
 
 
 # ---- 4. Invalid transition -----------------------------------------------
