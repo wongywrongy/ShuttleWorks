@@ -23,15 +23,6 @@ make stop               # stop the stack
 make help               # full target list
 ```
 
-```bash
-# From the repo root
-make run                # production-shape: build + start → http://localhost
-make dev                # backend in Docker, Vite dev server on :5173
-make logs               # tail the stack
-make rebuild            # nuclear rebuild when UI changes aren't showing up
-make stop
-```
-
 After it is up:
 
 | Surface | URL |
@@ -40,7 +31,7 @@ After it is up:
 | Frontend (dev, Vite + HMR) | <http://localhost:5173> |
 | Backend (FastAPI) | <http://localhost:8000> |
 | **Interactive API docs (Swagger UI)** | <http://localhost:8000/docs> |
-| Public TV display | `http://localhost/display?tournament_id=<id>` |
+| Public TV display | `http://localhost/display?token=<display-token>` |
 
 In dev, Vite proxies `/api/*` to the FastAPI container, so the front and back share an origin
 just as they do in production.
@@ -61,11 +52,11 @@ is deliberately **local only** — no nginx, no compose, no tunnel yet.
 ```bash
 # From the repo root
 make entrant-dev        # just the entrant site, on :5174, against a host backend on :8600
-make local-dev          # both frontends at once: operator :5173 + entrant :5174
+make full-dev           # both frontends at once: operator :5173 + entrant :5174
 ```
 
 Both targets assume a host backend is already running on `:8600` — they only launch frontends.
-`make local-dev` backgrounds the first server with `&`, so **run it from Git Bash**; under
+`make full-dev` backgrounds the first server with `&`, so **run it from Git Bash**; under
 `cmd.exe` `&` sequences instead of backgrounding and the operator SPA blocks forever.
 
 **Two backend variables, one per surface — swapping them fails silently.** The entrant SSR server
@@ -114,7 +105,7 @@ Postgres, `AUTH_MODE=cloud`, `SESSION_COOKIE_SECURE=true`, and SMTP — see
 
 ```bash
 # Backend + solver unit tests — from the repo root
-pip install -r backend/requirements-dev.txt    # one-time (pulls in pytest + httpx)
+pip install -r apps/api/requirements-dev.txt  # one-time (pulls in pytest + httpx)
 pytest
 
 # Frontend unit/component tests — from apps/console/
@@ -131,11 +122,19 @@ npm run test:entrant       # every entrant test
 make check-fast            # iteration-sized lint, type, unit, and backend checks
 make check                 # complete local compatibility gate
 
-# End-to-end (Playwright against the compose stack) — from the repo root
+# End-to-end (Playwright; maintained owners run serially) — from the repo root
 make test-e2e-install   # one-time, downloads browsers
-make test-e2e           # boots stack, runs specs, tears down
-make test-e2e-dev       # run against `make dev` on :5173
+make test-e2e           # entrant evidence only; boots compose stack, then tears down
+make test-e2e-rebuild   # entrant evidence only; forces an image rebuild
+make full-dev           # operator :5173 + entrant :5174 (backend on :8600)
+make test-e2e-dev       # entrant evidence against those dev origins
 ```
+
+| Workflow | Owner | Runner and prerequisite |
+| --- | --- | --- |
+| Public entrant layout, IA, CSP and headers | `10-entrant-r11-evidence.spec.ts` | `make test-e2e` on managed compose, or `make test-e2e-dev` after `make full-dev` |
+| Operator/Operations interactions, viewer lockout and public display | `interaction-smoke.spec.ts` | CI only, with the prepared harness build and seeded IDs/token |
+| Backend state, solving, import and persistence | Backend/unit suites | `make check` and focused backend tests |
 
 ## This documentation site
 

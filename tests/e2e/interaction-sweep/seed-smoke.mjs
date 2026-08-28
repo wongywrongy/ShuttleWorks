@@ -18,6 +18,7 @@
  * Output is `key=value` lines — directly appendable to $GITHUB_OUTPUT:
  *   tid=<uuid>
  *   viewerTid=<uuid>
+ *   displayToken=<capability-token>
  *
  * Usage: node seed-smoke.mjs [apiBase]   # default http://localhost:8600
  */
@@ -143,6 +144,15 @@ async function seedWorkspace(name) {
 
 const tid = await seedWorkspace('Interaction smoke');
 const viewerTid = await seedWorkspace('Interaction smoke (viewer)');
+const displayResponse = await fetch(`${API}/tournaments/${tid}/display-token`);
+if (!displayResponse.ok) {
+  throw new Error(`GET /tournaments/${tid}/display-token → ${displayResponse.status}`);
+}
+const { token: displayToken } = await displayResponse.json();
+if (typeof displayToken !== 'string' || !displayToken) {
+  throw new Error('display token response did not contain a token');
+}
 
 console.log(`tid=${tid}`);
 console.log(`viewerTid=${viewerTid}`);
+console.log(`displayToken=${displayToken}`);

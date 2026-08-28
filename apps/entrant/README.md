@@ -19,12 +19,12 @@ From the repo root:
 
 ```bash
 make entrant-dev     # this app alone, on :5174, against a host backend on :8600
-make local-dev       # both surfaces at once: operator :5173 + entrant :5174
+make full-dev        # both surfaces at once: operator :5173 + entrant :5174
 ```
 
 Either way, **start the backend first** — a host `uvicorn app.main:app --port 8600` from
-`apps/api` with the repo `.venv` active. `make entrant-dev` and `make local-dev`
-only launch the frontend surfaces. `make local-dev` backgrounds with `&`, so **run it from Git
+`apps/api` with the repo `.venv` active. `make entrant-dev` and `make full-dev`
+only launch the frontend surfaces. `make full-dev` backgrounds with `&`, so **run it from Git
 Bash** (under `cmd.exe` `&` sequences instead of backgrounding and the first server blocks forever).
 
 Stop the Docker stack first: see the Docker-vs-host-backend trap in
@@ -37,9 +37,9 @@ The two surfaces read **different** variables, and swapping them fails silently:
 | Variable | Read by | Effect |
 | --- | --- | --- |
 | `API_BASE_URL` | this app's SSR server (`app/lib/apiFetch.server.ts`) | The API origin. Unset **throws** — every API-backed route 500s. |
-| `VITE_API_PROXY_TARGET` | the operator SPA only (`frontend/vite.config.ts`) | Retargets the SPA's `/api` dev proxy. Does nothing here. |
+| `VITE_API_PROXY_TARGET` | the operator SPA only (`apps/console/vite.config.ts`) | Retargets the SPA's `/api` dev proxy. Does nothing here. |
 
-`make entrant-dev` sets `API_BASE_URL=http://localhost:8600`; `make local-dev` sets that plus
+`make entrant-dev` sets `API_BASE_URL=http://localhost:8600`; `make full-dev` sets that plus
 `VITE_API_PROXY_TARGET=http://localhost:8600` for the SPA.
 
 ## Tests

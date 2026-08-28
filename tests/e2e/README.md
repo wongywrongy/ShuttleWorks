@@ -1,15 +1,17 @@
 # e2e — Playwright tests
 
-End-to-end tests for the tournament scheduler. Runs against the
-nginx-served Docker build (what actually ships), not the Vite dev
-server.
+End-to-end tests for the tournament scheduler. The maintained browser coverage
+has two owners with separate runners: entrant layout evidence runs against the
+managed compose stack, while operator/Operations interaction smoke runs against
+a prepared harness-enabled preview fixture in CI.
 
 ## Two test layers — both required
 
-| layer | validates | where |
+| layer | validates | owner and runner |
 |---|---|---|
-| **unit** (vitest) | LOGIC — a reducer, a selector, a component given props | `frontend/src/**/__tests__` |
-| **interaction smoke** | that PRESSING the UI in a real composition doesn't break | `tests/interaction-smoke.spec.ts` |
+| **unit** (vitest) | LOGIC — a reducer, a selector, a component given props | `apps/console/src/**/__tests__`, `apps/entrant/tests/` |
+| **entrant evidence** | public entrant layout, IA, CSP and security headers at real widths | `tests/10-entrant-r11-evidence.spec.ts`, managed compose / local dev origins |
+| **interaction smoke** | operator/Operations UI presses, live transitions, viewer read-only behavior and public display | `tests/interaction-smoke.spec.ts`, CI prepared fixture |
 
 The interaction layer exists because the unit layer **structurally cannot** catch
 its bug class: unit tests mock the handlers and the stores, so a component can be
@@ -26,25 +28,25 @@ every interactive element: `docs/history/programs/design-plan/INTERACTION_INVENT
 
 ### Running the interaction smoke suite
 
-It asserts on the **error harness** (`frontend/src/platform/errorHarness.ts`),
+It asserts on the **error harness** (`apps/console/src/platform/errorHarness.ts`),
 which must be compiled in — that's what lets a failure name the button that broke
 instead of just "something threw".
 
 ```bash
-# 1. seed the fixtures — prints `tid=…` and `viewerTid=…`
-node interaction-sweep/seed-smoke.mjs http://localhost:8600
+# 1. seed the fixtures — prints `tid=…`, `viewerTid=…` and `displayToken=…`
+node tests/e2e/interaction-sweep/seed-smoke.mjs http://localhost:8600
 
 # 2. there is no HTTP path to a viewer role (the creator is always written as
 #    `owner`, and no endpoint mutates a member's role), so the fixture writes
 #    the row the API won't. Run it AFTER seeding, never before.
-python interaction-sweep/make-viewer.py ../backend/local.db <viewerTid>
+python tests/e2e/interaction-sweep/make-viewer.py apps/api/src/smoke.db <viewerTid>
 
-# 3. the suite asserts on the error harness (frontend/src/platform/errorHarness.ts),
+# 3. the suite asserts on the error harness (apps/console/src/platform/errorHarness.ts),
 #    which must be compiled in — that's what lets a failure name the button that
 #    broke instead of just "something threw".
-VITE_ERROR_HARNESS=1 npm --prefix ../frontend run build
+VITE_ERROR_HARNESS=1 npm --prefix apps/console run build
 E2E_BASE_URL=http://localhost:4173 SMOKE_TID=<tid> SMOKE_VIEWER_TID=<viewerTid> \
-  npx playwright test tests/interaction-smoke.spec.ts
+SMOKE_DISPLAY_TOKEN=<displayToken> npm run test:interaction-smoke
 ```
 
 - `SMOKE_TID` — **required**. It used to default to a hardcoded id, and that
@@ -55,6 +57,9 @@ E2E_BASE_URL=http://localhost:4173 SMOKE_TID=<tid> SMOKE_VIEWER_TID=<viewerTid> 
   green when its fixture is missing is worse than no gate.
 - `SMOKE_VIEWER_TID` — a workspace the caller only has `viewer` on (step 2). The
   viewer-gating test skips without it; CI always sets it.
+- `SMOKE_DISPLAY_TOKEN` — a capability token for the seeded owner workspace;
+  the display flow fails fast without it and verifies the live board plus the
+  deterministic invalid-link terminal state.
 
 Note `vite preview` binds IPv6 — reach it as `localhost`, not `127.0.0.1`.
 
@@ -89,16 +94,18 @@ node interaction-sweep/analyze.mjs        # triage table
 ## Run
 
 ```bash
-# from repo root
-make test-e2e            # docker compose up -d + tests + down
-make test-e2e-rebuild    # force rebuild of images first
-make test-e2e-dev        # point tests at Vite dev (http://localhost:5173) — requires `make dev` running
+# from repo root; these run serially because the Playwright config has one worker
+make test-e2e            # entrant evidence only; managed compose stack
+make test-e2e-rebuild    # entrant evidence only; force image rebuild first
+make full-dev            # operator :5173 + entrant :5174 (backend must be on :8600)
+make test-e2e-dev        # entrant evidence against those dev origins
 
 # or directly
-cd e2e
+cd tests/e2e
 npm ci
 npx playwright install --with-deps chromium
-npm test
+npm run test:entrant-evidence
+npm run test:interaction-smoke  # only with the prepared harness fixture
 ```
 
 ## Environment variables
@@ -106,6 +113,7 @@ npm test
 | var | default | effect |
 |---|---|---|
 | `E2E_BASE_URL` | `http://localhost` | frontend origin under test |
+| `E2E_PLAY_BASE_URL` | `http://localhost:8081` | entrant origin for the evidence spec |
 | `E2E_MANAGE_STACK` | `1` | set `0` to skip `docker-compose up/down` (use when stack is already running) |
 | `E2E_REBUILD` | `0` | set `1` to force `--build` on compose up |
 | `E2E_KEEP_STACK` | `0` | set `1` to skip `docker-compose down` on teardown |
@@ -113,20 +121,17 @@ npm test
 ## Layout
 
 ```
-e2e/
+tests/e2e/
 ├── global-setup.ts       # docker-compose up + health probe
 ├── global-teardown.ts    # docker-compose down
 ├── playwright.config.ts
-├── fixtures/             # canned tournaments + helpers
+├── interaction-sweep/       # prepared fixture seed and diagnostic crawler
 └── tests/
-    ├── 00-sanity.spec.ts                # shell, tabs, /display, /health
-    ├── 02-inline-roster.spec.ts         # add school + player without dialogs
-    ├── 03-auto-generate-matches.spec.ts # inline auto-gen flow
-    ├── 04-solve-happy-path.spec.ts      # SSE HUD populates from /schedule/stream
-    ├── 05-drag-reschedule.spec.ts       # feasible drop pins + re-solves; conflict shows infeasible
-    ├── 06-persistence.spec.ts           # /tournament-state survives a reload
-    └── 07-schedule-xlsx-import.spec.ts  # disaster-recovery import path
+    ├── 10-entrant-r11-evidence.spec.ts  # public entrant compose/dev evidence
+    └── interaction-smoke.spec.ts        # CI-owned operator/Operations smoke
 ```
 
-The numeric prefix is sort-order only; specs are independent and
-Playwright runs them in parallel.
+The two maintained specs are invoked explicitly and serially by their owner
+scripts. The retired numbered operator specs and screenshot capture are not
+discovered by any runner; their unique behavior remains owned by backend/unit
+tests or the interaction smoke flows described above.

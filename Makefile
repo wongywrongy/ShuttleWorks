@@ -1,6 +1,6 @@
 .PHONY: help \
         scheduler scheduler-dev scheduler-rebuild \
-        entrant-dev local-dev \
+        entrant-dev full-dev local-dev \
         dev-postgres dev-postgres-stop \
         stop logs ps clean \
         test test-e2e test-e2e-install test-e2e-rebuild test-e2e-dev check check-full check-fast \
@@ -36,7 +36,7 @@ help:
 	@echo "  make scheduler-dev      API in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
 	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host API on :8600"
-	@echo "  make local-dev          Both surfaces at once: operator :5173 + entrant :5174"
+	@echo "  make full-dev           Both surfaces at once: operator :5173 + entrant :5174"
 	@echo "                          (local only — see docs/how-to/running-locally)"
 	@echo "  make dev-postgres       Local Postgres + API (exercise the cloud path)"
 	@echo "  make stop               Stop the dev-facing stacks (default, dev, cloud)"
@@ -45,8 +45,8 @@ help:
 	@echo ""
 	@echo "Tests:"
 	@echo "  make test               Run the backend pytest suite"
-	@echo "  make test-e2e           Run Playwright e2e (boots stack)"
-	@echo "  make test-e2e-dev       Run e2e against http://localhost:5173 (requires 'make scheduler-dev')"
+	@echo "  make test-e2e           Run entrant evidence against the managed compose stack"
+	@echo "  make test-e2e-dev       Run entrant evidence against dev origins (requires 'make full-dev')"
 	@echo "  make check              Run the complete local check gate"
 	@echo "  make check-full         Alias for the complete local check gate"
 	@echo "  make check-fast         Run the fast local feedback checks"
@@ -142,6 +142,10 @@ local-dev:  ## Run BOTH surfaces: operator console :5173 + public entrant site :
 	VITE_API_PROXY_TARGET=http://localhost:8600 npm run dev:scheduler -- --port 5173 & \
 	API_BASE_URL=http://localhost:8600 npm run dev:entrant -- --port 5174
 
+# Explicit name used by the e2e developer runner and current docs. Keep the
+# old local-dev spelling as a compatibility alias for existing checkouts.
+full-dev: local-dev
+
 # `stop` covers the stacks a developer actually starts on this machine.
 # The selfhost and worker stacks run on servers, are started with an
 # explicit -f, and are listed in `help` rather than torn down from here:
@@ -167,13 +171,13 @@ test-e2e-install:
 	cd tests/e2e && npm install && npx playwright install --with-deps chromium
 
 test-e2e:
-	cd tests/e2e && npx playwright test
+	cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 npm run test:entrant-evidence
 
 test-e2e-rebuild:
-	cd tests/e2e && E2E_REBUILD=1 npx playwright test
+	cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 E2E_REBUILD=1 npm run test:entrant-evidence
 
 test-e2e-dev:
-	cd tests/e2e && E2E_BASE_URL=http://localhost:5173 E2E_MANAGE_STACK=0 npx playwright test
+	cd tests/e2e && E2E_BASE_URL=http://localhost:5173 E2E_PLAY_BASE_URL=http://localhost:5174 E2E_MANAGE_STACK=0 npm run test:entrant-evidence
 
 # === Tournament simulator (internal dev tool) ===
 # Full-tournament workflow simulation over the real HTTP API. NOT part of

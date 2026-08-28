@@ -298,7 +298,7 @@ jobs:
           #
           # Every real deployment already sets this (docker-compose*.yml pass
           # it as a build arg); only this job did not. It went unnoticed
-          # because a developer's untracked frontend/.env.local supplies
+          # because a developer's untracked apps/console/.env.local supplies
           # VITE_API_BASE_URL=/api, so local runs pass and CI does not.
           VITE_API_BASE_URL: /api
         run: npm run build
@@ -353,7 +353,8 @@ jobs:
           E2E_MANAGE_STACK: "0"
           SMOKE_TID: ${{ steps.seed.outputs.tid }}
           SMOKE_VIEWER_TID: ${{ steps.seed.outputs.viewerTid }}
-        run: npx playwright test tests/interaction-smoke.spec.ts
+          SMOKE_DISPLAY_TOKEN: ${{ steps.seed.outputs.displayToken }}
+        run: npm run test:interaction-smoke
 
       - name: Upload the failure trace
         if: failure()

@@ -44,6 +44,12 @@ if (!TID) {
     'SMOKE_TID is required — seed a workspace with e2e/interaction-sweep/seed-smoke.mjs first',
   );
 }
+const DISPLAY_TOKEN = process.env.SMOKE_DISPLAY_TOKEN;
+if (!DISPLAY_TOKEN) {
+  throw new Error(
+    'SMOKE_DISPLAY_TOKEN is required — seed a workspace with e2e/interaction-sweep/seed-smoke.mjs first',
+  );
+}
 
 type HarnessEvent = {
   kind: 'error' | 'unhandledrejection' | 'console.error' | 'boundary';
@@ -172,6 +178,20 @@ test.describe('interaction smoke — pressing the UI must not break it', () => {
 });
 
 test.describe('interaction smoke — real flows against real stores', () => {
+  test('the capability display shows live matches without operator chrome', async ({ page }) => {
+    await page.goto(`/display?token=${encodeURIComponent(DISPLAY_TOKEN)}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect(page.getByText('Player 2')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Player 6')).toBeVisible();
+    await expect(page.getByText('Configure display')).toHaveCount(0);
+    await expect(page.getByText('Open fullscreen')).toHaveCount(0);
+    await expect(page.getByText('Workspace')).toHaveCount(0);
+
+    await page.goto('/display?token=invalid-token', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('display-link-invalid')).toBeVisible({ timeout: 10_000 });
+  });
+
   test('the Run view offers only transitions the server accepts', async ({ page }) => {
     // Audit A1: the client's state machine was a superset of the backend's, so
     // Undo 409'd on every press behind a misleading "version mismatch" toast.

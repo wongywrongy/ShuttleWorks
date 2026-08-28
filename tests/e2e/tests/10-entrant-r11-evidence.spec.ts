@@ -56,7 +56,7 @@
  * form on the same document — which is the entire content of brief §3.
  *
  * 2. **CSP, enforced by a browser.** The policy comes from nginx
- *    (`frontend/security-headers.conf`), not from the app, so no dev server
+ *    (`infra/nginx/security-headers.conf`), not from the app, so no dev server
  *    and no unit test is ever sent one. `entry.render.test.ts` already
  *    proves the STRUCTURAL half in the gate — the rendered entry page
  *    contains no `<script>` at all, and a document with no scripts cannot
@@ -183,7 +183,7 @@ const PAGES = (slug: string) =>
  * in every test at once.
  *
  * **Once per file, not once per test, because nginx says so.**
- * `frontend/nginx.conf` rate-limits `/api/auth/` at `10r/m burst=5`. Signing
+ * `infra/nginx/console.conf` rate-limits `/api/auth/` at `10r/m burst=5`. Signing
  * in inside `seed()` put two auth requests in front of every test and the
  * later ones came back 429 from the edge before the backend ever saw them.
  * That limit is production's and is not the thing under test here, so the
@@ -529,7 +529,7 @@ test.describe('entrant app — R11 evidence', () => {
   /**
    * The Turnstile allowance is SCOPED, and this is what holds it there.
    *
-   * `$sw_turnstile_origin` (frontend/nginx.conf) adds
+   * `$sw_turnstile_origin` (`infra/nginx/security-headers.conf`) adds
    * challenges.cloudflare.com to `script-src`/`frame-src` on `/e/signup` and
    * nowhere else, because both tiers share one origin and the operator
    * console has no use for a third-party script host. Replacing the map's
@@ -630,7 +630,7 @@ test.describe('entrant app — R11 evidence', () => {
    * every deployed stack, and since R10 puts entry submission behind an
    * entrant session, no entrant could enter a tournament at all.
    *
-   * Fixed by `$sw_turnstile_origin` in `frontend/nginx.conf` — Cloudflare's
+   * Fixed by `$sw_turnstile_origin` in `infra/nginx/security-headers.conf` — Cloudflare's
    * documented `script-src`/`frame-src` requirement, scoped to this one path.
    *
    * The widget assertions are not decoration. Zero violations is satisfiable

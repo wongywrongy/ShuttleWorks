@@ -13,6 +13,10 @@ function entrantScripts(): Record<string, string> {
   return JSON.parse(readFileSync(join(REPO_ROOT, 'apps/entrant/package.json'), 'utf8')).scripts;
 }
 
+function e2eScripts(): Record<string, string> {
+  return JSON.parse(readFileSync(join(REPO_ROOT, 'tests/e2e/package.json'), 'utf8')).scripts;
+}
+
 function recipeCommands(makefile: string, target: string): string[] {
   const lines = makefile.split('\n');
   const start = lines.findIndex((line) => new RegExp(`^${target}:`).test(line));
@@ -54,6 +58,12 @@ function entrantTestFiles(): string[] {
   return visit(testDir).sort();
 }
 
+function e2eTestFiles(): string[] {
+  return readdirSync(join(REPO_ROOT, 'tests/e2e/tests'))
+    .filter((name) => name.endsWith('.spec.ts'))
+    .sort();
+}
+
 test('each surface has a launch script named after it', () => {
   const scripts = rootScripts();
   // The operator product and the public entrant site are launched by name.
@@ -80,7 +90,7 @@ test('the Makefile targets invoke the scripts that actually exist', () => {
   // behind the strip: a recipe line always begins with a TAB, never a `#`.
   const recipes = makefile.replace(/^\s*#.*$/gm, '');
   const invoked = [...recipes.matchAll(/npm run ([a-z:.-]+)/g)].map((m) => m[1]);
-  const missing = invoked.filter((name) => !(name in scripts));
+  const missing = invoked.filter((name) => !(name in scripts) && !(name in e2eScripts()));
   expect(missing).toEqual([]);
 });
 
@@ -163,9 +173,54 @@ test('installs e2e dependencies only through the explicit bootstrap target', () 
   for (const target of ['test-e2e', 'test-e2e-rebuild', 'test-e2e-dev']) {
     const recipe = recipeCommands(makefile, target);
     expect(recipe.length).toBeGreaterThan(0);
-    expect(recipe.some((line) => line.includes('npx playwright test'))).toBe(true);
+    expect(recipe.some((line) => line.includes('npm run test:entrant-evidence'))).toBe(true);
     expect(recipe.some((line) => line.includes('npm install'))).toBe(false);
   }
+});
+
+test('keeps e2e ownership explicit and excludes retired specs', () => {
+  const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
+  const e2e = e2eScripts();
+  const ci = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+  const seed = readFileSync(
+    join(REPO_ROOT, 'tests/e2e/interaction-sweep/seed-smoke.mjs'),
+    'utf8',
+  );
+  const interaction = readFileSync(
+    join(REPO_ROOT, 'tests/e2e/tests/interaction-smoke.spec.ts'),
+    'utf8',
+  );
+
+  expect(e2e['test:entrant-evidence']).toBe(
+    'playwright test tests/10-entrant-r11-evidence.spec.ts',
+  );
+  expect(e2e['test:interaction-smoke']).toBe(
+    'playwright test tests/interaction-smoke.spec.ts',
+  );
+
+  const managed = recipeCommands(makefile, 'test-e2e');
+  const rebuild = recipeCommands(makefile, 'test-e2e-rebuild');
+  const dev = recipeCommands(makefile, 'test-e2e-dev');
+  expect(managed).toEqual([
+    'cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 npm run test:entrant-evidence',
+  ]);
+  expect(rebuild).toEqual([
+    'cd tests/e2e && FRONTEND_HOST_PORT=8090 PLAY_HOST_PORT=8091 E2E_BASE_URL=http://localhost:8090 E2E_PLAY_BASE_URL=http://localhost:8091 E2E_REBUILD=1 npm run test:entrant-evidence',
+  ]);
+  expect(dev).toEqual([
+    'cd tests/e2e && E2E_BASE_URL=http://localhost:5173 E2E_PLAY_BASE_URL=http://localhost:5174 E2E_MANAGE_STACK=0 npm run test:entrant-evidence',
+  ]);
+  expect(makefile).toMatch(/test-e2e-dev.*make full-dev|make full-dev.*test-e2e-dev/s);
+
+  expect(e2eTestFiles()).toEqual([
+    '10-entrant-r11-evidence.spec.ts',
+    'interaction-smoke.spec.ts',
+  ]);
+  expect(interaction).toMatch(/SMOKE_TID is required/);
+  expect(interaction).toMatch(/SMOKE_DISPLAY_TOKEN is required/);
+  expect(seed).toMatch(/console\.log\(`displayToken=\$\{displayToken\}`\)/);
+  expect(ci).toContain('SMOKE_DISPLAY_TOKEN: ${{ steps.seed.outputs.displayToken }}');
+  expect(ci).toContain('npm run test:interaction-smoke');
 });
 
 /** The recipe lines of a Makefile target (everything indented under it). */
