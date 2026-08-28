@@ -61,3 +61,12 @@
   - Reduced Entries bracket-event reads from N distinct draws to one per retry.
   - Focused suites passed 286 tests; the full non-slow backend unit gate passed
     1,015 tests with 65 expected skips.
+- Task 6: complete
+  - Kept bracket hydration/serialization and repository command processing as
+    stable facades while extracting cohesive private helpers.
+  - Reduced `_hydrate_session` E33 to B6, `_serialize_session` E38 to A5, and
+    `LocalRepository.process_command` D27 to A5; the largest new helper is C13.
+  - Added mutation-proven command transaction tripwires and preserved Task 4's
+    constant-query and full-response parity coverage.
+  - Focused bracket suites passed 79 tests; command/match-state suites passed
+    63 tests; Ruff and all 15 API import contracts passed.
