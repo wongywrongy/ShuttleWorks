@@ -138,6 +138,29 @@ def test_list_all_returns_newest_first(repo, session):
     assert listed == [c.id, b.id, a.id]
 
 
+def test_list_by_ids_filters_and_preserves_newest_first(repo, session):
+    a = repo.tournaments.create(name="A")
+    hidden = repo.tournaments.create(name="Hidden")
+    c = repo.tournaments.create(name="C")
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for offset, row in enumerate((a, hidden, c)):
+        row.created_at = base + timedelta(seconds=offset)
+    session.commit()
+
+    listed = repo.tournaments.list_by_ids([a.id, c.id])
+
+    assert [row.id for row in listed] == [c.id, a.id]
+
+
+def test_list_by_ids_empty_does_not_query(repo, monkeypatch):
+    def unexpected_query(*_args, **_kwargs):
+        raise AssertionError("empty id set should not execute SQL")
+
+    monkeypatch.setattr(repo.session, "scalars", unexpected_query)
+
+    assert repo.tournaments.list_by_ids([]) == []
+
+
 def test_update_changes_whitelisted_fields_only(repo):
     tid = _seed_tournament(repo, name="Old")
     updated = repo.tournaments.update(

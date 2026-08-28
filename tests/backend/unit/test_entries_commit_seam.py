@@ -1037,6 +1037,46 @@ def _draft_event(repo, tid, event_id="MS"):
     )
 
 
+@pytest.mark.parametrize("draw_count", [1, 5, 10])
+def test_bracket_commit_reads_events_once_for_any_number_of_draws(
+    repo, session, draw_count
+):
+    from sqlalchemy import event as sqlalchemy_event
+
+    tid = _bracket_workspace(repo)
+    for index in range(draw_count):
+        event_id = f"E{index}"
+        _draft_event(repo, tid, event_id)
+        entry_event = _entry_event(
+            session,
+            tid,
+            code=event_id,
+            bracket_event_id=event_id,
+        )
+        _entry(
+            session,
+            tid,
+            entry_event,
+            player_name=f"Player {index}",
+        )
+
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    sqlalchemy_event.listen(session.get_bind(), "before_cursor_execute", capture)
+    try:
+        result = commit_entries(repo, tid)
+    finally:
+        sqlalchemy_event.remove(session.get_bind(), "before_cursor_execute", capture)
+
+    event_reads = [sql for sql in statements if "FROM bracket_events" in sql]
+    assert len(result.committed) == draw_count
+    assert len(event_reads) == 1
+
+
 def test_a_bracket_entry_becomes_a_participant_and_a_roster_player(repo, session):
     tid = _bracket_workspace(repo)
     _draft_event(repo, tid, "MS")

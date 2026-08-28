@@ -107,6 +107,26 @@ def test_list_newest_first(client):
     assert [t["name"] for t in listing] == ["B", "A"]
 
 
+def test_list_uses_membership_constrained_repository_query(client, monkeypatch):
+    client.post("/tournaments", json={"name": "Visible"})
+
+    from repositories import open_repository
+    import repositories.local as local_mod
+
+    with open_repository() as repo:
+        repo.tournaments.create(name="Hidden")
+
+    def forbidden_list_all(_self):
+        raise AssertionError("list endpoint must not materialize every tournament")
+
+    monkeypatch.setattr(local_mod._LocalTournamentRepo, "list_all", forbidden_list_all)
+
+    response = client.get("/tournaments")
+
+    assert response.status_code == 200
+    assert [row["name"] for row in response.json()] == ["Visible"]
+
+
 def test_get_returns_summary(client):
     created = client.post("/tournaments", json={"name": "A"}).json()
     r = client.get(f"/tournaments/{created['id']}")

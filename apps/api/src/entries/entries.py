@@ -55,7 +55,7 @@ from sqlalchemy.orm import Session
 
 from core.limits import MAX_GROUPS
 from core.schemas import BracketPlayerDTO, PlayerDTO
-from db.models import Entry, EntryEvent, MeetEvent
+from db.models import BracketEvent, Entry, EntryEvent, MeetEvent
 from repositories.local import LocalRepository
 # Resolved at raise/except time, not bound at import time — and imported
 # from the repository rather than re-derived, so the two cannot drift.
@@ -757,8 +757,17 @@ def _commit_bracket(
         seen = row.state_version or 0
         document = copy.deepcopy(row.data or {})
 
+        draws_by_id = {
+            draw.id: draw for draw in repo.brackets.list_events(tournament_id)
+        }
+
         planned, skipped, inserts, mutated = _plan_bracket(
-            repo, tournament_id, document, candidates, events
+            repo,
+            tournament_id,
+            document,
+            candidates,
+            events,
+            draws_by_id,
         )
         if not mutated:
             break
@@ -896,6 +905,7 @@ def _plan_bracket(
     document: dict,
     candidates: list[Entry],
     events: dict[uuid.UUID, EntryEvent],
+    draws_by_id: dict[str, BracketEvent],
 ) -> tuple[list[tuple[Entry, str]], list[SkippedEntry], dict[str, list[dict]], bool]:
     roster = list(document.get("bracketPlayers") or [])
     planned: list[tuple[Entry, str]] = []
@@ -914,7 +924,7 @@ def _plan_bracket(
         if event is None or not event.bracket_event_id:
             skipped.append(SkippedEntry(str(entry.id), SkipReason.UNMAPPABLE_EVENT))
             continue
-        draw = repo.brackets.get_event(tournament_id, event.bracket_event_id)
+        draw = draws_by_id.get(event.bracket_event_id)
         if draw is None:
             # A dangling pointer: ``entry_events.bracket_event_id`` carries
             # no FK on purpose (a composite FK would have to cascade, so

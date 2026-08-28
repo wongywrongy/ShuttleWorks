@@ -150,6 +150,53 @@ def test_hydrated_session_config_keeps_meet_occupied_windows_override(repo):
     assert (1, 5, 7) in session.config.closed_court_windows
 
 
+@pytest.mark.parametrize("event_count", [1, 5])
+def test_hydrate_session_uses_constant_bracket_read_queries(repo, event_count):
+    from sqlalchemy import event as sqlalchemy_event
+
+    from bracket.brackets import _hydrate_session
+
+    row = repo.tournaments.create(name=f"Query count {event_count}")
+    for index in range(event_count):
+        repo.brackets.create_event(
+            row.id,
+            f"E{index}",
+            discipline=f"Event {index}",
+            format="se",
+            duration_slots=2,
+        )
+
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    engine = repo.session.get_bind()
+    sqlalchemy_event.listen(engine, "before_cursor_execute", capture)
+    try:
+        hydrated = _hydrate_session(repo, row.id)
+    finally:
+        sqlalchemy_event.remove(engine, "before_cursor_execute", capture)
+
+    assert hydrated is not None
+    bracket_reads = [
+        statement
+        for statement in statements
+        if any(
+            table in statement
+            for table in (
+                "bracket_events",
+                "bracket_participants",
+                "bracket_matches",
+                "bracket_results",
+            )
+        )
+    ]
+    assert len(bracket_reads) == 4
+    assert len(statements) == 4
+
+
 def test_bracket_solver_options_deterministic_flows_through(repo):
     """config.deterministic + config.randomSeed must reach SolverOptions
     (single worker, seeded, deterministic=True) via the shared helper."""

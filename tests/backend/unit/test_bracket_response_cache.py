@@ -57,6 +57,66 @@ def test_ttl_expiry_returns_none(cache_module, monkeypatch):
     assert cache_module.get(tid) is None
 
 
+def test_expired_get_removes_the_stored_entry(cache_module, monkeypatch):
+    tid = uuid.uuid4()
+    now = iter((100.0, 102.1))
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: next(now))
+
+    cache_module.put(tid, {"foo": "bar"})
+
+    assert cache_module.get(tid) is None
+    assert (cache_module.BRACKET, tid) not in cache_module._cache
+
+
+def test_exact_ttl_boundary_is_still_fresh(cache_module, monkeypatch):
+    tid = uuid.uuid4()
+    now = iter((100.0, 102.0))
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: next(now))
+
+    cache_module.put(tid, {"foo": "bar"})
+
+    assert cache_module.get(tid) == {"foo": "bar"}
+
+
+def test_put_removes_expired_entries_across_namespaces(cache_module, monkeypatch):
+    old_bracket, old_display, fresh = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    clock = {"now": 100.0}
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: clock["now"])
+    cache_module.put(old_bracket, {"old": 1})
+    cache_module.put(old_display, {"old": 2}, cache_module.DISPLAY_STATE)
+
+    clock["now"] = 102.1
+    cache_module.put(fresh, {"fresh": True})
+
+    assert set(cache_module._cache) == {(cache_module.BRACKET, fresh)}
+
+
+def test_put_evicts_oldest_entry_at_maximum_size(cache_module, monkeypatch):
+    monkeypatch.setattr(cache_module, "MAX_ENTRIES", 2)
+    clock = {"now": 100.0}
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: clock["now"])
+    oldest, middle, newest = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    cache_module.put(oldest, {"position": 1})
+    clock["now"] += 0.1
+    cache_module.put(middle, {"position": 2}, cache_module.DISPLAY_STATE)
+    clock["now"] += 0.1
+    cache_module.put(newest, {"position": 3})
+
+    assert cache_module.get(oldest) is None
+    assert cache_module.get(middle, cache_module.DISPLAY_STATE) == {"position": 2}
+    assert cache_module.get(newest) == {"position": 3}
+    assert len(cache_module._cache) == 2
+
+
+def test_same_tournament_namespaces_remain_isolated(cache_module):
+    tid = uuid.uuid4()
+    cache_module.put(tid, {"view": "bracket"})
+    cache_module.put(tid, {"view": "display"}, cache_module.DISPLAY_STATE)
+
+    assert cache_module.get(tid) == {"view": "bracket"}
+    assert cache_module.get(tid, cache_module.DISPLAY_STATE) == {"view": "display"}
+
+
 def test_clear_all_clears_every_entry(cache_module):
     t1, t2 = uuid.uuid4(), uuid.uuid4()
     cache_module.put(t1, {"a": 1})
@@ -168,6 +228,70 @@ def test_second_get_within_ttl_is_a_cache_hit(client, tid, monkeypatch):
     assert r1.json() == r2.json()
     # Only the first GET should have rebuilt the session.
     assert calls["n"] == 1
+
+
+def test_cold_multi_event_get_has_constant_queries_and_full_response_parity(
+    client, tid
+):
+    from sqlalchemy import event as sqlalchemy_event
+
+    from bracket import response_cache
+    from db.session import engine
+
+    body = _se_4_body()
+    body["events"] = [
+        {
+            "id": f"E{event_index}",
+            "discipline": f"Event {event_index}",
+            "format": "se",
+            "participants": [
+                {
+                    "id": f"E{event_index}-P{participant_index}",
+                    "name": f"Event {event_index} Player {participant_index}",
+                    "seed": participant_index,
+                }
+                for participant_index in range(1, 5)
+            ],
+            "duration_slots": 1,
+        }
+        for event_index in range(5)
+    ]
+    created = client.post(_bracket_url(tid), json=body)
+    assert created.status_code == 200, created.text
+
+    response_cache.clear_all()
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    sqlalchemy_event.listen(engine, "before_cursor_execute", capture)
+    try:
+        cold = client.get(_bracket_url(tid))
+    finally:
+        sqlalchemy_event.remove(engine, "before_cursor_execute", capture)
+
+    assert cold.status_code == 200, cold.text
+    expected = created.json()
+    # Existing persistence semantics: hydration prefers config.courtCount and
+    # materializes the database default for seeded_count. Task 4 preserves
+    # those cold-GET values; normalize only this already-characterized POST/GET
+    # mismatch so every other serialized field remains under full parity.
+    expected["courts"] = 4
+    for event in expected["events"]:
+        event["seeded_count"] = 0
+    assert cold.json() == expected
+    assert [event["id"] for event in cold.json()["events"]] == [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+    ]
+    bracket_reads = [sql for sql in statements if "FROM bracket_" in sql]
+    assert len(bracket_reads) == 4
+    assert len(statements) == 7
 
 
 def test_record_result_command_invalidates_cache_for_immediate_get(client, tid):

@@ -741,6 +741,10 @@ def _hydrate_session(
     if not event_rows:
         return None
 
+    participants_by_event = repo.brackets.list_participants_by_event(tournament_id)
+    matches_by_event = repo.brackets.list_matches_by_event(tournament_id)
+    results_by_event = repo.brackets.list_results_by_event(tournament_id)
+
     tournament = repo.tournaments.get_by_id(tournament_id)
     data_blob = (tournament.data or {}) if tournament else {}
     camel_cfg = data_blob.get("config") or {}
@@ -802,9 +806,7 @@ def _hydrate_session(
 
     for event_row in event_rows:
         # Participants for this event.
-        participant_rows = repo.brackets.list_participants(
-            tournament_id, event_row.id
-        )
+        participant_rows = participants_by_event.get(event_row.id, [])
         event_participants: Dict[str, Participant] = {}
         for p in participant_rows:
             participant = Participant(
@@ -845,7 +847,7 @@ def _hydrate_session(
         state.events[event_row.id] = engine_event
 
         # Matches → PlayUnits + Draw slots + rounds.
-        match_rows = repo.brackets.list_matches(tournament_id, event_row.id)
+        match_rows = matches_by_event.get(event_row.id, [])
         slots: Dict[str, Tuple[BracketSlot, BracketSlot]] = {}
         round_buckets: Dict[int, List[Tuple[int, str]]] = defaultdict(list)
         event_play_units: Dict[str, PlayUnit] = {}
@@ -899,7 +901,7 @@ def _hydrate_session(
         )
 
         # Results.
-        result_rows = repo.brackets.list_results(tournament_id, event_row.id)
+        result_rows = results_by_event.get(event_row.id, [])
         for r in result_rows:
             state.results[r.bracket_match_id] = Result(
                 winner_side=WinnerSide(r.winner_side),

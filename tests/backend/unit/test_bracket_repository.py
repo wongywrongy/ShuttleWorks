@@ -578,6 +578,87 @@ def test_list_results_orders_by_match_id(repo, tournament_id):
     assert [r.bracket_match_id for r in results] == ["SF1", "SF2"]
 
 
+def test_tournament_wide_reads_group_rows_and_preserve_event_ordering(
+    repo, tournament_id
+):
+    for event_id in ("WS", "MS"):
+        repo.brackets.create_event(
+            tournament_id,
+            event_id,
+            discipline=event_id,
+            format="se",
+            duration_slots=2,
+        )
+        repo.brackets.bulk_create_participants(
+            tournament_id,
+            event_id,
+            [
+                {"id": "P2", "name": f"{event_id} Two", "type": "PLAYER"},
+                {"id": "P1", "name": f"{event_id} One", "type": "PLAYER"},
+            ],
+        )
+        repo.brackets.bulk_create_matches(
+            tournament_id,
+            event_id,
+            [
+                {
+                    "id": f"{event_id}-R2",
+                    "round_index": 1,
+                    "match_index": 0,
+                    "slot_a": {"participant_id": "P1"},
+                    "slot_b": {"participant_id": "P2"},
+                    "expected_duration_slots": 2,
+                },
+                {
+                    "id": f"{event_id}-R1B",
+                    "round_index": 0,
+                    "match_index": 1,
+                    "slot_a": {"participant_id": "P1"},
+                    "slot_b": {"participant_id": "P2"},
+                    "expected_duration_slots": 2,
+                },
+                {
+                    "id": f"{event_id}-R1A",
+                    "round_index": 0,
+                    "match_index": 0,
+                    "slot_a": {"participant_id": "P1"},
+                    "slot_b": {"participant_id": "P2"},
+                    "expected_duration_slots": 2,
+                },
+            ],
+        )
+        repo.brackets.record_result(
+            tournament_id, event_id, f"{event_id}-R2", winner_side="A"
+        )
+        repo.brackets.record_result(
+            tournament_id, event_id, f"{event_id}-R1A", winner_side="B"
+        )
+
+    participants = repo.brackets.list_participants_by_event(tournament_id)
+    matches = repo.brackets.list_matches_by_event(tournament_id)
+    results = repo.brackets.list_results_by_event(tournament_id)
+
+    assert list(participants) == ["MS", "WS"]
+    assert [row.id for row in participants["MS"]] == ["P1", "P2"]
+    assert list(matches) == ["MS", "WS"]
+    assert [row.id for row in matches["MS"]] == [
+        "MS-R1A",
+        "MS-R1B",
+        "MS-R2",
+    ]
+    assert list(results) == ["MS", "WS"]
+    assert [row.bracket_match_id for row in results["MS"]] == [
+        "MS-R1A",
+        "MS-R2",
+    ]
+
+
+def test_tournament_wide_reads_return_empty_maps_without_rows(repo, tournament_id):
+    assert repo.brackets.list_participants_by_event(tournament_id) == {}
+    assert repo.brackets.list_matches_by_event(tournament_id) == {}
+    assert repo.brackets.list_results_by_event(tournament_id) == {}
+
+
 # ---- Tenant isolation --------------------------------------------------
 
 

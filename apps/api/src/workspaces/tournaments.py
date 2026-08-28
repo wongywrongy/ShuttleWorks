@@ -315,11 +315,10 @@ def list_tournaments(
     user_uuid = user.as_uuid()
     if user_uuid is None:
         return []
-    # Resolve every (tournament_id, role) pair for the caller in one query so the
-    # list response carries the role per row without an N+1 lookup. ``list_all`` is
-    # already newest-first.
+    # Resolve every (tournament_id, role) pair for the caller in one query, then
+    # constrain the tournament query to those ids instead of materializing all rows.
     role_by_tournament = repo.members.list_roles_for_user(user_uuid)
-    visible = [t for t in repo.tournaments.list_all() if t.id in role_by_tournament]
+    visible = repo.tournaments.list_by_ids(role_by_tournament)
     # Modules + signals are both gathered in batch (one query for all module rows,
     # six grouped count queries) rather than per-row.
     modules_by_tid = repo.modules.ensure_modules_for(visible)

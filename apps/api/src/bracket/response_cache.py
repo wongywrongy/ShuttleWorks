@@ -37,6 +37,11 @@ from typing import Any, Dict, Tuple
 # cache hit is bounded by, not additive to, existing poll latency.
 TTL_SECONDS: float = 2.0
 
+# A director can visit only a small number of workspaces during one process
+# lifetime. This generous cap prevents abandoned namespace entries from
+# growing without bound if the process is long-lived or repeatedly exercised.
+MAX_ENTRIES: int = 256
+
 # Keyed by (namespace, tournament_id). The namespace exists because more
 # than one endpoint now caches per tournament: the bracket board and the
 # public display state (SP-SEC-1, SEC-13) hold DIFFERENT payloads for the
@@ -48,24 +53,47 @@ BRACKET = "bracket"
 DISPLAY_STATE = "display_state"
 
 
+def _remove_expired(now: float) -> None:
+    """Drop entries strictly older than the TTL, preserving its boundary."""
+    expired = [
+        key
+        for key, (stored_at, _payload) in _cache.items()
+        if now - stored_at > TTL_SECONDS
+    ]
+    for key in expired:
+        _cache.pop(key, None)
+
+
 def get(tournament_id: uuid.UUID, namespace: str = BRACKET) -> Any | None:
     """Return the cached payload for ``tournament_id`` if still fresh.
 
-    Returns ``None`` on a miss or an expired entry (the entry is left in
-    place; ``put`` will overwrite it on the next successful rebuild).
+    Returns ``None`` on a miss or an expired entry. Expired entries are
+    removed immediately so reads cannot leave dead keys resident.
     """
-    entry = _cache.get((namespace, tournament_id))
+    key = (namespace, tournament_id)
+    entry = _cache.get(key)
     if entry is None:
         return None
     stored_at, payload = entry
     if time.monotonic() - stored_at > TTL_SECONDS:
+        _cache.pop(key, None)
         return None
     return payload
 
 
 def put(tournament_id: uuid.UUID, payload: Any, namespace: str = BRACKET) -> None:
-    """Cache ``payload`` for ``tournament_id``, stamped with the current time."""
-    _cache[(namespace, tournament_id)] = (time.monotonic(), payload)
+    """Cache ``payload`` and keep the process-wide cache bounded.
+
+    Each write first scavenges expired entries, then evicts the oldest live
+    entries if necessary. The bound spans namespaces because they share the
+    same process memory and ``invalidate`` deliberately spans them too.
+    """
+    now = time.monotonic()
+    _remove_expired(now)
+    _cache[(namespace, tournament_id)] = (now, payload)
+    while len(_cache) > MAX_ENTRIES:
+        oldest = min(_cache, key=lambda key: _cache[key][0])
+        _cache.pop(oldest, None)
 
 
 def invalidate(tournament_id: uuid.UUID) -> None:

@@ -187,6 +187,21 @@ class _LocalTournamentRepo:
             )
         )
 
+    def list_by_ids(
+        self, tournament_ids: Iterable[uuid.UUID]
+    ) -> list[Tournament]:
+        """Newest-first list constrained in SQL to visible workspaces."""
+        ids = list(tournament_ids)
+        if not ids:
+            return []
+        return list(
+            self.session.scalars(
+                select(Tournament)
+                .where(Tournament.id.in_(ids))
+                .order_by(Tournament.created_at.desc(), Tournament.id.desc())
+            )
+        )
+
     def get_by_id(self, tournament_id: uuid.UUID) -> Optional[Tournament]:
         return self.session.get(Tournament, tournament_id)
 
@@ -762,6 +777,23 @@ class _LocalBracketRepo:
             )
         )
 
+    def list_participants_by_event(
+        self, tournament_id: uuid.UUID
+    ) -> dict[str, list[BracketParticipant]]:
+        """Read every participant once, grouped in existing per-event order."""
+        rows = self.session.scalars(
+            select(BracketParticipant)
+            .where(BracketParticipant.tournament_id == tournament_id)
+            .order_by(
+                BracketParticipant.bracket_event_id.asc(),
+                BracketParticipant.id.asc(),
+            )
+        )
+        grouped: dict[str, list[BracketParticipant]] = {}
+        for row in rows:
+            grouped.setdefault(row.bracket_event_id, []).append(row)
+        return grouped
+
     def bulk_create_participants(
         self,
         tournament_id: uuid.UUID,
@@ -867,6 +899,24 @@ class _LocalBracketRepo:
                 )
             )
         )
+
+    def list_matches_by_event(
+        self, tournament_id: uuid.UUID
+    ) -> dict[str, list[BracketMatch]]:
+        """Read every match once, grouped in existing per-event order."""
+        rows = self.session.scalars(
+            select(BracketMatch)
+            .where(BracketMatch.tournament_id == tournament_id)
+            .order_by(
+                BracketMatch.bracket_event_id.asc(),
+                BracketMatch.round_index.asc(),
+                BracketMatch.match_index.asc(),
+            )
+        )
+        grouped: dict[str, list[BracketMatch]] = {}
+        for row in rows:
+            grouped.setdefault(row.bracket_event_id, []).append(row)
+        return grouped
 
     def bulk_create_matches(
         self,
@@ -974,6 +1024,23 @@ class _LocalBracketRepo:
                 .order_by(BracketResult.bracket_match_id.asc())
             )
         )
+
+    def list_results_by_event(
+        self, tournament_id: uuid.UUID
+    ) -> dict[str, list[BracketResult]]:
+        """Read every result once, grouped in existing per-event order."""
+        rows = self.session.scalars(
+            select(BracketResult)
+            .where(BracketResult.tournament_id == tournament_id)
+            .order_by(
+                BracketResult.bracket_event_id.asc(),
+                BracketResult.bracket_match_id.asc(),
+            )
+        )
+        grouped: dict[str, list[BracketResult]] = {}
+        for row in rows:
+            grouped.setdefault(row.bracket_event_id, []).append(row)
+        return grouped
 
     def count_events_by_tournament(
         self, tournament_ids: list[uuid.UUID]

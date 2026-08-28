@@ -31,6 +31,10 @@ class TournamentRepository(Protocol):
         """Newest-first list for the dashboard view."""
         ...
 
+    def list_by_ids(self, tournament_ids: Iterable[uuid.UUID]) -> list[Tournament]:
+        """Newest-first list constrained to the supplied identifiers."""
+        ...
+
     def create(
         self,
         *,
