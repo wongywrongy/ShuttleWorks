@@ -50,6 +50,12 @@ if (!DISPLAY_TOKEN) {
     'SMOKE_DISPLAY_TOKEN is required — seed a workspace with e2e/interaction-sweep/seed-smoke.mjs first',
   );
 }
+const VIEWER_TID = process.env.SMOKE_VIEWER_TID;
+if (!VIEWER_TID) {
+  throw new Error(
+    'SMOKE_VIEWER_TID is required — create and demote a viewer workspace with the interaction-sweep fixture first',
+  );
+}
 
 type HarnessEvent = {
   kind: 'error' | 'unhandledrejection' | 'console.error' | 'boundary';
@@ -286,11 +292,6 @@ test.describe('interaction smoke — real flows against real stores', () => {
   });
 
   test('a viewer cannot mutate: no write leaves the browser', async ({ page }) => {
-    // Audit A2. Requires a workspace the caller only has `viewer` on; skipped
-    // when SMOKE_VIEWER_TID isn't provided so the suite stays runnable locally.
-    const viewerTid = process.env.SMOKE_VIEWER_TID;
-    test.skip(!viewerTid, 'set SMOKE_VIEWER_TID to a viewer-role workspace');
-
     const writes: string[] = [];
     page.on('request', (r) => {
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(r.method()) && r.url().includes('/api/')) {
@@ -298,7 +299,7 @@ test.describe('interaction smoke — real flows against real stores', () => {
       }
     });
 
-    await page.goto(`/tournaments/${viewerTid}/live`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`/tournaments/${VIEWER_TID}/live`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
     // The PERSISTENT banner, by testid. A text locator for the phrase is

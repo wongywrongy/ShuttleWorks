@@ -11,7 +11,7 @@ This app is **local-dev only** for now — no nginx, no compose, no tunnel (thos
 
 | Surface | Port | Command |
 | --- | --- | --- |
-| Backend (host uvicorn) | 8600 | `uvicorn app.main:app --port 8600` from `apps/api` |
+| Backend (host uvicorn) | 8600 | `uvicorn core.main:app --port 8600` from `apps/api/src` |
 | Operator product (SPA) | 5173 | `npm run dev:scheduler` |
 | Public entrant site (SSR) | 5174 | `npm run dev:entrant` |
 
@@ -22,8 +22,8 @@ make entrant-dev     # this app alone, on :5174, against a host backend on :8600
 make full-dev        # both surfaces at once: operator :5173 + entrant :5174
 ```
 
-Either way, **start the backend first** — a host `uvicorn app.main:app --port 8600` from
-`apps/api` with the repo `.venv` active. `make entrant-dev` and `make full-dev`
+Either way, **start the backend first** — a host `uvicorn core.main:app --port 8600` from
+`apps/api/src` with the repo `.venv` active. `make entrant-dev` and `make full-dev`
 only launch the frontend surfaces. `make full-dev` backgrounds with `&`, so **run it from Git
 Bash** (under `cmd.exe` `&` sequences instead of backgrounding and the first server blocks forever).
 

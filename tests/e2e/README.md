@@ -45,8 +45,11 @@ python tests/e2e/interaction-sweep/make-viewer.py apps/api/src/smoke.db <viewerT
 #    which must be compiled in — that's what lets a failure name the button that
 #    broke instead of just "something threw".
 VITE_ERROR_HARNESS=1 npm --prefix apps/console run build
+# 4. Serve that preview in another shell before running the browser suite.
+(cd apps/console && VITE_API_PROXY_TARGET=http://localhost:8600 npx vite preview --port 4173 --strictPort --host 127.0.0.1)
+# 5. Run from the repo root after the preview is accepting connections.
 E2E_BASE_URL=http://localhost:4173 SMOKE_TID=<tid> SMOKE_VIEWER_TID=<viewerTid> \
-SMOKE_DISPLAY_TOKEN=<displayToken> npm run test:interaction-smoke
+SMOKE_DISPLAY_TOKEN=<displayToken> npm --prefix tests/e2e run test:interaction-smoke
 ```
 
 - `SMOKE_TID` — **required**. It used to default to a hardcoded id, and that
@@ -56,7 +59,7 @@ SMOKE_DISPLAY_TOKEN=<displayToken> npm run test:interaction-smoke
   and the viewer test now assert they found controls at all. A gate that goes
   green when its fixture is missing is worse than no gate.
 - `SMOKE_VIEWER_TID` — a workspace the caller only has `viewer` on (step 2). The
-  viewer-gating test skips without it; CI always sets it.
+  suite fails fast without it; CI always sets it.
 - `SMOKE_DISPLAY_TOKEN` — a capability token for the seeded owner workspace;
   the display flow fails fast without it and verifies the live board plus the
   deterministic invalid-link terminal state.

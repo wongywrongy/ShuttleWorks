@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { SSR_TEST_FILES } from '../vitest.test-files';
+import { requiresEntrantOrigin } from '../../../tests/e2e/global-setup';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 
@@ -182,6 +183,11 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
   const e2e = e2eScripts();
   const ci = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+  const setup = readFileSync(join(REPO_ROOT, 'tests/e2e/global-setup.ts'), 'utf8');
+  const factories = readFileSync(
+    join(REPO_ROOT, 'simulator/tournament_sim/factories.py'),
+    'utf8',
+  );
   const seed = readFileSync(
     join(REPO_ROOT, 'tests/e2e/interaction-sweep/seed-smoke.mjs'),
     'utf8',
@@ -217,10 +223,27 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
     'interaction-smoke.spec.ts',
   ]);
   expect(interaction).toMatch(/SMOKE_TID is required/);
+  expect(interaction).toMatch(/SMOKE_VIEWER_TID is required/);
   expect(interaction).toMatch(/SMOKE_DISPLAY_TOKEN is required/);
+  expect(interaction).not.toMatch(/test\.skip\(!viewerTid/);
   expect(seed).toMatch(/console\.log\(`displayToken=\$\{displayToken\}`\)/);
   expect(ci).toContain('SMOKE_DISPLAY_TOKEN: ${{ steps.seed.outputs.displayToken }}');
   expect(ci).toContain('npm run test:interaction-smoke');
+  expect(ci).toContain('SMOKE_VIEWER_TID: ${{ steps.seed.outputs.viewerTid }}');
+  expect(setup).toMatch(/E2E_REQUIRE_PLAY/);
+  expect(setup).toMatch(/npm_lifecycle_event/);
+  expect(setup).toMatch(/\/e\/api\/config/);
+  expect(setup).toMatch(/E2E_PLAY_BASE_URL/);
+  expect(factories).not.toContain('e2e/fixtures/seed.ts');
+});
+
+test('waits for the entrant origin only for entrant evidence', () => {
+  expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:entrant-evidence' })).toBe(true);
+  expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:interaction-smoke' })).toBe(false);
+  expect(requiresEntrantOrigin({ E2E_REQUIRE_PLAY: '1' })).toBe(true);
+  expect(
+    requiresEntrantOrigin({ E2E_REQUIRE_PLAY: '0', npm_lifecycle_event: 'test:interaction-smoke' }),
+  ).toBe(false);
 });
 
 /** The recipe lines of a Makefile target (everything indented under it). */

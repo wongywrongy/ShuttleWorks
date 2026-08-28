@@ -50,6 +50,14 @@ The contract pins the two maintained spec files, exact package scripts, the
 three Makefile runner recipes, required smoke inputs, seed token output, and
 CI token wiring.
 
+Review hardening also pins that `SMOKE_VIEWER_TID` is required at module load,
+that interaction smoke no longer skips its viewer case, and that global setup
+waits for `/e/api/config` only for the entrant evidence lifecycle (or when
+`E2E_REQUIRE_PLAY=1`). The public-origin URL remains independently configured
+by `E2E_PLAY_BASE_URL`; operator-only interaction smoke does not wait for it by
+default. The simulator factory now documents the backend DTO contract directly
+and no longer names a deleted fixture.
+
 ## Verification
 
 - `npm run test:entrant-evidence -- --list`: 9 tests listed.
@@ -60,6 +68,11 @@ CI token wiring.
 - `ruff check tests/e2e`: passed.
 - `git diff --check`: passed.
 - `npm run docs:build`: passed.
+- Review contract: `npm --prefix apps/entrant run test:unit -- tests/launch-scripts.test.ts` — 10 tests passed.
+- Interaction instructions now use repo-root-runnable `npm --prefix` commands
+  and explicitly require a harness-enabled Vite preview before the smoke run.
+- Backend launch docs now use `uvicorn core.main:app --port 8600` from
+  `apps/api/src`.
 
 ## Limitation
 
@@ -71,4 +84,6 @@ appropriate full-stack verification for that owner.
 
 ## Commit
 
-Commit SHA: `3347effb`
+Initial pruning commit: `3347effb`
+
+Review-fix implementation SHA: pending

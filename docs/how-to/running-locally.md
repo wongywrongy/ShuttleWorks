@@ -45,7 +45,7 @@ is deliberately **local only** — no nginx, no compose, no tunnel yet.
 
 | Surface | Port | Command |
 | --- | --- | --- |
-| Backend (host uvicorn) | `:8600` | `uvicorn app.main:app --port 8600` from `apps/api` |
+| Backend (host uvicorn) | `:8600` | `uvicorn core.main:app --port 8600` from `apps/api/src` |
 | Operator product (SPA) | `:5173` | `npm run dev:scheduler` |
 | Public entrant site (SSR) | `:5174` | `npm run dev:entrant` |
 

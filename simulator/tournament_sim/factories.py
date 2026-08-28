@@ -5,10 +5,9 @@ Shapes mirror the backend wire contracts exactly:
 - meet blob  -> ``TournamentStateDTO``  (backend/core/schemas.py)
 - bracket    -> ``CreateTournamentIn`` / ``EventIn`` (backend/bracket/brackets.py)
 
-The meet blob is cribbed from the canonical minimal example the e2e suite
-uses (``e2e/fixtures/seed.ts`` — note that file wraps the blob as
-``{state, version}`` for localStorage injection; the PUT body here is the
-*inner* state shape with the DTO's own ``version`` field).
+The meet blob follows the backend ``TournamentStateDTO`` contract. The
+simulator returns the inner state shape used by the API's PUT body, including
+the DTO's own ``version`` field.
 
 No faker: names come from fixed tuples indexed by the roster RNG stream,
 so rosters are deterministic AND human-readable in the UI.
