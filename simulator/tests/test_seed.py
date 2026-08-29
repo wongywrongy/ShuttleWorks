@@ -11,6 +11,7 @@ from tournament_sim.seed import (
     Tournament,
     _HistoricalIdentityRegistry,
     _historical_event_payload,
+    _write_manifest,
     apply,
     attach_historical_sources,
     complete_demo_historical_draws,
@@ -49,6 +50,24 @@ Draw format: 32MS/32WS/32MD/32WD/32XD - five 32-entry draws.
 Timing note: The event ran across the listed window; only five finals are supplied.
 Source: https://example.test/t
 """
+
+
+def test_manifest_write_keeps_the_previous_file_if_atomic_replace_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    manifest = tmp_path / "run.json"
+    manifest.write_text('{"status":"previous"}\n', encoding="utf-8")
+
+    def fail_replace(_source, _target):
+        raise OSError("simulated interrupted replace")
+
+    monkeypatch.setattr("tournament_sim.seed.os.replace", fail_replace)
+
+    with pytest.raises(OSError, match="interrupted replace"):
+        _write_manifest(manifest, {"status": "next"})
+
+    assert manifest.read_text(encoding="utf-8") == '{"status":"previous"}\n'
+    assert list(tmp_path.glob(".run.json.*.tmp")) == []
 
 
 class FakeClient:

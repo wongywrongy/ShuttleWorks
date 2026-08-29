@@ -1,6 +1,7 @@
 .PHONY: help \
         scheduler scheduler-dev scheduler-rebuild \
         demo-up demo-rebuild demo-status demo-down demo-reset \
+        demo-backup demo-backup-verify demo-restore-drill demo-restore demo-backup-install \
         demo-seed-preview demo-seed-apply demo-seed-resume demo-seed-status demo-seed-reset \
         entrant-dev full-dev local-dev \
         dev-postgres dev-postgres-stop \
@@ -27,8 +28,11 @@ DEMO_SEED_FILE := simulator/fixtures/bwf-recent-completed.txt
 DEMO_SEED_NOTES := simulator/fixtures/bwf-recent-completed-notes.txt
 DEMO_SEED_SOURCE_MAP := simulator/fixtures/bwf-full-match-sources.json
 DEMO_SEED_KEY ?= bwf-recent
-DEMO_SEED_RUN_DIR := .local-testing/demo/data/import-runs
+DEMO_SEED_RUN_DIR ?= $(shell $(DEMO_COMPOSE) state-dir)/data/import-runs
+DEMO_BACKUP ?=
 DEMO_SEED := PYTHONPATH=simulator .venv/bin/python -m tournament_sim seed
+DEMO_SEED_LOCKED := flock -w 300 "$(shell $(DEMO_COMPOSE) state-dir)/.lifecycle.lock" \
+	env PYTHONPATH=simulator .venv/bin/python -m tournament_sim seed
 DEMO_MATCH_DATA ?=
 DEMO_JAPAN_RESULTS ?=
 DEMO_CHINA_RESULTS ?=
@@ -54,8 +58,12 @@ help:
 	@echo "  make demo-up            Start the Tailscale-only tech demo"
 	@echo "  make demo-rebuild       Rebuild and restart the tech demo"
 	@echo "  make demo-status        Show tech demo container status and URLs"
-	@echo "  make demo-down          Stop the tech demo"
-	@echo "  make demo-reset         Archive demo data and start clean"
+	@echo "  make demo-down          Back up and stop the tech demo"
+	@echo "  make demo-backup        Create and verify a Postgres backup"
+	@echo "  make demo-restore-drill Verify recovery in a throwaway database"
+	@echo "  make demo-restore       Restore DEMO_BACKUP (typed confirmation required)"
+	@echo "  make demo-backup-install Install the daily user-systemd backup timer"
+	@echo "  make demo-reset         Back up and quarantine demo data (typed confirmation required)"
 	@echo "  make demo-seed-preview  Validate the bundled BWF historical fixture"
 	@echo "  make demo-seed-apply    Import the fixture into the running demo"
 	@echo "  make demo-seed-status   Show the resumable import manifest"
@@ -119,13 +127,13 @@ scheduler-rebuild:
 	@echo "  API:     http://localhost:8000"
 	@echo ""
 
-# === Tailscale tech demo (production-shaped, disposable data) ===
+# === Tailscale tech demo (production application path, durable Postgres) ===
 #
 # The launcher refuses to start without a 100.x Tailscale address and passes
 # that address to Compose as the host bind address. The demo therefore never
 # publishes its ports on the LAN or public interfaces. It uses the same
-# backend/frontend/entrant images as the normal scheduler stack, but a
-# separate Compose project and .local-testing/demo/data directory.
+# backend/frontend/entrant images as production, plus a dedicated Postgres 16
+# database. Live state and verified backups are separate from the normal stack.
 
 demo-up:
 	$(DEMO_COMPOSE) up
@@ -139,6 +147,21 @@ demo-status:
 demo-down:
 	$(DEMO_COMPOSE) down
 
+demo-backup:
+	$(DEMO_COMPOSE) backup
+
+demo-backup-verify:
+	$(DEMO_COMPOSE) backup-verify $(DEMO_BACKUP)
+
+demo-restore-drill:
+	$(DEMO_COMPOSE) restore-drill $(DEMO_BACKUP)
+
+demo-restore:
+	$(DEMO_COMPOSE) restore $(DEMO_BACKUP)
+
+demo-backup-install:
+	$(DEMO_COMPOSE) install-backup-timer
+
 demo-reset:
 	$(DEMO_COMPOSE) reset
 
@@ -146,18 +169,18 @@ demo-seed-preview:
 	@$(DEMO_SEED) preview $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) $(DEMO_SEED_SOURCE_ARGS)
 
 demo-seed-apply:
-	@$(DEMO_SEED) apply $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) --seed-key $(DEMO_SEED_KEY) \
+	@$(DEMO_SEED_LOCKED) apply $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) --seed-key $(DEMO_SEED_KEY) \
 		$(DEMO_SEED_SOURCE_ARGS) --run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
 
 demo-seed-resume:
-	@$(DEMO_SEED) resume $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) --seed-key $(DEMO_SEED_KEY) \
+	@$(DEMO_SEED_LOCKED) resume $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) --seed-key $(DEMO_SEED_KEY) \
 		$(DEMO_SEED_SOURCE_ARGS) --run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
 
 demo-seed-status:
 	@$(DEMO_SEED) status --seed-key $(DEMO_SEED_KEY) --run-dir $(DEMO_SEED_RUN_DIR)
 
-demo-seed-reset:
-	@$(DEMO_SEED) reset --seed-key $(DEMO_SEED_KEY) --confirm $(DEMO_SEED_KEY) \
+demo-seed-reset: demo-backup
+	@$(DEMO_SEED_LOCKED) reset --seed-key $(DEMO_SEED_KEY) --confirm $(DEMO_SEED_KEY) \
 		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
 
 scheduler-dev:

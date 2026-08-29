@@ -1,31 +1,74 @@
-# Disposable Tailscale tech-demo override.
+# Private Tailscale tech-demo override.
 #
-# The base stack remains the source of truth for the production-shaped
-# backend/frontend/entrant topology. This file changes only the host-facing
-# address/ports, origins, and data directory used by the demo launcher.
-# `!override` is intentional: Compose must not retain the base stack's
-# localhost/public port mappings when this file is active.
+# The default stack remains the source of truth for the application images and
+# service topology. This override changes only deployment configuration:
+#
+# - a dedicated Postgres 16 database, matching self-hosted production;
+# - Tailscale-only host bindings instead of Cloudflare Tunnel ingress;
+# - plain HTTP cookies and bootstrap auth for a private, zero-friction demo.
+#
+# Product code, Dockerfiles, Alembic migrations, nginx configuration, the
+# entrant SSR server, and the embedded solve worker are the production paths.
+# `!override` prevents Compose from retaining the base stack's host bindings or
+# SQLite bind mount when this profile is active.
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scheduler
+      POSTGRES_DB: scheduler
+      POSTGRES_PASSWORD_FILE: /run/secrets/demo_postgres_password
+    secrets:
+      - demo_postgres_password
+    volumes:
+      - "${DEMO_STATE_DIR:?set by tools/demo-compose.sh}/postgres:/var/lib/postgresql/data"
+    tmpfs:
+      - /tmp
+      - /run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
   backend:
     # Keep the image's non-root app user while granting write access to the
-    # host-created demo directory. This is narrower than running as the host
+    # host-created runtime directory. This is narrower than running as the host
     # user or making the bind mount world-writable.
     group_add:
       - "${DEMO_HOST_GID:?set by tools/demo-compose.sh}"
+    # The base stack accepts an optional developer env file. It must not leak a
+    # direct DATABASE_URL into this deployment because direct values outrank
+    # DATABASE_URL_FILE in API configuration.
+    env_file: !reset []
     ports: !override
       - "${DEMO_TAILSCALE_IP:?set by tools/demo-compose.sh}:8092:8000"
     volumes: !override
-      - "${DEMO_DATA_DIR:?set by tools/demo-compose.sh}:/app/data"
-    environment:
+      - "${DEMO_STATE_DIR:?set by tools/demo-compose.sh}/data:/app/data"
+    environment: !override
+      LOG_LEVEL: info
       DATA_DIR: /app/data
-      DATABASE_URL: sqlite:////app/data/local.db
+      # Replace the base environment as a unit so its direct SQLite URL cannot
+      # survive Compose's list-to-map merge. The file-backed value is generated
+      # once beside Postgres' password, keeping the API and database in step.
+      DATABASE_URL_FILE: /run/secrets/demo_database_url
       ENVIRONMENT: local
       AUTH_MODE: local
       SESSION_COOKIE_SECURE: "false"
       CORS_ORIGINS: http://${DEMO_TAILSCALE_IP}:8090
       PUBLIC_APP_ORIGIN: http://${DEMO_TAILSCALE_IP}:8090
       PUBLIC_PLAY_ORIGIN: http://${DEMO_TAILSCALE_IP}:8091
+    secrets:
+      - demo_database_url
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     ports: !override
@@ -36,3 +79,15 @@ services:
     environment:
       API_BASE_URL: http://backend:8000
       SESSION_COOKIE_SECURE: "false"
+
+  # Documentation is not part of the private tech-demo surface. Clear its base
+  # host publication so even an accidental unqualified Compose up cannot open
+  # a LAN-facing port.
+  docs:
+    ports: !reset []
+
+secrets:
+  demo_postgres_password:
+    file: "${DEMO_STATE_DIR:?set by tools/demo-compose.sh}/secrets/postgres_password"
+  demo_database_url:
+    file: "${DEMO_STATE_DIR:?set by tools/demo-compose.sh}/secrets/database_url"

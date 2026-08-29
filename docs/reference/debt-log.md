@@ -49,6 +49,9 @@ These are decisions to make, then execute. Nothing here is blocked on effort.
 | D28 | **Transactional email delivery is not production-proven.** The `EMAIL_BACKEND=smtp` seam exists, but provider delivery and domain authentication (SPF/DKIM/DMARC) remain unverified. This blocks public verification/reset/invite delivery, not local console mode. | Provider and operational acceptance test | S–M |
 | D29 | **Entrant identity polish remains deferred.** Player highlighting and the “account has newer details” hint need product behavior and privacy copy before wiring. | Desired public/account behavior | S |
 | D30 | **Compass/Monrad plate winners are not projected publicly.** The public draw projection handles the primary winner path; classification/plate winners remain a format-aware follow-on in `apps/api/src/entries/entries_site.py`. | Public vocabulary and projection shape | S–M |
+| D31 | **`docker-compose.release.yml` is not the canonical production shape.** It still describes a direct-port/local-auth release while self-host production is Postgres, cloud auth, and tunnel ingress. Two files named like production invite config drift. | Retire/rename it, or make its role explicit | S |
+| D32 | **Production deploys are source builds, not immutable application-image revisions.** Backups record a Git SHA, but a rollback still rebuilds dependencies and images instead of pulling a content-addressed artifact. | Registry and image-promotion policy | M |
+| D33 | **CI parses the demo configuration but does not run its backup/restore lifecycle.** Static guards and `docker compose config` catch topology drift; only a live Postgres smoke would prove dump, drill, and restore together. | Add a required or scheduled Docker gate | M |
 
 ## Open — genuinely large
 
@@ -66,6 +69,10 @@ These are decisions to make, then execute. Nothing here is blocked on effort.
 ## Open — small and unscheduled
 
 Mechanical, each independently shippable. Grouped only so the list stays scannable.
+
+**Demo/deployment**
+- **D34 — production's backup commands remain prose, while the demo owns executable recovery tooling.** The self-host runbook has `pg_dump`/globals examples but no versioned, checksummed backup/restore-drill wrapper. Generalize the demo seam without coupling production credentials or paths to demo defaults. M.
+- **D35 — demo seed identity does not include the completion-generator revision.** The manifest pins its input digest and schema format, but a source-equivalent change to synthetic bracket completion can still look current. Add an explicit generator revision the next time the completion algorithm changes, so applying that release requires a deliberate replace instead of silently keeping older generated rows. XS.
 
 **Backend / API**
 - **`GET /tournaments` loads all rows and filters in Python** against the caller's memberships (`apps/api/src/workspaces/tournaments.py:309`). Fine at solo scale, wrong shape for multi-tenant cloud. Move the filter into SQL — `ix_tournament_members_user` exists. S.

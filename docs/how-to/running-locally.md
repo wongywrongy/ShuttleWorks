@@ -35,10 +35,13 @@ After it is up:
 
 ## Tailscale tech demo on a Linux server
 
-For a disposable, production-shaped demo on a headless Linux host, use the
-Tailscale-only targets. They detect the host's `100.64.0.0/10` address and bind
-the published ports to that address, so the services are reachable by other
-tailnet devices without opening them on the LAN or public interfaces.
+For a durable demo on a headless Linux host, use the Tailscale-only targets.
+The application path is production: the same API, console, entrant SSR, nginx,
+Alembic migrations, embedded worker, and Postgres 16. The deployment-only
+differences are Tailscale HTTP ingress and local bootstrap authentication; see
+[ADR 0016](/explanation/decisions/0016-demo-production-parity-and-durability).
+The launcher detects the host's `100.64.0.0/10` address and binds published web
+ports only to it, so no service opens on the LAN or public interfaces.
 
 ```bash
 make demo-up
@@ -53,11 +56,12 @@ The launcher prints the exact address, which has this shape:
 | Public entrant site (`/e/`) | `8091` |
 | FastAPI + Swagger (`/docs`) | `8092` |
 
-The demo uses `AUTH_MODE=local`, a separate Compose project, and
-`.local-testing/demo/data/`, so it does not share the normal local database.
-`make demo-down` stops it. `make demo-reset` stops the stack and moves the old
-demo directory to a timestamped archive before creating an empty one. No
-Cloudflare Funnel or public tunnel is configured.
+The demo uses a separate Compose project and a dedicated Postgres bind mount at
+`${XDG_STATE_HOME:-$HOME/.local/state}/shuttleworks/demo/postgres/`; it never
+shares development or production data. Generated database credentials and seed
+manifests live under that same private state root, outside the source checkout.
+`make demo-down` takes a verified backup before stopping it. No Cloudflare
+Funnel or public tunnel is configured.
 
 The two web surfaces use different demo ports, which are different browser
 origins, while nginx still applies the entrant cookie allowlist. This port
@@ -77,6 +81,7 @@ files outside the repository and provide their paths:
 
 ```bash
 git clone https://github.com/SahilMotyar/bwf-match-data /tmp/bwf-match-data
+git -C /tmp/bwf-match-data checkout 0a6899162bf4b9639b76dcdbc0dca4c5d4800664
 # Save the configured Japan and China daily-result URLs as local HTML files.
 make demo-seed-preview \
   DEMO_MATCH_DATA=/tmp/bwf-match-data/matches.csv \
@@ -89,16 +94,77 @@ make demo-seed-apply \
 make demo-seed-status
 ```
 
-The full-source apply creates 30 historical bracket workspaces and 4,235
-verified results. Japan is complete at 155 rows; China exposes 153 of 155;
-Taipei and Korea remain five-finals-only. Every page states its exact scope.
-The importer does not synthesize the absent rows or feeder topology. Without
-the optional paths the target retains the original 150-finals-only behaviour.
-The upstream CSV has no formal redistribution license, so it is consumed from
-a local clone and never copied into this repository.
+The full-source apply creates 30 complete demo brackets and 4,602 match rows:
+4,235 source-backed results plus 367 clearly attributed demo-completion rows.
+Without the optional sources it retains the 150 supplied finals and generates
+4,452 demo rows. The purpose is a complete, realistic product demonstration,
+not a claim that generated scores are historical evidence; coverage and
+provenance stay visible on each draw. The upstream CSV has no formal
+redistribution license, so it is consumed from a pinned local clone and never
+copied into this repository.
 Re-running the same source is a no-op; `make demo-seed-resume` continues an
-interrupted run. `make demo-seed-reset` requires the seed key as confirmation
-and deletes only workspace IDs recorded in that run's manifest.
+interrupted run. `make demo-seed-reset` takes a database backup first, requires
+the seed key as confirmation, and deletes only workspace IDs recorded in that
+run's manifest.
+
+### Demo backups and recovery
+
+The default backup directory is
+`${XDG_STATE_HOME:-$HOME/.local/state}/shuttleworks/demo-backups`, deliberately
+outside both the repository and live database directory. Every Postgres archive
+has a custom-format `pg_dump`, cluster globals, seed manifests, application
+revision, row counts, and SHA-256 checksums.
+
+```bash
+make demo-backup
+make demo-backup-verify                 # newest archive
+make demo-restore-drill                 # restore to a throwaway DB and compare counts
+DEMO_RESTORE_CONFIRM=restore-demo make demo-restore
+```
+
+Pass `DEMO_BACKUP=<timestamped-directory-name>` to verification, drill, or
+restore to select an older archive beneath the configured backup root. Restore
+always drills its input and takes a fresh backup of the current live database
+before replacing it. Reset is also recovery-first and quarantines, rather than
+deletes, the old state:
+
+```bash
+DEMO_RESET_CONFIRM=reset-demo make demo-reset
+```
+
+If a live restore is interrupted, the launcher retains
+`restore-in-progress.env` under the demo state root with the exact backup,
+phase, and temporary database names needed for manual recovery. It removes the
+marker only after the restored application passes health checks and the old
+database is retired.
+
+The launcher serializes backups, restores, rebuilds, resets, and demo seed
+writes with one filesystem lock. A scheduled backup therefore waits for an
+active import instead of capturing it halfway through, and concurrent recovery
+commands cannot overwrite each other's temporary state.
+
+Install a daily persistent user timer with `make demo-backup-install`. Run the
+one command it prints (`sudo loginctl enable-linger "$USER"`) so backups continue
+after logout and reboot. The default backup location protects against rebuilds,
+repository cleanup, and operator mistakes, but it is still on the same host.
+For disk-loss protection, set `DEMO_BACKUP_DIR` to an encrypted off-host or
+separately backed-up filesystem before installing the timer, and run a restore
+drill after changing it.
+
+When upgrading an older SQLite-backed demo, point `DEMO_STATE_DIR` at its state
+root for the final `demo-down` and explicitly confirm that the unmarked state is
+the legacy demo:
+
+```bash
+DEMO_STATE_DIR="$PWD/.local-testing/demo" \
+DEMO_LEGACY_CONFIRM=adopt-legacy-demo make demo-down
+```
+
+The launcher stops the old containers briefly, writes a checksummed legacy
+snapshot, and retires the old seed manifest before initializing Postgres. The
+original SQLite file remains available in that legacy snapshot for manual
+inspection or recovery with Python/SQLite tooling; the Postgres-only
+`demo-restore` command deliberately rejects the older format.
 
 In dev, Vite proxies `/api/*` to the FastAPI container, so the front and back share an origin
 just as they do in production.

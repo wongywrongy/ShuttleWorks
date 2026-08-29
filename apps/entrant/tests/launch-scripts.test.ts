@@ -287,7 +287,16 @@ test('the Tailscale demo has isolated lifecycle targets and guarded config', () 
     'utf8',
   );
 
-  for (const target of ['demo-up', 'demo-rebuild', 'demo-status', 'demo-down', 'demo-reset']) {
+  for (const target of [
+    'demo-up',
+    'demo-rebuild',
+    'demo-status',
+    'demo-down',
+    'demo-backup',
+    'demo-restore-drill',
+    'demo-restore',
+    'demo-reset',
+  ]) {
     expect(makefile).toContain(`${target}:`);
     expect(recipe(makefile, target)).toContain('$(DEMO_COMPOSE)');
   }
@@ -297,8 +306,16 @@ test('the Tailscale demo has isolated lifecycle targets and guarded config', () 
   expect(demoLauncher).toContain('$3 >= 0 && $3 <= 255');
   expect(demoLauncher).toContain('COMPOSE_PROJECT_NAME=shuttleworks-demo');
   expect(demoLauncher).toContain('DEMO_HOST_GID="$(id -g)"');
-  expect(demoLauncher).toContain('.local-testing/demo/data');
+  expect(demoLauncher).toContain('$state_home/shuttleworks/demo');
+  expect(demoLauncher).toContain('DEMO_STATE_DIR');
+  expect(demoLauncher).toContain('DEMO_BACKUP_DIR');
+  expect(demoLauncher).toContain('pg_dumpall -U scheduler --globals-only');
+  expect(demoLauncher).toContain('sha256sum -c SHA256SUMS');
+  expect(demoLauncher).toContain('DEMO_RESTORE_CONFIRM=restore-demo');
+  expect(demoLauncher).toContain('DEMO_RESET_CONFIRM=reset-demo');
   expect(demoOverride).toContain('DEMO_HOST_GID');
+  expect(demoOverride).toContain('image: postgres:16-alpine');
+  expect(demoOverride).toContain('DATABASE_URL_FILE: /run/secrets/demo_database_url');
   expect(demoOverride).toContain('8092:8000');
   expect(demoOverride).toContain('8090:8080');
   expect(demoOverride).toContain('8091:8081');

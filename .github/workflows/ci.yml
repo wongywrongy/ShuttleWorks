@@ -237,10 +237,26 @@ jobs:
           done
           # The demo is an override of the default stack rather than a
           # standalone deployment stack, so validate the combined files too.
+          mkdir -p /tmp/shuttleworks-demo/secrets
+          printf 'ci-only-password\n' > /tmp/shuttleworks-demo/secrets/postgres_password
+          printf 'postgresql://scheduler:ci-only-password@postgres:5432/scheduler\n' \
+            > /tmp/shuttleworks-demo/secrets/database_url
+          bash -n ../../tools/demo-compose.sh || status=1
           DEMO_TAILSCALE_IP=100.68.168.126 \
-          DEMO_DATA_DIR=/tmp/shuttleworks-demo-data \
+          DEMO_STATE_DIR=/tmp/shuttleworks-demo \
           DEMO_HOST_GID=1000 \
-            docker compose -f docker-compose.yml -f demo.override.yml config -q || status=1
+            docker compose -f docker-compose.yml -f demo.override.yml config \
+            > /tmp/shuttleworks-demo/rendered.yml || status=1
+          grep -q 'DATABASE_URL_FILE: /run/secrets/demo_database_url' \
+            /tmp/shuttleworks-demo/rendered.yml || status=1
+          if grep -Eq '^[[:space:]]+DATABASE_URL:' /tmp/shuttleworks-demo/rendered.yml; then
+            echo "::error::demo Compose retained a direct database URL"
+            status=1
+          fi
+          if grep -Eq 'DATABASE_URL: .*sqlite|local\.db' /tmp/shuttleworks-demo/rendered.yml; then
+            echo "::error::demo Compose retained the base SQLite configuration"
+            status=1
+          fi
           exit $status
 
   interaction-smoke:

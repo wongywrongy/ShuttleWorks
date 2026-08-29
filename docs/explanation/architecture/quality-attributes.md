@@ -29,6 +29,11 @@ cloud is unreachable for the entire day.**
   (`_enforce_cloud_secrets`), not a silent degrade to a broken half-state.
 - **Health probes.** `GET /health` (liveness) and `GET /health/deep` (data dir
   writable **and** CP-SAT solver importable) back the operator connection indicator.
+- **Production-parity demo recovery.** The private Tailscale demo uses a
+  dedicated Postgres 16 bind mount and a recovery-first launcher. Backups carry
+  custom-format data, cluster globals, seed manifests, revision/count metadata,
+  and checksums; a restore drill proves the archive in a throwaway database
+  before live restore ([ADR 0016](/explanation/decisions/0016-demo-production-parity-and-durability)).
 
 **Known gap (logged, not hidden):** `tournament_backups` rows live in the same
 database as the data they protect, so **local mode has no in-product off-site
@@ -36,7 +41,9 @@ durability** — a lost disk loses both. This is deliberate: a single operator o
 their own machine owns off-site copies the way they would for any desktop
 application, and `docs/how-to/install-local.md` says so plainly. Cloud mode, where
 it is not optional, has a real answer (`pg_dump` + `pg_dumpall --globals-only`,
-encrypted and off-host, with a restore drill). See
+encrypted and off-host, with a restore drill). The demo has the same backup and
+drill mechanics, but its default backup path is still on-host; disk-loss
+protection begins only when the operator points it at an off-host target. See
 [ADR 0012](/explanation/decisions/0012-remove-the-supabase-mirror). Tauri packaging is also not
 yet scaffolded; Docker Compose is the production shape today.
 

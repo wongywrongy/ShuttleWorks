@@ -27,6 +27,7 @@ references a longer source, it names the file rather than duplicating it.
 | [0013](/explanation/decisions/0013-shared-ui-promotion-policy) | Shared-UI promotion policy | Accepted |
 | [0014](/explanation/decisions/0014-workspace-vs-tournament-vocabulary) | Workspace is the product word; tournament is the storage word | Accepted |
 | [0015](/explanation/decisions/0015-court-policy) | Court policy: queue-run vs court-tied scheduling | Accepted |
+| [0016](/explanation/decisions/0016-demo-production-parity-and-durability) | Private demo production parity and durability | Accepted |
 
 ## Format
 
