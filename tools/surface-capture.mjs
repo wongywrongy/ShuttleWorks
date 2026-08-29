@@ -1,17 +1,18 @@
 /**
  * Surface capture — walks every page of one tier and writes a self-contained
- * HTML report with an embedded screenshot per surface.
+ * HTML/PDF review book with an embedded screenshot per surface.
  *
  * One card per surface, with base64 PNGs inline so the file opens anywhere
  * without an asset directory beside it.
  *
- *   node tools/surface-capture.mjs console  http://127.0.0.1:5173  out.html
- *   node tools/surface-capture.mjs entrant  http://127.0.0.1:5180  out.html
+ *   node tools/surface-capture.mjs console  http://127.0.0.1:5173  out.pdf
+ *   node tools/surface-capture.mjs entrant  http://127.0.0.1:5180  out.pdf
  *
  * Not wired into CI: it needs a running stack and is an authoring tool.
  */
 import { createRequire } from 'node:module';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, extname } from 'node:path';
 
 // Playwright is installed in the e2e workspace, not at the repo root, and ESM
 // resolves from THIS file's location — so reach it through that package.
@@ -20,56 +21,91 @@ const { chromium } = req('playwright');
 
 const [tier, base, outPath] = process.argv.slice(2);
 if (!tier || !base || !outPath) {
-  console.error('usage: surface-capture.mjs <console|entrant> <baseUrl> <out.html>');
+  console.error('usage: surface-capture.mjs <console|entrant> <baseUrl> <out.html|out.pdf>');
+  process.exit(2);
+}
+if (!['console', 'entrant'].includes(tier) || !['.html', '.pdf'].includes(extname(outPath))) {
+  console.error('tier must be console or entrant; output must end in .html or .pdf');
   process.exit(2);
 }
 
-// Workspace + tournament seeded for review (see the session that produced this).
-// The default was a MALFORMED uuid (`…-8fea-3b3237a72dcee4` — a 13-char final
-// group), so every run without an explicit WS_ID 422'd on the API and captured
-// error surfaces. Corrected to the real id of the seeded review workspace.
-const WS = process.env.WS_ID ?? '678379de-7eec-4582-8feb-3237a72dcee4';
-const SLUG = process.env.SLUG ?? 'dfw-lewisville-2026';
+// Current production-parity demo defaults. Override these for another seed run;
+// the selected values are printed into the report so a review is reproducible.
+const WS = process.env.WS_ID ?? 'a86a39b3-0eb4-4c12-9106-5ff1bd1e5aa2';
+const SLUG = process.env.SLUG ?? '2026-korea-masters-t030';
+const DRAW_KEY = process.env.DRAW_KEY ?? 'MS';
+const DOUBLES_DRAW_KEY = process.env.DOUBLES_DRAW_KEY ?? 'MD';
+const SUBMISSION_ID = process.env.SUBMISSION_ID ?? '11111111-1111-4111-8111-111111111111';
+const DISPLAY_TOKEN = process.env.DISPLAY_TOKEN ?? '';
+const AUTH_ME_URL = process.env.AUTH_ME_URL ?? '';
+const SETTLE_MS = Number(process.env.CAPTURE_SETTLE_MS ?? '1800');
+const normalizedBase = base.replace(/\/$/, '');
 
 const CONSOLE_SURFACES = [
+  ['Authentication · Sign in', '/login'],
   ['Hub — workspace list', '/'],
+  ['Hub — create workspace', '/new'],
+  ['Global settings', '/settings'],
   ['Overview', `/tournaments/${WS}/overview`],
-  ['Operations · Plan (queue mode)', `/tournaments/${WS}/schedule`],
-  ['Operations · Run (live)', `/tournaments/${WS}/live`],
-  ['Meet · Roster', `/tournaments/${WS}/roster`],
-  ['Meet · Matches', `/tournaments/${WS}/matches`],
-  ['Meet · Setup', `/tournaments/${WS}/setup`],
-  ['Bracket · Draws', `/tournaments/${WS}/bracket-draws`],
+  ['Bracket · Configuration', `/tournaments/${WS}/bracket-setup`],
   ['Bracket · Roster', `/tournaments/${WS}/bracket-roster`],
+  ['Bracket · Draws index', `/tournaments/${WS}/bracket-draws`],
+  ['Bracket · Draw canvas', `/tournaments/${WS}/bracket-draw`],
   ['Bracket · Matches', `/tournaments/${WS}/bracket-matches`],
-  ['Bracket · Setup', `/tournaments/${WS}/bracket-setup`],
-  ['Entries · Desk', `/tournaments/${WS}/entries`],
+  ['Operations · Plan', `/tournaments/${WS}/bracket-schedule`],
+  ['Operations · Live day', `/tournaments/${WS}/bracket-live`],
+  ['Display · Preview', `/tournaments/${WS}/tv`],
   ['Display · Board config', `/tournaments/${WS}/display-config`],
+  [
+    DISPLAY_TOKEN ? 'Display · Fullscreen venue board' : 'Display · Missing capability',
+    DISPLAY_TOKEN ? `/display?token=${encodeURIComponent(DISPLAY_TOKEN)}` : '/display',
+  ],
   ['Settings · Venue & schedule', `/tournaments/${WS}/ws-venue`],
-  ['Settings · Sharing', `/tournaments/${WS}/ws-sharing`],
   ['Settings · People & access', `/tournaments/${WS}/ws-members`],
+  ['Settings · Sharing', `/tournaments/${WS}/ws-sharing`],
   ['Settings · Modules', `/tournaments/${WS}/ws-modules`],
-  ['Settings · General', `/tournaments/${WS}/ws-settings`],
   ['Settings · Backups', `/tournaments/${WS}/ws-sync`],
+  ['Settings · General and danger zone', `/tournaments/${WS}/ws-settings`],
+  ['Module guard · Entries unavailable', `/tournaments/${WS}/entries`],
+  ['Module guard · Meet configuration unavailable', `/tournaments/${WS}/setup`],
+  ['Module guard · Meet roster unavailable', `/tournaments/${WS}/roster`],
+  ['Module guard · Meet matches unavailable', `/tournaments/${WS}/matches`],
 ];
 
 const ENTRANT_SURFACES = [
-  ['Discovery — find a tournament', '/e/'],
+  ['Discovery · Season', '/e/'],
+  ['Discovery · Completed tournaments', '/e/?view=completed#calendar'],
   ['Tournament · Overview', `/e/${SLUG}`],
   ['Tournament · Events', `/e/${SLUG}?tab=events`],
-  ['Tournament · Entrants', `/e/${SLUG}?tab=entrants`],
+  ['Tournament · Players', `/e/${SLUG}?tab=players`],
   ['Tournament · Draws', `/e/${SLUG}?tab=draws`],
   ['Tournament · Seeded entries', `/e/${SLUG}?tab=seeds`],
   ['Tournament · Winners', `/e/${SLUG}?tab=winners`],
-  ['Draw — finished (U11 BS)', `/e/${SLUG}/draws/u11-bs`],
-  ['Draw — in progress (U13 BS)', `/e/${SLUG}/draws/u13-bs`],
-  ['Draw — not started (U19 BS)', `/e/${SLUG}/draws/u19-bs`],
+  ['Draw · Singles detail', `/e/${SLUG}/draws/${DRAW_KEY}`],
+  ['Draw · Doubles detail', `/e/${SLUG}/draws/${DOUBLES_DRAW_KEY}`],
   ['Regulations reader', `/e/${SLUG}/regulations`],
   ['Entry form', `/e/${SLUG}/enter`],
-  ['Sign in', '/e/login'],
-  ['Create an account', '/e/signup'],
+  ['Entry form · Signed-in outcome', `/e/${SLUG}/enter/signed-in`],
+  ['Entry form · Account-created outcome', `/e/${SLUG}/enter/created`],
+  ['Account · Sign in', '/e/login'],
+  ['Account · Created outcome', '/e/login/created'],
+  ['Account · Failed sign-in outcome', '/e/login/failed'],
+  ['Account · Signed-in outcome', '/e/login/signed-in'],
+  ['Account · Create account', '/e/signup'],
+  ['Account · Create account for tournament', `/e/signup/${SLUG}`],
+  ['Account · Verify address', '/e/verify'],
+  ['Account · Verification complete', '/e/verify/done'],
+  ['Account · Verification failed', '/e/verify/failed'],
+  ['Account · Forgot password', '/e/forgot'],
+  ['Account · Reset password', '/e/reset'],
+  ['Account · Reset email sent', '/e/reset/sent'],
+  ['Account · Password reset complete', '/e/reset/done'],
+  ['Account · Password reset failed', '/e/reset/failed'],
+  ['Doubles partner invitation', '/e/partner'],
+  ['Doubles partner accepted', '/e/partner/accepted'],
+  ['Doubles partner failed', '/e/partner/failed'],
   ['My entries (signed out)', '/e/me/entries'],
-  ['Unpublished tournament (gated tabs)', '/e/dave-freeman-jr-2026'],
+  ['Entry receipt', `/e/${SLUG}/receipt/${SUBMISSION_ID}`],
 ];
 
 const surfaces = tier === 'console' ? CONSOLE_SURFACES : ENTRANT_SURFACES;
@@ -83,6 +119,22 @@ const esc = (s) =>
 
 const browser = await chromium.launch();
 const cards = [];
+let cachedAuthMe = null;
+
+// The production nginx auth budget is intentionally 10 requests/minute. A
+// hard navigation per surface would spend it on the same read-only `/auth/me`
+// bootstrap dozens of times and capture rate-limit pages instead of product
+// UI. Capture that stable local-demo identity once, then fulfill the repeated
+// browser bootstrap locally. Other API reads still exercise the live stack.
+if (tier === 'console' && AUTH_ME_URL) {
+  const response = await fetch(AUTH_ME_URL);
+  if (!response.ok) throw new Error(`AUTH_ME_URL returned HTTP ${response.status}`);
+  cachedAuthMe = {
+    status: response.status,
+    contentType: response.headers.get('content-type') ?? 'application/json',
+    body: await response.text(),
+  };
+}
 
 for (const [label, path] of surfaces) {
   const shots = {};
@@ -90,6 +142,23 @@ for (const [label, path] of surfaces) {
   for (const [vpName, width, height] of VIEWPORTS) {
     const ctx = await browser.newContext({ viewport: { width, height } });
     const page = await ctx.newPage();
+    if (tier === 'console') {
+      await page.route('**/api/auth/me', async (route) => {
+        if (cachedAuthMe === null) {
+          const response = await route.fetch();
+          cachedAuthMe = {
+            status: response.status(),
+            contentType: response.headers()['content-type'] ?? 'application/json',
+            body: await response.text(),
+          };
+        }
+        await route.fulfill({
+          status: cachedAuthMe.status,
+          contentType: cachedAuthMe.contentType,
+          body: cachedAuthMe.body,
+        });
+      });
+    }
     const errors = [];
     page.on('console', (m) => {
       if (m.type() === 'error') errors.push(m.text().slice(0, 200));
@@ -99,17 +168,18 @@ for (const [label, path] of surfaces) {
       // hold a connection open (dev-server sockets, embedded widgets) so
       // networkidle never fires and the capture times out on a page that
       // actually serves in milliseconds.
-      const res = await page.goto(base + path, {
+      const res = await page.goto(normalizedBase + path, {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       });
       await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
-      await page.waitForTimeout(1800);
+      await page.waitForTimeout(SETTLE_MS);
+      await page.evaluate(() => document.fonts.ready).catch(() => {});
       shots[vpName] = (await page.screenshot({ fullPage: true })).toString('base64');
       if (vpName === 'desktop') {
         const status = res?.status() ?? 0;
         const title = await page.title();
-        note = `HTTP ${status} · <code>${esc(title)}</code>`;
+        note = `HTTP ${status} · <code>${esc(title)}</code> · final <code>${esc(new URL(page.url()).pathname + new URL(page.url()).search)}</code>`;
         if (errors.length) {
           note += ` · <span class="err">${errors.length} console error(s): ${esc(errors[0])}</span>`;
         }
@@ -122,8 +192,6 @@ for (const [label, path] of surfaces) {
   cards.push({ label, path, note, shots });
   console.log(`captured  ${label}`);
 }
-
-await browser.close();
 
 const title =
   tier === 'console'
@@ -142,7 +210,7 @@ const html = `<!doctype html>
   .toc { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 20px; margin:20px 0; }
   .toc ul { margin:6px 0 0; padding-left:18px; columns:2; }
   .toc li { font-size:13px; margin:3px 0; }
-  .shot { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:16px 16px 12px; margin:20px 0; }
+  .shot { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:16px 16px 12px; margin:20px 0; break-inside:avoid; }
   .shot h2 { font-size:15px; margin:0 0 3px; }
   .shot .path { font-size:12px; color:#5a6172; margin:0 0 4px; }
   .shot .note { font-size:12px; color:#3c4250; margin:0 0 12px; }
@@ -152,14 +220,33 @@ const html = `<!doctype html>
   .pair img { width:100%; border:1px solid #e5e7eb; border-radius:4px; display:block; }
   .cap { font-size:11px; color:#7a8194; margin:4px 0 0; }
   @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } .toc ul { columns:1; } }
+  @page { size: A3 landscape; margin: 10mm; }
+  @media print {
+    body { background:#fff; }
+    header, main { max-width:none; padding:0; }
+    header { padding:0; }
+    .toc { break-after:page; page-break-after:always; }
+    .shot {
+      min-height:265mm;
+      border:0;
+      border-radius:0;
+      margin:0;
+      padding:0;
+      break-before:page;
+      break-inside:avoid;
+      page-break-before:always;
+      page-break-inside:avoid;
+    }
+    .pair { grid-template-columns:minmax(0, 1fr) 300px; }
+    .pair img { max-height:245mm; object-fit:contain; object-position:top left; }
+  }
 </style></head><body>
 <header>
   <h1>${esc(title)}</h1>
-  <p class="meta">Captured ${new Date().toISOString().slice(0, 10)} against the local stack
-  (API :8600 on <code>data/local.db</code>). Desktop 1440&times;900 and mobile 390&times;844, full-page,
-  for every surface. Source tournament: <code>${esc(SLUG)}</code> — 70 entrants, 9 events, all three
-  publication flags on, results deliberately staged so some events are finished, some mid-draw and
-  some untouched. Generated by <code>tools/surface-capture.mjs</code>.</p>
+  <p class="meta">Captured ${new Date().toISOString()} from <code>${esc(normalizedBase)}</code>.
+  Desktop 1440&times;900 and mobile 390&times;844, full-page. Workspace <code>${esc(WS)}</code>;
+  public tournament <code>${esc(SLUG)}</code>. Generated by
+  <code>tools/surface-capture.mjs</code>.</p>
   <div class="toc"><strong>${cards.length} surfaces</strong>
     <ul>${cards.map((c, i) => `<li><a href="#s${i}">${esc(c.label)}</a></li>`).join('')}</ul>
   </div>
@@ -180,5 +267,24 @@ ${cards
   .join('\n')}
 </main></body></html>`;
 
-writeFileSync(outPath, html);
-console.log(`\nwrote ${outPath} (${(html.length / 1024 / 1024).toFixed(1)} MB)`);
+mkdirSync(dirname(outPath), { recursive: true });
+const htmlPath = extname(outPath) === '.pdf' ? outPath.replace(/\.pdf$/, '.html') : outPath;
+writeFileSync(htmlPath, html);
+console.log(`\nwrote ${htmlPath} (${(html.length / 1024 / 1024).toFixed(1)} MB)`);
+
+if (extname(outPath) === '.pdf') {
+  const reportPage = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+  await reportPage.setContent(html, { waitUntil: 'load', timeout: 120000 });
+  await reportPage.emulateMedia({ media: 'print', reducedMotion: 'reduce' });
+  await reportPage.pdf({
+    path: outPath,
+    format: 'A3',
+    landscape: true,
+    printBackground: true,
+    preferCSSPageSize: true,
+    margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+  });
+  console.log(`wrote ${outPath}`);
+}
+
+await browser.close();
