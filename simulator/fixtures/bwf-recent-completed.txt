@@ -1,0 +1,424 @@
+# BWF Recent Completed Tournaments, Players, and Historical Final Scores Dataset
+# generated=2026-08-29
+# scope=30 most recent completed BWF World Tour / BWF Tour Super 100 tournaments identified from public year-summary tables, as of 2026-08-29
+# note=Scores are tournament finals for MS, WS, MD, WD, and XD. Doubles sides are semicolon-separated individual players.
+# sources=https://en.wikipedia.org/wiki/2026_BWF_World_Tour ; https://en.wikipedia.org/wiki/2025_BWF_World_Tour ; those tables cite BWF schedule/draw/report references
+# format=pipe-delimited UTF-8 text
+# T|tournament_id|year|date_range|end_date|tournament|host|venue|level|prize|draw_format|source_url
+# M|match_id|tournament_id|event|event_label|winner_players|runner_up_players|score|source_url
+# P|player_id|player_name
+# counts tournaments=30 matches=150 unique_players=232
+
+T|T001|2025|14–19 October|2025-10-19|Denmark Open|Odense, Denmark|Arena Fyn|Super 750|$950,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0001|T001|MS|mens_singles_final|Jonatan Christie|Shi Yuqi|13–21, 21–15, 21–15|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0002|T001|WS|womens_singles_final|An Se-young|Wang Zhiyi|21–5, 24–22|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0003|T001|MD|mens_doubles_final|Takuro Hoki; Yugo Kobayashi|Fajar Alfian; Muhammad Shohibul Fikri|21–18, 15–21, 21–19|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0004|T001|WD|womens_doubles_final|Baek Ha-na; Lee So-hee|Kim Hye-jeong; Kong Hee-yong|15–21, 21–14, 21–15|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0005|T001|XD|mixed_doubles_final|Feng Yanzhe; Huang Dongping|Jiang Zhenbang; Wei Yaxin|21–13, 21–9|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T002|2025|21–26 October|2025-10-26|French Open|Cesson-Sévigné, France|Glaz Arena|Super 750|$950,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0006|T002|MS|mens_singles_final|Anders Antonsen|Christo Popov|21–12, 21–19|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0007|T002|WS|womens_singles_final|An Se-young|Wang Zhiyi|21–13, 21–7|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0008|T002|MD|mens_doubles_final|Kim Won-ho; Seo Seung-jae|Fajar Alfian; Muhammad Shohibul Fikri|10–21, 21–13, 21–12|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0009|T002|WD|womens_doubles_final|Yuki Fukushima; Mayu Matsumoto|Li Yijing; Luo Xumin|17–21, 21–18, 21–15|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0010|T002|XD|mixed_doubles_final|Feng Yanzhe; Huang Dongping|Dechapol Puavaranukroh; Supissara Paewsampran|27–25, 21–12|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T003|2025|28 October – 2 November|2025-11-02|Hylo Open|Saarbrücken, Germany|Saarlandhalle|Super 500|$475,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0011|T003|MS|mens_singles_final|Jonatan Christie|Magnus Johannesen|21–14, 21–14|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0012|T003|WS|womens_singles_final|Mia Blichfeldt|Putri Kusuma Wardani|21–11, 7–21, 21–12|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0013|T003|MD|mens_doubles_final|Chiu Hsiang-chieh; Wang Chi-lin|Sabar Karyaman Gutama; Muhammad Reza Pahlevi Isfahani|21–19, 21–18|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0014|T003|WD|womens_doubles_final|Margot Lambert; Camille Pognante|Hsu Yin-hui; Lin Jhih-yun|21–16, 21–10|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0015|T003|XD|mixed_doubles_final|Mathias Christiansen; Alexandra Bøje|Thom Gicquel; Delphine Delrue|23–21, 21–15|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T004|2025|4–9 November|2025-11-09|Korea Masters|Iksan, South Korea|Wonkwang University Cultural and Sports Center|Super 300|$240,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0016|T004|MS|mens_singles_final|Jason Teh|Yudai Okimoto|21–14, 21–15|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0017|T004|WS|womens_singles_final|Chiu Pin-chian|Nguyễn Thùy Linh|21–16, 21–15|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0018|T004|MD|mens_doubles_final|Lee Jong-min; Wang Chan|Raymond Indra; Nikolaus Joaquin|16–21, 21–16, 21–6|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0019|T004|WD|womens_doubles_final|Hinata Suzuki; Nao Yamakita|Kim So-yeong; Lee Seo-jin|21–18, 25–23|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0020|T004|XD|mixed_doubles_final|Kim Jae-hyeon; Jeong Na-eun|Jimmy Wong; Lai Pei Jing|24–22, 21–18|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T005|2025|11–16 November|2025-11-16|Japan Masters|Kumamoto, Japan|Kumamoto Prefectural Gymnasium|Super 500|$475,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0021|T005|MS|mens_singles_final|Kodai Naraoka|Kenta Nishimoto|21–11, 10–21, 21–15|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0022|T005|WS|womens_singles_final|Ratchanok Intanon|Gregoria Mariska Tunjung|21–16, 22–20|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0023|T005|MD|mens_doubles_final|Kim Won-ho; Seo Seung-jae|Hiroki Midorikawa; Kyohei Yamashita|20–22, 21–11, 21–16|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0024|T005|WD|womens_doubles_final|Pearly Tan; Thinaah Muralitharan|Rin Iwanaga; Kie Nakanishi|22–20, 21–19|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0025|T005|XD|mixed_doubles_final|Dechapol Puavaranukroh; Supissara Paewsampran|Thom Gicquel; Delphine Delrue|21–18, 14–21, 21–18|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T006|2025|18–23 November|2025-11-23|Australian Open|Sydney, Australia|State Sports Centre|Super 500|$475,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0026|T006|MS|mens_singles_final|Lakshya Sen|Yushi Tanaka|21–15, 21–11|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0027|T006|WS|womens_singles_final|An Se-young|Putri Kusuma Wardani|21–16, 21–14|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0028|T006|MD|mens_doubles_final|Raymond Indra; Nikolaus Joaquin|Fajar Alfian; Muhammad Shohibul Fikri|22–20, 10–21, 21–18|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0029|T006|WD|womens_doubles_final|Rachel Allessya Rose; Febi Setianingrum|Febriana Dwipuji Kusuma; Meilysa Trias Puspita Sari|18–21, 21–19, 23–21|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0030|T006|XD|mixed_doubles_final|Chen Tang Jie; Toh Ee Wei|Jafar Hidayatullah; Felisha Pasaribu|21–16, 21–11|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T007|2025|25–30 November|2025-11-30|Syed Modi International|Lucknow, India|Babu Banarasi Das Indoor Stadium|Super 300|$240,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0031|T007|MS|mens_singles_final|Jason Gunawan|Srikanth Kidambi|21–16, 8–21, 22–20|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0032|T007|WS|womens_singles_final|Hina Akechi|Neslihan Arın|21–16, 21–14|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0033|T007|MD|mens_doubles_final|Kang Khai Xing; Aaron Tai|Chia Wei Jie; Lwi Sheng Hao|21–9, 21–19|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0034|T007|WD|womens_doubles_final|Treesa Jolly; Gayatri Gopichand Pullela|Kaho Osawa; Mai Tanabe|17–21, 21–13, 21–15|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0035|T007|XD|mixed_doubles_final|Dejan Ferdinansyah; Bernadine Anindya Wardana|Pakkapon Teeraratsakul; Sapsiree Taerattanachai|21–19, 21–16|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T008|2025|2–7 December|2025-12-07|Guwahati Masters|Guwahati, India|Saru Sajai Indoor Stadium|Super 100|$110,000|48MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0036|T008|MS|mens_singles_final|Sanskar Saraswat|Mithun Manjunath|21–11, 17–21, 21–13|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0037|T008|WS|womens_singles_final|Tung Ciou-tong|Tanvi Sharma|21–18, 21–18|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0038|T008|MD|mens_doubles_final|Kang Khai Xing; Aaron Tai|Pruthvi Roy; K. Sai Pratheek|21–13, 21–18|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0039|T008|WD|womens_doubles_final|Isyana Syahira Meida; Rinjani Kwinnara Nastine|Ong Xin Yee; Carmen Ting|21–17, 23–21|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0040|T008|XD|mixed_doubles_final|Marwan Faza; Aisyah Salsabila Putri Pranata|Tanadon Punpanich; Fungfa Korpthammakit|21–14, 21–16|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T009|2025|9–14 December|2025-12-14|Odisha Masters|Cuttack, India|Jawaharlal Nehru Indoor Stadium|Super 100|$110,000|48MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0041|T009|MS|mens_singles_final|Kiran George|Muhamad Yusuf|21–14, 13–21, 21–16|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0042|T009|WS|womens_singles_final|Unnati Hooda|Isharani Baruah|21–17, 21–10|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0043|T009|MD|mens_doubles_final|Ali Faathir Rayhan; Devin Artha Wahyudi|Kang Khai Xing; Aaron Tai|15–21, 21–12, 21–16|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0044|T009|WD|womens_doubles_final|Gabriela Stoeva; Stefani Stoeva|Ong Xin Yee; Carmen Ting|21–19, 21–14|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0045|T009|XD|mixed_doubles_final|Marwan Faza; Aisyah Salsabila Putri Pranata|Dejan Ferdinansyah; Bernadine Anindya Wardana|21–15, 21–10|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T010|2025|17–21 December|2025-12-21|BWF World Tour Finals|Hangzhou, China|Hangzhou Olympic Sports Center|World Tour Finals|$3,000,000|8MS/8WS/8MD/8WD/8XD|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0046|T010|MS|mens_singles_final|Christo Popov|Shi Yuqi|21-19, 21-9|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0047|T010|WS|womens_singles_final|An Se-young|Wang Zhiyi|21–13, 18–21, 21–10|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0048|T010|MD|mens_doubles_final|Kim Won-ho; Seo Seung-jae|Liang Weikeng; Wang Chang|21-18, 21-14|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0049|T010|WD|womens_doubles_final|Baek Ha-na; Lee So-hee|Yuki Fukushima; Mayu Matsumoto|21–17, 21–11|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+M|M0050|T010|XD|mixed_doubles_final|Feng Yanzhe; Huang Dongping|Jiang Zhenbang; Wei Yaxin|21–12, 21–17|https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+T|T011|2026|6–11 January|2026-01-11|Malaysia Open|Kuala Lumpur, Malaysia|Axiata Arena|Super 1000|$1,450,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0051|T011|MS|mens_singles_final|Kunlavut Vitidsarn|Shi Yuqi|23–21, 6–1 (retired)|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0052|T011|WS|womens_singles_final|An Se-young|Wang Zhiyi|21–15, 24–22|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0053|T011|MD|mens_doubles_final|Kim Won-ho; Seo Seung-jae|Aaron Chia; Soh Wooi Yik|21–15, 12–21, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0054|T011|WD|womens_doubles_final|Liu Shengshu; Tan Ning|Baek Ha-na; Lee So-hee|21–18, 21–12|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0055|T011|XD|mixed_doubles_final|Feng Yanzhe; Huang Dongping|Jiang Zhenbang; Wei Yaxin|21–19, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T012|2026|13–18 January|2026-01-18|India Open|New Delhi, India|Indira Gandhi Arena|Super 750|$950,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0056|T012|MS|mens_singles_final|Lin Chun-yi|Jonatan Christie|21–10, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0057|T012|WS|womens_singles_final|An Se-young|Wang Zhiyi|21–13, 21–11|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0058|T012|MD|mens_doubles_final|Liang Weikeng; Wang Chang|Hiroki Midorikawa; Kyohei Yamashita|17–21, 25–23, 21–16|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0059|T012|WD|womens_doubles_final|Liu Shengshu; Tan Ning|Yuki Fukushima; Mayu Matsumoto|21–11, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0060|T012|XD|mixed_doubles_final|Dechapol Puavaranukroh; Supissara Paewsampran|Mathias Christiansen; Alexandra Bøje|19–21, 25–23, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T013|2026|20–25 January|2026-01-25|Indonesia Masters|Jakarta, Indonesia|Istora Senayan|Super 500|$500,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0061|T013|MS|mens_singles_final|Alwi Farhan|Panitchaphon Teeraratsakul|21–5, 21–6|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0062|T013|WS|womens_singles_final|Chen Yufei|Pitchamon Opatniputh|23–21, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0063|T013|MD|mens_doubles_final|Goh Sze Fei; Nur Izzuddin|Raymond Indra; Nikolaus Joaquin|21–19, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0064|T013|WD|womens_doubles_final|Pearly Tan; Thinaah Muralitharan|Arisa Igarashi; Miyu Takahashi|Walkover|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0065|T013|XD|mixed_doubles_final|Chen Tang Jie; Toh Ee Wei|Mathias Christiansen; Alexandra Bøje|15–21, 21–17, 21–11|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T014|2026|27 January – 1 February|2026-02-01|Thailand Masters|Bangkok, Thailand|Nimibutr Stadium|Super 300|$250,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0066|T014|MS|mens_singles_final|Zaki Ubaidillah|Panitchaphon Teeraratsakul|21–19, 20–22, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0067|T014|WS|womens_singles_final|Devika Sihag|Goh Jin Wei|21–8, 6–3 (retired)|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0068|T014|MD|mens_doubles_final|Leo Rolly Carnando; Bagas Maulana|Raymond Indra; Nikolaus Joaquin|21–10, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0069|T014|WD|womens_doubles_final|Amallia Cahaya Pratiwi; Siti Fadia Silva Ramadhanti|Bao Lijing; Li Yijing|15–21, 21–15, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0070|T014|XD|mixed_doubles_final|Adnan Maulana; Indah Cahya Sari Jamil|Bobby Setiabudi; Melati Daeva Oktavianti|18–21, 21–19, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T015|2026|24 February – 1 March|2026-03-01|German Open|Mülheim, Germany|Westenergie Sporthalle|Super 300|$250,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0071|T015|MS|mens_singles_final|Christo Popov|Toma Junior Popov|21–16, 21–15|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0072|T015|WS|womens_singles_final|Han Qianxi|Wang Zhiyi|21–19, 22–20|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0073|T015|MD|mens_doubles_final|Chen Boyang; Liu Yi|Julien Maio; William Villeger|17–21, 21–15, 21–12|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0074|T015|WD|womens_doubles_final|Bao Lijing; Luo Xumin|Li Yijing; Wang Yiduo|21–16, 21–16|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0075|T015|XD|mixed_doubles_final|Cheng Xing; Zhang Chi|Mads Vestergaard; Christine Busch|21–12, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T016|2026|3–8 March|2026-03-08|All England Open|Birmingham, England|Utilita Arena|Super 1000|$1,450,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0076|T016|MS|mens_singles_final|Lin Chun-yi|Lakshya Sen|21–15, 22–20|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0077|T016|WS|womens_singles_final|Wang Zhiyi|An Se-young|21–15, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0078|T016|MD|mens_doubles_final|Kim Won-ho; Seo Seung-jae|Aaron Chia; Soh Wooi Yik|18–21, 21–12, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0079|T016|WD|womens_doubles_final|Liu Shengshu; Tan Ning|Baek Ha-na; Lee So-hee|21–18, 21–12|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0080|T016|XD|mixed_doubles_final|Ye Hong-wei; Nicole Gonzales Chan|Thom Gicquel; Delphine Delrue|21–19, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T017|2026|10–15 March|2026-03-15|Swiss Open|Basel, Switzerland|St. Jakobshalle|Super 300|$250,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0081|T017|MS|mens_singles_final|Yushi Tanaka|Alwi Farhan|21–18, 21–12|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0082|T017|WS|womens_singles_final|Supanida Katethong|Putri Kusuma Wardani|21–11, 21–15|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0083|T017|MD|mens_doubles_final|Lee Fang-chih; Lee Fang-jen|Daniel Lundgaard; Mads Vestergaard|21–18, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0084|T017|WD|womens_doubles_final|Li Yijing; Wang Yiduo|Jia Yifan; Zhang Shuxian|21–10, 22–20|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0085|T017|XD|mixed_doubles_final|Cheng Xing; Zhang Chi|Zhu Yijun; Li Qian|20–22, 21–15, 22–20|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T018|2026|17–22 March|2026-03-22|Orléans Masters|Orléans, France|Palais des Sports|Super 300|$250,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0086|T018|MS|mens_singles_final|Alex Lanier|Toma Junior Popov|21–11, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0087|T018|WS|womens_singles_final|Nozomi Okuhara|Pitchamon Opatniputh|21–15, 21–15|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0088|T018|MD|mens_doubles_final|Hu Keyuan; Lin Xiangyi|Hiroki Okamura; Kyohei Yamashita|21–19, 21–14|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0089|T018|WD|womens_doubles_final|Sumire Nakade; Miyu Takahashi|Lin Chih-chun; Yang Chu-yun|22–20, 12–21, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0090|T018|XD|mixed_doubles_final|Thom Gicquel; Delphine Delrue|Mathias Christiansen; Alexandra Bøje|21–19, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T019|2026|12–17 May|2026-05-17|Thailand Open|Bangkok, Thailand|Nimibutr Stadium|Super 500|$500,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0091|T019|MS|mens_singles_final|Anders Antonsen|Kunlavut Vitidsarn|9–21, 24–22, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0092|T019|WS|womens_singles_final|Akane Yamaguchi|Chen Yufei|21–14, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0093|T019|MD|mens_doubles_final|Leo Rolly Carnando; Daniel Marthin|Satwiksairaj Rankireddy; Chirag Shetty|21–12, 25–23|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0094|T019|WD|womens_doubles_final|Bao Lijing; Cao Zihan|Rin Iwanaga; Kie Nakanishi|19–21, 21–16, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0095|T019|XD|mixed_doubles_final|Mathias Christiansen; Alexandra Bøje|Zhu Yijun; Li Qian|21–17, 21–15|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T020|2026|19–24 May|2026-05-24|Malaysia Masters|Kuala Lumpur, Malaysia|Unifi Arena|Super 500|$500,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0096|T020|MS|mens_singles_final|Li Shifeng|Panitchaphon Teeraratsakul|21–16, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0097|T020|WS|womens_singles_final|Ratchanok Intanon|Chen Yufei|21–17, 21–15|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0098|T020|MD|mens_doubles_final|Mads Vestergaard; Daniel Lundgaard|Goh Sze Fei; Nur Izzudin|21–16, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0099|T020|WD|womens_doubles_final|Chen Fanshutian; Luo Xumin|Sayaka Hirota; Ayako Sakuramoto|21–16, 25–23|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0100|T020|XD|mixed_doubles_final|Gao Jiaxuan; Wei Yaxin|Pakkapon Teeraratsakul; Sapsiree Taerattanachai|21–13, 15–21, 21–11|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T021|2026|26–31 May|2026-05-31|Singapore Open|Singapore|Singapore Indoor Stadium|Super 750|$1,000,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0101|T021|MS|mens_singles_final|Alex Lanier|Loh Kean Yew|17–21, 21–15, 21–14|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0102|T021|WS|womens_singles_final|An Se-young|Akane Yamaguchi|21–11, 17–21, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0103|T021|MD|mens_doubles_final|Satwiksairaj Rankireddy; Chirag Shetty|Fajar Alfian; Muhammad Shohibul Fikri|18–21, 21–17, 21–16|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0104|T021|WD|womens_doubles_final|Jia Yifan; Zhang Shuxian|Liu Shengshu; Tan Ning|22–20, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0105|T021|XD|mixed_doubles_final|Mathias Christiansen; Alexandra Bøje|Yuichi Shimogami; Sayaka Hobara|17–21, 21–12, 21–12|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T022|2026|2–7 June|2026-06-07|Indonesia Open|Jakarta, Indonesia|Istora Gelora Bung Karno|Super 1000|$1,450,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0106|T022|MS|mens_singles_final|Victor Lai|Jonatan Christie|21–19, 21–8|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0107|T022|WS|womens_singles_final|An Se-young|Akane Yamaguchi|23–21, 21–12|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0108|T022|MD|mens_doubles_final|Goh Sze Fei; Nur Izzuddin|Raymond Indra; Nikolaus Joaquin|13–21, 21–18, 21–10|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0109|T022|WD|womens_doubles_final|Yuki Fukushima; Mayu Matsumoto|Liu Shengshu; Tan Ning|21–15, 18–21, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0110|T022|XD|mixed_doubles_final|Mathias Christiansen; Alexandra Bøje|Cheng Xing; Zhang Chi|21–19, 23–21|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T023|2026|9–14 June|2026-06-14|Australian Open|Sydney, Australia|State Sports Centre|Super 500|$500,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0111|T023|MS|mens_singles_final|Alwi Farhan|Dong Tianyao|21–13, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0112|T023|WS|womens_singles_final|Akane Yamaguchi|Pornpawee Chochuwong|22–20, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0113|T023|MD|mens_doubles_final|Chen Boyang; Liu Yi|Sabar Karyaman Gutama; Muhammad Reza Pahlevi Isfahani|21–15, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0114|T023|WD|womens_doubles_final|Jia Yifan; Zhang Shuxian|Febriana Dwipuji Kusuma; Meilysa Trias Puspita Sari|24–22, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0115|T023|XD|mixed_doubles_final|Feng Yanzhe; Huang Dongping|Guo Xinwa; Chen Fanghui|21–17, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T024|2026|16–21 June|2026-06-21|Macau Open|Macau|Macau East Asian Games Dome|Super 300|$370,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0116|T024|MS|mens_singles_final|Hu Zhe'an|Kantaphon Wangcharoen|11–21, 21–10, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0117|T024|WS|womens_singles_final|Kim Ga-eun|Park Ga-eun|21–16, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0118|T024|MD|mens_doubles_final|Jin Yong; Lee Jong-min|Ali Faathir Rayhan; Devin Artha Wahyudi|18–21, 21–19, 21–10|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0119|T024|WD|womens_doubles_final|Bao Lijing; Cao Zihan|Chen Fanshutian; Liu Jiayue|21–18, 21–10|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0120|T024|XD|mixed_doubles_final|Jiang Zhenbang; Wei Yaxin|Chan Yin Chak; Ng Tsz Yau|21–14, 21–14|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T025|2026|23–28 June|2026-06-28|U.S. Open|Fullerton, California, United States|Titan Gym|Super 300|$250,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0121|T025|MS|mens_singles_final|Su Li-yang|Srikanth Kidambi|21–15, 16–21, 21–9|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0122|T025|WS|womens_singles_final|Line Christophersen|Kaloyana Nalbantova|21–16, 16–21, 21–11|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0123|T025|MD|mens_doubles_final|Hiroki Okamura; Kyohei Yamashita|Chen Zhi-ray; Lin Yu-chieh|21–18, 16–21, 21–16|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0124|T025|WD|womens_doubles_final|Sumire Nakade; Miyu Takahashi|Lin Chih-chun; Yang Chu-yun|21–16, 21–10|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0125|T025|XD|mixed_doubles_final|Liu Kuang-heng; Hsu Yin-hui|Wu Hsuan-yi; Yang Chu-yun|21–9, 21–11|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T026|2026|30 June – 5 July|2026-07-05|Canada Open|Markham, Canada|Markham Pan Am Centre|Super 300|$250,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0126|T026|MS|mens_singles_final|Yudai Okimoto|Riki Takei|21–13, 21–3|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0127|T026|WS|womens_singles_final|Riko Gunji|Line Christophersen|21–15, 15–21, 21–6|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0128|T026|MD|mens_doubles_final|Hiroki Okamura; Kyohei Yamashita|Christian Faust Kjær; Rasmus Kjær|13–21, 21–10, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0129|T026|WD|womens_doubles_final|Hinata Suzuki; Nao Yamakita|Kaho Osawa; Mai Tanabe|21–15, 21–16|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0130|T026|XD|mixed_doubles_final|Akira Koga; Natsu Saito|Liu Kuang-heng; Hsu Yin-hui|21–17, 17–21, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T027|2026|14–19 July|2026-07-19|Japan Open|Tokyo, Japan|Tokyo Metropolitan Gymnasium|Super 750|$950,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0131|T027|MS|mens_singles_final|Christo Popov|Koki Watanabe|21–11, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0132|T027|WS|womens_singles_final|P. V. Sindhu|Akane Yamaguchi|21–17, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0133|T027|MD|mens_doubles_final|Fajar Alfian; Muhammad Shohibul Fikri|Kim Won-ho; Seo Seung-jae|21–19, 21–17|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0134|T027|WD|womens_doubles_final|Kim Hye-jeong; Kong Hee-yong|Jia Yifan; Zhang Shuxian|14–21, 21–15, 30–29|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0135|T027|XD|mixed_doubles_final|Feng Yanzhe; Huang Dongping|Tang Chun Man; Tse Ying Suet|21–14, 14–21, 21–15|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T028|2026|21–26 July|2026-07-26|China Open|Changzhou, China|Changzhou Olympic Sports Centre|Super 1000|$2,000,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0136|T028|MS|mens_singles_final|Chou Tien-chen|Toma Junior Popov|21–15, 7–21, 21–13|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0137|T028|WS|womens_singles_final|Akane Yamaguchi|Chen Yufei|21–18, 21–16|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0138|T028|MD|mens_doubles_final|Fajar Alfian; Muhammad Shohibul Fikri|Kim Won-ho; Seo Seung-jae|16–21, 21–19, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0139|T028|WD|womens_doubles_final|Liu Shengshu; Tan Ning|Yuki Fukushima; Mayu Matsumoto|21–14, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0140|T028|XD|mixed_doubles_final|Guo Xinwa; Chen Fanghui|Feng Yanzhe; Huang Dongping|25–23, 20–22, 21–15|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T029|2026|28 July – 2 August|2026-08-02|Taipei Open|Taipei, Taiwan|Taipei Arena|Super 300|$250,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0141|T029|MS|mens_singles_final|Yudai Okimoto|Yoo Tae-bin|21–19, 21–12|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0142|T029|WS|womens_singles_final|Tanvi Sharma|Nguyễn Thùy Linh|21–16, 21–16|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0143|T029|MD|mens_doubles_final|Leo Rolly Carnando; Daniel Marthin|Aaron Chia; Aaron Tai|23–21, 21–19|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0144|T029|WD|womens_doubles_final|Sumire Nakade; Miyu Takahashi|Pearly Tan; Thinaah Muralitharan|21–16, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0145|T029|XD|mixed_doubles_final|Yuta Watanabe; Maya Taguchi|Yang Po-hsuan; Hu Ling-fang|21–19, 21–8|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+T|T030|2026|4–9 August|2026-08-09|Korea Masters|Asan, South Korea|Asan Yi Sun-sin Gymnasium|Super 300|$250,000|32MS/32WS/32MD/32WD/32XD|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0146|T030|MS|mens_singles_final|Zhu Xuanchen|Yoo Tae-bin|21–16, 23–21|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0147|T030|WS|womens_singles_final|Ashmita Chaliha|Han Qianxi|14–21, 21–14, 21–14|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0148|T030|MD|mens_doubles_final|Tee Kai Wun; Yap Roy King|Man Wei Chong; Soh Wooi Yik|21–13, 21–18|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0149|T030|WD|womens_doubles_final|Luo Yi; Wang Tingge|Benyapa Aimsaard; Nuntakarn Aimsaard|17–21, 21–19, 21–14|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+M|M0150|T030|XD|mixed_doubles_final|Yuta Watanabe; Maya Taguchi|Kim Jae-hyeon; Jang Ha-jeong|21–19, 21–14|https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+P|P0001|Aaron Chia
+P|P0002|Aaron Tai
+P|P0003|Adnan Maulana
+P|P0004|Aisyah Salsabila Putri Pranata
+P|P0005|Akane Yamaguchi
+P|P0006|Akira Koga
+P|P0007|Alex Lanier
+P|P0008|Alexandra Bøje
+P|P0009|Ali Faathir Rayhan
+P|P0010|Alwi Farhan
+P|P0011|Amallia Cahaya Pratiwi
+P|P0012|An Se-young
+P|P0013|Anders Antonsen
+P|P0014|Arisa Igarashi
+P|P0015|Ashmita Chaliha
+P|P0016|Ayako Sakuramoto
+P|P0017|Baek Ha-na
+P|P0018|Bagas Maulana
+P|P0019|Bao Lijing
+P|P0020|Benyapa Aimsaard
+P|P0021|Bernadine Anindya Wardana
+P|P0022|Bobby Setiabudi
+P|P0023|Camille Pognante
+P|P0024|Cao Zihan
+P|P0025|Carmen Ting
+P|P0026|Chan Yin Chak
+P|P0027|Chen Boyang
+P|P0028|Chen Fanghui
+P|P0029|Chen Fanshutian
+P|P0030|Chen Tang Jie
+P|P0031|Chen Yufei
+P|P0032|Chen Zhi-ray
+P|P0033|Cheng Xing
+P|P0034|Chia Wei Jie
+P|P0035|Chirag Shetty
+P|P0036|Chiu Hsiang-chieh
+P|P0037|Chiu Pin-chian
+P|P0038|Chou Tien-chen
+P|P0039|Christian Faust Kjær
+P|P0040|Christine Busch
+P|P0041|Christo Popov
+P|P0042|Daniel Lundgaard
+P|P0043|Daniel Marthin
+P|P0044|Dechapol Puavaranukroh
+P|P0045|Dejan Ferdinansyah
+P|P0046|Delphine Delrue
+P|P0047|Devika Sihag
+P|P0048|Devin Artha Wahyudi
+P|P0049|Dong Tianyao
+P|P0050|Fajar Alfian
+P|P0051|Febi Setianingrum
+P|P0052|Febriana Dwipuji Kusuma
+P|P0053|Felisha Pasaribu
+P|P0054|Feng Yanzhe
+P|P0055|Fungfa Korpthammakit
+P|P0056|Gabriela Stoeva
+P|P0057|Gao Jiaxuan
+P|P0058|Gayatri Gopichand Pullela
+P|P0059|Goh Jin Wei
+P|P0060|Goh Sze Fei
+P|P0061|Gregoria Mariska Tunjung
+P|P0062|Guo Xinwa
+P|P0063|Han Qianxi
+P|P0064|Hina Akechi
+P|P0065|Hinata Suzuki
+P|P0066|Hiroki Midorikawa
+P|P0067|Hiroki Okamura
+P|P0068|Hsu Yin-hui
+P|P0069|Hu Keyuan
+P|P0070|Hu Ling-fang
+P|P0071|Hu Zhe'an
+P|P0072|Huang Dongping
+P|P0073|Indah Cahya Sari Jamil
+P|P0074|Isharani Baruah
+P|P0075|Isyana Syahira Meida
+P|P0076|Jafar Hidayatullah
+P|P0077|Jang Ha-jeong
+P|P0078|Jason Gunawan
+P|P0079|Jason Teh
+P|P0080|Jeong Na-eun
+P|P0081|Jia Yifan
+P|P0082|Jiang Zhenbang
+P|P0083|Jimmy Wong
+P|P0084|Jin Yong
+P|P0085|Jonatan Christie
+P|P0086|Julien Maio
+P|P0087|K. Sai Pratheek
+P|P0088|Kaho Osawa
+P|P0089|Kaloyana Nalbantova
+P|P0090|Kang Khai Xing
+P|P0091|Kantaphon Wangcharoen
+P|P0092|Kenta Nishimoto
+P|P0093|Kie Nakanishi
+P|P0094|Kim Ga-eun
+P|P0095|Kim Hye-jeong
+P|P0096|Kim Jae-hyeon
+P|P0097|Kim So-yeong
+P|P0098|Kim Won-ho
+P|P0099|Kiran George
+P|P0100|Kodai Naraoka
+P|P0101|Koki Watanabe
+P|P0102|Kong Hee-yong
+P|P0103|Kunlavut Vitidsarn
+P|P0104|Kyohei Yamashita
+P|P0105|Lai Pei Jing
+P|P0106|Lakshya Sen
+P|P0107|Lee Fang-chih
+P|P0108|Lee Fang-jen
+P|P0109|Lee Jong-min
+P|P0110|Lee Seo-jin
+P|P0111|Lee So-hee
+P|P0112|Leo Rolly Carnando
+P|P0113|Li Qian
+P|P0114|Li Shifeng
+P|P0115|Li Yijing
+P|P0116|Liang Weikeng
+P|P0117|Lin Chih-chun
+P|P0118|Lin Chun-yi
+P|P0119|Lin Jhih-yun
+P|P0120|Lin Xiangyi
+P|P0121|Lin Yu-chieh
+P|P0122|Line Christophersen
+P|P0123|Liu Jiayue
+P|P0124|Liu Kuang-heng
+P|P0125|Liu Shengshu
+P|P0126|Liu Yi
+P|P0127|Loh Kean Yew
+P|P0128|Luo Xumin
+P|P0129|Luo Yi
+P|P0130|Lwi Sheng Hao
+P|P0131|Mads Vestergaard
+P|P0132|Magnus Johannesen
+P|P0133|Mai Tanabe
+P|P0134|Man Wei Chong
+P|P0135|Margot Lambert
+P|P0136|Marwan Faza
+P|P0137|Mathias Christiansen
+P|P0138|Maya Taguchi
+P|P0139|Mayu Matsumoto
+P|P0140|Meilysa Trias Puspita Sari
+P|P0141|Melati Daeva Oktavianti
+P|P0142|Mia Blichfeldt
+P|P0143|Mithun Manjunath
+P|P0144|Miyu Takahashi
+P|P0145|Muhamad Yusuf
+P|P0146|Muhammad Reza Pahlevi Isfahani
+P|P0147|Muhammad Shohibul Fikri
+P|P0148|Nao Yamakita
+P|P0149|Natsu Saito
+P|P0150|Neslihan Arın
+P|P0151|Ng Tsz Yau
+P|P0152|Nguyễn Thùy Linh
+P|P0153|Nicole Gonzales Chan
+P|P0154|Nikolaus Joaquin
+P|P0155|Nozomi Okuhara
+P|P0156|Nuntakarn Aimsaard
+P|P0157|Nur Izzuddin
+P|P0158|Nur Izzudin
+P|P0159|Ong Xin Yee
+P|P0160|P. V. Sindhu
+P|P0161|Pakkapon Teeraratsakul
+P|P0162|Panitchaphon Teeraratsakul
+P|P0163|Park Ga-eun
+P|P0164|Pearly Tan
+P|P0165|Pitchamon Opatniputh
+P|P0166|Pornpawee Chochuwong
+P|P0167|Pruthvi Roy
+P|P0168|Putri Kusuma Wardani
+P|P0169|Rachel Allessya Rose
+P|P0170|Rasmus Kjær
+P|P0171|Ratchanok Intanon
+P|P0172|Raymond Indra
+P|P0173|Riki Takei
+P|P0174|Riko Gunji
+P|P0175|Rin Iwanaga
+P|P0176|Rinjani Kwinnara Nastine
+P|P0177|Sabar Karyaman Gutama
+P|P0178|Sanskar Saraswat
+P|P0179|Sapsiree Taerattanachai
+P|P0180|Satwiksairaj Rankireddy
+P|P0181|Sayaka Hirota
+P|P0182|Sayaka Hobara
+P|P0183|Seo Seung-jae
+P|P0184|Shi Yuqi
+P|P0185|Siti Fadia Silva Ramadhanti
+P|P0186|Soh Wooi Yik
+P|P0187|Srikanth Kidambi
+P|P0188|Stefani Stoeva
+P|P0189|Su Li-yang
+P|P0190|Sumire Nakade
+P|P0191|Supanida Katethong
+P|P0192|Supissara Paewsampran
+P|P0193|Takuro Hoki
+P|P0194|Tan Ning
+P|P0195|Tanadon Punpanich
+P|P0196|Tang Chun Man
+P|P0197|Tanvi Sharma
+P|P0198|Tee Kai Wun
+P|P0199|Thinaah Muralitharan
+P|P0200|Thom Gicquel
+P|P0201|Toh Ee Wei
+P|P0202|Toma Junior Popov
+P|P0203|Treesa Jolly
+P|P0204|Tse Ying Suet
+P|P0205|Tung Ciou-tong
+P|P0206|Unnati Hooda
+P|P0207|Victor Lai
+P|P0208|Wang Chan
+P|P0209|Wang Chang
+P|P0210|Wang Chi-lin
+P|P0211|Wang Tingge
+P|P0212|Wang Yiduo
+P|P0213|Wang Zhiyi
+P|P0214|Wei Yaxin
+P|P0215|William Villeger
+P|P0216|Wu Hsuan-yi
+P|P0217|Yang Chu-yun
+P|P0218|Yang Po-hsuan
+P|P0219|Yap Roy King
+P|P0220|Ye Hong-wei
+P|P0221|Yoo Tae-bin
+P|P0222|Yudai Okimoto
+P|P0223|Yugo Kobayashi
+P|P0224|Yuichi Shimogami
+P|P0225|Yuki Fukushima
+P|P0226|Yushi Tanaka
+P|P0227|Yuta Watanabe
+P|P0228|Zaki Ubaidillah
+P|P0229|Zhang Chi
+P|P0230|Zhang Shuxian
+P|P0231|Zhu Xuanchen
+P|P0232|Zhu Yijun

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nextActionFor } from '../nextAction';
+import { nextActionFor, rowActionFor } from '../nextAction';
 import type { TournamentSummaryDTO } from '../../../api/dto';
 
 const t = (reason?: string): TournamentSummaryDTO => ({
@@ -18,5 +18,33 @@ describe('nextActionFor', () => {
   });
   it('defaults to Open with no reason', () => {
     expect(nextActionFor(t())).toEqual({ label: 'Open', reasonCode: null });
+  });
+});
+
+describe('rowActionFor', () => {
+  it('opens completed and past bracket workspaces on their draw directory', () => {
+    const bracket = {
+      ...t(),
+      kind: 'bracket' as const,
+      tournamentDate: '2026-01-01',
+      signals: {
+        health: 'good' as const,
+        attention: [],
+        phase: 'complete' as const,
+        modules: { enabled: 1, available: 0, disabled: 0, comingSoon: 0 },
+        setup: {},
+        collaboration: { memberCount: 0, activeInviteCount: 0 },
+      },
+    };
+    expect(rowActionFor(bracket, 'upcoming')).toEqual({
+      label: 'View draws',
+      kind: 'results',
+      segment: 'bracket-draws',
+    });
+    expect(rowActionFor({ ...bracket, signals: undefined }, 'past')).toEqual({
+      label: 'View draws',
+      kind: 'results',
+      segment: 'bracket-draws',
+    });
   });
 });

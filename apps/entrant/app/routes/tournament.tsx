@@ -23,12 +23,14 @@ import { EventRow } from '../components/EventRow';
 import { HeroHeader } from '../components/HeroHeader';
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
+import { PlayersList } from '../components/PlayersList';
 import { SectionCard } from '../components/SectionCard';
 import { TabBar } from '../components/TabBar';
 import { TimelineCard } from '../components/TimelineCard';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type {
   DrawsIndexDTO,
+  PlayersDTO,
   SeedsDTO,
   WinnersDTO,
 } from '../lib/draws.types';
@@ -54,6 +56,7 @@ export interface TournamentLoaderData {
   /** Present only when the matching tab is active — one extra public read
    * per document, never a fan-out (SP-P7 §3.4–3.6). */
   draws?: DrawsIndexDTO;
+  players?: PlayersDTO;
   seeds?: SeedsDTO;
   winners?: WinnersDTO;
 }
@@ -95,7 +98,9 @@ export async function loader({
     nowMs: Date.now(),
   };
   const base = `/e/api/page/${encodeURIComponent(slug)}`;
-  if (active === 'draws') {
+  if (active === 'players') {
+    payload.players = await apiGet<PlayersDTO>(`${base}/players`);
+  } else if (active === 'draws') {
     payload.draws = await apiGet<DrawsIndexDTO>(`${base}/draws`);
   } else if (active === 'seeds') {
     payload.seeds = await apiGet<SeedsDTO>(`${base}/seeds`);
@@ -121,8 +126,13 @@ export const meta: Route.MetaFunction = ({ data }) => {
     return [{ title: 'Entry page not found' }];
   }
 
-  const { tournament, org, venue, page } = data.page;
-  const title = tournament.name ? `${tournament.name} · Enter now` : 'Enter now';
+  const { tournament, org, venue, page, events, publication } = data.page;
+  const titleSuffix = events.some((event) => event.isOpen)
+    ? 'Enter now'
+    : publication.results
+      ? 'Results'
+      : 'Tournament';
+  const title = tournament.name ? `${tournament.name} · ${titleSuffix}` : titleSuffix;
   const description = [tournament.date, venue?.name, page.introText]
     .filter((part): part is string => Boolean(part))
     .join(' · ');
@@ -265,6 +275,21 @@ function DrawsPanel({ slug, draws }: { slug: string; draws: DrawsIndexDTO }) {
                 .filter(Boolean)
                 .join(' · ')}
             </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {card.matchCoverage.expected === null
+                ? `${card.matchCoverage.imported} match records`
+                : `${card.matchCoverage.imported} of ${card.matchCoverage.expected} match records`}
+              {card.matchCoverage.missing
+                ? ` · ${card.matchCoverage.missing} unavailable`
+                : ''}
+            </p>
+            {card.topologyScope !== 'full_draw' ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {card.topologyScope === 'proven_winner_advancement'
+                  ? 'Recorded paths use source-proven advancement only.'
+                  : 'Recorded matches are shown without inferred connections.'}
+              </p>
+            ) : null}
           </a>
         </li>
       ))}
@@ -423,6 +448,9 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
             )}
             <ReserveList reserves={page.reserves ?? []} />
           </>
+        ) : null}
+        {active === 'players' && loaderData.players ? (
+          <PlayersList roster={loaderData.players} />
         ) : null}
         {active === 'draws' && loaderData.draws ? (
           <>

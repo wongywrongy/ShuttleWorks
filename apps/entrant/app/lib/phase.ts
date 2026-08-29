@@ -26,7 +26,14 @@
  */
 import type { FormEcho } from './echo';
 
-export type Tab = 'overview' | 'events' | 'entrants' | 'draws' | 'seeds' | 'winners';
+export type Tab =
+  | 'overview'
+  | 'events'
+  | 'entrants'
+  | 'players'
+  | 'draws'
+  | 'seeds'
+  | 'winners';
 
 export type ChipState =
   | { kind: 'entriesOpen'; closesInDays: number | null }
@@ -287,6 +294,7 @@ export function visibleTabs(
     // for the pre-SP-P7 callers in old fixtures; absent falls back to the
     // old data-driven entrants rule with no result tabs at all.
     ['entrants', publication ? publication.entrants : entrants.length > 0],
+    ['players', publication?.draws ?? false],
     ['draws', publication?.draws ?? false],
     ['seeds', publication?.draws ?? false],
     ['winners', publication?.results ?? false],
@@ -496,8 +504,13 @@ export function statusCell(row: SeasonRow): StatusCell {
     case 'entries_closed':
       return { kind: 'chip-muted', label: 'Entries closed' };
     case 'completed_winners':
-      return { kind: 'link', label: 'Winners', href: `${page}?tab=winners` };
     case 'completed':
+      if (row.drawsPublished) {
+        return { kind: 'link', label: 'Draws', href: `${page}?tab=draws` };
+      }
+      if (row.winnersPublished) {
+        return { kind: 'link', label: 'Winners', href: `${page}?tab=winners` };
+      }
       return { kind: 'text', label: 'Completed' };
   }
 }

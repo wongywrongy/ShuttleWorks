@@ -17,7 +17,7 @@ export function nextActionFor(t: TournamentSummaryDTO): { label: string; reasonC
 
 /** What the single row CTA does, in plain language, by time group:
  *  - undated → "Set date" (opens General settings — there is no date route).
- *  - past    → "View results" (opens the workspace, receded — it's done).
+ *  - past    → the most useful review surface for that workspace kind.
  *  - upcoming → the most useful setup step, else "Open workspace". */
 type RowActionKind = 'open' | 'set-date' | 'results';
 export interface RowAction {
@@ -42,11 +42,15 @@ export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAct
     if (phase === 'live')
       return { label: 'Open live day', kind: 'open', segment: br ? 'bracket-live' : 'live' };
     if (phase === 'complete')
-      return { label: 'View results', kind: 'results', segment: br ? 'bracket-matches' : 'matches' };
+      return br
+        ? { label: 'View draws', kind: 'results', segment: 'bracket-draws' }
+        : { label: 'View results', kind: 'results', segment: 'matches' };
   }
   if (group === 'undated') return { label: 'Set date', kind: 'set-date' };
   if (group === 'past')
-    return { label: 'View results', kind: 'results', segment: br ? 'bracket-matches' : 'matches' };
+    return br
+      ? { label: 'View draws', kind: 'results', segment: 'bracket-draws' }
+      : { label: 'View results', kind: 'results', segment: 'matches' };
   const next = nextActionFor(t);
   return { label: next.reasonCode ? next.label : 'Open workspace', kind: 'open' };
 }

@@ -11,6 +11,7 @@ Meet solves ride the async job rail (``POST /tournaments/{id}/solve-jobs``
 ``POST /bracket/schedule-next``. Never the ``/stream`` SSE variants
 (dev proxies buffer SSE).
 """
+
 from __future__ import annotations
 
 import re
@@ -20,9 +21,7 @@ from typing import Any, Iterable, Optional
 
 import httpx
 
-_UUID_RE = re.compile(
-    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I
-)
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
 
 
 def _template(path: str) -> str:
@@ -30,6 +29,7 @@ def _template(path: str) -> str:
     per-endpoint report readable AND makes byEndpoint deterministic across
     runs (the server generates tournament UUIDs)."""
     return _UUID_RE.sub("{id}", path)
+
 
 # Statuses that chaos steps may legitimately expect.
 OK = frozenset({200})
@@ -145,9 +145,7 @@ class SimClient:
         for attempt in range(self.TRANSPORT_RETRIES):
             start = time.perf_counter()
             try:
-                resp = self._http.request(
-                    method, path, json=json, data=data, headers=headers
-                )
+                resp = self._http.request(method, path, json=json, data=data, headers=headers)
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout) as exc:
                 last_exc = exc
                 time.sleep(0.25 * (attempt + 1))
@@ -189,15 +187,11 @@ class SimClient:
 
     def login(self, email: str, password: str) -> dict:
         """``POST /auth/login`` — puts ``sw_session`` on this client's jar."""
-        user = self._json(
-            "POST", "/auth/login", json={"email": email, "password": password}
-        )
+        user = self._json("POST", "/auth/login", json={"email": email, "password": password})
         self._prove_csrf()
         return user
 
-    def register(
-        self, email: str, password: str, display_name: Optional[str] = None
-    ) -> dict:
+    def register(self, email: str, password: str, display_name: Optional[str] = None) -> dict:
         """``POST /auth/register`` — creates the account, its personal org and
         the owner membership, and returns *already signed in* (the route sets
         the session cookie itself, so no second call is needed).
@@ -213,9 +207,7 @@ class SimClient:
         self._prove_csrf()
         return user
 
-    def sign_in(
-        self, email: str, password: str, display_name: Optional[str] = None
-    ) -> dict:
+    def sign_in(self, email: str, password: str, display_name: Optional[str] = None) -> dict:
         """Log in, registering the account if this deployment has never seen it.
 
         **Call the one that succeeds on your common path.** There are two
@@ -270,10 +262,13 @@ class SimClient:
         name: str,
         kind: str = "meet",
         modules: Optional[list[dict]] = None,
+        tournament_date: Optional[str] = None,
     ) -> dict:
         body: dict[str, Any] = {"name": name, "kind": kind}
         if modules is not None:
             body["modules"] = modules
+        if tournament_date is not None:
+            body["tournamentDate"] = tournament_date
         return self._json("POST", "/tournaments", json=body, expect=OK_OR_CREATED)
 
     def list_tournaments(self) -> list[dict]:
@@ -290,7 +285,9 @@ class SimClient:
     def get_modules(self, tid: str) -> list[dict]:
         return self._json("GET", f"/tournaments/{tid}/modules")
 
-    def patch_module(self, tid: str, module_id: str, status: str, config: Optional[dict] = None) -> dict:
+    def patch_module(
+        self, tid: str, module_id: str, status: str, config: Optional[dict] = None
+    ) -> dict:
         body: dict[str, Any] = {"status": status}
         if config is not None:
             body["config"] = config
@@ -313,9 +310,7 @@ class SimClient:
         probe = self.request("GET", f"/tournaments/{tid}/state", expect={200, 204})
         etag = probe.headers.get("etag")
         headers = {"If-Match": etag} if etag else {}
-        return self._json(
-            "PUT", f"/tournaments/{tid}/state", json=blob, headers=headers
-        )
+        return self._json("PUT", f"/tournaments/{tid}/state", json=blob, headers=headers)
 
     def solve(
         self,
@@ -347,7 +342,9 @@ class SimClient:
         while job["status"] not in terminal:
             if time.monotonic() > deadline:
                 raise ApiError(
-                    "GET", f"/tournaments/{tid}/solve-jobs/{job['id']}", 0,
+                    "GET",
+                    f"/tournaments/{tid}/solve-jobs/{job['id']}",
+                    0,
                     f"solve job still {job['status']} after {timeout}s",
                 )
             time.sleep(poll_interval)
@@ -362,7 +359,9 @@ class SimClient:
         )
 
     def finalize_plan(self, tid: str, finalized: bool = True) -> dict:
-        return self._json("POST", f"/tournaments/{tid}/plan-finalized", json={"finalized": finalized})
+        return self._json(
+            "POST", f"/tournaments/{tid}/plan-finalized", json={"finalized": finalized}
+        )
 
     # ---- operations (meet command queue + match states) --------------------
 
@@ -402,6 +401,12 @@ class SimClient:
     def create_bracket(self, tid: str, body: dict) -> dict:
         return self._json("POST", f"/tournaments/{tid}/bracket", json=body, expect=OK_OR_CREATED)
 
+    def import_bracket(self, tid: str, body: dict) -> dict:
+        """Install a pre-paired bracket through the product import seam."""
+        return self._json(
+            "POST", f"/tournaments/{tid}/bracket/import", json=body, expect=OK_OR_CREATED
+        )
+
     def get_bracket(self, tid: str) -> dict:
         return self._json("GET", f"/tournaments/{tid}/bracket")
 
@@ -413,14 +418,20 @@ class SimClient:
     def schedule_next(self, tid: str) -> dict:
         return self._json("POST", f"/tournaments/{tid}/bracket/schedule-next")
 
-    def bracket_match_action(self, tid: str, play_unit_id: str, action: str, slot: Optional[int] = None) -> dict:
+    def bracket_match_action(
+        self, tid: str, play_unit_id: str, action: str, slot: Optional[int] = None
+    ) -> dict:
         body: dict[str, Any] = {"play_unit_id": play_unit_id, "action": action}
         if slot is not None:
             body["slot"] = slot
         return self._json("POST", f"/tournaments/{tid}/bracket/match-action", json=body)
 
-    def bracket_command(self, tid: str, body: dict, *, expect: Iterable[int] = OK) -> httpx.Response:
-        return self.request("POST", f"/tournaments/{tid}/bracket/commands", json=body, expect=expect)
+    def bracket_command(
+        self, tid: str, body: dict, *, expect: Iterable[int] = OK
+    ) -> httpx.Response:
+        return self.request(
+            "POST", f"/tournaments/{tid}/bracket/commands", json=body, expect=expect
+        )
 
     # ---- entries: the operator's desk + its configuration ------------------
 
@@ -428,9 +439,11 @@ class SimClient:
         return self._json("PUT", f"/tournaments/{tid}/entry-page", json=body)
 
     def create_entry_event(self, tid: str, body: dict) -> dict:
-        return self._json(
-            "POST", f"/tournaments/{tid}/entry-events", json=body, expect={201}
-        )
+        return self._json("POST", f"/tournaments/{tid}/entry-events", json=body, expect={201})
+
+    def patch_entry_page_publication(self, tid: str, body: dict) -> dict:
+        """Toggle entrant publication gates without replacing page content."""
+        return self._json("PATCH", f"/tournaments/{tid}/entry-page/publication", json=body)
 
     def list_entries(self, tid: str, state: Optional[str] = None) -> list[dict]:
         suffix = f"?state={state}" if state else ""
@@ -461,9 +474,7 @@ class SimClient:
 
     def entrant_login(self, email: str, password: str) -> httpx.Response:
         """``POST /e/account/login`` — sets ``sw_play_session`` on the jar."""
-        return self.request(
-            "POST", "/e/account/login", json={"email": email, "password": password}
-        )
+        return self.request("POST", "/e/account/login", json={"email": email, "password": password})
 
     def form_csrf(self) -> str:
         """The hidden ``_csrf`` field's value for this client's session.
@@ -480,9 +491,7 @@ class SimClient:
         secret = self._http.cookies.get("sw_play_session") or ""
         if not secret:
             return ""
-        return hashlib.sha256(
-            ("sw-play-form-csrf:" + secret).encode("utf-8")
-        ).hexdigest()
+        return hashlib.sha256(("sw-play-form-csrf:" + secret).encode("utf-8")).hexdigest()
 
     def submit_entry(
         self, slug: str, fields: list[tuple[str, str]], *, expect: Iterable[int] = (303,)

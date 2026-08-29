@@ -42,6 +42,60 @@ PYTHONPATH=simulator python -m tournament_sim list
 
 Exit code 0 ⇔ zero invariant violations and zero 5xx.
 
+## BWF historical-data seeder
+
+The internal `seed` command imports the pipe-delimited `T|`, `M|` and `P|`
+dataset through the same HTTP boundary as the scenarios. Its optional `TNOTE`
+companion is strictly reconciled with every redundant tournament field and
+retains the additional level, draw-format, and timing prose. It never writes
+product tables directly. Preview validates the complete source and reports
+both SHA-256 hashes without contacting the backend; apply creates one bracket
+workspace per tournament, embeds each verified result in a non-schedulable
+historical event, publishes a historical results projection, and writes
+resumable checkpoints under
+`.local-testing/demo/data/import-runs/<seed-key>.json`.
+
+```bash
+PYTHONPATH=simulator python -m tournament_sim seed preview simulator/fixtures/bwf-recent-completed.txt \
+  --notes simulator/fixtures/bwf-recent-completed-notes.txt
+PYTHONPATH=simulator python -m tournament_sim seed apply simulator/fixtures/bwf-recent-completed.txt \
+  --notes simulator/fixtures/bwf-recent-completed-notes.txt \
+  --match-data /path/to/bwf-match-data/matches.csv \
+  --daily-results T027=/path/to/japan-open-2026.html \
+  --daily-results T028=/path/to/china-open-2026.html \
+  --seed-key bwf-recent --base-url http://localhost:8600
+PYTHONPATH=simulator python -m tournament_sim seed status --seed-key bwf-recent
+PYTHONPATH=simulator python -m tournament_sim seed resume simulator/fixtures/bwf-recent-completed.txt \
+  --notes simulator/fixtures/bwf-recent-completed-notes.txt \
+  --seed-key bwf-recent --base-url http://localhost:8600
+PYTHONPATH=simulator python -m tournament_sim seed reset --seed-key bwf-recent \
+  --confirm bwf-recent --base-url http://localhost:8600
+```
+
+The same seed key and complete set of source hashes is a no-op. A changed source is refused
+unless `--replace` is provided; reset only deletes workspace IDs recorded by
+that run manifest and requires the typed confirmation.
+
+The checked-in fixture contains exactly five championship finals per tournament.
+For a richer local demo, clone `SahilMotyar/bwf-match-data` separately and cache
+the two configured daily-results pages, then pass the three paths above. Raw
+third-party match data is not vendored because that repository has no formal
+license file. The source map pins its commit and URLs; the run manifest records
+every content hash and per-tournament imported/expected/missing counts.
+
+With the audited 2026-08-29 sources, the import contains 4,235 verified records:
+T001–T026 have 3,917 completed main-draw rows, Japan has 155/155, China has
+153/155, and Taipei plus Korea remain five-finals-only. Missing rows stay
+explicitly unavailable; no match, player identity, score, walkover, or
+withdrawal is fabricated. Japan/China local dates, times, courts, outcome
+status, and per-match source references are retained when present.
+
+Even a 155/155 archive uses `completed_matches_only`, not `full_draw`: the
+sources enumerate completed rows but do not provide stable source feeder/slot
+IDs. The importer proves only adjacent-round edges whose earlier winner exactly
+matches the later side; it inferred 3,985 such edges in this archive. Gaps and
+ambiguous edges remain disconnected and visibly partial rather than guessed.
+
 ## Scenarios
 
 | name | what it drives |

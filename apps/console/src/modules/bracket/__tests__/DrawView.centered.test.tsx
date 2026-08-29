@@ -2,7 +2,12 @@ import type { ReactElement } from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import { DrawView } from '../DrawView';
+import {
+  DrawView,
+  computeBracketConnectorPaths,
+  computeMirroredBracketLayout,
+  computeOneSidedBracketLayout,
+} from '../DrawView';
 import type { PlayUnitDTO, TournamentDTO } from '../../../api/bracketDto';
 
 vi.mock('../../../api/bracketClient', () => ({
@@ -32,6 +37,8 @@ function pu(
   matchIndex: number,
   sideA: string[] | null,
   sideB: string[] | null,
+  feederA: string | null = null,
+  feederB: string | null = null,
 ): PlayUnitDTO {
   return {
     id,
@@ -41,9 +48,9 @@ function pu(
     side_a: sideA,
     side_b: sideB,
     duration_slots: 1,
-    dependencies: [],
-    slot_a: { participant_id: sideA?.[0] ?? null, feeder_play_unit_id: null },
-    slot_b: { participant_id: sideB?.[0] ?? null, feeder_play_unit_id: null },
+    dependencies: [feederA, feederB].filter((id): id is string => id !== null),
+    slot_a: { participant_id: sideA?.[0] ?? null, feeder_play_unit_id: feederA },
+    slot_b: { participant_id: sideB?.[0] ?? null, feeder_play_unit_id: feederB },
   };
 }
 
@@ -78,9 +85,9 @@ const EIGHT_PLAYER: TournamentDTO = {
     pu('r0m1', 0, 1, ['p3'], ['p4']),
     pu('r0m2', 0, 2, ['p5'], ['p6']),
     pu('r0m3', 0, 3, ['p7'], ['p8']),
-    pu('r1m0', 1, 0, null, null),
-    pu('r1m1', 1, 1, null, null),
-    pu('r2m0', 2, 0, null, null),
+    pu('r1m0', 1, 0, null, null, 'r0m0', 'r0m1'),
+    pu('r1m1', 1, 1, null, null, 'r0m2', 'r0m3'),
+    pu('r2m0', 2, 0, null, null, 'r1m0', 'r1m1'),
   ],
   assignments: [],
   results: [],
@@ -164,6 +171,33 @@ describe('DrawView — one-sided bracket layout (default)', () => {
       expect(container.querySelector(`[data-round="${ri}"]`)).not.toBeNull();
     }
   });
+
+  it('renders one connector for every persisted feeder relationship', () => {
+    renderDrawView(
+      <DrawView data={EIGHT_PLAYER} eventId="MS" onChange={vi.fn()} refresh={async () => {}} />,
+    );
+
+    const svg = screen.getByTestId('bracket-connectors');
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    expect(svg.querySelectorAll('path')).toHaveLength(6);
+    expect(svg.querySelector('[data-feeder="r0m0"][data-target="r1m0"]')).not.toBeNull();
+    expect(svg.querySelector('[data-feeder="r1m1"][data-target="r2m0"]')).not.toBeNull();
+  });
+
+  it('omits unknown and absent feeder relationships instead of inventing topology', () => {
+    const layout = computeOneSidedBracketLayout(EIGHT_PLAYER.events[0].rounds);
+    const units = EIGHT_PLAYER.play_units.map((unit) => ({
+      ...unit,
+      slot_a: { ...unit.slot_a },
+      slot_b: { ...unit.slot_b },
+    }));
+    units.find((unit) => unit.id === 'r1m0')!.slot_a.feeder_play_unit_id = null;
+    units.find((unit) => unit.id === 'r1m0')!.slot_b.feeder_play_unit_id = 'not-in-draw';
+
+    const paths = computeBracketConnectorPaths(layout, units);
+    expect(paths).toHaveLength(4);
+    expect(paths.some((path) => path.targetPlayUnitId === 'r1m0')).toBe(false);
+  });
 });
 
 describe('DrawView — mirrored bracket layout (opt-in)', () => {
@@ -211,5 +245,16 @@ describe('DrawView — mirrored bracket layout (opt-in)', () => {
     const r1m1 = cellCenterY(getCell(container, 'r1m1'));
     const r2m0 = cellCenterY(getCell(container, 'r2m0'));
     expect(r2m0).toBeCloseTo((r1m0 + r1m1) / 2, 1);
+  });
+
+  it('routes both wings toward the centered final without invalid geometry', () => {
+    const layout = computeMirroredBracketLayout(EIGHT_PLAYER.events[0].rounds);
+    const paths = computeBracketConnectorPaths(layout, EIGHT_PLAYER.play_units);
+
+    expect(paths).toHaveLength(6);
+    expect(paths.every((path) => !path.d.includes('NaN'))).toBe(true);
+    const finalPaths = paths.filter((path) => path.targetPlayUnitId === 'r2m0');
+    expect(finalPaths).toHaveLength(2);
+    expect(finalPaths[0].d).not.toEqual(finalPaths[1].d);
   });
 });

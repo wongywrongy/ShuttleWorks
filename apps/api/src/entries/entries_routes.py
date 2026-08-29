@@ -32,15 +32,16 @@ that way because ``require_tournament_access`` binds to it and
 ``tests/test_tenant_isolation.py`` derives its probe set from it. A route
 here named ``workspace_id`` would silently leave the tenancy suite.
 """
+
 from __future__ import annotations
 
 import re
 import uuid
 from datetime import date, datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Path, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -62,11 +63,13 @@ from db.models import (
     MeetEvent,
     Submission,
     Tournament,
+    EntrantAccount,
 )
 from repositories import LocalRepository, get_repository
-from entries import lifecycle, money, retention
+from entries import lifecycle, money, retention, submissions
 from entries.entries import commit_entries
 from entries.entry_fees import normalize_fee_schedule
+from core.limits import MAX_EVENTS, Identifier, Name, Notes, StrictModel
 
 router = APIRouter(prefix="/tournaments", tags=["entries"])
 
@@ -97,15 +100,85 @@ _SLUG_RE = re.compile(r"^[a-z0-9-]{3,60}$")
 # never reaches node at all. (`sitemap.xml` and `robots.txt` are two more
 # static routes node owns, but the `.` in each already fails `_SLUG_RE`
 # above, so they cannot collide and are not listed here.)
-_RESERVED_SLUGS = frozenset({
-    "api", "account", "health", "signup", "login", "me",
-    # E2 (Phase 7): the account-flow pages node now owns. A workspace called
-    # "verify" would be unreachable behind them, and — worse — a director
-    # could claim the slug an entrant's confirmation link points at.
-    "verify", "forgot", "reset",
-    # E3 (Phase 8): the doubles invitation page.
-    "partner",
-})
+_RESERVED_SLUGS = frozenset(
+    {
+        "api",
+        "account",
+        "health",
+        "signup",
+        "login",
+        "me",
+        # E2 (Phase 7): the account-flow pages node now owns. A workspace called
+        # "verify" would be unreachable behind them, and — worse — a director
+        # could claim the slug an entrant's confirmation link points at.
+        "verify",
+        "forgot",
+        "reset",
+        # E3 (Phase 8): the doubles invitation page.
+        "partner",
+    }
+)
+
+
+# ---- internal batch import ----------------------------------------------
+
+
+class EntryImportPlayerDTO(StrictModel):
+    """One normalized player record for the operator import seam.
+
+    The importer owns parsing (for example, the supplied pipe-delimited
+    source file); this route accepts only resolved workspace event ids. That
+    keeps source-format concerns out of the API and ensures every write goes
+    through ``entries.submissions.create_submission``.
+    """
+
+    sourceKey: Identifier
+    fullName: Name
+    gender: str = Field(..., min_length=1, max_length=20)
+    club: Optional[Name] = None
+    birthYear: Optional[int] = Field(None, ge=1900, le=2200)
+    remarks: Optional[Notes] = None
+    eventIds: List[uuid.UUID] = Field(..., min_length=1, max_length=MAX_EVENTS)
+    partners: Dict[str, str] = Field(default_factory=dict, max_length=MAX_EVENTS)
+
+
+class EntryImportSubmissionDTO(StrictModel):
+    """One submission-shaped batch item.
+
+    ``sourceKey`` identifies the source record. ``idempotencyKey`` is the
+    database retry key and must be supplied separately so an importer can
+    change its source labels without accidentally changing replay identity.
+    """
+
+    sourceKey: Identifier
+    idempotencyKey: str = Field(..., min_length=1, max_length=64)
+    accountId: uuid.UUID
+    players: List[EntryImportPlayerDTO] = Field(..., min_length=1, max_length=2000)
+    feeTotalCents: Optional[int] = Field(None, ge=0)
+    feeBasis: Optional[Dict[str, Any]] = None
+    emailVerified: bool = True
+
+
+class EntryImportBatchDTO(StrictModel):
+    """The complete normalized batch submitted by a trusted operator."""
+
+    sourceKey: Identifier
+    submissions: List[EntryImportSubmissionDTO] = Field(..., min_length=1, max_length=2000)
+
+
+class EntryImportSubmissionResultDTO(BaseModel):
+    sourceKey: str
+    idempotencyKey: str
+    submissionId: str
+    replayed: bool
+    playersCreated: int
+    entriesCreated: int
+
+
+class EntryImportBatchResultDTO(BaseModel):
+    sourceKey: str
+    replayed: bool
+    submissions: List[EntryImportSubmissionResultDTO]
 
 
 def _event_codes(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
@@ -123,9 +196,7 @@ def _event_codes(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
     }
 
 
-def _get_entry(
-    repo: LocalRepository, tournament_id: uuid.UUID, entry_id: uuid.UUID
-) -> Entry:
+def _get_entry(repo: LocalRepository, tournament_id: uuid.UUID, entry_id: uuid.UUID) -> Entry:
     """Fetch one entry **within this workspace**, or 404.
 
     Scoped by the composite primary key, so an id that is perfectly valid
@@ -135,9 +206,7 @@ def _get_entry(
     """
     row = repo.session.get(Entry, (tournament_id, entry_id))
     if row is None:
-        raise http_error(
-            404, ErrorCode.ENTRY_NOT_FOUND, f"entry not found: {entry_id}"
-        )
+        raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, f"entry not found: {entry_id}")
     return row
 
 
@@ -148,9 +217,7 @@ def _get_entry(
 )
 def list_entries(
     tournament_id: uuid.UUID = Path(...),
-    state: Optional[str] = Query(
-        None, description="Filter to one lifecycle state (spec §6)."
-    ),
+    state: Optional[str] = Query(None, description="Filter to one lifecycle state (spec §6)."),
     repo: LocalRepository = Depends(get_repository),
 ):
     """The desk list: newest submission first, each row naming its act.
@@ -176,14 +243,9 @@ def list_entries(
     stmt = select(Entry).where(Entry.tournament_id == tournament_id)
     if state:
         stmt = stmt.where(Entry.state == state)
-    rows = repo.session.scalars(
-        stmt.order_by(Entry.submitted_at.desc(), Entry.id.desc())
-    )
+    rows = repo.session.scalars(stmt.order_by(Entry.submitted_at.desc(), Entry.id.desc()))
     codes = _event_codes(repo, tournament_id)
-    return [
-        EntryDeskRowDTO.from_row(row, event_code=codes.get(row.entry_event_id))
-        for row in rows
-    ]
+    return [EntryDeskRowDTO.from_row(row, event_code=codes.get(row.entry_event_id)) for row in rows]
 
 
 @router.post(
@@ -210,6 +272,163 @@ def commit_entries_route(
     """
     result = commit_entries(repo, tournament_id, entry_event_id=entry_event_id)
     return EntryCommitResultDTO(**result.as_dict())
+
+
+@router.post(
+    "/{tournament_id}/entries/import",
+    response_model=EntryImportBatchResultDTO,
+    status_code=200,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def import_entries(
+    body: EntryImportBatchDTO,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Import normalized submissions through the ordinary entry write seam.
+
+    This is intentionally an operator route, not a public-form shortcut.
+    The caller resolves source records to this workspace's ``eventIds`` and
+    supplies an existing entrant account; this handler never inserts ORM
+    rows directly and never creates accounts on behalf of a source file.
+
+    Every item is preflighted before the first write. The service's commit is
+    suppressed so the whole batch shares one transaction: a malformed event,
+    missing account, or failed downstream write rolls back all submissions.
+    Replays are safe because ``idempotencyKey`` is the existing submission
+    idempotency key, scoped by tournament and account. ``sourceKey`` remains
+    an importer trace key and is returned in the result, while the explicit
+    database key controls replay identity.
+    """
+    batch_source = body.sourceKey.strip()
+    if not batch_source:
+        raise http_error(400, ErrorCode.INVALID_INPUT, "sourceKey must not be empty")
+
+    # Reject duplicate identities before any flush. This also avoids a
+    # partial replay/create answer when the same key appears twice in one
+    # request.
+    seen_idempotency: set[tuple[uuid.UUID, str]] = set()
+    seen_sources: set[str] = set()
+    resolved: list[tuple[EntryImportSubmissionDTO, list[list[Any]]]] = []
+    for submission in body.submissions:
+        source_key = submission.sourceKey.strip()
+        idempotency_key = submission.idempotencyKey.strip()
+        if not source_key or not idempotency_key:
+            raise http_error(
+                400,
+                ErrorCode.INVALID_INPUT,
+                "submission sourceKey and idempotencyKey must not be empty",
+            )
+        if source_key in seen_sources:
+            raise http_error(
+                400,
+                ErrorCode.INVALID_INPUT,
+                f"duplicate submission sourceKey: {source_key}",
+            )
+        identity = (submission.accountId, idempotency_key)
+        if identity in seen_idempotency:
+            raise http_error(
+                400,
+                ErrorCode.INVALID_INPUT,
+                f"duplicate idempotencyKey: {idempotency_key}",
+            )
+        seen_sources.add(source_key)
+        seen_idempotency.add(identity)
+
+        account = repo.session.get(EntrantAccount, submission.accountId)
+        if account is None:
+            raise http_error(
+                400,
+                ErrorCode.INVALID_INPUT,
+                f"entrant account not found: {submission.accountId}",
+            )
+
+        players: list[list[Any]] = []
+        player_keys: set[str] = set()
+        for player in submission.players:
+            player_source = player.sourceKey.strip()
+            if not player_source:
+                raise http_error(400, ErrorCode.INVALID_INPUT, "player sourceKey must not be empty")
+            if player_source in player_keys:
+                raise http_error(
+                    400,
+                    ErrorCode.INVALID_INPUT,
+                    f"duplicate player sourceKey: {player_source}",
+                )
+            player_keys.add(player_source)
+            events: list[EntryEvent] = []
+            event_ids: set[uuid.UUID] = set()
+            for event_id in player.eventIds:
+                if event_id in event_ids:
+                    raise http_error(
+                        400,
+                        ErrorCode.INVALID_INPUT,
+                        f"duplicate eventId for player {player_source}: {event_id}",
+                    )
+                event_ids.add(event_id)
+                event = repo.session.get(EntryEvent, (tournament_id, event_id))
+                if event is None:
+                    raise http_error(
+                        400,
+                        ErrorCode.INVALID_INPUT,
+                        f"entry event not found in tournament: {event_id}",
+                    )
+                events.append(event)
+            players.append([player, events])
+        resolved.append((submission, players))
+
+    results: list[EntryImportSubmissionResultDTO] = []
+    # One workspace has at most one entry page. Resolve it once rather than
+    # turning a large import into one identical lookup per submission.
+    page = repo.session.get(EntryPage, tournament_id)
+    try:
+        for submission, players in resolved:
+            # ``page`` is optional for an internal import. Existing entry
+            # pages are still used to snapshot regulations when present;
+            # historical/demo workspaces may intentionally have no page.
+            result = submissions.create_submission(
+                repo.session,
+                tournament_id=tournament_id,
+                page=page,
+                account_id=submission.accountId,
+                players=[
+                    submissions.PlayerInput(
+                        full_name=player.fullName,
+                        gender=player.gender,
+                        club=player.club,
+                        birth_year=player.birthYear,
+                        remarks=player.remarks,
+                        events=events,
+                        partners=player.partners,
+                    )
+                    for player, events in players
+                ],
+                fee_total_cents=submission.feeTotalCents,
+                fee_basis=submission.feeBasis,
+                idempotency_key=submission.idempotencyKey.strip(),
+                email_verified=submission.emailVerified,
+                commit=False,
+            )
+            results.append(
+                EntryImportSubmissionResultDTO(
+                    sourceKey=submission.sourceKey.strip(),
+                    idempotencyKey=submission.idempotencyKey.strip(),
+                    submissionId=str(result.submission.id),
+                    replayed=result.replayed,
+                    playersCreated=0 if result.replayed else len(result.players),
+                    entriesCreated=0 if result.replayed else len(result.entries),
+                )
+            )
+        repo.session.commit()
+    except Exception:
+        repo.session.rollback()
+        raise
+
+    return EntryImportBatchResultDTO(
+        sourceKey=batch_source,
+        replayed=bool(results) and all(item.replayed for item in results),
+        submissions=results,
+    )
 
 
 @router.post(
@@ -353,7 +572,6 @@ def withdraw_entry_at_the_desk(
     return _desk_row(repo, tournament_id, row)
 
 
-
 # ---- money: the operator records a payment made elsewhere (E5, Phase 10) --
 #
 # v1 processes nothing (spec Q8's boundary, untouched): a director is told
@@ -391,9 +609,7 @@ def _get_submission(
 ) -> Submission:
     row = repo.session.get(Submission, (tournament_id, submission_id))
     if row is None:
-        raise http_error(
-            404, ErrorCode.ENTRY_NOT_FOUND, f"submission not found: {submission_id}"
-        )
+        raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, f"submission not found: {submission_id}")
     return row
 
 
@@ -455,7 +671,6 @@ def mark_submission_unpaid(
     )
 
 
-
 class RetentionSweepDTO(BaseModel):
     """What one retention run did, in counts an operator can read back."""
 
@@ -494,9 +709,7 @@ def run_retention_sweep(
     """
     tournament = repo.session.get(Tournament, tournament_id)
     if tournament is None:
-        raise http_error(
-            404, ErrorCode.TOURNAMENT_NOT_FOUND, "workspace not found"
-        )
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "workspace not found")
     raw_date = getattr(tournament, "tournament_date", None)
     event_date = None
     if raw_date:
@@ -596,9 +809,7 @@ def _validated_fee_schedule(raw: Optional[dict]) -> Optional[dict]:
             ErrorCode.INVALID_INPUT,
             "feeSchedule must be an object of event count to price in cents",
         )
-    rejected = sorted(
-        str(key) for key, value in raw.items() if not _tier_is_usable(key, value)
-    )
+    rejected = sorted(str(key) for key, value in raw.items() if not _tier_is_usable(key, value))
     if rejected:
         raise http_error(
             400,
@@ -691,16 +902,14 @@ def upsert_entry_page(
         raise http_error(
             400,
             ErrorCode.INVALID_INPUT,
-            "slug must be 3-60 characters of lowercase letters, digits and "
-            f"hyphens: {body.slug!r}",
+            f"slug must be 3-60 characters of lowercase letters, digits and hyphens: {body.slug!r}",
         )
 
     if slug in _RESERVED_SLUGS:
         raise http_error(
             400,
             ErrorCode.INVALID_INPUT,
-            f"the slug {slug!r} is reserved for entrant-app routing and "
-            "cannot be used",
+            f"the slug {slug!r} is reserved for entrant-app routing and cannot be used",
         )
 
     # Slugs are globally unique — the slug alone resolves the public page,
@@ -830,9 +1039,7 @@ def patch_entry_page_publication(
     return EntryPageDTO.from_row(row)
 
 
-def _meet_event_id(
-    repo: LocalRepository, tournament_id: uuid.UUID, code: str
-) -> Optional[str]:
+def _meet_event_id(repo: LocalRepository, tournament_id: uuid.UUID, code: str) -> Optional[str]:
     """The Meet division this entry event maps onto, resolved at creation.
 
     **R-DM-5 requires a real mapping column, and a column nothing populates

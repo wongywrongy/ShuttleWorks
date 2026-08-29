@@ -186,8 +186,8 @@ describe('WorkspaceOverview', () => {
         modules: [{ moduleId: 'bracket', status: 'enabled', config: null }],
       };
       renderOverview(br);
-      screen.getByRole('button', { name: 'View results' }).click();
-      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/bracket-matches');
+      screen.getByRole('button', { name: 'View draws' }).click();
+      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/bracket-draws');
     });
   });
 

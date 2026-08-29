@@ -28,7 +28,7 @@ import type {
 } from '../lib/draws.types';
 import { isRoundRobin, kindLabel } from '../lib/draws.types';
 import type { EntryPageDTO } from '../lib/entryPage.types';
-import type { PlayerMatchDTO } from '../lib/player.types';
+import type { MatchCardData } from '../components/MatchCard';
 import type { Route } from './+types/draw';
 
 export interface DrawLoaderData {
@@ -94,7 +94,7 @@ function nodeToMatch(
   node: MatchNodeDTO,
   teams: Map<string, TeamDTO>,
   roundLabel: string | null,
-): PlayerMatchDTO {
+): MatchCardData {
   const decided = node.result?.winnerSide === 'A' || node.result?.winnerSide === 'B';
   return {
     eventCode: '',
@@ -117,7 +117,45 @@ function nodeToMatch(
     decided,
     scheduledTime: node.scheduledTime,
     court: node.court,
+    playedOn: node.playedOn,
+    localTime: node.localTime,
+    courtLabel: node.courtLabel,
+    sourceUrl: node.sourceUrl,
+    sourceRef: node.sourceRef,
   };
+}
+
+function CoverageNote({ draw }: { draw: DrawDetailDTO }) {
+  const { imported, expected, missing } = draw.matchCoverage;
+  return (
+    <aside className="rounded-lg border border-rule-soft bg-surface-raised p-4 text-sm text-muted-foreground">
+      <p>
+        {expected === null
+          ? `${imported} match records are available.`
+          : `${imported} of ${expected} match records are available${
+              missing ? `; ${missing} unavailable source ${missing === 1 ? 'record was' : 'records were'} not inferred` : ''
+            }.`}
+      </p>
+      {draw.topologyScope !== 'full_draw' ? (
+        <p className="mt-1">
+          {draw.topologyScope === 'proven_winner_advancement'
+            ? 'Connections appear only where winner advancement is proven by the source data.'
+            : 'Recorded matches are shown independently because feeder topology was not supplied.'}
+        </p>
+      ) : null}
+      {draw.identityScope === 'source_local_name' ? (
+        <p className="mt-1">Player identities use normalized, source-local roster names.</p>
+      ) : null}
+      {draw.sourceUrl ? (
+        <a
+          href={draw.sourceUrl}
+          className="mt-2 inline-block font-medium text-accent underline-offset-4 hover:underline"
+        >
+          Tournament source
+        </a>
+      ) : null}
+    </aside>
+  );
 }
 
 function StandingsTable({ draw }: { draw: DrawDetailDTO }) {
@@ -247,6 +285,10 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
           {[draw.eventCode, kindLabel(draw.kind), `${draw.size} entries`].join(' · ')}
         </p>
 
+        <div className="mt-4">
+          <CoverageNote draw={draw} />
+        </div>
+
         <div className="mt-6 grid gap-6">
           {roundRobin ? (
             <>
@@ -279,7 +321,29 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
               />
               {segment ? (
                 <div className="overflow-x-auto pb-2">
-                  <div className="flex items-stretch gap-4">
+                  <div className="relative flex items-stretch gap-4" data-bracket-connect>
+                    <svg
+                      aria-hidden="true"
+                      focusable="false"
+                      className="pointer-events-none absolute inset-0 h-full w-full text-rule-control"
+                    >
+                      {segment.rounds.flatMap((round) =>
+                        round.matches.flatMap((node) =>
+                          node.sides.flatMap((side, sideIndex) =>
+                            side.feederNodeKey ? (
+                              <path
+                                key={`${side.feederNodeKey}-${node.nodeKey}-${sideIndex}`}
+                                data-feeder-node-key={side.feederNodeKey}
+                                data-target-node-key={node.nodeKey}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                              />
+                            ) : [],
+                          ),
+                        ),
+                      )}
+                    </svg>
                     {segment.rounds.map((round) => (
                       <div key={round.label} className="w-64 shrink-0">
                         <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
@@ -287,10 +351,9 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                         </h2>
                         <div className="mt-3 flex h-full flex-col justify-around gap-3">
                           {round.matches.map((node) => (
-                            <MatchCard
-                              key={node.nodeKey}
-                              match={nodeToMatch(node, teams, null)}
-                            />
+                            <div key={node.nodeKey} data-node-key={node.nodeKey} className="relative z-10">
+                              <MatchCard match={nodeToMatch(node, teams, null)} />
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -298,6 +361,11 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                   </div>
                 </div>
               ) : null}
+              {segment?.rounds.some((round) =>
+                round.matches.some((node) =>
+                  node.sides.some((side) => Boolean(side.feederNodeKey)),
+                ),
+              ) ? <script type="module" src="/e/assets/bracket-connectors.js" /> : null}
             </>
           )}
         </div>

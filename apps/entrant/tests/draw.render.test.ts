@@ -29,6 +29,8 @@ const DRAWS_INDEX = {
       kind: 'se',
       size: 4,
       hasConsolation: false,
+      matchCoverage: { imported: 3, expected: 3, missing: 0 },
+      recordScope: 'full_draw', topologyScope: 'full_draw', historical: false, sourceUrl: null,
     },
     {
       drawKey: 'WS',
@@ -37,9 +39,21 @@ const DRAWS_INDEX = {
       kind: 'rr',
       size: 3,
       hasConsolation: false,
+      matchCoverage: { imported: 3, expected: 3, missing: 0 },
+      recordScope: 'full_draw', topologyScope: 'full_draw', historical: false, sourceUrl: null,
     },
   ],
   divisions: [],
+};
+
+const PLAYERS = {
+  published: true,
+  players: [
+    { playerKey: 'p2', name: 'Bea Osei', eventCodes: ['WS'] },
+    { playerKey: 'p1', name: 'Ada Lovelace', eventCodes: ['MS', 'XD'] },
+  ],
+  referencedPlayerCount: 3,
+  missingNameCount: 1,
 };
 
 const SEEDS = {
@@ -85,6 +99,9 @@ const SE_DRAW = {
   kind: 'se',
   size: 4,
   resultsPublished: true,
+  matchCoverage: { imported: 3, expected: 3, missing: 0 },
+  recordScope: 'full_draw', topologyScope: 'full_draw', historical: false,
+  sourceUrl: null, identityScope: null,
   teams: [
     { participantKey: 'p1', names: ['Ada Lovelace'], club: 'Analytical BC', seed: 1 },
     { participantKey: 'p2', names: ['Grace Hopper'], club: null, seed: null },
@@ -102,8 +119,8 @@ const SE_DRAW = {
               nodeKey: 'sf1',
               position: 1,
               sides: [
-                { participantKey: 'p1', placeholder: null, bye: false },
-                { participantKey: 'p2', placeholder: null, bye: false },
+                { participantKey: 'p1', placeholder: null, bye: false, feederNodeKey: null, feederTake: null },
+                { participantKey: 'p2', placeholder: null, bye: false, feederNodeKey: null, feederTake: null },
               ],
               result: {
                 winnerSide: 'A',
@@ -120,8 +137,8 @@ const SE_DRAW = {
               nodeKey: 'sf2',
               position: 2,
               sides: [
-                { participantKey: 'p3', placeholder: null, bye: false },
-                { participantKey: null, placeholder: null, bye: true },
+                { participantKey: 'p3', placeholder: null, bye: false, feederNodeKey: null, feederTake: null },
+                { participantKey: null, placeholder: null, bye: true, feederNodeKey: null, feederTake: null },
               ],
               result: null,
               scheduledTime: null,
@@ -136,8 +153,8 @@ const SE_DRAW = {
               nodeKey: 'f1',
               position: 1,
               sides: [
-                { participantKey: 'p1', placeholder: null, bye: false },
-                { participantKey: null, placeholder: 'Winner of SF 2', bye: false },
+                { participantKey: 'p1', placeholder: null, bye: false, feederNodeKey: 'sf1', feederTake: 'winner' },
+                { participantKey: null, placeholder: 'Winner of SF 2', bye: false, feederNodeKey: 'sf2', feederTake: 'winner' },
               ],
               result: null,
               scheduledTime: '14:30',
@@ -159,6 +176,9 @@ const RR_DRAW = {
   kind: 'rr',
   size: 3,
   resultsPublished: true,
+  matchCoverage: { imported: 3, expected: null, missing: null },
+  recordScope: 'full_draw', topologyScope: 'full_draw', historical: false,
+  sourceUrl: null, identityScope: null,
   teams: [
     { participantKey: 'a', names: ['Ann Ito'], club: 'North BC', seed: null },
     { participantKey: 'b', names: ['Bea Osei'], club: null, seed: null },
@@ -175,8 +195,8 @@ const RR_DRAW = {
               nodeKey: 'r1m1',
               position: 1,
               sides: [
-                { participantKey: 'a', placeholder: null, bye: false },
-                { participantKey: 'b', placeholder: null, bye: false },
+                { participantKey: 'a', placeholder: null, bye: false, feederNodeKey: null, feederTake: null },
+                { participantKey: 'b', placeholder: null, bye: false, feederNodeKey: null, feederTake: null },
               ],
               result: { winnerSide: 'A', score: [[21, 10]], walkover: false },
               scheduledTime: '09:00',
@@ -257,7 +277,7 @@ async function render(path: string): Promise<string> {
 }
 
 describe('the tab bar under full publication', () => {
-  it('carries the §3.7 order: Overview · Events · Entrants · Draws · Seeded entries · Winners', async () => {
+  it('puts the published-draw Players directory before Draws', async () => {
     stubApi({});
     const html = await render('/e/spring-open');
     const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
@@ -266,10 +286,23 @@ describe('the tab bar under full publication', () => {
       'Overview',
       'Events',
       'Entrants',
+      'Players',
       'Draws',
       'Seeded entries',
       'Winners',
     ]);
+  });
+});
+
+describe('the Players tab', () => {
+  it('lists every named draw roster person as text, with honest missing-name copy', async () => {
+    stubApi({ '/players': PLAYERS });
+    const html = await render('/e/spring-open?tab=players');
+    expect(html).toContain('Ada Lovelace');
+    expect(html).toContain('MS, XD');
+    expect(html).toContain('1 draw roster reference has no published player name');
+    expect(html).toContain('not entrant profiles');
+    expect(html).not.toContain('/players/p1');
   });
 });
 
@@ -351,6 +384,11 @@ describe('the elimination draw page', () => {
     expect(html).toContain('10:30 · Court 1');
     // Wide content scrolls in its own container (R11).
     expect(html).toContain('overflow-x-auto');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain('data-feeder-node-key="sf1"');
+    expect(html).toContain('data-feeder-node-key="sf2"');
+    expect(html).toContain('/e/assets/bracket-connectors.js');
+    expect((html.match(/<article/g) ?? []).length).toBe(3);
   });
 
   it('offers the Draw / Consolation link-pills and honors ?segment=', async () => {

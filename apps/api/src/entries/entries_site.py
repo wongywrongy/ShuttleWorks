@@ -25,8 +25,10 @@ confidently wrong (the 2026-08-10 defect class).
 
 from __future__ import annotations
 
+import unicodedata
 import uuid
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Path, Response
 from pydantic import BaseModel
@@ -130,11 +132,48 @@ def _clubs_by_roster_id(repo: LocalRepository, tournament_id) -> Dict[str, Optio
     not in this map and renders club-less — calm, not wrong.
     """
     rows = repo.session.execute(
-        select(EntryPlayer.id, EntryPlayer.club).where(
-            EntryPlayer.tournament_id == tournament_id
-        )
+        select(EntryPlayer.id, EntryPlayer.club).where(EntryPlayer.tournament_id == tournament_id)
     ).all()
     return {roster_id(pid): club for pid, club in rows}
+
+
+def _bracket_roster_names(tournament: Tournament) -> Dict[str, str]:
+    """Canonical bracket-roster id → public display name.
+
+    Historical pairs carry member ids on the draw participant. Those ids are
+    the only sound way to recover two individual names: splitting a team
+    label on ``/`` corrupts real names and invents identity structure. Invalid
+    or unnamed blob rows stay absent and are counted by the Players projection
+    instead of leaking an id as though it were a name.
+    """
+    out: Dict[str, str] = {}
+    for row in (tournament.data or {}).get("bracketPlayers") or []:
+        if not isinstance(row, dict):
+            continue
+        key, name = row.get("id"), row.get("name")
+        if isinstance(key, str) and key and isinstance(name, str) and name.strip():
+            out[key] = name.strip()
+    return out
+
+
+def _participant_names(participant, roster_names: Dict[str, str]) -> List[str]:
+    """Resolve a draw participant without parsing its presentation label."""
+    if participant.members:
+        resolved = [roster_names[m] for m in participant.members if m in roster_names]
+        # Partial member resolution would display a one-person doubles side.
+        # Keep the unsplit source label in that case: honest and reversible.
+        if len(resolved) == len(participant.members):
+            return resolved
+    roster_name = roster_names.get(participant.id)
+    return [roster_name or participant.name]
+
+
+def _alphabetic_name_key(name: str) -> str:
+    return "".join(
+        char
+        for char in unicodedata.normalize("NFKD", name).casefold()
+        if not unicodedata.combining(char)
+    )
 
 
 def _hhmm_plus(day_start: str, minutes: int) -> str:
@@ -156,6 +195,11 @@ class DrawCardDTO(BaseModel):
     kind: str  # the format tag: 'se' | 'rr' | 'de' | 'swiss' | 'compass' | 'monrad'
     size: int
     hasConsolation: bool
+    matchCoverage: "MatchCoverageDTO"
+    recordScope: str
+    topologyScope: str
+    historical: bool = False
+    sourceUrl: Optional[str] = None
 
 
 class DrawsIndexDTO(BaseModel):
@@ -181,12 +225,44 @@ class TeamDTO(BaseModel):
     seed: Optional[int] = None
 
 
+class DrawPlayerDTO(BaseModel):
+    """One real roster person referenced by at least one published draw.
+
+    ``playerKey`` is only a stable row identity. It is deliberately not an
+    Entries person key and the public tier never turns it into a profile URL.
+    Historical source-name identities cannot safely claim that relationship.
+    """
+
+    playerKey: str
+    name: str
+    eventCodes: List[str]
+
+
+class PlayersDTO(BaseModel):
+    published: bool
+    players: List[DrawPlayerDTO] = []
+    referencedPlayerCount: int = 0
+    missingNameCount: int = 0
+
+
+class MatchCoverageDTO(BaseModel):
+    imported: int
+    expected: Optional[int] = None
+    missing: Optional[int] = None
+
+
 class SideDTO(BaseModel):
     participantKey: Optional[str] = None
     # "Winner of QF 3" / "Loser of R1 5" when the slot is fed by another
     # match; "Bye" for the BYE sentinel; None with a participantKey set.
     placeholder: Optional[str] = None
     bye: bool = False
+    # Structural edge metadata for the progressively enhanced connector
+    # layer. It is safe with results hidden: the same feeder relationship is
+    # already stated by ``placeholder``. Historical independent match rows
+    # have no invented feeder and therefore leave both fields absent.
+    feederNodeKey: Optional[str] = None
+    feederTake: Optional[Literal["winner", "loser"]] = None
 
 
 class NodeResultDTO(BaseModel):
@@ -206,6 +282,11 @@ class MatchNodeDTO(BaseModel):
     # Venue-local naive strings; None until scheduled.
     scheduledTime: Optional[str] = None
     court: Optional[int] = None
+    playedOn: Optional[str] = None
+    localTime: Optional[str] = None
+    courtLabel: Optional[str] = None
+    sourceUrl: Optional[str] = None
+    sourceRef: Optional[str] = None
 
 
 class RoundDTO(BaseModel):
@@ -240,6 +321,12 @@ class DrawDetailDTO(BaseModel):
     kind: str
     size: int
     resultsPublished: bool
+    matchCoverage: MatchCoverageDTO
+    recordScope: str
+    topologyScope: str
+    historical: bool = False
+    sourceUrl: Optional[str] = None
+    identityScope: Optional[str] = None
     teams: List[TeamDTO]
     segments: List[SegmentDTO]
     # RR/Swiss only, and only when results are published.
@@ -341,7 +428,7 @@ def _round_label(total_rounds: int, index: int, knockout: bool) -> str:
         return "Semifinals"
     if remaining == 3:
         return "Quarterfinals"
-    return f"Round of {2 ** remaining}"
+    return f"Round of {2**remaining}"
 
 
 def _short_round(total_rounds: int, index: int, knockout: bool) -> str:
@@ -354,7 +441,7 @@ def _short_round(total_rounds: int, index: int, knockout: bool) -> str:
         return "SF"
     if remaining == 3:
         return "QF"
-    return f"R{2 ** remaining}"
+    return f"R{2**remaining}"
 
 
 _KNOCKOUT_FORMATS = {"se", "de", "compass", "monrad"}
@@ -443,36 +530,78 @@ def _side(
     a side that got here by winning a recorded match is a result, and is
     projected back into the placeholder the slot held before advancement
     overwrote it (``_derivation``)."""
+    feeder_node_key = slot.feeder_play_unit_id
+    feeder_take = (
+        "loser"
+        if feeder_node_key is not None and slot.feeder_take == "loser"
+        else ("winner" if feeder_node_key is not None else None)
+    )
     if slot.participant_id == _BYE:
-        return SideDTO(bye=True)
+        return SideDTO(
+            bye=True,
+            feederNodeKey=feeder_node_key,
+            feederTake=feeder_take,
+        )
     if slot.participant_id is not None:
+        derived = _derivation(unit, units, results, slot.participant_id)
+        if derived is not None:
+            feeder_node_key, derived_take = derived
+            feeder_take = derived_take.lower()
         if not reveal_resolved:
-            derived = _derivation(unit, units, results, slot.participant_id)
             if derived is not None:
                 dep_id, take = derived
                 where = locator.get(dep_id)
                 if where is None:
-                    return SideDTO(placeholder=f"{take} of an earlier match")
+                    return SideDTO(
+                        placeholder=f"{take} of an earlier match",
+                        feederNodeKey=feeder_node_key,
+                        feederTake=feeder_take,
+                    )
                 segment_label, short, position = where
                 prefix = f"{segment_label} " if segment_label else ""
-                return SideDTO(placeholder=f"{take} of {prefix}{short} {position}")
-        return SideDTO(participantKey=slot.participant_id)
+                return SideDTO(
+                    placeholder=f"{take} of {prefix}{short} {position}",
+                    feederNodeKey=feeder_node_key,
+                    feederTake=feeder_take,
+                )
+        return SideDTO(
+            participantKey=slot.participant_id,
+            feederNodeKey=feeder_node_key,
+            feederTake=feeder_take,
+        )
     if reveal_resolved and participant_ids:
         if participant_ids == [_BYE]:
-            return SideDTO(bye=True)
+            return SideDTO(
+                bye=True,
+                feederNodeKey=feeder_node_key,
+                feederTake=feeder_take,
+            )
         # A resolved multi-member side is one participant (a pair) in this
         # model; the cached list is member ids only for teams, participant
         # ids otherwise — either way the FIRST id keys the lookup table the
         # tier joins against, and pairs are one participant row there.
-        return SideDTO(participantKey=participant_ids[0])
+        return SideDTO(
+            participantKey=participant_ids[0],
+            feederNodeKey=feeder_node_key,
+            feederTake=feeder_take,
+        )
     placeholder = _placeholder(slot, locator)
-    return SideDTO(placeholder=placeholder or "TBD")
+    return SideDTO(
+        placeholder=placeholder or "TBD",
+        feederNodeKey=feeder_node_key,
+        feederTake=feeder_take,
+    )
 
 
-def _teams(event, clubs: Dict[str, Optional[str]]) -> List[TeamDTO]:
+def _teams(
+    event,
+    clubs: Dict[str, Optional[str]],
+    roster_names: Optional[Dict[str, str]] = None,
+) -> List[TeamDTO]:
+    roster_names = roster_names or {}
     out = []
     for participant in event.participants:
-        names = [participant.name]
+        names = _participant_names(participant, roster_names)
         club = clubs.get(participant.id)
         if participant.members and club is None:
             for member in participant.members:
@@ -564,6 +693,74 @@ def _has_consolation(event) -> bool:
     return False
 
 
+_RECORD_SCOPES = {"full_draw", "completed_matches_only", "finals_only"}
+
+
+def _event_record_scope(event) -> str:
+    raw = (event.config or {}).get("record_scope")
+    return raw if raw in _RECORD_SCOPES else "full_draw"
+
+
+def _event_topology_scope(event) -> str:
+    raw = (event.config or {}).get("topology_scope")
+    if raw in {"none", "proven_winner_advancement"}:
+        return raw
+    return "full_draw" if _event_record_scope(event) == "full_draw" else "none"
+
+
+def _event_match_coverage(event) -> MatchCoverageDTO:
+    config = event.config or {}
+    observed = sum(
+        len(round_ids) for segment in _event_segments(event) for round_ids in segment.rounds
+    )
+    configured_imported = config.get("imported_match_count")
+    imported = (
+        configured_imported
+        if isinstance(configured_imported, int) and configured_imported >= 0
+        else observed
+    )
+    expected: Optional[int] = None
+    configured_expected = config.get("expected_match_count")
+    if isinstance(configured_expected, int) and configured_expected >= 0:
+        expected = configured_expected
+    # For an ordinary single-elimination main draw, N entries imply N-1
+    # deciding match positions. Historical/imported formats provide their own
+    # expected count because group stages and partial topologies do not.
+    elif (
+        _event_record_scope(event) == "full_draw"
+        and event.format == "se"
+        and isinstance(event.bracket_size, int)
+    ):
+        expected = max(event.bracket_size - 1, 0)
+    return MatchCoverageDTO(
+        imported=imported,
+        expected=expected,
+        missing=max(expected - imported, 0) if expected is not None else None,
+    )
+
+
+def _safe_public_url(raw) -> Optional[str]:
+    if not isinstance(raw, str):
+        return None
+    parsed = urlparse(raw)
+    return raw if parsed.scheme in {"http", "https"} and parsed.netloc else None
+
+
+def _public_source_url(event) -> Optional[str]:
+    return _safe_public_url((event.config or {}).get("source_url"))
+
+
+def _event_projection_meta(event) -> dict:
+    config = event.config or {}
+    return {
+        "matchCoverage": _event_match_coverage(event),
+        "recordScope": _event_record_scope(event),
+        "topologyScope": _event_topology_scope(event),
+        "historical": bool(config.get("historical")),
+        "sourceUrl": _public_source_url(event),
+    }
+
+
 # ---- routes ---------------------------------------------------------------
 
 
@@ -586,8 +783,9 @@ def draws_index(
                 eventCode=event.id,
                 discipline=event.discipline,
                 kind=event.format,
-                size=event.participant_count,
+                size=event.bracket_size or event.participant_count,
                 hasConsolation=_has_consolation(event),
+                **_event_projection_meta(event),
             )
             for event in payload.events
         ]
@@ -625,6 +823,7 @@ def draw_detail(
     units, results, assignments = _bracket_indexes(payload)
     locator = _unit_locator(event, knockout)
     clubs = _clubs_by_roster_id(repo, tournament.id)
+    roster_names = _bracket_roster_names(tournament)
 
     segments_out: List[SegmentDTO] = []
     for segment in _event_segments(event):
@@ -644,20 +843,28 @@ def draw_detail(
                         position=position,
                         sides=[
                             _side(
-                                unit, unit.side_a, unit.slot_a,
-                                locator, units, results, results_on,
+                                unit,
+                                unit.side_a,
+                                unit.slot_a,
+                                locator,
+                                units,
+                                results,
+                                results_on,
                             ),
                             _side(
-                                unit, unit.side_b, unit.slot_b,
-                                locator, units, results, results_on,
+                                unit,
+                                unit.side_b,
+                                unit.slot_b,
+                                locator,
+                                units,
+                                results,
+                                results_on,
                             ),
                         ],
                         result=(
                             NodeResultDTO(
                                 winnerSide=(
-                                    result.winner_side
-                                    if result.winner_side in ("A", "B")
-                                    else None
+                                    result.winner_side if result.winner_side in ("A", "B") else None
                                 ),
                                 score=_score_rows(result.score),
                                 walkover=bool(result.walkover),
@@ -669,11 +876,22 @@ def draw_detail(
                             payload, assignment.slot_id if assignment else None
                         ),
                         court=assignment.court_id if assignment else None,
+                        playedOn=unit.played_on,
+                        localTime=unit.local_time,
+                        courtLabel=unit.court_label,
+                        sourceUrl=_safe_public_url(unit.source_url),
+                        sourceRef=unit.source_ref,
                     )
                 )
-            rounds_out.append(
-                RoundDTO(label=_round_label(total, r_index, knockout), matches=matches)
+            historical_labels = event.config.get("round_labels") if event.config else None
+            label = (
+                historical_labels[r_index]
+                if isinstance(historical_labels, list)
+                and r_index < len(historical_labels)
+                and isinstance(historical_labels[r_index], str)
+                else _round_label(total, r_index, knockout)
             )
+            rounds_out.append(RoundDTO(label=label, matches=matches))
         segments_out.append(
             SegmentDTO(
                 id=segment.id,
@@ -686,9 +904,7 @@ def draw_detail(
     if results_on and event.standings:
         results_by_unit = {
             unit_id: (units[unit_id], result)
-            for unit_id, result in (
-                (r.play_unit_id, r) for r in payload.results
-            )
+            for unit_id, result in ((r.play_unit_id, r) for r in payload.results)
             if unit_id in units
         }
         standings = [
@@ -712,11 +928,61 @@ def draw_detail(
         eventCode=event.id,
         discipline=event.discipline,
         kind=event.format,
-        size=event.participant_count,
+        size=event.bracket_size or event.participant_count,
         resultsPublished=results_on,
-        teams=_teams(event, clubs),
+        **_event_projection_meta(event),
+        identityScope=(event.config or {}).get("identity_scope"),
+        teams=_teams(event, clubs, roster_names),
         segments=segments_out,
         standings=standings,
+    )
+
+
+@router.get("/players", response_model=PlayersDTO)
+def players_index(
+    response: Response,
+    slug: str = Path(..., max_length=100),
+    repo: LocalRepository = Depends(get_repository),
+) -> PlayersDTO:
+    """Every named roster person referenced by the published draws.
+
+    This is a draw-roster index, not an Entries directory. It therefore uses
+    ``draws_published`` as its only publication gate, reads names solely from
+    ``tournaments.data.bracketPlayers``, and never manufactures a profile URL
+    from a source-local roster key.
+    """
+    page, tournament = _page(repo, slug)
+    response.headers["Cache-Control"] = _CACHE
+    if not page.draws_published:
+        return PlayersDTO(published=False)
+
+    payload = _bracket(repo, tournament.id)
+    if payload is None:
+        return PlayersDTO(published=True)
+
+    roster_names = _bracket_roster_names(tournament)
+    events_by_player: Dict[str, set[str]] = {}
+    for event in payload.events:
+        for participant in event.participants:
+            player_ids = participant.members or [participant.id]
+            for player_id in player_ids:
+                events_by_player.setdefault(player_id, set()).add(event.id)
+
+    players = [
+        DrawPlayerDTO(
+            playerKey=player_id,
+            name=roster_names[player_id],
+            eventCodes=sorted(event_codes),
+        )
+        for player_id, event_codes in events_by_player.items()
+        if player_id in roster_names
+    ]
+    players.sort(key=lambda row: (_alphabetic_name_key(row.name), row.name, row.playerKey))
+    return PlayersDTO(
+        published=True,
+        players=players,
+        referencedPlayerCount=len(events_by_player),
+        missingNameCount=len(events_by_player) - len(players),
     )
 
 
@@ -736,6 +1002,7 @@ def seeds(
         return SeedsDTO(published=True)
 
     clubs = _clubs_by_roster_id(repo, tournament.id)
+    roster_names = _bracket_roster_names(tournament)
     events_out = []
     for event in payload.events:
         seeded = sorted(
@@ -751,14 +1018,10 @@ def seeds(
                 seeds=[
                     SeedLineDTO(
                         seed=p.seed,
-                        names=[p.name],
+                        names=_participant_names(p, roster_names),
                         club=clubs.get(p.id)
                         or next(
-                            (
-                                clubs[m]
-                                for m in (p.members or [])
-                                if m in clubs and clubs[m]
-                            ),
+                            (clubs[m] for m in (p.members or []) if m in clubs and clubs[m]),
                             None,
                         ),
                     )
@@ -793,10 +1056,11 @@ def winners(
         return WinnersDTO(published=True)
 
     clubs = _clubs_by_roster_id(repo, tournament.id)
+    roster_names = _bracket_roster_names(tournament)
     units, results, _ = _bracket_indexes(payload)
     events_out = []
     for event in payload.events:
-        teams = {t.participantKey: t for t in _teams(event, clubs)}
+        teams = {t.participantKey: t for t in _teams(event, clubs, roster_names)}
         entry = _event_winner(event, units, results)
         winner_key, runner_key, semi_keys = entry
         events_out.append(
@@ -958,9 +1222,7 @@ def player_page(
             )
         }
         partner_player_ids = {
-            pe.entry_player_id
-            for pe in partner_entries.values()
-            if pe.entry_player_id is not None
+            pe.entry_player_id for pe in partner_entries.values() if pe.entry_player_id is not None
         }
         partner_players = (
             {
@@ -987,9 +1249,7 @@ def player_page(
     player_events = sorted(
         {
             (event.code, event.discipline, partner_name_by_event.get(event.id))
-            for event in (
-                events_by_id.get(e.entry_event_id) for e in entries
-            )
+            for event in (events_by_id.get(e.entry_event_id) for e in entries)
             if event is not None
         },
         key=lambda row: (row[0], row[1]),
@@ -1003,6 +1263,7 @@ def player_page(
     # ---- bracket-origin matches --------------------------------------
     payload = _bracket(repo, tournament.id)
     if payload is not None and page.draws_published:
+        roster_names = _bracket_roster_names(tournament)
         units, results, assignments = _bracket_indexes(payload)
         for event in payload.events:
             mine = {
@@ -1014,7 +1275,7 @@ def player_page(
                 continue
             knockout = event.format in _KNOCKOUT_FORMATS
             locator = _unit_locator(event, knockout)
-            teams = {t.participantKey: t for t in _teams(event, {})}
+            teams = {t.participantKey: t for t in _teams(event, {}, roster_names)}
             for segment in _event_segments(event):
                 total = len(segment.rounds)
                 for r_index, round_ids in enumerate(segment.rounds):
@@ -1034,8 +1295,13 @@ def player_page(
                             (unit.side_b, unit.slot_b, "B"),
                         ):
                             projected = _side(
-                                unit, cached, slot,
-                                locator, units, results, results_on,
+                                unit,
+                                cached,
+                                slot,
+                                locator,
+                                units,
+                                results,
+                                results_on,
                             )
                             if projected.participantKey:
                                 projected_keys.add(projected.participantKey)
@@ -1047,14 +1313,8 @@ def player_page(
                             sides.append(
                                 PlayerMatchSideDTO(
                                     names=team.names if team else [],
-                                    placeholder=(
-                                        "Bye"
-                                        if projected.bye
-                                        else projected.placeholder
-                                    ),
-                                    winner=bool(
-                                        decided and result.winner_side == side_tag
-                                    ),
+                                    placeholder=("Bye" if projected.bye else projected.placeholder),
+                                    winner=bool(decided and result.winner_side == side_tag),
                                 )
                             )
                         # Involvement AS THE PUBLIC VIEW KNOWS IT: the same
@@ -1065,9 +1325,7 @@ def player_page(
                         if not projected_keys & mine:
                             continue
                         if decided:
-                            my_side = "A" if (
-                                set(unit.side_a or []) & mine
-                            ) else "B"
+                            my_side = "A" if (set(unit.side_a or []) & mine) else "B"
                             if result.winner_side == my_side:
                                 wins += 1
                             else:
@@ -1103,9 +1361,7 @@ def player_page(
             for code, discipline, partner in player_events
         ],
         record=(
-            PlayerRecordDTO(played=wins + losses, wins=wins, losses=losses)
-            if results_on
-            else None
+            PlayerRecordDTO(played=wins + losses, wins=wins, losses=losses) if results_on else None
         ),
         matches=matches,
     )
@@ -1128,9 +1384,7 @@ def _meet_matches(
     the gated half."""
     out = _MeetMatches()
     data = tournament.data or {}
-    players = {
-        p.get("id"): p for p in data.get("players", []) if isinstance(p, dict)
-    }
+    players = {p.get("id"): p for p in data.get("players", []) if isinstance(p, dict)}
     if roster_id not in players:
         return out
 
@@ -1139,9 +1393,7 @@ def _meet_matches(
     interval = config.get("intervalMinutes")
     schedule = data.get("schedule") or {}
     assignments = {
-        a.get("matchId"): a
-        for a in schedule.get("assignments", [])
-        if isinstance(a, dict)
+        a.get("matchId"): a for a in schedule.get("assignments", []) if isinstance(a, dict)
     }
     states = (
         {row.match_id: row for row in repo.match_states.list_for_tournament(tournament.id)}
@@ -1195,15 +1447,12 @@ def _meet_matches(
                     PlayerMatchSideDTO(names=names_for(side_a), winner=winner_a),
                     PlayerMatchSideDTO(names=names_for(side_b), winner=winner_b),
                 ],
-                score=(
-                    [[state.score_side_a, state.score_side_b]] if finished else None
-                ),
+                score=([[state.score_side_a, state.score_side_b]] if finished else None),
                 decided=finished,
                 scheduledTime=scheduled,
                 court=(
                     assignment.get("courtId")
-                    if assignment is not None
-                    and isinstance(assignment.get("courtId"), int)
+                    if assignment is not None and isinstance(assignment.get("courtId"), int)
                     else None
                 ),
             )

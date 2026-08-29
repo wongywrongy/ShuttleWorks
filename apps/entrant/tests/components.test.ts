@@ -146,7 +146,7 @@ describe('DateBadge', () => {
 describe('SeasonStatusCell', () => {
   it('renders Winners as a link and bare Completed as text (§7 trap 3)', () => {
     const winners = renderToStaticMarkup(
-      h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status: 'completed_winners' })) }),
+      h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status: 'completed_winners', winnersPublished: true })) }),
     );
     expect(winners).toContain('href="/e/x?tab=winners"');
     expect(winners).toContain('Winners');

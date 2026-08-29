@@ -33,6 +33,73 @@ After it is up:
 | **Interactive API docs (Swagger UI)** | <http://localhost:8000/docs> |
 | Public TV display | `http://localhost/display?token=<display-token>` |
 
+## Tailscale tech demo on a Linux server
+
+For a disposable, production-shaped demo on a headless Linux host, use the
+Tailscale-only targets. They detect the host's `100.64.0.0/10` address and bind
+the published ports to that address, so the services are reachable by other
+tailnet devices without opening them on the LAN or public interfaces.
+
+```bash
+make demo-up
+make demo-status
+```
+
+The launcher prints the exact address, which has this shape:
+
+| Surface | Port |
+| --- | --- |
+| Operator console | `8090` |
+| Public entrant site (`/e/`) | `8091` |
+| FastAPI + Swagger (`/docs`) | `8092` |
+
+The demo uses `AUTH_MODE=local`, a separate Compose project, and
+`.local-testing/demo/data/`, so it does not share the normal local database.
+`make demo-down` stops it. `make demo-reset` stops the stack and moves the old
+demo directory to a timestamped archive before creating an empty one. No
+Cloudflare Funnel or public tunnel is configured.
+
+The two web surfaces use different demo ports, which are different browser
+origins, while nginx still applies the entrant cookie allowlist. This port
+layout is for the private tech demo only; production deployments must keep
+the operator and entrant surfaces on distinct hostnames as documented in the
+self-host deployment guide.
+
+If Tailscale is installed but its address is not discovered automatically, set
+`DEMO_TAILSCALE_IP` to the host's `100.x` address for the command. The launcher
+rejects any address outside the Tailscale IPv4 range rather than falling back
+to a broad bind.
+
+The repository includes checked, resumable BWF historical-finals and companion
+timing/format fixtures. Preview validates both files against each other without
+touching the database. To load all audited match rows, keep the third-party
+files outside the repository and provide their paths:
+
+```bash
+git clone https://github.com/SahilMotyar/bwf-match-data /tmp/bwf-match-data
+# Save the configured Japan and China daily-result URLs as local HTML files.
+make demo-seed-preview \
+  DEMO_MATCH_DATA=/tmp/bwf-match-data/matches.csv \
+  DEMO_JAPAN_RESULTS=/tmp/japan-open-2026.html \
+  DEMO_CHINA_RESULTS=/tmp/china-open-2026.html
+make demo-seed-apply \
+  DEMO_MATCH_DATA=/tmp/bwf-match-data/matches.csv \
+  DEMO_JAPAN_RESULTS=/tmp/japan-open-2026.html \
+  DEMO_CHINA_RESULTS=/tmp/china-open-2026.html
+make demo-seed-status
+```
+
+The full-source apply creates 30 historical bracket workspaces and 4,235
+verified results. Japan is complete at 155 rows; China exposes 153 of 155;
+Taipei and Korea remain five-finals-only. Every page states its exact scope.
+The importer does not synthesize the absent rows or feeder topology. Without
+the optional paths the target retains the original 150-finals-only behaviour.
+The upstream CSV has no formal redistribution license, so it is consumed from
+a local clone and never copied into this repository.
+Re-running the same source is a no-op; `make demo-seed-resume` continues an
+interrupted run. `make demo-seed-reset` requires the seed key as confirmation
+and deletes only workspace IDs recorded in that run's manifest.
+
 In dev, Vite proxies `/api/*` to the FastAPI container, so the front and back share an origin
 just as they do in production.
 

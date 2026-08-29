@@ -252,11 +252,11 @@ describe('visibleTabs (a tab exists only when its data does)', () => {
     ],
     [
       { entrants: true, draws: true, results: false },
-      ['overview', 'events', 'entrants', 'draws', 'seeds'],
+      ['overview', 'events', 'entrants', 'players', 'draws', 'seeds'],
     ],
     [
       { entrants: true, draws: true, results: true },
-      ['overview', 'events', 'entrants', 'draws', 'seeds', 'winners'],
+      ['overview', 'events', 'entrants', 'players', 'draws', 'seeds', 'winners'],
     ],
     [
       // Independent flags render coherently: winners without draws is a
@@ -460,8 +460,11 @@ describe('statusCell — the §2.4 table, one arm per enum case', () => {
       kind: 'chip-muted', label: 'Entries closed',
     });
   });
-  it('completed_winners links to the winners tab', () => {
-    expect(statusCell(row({ slug: 'x', status: 'completed_winners' }))).toEqual({
+  it('completed links to Draws first, then Winners when draws are unavailable', () => {
+    expect(statusCell(row({ slug: 'x', status: 'completed', drawsPublished: true }))).toEqual({
+      kind: 'link', label: 'Draws', href: '/e/x?tab=draws',
+    });
+    expect(statusCell(row({ slug: 'x', status: 'completed_winners', winnersPublished: true }))).toEqual({
       kind: 'link', label: 'Winners', href: '/e/x?tab=winners',
     });
   });

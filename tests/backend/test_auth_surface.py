@@ -159,6 +159,11 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "stripped at source while results_published is off, including "
         "resolved advancement projected back into its placeholder"
     ),
+    ("GET", "/e/api/page/{slug}/players"): (
+        "published-draw roster directory — draws_published gates it; contains "
+        "names and event codes only for roster people referenced by published "
+        "draws, with no entry profiles or contact data"
+    ),
     ("GET", "/e/api/page/{slug}/seeds"): (
         "per-event seed lists — seeds are draw facts, so draws_published "
         "gates them; the same published:false envelope when off"
@@ -594,5 +599,4 @@ def test_the_same_submit_with_an_entrant_session_is_accepted(
     r = _post_entry(client, entry_page["a"], _csrf=token)
     assert r.status_code == 303, r.text
     assert _entry_count(entry_page["a"]["tid"]) == 1
-
 

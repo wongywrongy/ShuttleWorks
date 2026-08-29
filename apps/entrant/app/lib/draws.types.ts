@@ -22,6 +22,30 @@ export interface DrawCardDTO {
   kind: DrawKind;
   size: number;
   hasConsolation: boolean;
+  matchCoverage: MatchCoverageDTO;
+  recordScope: string;
+  topologyScope: string;
+  historical: boolean;
+  sourceUrl: string | null;
+}
+
+export interface MatchCoverageDTO {
+  imported: number;
+  expected: number | null;
+  missing: number | null;
+}
+
+export interface DrawPlayerDTO {
+  playerKey: string;
+  name: string;
+  eventCodes: string[];
+}
+
+export interface PlayersDTO {
+  published: boolean;
+  players: DrawPlayerDTO[];
+  referencedPlayerCount: number;
+  missingNameCount: number;
 }
 
 export interface DrawsIndexDTO {
@@ -48,6 +72,8 @@ export interface SideDTO {
   participantKey: string | null;
   placeholder: string | null;
   bye: boolean;
+  feederNodeKey: string | null;
+  feederTake: 'winner' | 'loser' | null;
 }
 
 export interface NodeResultDTO {
@@ -63,6 +89,11 @@ export interface MatchNodeDTO {
   result: NodeResultDTO | null;
   scheduledTime: string | null;
   court: number | null;
+  playedOn: string | null;
+  localTime: string | null;
+  courtLabel: string | null;
+  sourceUrl: string | null;
+  sourceRef: string | null;
 }
 
 export interface RoundDTO {
@@ -96,6 +127,12 @@ export interface DrawDetailDTO {
   kind: DrawKind;
   size: number;
   resultsPublished: boolean;
+  matchCoverage: MatchCoverageDTO;
+  recordScope: string;
+  topologyScope: string;
+  historical: boolean;
+  sourceUrl: string | null;
+  identityScope: string | null;
   teams: TeamDTO[];
   segments: SegmentDTO[];
   standings: StandingRowDTO[] | null;

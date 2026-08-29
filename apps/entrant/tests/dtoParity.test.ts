@@ -107,6 +107,9 @@ const MIRRORS: { file: string; pairs: Record<string, string>; unpaired: Record<s
       pairs: {
         DrawCardDTO: 'DrawCardDTO',
         DrawsIndexDTO: 'DrawsIndexDTO',
+        MatchCoverageDTO: 'MatchCoverageDTO',
+        DrawPlayerDTO: 'DrawPlayerDTO',
+        PlayersDTO: 'PlayersDTO',
         TeamDTO: 'TeamDTO',
         SideDTO: 'SideDTO',
         NodeResultDTO: 'NodeResultDTO',

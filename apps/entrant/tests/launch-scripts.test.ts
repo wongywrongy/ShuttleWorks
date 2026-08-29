@@ -279,6 +279,33 @@ test('the entrant dev server does not collide with the operator dev server', () 
   expect(recipe(makefile, 'local-dev')).toContain('--port 5173');
 });
 
+test('the Tailscale demo has isolated lifecycle targets and guarded config', () => {
+  const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
+  const demoLauncher = readFileSync(join(REPO_ROOT, 'tools/demo-compose.sh'), 'utf8');
+  const demoOverride = readFileSync(
+    join(REPO_ROOT, 'infra/compose/demo.override.yml'),
+    'utf8',
+  );
+
+  for (const target of ['demo-up', 'demo-rebuild', 'demo-status', 'demo-down', 'demo-reset']) {
+    expect(makefile).toContain(`${target}:`);
+    expect(recipe(makefile, target)).toContain('$(DEMO_COMPOSE)');
+  }
+  expect(makefile).toContain('DEMO_COMPOSE := bash tools/demo-compose.sh');
+  expect(demoLauncher).toContain('tailscale ip -4');
+  expect(demoLauncher).toContain('$2 >= 64 && $2 <= 127');
+  expect(demoLauncher).toContain('$3 >= 0 && $3 <= 255');
+  expect(demoLauncher).toContain('COMPOSE_PROJECT_NAME=shuttleworks-demo');
+  expect(demoLauncher).toContain('DEMO_HOST_GID="$(id -g)"');
+  expect(demoLauncher).toContain('.local-testing/demo/data');
+  expect(demoOverride).toContain('DEMO_HOST_GID');
+  expect(demoOverride).toContain('8092:8000');
+  expect(demoOverride).toContain('8090:8080');
+  expect(demoOverride).toContain('8091:8081');
+  expect(demoOverride).toContain('AUTH_MODE: local');
+  expect(demoOverride).toContain('!override');
+});
+
 test('each surface gets the backend variable its own code reads', () => {
   const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
   // The entrant SSR server reads API_BASE_URL (apiFetch.server.ts, which throws

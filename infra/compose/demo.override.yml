@@ -1,0 +1,38 @@
+# Disposable Tailscale tech-demo override.
+#
+# The base stack remains the source of truth for the production-shaped
+# backend/frontend/entrant topology. This file changes only the host-facing
+# address/ports, origins, and data directory used by the demo launcher.
+# `!override` is intentional: Compose must not retain the base stack's
+# localhost/public port mappings when this file is active.
+
+services:
+  backend:
+    # Keep the image's non-root app user while granting write access to the
+    # host-created demo directory. This is narrower than running as the host
+    # user or making the bind mount world-writable.
+    group_add:
+      - "${DEMO_HOST_GID:?set by tools/demo-compose.sh}"
+    ports: !override
+      - "${DEMO_TAILSCALE_IP:?set by tools/demo-compose.sh}:8092:8000"
+    volumes: !override
+      - "${DEMO_DATA_DIR:?set by tools/demo-compose.sh}:/app/data"
+    environment:
+      DATA_DIR: /app/data
+      DATABASE_URL: sqlite:////app/data/local.db
+      ENVIRONMENT: local
+      AUTH_MODE: local
+      SESSION_COOKIE_SECURE: "false"
+      CORS_ORIGINS: http://${DEMO_TAILSCALE_IP}:8090
+      PUBLIC_APP_ORIGIN: http://${DEMO_TAILSCALE_IP}:8090
+      PUBLIC_PLAY_ORIGIN: http://${DEMO_TAILSCALE_IP}:8091
+
+  frontend:
+    ports: !override
+      - "${DEMO_TAILSCALE_IP:?set by tools/demo-compose.sh}:8090:8080"
+      - "${DEMO_TAILSCALE_IP:?set by tools/demo-compose.sh}:8091:8081"
+
+  entrant:
+    environment:
+      API_BASE_URL: http://backend:8000
+      SESSION_COOKIE_SECURE: "false"

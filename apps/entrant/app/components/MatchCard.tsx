@@ -16,6 +16,14 @@
  */
 import type { PlayerMatchDTO, PlayerMatchSideDTO } from '../lib/player.types';
 
+export type MatchCardData = PlayerMatchDTO & {
+  playedOn?: string | null;
+  localTime?: string | null;
+  courtLabel?: string | null;
+  sourceUrl?: string | null;
+  sourceRef?: string | null;
+};
+
 function Side({ side, score, index }: {
   side: PlayerMatchSideDTO;
   score: number[][] | null;
@@ -53,10 +61,11 @@ function Side({ side, score, index }: {
   );
 }
 
-export function MatchCard({ match }: { match: PlayerMatchDTO }) {
+export function MatchCard({ match }: { match: MatchCardData }) {
   const footer = [
-    match.scheduledTime,
-    match.court !== null ? `Court ${match.court}` : null,
+    match.playedOn,
+    match.localTime ?? match.scheduledTime,
+    match.courtLabel ?? (match.court !== null ? `Court ${match.court}` : null),
   ].filter(Boolean);
 
   return (
@@ -67,7 +76,7 @@ export function MatchCard({ match }: { match: PlayerMatchDTO }) {
         </p>
         {/* The status-chip slot. v1: schedule only (§3.3). */}
         <span className="text-xs text-muted-foreground">
-          {match.scheduledTime ?? (match.decided ? '' : 'Court to be assigned')}
+          {match.localTime ?? match.scheduledTime ?? (match.decided ? '' : 'Court to be assigned')}
         </span>
       </header>
       <div className="divide-y divide-rule-soft px-4">
@@ -77,6 +86,17 @@ export function MatchCard({ match }: { match: PlayerMatchDTO }) {
       {footer.length > 0 ? (
         <footer className="border-t border-rule-soft px-4 py-1.5 text-xs text-muted-foreground">
           {footer.join(' · ')}
+          {match.sourceUrl ? (
+            <>
+              {' · '}
+              <a
+                href={match.sourceUrl}
+                className="font-medium text-accent underline-offset-4 hover:underline"
+              >
+                {match.sourceRef ?? 'Source record'}
+              </a>
+            </>
+          ) : null}
         </footer>
       ) : null}
     </article>

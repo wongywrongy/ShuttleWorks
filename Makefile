@@ -1,5 +1,7 @@
 .PHONY: help \
         scheduler scheduler-dev scheduler-rebuild \
+        demo-up demo-rebuild demo-status demo-down demo-reset \
+        demo-seed-preview demo-seed-apply demo-seed-resume demo-seed-status demo-seed-reset \
         entrant-dev full-dev local-dev \
         dev-postgres dev-postgres-stop \
         stop logs ps clean \
@@ -20,6 +22,20 @@
 COMPOSE       := docker compose -f infra/compose/docker-compose.yml
 COMPOSE_DEV   := docker compose -f infra/compose/docker-compose.dev.yml
 COMPOSE_CLOUD := docker compose -f infra/compose/docker-compose.cloud.yml
+DEMO_COMPOSE := bash tools/demo-compose.sh
+DEMO_SEED_FILE := simulator/fixtures/bwf-recent-completed.txt
+DEMO_SEED_NOTES := simulator/fixtures/bwf-recent-completed-notes.txt
+DEMO_SEED_SOURCE_MAP := simulator/fixtures/bwf-full-match-sources.json
+DEMO_SEED_KEY ?= bwf-recent
+DEMO_SEED_RUN_DIR := .local-testing/demo/data/import-runs
+DEMO_SEED := PYTHONPATH=simulator .venv/bin/python -m tournament_sim seed
+DEMO_MATCH_DATA ?=
+DEMO_JAPAN_RESULTS ?=
+DEMO_CHINA_RESULTS ?=
+DEMO_SEED_SOURCE_ARGS = $(if $(DEMO_MATCH_DATA),--match-data $(DEMO_MATCH_DATA)) \
+	$(if $(DEMO_JAPAN_RESULTS),--daily-results T027=$(DEMO_JAPAN_RESULTS)) \
+	$(if $(DEMO_CHINA_RESULTS),--daily-results T028=$(DEMO_CHINA_RESULTS)) \
+	--source-map $(DEMO_SEED_SOURCE_MAP)
 
 # Every Python tree ruff is expected to lint. Spelled out rather than `.`
 # because pyproject.toml now sits at the repo root, so a bare `ruff check .`
@@ -35,6 +51,16 @@ help:
 	@echo "                          (console :80, api :8000, entrant :8081, docs :8082)"
 	@echo "  make scheduler-dev      API in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
+	@echo "  make demo-up            Start the Tailscale-only tech demo"
+	@echo "  make demo-rebuild       Rebuild and restart the tech demo"
+	@echo "  make demo-status        Show tech demo container status and URLs"
+	@echo "  make demo-down          Stop the tech demo"
+	@echo "  make demo-reset         Archive demo data and start clean"
+	@echo "  make demo-seed-preview  Validate the bundled BWF historical fixture"
+	@echo "  make demo-seed-apply    Import the fixture into the running demo"
+	@echo "  make demo-seed-status   Show the resumable import manifest"
+	@echo "  make demo-seed-resume   Resume an interrupted fixture import"
+	@echo "  make demo-seed-reset    Delete only workspaces owned by this seed run"
 	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host API on :8600"
 	@echo "  make full-dev           Both surfaces at once: operator :5173 + entrant :5174"
 	@echo "                          (local only — see docs/how-to/running-locally)"
@@ -92,6 +118,47 @@ scheduler-rebuild:
 	@echo "  Console: http://localhost  (hard-refresh the browser: Cmd+Shift+R)"
 	@echo "  API:     http://localhost:8000"
 	@echo ""
+
+# === Tailscale tech demo (production-shaped, disposable data) ===
+#
+# The launcher refuses to start without a 100.x Tailscale address and passes
+# that address to Compose as the host bind address. The demo therefore never
+# publishes its ports on the LAN or public interfaces. It uses the same
+# backend/frontend/entrant images as the normal scheduler stack, but a
+# separate Compose project and .local-testing/demo/data directory.
+
+demo-up:
+	$(DEMO_COMPOSE) up
+
+demo-rebuild:
+	$(DEMO_COMPOSE) rebuild
+
+demo-status:
+	$(DEMO_COMPOSE) status
+
+demo-down:
+	$(DEMO_COMPOSE) down
+
+demo-reset:
+	$(DEMO_COMPOSE) reset
+
+demo-seed-preview:
+	@$(DEMO_SEED) preview $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) $(DEMO_SEED_SOURCE_ARGS)
+
+demo-seed-apply:
+	@$(DEMO_SEED) apply $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) --seed-key $(DEMO_SEED_KEY) \
+		$(DEMO_SEED_SOURCE_ARGS) --run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
+demo-seed-resume:
+	@$(DEMO_SEED) resume $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) --seed-key $(DEMO_SEED_KEY) \
+		$(DEMO_SEED_SOURCE_ARGS) --run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
+demo-seed-status:
+	@$(DEMO_SEED) status --seed-key $(DEMO_SEED_KEY) --run-dir $(DEMO_SEED_RUN_DIR)
+
+demo-seed-reset:
+	@$(DEMO_SEED) reset --seed-key $(DEMO_SEED_KEY) --confirm $(DEMO_SEED_KEY) \
+		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
 
 scheduler-dev:
 	@echo "Starting development environment..."

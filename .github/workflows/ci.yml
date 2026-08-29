@@ -235,6 +235,12 @@ jobs:
             docker compose -f "$f" config -q || status=1
             echo "::endgroup::"
           done
+          # The demo is an override of the default stack rather than a
+          # standalone deployment stack, so validate the combined files too.
+          DEMO_TAILSCALE_IP=100.68.168.126 \
+          DEMO_DATA_DIR=/tmp/shuttleworks-demo-data \
+          DEMO_HOST_GID=1000 \
+            docker compose -f docker-compose.yml -f demo.override.yml config -q || status=1
           exit $status
 
   interaction-smoke:

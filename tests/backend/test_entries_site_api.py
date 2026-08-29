@@ -15,6 +15,7 @@ Bracket data is seeded through the real bracket API (create + commands),
 so the projection is tested against what the draw actually is, not a
 hand-built imitation of it.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -39,9 +40,7 @@ def client(tmp_path, monkeypatch):
 
 
 def _make_workspace(client, name="Draws Open", slug="draws-open", kind="meet", **flags):
-    tid = client.post(
-        "/tournaments", json={"name": name, "kind": kind}, headers=CSRF
-    ).json()["id"]
+    tid = client.post("/tournaments", json={"name": name, "kind": kind}, headers=CSRF).json()["id"]
 
     from db.models import EntryPage
     from db.session import SessionLocal
@@ -62,8 +61,9 @@ def _make_workspace(client, name="Draws Open", slug="draws-open", kind="meet", *
     return tid
 
 
-def _seed_person(tid, full_name="Ada Chen", club="Riverside BC", state="confirmed",
-                 event_code="MS"):
+def _seed_person(
+    tid, full_name="Ada Chen", club="Riverside BC", state="confirmed", event_code="MS"
+):
     """A person with an entry (default confirmed) + the event it names.
     Returns the person id — ``entry-{id}`` is their roster/participant key."""
     from db.models import (
@@ -134,6 +134,19 @@ def _set_flags(tid, **flags):
         row = session.get(EntryPage, uuid.UUID(tid))
         for key, value in flags.items():
             setattr(row, key, value)
+        session.commit()
+    finally:
+        session.close()
+
+
+def _set_bracket_players(tid, players):
+    from db.models import Tournament
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        tournament = session.get(Tournament, uuid.UUID(tid))
+        tournament.data = {**(tournament.data or {}), "bracketPlayers": players}
         session.commit()
     finally:
         session.close()
@@ -262,10 +275,175 @@ def test_the_draws_index_lists_the_draw_with_exact_card_keys(client, bracket_pag
         "kind",
         "size",
         "hasConsolation",
+        "matchCoverage",
+        "recordScope",
+        "topologyScope",
+        "historical",
+        "sourceUrl",
     }
     assert card["kind"] == "se"
     assert card["size"] == 4
     assert card["hasConsolation"] is False
+    assert card["matchCoverage"] == {"imported": 3, "expected": 3, "missing": 0}
+    assert card["recordScope"] == "full_draw"
+    assert card["topologyScope"] == "full_draw"
+
+
+def test_historical_draw_uses_advertised_size_and_source_round_labels(client):
+    tid = _make_workspace(client, slug="historical-open", draws_published=True)
+    payload = {
+        "courts": 1,
+        "total_slots": 8,
+        "events": [
+            {
+                "id": "MS",
+                "discipline": "MS",
+                "format": "se",
+                "record_scope": "completed_matches_only",
+                "historical": True,
+                "advertised_size": 32,
+                "round_labels": ["Quarterfinals", "Finals"],
+                "source_url": "https://example.test/results",
+                "topology_scope": "none",
+                "imported_match_count": 2,
+                "expected_match_count": 31,
+                "participants": [
+                    {"id": "P1", "name": "Player 1"},
+                    {"id": "P2", "name": "Player 2"},
+                    {"id": "P3", "name": "Player 3"},
+                    {"id": "P4", "name": "Player 4"},
+                ],
+                "rounds": [
+                    [
+                        {
+                            "id": "QF-1",
+                            "side_a": ["P1"],
+                            "side_b": ["P2"],
+                            "result": {"winner_side": "A"},
+                            "played_on": "2025-10-19",
+                            "local_time": "10:00",
+                            "court_label": "Court 1",
+                            "source_url": "https://example.test/results#qf-1",
+                            "source_ref": "QF 1",
+                        }
+                    ],
+                    [
+                        {
+                            "id": "F-1",
+                            "side_a": ["P3"],
+                            "side_b": ["P4"],
+                            "result": {"winner_side": "B"},
+                        }
+                    ],
+                ],
+            }
+        ],
+    }
+    imported = client.post(f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF)
+    assert imported.status_code == 200, imported.text
+
+    draws = client.get("/e/api/page/historical-open/draws").json()
+    assert draws["draws"][0]["size"] == 32
+    assert draws["draws"][0]["matchCoverage"] == {
+        "imported": 2,
+        "expected": 31,
+        "missing": 29,
+    }
+    assert draws["draws"][0]["recordScope"] == "completed_matches_only"
+    assert draws["draws"][0]["topologyScope"] == "none"
+    assert draws["draws"][0]["sourceUrl"] == "https://example.test/results"
+    detail = client.get("/e/api/page/historical-open/draws/MS").json()
+    assert [round_["label"] for round_ in detail["segments"][0]["rounds"]] == [
+        "Quarterfinals",
+        "Finals",
+    ]
+    assert all(
+        side["feederNodeKey"] is None
+        for round_ in detail["segments"][0]["rounds"]
+        for match in round_["matches"]
+        for side in match["sides"]
+    )
+    first_match = detail["segments"][0]["rounds"][0]["matches"][0]
+    assert {
+        key: first_match[key]
+        for key in ("playedOn", "localTime", "courtLabel", "sourceUrl", "sourceRef")
+    } == {
+        "playedOn": "2025-10-19",
+        "localTime": "10:00",
+        "courtLabel": "Court 1",
+        "sourceUrl": "https://example.test/results#qf-1",
+        "sourceRef": "QF 1",
+    }
+
+
+def test_draw_players_are_published_draw_roster_people_not_profiles(client):
+    tid = _make_workspace(client, slug="roster-open", draws_published=True)
+    _set_bracket_players(
+        tid,
+        [
+            {"id": "P-A", "name": "Áda Chen"},
+            {"id": "P-B", "name": "Bo Lee"},
+            {"id": "P-C", "name": "Cass Doe"},
+        ],
+    )
+    payload = {
+        "courts": 1,
+        "total_slots": 4,
+        "events": [
+            {
+                "id": "MD",
+                "discipline": "Men's Doubles",
+                "format": "se",
+                "participants": [
+                    {"id": "PAIR-1", "name": "Do not split this", "members": ["P-A", "P-B"]},
+                    {"id": "PAIR-2", "name": "Missing / Cass", "members": ["P-MISSING", "P-C"]},
+                ],
+                "rounds": [[{"id": "F", "side_a": ["PAIR-1"], "side_b": ["PAIR-2"]}]],
+            },
+            {
+                "id": "WS",
+                "discipline": "Women's Singles",
+                "format": "se",
+                "participants": [
+                    {"id": "P-A", "name": "Wrong fallback label"},
+                    {"id": "P-B", "name": "Another wrong fallback label"},
+                ],
+                "rounds": [[{"id": "WS-F", "side_a": ["P-A"], "side_b": ["P-B"]}]],
+            },
+        ],
+    }
+    imported = client.post(f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF)
+    assert imported.status_code == 200, imported.text
+
+    players = client.get("/e/api/page/roster-open/players").json()
+    assert players == {
+        "published": True,
+        "players": [
+            {"playerKey": "P-A", "name": "Áda Chen", "eventCodes": ["MD", "WS"]},
+            {"playerKey": "P-B", "name": "Bo Lee", "eventCodes": ["MD", "WS"]},
+            {"playerKey": "P-C", "name": "Cass Doe", "eventCodes": ["MD"]},
+        ],
+        "referencedPlayerCount": 4,
+        "missingNameCount": 1,
+    }
+    assert all("href" not in player for player in players["players"])
+
+    detail = client.get("/e/api/page/roster-open/draws/MD").json()
+    teams = {team["participantKey"]: team for team in detail["teams"]}
+    assert teams["PAIR-1"]["names"] == ["Áda Chen", "Bo Lee"]
+    # Partial member resolution falls back to the whole source label; it is
+    # never split on punctuation into invented people.
+    assert teams["PAIR-2"]["names"] == ["Missing / Cass"]
+
+
+def test_draw_players_are_hidden_until_draws_are_published(client):
+    _make_workspace(client, slug="quiet-roster")
+    assert client.get("/e/api/page/quiet-roster/players").json() == {
+        "published": False,
+        "players": [],
+        "referencedPlayerCount": 0,
+        "missingNameCount": 0,
+    }
 
 
 def test_a_meet_only_workspace_publishes_an_empty_draws_list(client):
@@ -339,9 +517,7 @@ def test_a_bracket_workspace_does_not_publish_divisions_it_never_configured(
     CHECK-constrained since P7a; ``workspace_modules`` is UI enablement
     only). The two toggle controls below are the other half of that ruling.
     """
-    tid = _make_workspace(
-        client, slug="bracket-with-junk", kind="bracket", draws_published=True
-    )
+    tid = _make_workspace(client, slug="bracket-with-junk", kind="bracket", draws_published=True)
     _declare_divisions(client, tid, {"MS": 3, "WS": 3})
 
     body = client.get("/e/api/page/bracket-with-junk/draws").json()
@@ -361,15 +537,11 @@ def test_enabling_the_meet_module_on_a_bracket_workspace_changes_nothing_public(
     Under R-DM-10's authority it cannot: ``kind`` did not move, so the wire
     did not move.
     """
-    tid = _make_workspace(
-        client, slug="bracket-toggled", kind="bracket", draws_published=True
-    )
+    tid = _make_workspace(client, slug="bracket-toggled", kind="bracket", draws_published=True)
     _declare_divisions(client, tid, {"MS": 3, "WS": 3, "MD": 2, "WD": 2, "XD": 2})
     before = client.get("/e/api/page/bracket-toggled/draws").json()
 
-    r = client.patch(
-        f"/tournaments/{tid}/modules/meet", json={"status": "enabled"}, headers=CSRF
-    )
+    r = client.patch(f"/tournaments/{tid}/modules/meet", json={"status": "enabled"}, headers=CSRF)
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "enabled"
 
@@ -424,9 +596,7 @@ def test_draw_detail_is_a_uniform_404_while_unpublished(client, bracket_page):
     assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
-def test_the_tree_renders_rounds_seeds_schedule_and_placeholders(
-    client, bracket_page
-):
+def test_the_tree_renders_rounds_seeds_schedule_and_placeholders(client, bracket_page):
     body = client.get(f"/e/api/page/{bracket_page['slug']}/draws/MS").json()
     (segment,) = body["segments"]
     labels = [r["label"] for r in segment["rounds"]]
@@ -447,6 +617,11 @@ def test_the_tree_renders_rounds_seeds_schedule_and_placeholders(
         "Winner of SF 1",
         "Winner of SF 2",
     ]
+    assert [side["feederNodeKey"] for side in final["sides"]] == [
+        sf1["nodeKey"],
+        sf2["nodeKey"],
+    ]
+    assert [side["feederTake"] for side in final["sides"]] == ["winner", "winner"]
 
 
 def test_results_off_hides_scores_and_resolved_advancement(client, bracket_page):
@@ -456,8 +631,13 @@ def test_results_off_hides_scores_and_resolved_advancement(client, bracket_page)
     tid, slug = bracket_page["tid"], bracket_page["slug"]
     state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
     sf0 = _units_by_round(state)[0][0]
-    _record(client, tid, sf0, winner="A",
-            score={"sets": [{"sideA": 21, "sideB": 15}, {"sideA": 21, "sideB": 12}]})
+    _record(
+        client,
+        tid,
+        sf0,
+        winner="A",
+        score={"sets": [{"sideA": 21, "sideB": 15}, {"sideA": 21, "sideB": 12}]},
+    )
 
     body = client.get(f"/e/api/page/{slug}/draws/MS").json()
     assert body["resultsPublished"] is False
@@ -480,8 +660,7 @@ def test_results_off_hides_scores_and_resolved_advancement(client, bracket_page)
 
 
 def test_rr_standings_ride_the_detail_with_history_pills(client):
-    tid = _make_workspace(client, slug="rr-open", draws_published=True,
-                          results_published=True)
+    tid = _make_workspace(client, slug="rr-open", draws_published=True, results_published=True)
     body = {
         "courts": 2,
         "total_slots": 64,
@@ -502,16 +681,12 @@ def test_rr_standings_ride_the_detail_with_history_pills(client):
             }
         ],
     }
-    assert (
-        client.post(f"/tournaments/{tid}/bracket", json=body, headers=CSRF).status_code
-        == 200
-    )
+    assert client.post(f"/tournaments/{tid}/bracket", json=body, headers=CSRF).status_code == 200
     state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
     for pu in [p for p in state["play_units"] if p["event_id"] == "WS"]:
         if pu["side_a"] and pu["side_b"]:
             winner = "A" if "A" in (pu["side_a"] or []) else "A"
-            _record(client, tid, pu, winner=winner,
-                    score={"sets": [{"sideA": 21, "sideB": 10}]})
+            _record(client, tid, pu, winner=winner, score={"sets": [{"sideA": 21, "sideB": 10}]})
         state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
 
     detail = client.get("/e/api/page/rr-open/draws/WS").json()
@@ -587,9 +762,7 @@ def test_winners_gate_then_populate_as_the_draw_decides(client, bracket_page):
 
 def test_a_player_page_is_404_while_entrants_are_unpublished(client, bracket_page):
     _set_flags(bracket_page["tid"], entrants_published=False)
-    r = client.get(
-        f"/e/api/page/{bracket_page['slug']}/players/{bracket_page['ada']}"
-    )
+    r = client.get(f"/e/api/page/{bracket_page['slug']}/players/{bracket_page['ada']}")
     assert r.status_code == 404
 
 
@@ -599,30 +772,22 @@ def test_a_pending_person_has_no_public_page(client, bracket_page):
     assert r.status_code == 404
 
 
-def test_an_unknown_person_and_a_garbage_key_answer_identically(
-    client, bracket_page
-):
-    ghost = client.get(
-        f"/e/api/page/{bracket_page['slug']}/players/{uuid.uuid4()}"
-    )
+def test_an_unknown_person_and_a_garbage_key_answer_identically(client, bracket_page):
+    ghost = client.get(f"/e/api/page/{bracket_page['slug']}/players/{uuid.uuid4()}")
     garbage = client.get(f"/e/api/page/{bracket_page['slug']}/players/not-a-key")
     assert ghost.status_code == garbage.status_code == 404
     assert ghost.json() == garbage.json()
 
 
 def test_the_player_page_header_events_and_upcoming_matches(client, bracket_page):
-    body = client.get(
-        f"/e/api/page/{bracket_page['slug']}/players/{bracket_page['ada']}"
-    ).json()
+    body = client.get(f"/e/api/page/{bracket_page['slug']}/players/{bracket_page['ada']}").json()
     assert set(body) == {"personKey", "name", "club", "events", "record", "matches"}
     assert body["name"] == "Ada Chen"
     assert body["club"] == "Riverside BC"
     # SP-P7 delta (§3.3): event rows carry the accepted-partner slot. None
     # here — a singles event has no partner; the populated case and its
     # privacy gates live in test_partner_names_on_the_player_page.
-    assert body["events"] == [
-        {"code": "MS", "discipline": "Men's Singles", "partnerName": None}
-    ]
+    assert body["events"] == [{"code": "MS", "discipline": "Men's Singles", "partnerName": None}]
     # Results unpublished: no record claim, and the SF shows as undecided.
     assert body["record"] is None
     (match,) = body["matches"]
@@ -635,9 +800,7 @@ def test_the_record_counts_published_results_only(client, bracket_page):
     tid, slug = bracket_page["tid"], bracket_page["slug"]
     state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
     sf0 = _units_by_round(state)[0][0]
-    assert f"entry-{bracket_page['ada']}" in (sf0["side_a"] or []) + (
-        sf0["side_b"] or []
-    )
+    assert f"entry-{bracket_page['ada']}" in (sf0["side_a"] or []) + (sf0["side_b"] or [])
     winner = "A" if f"entry-{bracket_page['ada']}" in (sf0["side_a"] or []) else "B"
     _record(client, tid, sf0, winner=winner)
 
@@ -655,8 +818,7 @@ def test_the_record_counts_published_results_only(client, bracket_page):
 
 
 def test_meet_matches_reach_the_player_page_with_gated_scores(client):
-    tid = _make_workspace(client, name="Dual Meet", slug="dual-meet",
-                          entrants_published=True)
+    tid = _make_workspace(client, name="Dual Meet", slug="dual-meet", entrants_published=True)
     person = _seed_person(tid, "Ada Chen", "Riverside BC", event_code="MS1")
     roster_id = f"entry-{person}"
 
@@ -681,9 +843,7 @@ def test_meet_matches_reach_the_player_page_with_gated_scores(client):
                 }
             ],
             "schedule": {
-                "assignments": [
-                    {"matchId": "m1", "slotId": 2, "courtId": 2, "durationSlots": 1}
-                ]
+                "assignments": [{"matchId": "m1", "slotId": 2, "courtId": 2, "durationSlots": 1}]
             },
         }
         # The blob is written straight in, bypassing the projection that

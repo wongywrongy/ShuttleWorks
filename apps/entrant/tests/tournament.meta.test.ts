@@ -55,6 +55,7 @@ const PAGE = {
       entryCount: 7,
     },
   ],
+  publication: { entrants: true, draws: false, results: false },
   entrants: [{ name: 'Ada Lovelace', eventCodes: ['MS'] }],
   // The email below is a deliberately distinctive marker string that must
   // never appear ANYWHERE in the rendered document. `signedIn` is fed `true`
@@ -115,7 +116,26 @@ function metaSource(source: string): string | null {
 describe('per-route meta/OG tags on /e/{slug}', () => {
   it('titles the document with the tournament name', async () => {
     const html = await render();
-    expect(head(html)).toMatch(/<title>[^<]*Spring Open[^<]*<\/title>/);
+    expect(head(html)).toContain('<title>Spring Open · Enter now</title>');
+  });
+
+  it('labels a closed published historical page as results, not an invitation to enter', async () => {
+    const html = await render({
+      ...PAGE,
+      publication: { entrants: false, draws: true, results: true },
+      events: PAGE.events.map((event) => ({ ...event, isOpen: false })),
+    });
+    expect(head(html)).toContain('<title>Spring Open · Results</title>');
+    expect(head(html)).not.toContain('Enter now');
+  });
+
+  it('uses a neutral tournament title when entries are closed and results are unpublished', async () => {
+    const html = await render({
+      ...PAGE,
+      publication: { entrants: false, draws: false, results: false },
+      events: PAGE.events.map((event) => ({ ...event, isOpen: false })),
+    });
+    expect(head(html)).toContain('<title>Spring Open · Tournament</title>');
   });
 
   it('sets og:title from the same data, and og:type', async () => {

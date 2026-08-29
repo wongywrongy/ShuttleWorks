@@ -1,0 +1,288 @@
+# BWF Tournament Format and Timing Notes
+# generated=2026-08-29
+# companion_to=bwf_recent_tournaments_players_scores_dataset.txt
+# scope=the same 30 recent completed tournaments used in the match-score dataset
+# format=plain text, one TNOTE block per tournament
+# source_pages=https://en.wikipedia.org/wiki/2026_BWF_World_Tour ; https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+FIELD GUIDE
+MS = men's singles; WS = women's singles; MD = men's doubles; WD = women's doubles; XD = mixed doubles.
+A format such as 32MS/32WS/32MD/32WD/32XD means the tournament listed 32-entry draws in each of the five standard events.
+Tournament timing is given as the official date range from the source table; the final day is used as the completion date for ordering.
+
+BWF LEVELS
+- Super 1000: top regular BWF World Tour level; highest regular-tour ranking points and prize-money tier.
+- Super 750: elite regular BWF World Tour level below Super 1000.
+- Super 500: mid-high BWF World Tour level with full international draws.
+- Super 300: BWF World Tour level for major international circuit events.
+- Super 100: BWF Tour Super 100 level; development/pathway events that still award World Tour ranking points.
+
+TNOTE|T001|Denmark Open|2025
+Dates: 14–19 October 2025; completion date 2025-10-19.
+Location: Odense, Denmark. Venue: Arena Fyn.
+Level: Super 750 - elite regular BWF World Tour level below Super 1000.
+Prize: $950,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T002|French Open|2025
+Dates: 21–26 October 2025; completion date 2025-10-26.
+Location: Cesson-Sévigné, France. Venue: Glaz Arena.
+Level: Super 750 - elite regular BWF World Tour level below Super 1000.
+Prize: $950,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T003|Hylo Open|2025
+Dates: 28 October – 2 November 2025; completion date 2025-11-02.
+Location: Saarbrücken, Germany. Venue: Saarlandhalle.
+Level: Super 500 - mid-high BWF World Tour level with full international draws.
+Prize: $475,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T004|Korea Masters|2025
+Dates: 4–9 November 2025; completion date 2025-11-09.
+Location: Iksan, South Korea. Venue: Wonkwang University Cultural and Sports Center.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $240,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T005|Japan Masters|2025
+Dates: 11–16 November 2025; completion date 2025-11-16.
+Location: Kumamoto, Japan. Venue: Kumamoto Prefectural Gymnasium.
+Level: Super 500 - mid-high BWF World Tour level with full international draws.
+Prize: $475,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T006|Australian Open|2025
+Dates: 18–23 November 2025; completion date 2025-11-23.
+Location: Sydney, Australia. Venue: State Sports Centre.
+Level: Super 500 - mid-high BWF World Tour level with full international draws.
+Prize: $475,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T007|Syed Modi International|2025
+Dates: 25–30 November 2025; completion date 2025-11-30.
+Location: Lucknow, India. Venue: Babu Banarasi Das Indoor Stadium.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $240,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T008|Guwahati Masters|2025
+Dates: 2–7 December 2025; completion date 2025-12-07.
+Location: Guwahati, India. Venue: Saru Sajai Indoor Stadium.
+Level: Super 100 - BWF Tour Super 100 level; development/pathway events that still award World Tour ranking points.
+Prize: $110,000.
+Draw format: 48MS/32WS/32MD/32WD/32XD - 48-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T009|Odisha Masters|2025
+Dates: 9–14 December 2025; completion date 2025-12-14.
+Location: Cuttack, India. Venue: Jawaharlal Nehru Indoor Stadium.
+Level: Super 100 - BWF Tour Super 100 level; development/pathway events that still award World Tour ranking points.
+Prize: $110,000.
+Draw format: 48MS/32WS/32MD/32WD/32XD - 48-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T010|BWF World Tour Finals|2025
+Dates: 17–21 December 2025; completion date 2025-12-21.
+Location: Hangzhou, China. Venue: Hangzhou Olympic Sports Center.
+Level: World Tour Finals - season-ending invitational finals event for top World Tour performers.
+Prize: $3,000,000.
+Draw format: 8MS/8WS/8MD/8WD/8XD - 8-entry men's singles draw; 8-entry women's singles draw; 8-entry men's doubles draw; 8-entry women's doubles draw; 8-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2025_BWF_World_Tour
+
+TNOTE|T011|Malaysia Open|2026
+Dates: 6–11 January 2026; completion date 2026-01-11.
+Location: Kuala Lumpur, Malaysia. Venue: Axiata Arena.
+Level: Super 1000 - top regular BWF World Tour level; highest regular-tour ranking points and prize-money tier.
+Prize: $1,450,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T012|India Open|2026
+Dates: 13–18 January 2026; completion date 2026-01-18.
+Location: New Delhi, India. Venue: Indira Gandhi Arena.
+Level: Super 750 - elite regular BWF World Tour level below Super 1000.
+Prize: $950,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T013|Indonesia Masters|2026
+Dates: 20–25 January 2026; completion date 2026-01-25.
+Location: Jakarta, Indonesia. Venue: Istora Senayan.
+Level: Super 500 - mid-high BWF World Tour level with full international draws.
+Prize: $500,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T014|Thailand Masters|2026
+Dates: 27 January – 1 February 2026; completion date 2026-02-01.
+Location: Bangkok, Thailand. Venue: Nimibutr Stadium.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $250,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T015|German Open|2026
+Dates: 24 February – 1 March 2026; completion date 2026-03-01.
+Location: Mülheim, Germany. Venue: Westenergie Sporthalle.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $250,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T016|All England Open|2026
+Dates: 3–8 March 2026; completion date 2026-03-08.
+Location: Birmingham, England. Venue: Utilita Arena.
+Level: Super 1000 - top regular BWF World Tour level; highest regular-tour ranking points and prize-money tier.
+Prize: $1,450,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T017|Swiss Open|2026
+Dates: 10–15 March 2026; completion date 2026-03-15.
+Location: Basel, Switzerland. Venue: St. Jakobshalle.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $250,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T018|Orléans Masters|2026
+Dates: 17–22 March 2026; completion date 2026-03-22.
+Location: Orléans, France. Venue: Palais des Sports.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $250,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T019|Thailand Open|2026
+Dates: 12–17 May 2026; completion date 2026-05-17.
+Location: Bangkok, Thailand. Venue: Nimibutr Stadium.
+Level: Super 500 - mid-high BWF World Tour level with full international draws.
+Prize: $500,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T020|Malaysia Masters|2026
+Dates: 19–24 May 2026; completion date 2026-05-24.
+Location: Kuala Lumpur, Malaysia. Venue: Unifi Arena.
+Level: Super 500 - mid-high BWF World Tour level with full international draws.
+Prize: $500,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T021|Singapore Open|2026
+Dates: 26–31 May 2026; completion date 2026-05-31.
+Location: Singapore. Venue: Singapore Indoor Stadium.
+Level: Super 750 - elite regular BWF World Tour level below Super 1000.
+Prize: $1,000,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T022|Indonesia Open|2026
+Dates: 2–7 June 2026; completion date 2026-06-07.
+Location: Jakarta, Indonesia. Venue: Istora Gelora Bung Karno.
+Level: Super 1000 - top regular BWF World Tour level; highest regular-tour ranking points and prize-money tier.
+Prize: $1,450,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T023|Australian Open|2026
+Dates: 9–14 June 2026; completion date 2026-06-14.
+Location: Sydney, Australia. Venue: State Sports Centre.
+Level: Super 500 - mid-high BWF World Tour level with full international draws.
+Prize: $500,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T024|Macau Open|2026
+Dates: 16–21 June 2026; completion date 2026-06-21.
+Location: Macau. Venue: Macau East Asian Games Dome.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $370,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T025|U.S. Open|2026
+Dates: 23–28 June 2026; completion date 2026-06-28.
+Location: Fullerton, California, United States. Venue: Titan Gym.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $250,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T026|Canada Open|2026
+Dates: 30 June – 5 July 2026; completion date 2026-07-05.
+Location: Markham, Canada. Venue: Markham Pan Am Centre.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $250,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T027|Japan Open|2026
+Dates: 14–19 July 2026; completion date 2026-07-19.
+Location: Tokyo, Japan. Venue: Tokyo Metropolitan Gymnasium.
+Level: Super 750 - elite regular BWF World Tour level below Super 1000.
+Prize: $950,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T028|China Open|2026
+Dates: 21–26 July 2026; completion date 2026-07-26.
+Location: Changzhou, China. Venue: Changzhou Olympic Sports Centre.
+Level: Super 1000 - top regular BWF World Tour level; highest regular-tour ranking points and prize-money tier.
+Prize: $2,000,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T029|Taipei Open|2026
+Dates: 28 July – 2 August 2026; completion date 2026-08-02.
+Location: Taipei, Taiwan. Venue: Taipei Arena.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $250,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour
+
+TNOTE|T030|Korea Masters|2026
+Dates: 4–9 August 2026; completion date 2026-08-09.
+Location: Asan, South Korea. Venue: Asan Yi Sun-sin Gymnasium.
+Level: Super 300 - BWF World Tour level for major international circuit events.
+Prize: $250,000.
+Draw format: 32MS/32WS/32MD/32WD/32XD - 32-entry men's singles draw; 32-entry women's singles draw; 32-entry men's doubles draw; 32-entry women's doubles draw; 32-entry mixed doubles draw.
+Timing note: The event ran across the listed multi-day tournament window, with finals represented in the companion dataset by five match records: MS, WS, MD, WD, and XD.
+Source: https://en.wikipedia.org/wiki/2026_BWF_World_Tour

@@ -1664,6 +1664,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/entries/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Entries
+         * @description Import normalized submissions through the ordinary entry write seam.
+         *
+         *     This is intentionally an operator route, not a public-form shortcut.
+         *     The caller resolves source records to this workspace's ``eventIds`` and
+         *     supplies an existing entrant account; this handler never inserts ORM
+         *     rows directly and never creates accounts on behalf of a source file.
+         *
+         *     Every item is preflighted before the first write. The service's commit is
+         *     suppressed so the whole batch shares one transaction: a malformed event,
+         *     missing account, or failed downstream write rolls back all submissions.
+         *     Replays are safe because ``idempotencyKey`` is the existing submission
+         *     idempotency key, scoped by tournament and account. ``sourceKey`` remains
+         *     an importer trace key and is returned in the result, while the explicit
+         *     database key controls replay identity.
+         */
+        post: operations["import_entries_tournaments__tournament_id__entries_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/entries/{entry_id}/confirm": {
         parameters: {
             query?: never;
@@ -2305,6 +2338,31 @@ export interface paths {
         };
         /** Draw Detail */
         get: operations["draw_detail_e_api_page__slug__draws__draw_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/page/{slug}/players": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Players Index
+         * @description Every named roster person referenced by the published draws.
+         *
+         *     This is a draw-roster index, not an Entries directory. It therefore uses
+         *     ``draws_published`` as its only publication gate, reads names solely from
+         *     ``tournaments.data.bracketPlayers``, and never manufactures a profile URL
+         *     from a source-local roster key.
+         */
+        get: operations["players_index_e_api_page__slug__players_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3792,6 +3850,18 @@ export interface components {
             size: number;
             /** Hasconsolation */
             hasConsolation: boolean;
+            matchCoverage: components["schemas"]["MatchCoverageDTO"];
+            /** Recordscope */
+            recordScope: string;
+            /** Topologyscope */
+            topologyScope: string;
+            /**
+             * Historical
+             * @default false
+             */
+            historical: boolean;
+            /** Sourceurl */
+            sourceUrl?: string | null;
         };
         /** DrawDetailDTO */
         DrawDetailDTO: {
@@ -3807,12 +3877,42 @@ export interface components {
             size: number;
             /** Resultspublished */
             resultsPublished: boolean;
+            matchCoverage: components["schemas"]["MatchCoverageDTO"];
+            /** Recordscope */
+            recordScope: string;
+            /** Topologyscope */
+            topologyScope: string;
+            /**
+             * Historical
+             * @default false
+             */
+            historical: boolean;
+            /** Sourceurl */
+            sourceUrl?: string | null;
+            /** Identityscope */
+            identityScope?: string | null;
             /** Teams */
             teams: components["schemas"]["TeamDTO"][];
             /** Segments */
             segments: components["schemas"]["SegmentDTO"][];
             /** Standings */
             standings?: components["schemas"]["StandingRowDTO"][] | null;
+        };
+        /**
+         * DrawPlayerDTO
+         * @description One real roster person referenced by at least one published draw.
+         *
+         *     ``playerKey`` is only a stable row identity. It is deliberately not an
+         *     Entries person key and the public tier never turns it into a profile URL.
+         *     Historical source-name identities cannot safely claim that relationship.
+         */
+        DrawPlayerDTO: {
+            /** Playerkey */
+            playerKey: string;
+            /** Name */
+            name: string;
+            /** Eventcodes */
+            eventCodes: string[];
         };
         /** DrawsIndexDTO */
         DrawsIndexDTO: {
@@ -4082,6 +4182,101 @@ export interface components {
             closesAt?: string | null;
             /** Withdrawsuntil */
             withdrawsUntil?: string | null;
+        };
+        /**
+         * EntryImportBatchDTO
+         * @description The complete normalized batch submitted by a trusted operator.
+         */
+        EntryImportBatchDTO: {
+            /** Sourcekey */
+            sourceKey: string;
+            /** Submissions */
+            submissions: components["schemas"]["EntryImportSubmissionDTO"][];
+        };
+        /** EntryImportBatchResultDTO */
+        EntryImportBatchResultDTO: {
+            /** Sourcekey */
+            sourceKey: string;
+            /** Replayed */
+            replayed: boolean;
+            /** Submissions */
+            submissions: components["schemas"]["EntryImportSubmissionResultDTO"][];
+        };
+        /**
+         * EntryImportPlayerDTO
+         * @description One normalized player record for the operator import seam.
+         *
+         *     The importer owns parsing (for example, the supplied pipe-delimited
+         *     source file); this route accepts only resolved workspace event ids. That
+         *     keeps source-format concerns out of the API and ensures every write goes
+         *     through ``entries.submissions.create_submission``.
+         */
+        EntryImportPlayerDTO: {
+            /** Sourcekey */
+            sourceKey: string;
+            /** Fullname */
+            fullName: string;
+            /** Gender */
+            gender: string;
+            /** Club */
+            club?: string | null;
+            /** Birthyear */
+            birthYear?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Eventids */
+            eventIds: string[];
+            /** Partners */
+            partners?: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * EntryImportSubmissionDTO
+         * @description One submission-shaped batch item.
+         *
+         *     ``sourceKey`` identifies the source record. ``idempotencyKey`` is the
+         *     database retry key and must be supplied separately so an importer can
+         *     change its source labels without accidentally changing replay identity.
+         */
+        EntryImportSubmissionDTO: {
+            /** Sourcekey */
+            sourceKey: string;
+            /** Idempotencykey */
+            idempotencyKey: string;
+            /**
+             * Accountid
+             * Format: uuid
+             */
+            accountId: string;
+            /** Players */
+            players: components["schemas"]["EntryImportPlayerDTO"][];
+            /** Feetotalcents */
+            feeTotalCents?: number | null;
+            /** Feebasis */
+            feeBasis?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Emailverified
+             * @default true
+             */
+            emailVerified: boolean;
+        };
+        /** EntryImportSubmissionResultDTO */
+        EntryImportSubmissionResultDTO: {
+            /** Sourcekey */
+            sourceKey: string;
+            /** Idempotencykey */
+            idempotencyKey: string;
+            /** Submissionid */
+            submissionId: string;
+            /** Replayed */
+            replayed: boolean;
+            /** Playerscreated */
+            playersCreated: number;
+            /** Entriescreated */
+            entriesCreated: number;
         };
         /**
          * EntryPageDTO
@@ -4574,6 +4769,35 @@ export interface components {
             participants: components["schemas"]["ParticipantIn"][];
             /** Rounds */
             rounds: components["schemas"]["ImportPlayUnitIn"][][];
+            /**
+             * Record Scope
+             * @default full_draw
+             * @enum {string}
+             */
+            record_scope: "full_draw" | "completed_matches_only" | "finals_only";
+            /**
+             * Historical
+             * @default false
+             */
+            historical: boolean;
+            /** Advertised Size */
+            advertised_size?: number | null;
+            /** Round Labels */
+            round_labels?: string[] | null;
+            /** Round Codes */
+            round_codes?: string[] | null;
+            /** Topology Scope */
+            topology_scope?: ("none" | "proven_winner_advancement") | null;
+            /** Topology Edge Count */
+            topology_edge_count?: number | null;
+            /** Imported Match Count */
+            imported_match_count?: number | null;
+            /** Expected Match Count */
+            expected_match_count?: number | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Identity Scope */
+            identity_scope?: ("source_local_name" | "canonical") | null;
         };
         /** ImportPlayUnitIn */
         ImportPlayUnitIn: {
@@ -4592,6 +4816,36 @@ export interface components {
              * @default 1
              */
             duration_slots: number;
+            result?: components["schemas"]["ImportResultIn"] | null;
+            /** Played On */
+            played_on?: string | null;
+            /** Local Time */
+            local_time?: string | null;
+            /** Court Label */
+            court_label?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Source Ref */
+            source_ref?: string | null;
+        };
+        /** ImportResultIn */
+        ImportResultIn: {
+            /**
+             * Winner Side
+             * @enum {string}
+             */
+            winner_side: "A" | "B";
+            /** Score */
+            score?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Walkover
+             * @default false
+             */
+            walkover: boolean;
+            /** Reason */
+            reason?: ("walkover" | "retired" | "forfeit") | null;
         };
         /** ImportTournamentIn */
         ImportTournamentIn: {
@@ -4616,6 +4870,8 @@ export interface components {
             time_limit_seconds: number;
             /** Start Time */
             start_time?: string | null;
+            /** Roster */
+            roster?: components["schemas"]["BracketPlayerDTO"][] | null;
             /** Events */
             events: components["schemas"]["ImportEventIn"][];
         };
@@ -4803,6 +5059,15 @@ export interface components {
             /** Slot */
             slot?: number | null;
         };
+        /** MatchCoverageDTO */
+        MatchCoverageDTO: {
+            /** Imported */
+            imported: number;
+            /** Expected */
+            expected?: number | null;
+            /** Missing */
+            missing?: number | null;
+        };
         /** MatchDTO */
         MatchDTO: {
             /** Id */
@@ -4913,6 +5178,16 @@ export interface components {
             scheduledTime?: string | null;
             /** Court */
             court?: number | null;
+            /** Playedon */
+            playedOn?: string | null;
+            /** Localtime */
+            localTime?: string | null;
+            /** Courtlabel */
+            courtLabel?: string | null;
+            /** Sourceurl */
+            sourceUrl?: string | null;
+            /** Sourceref */
+            sourceRef?: string | null;
         };
         /** MatchScore */
         MatchScore: {
@@ -5271,6 +5546,16 @@ export interface components {
             slot_b: components["schemas"]["BracketSlotOut"];
             /** Segment */
             segment?: string | null;
+            /** Played On */
+            played_on?: string | null;
+            /** Local Time */
+            local_time?: string | null;
+            /** Court Label */
+            court_label?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Source Ref */
+            source_ref?: string | null;
             /**
              * Version
              * @default 1
@@ -5381,6 +5666,26 @@ export interface components {
             wins: number;
             /** Losses */
             losses: number;
+        };
+        /** PlayersDTO */
+        PlayersDTO: {
+            /** Published */
+            published: boolean;
+            /**
+             * Players
+             * @default []
+             */
+            players: components["schemas"]["DrawPlayerDTO"][];
+            /**
+             * Referencedplayercount
+             * @default 0
+             */
+            referencedPlayerCount: number;
+            /**
+             * Missingnamecount
+             * @default 0
+             */
+            missingNameCount: number;
         };
         /** PolicyDTO */
         PolicyDTO: {
@@ -5901,6 +6206,10 @@ export interface components {
              * @default false
              */
             bye: boolean;
+            /** Feedernodekey */
+            feederNodeKey?: string | null;
+            /** Feedertake */
+            feederTake?: ("winner" | "loser") | null;
         };
         /** SignupResponse */
         SignupResponse: {
@@ -9269,6 +9578,41 @@ export interface operations {
             };
         };
     };
+    import_entries_tournaments__tournament_id__entries_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntryImportBatchDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryImportBatchResultDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     confirm_entry_tournaments__tournament_id__entries__entry_id__confirm_post: {
         parameters: {
             query?: never;
@@ -9912,6 +10256,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DrawDetailDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    players_index_e_api_page__slug__players_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayersDTO"];
                 };
             };
             /** @description Validation Error */

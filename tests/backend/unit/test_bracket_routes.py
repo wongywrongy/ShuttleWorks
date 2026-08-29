@@ -19,6 +19,7 @@ helper; the FastAPI TestClient pipeline exercises the routers + auth
 deps + repository layer end-to-end. The local-dev synthetic user is
 seeded as the tournament owner, so role gates pass without a real JWT.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -71,8 +72,7 @@ def _se_4_body(time_limit: float = 1.0) -> dict:
                 "discipline": "Men's Singles",
                 "format": "se",
                 "participants": [
-                    {"id": f"P{i}", "name": f"Player {i}", "seed": i}
-                    for i in range(1, 5)
+                    {"id": f"P{i}", "name": f"Player {i}", "seed": i} for i in range(1, 5)
                 ],
                 "duration_slots": 1,
             }
@@ -142,9 +142,7 @@ def test_create_bracket_rejects_empty_events(client, tid):
 
 def test_create_bracket_rejects_undersized_event(client, tid):
     payload = _se_4_body()
-    payload["events"][0]["participants"] = payload["events"][0][
-        "participants"
-    ][:1]
+    payload["events"][0]["participants"] = payload["events"][0]["participants"][:1]
     r = client.post(_bracket_url(tid), json=payload)
     assert r.status_code == 400
 
@@ -173,8 +171,7 @@ def test_create_bracket_multi_event_namespaces_play_units(client, tid):
             "discipline": "Women's Singles",
             "format": "se",
             "participants": [
-                {"id": f"Q{i}", "name": f"Player {i}", "seed": i}
-                for i in range(1, 5)
+                {"id": f"Q{i}", "name": f"Player {i}", "seed": i} for i in range(1, 5)
             ],
             "duration_slots": 1,
         }
@@ -194,6 +191,333 @@ def test_create_bracket_rejects_if_one_already_exists(client, tid):
     assert r1.status_code == 200
     r2 = client.post(_bracket_url(tid), json=_se_4_body())
     assert r2.status_code == 409
+
+
+def test_historical_import_accepts_completed_matches_in_every_round(client, tid):
+    payload = {
+        "courts": 2,
+        "total_slots": 64,
+        "events": [
+            {
+                "id": "MS",
+                "discipline": "MS",
+                "format": "se",
+                "record_scope": "completed_matches_only",
+                "historical": True,
+                "advertised_size": 32,
+                "round_labels": ["Round of 16", "Quarterfinals"],
+                "source_url": "https://example.test/results",
+                "participants": [
+                    {"id": "P1", "name": "Player 1"},
+                    {"id": "P2", "name": "Player 2"},
+                    {"id": "P3", "name": "Player 3"},
+                    {"id": "P4", "name": "Player 4"},
+                ],
+                "rounds": [
+                    [
+                        {
+                            "id": "R16-1",
+                            "side_a": ["P1"],
+                            "side_b": ["P2"],
+                            "played_on": "2026-07-14",
+                            "local_time": "9:50 AM",
+                            "court_label": "Court 2",
+                            "source_url": "https://example.test/results/day-1",
+                            "source_ref": "matches.csv:42",
+                            "result": {
+                                "winner_side": "A",
+                                "score": {"sets": [{"sideA": 21, "sideB": 14}]},
+                            },
+                        }
+                    ],
+                    [
+                        {
+                            "id": "QF-1",
+                            "side_a": ["P3"],
+                            "side_b": ["P4"],
+                            "result": {
+                                "winner_side": "B",
+                                "walkover": True,
+                                "reason": "walkover",
+                            },
+                        }
+                    ],
+                ],
+            }
+        ],
+    }
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    event = body["events"][0]
+    assert event["bracket_size"] == 32
+    assert event["status"] == "completed"
+    assert event["config"]["record_scope"] == "completed_matches_only"
+    assert event["config"]["round_labels"] == ["Round of 16", "Quarterfinals"]
+    assert len(body["results"]) == 2
+    assert {result["play_unit_id"] for result in body["results"]} == {"R16-1", "QF-1"}
+    first_unit = next(unit for unit in body["play_units"] if unit["id"] == "R16-1")
+    assert first_unit["played_on"] == "2026-07-14"
+    assert first_unit["local_time"] == "9:50 AM"
+    assert first_unit["court_label"] == "Court 2"
+    assert first_unit["source_ref"] == "matches.csv:42"
+
+    hydrated = client.get(_bracket_url(tid)).json()
+    assert hydrated["events"][0]["config"]["historical"] is True
+    assert hydrated["events"][0]["status"] == "completed"
+    assert len(hydrated["results"]) == 2
+    hydrated_unit = next(unit for unit in hydrated["play_units"] if unit["id"] == "R16-1")
+    assert hydrated_unit["source_url"] == "https://example.test/results/day-1"
+
+
+def test_historical_import_persists_roster_and_verified_partial_feeders(client, tid):
+    payload = {
+        "courts": 1,
+        "total_slots": 16,
+        "roster": [
+            {"id": "P1", "name": "Player 1"},
+            {"id": "P2", "name": "Player 2"},
+            {"id": "P3", "name": "Player 3"},
+        ],
+        "events": [
+            {
+                "id": "MS",
+                "discipline": "MS",
+                "format": "se",
+                "record_scope": "completed_matches_only",
+                "historical": True,
+                "round_codes": ["R16", "QF"],
+                "round_labels": ["Round of 16", "Quarterfinals"],
+                "topology_scope": "proven_winner_advancement",
+                "topology_edge_count": 1,
+                "imported_match_count": 2,
+                "expected_match_count": 31,
+                "participants": [
+                    {"id": "P1", "name": "Player 1"},
+                    {"id": "P2", "name": "Player 2"},
+                    {"id": "P3", "name": "Player 3"},
+                ],
+                "rounds": [
+                    [
+                        {
+                            "id": "R16-1",
+                            "side_a": ["P1"],
+                            "side_b": ["P2"],
+                            "result": {"winner_side": "A"},
+                        }
+                    ],
+                    [
+                        {
+                            "id": "QF-1",
+                            "side_a": ["P1"],
+                            "side_b": ["P3"],
+                            "feeder_a": "R16-1",
+                            "result": {"winner_side": "B"},
+                        }
+                    ],
+                ],
+            }
+        ],
+    }
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    target = next(unit for unit in body["play_units"] if unit["id"] == "QF-1")
+    assert target["side_a"] == ["P1"]
+    assert target["side_b"] == ["P3"]
+    assert target["dependencies"] == ["R16-1"]
+    assert target["slot_a"]["feeder_play_unit_id"] == "R16-1"
+    assert target["slot_b"]["participant_id"] == "P3"
+    assert body["events"][0]["config"]["round_codes"] == ["R16", "QF"]
+    assert body["events"][0]["config"]["topology_edge_count"] == 1
+
+    from sqlalchemy import select
+    from db.models import Tournament
+    from db.session import SessionLocal
+
+    with SessionLocal() as session:
+        tournament = session.scalar(select(Tournament).where(Tournament.id == uuid.UUID(tid)))
+        assert tournament is not None
+        assert [player["id"] for player in tournament.data["bracketPlayers"]] == [
+            "P1",
+            "P2",
+            "P3",
+        ]
+
+
+def test_historical_import_rejects_unproven_or_nonadjacent_feeder(client, tid):
+    payload = {
+        "courts": 1,
+        "total_slots": 16,
+        "events": [
+            {
+                "id": "MS",
+                "record_scope": "completed_matches_only",
+                "historical": True,
+                "round_codes": ["R32", "QF"],
+                "round_labels": ["Round of 32", "Quarterfinals"],
+                "topology_scope": "proven_winner_advancement",
+                "participants": [
+                    {"id": "P1", "name": "Player 1"},
+                    {"id": "P2", "name": "Player 2"},
+                    {"id": "P3", "name": "Player 3"},
+                ],
+                "rounds": [
+                    [
+                        {
+                            "id": "R32-1",
+                            "side_a": ["P1"],
+                            "side_b": ["P2"],
+                            "result": {"winner_side": "A"},
+                        }
+                    ],
+                    [
+                        {
+                            "id": "QF-1",
+                            "side_a": ["P1"],
+                            "side_b": ["P3"],
+                            "feeder_a": "R32-1",
+                            "result": {"winner_side": "B"},
+                        }
+                    ],
+                ],
+            }
+        ],
+    }
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 400
+    assert "cannot advance from 'R32' to 'QF'" in response.json()["detail"]
+
+    payload["events"][0]["round_codes"] = ["R16", "QF"]
+    payload["events"][0]["rounds"][1][0]["side_a"] = ["P2"]
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 400
+    assert "winner does not match side A" in response.json()["detail"]
+
+
+def test_invalid_import_does_not_erase_existing_bracket(client, tid):
+    created = client.post(_bracket_url(tid), json=_se_4_body())
+    assert created.status_code == 200
+    original_ids = {unit["id"] for unit in created.json()["play_units"]}
+    invalid = {
+        "courts": 1,
+        "total_slots": 16,
+        "events": [
+            {
+                "id": "bad",
+                "participants": [
+                    {"id": "P1", "name": "One"},
+                    {"id": "P1", "name": "Duplicate"},
+                ],
+                "rounds": [[{"id": "bad-1", "side_a": ["P1"], "side_b": ["P1"]}]],
+            }
+        ],
+    }
+    response = client.post(_bracket_url(tid, "import"), json=invalid)
+    assert response.status_code == 400
+    assert "duplicate participant id" in response.json()["detail"]
+    after = client.get(_bracket_url(tid))
+    assert after.status_code == 200
+    assert {unit["id"] for unit in after.json()["play_units"]} == original_ids
+
+
+def test_import_rejects_global_unit_collision_and_unresolved_roster_member(client, tid):
+    shared = {
+        "participants": [
+            {"id": "P1", "name": "One"},
+            {"id": "P2", "name": "Two"},
+        ],
+        "rounds": [[{"id": "shared-unit", "side_a": ["P1"], "side_b": ["P2"]}]],
+    }
+    payload = {
+        "courts": 1,
+        "total_slots": 16,
+        "events": [{"id": "MS", **shared}, {"id": "WS", **shared}],
+    }
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 400
+    assert "duplicated across imported events" in response.json()["detail"]
+
+    payload = {
+        "courts": 1,
+        "total_slots": 16,
+        "roster": [{"id": "P1", "name": "One"}],
+        "events": [
+            {
+                "id": "MD",
+                "participants": [
+                    {
+                        "id": "PAIR",
+                        "name": "One / Missing",
+                        "members": ["P1", "P2"],
+                    }
+                ],
+                "rounds": [
+                    [
+                        {
+                            "id": "MD-1",
+                            "side_a": ["PAIR"],
+                            "side_b": ["PAIR"],
+                        }
+                    ]
+                ],
+            }
+        ],
+    }
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 400
+    assert "roster players that do not exist: ['P2']" in response.json()["detail"]
+
+    payload["events"][0]["participants"] = [{"id": "P2", "name": "Missing"}]
+    payload["events"][0]["rounds"] = [[{"id": "MS-1", "side_a": ["P2"], "side_b": ["P2"]}]]
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 400
+    assert "roster players that do not exist: ['P2']" in response.json()["detail"]
+
+
+def test_historical_import_requires_a_result_for_every_record(client, tid):
+    payload = {
+        "courts": 1,
+        "total_slots": 16,
+        "events": [
+            {
+                "id": "MS",
+                "record_scope": "completed_matches_only",
+                "historical": True,
+                "participants": [
+                    {"id": "P1", "name": "One"},
+                    {"id": "P2", "name": "Two"},
+                ],
+                "rounds": [[{"id": "MS-1", "side_a": ["P1"], "side_b": ["P2"]}]],
+            }
+        ],
+    }
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 400
+    assert "must include its completed result" in response.json()["detail"]
+
+
+def test_structural_import_still_requires_feeders_after_round_one(client, tid):
+    payload = {
+        "courts": 1,
+        "total_slots": 16,
+        "events": [
+            {
+                "id": "MS",
+                "participants": [
+                    {"id": "P1", "name": "Player 1"},
+                    {"id": "P2", "name": "Player 2"},
+                ],
+                "rounds": [
+                    [{"id": "R1", "side_a": ["P1"], "side_b": ["P2"]}],
+                    [{"id": "R2", "side_a": ["P1"], "side_b": ["P2"]}],
+                ],
+            }
+        ],
+    }
+    response = client.post(_bracket_url(tid, "import"), json=payload)
+    assert response.status_code == 400
+    assert "must declare feeder_a and feeder_b" in response.json()["detail"]
 
 
 def test_create_bracket_404_on_unknown_tournament(client):
@@ -232,9 +556,7 @@ def test_delete_bracket_clears_everything(client, tid):
 def test_record_result_advances_downstream_slot(client, tid):
     client.post(_bracket_url(tid), json=_se_4_body())
     state = client.get(_bracket_url(tid)).json()
-    sf1 = next(
-        p for p in state["play_units"] if p["round_index"] == 0 and p["match_index"] == 0
-    )
+    sf1 = next(p for p in state["play_units"] if p["round_index"] == 0 and p["match_index"] == 0)
     final = next(p for p in state["play_units"] if p["round_index"] == 1)
     assert final["slot_a"]["participant_id"] is None
     assert final["slot_a"]["feeder_play_unit_id"] == sf1["id"]
@@ -255,10 +577,7 @@ def test_record_result_advances_downstream_slot(client, tid):
     assert new_final["slot_a"]["participant_id"] == sf1["side_a"][0]
     assert new_final["slot_a"]["feeder_play_unit_id"] is None
     # Result row recorded.
-    assert any(
-        r["play_unit_id"] == sf1["id"] and r["winner_side"] == "A"
-        for r in body["results"]
-    )
+    assert any(r["play_unit_id"] == sf1["id"] and r["winner_side"] == "A" for r in body["results"])
 
 
 def test_record_result_replay_does_not_duplicate_or_corrupt_advancement(client, tid):
@@ -267,9 +586,7 @@ def test_record_result_replay_does_not_duplicate_or_corrupt_advancement(client, 
     assert sched.status_code == 200, sched.text
     first_match = sched.json()["play_unit_ids"][0]
     initial_state = client.get(_bracket_url(tid)).json()
-    first_play_unit = next(
-        p for p in initial_state["play_units"] if p["id"] == first_match
-    )
+    first_play_unit = next(p for p in initial_state["play_units"] if p["id"] == first_match)
     final = next(p for p in initial_state["play_units"] if p["round_index"] == 1)
 
     r1 = client.post(
@@ -372,9 +689,7 @@ def test_record_result_replay_rejects_changed_metadata(client, tid):
 
     state = client.get(_bracket_url(tid))
     assert state.status_code == 200
-    matching_results = [
-        r for r in state.json()["results"] if r["play_unit_id"] == first_match
-    ]
+    matching_results = [r for r in state.json()["results"] if r["play_unit_id"] == first_match]
     assert matching_results == [
         {
             "play_unit_id": first_match,
@@ -409,9 +724,7 @@ def test_record_result_replay_rejects_changed_winner(client, tid):
 
     state = client.get(_bracket_url(tid))
     assert state.status_code == 200
-    matching_results = [
-        r for r in state.json()["results"] if r["play_unit_id"] == first_match
-    ]
+    matching_results = [r for r in state.json()["results"] if r["play_unit_id"] == first_match]
     assert len(matching_results) == 1
     assert matching_results[0]["winner_side"] == "A"
 
@@ -492,9 +805,7 @@ def test_bracket_match_action_reset_clears_start_before_result(client, tid):
         json={"play_unit_id": match_id, "action": "reset"},
     )
     assert r.status_code == 200, r.text
-    a = next(
-        a for a in r.json()["assignments"] if a["play_unit_id"] == match_id
-    )
+    a = next(a for a in r.json()["assignments"] if a["play_unit_id"] == match_id)
     assert a["actual_start_slot"] is None
     assert a["started"] is False
 
@@ -590,9 +901,7 @@ def _two_layer_bye_import_body() -> dict:
                 "id": "MS",
                 "discipline": "Men's Singles",
                 "format": "se",
-                "participants": [
-                    {"id": f"P{i}", "name": f"Player {i}"} for i in range(1, 5)
-                ],
+                "participants": [{"id": f"P{i}", "name": f"Player {i}"} for i in range(1, 5)],
                 "rounds": [
                     [
                         {"id": "QF0", "side_a": ["P1"], "side_b": ["P2"]},
@@ -652,8 +961,7 @@ def test_record_result_persists_deep_walkover_cascade(client, tid):
     fresh = client.get(_bracket_url(tid)).json()
     f0 = _pu(fresh, "F0")
     assert f0["slot_a"]["participant_id"] == "P1", (
-        "deep walkover cascade was not persisted: F0.slot_a is "
-        f"{f0['slot_a']} after reload"
+        f"deep walkover cascade was not persisted: F0.slot_a is {f0['slot_a']} after reload"
     )
     assert f0["side_a"] == ["P1"]
 
@@ -724,8 +1032,7 @@ def test_meet_side_put_state_preserves_bracket_session(client, tid):
     # 4. GET /bracket — verify bracket_session survived with assignments intact.
     r3 = client.get(_bracket_url(tid))
     assert r3.status_code == 200, (
-        f"GET /bracket returned {r3.status_code} after meet-side PUT — "
-        "bracket_session was wiped"
+        f"GET /bracket returned {r3.status_code} after meet-side PUT — bracket_session was wiped"
     )
     body = r3.json()
     assert body["courts"] == 2

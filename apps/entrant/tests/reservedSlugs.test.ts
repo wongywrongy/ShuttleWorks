@@ -46,12 +46,14 @@ function backendReservedSlugs(): string[] {
     new URL('../../../apps/api/src/entries/entries_routes.py', import.meta.url),
     'utf8',
   );
-  const match = source.match(/_RESERVED_SLUGS\s*=\s*frozenset\(\{([^}]*)\}\)/);
+  const match = source.match(
+    /_RESERVED_SLUGS\s*=\s*frozenset\(\s*\{([\s\S]*?)\}\s*\)/,
+  );
 
-  // FAIL CLOSED. A rename, a reformat onto several lines, or a move to another
-  // module all make this regex miss — and a "no matches, nothing to check"
-  // reading would leave this file green forever while asserting nothing. Zero
-  // matches is a finding, not a pass.
+  // FAIL CLOSED. A rename or move to another module makes this regex miss —
+  // and a "no matches, nothing to check" reading would leave this file green
+  // forever while asserting nothing. Whitespace is deliberately flexible so
+  // Ruff's valid multiline formatting cannot invalidate the contract guard.
   expect(match, '_RESERVED_SLUGS not found in apps/api/src/entries/entries_routes.py').not.toBeNull();
 
   return [...match![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);

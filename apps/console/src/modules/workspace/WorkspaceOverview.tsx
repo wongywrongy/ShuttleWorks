@@ -87,7 +87,9 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
     phase === 'ready' || phase === 'live' ? (
       <Button onClick={() => go(br ? 'bracket-live' : 'live')}>Open live day</Button>
     ) : phase === 'complete' ? (
-      <Button onClick={() => go(br ? 'bracket-matches' : 'matches')}>View results</Button>
+      <Button onClick={() => go(br ? 'bracket-draws' : 'matches')}>
+        {br ? 'View draws' : 'View results'}
+      </Button>
     ) : null;
 
   return (

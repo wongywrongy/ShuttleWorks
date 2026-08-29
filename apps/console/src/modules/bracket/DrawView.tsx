@@ -293,10 +293,9 @@ function BracketView({
         >
           {/* Bracket canvas: one-sided (default) reads left-to-right with the
               Final as the rightmost column; mirrored fans two wings out from
-              a centered Final. Either way each match is positioned absolutely
-              at the vertical midpoint of its two feeders, so the connecting
-              lines are implied by alignment. Positions are inline styles
-              (not flex) so the layout is deterministic and testable. */}
+              a centered Final. Positions and feeder paths use the same pure
+              geometry, so the result stays deterministic under pan/zoom and
+              can be verified without browser layout measurements. */}
           <div
             data-testid="bracket-canvas"
             className="relative"
@@ -305,13 +304,14 @@ function BracketView({
               height: `${layout.contentHeight}px`,
             }}
           >
+            <BracketConnectors layout={layout} playUnits={Object.values(idMap)} />
             {layout.columns.map((col) => {
               const isFinal = col.roundIndex === event.rounds.length - 1;
               return (
               <div
                 key={col.key}
                 data-round={col.roundIndex}
-                className="absolute top-0"
+                className="absolute top-0 z-10"
                 style={{ left: `${col.left}px`, width: `${BRACKET_CARD_WIDTH}px` }}
               >
                 <h3
@@ -405,6 +405,111 @@ export interface BracketLayout {
   contentWidth: number;
   contentHeight: number;
   columns: BracketColumn[];
+}
+
+export interface BracketConnectorPath {
+  feederPlayUnitId: string;
+  targetPlayUnitId: string;
+  targetSide: "A" | "B";
+  d: string;
+}
+
+/**
+ * Turn persisted feeder relationships into orthogonal bracket paths.
+ *
+ * The API remains the source of truth: a path is emitted only when a target
+ * slot names a feeder and both cards exist in this layout. Historical imports
+ * can therefore leave uncertain links absent without the client inventing a
+ * tournament result.
+ */
+export function computeBracketConnectorPaths(
+  layout: BracketLayout,
+  playUnits: PlayUnitDTO[],
+): BracketConnectorPath[] {
+  const geometry = new Map<string, { left: number; top: number }>();
+  for (const column of layout.columns) {
+    for (const match of column.matches) {
+      geometry.set(match.puId, { left: column.left, top: match.top });
+    }
+  }
+
+  const paths: BracketConnectorPath[] = [];
+  for (const target of playUnits) {
+    const targetGeometry = geometry.get(target.id);
+    if (!targetGeometry) continue;
+
+    const slots = [
+      { side: "A" as const, feederId: target.slot_a.feeder_play_unit_id },
+      { side: "B" as const, feederId: target.slot_b.feeder_play_unit_id },
+    ];
+    for (const slot of slots) {
+      if (!slot.feederId) continue;
+      const feederGeometry = geometry.get(slot.feederId);
+      if (!feederGeometry || slot.feederId === target.id) continue;
+
+      const targetIsRight = targetGeometry.left > feederGeometry.left;
+      const sourceX = targetIsRight
+        ? feederGeometry.left + BRACKET_CARD_WIDTH
+        : feederGeometry.left;
+      const targetX = targetIsRight
+        ? targetGeometry.left
+        : targetGeometry.left + BRACKET_CARD_WIDTH;
+      const sourceY = feederGeometry.top + BRACKET_CARD_HEIGHT / 2;
+      // Land beside the owning side instead of the card midpoint so two
+      // feeders remain visually distinct when they converge on one match.
+      const targetY =
+        targetGeometry.top + BRACKET_CARD_HEIGHT * (slot.side === "A" ? 0.32 : 0.68);
+      const elbowX = (sourceX + targetX) / 2;
+
+      paths.push({
+        feederPlayUnitId: slot.feederId,
+        targetPlayUnitId: target.id,
+        targetSide: slot.side,
+        d: `M ${sourceX} ${sourceY} H ${elbowX} V ${targetY} H ${targetX}`,
+      });
+    }
+  }
+  return paths;
+}
+
+function BracketConnectors({
+  layout,
+  playUnits,
+}: {
+  layout: BracketLayout;
+  playUnits: PlayUnitDTO[];
+}) {
+  const paths = useMemo(
+    () => computeBracketConnectorPaths(layout, playUnits),
+    [layout, playUnits],
+  );
+  if (paths.length === 0) return null;
+
+  return (
+    <svg
+      data-testid="bracket-connectors"
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-0 overflow-visible text-rule"
+      width={layout.contentWidth}
+      height={layout.contentHeight}
+      viewBox={`0 0 ${layout.contentWidth} ${layout.contentHeight}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="square"
+      strokeLinejoin="miter"
+    >
+      {paths.map((path) => (
+        <path
+          key={`${path.feederPlayUnitId}-${path.targetPlayUnitId}-${path.targetSide}`}
+          data-feeder={path.feederPlayUnitId}
+          data-target={path.targetPlayUnitId}
+          data-target-side={path.targetSide}
+          d={path.d}
+        />
+      ))}
+    </svg>
+  );
 }
 
 /**

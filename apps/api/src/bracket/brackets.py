@@ -31,6 +31,7 @@ Tournament-product backend (:8765) continues to run unchanged in
 parallel through PR 2. PR 3 retires it after the frontend folds into
 the scheduler shell.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -89,6 +90,7 @@ from core.limits import (
     MAX_ASSIGNMENTS,
     MAX_COURTS,
     MAX_EVENTS,
+    MAX_MATCHES,
     MAX_PLAYERS,
     MAX_ROUNDS,
     MAX_SIDE_MEMBERS,
@@ -179,9 +181,7 @@ def _generate_draw(
     """
     spec = get_format(format_id)
     if spec is None:
-        raise HTTPException(
-            status_code=400, detail=f"unknown draw format {format_id!r}"
-        )
+        raise HTTPException(status_code=400, detail=f"unknown draw format {format_id!r}")
     try:
         resolved = spec.normalize_config(dict(config or {}), len(participants))
         return spec.generate(
@@ -288,6 +288,11 @@ class PlayUnitOut(BaseModel):
     # Segment id for multi-segment formats ('W', 'L', 'GF', 'P5_8', …) —
     # from the unit's metadata; None for single-bracket formats (se/rr).
     segment: Optional[str] = None
+    played_on: Optional[str] = None
+    local_time: Optional[str] = None
+    court_label: Optional[str] = None
+    source_url: Optional[str] = None
+    source_ref: Optional[str] = None
     # Optimistic-concurrency token (SP-F3): the client echoes this back as
     # ``seen_version`` when recording a result so concurrent writes from a
     # second operator are rejected with a stale-version conflict. Defaults to
@@ -388,6 +393,7 @@ class TournamentOut(BaseModel):
 
 class BracketAssignmentIn(StrictModel):
     """One solver-produced (or operator-chosen) assignment cell."""
+
     play_unit_id: Identifier
     slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
     court_id: int = Field(..., ge=0, le=MAX_COURTS)
@@ -403,6 +409,7 @@ class BracketScheduleCandidate(BaseModel):
     candidate-selection-before-commit step). ``candidates[0]`` is the
     best one found.
     """
+
     solution_id: str
     objective_score: float = 0.0
     found_at_seconds: float = 0.0
@@ -423,6 +430,7 @@ class ScheduleNextRoundOut(BaseModel):
 
 class CommitRoundIn(StrictModel):
     """Persist the operator-chosen candidate's assignments for a round."""
+
     assignments: List[BracketAssignmentIn] = Field(..., max_length=MAX_ASSIGNMENTS)
 
 
@@ -450,6 +458,7 @@ class MatchActionIn(StrictModel):
 
 class BracketValidateIn(StrictModel):
     """A single proposed drag target evaluated by /bracket/validate."""
+
     play_unit_id: Identifier
     slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
     court_id: int = Field(..., ge=0, le=MAX_COURTS)
@@ -457,6 +466,7 @@ class BracketValidateIn(StrictModel):
 
 class BracketPinIn(StrictModel):
     """A single proposed drag target committed by /bracket/pin."""
+
     play_unit_id: Identifier
     slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
     court_id: int = Field(..., ge=0, le=MAX_COURTS)
@@ -464,6 +474,7 @@ class BracketPinIn(StrictModel):
 
 class BracketAssignIn(StrictModel):
     """Body for POST /bracket/assign — direct (non-solver) court placement."""
+
     play_unit_id: Identifier
     court_id: int = Field(..., ge=0, le=MAX_COURTS)
     slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
@@ -471,11 +482,13 @@ class BracketAssignIn(StrictModel):
 
 class BracketUnassignIn(StrictModel):
     """Body for POST /bracket/unassign — remove a play unit's court assignment."""
+
     play_unit_id: Identifier
 
 
 class EventUpsertIn(StrictModel):
     """Body of POST /bracket/events/{event_id} — upsert one event."""
+
     discipline: str
     format: FormatId = "se"
     bracket_size: Optional[int] = None
@@ -491,6 +504,7 @@ class EventConfigPatchIn(StrictModel):
     """Body of PATCH /bracket/events/{event_id} — edit a DRAFT draw's
     configuration without touching its participants (the upsert route
     wipes them; a config-only patch must not)."""
+
     format: Optional[FormatId] = None
     bracket_size: Optional[int] = None
     seeded_count: Optional[int] = None
@@ -509,6 +523,7 @@ class BracketValidationConflictOut(BaseModel):
     Snake-case sibling of the meet's ``ValidationConflict`` — the
     bracket API surface is snake_case throughout.
     """
+
     type: str
     description: str
     play_unit_id: Optional[str] = None
@@ -530,6 +545,19 @@ class ImportPlayUnitIn(StrictModel):
     feeder_a: Optional[Identifier] = None
     feeder_b: Optional[Identifier] = None
     duration_slots: int = Field(1, ge=0, le=MAX_DURATION_SLOTS)
+    result: Optional["ImportResultIn"] = None
+    played_on: Optional[str] = Field(None, max_length=10)
+    local_time: Optional[str] = Field(None, max_length=40)
+    court_label: Optional[str] = Field(None, max_length=80)
+    source_url: Optional[str] = Field(None, max_length=2048)
+    source_ref: Optional[str] = Field(None, max_length=200)
+
+
+class ImportResultIn(StrictModel):
+    winner_side: Literal["A", "B"]
+    score: Optional[dict] = None
+    walkover: bool = False
+    reason: Optional[Literal["walkover", "retired", "forfeit"]] = None
 
 
 class ImportEventIn(StrictModel):
@@ -538,6 +566,17 @@ class ImportEventIn(StrictModel):
     format: FormatId = "se"
     participants: List[ParticipantIn] = Field(..., max_length=MAX_PLAYERS)
     rounds: List[List[ImportPlayUnitIn]] = Field(..., max_length=MAX_ROUNDS)
+    record_scope: Literal["full_draw", "completed_matches_only", "finals_only"] = "full_draw"
+    historical: bool = False
+    advertised_size: Optional[int] = Field(None, ge=2, le=MAX_PLAYERS)
+    round_labels: Optional[List[str]] = Field(None, max_length=MAX_ROUNDS)
+    round_codes: Optional[List[Code]] = Field(None, max_length=MAX_ROUNDS)
+    topology_scope: Optional[Literal["none", "proven_winner_advancement"]] = None
+    topology_edge_count: Optional[int] = Field(None, ge=0, le=MAX_MATCHES)
+    imported_match_count: Optional[int] = Field(None, ge=0, le=MAX_MATCHES)
+    expected_match_count: Optional[int] = Field(None, ge=0, le=MAX_MATCHES)
+    source_url: Optional[str] = Field(None, max_length=2048)
+    identity_scope: Optional[Literal["source_local_name", "canonical"]] = None
 
 
 class ImportTournamentIn(StrictModel):
@@ -547,6 +586,7 @@ class ImportTournamentIn(StrictModel):
     interval_minutes: int = Field(30, ge=1, le=240)
     time_limit_seconds: float = Field(5.0, gt=0, le=MAX_SOLVE_SECONDS)
     start_time: Optional[datetime] = None
+    roster: Optional[List[BracketPlayerDTO]] = Field(None, max_length=MAX_PLAYERS)
     events: List[ImportEventIn] = Field(..., max_length=MAX_EVENTS)
 
 
@@ -619,9 +659,7 @@ def _load_bracket_player_extras(
     )
 
 
-def _meet_occupied_windows(
-    data_blob: dict, court_count: int
-) -> List[Tuple[int, int, int]]:
+def _meet_occupied_windows(data_blob: dict, court_count: int) -> List[Tuple[int, int, int]]:
     """Cross-engine court coordination (hybrid workspaces).
 
     Meet and Bracket schedule the same physical courts independently. To
@@ -648,9 +686,7 @@ def _meet_occupied_windows(
     return out
 
 
-def _segments_from_match_meta(
-    format_id: str, match_rows
-) -> Optional[List[DrawSegment]]:
+def _segments_from_match_meta(format_id: str, match_rows) -> Optional[List[DrawSegment]]:
     """Rebuild ``Draw.segments`` from persisted per-match meta.
 
     Segment formats stamp ``segment`` / ``segment_order`` / ``round`` /
@@ -675,25 +711,19 @@ def _segments_from_match_meta(
                 "positions": None,
             },
         )
-        bucket["rounds"][int(meta.get("round", 0))].append(
-            (int(meta.get("match_index", 0)), m.id)
-        )
+        bucket["rounds"][int(meta.get("round", 0))].append((int(meta.get("match_index", 0)), m.id))
         if bucket["positions"] is None:
             bucket["positions"] = segment_positions(seg_id, meta)
     if not buckets:
         return None
 
     segments: List[DrawSegment] = []
-    for seg_id, bucket in sorted(
-        buckets.items(), key=lambda kv: (kv[1]["order"], kv[0])
-    ):
+    for seg_id, bucket in sorted(buckets.items(), key=lambda kv: (kv[1]["order"], kv[0])):
         seg_rounds = [
             [pu_id for _, pu_id in sorted(bucket["rounds"][r])]
             for r in sorted(bucket["rounds"].keys())
         ]
-        metadata = (
-            {"positions": bucket["positions"]} if bucket["positions"] else {}
-        )
+        metadata = {"positions": bucket["positions"]} if bucket["positions"] else {}
         segments.append(
             DrawSegment(
                 id=seg_id,
@@ -706,9 +736,7 @@ def _segments_from_match_meta(
     return segments
 
 
-def _bracket_solver_options(
-    time_limit_seconds: float, camel_cfg: dict
-) -> SolverOptions:
+def _bracket_solver_options(time_limit_seconds: float, camel_cfg: dict) -> SolverOptions:
     """Bracket ``SolverOptions``: per-request time budget (bracket-owned,
     default 5 s) + the shared deterministic/seed knobs from the engine
     config.
@@ -735,9 +763,7 @@ def _hydrated_session_config(data_blob: dict):
     camel_cfg = data_blob.get("config") or {}
     session_cfg = data_blob.get("bracket_session") or {}
     court_count = int(_pick(camel_cfg, session_cfg, "courtCount", "courts", 2))
-    interval_minutes = int(
-        _pick(camel_cfg, session_cfg, "intervalMinutes", "interval_minutes", 30)
-    )
+    interval_minutes = int(_pick(camel_cfg, session_cfg, "intervalMinutes", "interval_minutes", 30))
     # total_slots is a derived scheduler constant, not a TournamentConfig field.
     total_slots = int(session_cfg.get("total_slots", 128))
     rest = int(
@@ -898,9 +924,7 @@ def _hydrate_assignments(session_cfg: dict, state: TournamentState) -> None:
         )
 
 
-def _hydrate_session(
-    repo: LocalRepository, tournament_id: uuid.UUID
-) -> Optional[BracketSession]:
+def _hydrate_session(repo: LocalRepository, tournament_id: uuid.UUID) -> Optional[BracketSession]:
     """Reconstruct the in-memory bracket session from persisted rows.
 
     Returns ``None`` if no bracket events exist for this tournament.
@@ -915,9 +939,7 @@ def _hydrate_session(
 
     tournament = repo.tournaments.get_by_id(tournament_id)
     data_blob = (tournament.data or {}) if tournament else {}
-    config, rest, start_time, player_extras, session_cfg = (
-        _hydrated_session_config(data_blob)
-    )
+    config, rest, start_time, player_extras, session_cfg = _hydrated_session_config(data_blob)
 
     state = TournamentState()
     draws: Dict[str, Draw] = {}
@@ -934,9 +956,7 @@ def _hydrate_session(
             state,
             match_versions,
         )
-        events_meta[event_row.id] = _event_meta_from_row(
-            event_row, len(participant_rows)
-        )
+        events_meta[event_row.id] = _event_meta_from_row(event_row, len(participant_rows))
         _hydrate_results(results_by_event.get(event_row.id, []), state)
 
     # Assignments live in tournaments.data["bracket_session"]["assignments"]
@@ -948,9 +968,7 @@ def _hydrate_session(
     # SP-G1 Seam C: applied_command_ids is stored as a sorted list in the
     # JSON blob (Python sets are not JSON-serialisable) and hydrated back
     # to a set for O(1) membership checks during the replay guard.
-    applied_command_ids: set = set(
-        session_cfg.get("applied_command_ids") or []
-    )
+    applied_command_ids: set = set(session_cfg.get("applied_command_ids") or [])
 
     return BracketSession(
         state=state,
@@ -977,6 +995,7 @@ def _persist_session_metadata(
     *,
     session: BracketSession,
     time_limit_seconds: Optional[float] = None,
+    roster: Optional[List[BracketPlayerDTO]] = None,
 ) -> None:
     """Write the schedule-config + assignments blob into tournaments.data.
 
@@ -1001,9 +1020,7 @@ def _persist_session_metadata(
         "interval_minutes": session.config.interval_minutes,
         "rest_between_rounds": session.rest_between_rounds,
         "time_limit_seconds": time_limit_seconds,
-        "start_time": (
-            session.start_time.isoformat() if session.start_time else None
-        ),
+        "start_time": (session.start_time.isoformat() if session.start_time else None),
         "assignments": [
             {
                 "play_unit_id": a.play_unit_id,
@@ -1019,6 +1036,8 @@ def _persist_session_metadata(
         # JSON without loss; hydrated back to a set in _hydrate_session.
         "applied_command_ids": sorted(session.applied_command_ids),
     }
+    if roster is not None:
+        existing["bracketPlayers"] = [player.model_dump(mode="json") for player in roster]
     repo.tournaments.upsert_data(tournament_id, existing)
 
 
@@ -1051,6 +1070,7 @@ def _persist_event(
         seeded_count=seeded_count,
         rr_rounds=rr_rounds,
         config=config or {},
+        status=meta.status,
     )
     repo.brackets.bulk_create_participants(
         tournament_id,
@@ -1110,9 +1130,7 @@ def _participant_persist_fields(metadata: Optional[dict]) -> dict:
         "entry_player_id": (
             uuid.UUID(meta["entryPlayerId"]) if meta.get("entryPlayerId") else None
         ),
-        "meta": {
-            k: v for k, v in meta.items() if k not in ("seed", "entryPlayerId")
-        },
+        "meta": {k: v for k, v in meta.items() if k not in ("seed", "entryPlayerId")},
     }
 
 
@@ -1132,12 +1150,8 @@ def _participant_out(participant: Participant) -> ParticipantOut:
             else None
         ),
         seed=metadata.get("seed"),
-        entryPlayerId=(
-            metadata.get("entryPlayerId") if isinstance(metadata, dict) else None
-        ),
-        sourceEntryId=(
-            metadata.get("sourceEntryId") if isinstance(metadata, dict) else None
-        ),
+        entryPlayerId=(metadata.get("entryPlayerId") if isinstance(metadata, dict) else None),
+        sourceEntryId=(metadata.get("sourceEntryId") if isinstance(metadata, dict) else None),
     )
 
 
@@ -1147,8 +1161,7 @@ def _slot_out(slot: BracketSlot) -> BracketSlotOut:
         feeder_play_unit_id=slot.feeder_play_unit_id,
         feeder_take=(
             "loser"
-            if slot.feeder_play_unit_id is not None
-            and slot.feeder_take == "loser"
+            if slot.feeder_play_unit_id is not None and slot.feeder_take == "loser"
             else None
         ),
     )
@@ -1176,12 +1189,15 @@ def _play_unit_out(
         slot_b=_slot_out(slot_b),
         version=session.match_versions.get(play_unit_id, 1),
         segment=(play_unit.metadata.get("segment") if play_unit.metadata else None),
+        played_on=(play_unit.metadata.get("played_on") if play_unit.metadata else None),
+        local_time=(play_unit.metadata.get("local_time") if play_unit.metadata else None),
+        court_label=(play_unit.metadata.get("court_label") if play_unit.metadata else None),
+        source_url=(play_unit.metadata.get("source_url") if play_unit.metadata else None),
+        source_ref=(play_unit.metadata.get("source_ref") if play_unit.metadata else None),
     )
 
 
-def _draw_play_units_out(
-    session: BracketSession, draw: Draw
-) -> List[PlayUnitOut]:
+def _draw_play_units_out(session: BracketSession, draw: Draw) -> List[PlayUnitOut]:
     output: List[PlayUnitOut] = []
     for round_index, round_play_unit_ids in enumerate(draw.rounds):
         for match_index, play_unit_id in enumerate(round_play_unit_ids):
@@ -1235,10 +1251,7 @@ def _event_out(session: BracketSession, event_id: str, draw: Draw) -> EventOut:
         seeded_count=meta.seeded_count if meta else None,
         rr_rounds=meta.rr_rounds if meta else None,
         config=dict(meta.config) if meta else {},
-        participants=[
-            _participant_out(participant)
-            for participant in draw.participants.values()
-        ],
+        participants=[_participant_out(participant) for participant in draw.participants.values()],
     )
 
 
@@ -1302,8 +1315,7 @@ def _started_play_unit_ids(state: TournamentState) -> Set[str]:
     return {
         a.play_unit_id
         for a in state.assignments.values()
-        if a.actual_start_slot is not None
-        and a.play_unit_id not in state.results
+        if a.actual_start_slot is not None and a.play_unit_id not in state.results
     }
 
 
@@ -1311,9 +1323,7 @@ def _finished_play_unit_ids(state: TournamentState) -> Set[str]:
     return set(state.results.keys())
 
 
-def _bracket_locked_play_unit_ids(
-    state: TournamentState, current_slot: int
-) -> Set[str]:
+def _bracket_locked_play_unit_ids(state: TournamentState, current_slot: int) -> Set[str]:
     """PlayUnits whose assignment is locked: played (has a result) ∪
     started (``actual_start_slot`` set) ∪ past (ends at or before
     ``current_slot``). Delegates to ``is_assignment_locked`` — the
@@ -1378,9 +1388,7 @@ def _parse_play_unit_kind(value: str) -> PlayUnitKind:
     return PlayUnitKind.MATCH
 
 
-def _ensure_tournament_exists(
-    repo: LocalRepository, tournament_id: uuid.UUID
-) -> None:
+def _ensure_tournament_exists(repo: LocalRepository, tournament_id: uuid.UUID) -> None:
     if repo.tournaments.get_by_id(tournament_id) is None:
         raise HTTPException(status_code=404, detail="tournament not found")
 
@@ -1398,9 +1406,7 @@ def _clear_bracket(repo: LocalRepository, tournament_id: uuid.UUID) -> None:
             repo.tournaments.upsert_data(tournament_id, payload)
 
 
-def _load_match_versions(
-    repo: LocalRepository, tournament_id: uuid.UUID
-) -> Dict[str, int]:
+def _load_match_versions(repo: LocalRepository, tournament_id: uuid.UUID) -> Dict[str, int]:
     """``{play_unit_id: BracketMatch.version}`` across all of the
     tournament's events — the optimistic-concurrency tokens surfaced on
     the serialized play units (SP-F3)."""
@@ -1448,12 +1454,8 @@ def _persist_result_advancement(
             {
                 "slot_a": _slot_to_dict(slot_a),
                 "slot_b": _slot_to_dict(slot_b),
-                "side_a": list(downstream_pu.side_a)
-                if downstream_pu.side_a
-                else [],
-                "side_b": list(downstream_pu.side_b)
-                if downstream_pu.side_b
-                else [],
+                "side_a": list(downstream_pu.side_a) if downstream_pu.side_a else [],
+                "side_b": list(downstream_pu.side_b) if downstream_pu.side_b else [],
             },
         )
         # If the sweep auto-walkovered this downstream PlayUnit too,
@@ -1498,9 +1500,7 @@ def create_bracket(
     _ensure_tournament_exists(repo, tournament_id)
 
     if not body.events:
-        raise HTTPException(
-            status_code=400, detail="at least one event is required"
-        )
+        raise HTTPException(status_code=400, detail="at least one event is required")
     if repo.brackets.list_events(tournament_id):
         raise HTTPException(
             status_code=409,
@@ -1514,9 +1514,7 @@ def create_bracket(
     seen_event_ids: Set[str] = set()
     for ev in body.events:
         if ev.id in seen_event_ids:
-            raise HTTPException(
-                status_code=400, detail=f"duplicate event id {ev.id!r}"
-            )
+            raise HTTPException(status_code=400, detail=f"duplicate event id {ev.id!r}")
         seen_event_ids.add(ev.id)
         if len(ev.participants) < 2:
             raise HTTPException(
@@ -1529,11 +1527,7 @@ def create_bracket(
             Participant(
                 id=p.id,
                 name=p.name,
-                type=(
-                    ParticipantType.TEAM
-                    if p.members
-                    else ParticipantType.PLAYER
-                ),
+                type=(ParticipantType.TEAM if p.members else ParticipantType.PLAYER),
                 member_ids=list(p.members or []),
                 metadata={
                     # F-DM-09, generation half: this construction dropped
@@ -1542,11 +1536,7 @@ def create_bracket(
                     # same way. Characterized before the fix; see the test.
                     **(dict(p.meta) if getattr(p, "meta", None) else {}),
                     **({"seed": p.seed} if p.seed is not None else {}),
-                    **(
-                        {"entryPlayerId": p.entryPlayerId}
-                        if p.entryPlayerId
-                        else {}
-                    ),
+                    **({"entryPlayerId": p.entryPlayerId} if p.entryPlayerId else {}),
                 },
             )
             for p in ev.participants
@@ -1562,9 +1552,7 @@ def create_bracket(
             # Preserved pre-registry behaviour: only SE ever consumed
             # ``randomize`` (raising NotImplementedError → 400); other
             # formats silently ignored it.
-            raise HTTPException(
-                status_code=400, detail="randomize=True is not implemented"
-            )
+            raise HTTPException(status_code=400, detail="randomize=True is not implemented")
         draw = _generate_draw(
             ev.format,
             participants,
@@ -1671,9 +1659,7 @@ def get_bracket(
         return cached
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
     payload = _serialize_session(session)
     response_cache.put(tournament_id, payload)
     return payload
@@ -1707,9 +1693,7 @@ def schedule_next_round(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
 
     # Pull the per-session solver time limit out of the persisted
     # bracket-session blob; the lightweight BracketSession dataclass
@@ -1722,9 +1706,7 @@ def schedule_next_round(
     driver = TournamentDriver(
         state=session.state,
         config=session.config,
-        solver_options=_bracket_solver_options(
-            time_limit_seconds, data_blob.get("config") or {}
-        ),
+        solver_options=_bracket_solver_options(time_limit_seconds, data_blob.get("config") or {}),
         rest_between_rounds=session.rest_between_rounds,
         player_extras=session.player_extras,
     )
@@ -1770,9 +1752,7 @@ def _candidates_from_schedule_result(result) -> List[BracketScheduleCandidate]:
     ]
 
 
-def _resolve_candidate_pool_size(
-    session_cfg: dict, override: Optional[int]
-) -> int:
+def _resolve_candidate_pool_size(session_cfg: dict, override: Optional[int]) -> int:
     """Pick the candidate-pool size: explicit query override > persisted
     bracket-session value > the shared default."""
     if override is not None and override >= 1:
@@ -1813,18 +1793,14 @@ async def schedule_next_round_stream(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
 
     tournament = repo.tournaments.get_by_id(tournament_id)
     data_blob = (tournament.data or {}) if tournament else {}
     session_cfg = data_blob.get("bracket_session") or {}
     time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
     pool_size = _resolve_candidate_pool_size(session_cfg, candidate_pool_size)
-    solver_options = _bracket_solver_options(
-        time_limit_seconds, data_blob.get("config") or {}
-    )
+    solver_options = _bracket_solver_options(time_limit_seconds, data_blob.get("config") or {})
 
     driver = TournamentDriver(
         state=session.state,
@@ -1933,9 +1909,7 @@ async def schedule_next_round_stream(
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(
-                        progress_queue.get(), timeout=1.0
-                    )
+                    event = await asyncio.wait_for(progress_queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
                     if await http_request.is_disconnected():
                         log.info("bracket SSE client disconnected; cancelling")
@@ -1991,9 +1965,7 @@ def commit_next_round(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
 
     ready = set(find_ready_play_units(session.state))
     for cell in body.assignments:
@@ -2060,9 +2032,7 @@ def upsert_event(
         if session is not None:
             # Remove assignments belonging to this event.
             event_pu_ids = [
-                pu_id
-                for pu_id, pu in session.state.play_units.items()
-                if pu.event_id == event_id
+                pu_id for pu_id, pu in session.state.play_units.items() if pu.event_id == event_id
             ]
             for pu_id in event_pu_ids:
                 session.state.assignments.pop(pu_id, None)
@@ -2074,9 +2044,7 @@ def upsert_event(
     if spec is None:  # unreachable — FormatId validated; defensive
         raise HTTPException(status_code=400, detail=f"unknown format {body.format!r}")
     try:
-        normalized_config = spec.normalize_config(
-            dict(body.config or {}), len(body.participants)
-        )
+        normalized_config = spec.normalize_config(dict(body.config or {}), len(body.participants))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -2116,9 +2084,7 @@ def upsert_event(
         )
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket session for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket session for this tournament")
     response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
@@ -2157,14 +2123,10 @@ def patch_event_config(
     target_format = body.format or existing.format
     spec = get_format(target_format)
     if spec is None:
-        raise HTTPException(
-            status_code=400, detail=f"unknown draw format {target_format!r}"
-        )
+        raise HTTPException(status_code=400, detail=f"unknown draw format {target_format!r}")
     normalized_config: Optional[dict] = None
     if body.config is not None or body.format is not None:
-        participant_count = len(
-            repo.brackets.list_participants(tournament_id, event_id)
-        )
+        participant_count = len(repo.brackets.list_participants(tournament_id, event_id))
         try:
             normalized_config = spec.normalize_config(
                 dict(body.config if body.config is not None else existing.config or {}),
@@ -2185,9 +2147,7 @@ def patch_event_config(
     )
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket session for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket session for this tournament")
     response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
@@ -2294,9 +2254,7 @@ def generate_event_route(
     # hydrated session state (handles wipe=True semantics in memory,
     # before any DB writes).
     old_pu_ids = [
-        pu_id
-        for pu_id, pu in session.state.play_units.items()
-        if pu.event_id == event_id
+        pu_id for pu_id, pu in session.state.play_units.items() if pu.event_id == event_id
     ]
     for pu_id in old_pu_ids:
         session.state.play_units.pop(pu_id, None)
@@ -2314,11 +2272,7 @@ def generate_event_route(
     # The RESOLVED config (normalize_config output) is what the draw was
     # actually built with — persist/echo it so the client can render e.g.
     # Swiss "Round k of K" from concrete values.
-    resolved_config = dict(
-        draw.event.parameters.get("resolved_config")
-        or existing.config
-        or {}
-    )
+    resolved_config = dict(draw.event.parameters.get("resolved_config") or existing.config or {})
     session.events[event_id] = EventMeta(
         id=event_id,
         discipline=existing.discipline,
@@ -2345,10 +2299,7 @@ def generate_event_route(
         raise HTTPException(status_code=409, detail=str(exc))
 
     if not result.scheduled:
-        reasons = (
-            result.schedule_result.infeasible_reasons
-            if result.schedule_result else []
-        )
+        reasons = result.schedule_result.infeasible_reasons if result.schedule_result else []
         # Operator-facing wording: "solver returned infeasible: no reason"
         # reads as a malfunction. Say what happened and what to try.
         detail = (
@@ -2471,8 +2422,7 @@ def generate_next_round_route(
         raise HTTPException(
             status_code=409,
             detail=(
-                f"format {existing.format!r} is not progressive; "
-                "its rounds are generated upfront"
+                f"format {existing.format!r} is not progressive; its rounds are generated upfront"
             ),
         )
     if (existing.status or "draft") == "draft":
@@ -2489,11 +2439,7 @@ def generate_next_round_route(
     if draw is None or meta is None:
         raise HTTPException(status_code=404, detail="event not found")
 
-    pending = [
-        pu_id
-        for pu_id in draw.play_units
-        if pu_id not in session.state.results
-    ]
+    pending = [pu_id for pu_id in draw.play_units if pu_id not in session.state.results]
     if pending:
         raise HTTPException(
             status_code=409,
@@ -2507,9 +2453,7 @@ def generate_next_round_route(
     # generate time (normalize re-derives the default if the key is
     # somehow absent — same clamp, same participant count).
     try:
-        resolved_cfg = spec.normalize_config(
-            dict(meta.config or {}), meta.participant_count
-        )
+        resolved_cfg = spec.normalize_config(dict(meta.config or {}), meta.participant_count)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     total_rounds = int(resolved_cfg.get("swiss_rounds", 0))
@@ -2520,9 +2464,7 @@ def generate_next_round_route(
         )
 
     # ── Pair the new round from live standings + pairing history. ─────
-    standings = compute_standings(
-        draw.play_units, session.state.results, list(draw.participants)
-    )
+    standings = compute_standings(draw.play_units, session.state.results, list(draw.participants))
     prior_pairings: Set[frozenset] = set()
     bye_history: Set[str] = set()
     for pu_id, pu in draw.play_units.items():
@@ -2661,15 +2603,11 @@ def record_match_result(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
 
     pu = session.state.play_units.get(body.play_unit_id)
     if pu is None:
-        raise HTTPException(
-            status_code=404, detail=f"play_unit {body.play_unit_id!r} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"play_unit {body.play_unit_id!r} not found")
 
     # Optimistic concurrency (SP-F3): when the client carries the version it
     # last saw, reject a write whose token is stale — a second operator
@@ -2752,9 +2690,7 @@ def submit_bracket_command(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
 
     # ---- Idempotency guard (MUST precede seen_version check) ---------------
     # On a genuine replay the downstream version has already advanced, so the
@@ -2766,9 +2702,7 @@ def submit_bracket_command(
     # ---- Play-unit existence -----------------------------------------------
     pu = session.state.play_units.get(body.play_unit_id)
     if pu is None:
-        raise HTTPException(
-            status_code=404, detail=f"play_unit {body.play_unit_id!r} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"play_unit {body.play_unit_id!r} not found")
 
     # ---- Optimistic concurrency (mirror record_match_result SP-F3) ---------
     if body.seen_version is not None:
@@ -2823,9 +2757,7 @@ def submit_bracket_command(
     return _serialize_session(session)
 
 
-@router.post(
-    "/match-action", response_model=TournamentOut, dependencies=[_OPERATOR]
-)
+@router.post("/match-action", response_model=TournamentOut, dependencies=[_OPERATOR])
 def match_action(
     body: MatchActionIn,
     tournament_id: uuid.UUID = Path(...),
@@ -2840,9 +2772,7 @@ def match_action(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
     assignment = session.state.assignments.get(body.play_unit_id)
     if assignment is None:
         raise HTTPException(
@@ -2863,9 +2793,7 @@ def match_action(
                 status_code=409,
                 detail="Cannot start a bracket match that already has a result",
             )
-        assignment.actual_start_slot = (
-            body.slot if body.slot is not None else assignment.slot_id
-        )
+        assignment.actual_start_slot = body.slot if body.slot is not None else assignment.slot_id
         assignment.actual_end_slot = None
     elif body.action == "finish":
         if assignment.actual_start_slot is None:
@@ -2874,9 +2802,7 @@ def match_action(
                 detail="Cannot finish a bracket match before it has started",
             )
         assignment.actual_end_slot = (
-            body.slot
-            if body.slot is not None
-            else (assignment.slot_id + assignment.duration_slots)
+            body.slot if body.slot is not None else (assignment.slot_id + assignment.duration_slots)
         )
     elif body.action == "reset":
         if has_result:
@@ -2895,9 +2821,7 @@ def match_action(
     return _serialize_session(session)
 
 
-@router.post(
-    "/validate", response_model=BracketValidationOut, dependencies=[_VIEWER]
-)
+@router.post("/validate", response_model=BracketValidationOut, dependencies=[_VIEWER])
 def validate_bracket_move_route(
     body: BracketValidateIn,
     tournament_id: uuid.UUID = Path(...),
@@ -2915,18 +2839,14 @@ def validate_bracket_move_route(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
     if body.play_unit_id not in session.state.play_units:
         raise HTTPException(
             status_code=404,
             detail=f"play_unit {body.play_unit_id!r} not found",
         )
 
-    locked_ids = _bracket_locked_play_unit_ids(
-        session.state, session.config.current_slot
-    )
+    locked_ids = _bracket_locked_play_unit_ids(session.state, session.config.current_slot)
     if body.play_unit_id in locked_ids:
         return BracketValidationOut(
             feasible=False,
@@ -2949,8 +2869,7 @@ def validate_bracket_move_route(
                 BracketValidationConflictOut(
                     type="unscheduled",
                     description=(
-                        f"Play unit {body.play_unit_id} is not scheduled "
-                        f"and cannot be re-pinned"
+                        f"Play unit {body.play_unit_id} is not scheduled and cannot be re-pinned"
                     ),
                     play_unit_id=body.play_unit_id,
                 )
@@ -2982,9 +2901,7 @@ def validate_bracket_move_route(
     )
 
 
-@router.post(
-    "/pin", response_model=TournamentOut, dependencies=[_OPERATOR]
-)
+@router.post("/pin", response_model=TournamentOut, dependencies=[_OPERATOR])
 def pin_bracket_match(
     body: BracketPinIn,
     tournament_id: uuid.UUID = Path(...),
@@ -3007,9 +2924,7 @@ def pin_bracket_match(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
     if body.play_unit_id not in session.state.play_units:
         raise HTTPException(
             status_code=404,
@@ -3019,9 +2934,7 @@ def pin_bracket_match(
     # Reject a locked play_unit BEFORE the partition / feasibility
     # check so the frontend gets an unambiguous 409 rather than an
     # `infeasible` response.
-    locked_ids = _bracket_locked_play_unit_ids(
-        session.state, session.config.current_slot
-    )
+    locked_ids = _bracket_locked_play_unit_ids(session.state, session.config.current_slot)
     if body.play_unit_id in locked_ids:
         raise HTTPException(
             status_code=409,
@@ -3042,9 +2955,7 @@ def pin_bracket_match(
     driver = TournamentDriver(
         state=session.state,
         config=session.config,
-        solver_options=_bracket_solver_options(
-            time_limit_seconds, data_blob.get("config") or {}
-        ),
+        solver_options=_bracket_solver_options(time_limit_seconds, data_blob.get("config") or {}),
         rest_between_rounds=session.rest_between_rounds,
         player_extras=session.player_extras,
     )
@@ -3077,9 +2988,7 @@ def pin_bracket_match(
             status_code=409,
             detail={
                 "error": "infeasible",
-                "reasons": reasons or [
-                    f"solver returned {result.status.value}"
-                ],
+                "reasons": reasons or [f"solver returned {result.status.value}"],
             },
         )
 
@@ -3117,9 +3026,7 @@ def assign_bracket_court(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
 
     pu = session.state.play_units.get(body.play_unit_id)
     if pu is None:
@@ -3167,9 +3074,7 @@ def unassign_bracket_court(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
 
     # pop is a no-op when the key is absent — idempotent by design.
     session.state.assignments.pop(body.play_unit_id, None)
@@ -3193,13 +3098,17 @@ def import_tournament_json(
     POST /tournament/import.
     """
     _ensure_tournament_exists(repo, tournament_id)
-    if repo.brackets.list_events(tournament_id):
-        _clear_bracket(repo, tournament_id)
-
     try:
         slot = parse_json_payload(body)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # Validation is intentionally complete before destructive replacement.
+    # Repository methods currently commit per operation, so this does not make
+    # an infrastructure failure mid-write transactional, but a malformed
+    # import can never erase the existing bracket.
+    if repo.brackets.list_events(tournament_id):
+        _clear_bracket(repo, tournament_id)
 
     # Build session metadata from the slot the parser constructed.
     events_meta: Dict[str, EventMeta] = {}
@@ -3213,6 +3122,7 @@ def import_tournament_json(
             bracket_size=meta.bracket_size if meta else None,
             participant_count=len(draw.participants),
             status=meta.status if meta else "draft",
+            config=dict(meta.config) if meta else dict(draw.event.parameters),
         )
     session = BracketSession(
         state=slot.state,
@@ -3234,6 +3144,7 @@ def import_tournament_json(
             state=slot.state,
             seeded_count=0,
             rr_rounds=None,
+            config=meta.config,
         )
     for pu_id, result in slot.state.results.items():
         ev_id = slot.state.play_units[pu_id].event_id
@@ -3252,14 +3163,13 @@ def import_tournament_json(
         tournament_id,
         session=session,
         time_limit_seconds=body.time_limit_seconds,
+        roster=body.roster,
     )
     response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
 
-@router.post(
-    "/import.csv", response_model=TournamentOut, dependencies=[_OPERATOR]
-)
+@router.post("/import.csv", response_model=TournamentOut, dependencies=[_OPERATOR])
 async def import_tournament_csv(
     request: Request,
     tournament_id: uuid.UUID = Path(...),
@@ -3305,6 +3215,7 @@ async def import_tournament_csv(
             bracket_size=meta.bracket_size if meta else None,
             participant_count=len(draw.participants),
             status=meta.status if meta else "draft",
+            config=dict(meta.config) if meta else dict(draw.event.parameters),
         )
     session = BracketSession(
         state=slot.state,
@@ -3325,6 +3236,7 @@ async def import_tournament_csv(
             state=slot.state,
             seeded_count=0,
             rr_rounds=None,
+            config=events_meta[ev_id].config,
         )
     for pu_id, result in slot.state.results.items():
         ev_id = slot.state.play_units[pu_id].event_id
@@ -3357,9 +3269,7 @@ def export_tournament_json(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
     return _serialize_session(session)
 
 
@@ -3376,9 +3286,7 @@ def export_tournament_csv(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
     body = to_csv(
         session.state,
         interval_minutes=session.config.interval_minutes,
@@ -3400,9 +3308,7 @@ def export_tournament_ics(
     _ensure_tournament_exists(repo, tournament_id)
     session = _hydrate_session(repo, tournament_id)
     if session is None:
-        raise HTTPException(
-            status_code=404, detail="no bracket configured for this tournament"
-        )
+        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
     body = to_ics(
         session.state,
         start_time=session.start_time,

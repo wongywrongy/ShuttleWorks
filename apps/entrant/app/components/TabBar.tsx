@@ -14,6 +14,7 @@ const TAB_LABELS: Readonly<Record<Tab, string>> = Object.freeze({
   overview: 'Overview',
   events: 'Events',
   entrants: 'Entrants',
+  players: 'Players',
   draws: 'Draws',
   seeds: 'Seeded entries',
   winners: 'Winners',

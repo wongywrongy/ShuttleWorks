@@ -39,6 +39,23 @@ describe('WorkspaceRow', () => {
     expect(screen.getByRole('button', { name: 'View results' })).toBeInTheDocument();
   });
 
+  it('past bracket: the action opens Draws first', () => {
+    const onOpen = vi.fn();
+    render(
+      <WorkspaceRow
+        tournament={{ ...t, kind: 'bracket' }}
+        group="past"
+        selected={false}
+        onSelect={noop}
+        onOpen={onOpen}
+        onSetDate={noop}
+        onSettings={noop}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'View draws' }));
+    expect(onOpen).toHaveBeenCalledWith('bracket-draws');
+  });
+
   it('names what needs attention where the module glyphs used to sit (HUB-3)', () => {
     render(
       <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,

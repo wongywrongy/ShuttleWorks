@@ -50,6 +50,7 @@ timestamp *and* the version agreed to. "They agreed to something at some
 point" is not a record, and a version resolved later is a different
 document than the one they read.
 """
+
 from __future__ import annotations
 
 import logging
@@ -411,6 +412,7 @@ def create_submission(
     fee_basis: Optional[dict],
     idempotency_key: Optional[str] = None,
     email_verified: bool = True,
+    commit: bool = True,
 ) -> SubmissionResult:
     """Record one act: a submission, its players, and one entry per event.
 
@@ -418,6 +420,10 @@ def create_submission(
     ``entries.entry_fees.compute_fee_total`` and are stored as computed —
     the total the entrant was shown **is** the total recorded (Seam B), so
     this function deliberately does not recompute anything.
+
+    ``commit`` defaults to ``True`` for the public form path. Trusted
+    batch callers can set it to ``False`` to compose several submissions in
+    one transaction; they own the final commit/rollback boundary.
 
     A replay of ``idempotency_key`` is answered before any write. The same
     key arriving concurrently is answered after the unique index refuses
@@ -438,6 +444,7 @@ def create_submission(
             fee_basis=fee_basis,
             idempotency_key=idempotency_key,
             email_verified=email_verified,
+            commit=commit,
         )
     except IntegrityError:
         # The other half of the retry race — see the module docstring. The
@@ -467,6 +474,7 @@ def _write(
     fee_basis: Optional[dict],
     idempotency_key: Optional[str],
     email_verified: bool = True,
+    commit: bool = True,
 ) -> SubmissionResult:
     now = _utcnow()
     submission = Submission(
@@ -560,7 +568,8 @@ def _write(
                         partners.flag_conflict(entry, *clashes)
                     created_invites.append((entry, token))
 
-    session.commit()
+    if commit:
+        session.commit()
     return SubmissionResult(
         submission=submission,
         entries=created_entries,
@@ -606,11 +615,7 @@ def _per_player_fee(fee_basis: Optional[dict]) -> list[Optional[int]]:
     """
     if not isinstance(fee_basis, dict):
         return []
-    return [
-        row.get("cents")
-        for row in fee_basis.get("players") or []
-        if isinstance(row, dict)
-    ]
+    return [row.get("cents") for row in fee_basis.get("players") or [] if isinstance(row, dict)]
 
 
 def _split(cents: Optional[int], event_count: int) -> list[Optional[int]]:
