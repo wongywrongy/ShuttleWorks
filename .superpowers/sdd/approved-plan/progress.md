@@ -78,5 +78,12 @@
     after distillation; Git retains their provenance.
   - Expanded live-doc checks reduced all discovered stale references to zero;
     focused tests, mutation probes, docs build, and Make/CI contracts passed.
-- Task 8: in progress
-  - Full product/browser gates, same-host comparison, and final review remain.
+- Task 8: complete
+  - Complete product, production-build, Compose, browser, deterministic-engine,
+    and SQLite/Postgres gates passed on the Linux development host.
+  - Same-host `origin/main` comparison added 30 console, 6 entrant, and 38
+    backend passing tests with effectively flat wall time.
+  - Tracked repository blobs fell from 41.21 MiB to 13.46 MiB before the final
+    active-ledger prune.
+  - Independent review found no blocker/high issue; the browser owner repairs
+    and three formatting findings were committed as `2a8849b5`.
