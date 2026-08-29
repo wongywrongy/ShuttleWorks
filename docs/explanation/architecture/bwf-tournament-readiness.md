@@ -32,9 +32,12 @@ not fit the live `full_draw` import contract. `full_draw` remains reserved for
 structural imports produced by a bracket generator.
 
 Player IDs in this archive are deterministic, normalized source-name keys.
-The checked alias map reconciles verified spelling variants in the supplied
-finals, but these are not durable BWF person IDs; canonical cross-event player
-identity remains future work.
+Public display names omit source-only trailing BWF member numbers and normalize
+whitespace and all-caps source tokens while preserving accents, punctuation,
+initials, and word order. The checked alias map reconciles verified spelling
+variants in the supplied finals, and import integrity checks reject duplicate
+partners or self-opponents after normalization. These are still not durable BWF
+person IDs; canonical cross-event player identity remains future work.
 
 ## Delivery plan
 

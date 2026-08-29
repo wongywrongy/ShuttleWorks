@@ -25,6 +25,7 @@ from .historical_matches import (
     ordered_rounds,
     parse_daily_results_html,
     parse_match_csv,
+    source_display_name,
     source_name_key,
     source_team_key,
 )
@@ -518,12 +519,29 @@ def attach_historical_sources(
     provided_tournaments: set[str] = set()
 
     github = source_map["github"]
-    aliases = {
-        source.casefold(): target for source, target in source_map.get("playerAliases", {}).items()
-    }
+    aliases: dict[str, str] = {}
+    alias_conflicts: list[str] = []
+    for source, target in source_map.get("playerAliases", {}).items():
+        key = source_name_key(source).casefold()
+        canonical = source_display_name(target)
+        prior = aliases.get(key)
+        if (
+            prior is not None
+            and source_name_key(prior).casefold() != source_name_key(canonical).casefold()
+        ):
+            alias_conflicts.append(
+                f"player alias {source!r} normalizes to both {prior!r} and {canonical!r}"
+            )
+        aliases[key] = canonical
+    if alias_conflicts:
+        raise DatasetError(alias_conflicts)
+
+    def canonical_name(name: str) -> str:
+        cleaned = source_display_name(name)
+        return aliases.get(source_name_key(cleaned).casefold(), cleaned)
 
     def team_key(names: tuple[str, ...]) -> tuple[str, ...]:
-        return source_team_key(aliases.get(name.casefold(), name) for name in names)
+        return source_team_key(canonical_name(name) for name in names)
 
     if match_data_path is not None:
         csv_matches, csv_hash = parse_match_csv(
@@ -569,8 +587,8 @@ def attach_historical_sources(
     base_finals = dataset.matches_by_tournament
     enriched: list[HistoricalMatch] = []
     for match in archive:
-        canonical_side_a = tuple(aliases.get(name.casefold(), name) for name in match.side_a)
-        canonical_side_b = tuple(aliases.get(name.casefold(), name) for name in match.side_b)
+        canonical_side_a = tuple(canonical_name(name) for name in match.side_a)
+        canonical_side_b = tuple(canonical_name(name) for name in match.side_b)
         if canonical_side_a != match.side_a or canonical_side_b != match.side_b:
             match = HistoricalMatch(
                 **{
@@ -694,6 +712,25 @@ def attach_historical_sources(
                 [f"{tournament_id} daily results must contain one verified final per event"]
             )
 
+    participant_errors: list[str] = []
+    for match in archive:
+        side_a = [source_name_key(name).casefold() for name in match.side_a]
+        side_b = [source_name_key(name).casefold() for name in match.side_b]
+        if len(side_a) != len(set(side_a)):
+            participant_errors.append(
+                f"{match.source_ref}: side A repeats a player after name normalization"
+            )
+        if len(side_b) != len(set(side_b)):
+            participant_errors.append(
+                f"{match.source_ref}: side B repeats a player after name normalization"
+            )
+        if set(side_a) & set(side_b):
+            participant_errors.append(
+                f"{match.source_ref}: the same player appears on both sides after name normalization"
+            )
+    if participant_errors:
+        raise DatasetError(participant_errors)
+
     coverage: dict[str, SourceCoverage] = {}
     grouped = _group_by(archive, lambda match: match.tournament_id)
     for tournament in dataset.tournaments:
@@ -805,6 +842,9 @@ def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
         ]
     generated_people: dict[str, set[str]] = {event: set() for event in _EVENTS}
 
+    def person_key(name: str) -> str:
+        return source_name_key(name).casefold()
+
     def generated_result(
         tournament: Tournament,
         event: str,
@@ -862,18 +902,19 @@ def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
         # sides of one match cannot accidentally be the same participant.
         seed = sum(ord(char) for char in f"{tournament_id}:{event}:{round_code}:{number}")
         width = 2 if event in {"MD", "WD", "XD"} else 1
-        blocked_names = set(blocked)
+        blocked_names = {person_key(name) for name in blocked}
         selected: list[str | None] = [None] * width
         for position in range(width):
             pool = event_position_names[event][position]
             offset = (seed * 7 + number * (width + 1)) % len(pool)
             for step in range(len(pool) * 2):
                 candidate = pool[(offset + step) % len(pool)]
-                if candidate in blocked_names or candidate in generated_people[event]:
+                key = person_key(candidate)
+                if key in blocked_names or key in generated_people[event]:
                     continue
                 selected[position] = candidate
-                blocked_names.add(candidate)
-                generated_people[event].add(candidate)
+                blocked_names.add(key)
+                generated_people[event].add(key)
                 break
         if any(candidate is None for candidate in selected):
             # A custom fixture may have a tiny pool.  Keep it usable while
@@ -895,7 +936,7 @@ def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
     ) -> HistoricalMatch:
         left = side_a or generated_side(tournament.id, event, round_code, number * 2)
         if side_a:
-            generated_people[event].update(side_a)
+            generated_people[event].update(person_key(name) for name in side_a)
         right = side_b or generated_side(
             tournament.id,
             event,

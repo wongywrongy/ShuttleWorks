@@ -545,6 +545,12 @@ def test_historical_ids_preserve_names_and_canonicalize_pair_order():
     assert pair_a["members"] == sorted(pair_a["members"])
 
 
+def test_historical_ids_remove_source_member_ids_and_case_formatting():
+    registry = _HistoricalIdentityRegistry("T001")
+    assert registry.player_id("Daniel LEUNG [84072]") == registry.player_id("Daniel Leung")
+    assert registry.player_id("Arisa IGARASHI") == registry.player_id("Arisa Igarashi")
+
+
 def test_historical_identity_hash_collision_fails_closed(monkeypatch):
     class ConstantHash:
         def hexdigest(self):
@@ -601,3 +607,39 @@ def test_historical_source_final_must_reconcile_with_fixture(tmp_path: Path):
             source_map_path=source_map,
             match_data_path=match_data,
         )
+
+
+def test_historical_source_rejects_duplicate_person_after_name_cleanup(tmp_path: Path):
+    dataset = parse_text(SOURCE)
+    source_map = tmp_path / "sources.json"
+    source_map.write_text(
+        '{"version":1,"github":{"repository":"https://example.test/repo",'
+        '"tournaments":{"T001":"Demo Open"}},"dailyResults":{},"unavailable":{}}',
+        encoding="utf-8",
+    )
+    match_data = tmp_path / "matches.csv"
+    match_data.write_text(
+        "date,discipline,tournament,tier,round,host_location,team1,team2,winner,score,team1_at_home,team2_at_home\n"
+        "2025-01-04,MD,Demo Open,Super 100,QF,Test,Alice/ALICE,Dave/Eve,1,21-19 21-18,False,False\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DatasetError, match="side A repeats a player"):
+        attach_historical_sources(
+            dataset,
+            source_map_path=source_map,
+            match_data_path=match_data,
+        )
+
+
+def test_historical_source_rejects_conflicting_normalized_aliases(tmp_path: Path):
+    dataset = parse_text(SOURCE)
+    source_map = tmp_path / "sources.json"
+    source_map.write_text(
+        '{"version":1,"github":{"repository":"https://example.test/repo",'
+        '"tournaments":{}},"dailyResults":{},"unavailable":{},'
+        '"playerAliases":{"DANIEL LEUNG":"Daniel Leung",'
+        '"Daniel LEUNG [84072]":"Different Person"}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(DatasetError, match="normalizes to both"):
+        attach_historical_sources(dataset, source_map_path=source_map)

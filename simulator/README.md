@@ -90,7 +90,11 @@ then deterministically adds 367 clearly tagged `demo-generated:` rows, producing
 4,602 matches and a complete navigable draw for every event. Supplied rows,
 final scores, walkovers, retirements, dates, courts, and source references are
 retained; generated provenance stays in the run manifest and is not presented
-as historical evidence.
+as historical evidence. Import-time name cleanup removes source-only trailing
+BWF member numbers, folds accidental whitespace, and normalizes all-caps source
+tokens for display. Accents, punctuation, initials, and word order remain
+unchanged; the importer rejects duplicate partners and self-opponents after
+normalization.
 
 The demo still imports through `completed_matches_only`, not `full_draw`.
 That path retains concrete completed sides and represents the 16 legitimate

@@ -9,6 +9,7 @@ from tournament_sim.historical_matches import (
     HistoricalSourceError,
     parse_daily_results_html,
     parse_match_csv,
+    source_display_name,
 )
 
 
@@ -33,12 +34,29 @@ def test_match_identity_preserves_name_evidence_and_ignores_partner_order():
     assert _match(side_a=("Alice", "Ada")).identity == _match(side_a=("Ada", "Alice")).identity
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (" Daniel  LEUNG [84072] ", "Daniel Leung"),
+        ("WANG Zheng Xing [89163]", "Wang Zheng Xing"),
+        ("M.R. ARJUN", "M.R. Arjun"),
+        ("Divya R.BALASUBRAMANIAN", "Divya R.Balasubramanian"),
+        ("Hari Bharathi BASKARAN.P", "Hari Bharathi Baskaran.P"),
+        ("O'CONNOR YU-HSUN", "O'Connor Yu-Hsun"),
+        ("An Se-young", "An Se-young"),
+        ("Nguyễn Thùy Linh", "Nguyễn Thùy Linh"),
+    ],
+)
+def test_source_display_name_removes_archive_formatting_only(raw: str, expected: str):
+    assert source_display_name(raw) == expected
+
+
 def test_match_csv_keeps_main_draw_quarterfinals_and_excludes_qualification(tmp_path: Path):
     source = tmp_path / "matches.csv"
     source.write_text(
         "date,discipline,tournament,tier,round,host_location,team1,team2,winner,score,team1_at_home,team2_at_home\n"
         "2026-01-01,MS,Demo Open,Super 300,Q Qual. QF,Test,Alice,Bob,1,21-10 21-11,False,False\n"
-        "2026-01-02,MS,Demo Open,Super 300,QF,Test,Alice,Bob,2,18-21 17-21,False,False\n",
+        "2026-01-02,MS,Demo Open,Super 300,QF,Test,Daniel  LEUNG [84072],WANG Zheng Xing [89163],2,18-21 17-21,False,False\n",
         encoding="utf-8",
     )
     matches, digest = parse_match_csv(
@@ -51,6 +69,8 @@ def test_match_csv_keeps_main_draw_quarterfinals_and_excludes_qualification(tmp_
     assert matches[0].round_code == "QF"
     assert matches[0].winner_side == "B"
     assert matches[0].sets == ((18, 21), (17, 21))
+    assert matches[0].side_a == ("Daniel Leung",)
+    assert matches[0].side_b == ("Wang Zheng Xing",)
 
 
 def test_daily_results_html_preserves_schedule_and_outcome_status(tmp_path: Path):

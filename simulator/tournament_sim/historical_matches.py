@@ -50,19 +50,42 @@ _HTML_ROUNDS = {
     "Finals": "Final",
 }
 _SEED_RE = re.compile(r"\s*\(\d+\)\s*$")
+_MEMBER_ID_RE = re.compile(r"\s*\[\d+\]\s*$")
 _SET_RE = re.compile(r"^(\d+)\s*[-–]\s*(\d+)$")
 
 
-def source_name_key(name: str) -> str:
-    """Return the minimally-normalized, source-local player identity.
+def source_display_name(name: str) -> str:
+    """Remove source-system noise while preserving a person's written name.
 
-    Accents, punctuation, and case are evidence-bearing and deliberately stay
-    intact.  NFC plus whitespace folding removes only representation noise.
-    Known spelling variants must be handled by the source map's explicit alias
-    table before this function is called.
+    The bulk archive sometimes appends a BWF member number to disambiguate a
+    row (for example ``Daniel LEUNG [84072]``) and uses all-caps surname
+    tokens. The caller-owned raw archive remains content-hashed for provenance;
+    the member number is not part of the public identity. Mixed-case tokens,
+    accents, initials and punctuation are otherwise left intact.
     """
 
-    return " ".join(unicodedata.normalize("NFC", name).split())
+    normalized = " ".join(unicodedata.normalize("NFC", name).split())
+    normalized = _MEMBER_ID_RE.sub("", normalized).strip()
+
+    def display_segment(match: re.Match[str]) -> str:
+        segment = match.group(0)
+        if len(segment) > 1 and segment.isupper():
+            return segment[:1] + segment[1:].lower()
+        return segment
+
+    return " ".join(re.sub(r"[^\W\d_]+", display_segment, token) for token in normalized.split())
+
+
+def source_name_key(name: str) -> str:
+    """Return the cleaned, source-local player identity.
+
+    Accents and punctuation are evidence-bearing and deliberately stay intact.
+    Source-only member ids, whitespace noise, and all-caps surname formatting
+    are presentation artifacts. Known spelling variants must still be handled
+    by the source map's explicit alias table before this function is called.
+    """
+
+    return source_display_name(name)
 
 
 def source_team_key(names: Iterable[str]) -> tuple[str, ...]:
@@ -141,7 +164,11 @@ def load_source_map(path: str | Path) -> dict:
 
 def _split_team(raw: str) -> tuple[str, ...]:
     cleaned = re.sub(r"\[\s*(?:WO|RET|Retired)\s*\]", "", raw, flags=re.I)
-    members = tuple(_SEED_RE.sub("", part.strip()) for part in cleaned.split("/") if part.strip())
+    members = tuple(
+        source_display_name(_SEED_RE.sub("", part.strip()))
+        for part in cleaned.split("/")
+        if part.strip()
+    )
     if not members or len(members) > 2:
         raise HistoricalSourceError(f"invalid player/pair {raw!r}")
     return members
