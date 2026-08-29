@@ -83,18 +83,22 @@ third-party match data is not vendored because that repository has no formal
 license file. The source map pins its commit and URLs; the run manifest records
 every content hash and per-tournament imported/expected/missing counts.
 
-With the audited 2026-08-29 sources, the import contains 4,235 verified records:
-T001–T026 have 3,917 completed main-draw rows, Japan has 155/155, China has
-153/155, and Taipei plus Korea remain five-finals-only. Missing rows stay
-explicitly unavailable; no match, player identity, score, walkover, or
-withdrawal is fabricated. Japan/China local dates, times, courts, outcome
-status, and per-match source references are retained when present.
+The audited 2026-08-29 source layer contains 4,235 verified records: T001–T026
+have 3,917 completed main-draw rows, Japan has 155/155, China has 153/155, and
+Taipei plus Korea have five supplied finals each. The local **tech-demo** seed
+then deterministically adds 367 clearly tagged `demo-generated:` rows, producing
+4,602 matches and a complete navigable draw for every event. Supplied rows,
+final scores, walkovers, retirements, dates, courts, and source references are
+retained; generated provenance stays in the run manifest and is not presented
+as historical evidence.
 
-Even a 155/155 archive uses `completed_matches_only`, not `full_draw`: the
-sources enumerate completed rows but do not provide stable source feeder/slot
-IDs. The importer proves only adjacent-round edges whose earlier winner exactly
-matches the later side; it inferred 3,985 such edges in this archive. Gaps and
-ambiguous edges remain disconnected and visibly partial rather than guessed.
+The demo still imports through `completed_matches_only`, not `full_draw`.
+That path retains concrete completed sides and represents the 16 legitimate
+first-round byes in a 48-entry draw. Standard elimination events carry their
+complete adjacent winner graph; the World Tour Finals retains three group
+rounds followed by semifinals and a final, with the semifinal-to-final edges
+that this bracket model can express. This is presentation data for a local
+walkthrough, not a claim that ShuttleWorks already models group qualification.
 
 ## Scenarios
 

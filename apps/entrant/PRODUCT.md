@@ -57,13 +57,15 @@ result. Intake, engine and emit are one product.
 ## Capabilities and Constraints
 
 **Built today:** discovery with status/date/text filters · a tournament page (Overview, Events,
-Entrants, draws, seeds, winners and player pages) · a dedicated entry flow with a
+one Players directory, draws, seeds, winners and entrant-backed player pages) · a dedicated entry flow with a
 server-computed running total · entrant accounts (sign-up/sign-in, verification and reset) ·
 My Entries · receipts · sitemap and robots.
 
 The public tier now publishes draws, matches and results behind the organiser's independent
 publication flags. The positioning above therefore describes the shipped public surface; future
-profile and cross-tournament identity work remains separately owner-scoped.
+profile and cross-tournament identity work remains separately owner-scoped. The Players directory
+merges confirmed entrants with published draw-roster people; only entrant-backed rows link to a
+profile, so imported demo identities are never presented as accounts.
 
 Signed-in entrant surfaces are account-scoped (`/e/account` and `/e/api/me`): verification,
 password reset, My Entries, withdrawal and erasure. Server-rendered public pages still cannot

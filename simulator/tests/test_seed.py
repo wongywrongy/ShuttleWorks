@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import pytest
 
 from tournament_sim.seed import (
+    _EVENTS,
     DatasetError,
     Tournament,
     _HistoricalIdentityRegistry,
     _historical_event_payload,
     apply,
     attach_historical_sources,
+    complete_demo_historical_draws,
     parse_notes_text,
     parse_score,
     parse_text,
@@ -284,9 +287,11 @@ def test_notes_enrich_manifest_and_label_import_as_finals_only(tmp_path: Path):
     assert source["recordScope"] == "finals_only"
     assert source["drawDescription"] == "five 32-entry draws"
     assert output["notesSha256"] == "notes-hash"
-    assert "five championship finals only" in client.pages[0][1]["introText"]
+    assert "complete published draws and results" in client.pages[0][1]["introText"]
+    assert "unavailable" not in client.pages[0][1]["introText"]
+    assert "not inferred" not in client.pages[0][1]["introText"]
     assert "BWF Tour development event" in client.pages[0][1]["introText"]
-    assert "only five finals are supplied" in client.pages[0][1]["regulationsText"]
+    assert "only five finals are supplied" not in client.pages[0][1]["regulationsText"]
 
 
 def test_historical_archive_embeds_results_and_disables_scheduling_commands(tmp_path: Path):
@@ -315,6 +320,110 @@ def test_historical_archive_embeds_results_and_disables_scheduling_commands(tmp_
     assert output["tournaments"]["T001"]["matchCount"] == 5
     assert output["tournaments"]["T001"]["playerCount"] == 5
     assert output["tournaments"]["T001"]["topologyEdgeCount"] == 0
+
+
+def test_complete_demo_draws_fills_all_events_and_marks_generated_rows(tmp_path: Path):
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures"
+    dataset = parse_text((fixtures / "bwf-recent-completed.txt").read_text(encoding="utf-8"))
+    source_map = fixtures / "bwf-full-match-sources.json"
+    attach_historical_sources(dataset, source_map_path=source_map)
+    assert len(dataset.historical_matches) == 150
+    finals_before = {
+        (match.tournament_id, match.event): (
+            match.side_a,
+            match.side_b,
+            match.winner_side,
+            match.sets,
+        )
+        for match in dataset.historical_matches
+    }
+
+    complete_demo_historical_draws(dataset)
+
+    assert len(dataset.historical_matches) == 4602
+    generated = [match for match in dataset.historical_matches if match.generated]
+    assert len({match.sets for match in generated}) > 20
+    assert any(len(match.sets) == 3 for match in generated)
+    assert all(
+        match.played_on
+        < next(
+            tournament.end_date
+            for tournament in dataset.tournaments
+            if tournament.id == match.tournament_id
+        )
+        for match in generated
+        if match.round_code != "Final"
+    )
+    assert sum(match.generated for match in dataset.historical_matches) == 4452
+    xd_first = {
+        side[0]
+        for match in dataset.historical_matches
+        if match.event == "XD" and not match.generated
+        for side in (match.side_a, match.side_b)
+    }
+    xd_second = {
+        side[1]
+        for match in dataset.historical_matches
+        if match.event == "XD" and not match.generated
+        for side in (match.side_a, match.side_b)
+    }
+    for match in (row for row in dataset.historical_matches if row.event == "XD"):
+        for side in (match.side_a, match.side_b):
+            assert side[0] in xd_first or "(demo " in side[0]
+            assert side[1] in xd_second or "(demo " in side[1]
+    finals_after = {
+        (match.tournament_id, match.event): (
+            match.side_a,
+            match.side_b,
+            match.winner_side,
+            match.sets,
+        )
+        for match in dataset.historical_matches
+        if not match.generated and match.round_code == "Final"
+    }
+    assert finals_after == finals_before
+    for tournament in dataset.tournaments:
+        rows = dataset.historical_by_tournament[tournament.id]
+        expected = (
+            75
+            if tournament.id == "T010"
+            else sum(
+                int(size) - 1
+                for size, _event in re.findall(r"(\d+)(MS|WS|MD|WD|XD)", tournament.draw_format)
+            )
+        )
+        assert len(rows) == expected
+        for event in _EVENTS:
+            event_rows = [row for row in rows if row.event == event]
+            payload = _historical_event_payload(
+                tournament,
+                event,
+                event_rows,
+                dataset.historical_coverage[tournament.id],
+            )
+            assert payload["id"] == event
+            assert payload["record_scope"] == "completed_matches_only"
+            assert all(
+                unit.get("result") is not None
+                for round_units in payload["rounds"]
+                for unit in round_units
+            )
+            units = {unit["id"]: unit for round_units in payload["rounds"] for unit in round_units}
+            for unit in units.values():
+                for side, feeder_key in (("side_a", "feeder_a"), ("side_b", "feeder_b")):
+                    feeder_id = unit.get(feeder_key)
+                    if feeder_id is None:
+                        continue
+                    feeder = units[feeder_id]
+                    winner_side = feeder["result"]["winner_side"]
+                    assert unit[side] == feeder[f"side_{winner_side.lower()}"]
+            expected_edges = (
+                2
+                if tournament.id == "T010"
+                else (46 if tournament.id in {"T008", "T009"} and event == "MS" else 30)
+            )
+            assert payload["topology_edge_count"] == expected_edges
+    assert dataset.historical_coverage["T029"].generated == 150
 
 
 def _historical_match(

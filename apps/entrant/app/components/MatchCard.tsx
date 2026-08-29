@@ -15,6 +15,7 @@
  * would move.
  */
 import type { PlayerMatchDTO, PlayerMatchSideDTO } from '../lib/player.types';
+import { eventCodeLabel, roundLabel } from '../lib/draws.types';
 
 export type MatchCardData = PlayerMatchDTO & {
   playedOn?: string | null;
@@ -67,12 +68,19 @@ export function MatchCard({ match }: { match: MatchCardData }) {
     match.localTime ?? match.scheduledTime,
     match.courtLabel ?? (match.court !== null ? `Court ${match.court}` : null),
   ].filter(Boolean);
+  const showSource = Boolean(
+    match.sourceUrl
+      && match.sourceRef
+      && !match.sourceRef.startsWith('demo-generated:'),
+  );
 
   return (
     <article className="rounded-lg border border-rule-soft bg-surface-raised shadow-sm">
       <header className="flex items-center justify-between gap-3 border-b border-rule-soft px-4 py-2">
         <p className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
-          {match.roundLabel ? `${match.eventCode} · ${match.roundLabel}` : match.eventCode}
+          {match.roundLabel
+            ? `${eventCodeLabel(match.eventCode)} · ${roundLabel(match.roundLabel) ?? match.roundLabel}`
+            : eventCodeLabel(match.eventCode)}
         </p>
         {/* The status-chip slot. v1: schedule only (§3.3). */}
         <span className="text-xs text-muted-foreground">
@@ -86,14 +94,14 @@ export function MatchCard({ match }: { match: MatchCardData }) {
       {footer.length > 0 ? (
         <footer className="border-t border-rule-soft px-4 py-1.5 text-xs text-muted-foreground">
           {footer.join(' · ')}
-          {match.sourceUrl ? (
+          {showSource ? (
             <>
               {' · '}
               <a
-                href={match.sourceUrl}
+                href={match.sourceUrl ?? undefined}
                 className="font-medium text-accent underline-offset-4 hover:underline"
               >
-                {match.sourceRef ?? 'Source record'}
+                Match source
               </a>
             </>
           ) : null}

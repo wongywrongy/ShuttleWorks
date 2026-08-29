@@ -132,6 +132,9 @@ const SE_DRAW = {
               },
               scheduledTime: '10:30',
               court: 1,
+              playedOn: '2026-08-01',
+              sourceUrl: 'https://example.test/archive',
+              sourceRef: 'demo-generated:T001:MS:SF:00',
             },
             {
               nodeKey: 'sf2',
@@ -285,7 +288,6 @@ describe('the tab bar under full publication', () => {
     expect(labels).toEqual([
       'Overview',
       'Events',
-      'Entrants',
       'Players',
       'Draws',
       'Seeded entries',
@@ -295,13 +297,14 @@ describe('the tab bar under full publication', () => {
 });
 
 describe('the Players tab', () => {
-  it('lists every named draw roster person as text, with honest missing-name copy', async () => {
+  it('lists every named draw roster person in the public directory', async () => {
     stubApi({ '/players': PLAYERS });
     const html = await render('/e/spring-open?tab=players');
     expect(html).toContain('Ada Lovelace');
-    expect(html).toContain('MS, XD');
-    expect(html).toContain('1 draw roster reference has no published player name');
-    expect(html).toContain('not entrant profiles');
+    expect(html).toContain('MS');
+    expect(html).toContain('XD');
+    expect(html).not.toContain('unavailable');
+    expect(html).not.toContain('source roster');
     expect(html).not.toContain('/players/p1');
   });
 });
@@ -312,8 +315,8 @@ describe('the Draws tab (§3.4)', () => {
     const html = await render('/e/spring-open?tab=draws');
 
     expect(html).toContain('href="/e/spring-open/draws/MS"');
-    expect(html).toContain('MS · Elimination · 4 entries');
-    expect(html).toContain('WS · Round robin · 3 entries');
+    expect(html).toContain('MS · Elimination · 4 players');
+    expect(html).toContain('WS · Round robin · 3 players');
   });
 
   it('says plainly when a published tier has no draws', async () => {
@@ -382,6 +385,8 @@ describe('the elimination draw page', () => {
     expect(html).toContain('Winner of SF 2');
     expect(html).toContain('21');
     expect(html).toContain('10:30 · Court 1');
+    expect(html).toContain('2026-08-01');
+    expect(html).not.toContain('demo-generated:');
     // Wide content scrolls in its own container (R11).
     expect(html).toContain('overflow-x-auto');
     expect(html).toContain('aria-hidden="true"');

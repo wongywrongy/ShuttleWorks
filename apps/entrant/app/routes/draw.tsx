@@ -26,7 +26,14 @@ import type {
   SegmentDTO,
   TeamDTO,
 } from '../lib/draws.types';
-import { isRoundRobin, kindLabel } from '../lib/draws.types';
+import {
+  entryCountLabel,
+  eventCodeLabel,
+  eventDisciplineLabel,
+  isRoundRobin,
+  kindLabel,
+  roundLabel,
+} from '../lib/draws.types';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import type { MatchCardData } from '../components/MatchCard';
 import type { Route } from './+types/draw';
@@ -93,12 +100,13 @@ export const meta: Route.MetaFunction = ({ data }) => {
 function nodeToMatch(
   node: MatchNodeDTO,
   teams: Map<string, TeamDTO>,
-  roundLabel: string | null,
+  eventCode: string,
+  round: string | null,
 ): MatchCardData {
   const decided = node.result?.winnerSide === 'A' || node.result?.winnerSide === 'B';
   return {
-    eventCode: '',
-    roundLabel,
+    eventCode: eventCodeLabel(eventCode),
+    roundLabel: roundLabel(round),
     sides: node.sides.map((side, index) => {
       const team = side.participantKey ? teams.get(side.participantKey) : undefined;
       return {
@@ -123,39 +131,6 @@ function nodeToMatch(
     sourceUrl: node.sourceUrl,
     sourceRef: node.sourceRef,
   };
-}
-
-function CoverageNote({ draw }: { draw: DrawDetailDTO }) {
-  const { imported, expected, missing } = draw.matchCoverage;
-  return (
-    <aside className="rounded-lg border border-rule-soft bg-surface-raised p-4 text-sm text-muted-foreground">
-      <p>
-        {expected === null
-          ? `${imported} match records are available.`
-          : `${imported} of ${expected} match records are available${
-              missing ? `; ${missing} unavailable source ${missing === 1 ? 'record was' : 'records were'} not inferred` : ''
-            }.`}
-      </p>
-      {draw.topologyScope !== 'full_draw' ? (
-        <p className="mt-1">
-          {draw.topologyScope === 'proven_winner_advancement'
-            ? 'Connections appear only where winner advancement is proven by the source data.'
-            : 'Recorded matches are shown independently because feeder topology was not supplied.'}
-        </p>
-      ) : null}
-      {draw.identityScope === 'source_local_name' ? (
-        <p className="mt-1">Player identities use normalized, source-local roster names.</p>
-      ) : null}
-      {draw.sourceUrl ? (
-        <a
-          href={draw.sourceUrl}
-          className="mt-2 inline-block font-medium text-accent underline-offset-4 hover:underline"
-        >
-          Tournament source
-        </a>
-      ) : null}
-    </aside>
-  );
 }
 
 function StandingsTable({ draw }: { draw: DrawDetailDTO }) {
@@ -279,15 +254,11 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
           ← {tournamentName ? `${tournamentName} · Draws` : 'Draws'}
         </a>
         <h1 className="mt-4 font-display text-2xl font-bold tracking-tight text-foreground">
-          {draw.discipline}
+          {eventDisciplineLabel(draw.discipline)}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {[draw.eventCode, kindLabel(draw.kind), `${draw.size} entries`].join(' · ')}
+          {[eventCodeLabel(draw.eventCode), kindLabel(draw.kind), entryCountLabel(draw.eventCode, draw.size)].join(' · ')}
         </p>
-
-        <div className="mt-4">
-          <CoverageNote draw={draw} />
-        </div>
 
         <div className="mt-6 grid gap-6">
           {roundRobin ? (
@@ -303,7 +274,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                         {round.matches.map((node) => (
                           <MatchCard
                             key={node.nodeKey}
-                            match={nodeToMatch(node, teams, null)}
+                            match={nodeToMatch(node, teams, draw.eventCode, round.label)}
                           />
                         ))}
                       </div>
@@ -352,7 +323,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                         <div className="mt-3 flex h-full flex-col justify-around gap-3">
                           {round.matches.map((node) => (
                             <div key={node.nodeKey} data-node-key={node.nodeKey} className="relative z-10">
-                              <MatchCard match={nodeToMatch(node, teams, null)} />
+                              <MatchCard match={nodeToMatch(node, teams, draw.eventCode, round.label)} />
                             </div>
                           ))}
                         </div>

@@ -132,7 +132,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "seed":
         import json
         from pathlib import Path
-        from .seed import attach_historical_sources, apply, load_file, preview, reset, status
+        from .seed import (
+            attach_historical_sources,
+            apply,
+            complete_demo_historical_draws,
+            load_file,
+            preview,
+            reset,
+            status,
+        )
 
         def load_dataset():
             dataset = load_file(args.path, args.notes)
@@ -144,13 +152,17 @@ def main(argv: list[str] | None = None) -> int:
                 if tournament_id in daily_paths:
                     raise SystemExit(f"duplicate --daily-results for {tournament_id}")
                 daily_paths[tournament_id] = html_path
-            if args.match_data or daily_paths:
-                attach_historical_sources(
-                    dataset,
-                    source_map_path=args.source_map,
-                    match_data_path=args.match_data,
-                    daily_results_paths=daily_paths,
-                )
+            # Attach finals even when optional local archives are absent, then
+            # complete the fictional demo tree.  This keeps the default CLI
+            # useful on a headless server without requiring a manual data
+            # download first.
+            attach_historical_sources(
+                dataset,
+                source_map_path=args.source_map,
+                match_data_path=args.match_data,
+                daily_results_paths=daily_paths,
+            )
+            complete_demo_historical_draws(dataset)
             return dataset
 
         if args.seed_cmd == "status":

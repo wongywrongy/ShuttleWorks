@@ -38,6 +38,9 @@ export interface MatchCoverageDTO {
 export interface DrawPlayerDTO {
   playerKey: string;
   name: string;
+  /** Opaque entry person id when this roster row has a public profile. */
+  personKey?: string | null;
+  club?: string | null;
   eventCodes: string[];
 }
 
@@ -189,6 +192,59 @@ export function kindLabel(kind: DrawKind): string {
       monrad: 'Monrad',
     }[kind] ?? kind
   );
+}
+
+/**
+ * Event codes are compact public labels, not storage identifiers. Historical
+ * imports may prefix them with a tournament key (for example `T027-MS`), but
+ * that implementation detail must never leak into a public draw page.
+ */
+export function eventCodeLabel(code: string): string {
+  const normalized = code.trim().toUpperCase();
+  const suffix = normalized.match(/(?:^|-)(MS|WS|MD|WD|XD)$/)?.[1];
+  return suffix ?? normalized;
+}
+
+/** Human event name for a projection that does not carry its discipline. */
+export function eventDisciplineLabel(code: string): string {
+  const compact = eventCodeLabel(code);
+  return (
+    {
+      MS: "Men's Singles",
+      WS: "Women's Singles",
+      MD: "Men's Doubles",
+      WD: "Women's Doubles",
+      XD: 'Mixed Doubles',
+    }[compact] ?? code.trim()
+  );
+}
+
+/**
+ * Normalize the common shorthand emitted by draw providers. Keeping this in
+ * the display tier makes a source's `R32`, `QF`, or `SF` vocabulary readable
+ * without changing the stored match topology.
+ */
+export function roundLabel(raw: string | null): string | null {
+  if (!raw) return null;
+  const value = raw.trim();
+  const folded = value.toLowerCase().replace(/[._-]/g, ' ');
+  if (folded === 'f' || folded === 'final' || folded === 'finals') return 'Final';
+  if (folded === 'sf' || folded === 'semi final' || folded === 'semifinal' || folded === 'semifinals') {
+    return 'Semifinals';
+  }
+  if (folded === 'qf' || folded === 'quarter final' || folded === 'quarterfinal' || folded === 'quarterfinals') {
+    return 'Quarterfinals';
+  }
+  if (folded === 'r16' || folded === 'round 16' || folded === 'round of 16') return 'Round of 16';
+  if (folded === 'r32' || folded === 'round 32' || folded === 'round of 32') return 'Round of 32';
+  if (folded === 'r64' || folded === 'round 64' || folded === 'round of 64') return 'Round of 64';
+  return value;
+}
+
+/** Public count copy: singles are players, doubles are pairs. */
+export function entryCountLabel(code: string, size: number): string {
+  const unit = ['MD', 'WD', 'XD'].includes(eventCodeLabel(code)) ? 'pairs' : 'players';
+  return `${size} ${unit}`;
 }
 
 /** Round-robin-family formats render as standings + rounds, not a tree. */

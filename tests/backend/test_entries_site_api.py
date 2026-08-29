@@ -19,12 +19,29 @@ hand-built imitation of it.
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
 from tests.backend._helpers import isolate_test_database
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
+
+
+@pytest.mark.parametrize(
+    ("event_id", "discipline", "expected"),
+    [
+        ("T027-MS", "MS", "MS"),
+        ("T027-XD", "Mixed Doubles", "XD"),
+        ("U17-A", "U17", "U17"),
+        ("T027-U17", "Under 17 Boys Singles", "Under 17 Boys Singles"),
+        ("T027-INTERNAL", "", "Event"),
+    ],
+)
+def test_public_event_codes_hide_import_namespaces(event_id, discipline, expected):
+    from entries.entries_site import _event_public_code
+
+    assert _event_public_code(SimpleNamespace(id=event_id, discipline=discipline)) == expected
 
 
 @pytest.fixture
@@ -419,9 +436,27 @@ def test_draw_players_are_published_draw_roster_people_not_profiles(client):
     assert players == {
         "published": True,
         "players": [
-            {"playerKey": "P-A", "name": "Áda Chen", "eventCodes": ["MD", "WS"]},
-            {"playerKey": "P-B", "name": "Bo Lee", "eventCodes": ["MD", "WS"]},
-            {"playerKey": "P-C", "name": "Cass Doe", "eventCodes": ["MD"]},
+            {
+                "playerKey": "P-A",
+                "personKey": None,
+                "name": "Áda Chen",
+                "club": None,
+                "eventCodes": ["MD", "WS"],
+            },
+            {
+                "playerKey": "P-B",
+                "personKey": None,
+                "name": "Bo Lee",
+                "club": None,
+                "eventCodes": ["MD", "WS"],
+            },
+            {
+                "playerKey": "P-C",
+                "personKey": None,
+                "name": "Cass Doe",
+                "club": None,
+                "eventCodes": ["MD"],
+            },
         ],
         "referencedPlayerCount": 4,
         "missingNameCount": 1,
@@ -442,6 +477,26 @@ def test_draw_players_are_hidden_until_draws_are_published(client):
         "published": False,
         "players": [],
         "referencedPlayerCount": 0,
+        "missingNameCount": 0,
+    }
+
+
+def test_players_directory_preserves_confirmed_entrant_profiles_before_draws(client):
+    tid = _make_workspace(client, slug="entry-players", entrants_published=True)
+    person_id = _seed_person(tid, full_name="Ada Chen", club="Riverside BC")
+
+    assert client.get("/e/api/page/entry-players/players").json() == {
+        "published": True,
+        "players": [
+            {
+                "playerKey": f"entry-{person_id}",
+                "personKey": str(person_id),
+                "name": "Ada Chen",
+                "club": "Riverside BC",
+                "eventCodes": ["MS"],
+            }
+        ],
+        "referencedPlayerCount": 1,
         "missingNameCount": 0,
     }
 

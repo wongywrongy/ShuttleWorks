@@ -71,7 +71,7 @@ Routes are grouped by the **architectural module** that owns them. The full endp
 | `/tournaments/{id}/commands` | **Operations** | idempotent operator command queue |
 | `/display/{token}/*`, `/tournaments/{id}/display-token*` | **Display** | public capability-token projection + owner mint/rotate |
 | `/tournaments/{id}/entry-page*`, `…/entry-events*`, `…/entries*` | **Entries** | the operator's entry-page config + entries desk (session-guarded) |
-| `/e/api/*`, `/e/account/*` | **Entries** | the **public entrant surface** — slug-keyed page projection, fee quote, submit, and entrant accounts (`sw_play_session`, never `users`). The *pages* are a separate React Router 7 service; these are the JSON it reads and the writes the browser posts directly (SP-PROGRAM-1 Phase 6, ruling R8-A) |
+| `/e/api/*`, `/e/account/*` | **Entries** | the **public entrant surface** — slug-keyed page, unified Entries/Bracket player directory, draw/result projections, fee quote, submit, and entrant accounts (`sw_play_session`, never `users`). The *pages* are a separate React Router 7 service; these are the JSON it reads and the writes the browser posts directly (SP-PROGRAM-1 Phase 6, ruling R8-A) |
 | `/tournaments`, `/tournaments/{id}`, `…/state`, `…/state/backups`, `…/members`, `…/invites` | **Control plane** | workspace CRUD + shared state + collaboration |
 | `/tournaments/{id}/modules`, `…/modules/{moduleId}` | **Control plane** | the `workspace_modules` API |
 | `/invites/*` | **Control plane** | public + authenticated invite endpoints |

@@ -2355,12 +2355,11 @@ export interface paths {
         };
         /**
          * Players Index
-         * @description Every named roster person referenced by the published draws.
+         * @description The one public player directory for entries and published draws.
          *
-         *     This is a draw-roster index, not an Entries directory. It therefore uses
-         *     ``draws_published`` as its only publication gate, reads names solely from
-         *     ``tournaments.data.bracketPlayers``, and never manufactures a profile URL
-         *     from a source-local roster key.
+         *     Confirmed entrants retain their existing profile identity.  Once draws
+         *     are published, roster-only people are merged into that same directory so
+         *     imported/demo tournaments do not need a second, competing player list.
          */
         get: operations["players_index_e_api_page__slug__players_get"];
         put?: never;
@@ -3900,17 +3899,22 @@ export interface components {
         };
         /**
          * DrawPlayerDTO
-         * @description One real roster person referenced by at least one published draw.
+         * @description One person in the public tournament directory.
          *
-         *     ``playerKey`` is only a stable row identity. It is deliberately not an
-         *     Entries person key and the public tier never turns it into a profile URL.
-         *     Historical source-name identities cannot safely claim that relationship.
+         *     ``playerKey`` is the stable row identity. ``personKey`` exists only when
+         *     the person came through Entries and therefore has a real public player
+         *     page; imported/demo roster people remain useful directory rows without
+         *     pretending to own an account-backed identity.
          */
         DrawPlayerDTO: {
             /** Playerkey */
             playerKey: string;
+            /** Personkey */
+            personKey?: string | null;
             /** Name */
             name: string;
+            /** Club */
+            club?: string | null;
             /** Eventcodes */
             eventCodes: string[];
         };

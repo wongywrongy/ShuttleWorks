@@ -29,6 +29,7 @@ import type { FormEcho } from './echo';
 export type Tab =
   | 'overview'
   | 'events'
+  /** Legacy deep-link compatibility; no longer emitted by visibleTabs. */
   | 'entrants'
   | 'players'
   | 'draws'
@@ -274,7 +275,7 @@ export function ctaState(
 /**
  * Design §6 visibleTabs table. A declarative `[tab, predicate]` walk so a
  * future Draws/Schedule/Results tab is a data addition (brief rule 4). The
- * function is total: `[overview, entrants]` is unreachable in practice but
+ * function is total: `[overview]` is the minimal answer when no public data exists, but
  * still an answer.
  */
 export function visibleTabs(
@@ -285,16 +286,12 @@ export function visibleTabs(
   const table: readonly [Tab, boolean][] = [
     ['overview', true],
     ['events', events.length > 0],
-    // SP-P7 §4: each public tab exists iff the TD PUBLISHED its data —
-    // including published-and-empty, which is a real state ("no confirmed
-    // entries yet"), not a placeholder. Unpublished hides the tab entirely
-    // (rule 4: a tab whose whole content would be "not yet" is a
-    // placeholder in disguise). Seeds ride the DRAWS flag (§3.5: seeds are
-    // draw facts); winners ride RESULTS. The parameter is optional only
-    // for the pre-SP-P7 callers in old fixtures; absent falls back to the
-    // old data-driven entrants rule with no result tabs at all.
-    ['entrants', publication ? publication.entrants : entrants.length > 0],
-    ['players', publication?.draws ?? false],
+    // One public roster serves both registered entrants and imported draw
+    // players. The API merges those rows; this avoids two competing lists
+    // where the draw roster appears to contain only five winners. The
+    // parameter is optional for older fixtures and falls back to the legacy
+    // entrant-list visibility rule.
+    ['players', publication ? publication.entrants || publication.draws : entrants.length > 0],
     ['draws', publication?.draws ?? false],
     ['seeds', publication?.draws ?? false],
     ['winners', publication?.results ?? false],
@@ -302,8 +299,9 @@ export function visibleTabs(
   return table.filter(([, visible]) => visible).map(([tab]) => tab);
 }
 
-/** Requested ∈ visible → requested; anything else → overview. */
+/** Requested ∈ visible → requested; the retired entrants tab maps to Players. */
 export function activeTab(requested: string | null, visible: readonly Tab[]): Tab {
+  if (requested === 'entrants' && visible.includes('players')) return 'players';
   return visible.includes(requested as Tab) ? (requested as Tab) : 'overview';
 }
 

@@ -18,7 +18,6 @@
  */
 import { isRouteErrorResponse, useRouteError } from 'react-router';
 
-import { EntrantsList } from '../components/EntrantsList';
 import { EventRow } from '../components/EventRow';
 import { HeroHeader } from '../components/HeroHeader';
 import { MessagePage } from '../components/MessagePage';
@@ -34,7 +33,12 @@ import type {
   SeedsDTO,
   WinnersDTO,
 } from '../lib/draws.types';
-import { kindLabel } from '../lib/draws.types';
+import {
+  entryCountLabel,
+  eventCodeLabel,
+  eventDisciplineLabel,
+  kindLabel,
+} from '../lib/draws.types';
 import type { EntryPageDTO, ReserveRowDTO } from '../lib/entryPage.types';
 import { dateOfIso, formatDateLong } from '../lib/format';
 import {
@@ -99,6 +103,9 @@ export async function loader({
   };
   const base = `/e/api/page/${encodeURIComponent(slug)}`;
   if (active === 'players') {
+    // One server-side projection merges confirmed entrants and published draw
+    // roster rows. This keeps the public directory complete before and after
+    // draws are released without maintaining a second client-side roster.
     payload.players = await apiGet<PlayersDTO>(`${base}/players`);
   } else if (active === 'draws') {
     payload.draws = await apiGet<DrawsIndexDTO>(`${base}/draws`);
@@ -257,39 +264,27 @@ function DrawsPanel({ slug, draws }: { slug: string; draws: DrawsIndexDTO }) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2">
       {draws.draws.map((card) => (
-        <li key={card.drawKey}>
+        <li key={card.drawKey} id={`draw-${eventCodeLabel(card.eventCode)}`}>
           <a
             href={`/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(card.drawKey)}`}
             className="block rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-sm hover:border-rule-control"
           >
             <p className="font-display text-base font-bold tracking-tight text-foreground">
-              {card.discipline}
+              {eventDisciplineLabel(card.discipline)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {[
-                card.eventCode,
+                eventCodeLabel(card.eventCode),
                 kindLabel(card.kind),
-                `${card.size} ${card.size === 1 ? 'entry' : 'entries'}`,
+                entryCountLabel(card.eventCode, card.size),
                 card.hasConsolation ? 'with consolation' : null,
               ]
                 .filter(Boolean)
                 .join(' · ')}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              {card.matchCoverage.expected === null
-                ? `${card.matchCoverage.imported} match records`
-                : `${card.matchCoverage.imported} of ${card.matchCoverage.expected} match records`}
-              {card.matchCoverage.missing
-                ? ` · ${card.matchCoverage.missing} unavailable`
-                : ''}
+              {`${card.matchCoverage.imported} matches`}
             </p>
-            {card.topologyScope !== 'full_draw' ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {card.topologyScope === 'proven_winner_advancement'
-                  ? 'Recorded paths use source-proven advancement only.'
-                  : 'Recorded matches are shown without inferred connections.'}
-              </p>
-            ) : null}
           </a>
         </li>
       ))}
@@ -309,9 +304,9 @@ function SeedsPanel({ seeds }: { seeds: SeedsDTO }) {
           className="rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm"
         >
           <h3 className="text-base font-semibold text-foreground">
-            {event.discipline}
+            {eventDisciplineLabel(event.discipline)}
             <span className="ml-2 text-sm font-normal text-muted-foreground">
-              {event.eventCode}
+              {eventCodeLabel(event.eventCode)}
             </span>
           </h3>
           <ol className="mt-3 grid gap-2">
@@ -366,9 +361,9 @@ function WinnersPanel({ winners }: { winners: WinnersDTO }) {
           className="rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm"
         >
           <h3 className="text-base font-semibold text-foreground">
-            {event.discipline}
+            {eventDisciplineLabel(event.discipline)}
             <span className="ml-2 text-sm font-normal text-muted-foreground">
-              {event.eventCode}
+              {eventCodeLabel(event.eventCode)}
             </span>
           </h3>
           <div className="mt-3 grid gap-1.5">
@@ -404,8 +399,8 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
     .join(' · ');
   // The by-event anchors died with the by-event grouping (SP-P7 §3.2): the
   // list is alphabetical now, so an event's "N entered" links to the tab.
-  const entrantsHref = tabs.includes('entrants')
-    ? () => tabHref(slug, 'entrants')
+  const entrantsHref = tabs.includes('players')
+    ? () => tabHref(slug, 'players')
     : null;
 
   return (
@@ -436,21 +431,15 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
             </ul>
           </div>
         ) : null}
-        {active === 'entrants' ? (
+        {active === 'players' && loaderData.players ? (
           <>
-            <h2 className="sr-only">Entrants</h2>
-            {page.entrants.length > 0 ? (
-              <EntrantsList slug={slug} entrants={page.entrants} />
-            ) : (
-              // Published and empty is a real state, said plainly: the
-              // desk has confirmed nobody yet.
-              <p className="text-muted-foreground">No confirmed entries yet.</p>
-            )}
+            <PlayersList
+              slug={slug}
+              roster={loaderData.players}
+              drawsPublished={page.publication.draws}
+            />
             <ReserveList reserves={page.reserves ?? []} />
           </>
-        ) : null}
-        {active === 'players' && loaderData.players ? (
-          <PlayersList roster={loaderData.players} />
         ) : null}
         {active === 'draws' && loaderData.draws ? (
           <>
@@ -535,7 +524,7 @@ function ReserveList({ reserves }: { reserves: ReserveRowDTO[] }) {
       {[...byEvent.entries()].map(([code, rows]) => (
         <div key={code} className="grid gap-1.5">
           <h4 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
-            {code}
+            {eventCodeLabel(code)}
           </h4>
           <ol className="grid gap-1">
             {rows.map((row) => (

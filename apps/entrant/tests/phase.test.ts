@@ -232,8 +232,8 @@ describe('visibleTabs (a tab exists only when its data does)', () => {
   it.each([
     [0, 0, ['overview']],
     [2, 0, ['overview', 'events']],
-    [0, 3, ['overview', 'entrants']],
-    [2, 3, ['overview', 'events', 'entrants']],
+    [0, 3, ['overview', 'players']],
+    [2, 3, ['overview', 'events', 'players']],
   ])('%i events, %i entrants → %j (no publication arg: legacy rule)', (events, entrants, expected) => {
     expect(visibleTabs(Array(events).fill({}), Array(entrants).fill({}))).toEqual(expected);
   });
@@ -248,15 +248,15 @@ describe('visibleTabs (a tab exists only when its data does)', () => {
     ],
     [
       { entrants: true, draws: false, results: false },
-      ['overview', 'events', 'entrants'],
+      ['overview', 'events', 'players'],
     ],
     [
       { entrants: true, draws: true, results: false },
-      ['overview', 'events', 'entrants', 'players', 'draws', 'seeds'],
+      ['overview', 'events', 'players', 'draws', 'seeds'],
     ],
     [
       { entrants: true, draws: true, results: true },
-      ['overview', 'events', 'entrants', 'players', 'draws', 'seeds', 'winners'],
+      ['overview', 'events', 'players', 'draws', 'seeds', 'winners'],
     ],
     [
       // Independent flags render coherently: winners without draws is a
@@ -271,8 +271,8 @@ describe('visibleTabs (a tab exists only when its data does)', () => {
   it('published entrants beats an empty list; unpublished beats a full one', () => {
     const on = { entrants: true, draws: false, results: false };
     const off = { entrants: false, draws: false, results: false };
-    expect(visibleTabs([], [], on)).toContain('entrants');
-    expect(visibleTabs([], Array(9).fill({}), off)).not.toContain('entrants');
+    expect(visibleTabs([], [], on)).toContain('players');
+    expect(visibleTabs([], Array(9).fill({}), off)).not.toContain('players');
   });
 });
 
@@ -286,6 +286,10 @@ describe('activeTab', () => {
     ['a data-hidden tab', 'entrants', 'overview'],
   ])('%s → %s', (_label, requested, expected) => {
     expect(activeTab(requested, [...visible])).toBe(expected);
+  });
+
+  it('maps a legacy entrants bookmark to the unified Players directory', () => {
+    expect(activeTab('entrants', ['overview', 'players'])).toBe('players');
   });
 });
 

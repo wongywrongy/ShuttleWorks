@@ -20,6 +20,7 @@ Run in ``AUTH_MODE=cloud``: in local mode an anonymous request deliberately
 resolves to the bootstrap operator (the solo offline flow), so there is nothing
 to assert. Cloud mode is the deployed posture and the one that matters.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -160,9 +161,10 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "resolved advancement projected back into its placeholder"
     ),
     ("GET", "/e/api/page/{slug}/players"): (
-        "published-draw roster directory — draws_published gates it; contains "
-        "names and event codes only for roster people referenced by published "
-        "draws, with no entry profiles or contact data"
+        "the unified public player directory — entrants_published exposes "
+        "confirmed Entries identities and draws_published adds named bracket "
+        "roster people; only real entry players receive profile keys, and no "
+        "contact data is selected"
     ),
     ("GET", "/e/api/page/{slug}/seeds"): (
         "per-event seed lists — seeds are draw facts, so draws_published "
@@ -339,8 +341,7 @@ def test_every_route_refuses_an_anonymous_caller(cloud_client):
     assert not reachable, (
         "These routes answered an anonymous caller. Either gate them with "
         "Depends(get_current_user) / require_tournament_access, or add them to "
-        "PUBLIC_BY_DESIGN with a written reason:\n  "
-        + "\n  ".join(sorted(reachable))
+        "PUBLIC_BY_DESIGN with a written reason:\n  " + "\n  ".join(sorted(reachable))
     )
 
 
@@ -376,9 +377,7 @@ def test_display_capability_routes_reject_a_bogus_token(cloud_client):
     so the guard is worth asserting rather than assuming.
     """
     client, _ = cloud_client
-    for method, path in sorted(
-        k for k in PUBLIC_BY_DESIGN if k[1].startswith("/display/")
-    ):
+    for method, path in sorted(k for k in PUBLIC_BY_DESIGN if k[1].startswith("/display/")):
         r = client.request(method, _concrete(path))
         assert r.status_code == 404, f"{method} {path} answered {r.status_code}"
 
@@ -410,9 +409,7 @@ def turnstile(cloud_client, monkeypatch):
 
     def fake_post(url, fields, timeout):
         if fields.get("secret", "").startswith("2x"):
-            return json.dumps(
-                {"success": False, "error-codes": ["invalid-input-response"]}
-            )
+            return json.dumps({"success": False, "error-codes": ["invalid-input-response"]})
         return json.dumps({"success": True})
 
     monkeypatch.setattr(service, "_post", fake_post)
@@ -432,9 +429,7 @@ def entry_page(cloud_client):
             t = Tournament(name=name, kind="meet", data={})
             session.add(t)
             session.flush()
-            session.add(
-                EntryPage(tournament_id=t.id, slug=f"club-{label}", is_open=True)
-            )
+            session.add(EntryPage(tournament_id=t.id, slug=f"club-{label}", is_open=True))
             ev = EntryEvent(
                 tournament_id=t.id,
                 code="MS",
@@ -512,9 +507,7 @@ def test_a_bogus_slug_answers_the_uniform_404(cloud_client, entry_page):
     assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
-def test_the_page_of_one_workspace_never_carries_another_workspaces_data(
-    cloud_client, entry_page
-):
+def test_the_page_of_one_workspace_never_carries_another_workspaces_data(cloud_client, entry_page):
     """The cross-tenant probe. Two workspaces exist and neither knows the
     other; a slug is a key to exactly one of them."""
     client, _ = cloud_client
@@ -558,9 +551,7 @@ def test_an_anonymous_submit_is_rejected(cloud_client, entry_page):
     assert _entry_count() == 0
 
 
-def test_the_same_submit_with_an_entrant_session_is_accepted(
-    cloud_client, entry_page, turnstile
-):
+def test_the_same_submit_with_an_entrant_session_is_accepted(cloud_client, entry_page, turnstile):
     """Negative control for the refusal above: same request, same route,
     one session cookie different. Without it, the assertion above would
     pass just as happily against a route that refuses everything."""
@@ -592,11 +583,8 @@ def test_the_same_submit_with_an_entrant_session_is_accepted(
     # Read off the projection rather than recomputed: a recomputed digest
     # would pass even if the loader stopped emitting the field, and that
     # field is the only thing that lets an unhydrated form post this write.
-    token = client.get(f"/e/api/page/{entry_page['a']['slug']}").json()[
-        "viewer"
-    ]["formCsrf"]
+    token = client.get(f"/e/api/page/{entry_page['a']['slug']}").json()["viewer"]["formCsrf"]
 
     r = _post_entry(client, entry_page["a"], _csrf=token)
     assert r.status_code == 303, r.text
     assert _entry_count(entry_page["a"]["tid"]) == 1
-

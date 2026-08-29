@@ -95,6 +95,10 @@ class HistoricalMatch:
     court: str | None = None
     walkover: bool = False
     reason: str | None = None
+    # Synthetic rows are used only by the local complete-demo seeder.  They
+    # retain the same contract as source rows while making provenance explicit
+    # to manifests and tests (the public projection may choose to hide it).
+    generated: bool = False
 
     @property
     def identity(self) -> str:
@@ -121,6 +125,7 @@ class SourceCoverage:
     source_url: str
     source_sha256: str
     availability: str
+    generated: int = 0
 
     @property
     def missing(self) -> int:

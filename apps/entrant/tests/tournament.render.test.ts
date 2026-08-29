@@ -40,11 +40,22 @@ async function respond(body: unknown, status: number, path: string): Promise<Res
   vi.stubGlobal(
     'fetch',
     vi.fn(
-      async () =>
-        new Response(status === 200 ? JSON.stringify(body) : 'Not found', {
+      async (request: Request | string) => {
+        const requestUrl = typeof request === 'string' ? request : request.url;
+        const isPlayersProjection = /\/api\/page\/[^/]+\/players(?:$|[/?])/.test(requestUrl);
+        const payload = isPlayersProjection
+          ? ((body as { players?: unknown }).players ?? {
+              published: true,
+              players: [],
+              referencedPlayerCount: 0,
+              missingNameCount: 0,
+            })
+          : body;
+        return new Response(status === 200 ? JSON.stringify(payload) : 'Not found', {
           status,
           headers: { 'content-type': status === 200 ? 'application/json' : 'text/plain' },
-        }),
+        });
+      },
     ),
   );
   const build = (await vite.ssrLoadModule(
@@ -89,14 +100,14 @@ describe('the hero band', () => {
 });
 
 describe('the tab bar and its panels (Z6)', () => {
-  it('renders the three tabs as links with aria-current on the active one', async () => {
+  it('renders the public sections as links with aria-current on the active one', async () => {
     const html = await render();
 
     const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
     expect(nav).not.toBe('');
     expect(nav).toContain('>Overview<');
     expect(nav).toContain('>Events<');
-    expect(nav).toContain('>Entrants<');
+    expect(nav).toContain('>Players<');
     const active = nav.match(/<a[^>]*aria-current="page"[^>]*>[^<]*/g) ?? [];
     expect(active).toHaveLength(1);
     expect(active[0]).toContain('Overview');
@@ -112,6 +123,13 @@ describe('the tab bar and its panels (Z6)', () => {
     // …and the Overview panel is not.
     expect(events).not.toContain('Key dates');
     expect(events).not.toContain('Bank transfer on the day.');
+  });
+
+  it('maps a legacy Entrants bookmark to the unified Players panel', async () => {
+    const html = await render(PAGE, '/e/spring-open?tab=entrants');
+    const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(nav).toMatch(/aria-current="page"[^>]*>Players<\/a>/);
+    expect(html).toContain('No players published yet.');
   });
 
   it('renders Overview for an unknown or gate-hidden ?tab', async () => {
@@ -131,13 +149,37 @@ describe('the tab bar and its panels (Z6)', () => {
     expect(hidden).not.toContain('>Entrants<');
   });
 
-  it('a published-but-empty entrant list is a real tab with a plain answer', async () => {
+  it('a published-but-empty player list is a real tab with a plain answer', async () => {
+    const roster = { published: true, players: [], referencedPlayerCount: 0, missingNameCount: 0 };
     const html = await render(
-      { ...PAGE, entrants: [] },
-      '/e/spring-open?tab=entrants',
+      { ...PAGE, entrants: [], players: roster },
+      '/e/spring-open?tab=players',
     );
-    expect(html).toContain('>Entrants<');
-    expect(html).toContain('No confirmed entries yet.');
+    expect(html).toContain('>Players<');
+    expect(html).toContain('No players published yet.');
+  });
+
+  it('does not link entrant-only event chips to unpublished draws', async () => {
+    const roster = {
+      published: true,
+      players: [
+        {
+          playerKey: 'entry-ada',
+          personKey: 'ada',
+          name: 'Ada Lovelace',
+          club: 'Analytical BC',
+          eventCodes: ['MS'],
+        },
+      ],
+      referencedPlayerCount: 1,
+      missingNameCount: 0,
+    };
+    const html = await render(
+      { ...PAGE, players: roster },
+      '/e/spring-open?tab=players',
+    );
+    expect(html).toContain('Ada Lovelace');
+    expect(html).not.toContain('?tab=draws#draw-MS');
   });
 
   it('renders no tab bar at all below two tabs', async () => {
@@ -156,7 +198,7 @@ describe('the tab bar and its panels (Z6)', () => {
     ['open', PAGE, '/e/spring-open'],
     ['closed', CLOSED, '/e/spring-open'],
     ['events tab', PAGE, '/e/spring-open?tab=events'],
-    ['entrants tab', PAGE, '/e/spring-open?tab=entrants'],
+    ['players tab', PAGE, '/e/spring-open?tab=players'],
     ['no events/entrants', { ...PAGE, events: [], entrants: [] }, '/e/spring-open'],
   ])(
     'renders no placeholder, disabled tab or coming-soon in the %s state (rule 4)',
@@ -213,25 +255,37 @@ describe('the panels', () => {
     expect(html).not.toContain('/regulations"');
   });
 
-  it('Events: rows with counts ("N entered", G2 declined) linking into Entrants', async () => {
+  it('Events: rows with counts ("N entered", G2 declined) linking into Players', async () => {
     const html = await render(PAGE, '/e/spring-open?tab=events');
 
     expect(html).toContain('7 entered');
     expect(html).not.toMatch(/7 of \d/);
     // The by-event anchors died with the by-event grouping (SP-P7 §3.2):
     // "N entered" links to the alphabetical tab itself.
-    expect(html).toContain('href="/e/spring-open?tab=entrants"');
+    expect(html).toContain('href="/e/spring-open?tab=players"');
     expect(html).not.toContain('#event-MS');
     expect(html).toContain('>Open<');
     expect(html).toContain('>Closed<');
   });
 
-  it('Entrants: alphabetical letter groups, one row per person (SP-P7 §3.2)', async () => {
-    const html = await render(PAGE, '/e/spring-open?tab=entrants');
+  it('Players: public directory, one row per person (SP-P7 §3.2)', async () => {
+    const roster = {
+      published: true,
+      players: PAGE.entrants.map((row) => ({
+        playerKey: row.personKey,
+        personKey: row.personKey,
+        name: row.name,
+        club: row.club,
+        eventCodes: row.eventCodes,
+      })),
+      referencedPlayerCount: PAGE.entrants.length,
+      missingNameCount: 0,
+    };
+    const html = await render({ ...PAGE, players: roster }, '/e/spring-open?tab=players');
 
     // One row per person now — Ada's two events ride HER row as codes.
     expect(html.match(/Ada Lovelace/g)).toHaveLength(1);
-    expect(html).toContain('MS · WD');
+    expect(html).toContain('>MS<');
     // Letter headers, alphabetical: Ada under A, Grace under G, Katherine under K.
     expect(html).toMatch(/>A<[\s\S]*Ada Lovelace[\s\S]*>G<[\s\S]*Grace Hopper[\s\S]*>K<[\s\S]*Katherine Johnson/);
     // Names link to player pages, keyed by person — never by name.
@@ -242,9 +296,7 @@ describe('the panels', () => {
     expect(html).toContain('Analytical BC');
     expect(html).toContain('data-name="ada lovelace"');
     expect(html).toContain('data-club="analytical bc"');
-    expect(html).toContain('id="entrants-filter-root"');
-    expect(html).toContain('src="/e/assets/entrants-filter.js"');
-    expect(html).toContain('3 entrants');
+    expect(html).toContain('3 players');
   });
 });
 

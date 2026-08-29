@@ -2,11 +2,13 @@
 
 This page records what the 30-tournament BWF historical dataset proves about
 ShuttleWorks, what it does not prove, and the implementation order for closing
-the remaining gaps. The audited import contains 4,235 verified match records:
-3,917 completed main-draw rows for T001–T026, Japan 155/155, China 153/155, and
-five finals each for Taipei and Korea. It does **not** invent any of the 367
-unavailable structural rows. Only the Japan and China daily pages contain
-court allocations and local estimated times.
+the remaining gaps. The audited source layer contains 4,235 verified match
+records: 3,917 completed main-draw rows for T001–T026, Japan 155/155, China
+153/155, and five finals each for Taipei and Korea. The local tech-demo layer
+adds 367 deterministic, internally tagged fictional rows for 4,602 complete
+match records. This makes every public draw navigable without converting those
+rows into historical claims. Only the Japan and China daily pages contain
+source-backed court allocations and local estimated times.
 
 ## Current capability
 
@@ -15,20 +17,19 @@ court allocations and local estimated times.
 | MS, WS, MD, WD, XD | Ready | Five independent bracket events are supported. |
 | Doubles identities and rest | Ready | Team members expand to individual scheduler players, so cross-event conflicts are detected. |
 | 8-entry and 32-entry elimination | Ready | Single elimination supports those structural sizes; round robin is also available independently. |
-| 48-entry advertised field | Partial | Historical events now retain and display 48 independently from observed participants; live generation still needs a tested 64-slot tree and bye policy. |
+| 48-entry advertised field | Demo-ready, operations partial | The historical demo renders all 47 matches and 16 first-round byes; live generation still needs a tested 64-slot tree and operator bye policy. |
 | Walkover and retirement | Ready for import | Results retain walkover and retirement reason/partial-score data. |
-| Historical archive | Partial | `completed_matches_only` and `finals_only`, advertised size, round labels, per-match date/court/source, and embedded results persist and render. Mutation is not yet rejected at the command boundary. |
-| World Tour Finals | Missing | Round robin and elimination exist separately; group-to-knockout advancement does not. |
+| Historical archive | Demo-ready, provenance partial | Supplied and generated rows remain distinguishable internally; advertised size, round labels, per-match metadata, and results persist and render. Mutation is not yet rejected at the command boundary. |
+| World Tour Finals | Presentation-ready, operations missing | The demo renders 12 group matches plus semifinals/final; real standings-driven group-to-knockout qualification does not yet exist. |
 | Multi-day venue schedule | Missing | Bracket scheduling is one abstract slot horizon with no date range or IANA venue timezone. |
 | Unified live courts | Partial | Meet and Bracket use the same solver concepts but can reserve physical courts independently. |
 
-Each historical page states its own imported, expected, and missing coverage.
-The 8/32/48-entry values are advertised provenance, not evidence that omitted
-walkovers or unavailable feeder topology were reconstructed.
-`availability: complete` means every expected match row is present; imports
-still use `completed_matches_only` because none of these sources provides
-stable feeder-slot identities. `full_draw` remains reserved for structural
-imports whose advancement graph is actually known.
+The public tech demo presents the completed tournament experience rather than
+source-audit warnings. Its run manifest remains the audit boundary: it records
+source-backed and generated counts separately. Imports still use
+`completed_matches_only` because concrete historical rows and 48-entry byes do
+not fit the live `full_draw` import contract. `full_draw` remains reserved for
+structural imports produced by a bracket generator.
 
 Player IDs in this archive are deterministic, normalized source-name keys.
 The checked alias map reconciles verified spelling variants in the supplied

@@ -93,6 +93,13 @@ opted-out entry never prints, but it still occupies its place, so a
 reserve list's positions stay truthful rather than closing up over the
 rows it may not show.
 
+The public Players directory is the shared seam between Entries and
+Bracket. Confirmed `entry_players` keep their stable profile identity,
+club, and event membership; named participants that exist only in a
+published imported draw are merged as non-profile rows. This keeps one
+complete tournament directory without claiming that source-local names
+are entrant accounts.
+
 ## Signals (Q9)
 
 The control plane reads Entries through `workspaces/entries_facts.py`, which

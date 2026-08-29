@@ -20,6 +20,7 @@ import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
+import { eventCodeLabel } from '../lib/draws.types';
 import { formatDateLong } from '../lib/format';
 import type { PlayerPageDTO } from '../lib/player.types';
 import type { Route } from './+types/player';
@@ -116,7 +117,7 @@ export default function Player({ loaderData }: Route.ComponentProps) {
               {player.events
                 .map(
                   (event) =>
-                    `${event.code} · ${event.discipline}` +
+                    `${eventCodeLabel(event.code)} · ${event.discipline}` +
                     // §3.3: "CXD with Prashant Vurikiti". Absent for singles
                     // and while the partner is not publicly visible.
                     (event.partnerName ? ` with ${event.partnerName}` : ''),

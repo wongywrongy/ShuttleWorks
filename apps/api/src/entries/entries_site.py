@@ -35,7 +35,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from entries.entries import roster_id
-from entries.entries_public import _not_found, _resolve
+from entries.entries_public import _entrants, _not_found, _resolve
 from db.models import (
     Entry,
     EntryEvent,
@@ -226,15 +226,18 @@ class TeamDTO(BaseModel):
 
 
 class DrawPlayerDTO(BaseModel):
-    """One real roster person referenced by at least one published draw.
+    """One person in the public tournament directory.
 
-    ``playerKey`` is only a stable row identity. It is deliberately not an
-    Entries person key and the public tier never turns it into a profile URL.
-    Historical source-name identities cannot safely claim that relationship.
+    ``playerKey`` is the stable row identity. ``personKey`` exists only when
+    the person came through Entries and therefore has a real public player
+    page; imported/demo roster people remain useful directory rows without
+    pretending to own an account-backed identity.
     """
 
     playerKey: str
+    personKey: Optional[str] = None
     name: str
+    club: Optional[str] = None
     eventCodes: List[str]
 
 
@@ -708,6 +711,25 @@ def _event_topology_scope(event) -> str:
     return "full_draw" if _event_record_scope(event) == "full_draw" else "none"
 
 
+def _event_public_code(event) -> str:
+    """The short public event code, never an importer namespace.
+
+    Bracket event ids are operator-owned and may legitimately be ``MS1`` or
+    ``T027-MS``.  The discipline is the public category when it is a compact
+    code; otherwise the id remains the only non-invented label available.
+    """
+    canonical = {"MS", "WS", "MD", "WD", "XD"}
+    discipline = event.discipline
+    if discipline in canonical:
+        return discipline
+    suffix = event.id.rsplit("-", 1)[-1]
+    if suffix in canonical:
+        return suffix
+    if isinstance(discipline, str) and discipline.strip():
+        return discipline.strip()
+    return "Event"
+
+
 def _event_match_coverage(event) -> MatchCoverageDTO:
     config = event.config or {}
     observed = sum(
@@ -780,7 +802,7 @@ def draws_index(
         [
             DrawCardDTO(
                 drawKey=event.id,
-                eventCode=event.id,
+                eventCode=_event_public_code(event),
                 discipline=event.discipline,
                 kind=event.format,
                 size=event.bracket_size or event.participant_count,
@@ -925,7 +947,7 @@ def draw_detail(
 
     return DrawDetailDTO(
         drawKey=event.id,
-        eventCode=event.id,
+        eventCode=_event_public_code(event),
         discipline=event.discipline,
         kind=event.format,
         size=event.bracket_size or event.participant_count,
@@ -944,38 +966,55 @@ def players_index(
     slug: str = Path(..., max_length=100),
     repo: LocalRepository = Depends(get_repository),
 ) -> PlayersDTO:
-    """Every named roster person referenced by the published draws.
+    """The one public player directory for entries and published draws.
 
-    This is a draw-roster index, not an Entries directory. It therefore uses
-    ``draws_published`` as its only publication gate, reads names solely from
-    ``tournaments.data.bracketPlayers``, and never manufactures a profile URL
-    from a source-local roster key.
+    Confirmed entrants retain their existing profile identity.  Once draws
+    are published, roster-only people are merged into that same directory so
+    imported/demo tournaments do not need a second, competing player list.
     """
     page, tournament = _page(repo, slug)
     response.headers["Cache-Control"] = _CACHE
-    if not page.draws_published:
+    if not page.draws_published and not page.entrants_published:
         return PlayersDTO(published=False)
 
-    payload = _bracket(repo, tournament.id)
-    if payload is None:
-        return PlayersDTO(published=True)
+    entrant_rows = list(_entrants(repo, tournament.id)) if page.entrants_published else []
+    entrants_by_roster_id = {
+        roster_id(person_id): {
+            "personKey": str(person_id),
+            "name": name,
+            "club": club,
+            "eventCodes": set(codes),
+        }
+        for person_id, name, club, codes in entrant_rows
+    }
+
+    events_by_player: Dict[str, set[str]] = {}
+    payload = _bracket(repo, tournament.id) if page.draws_published else None
+    if payload is not None:
+        for event in payload.events:
+            code = _event_public_code(event)
+            for participant in event.participants:
+                player_ids = participant.members or [participant.id]
+                for player_id in player_ids:
+                    events_by_player.setdefault(player_id, set()).add(code)
+
+    # A confirmed entrant can exist before a draw, or can be omitted from a
+    # draw after withdrawal.  It remains part of the published directory.
+    for player_id, entrant in entrants_by_roster_id.items():
+        events_by_player.setdefault(player_id, set()).update(entrant["eventCodes"])
 
     roster_names = _bracket_roster_names(tournament)
-    events_by_player: Dict[str, set[str]] = {}
-    for event in payload.events:
-        for participant in event.participants:
-            player_ids = participant.members or [participant.id]
-            for player_id in player_ids:
-                events_by_player.setdefault(player_id, set()).add(event.id)
-
     players = [
         DrawPlayerDTO(
             playerKey=player_id,
-            name=roster_names[player_id],
+            personKey=(entrants_by_roster_id.get(player_id) or {}).get("personKey"),
+            name=(entrants_by_roster_id.get(player_id) or {}).get("name")
+            or roster_names[player_id],
+            club=(entrants_by_roster_id.get(player_id) or {}).get("club"),
             eventCodes=sorted(event_codes),
         )
         for player_id, event_codes in events_by_player.items()
-        if player_id in roster_names
+        if player_id in roster_names or player_id in entrants_by_roster_id
     ]
     players.sort(key=lambda row: (_alphabetic_name_key(row.name), row.name, row.playerKey))
     return PlayersDTO(
@@ -1013,7 +1052,7 @@ def seeds(
             continue
         events_out.append(
             SeedsEventDTO(
-                eventCode=event.id,
+                eventCode=_event_public_code(event),
                 discipline=event.discipline,
                 seeds=[
                     SeedLineDTO(
@@ -1065,7 +1104,7 @@ def winners(
         winner_key, runner_key, semi_keys = entry
         events_out.append(
             WinnersEventDTO(
-                eventCode=event.id,
+                eventCode=_event_public_code(event),
                 discipline=event.discipline,
                 decided=winner_key is not None,
                 winner=_honor(teams.get(winner_key)) if winner_key else None,
@@ -1333,7 +1372,7 @@ def player_page(
                         assignment = assignments.get(unit_id)
                         matches.append(
                             PlayerMatchDTO(
-                                eventCode=event.id,
+                                eventCode=_event_public_code(event),
                                 roundLabel=_round_label(total, r_index, knockout),
                                 sides=sides,
                                 score=_score_rows(result.score) if result else None,

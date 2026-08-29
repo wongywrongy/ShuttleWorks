@@ -179,6 +179,8 @@ Two prefixes, both registered without the global auth dependency:
 | Method · Path | Purpose |
 | --- | --- |
 | `GET /e/api/page/{slug}` | public: the entry page projection (page config, open events, fee schedule, the entrant list). Strict — entrant **names and event ids only**, opt-outs excluded, no contact data selected in the SQL |
+| `GET /e/api/page/{slug}/players` | public: one alphabetical tournament directory merging confirmed entrants with named draw-roster people. Only a real Entries row carries a `personKey`; imported roster identities never acquire a fabricated profile URL |
+| `GET /e/api/page/{slug}/draws` · `GET …/draws/{key}` | public: published draw cards and full round/match trees. Event labels are public discipline codes rather than importer-qualified ids; results remain independently gated |
 | `GET /e/api/config` | public: the entrant app's runtime config — the Turnstile **site** key and the auth mode. Cannot require a session: it is read by the page where a session is obtained |
 | `GET /e/api/pages` | public: the **season listing** — `{tournaments, counts, now}`, one read for the whole `/e/` calendar (SP-P8). Each row carries `slug`, `name`, `organizer`, `venueName`, `date`, `eventCount`, `status`, `closesInDays`, `drawsPublished`, `winnersPublished`; `counts` is `{takingEntries, completed}`; `now` is the live pick or `null`. `Cache-Control: public, max-age=30`. Still filtered on `is_open` in SQL, and still the list `/e/sitemap.xml` crawls |
 | `POST /e/api/quote/{slug}` | **session-gated** (R8-C): the R14 running fee total. Shares one `compute_fee_total` with submit, so a quote cannot diverge from the charge |

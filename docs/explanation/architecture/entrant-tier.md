@@ -1,7 +1,7 @@
 # Entrant tier (the public site)
 
 The public tournament site — discovery, tournament pages, the entry flow,
-and (since SP-P7) entrant surfaces: My Entries, entrant lists, player
+and (since SP-P7) entrant surfaces: My Entries, player directories, player
 pages, draws, seeds, and winners. It is a **separate frontend workspace**
 (`apps/entrant/`), not part of the operator SPA.
 
@@ -58,8 +58,8 @@ independent, reversible, flipped from the operator console's Sharing tab
 
 | Flag | Gates |
 |---|---|
-| `entrants_published` | the entrant list, and player-page discoverability |
-| `draws_published` | draws and seeded entries |
+| `entrants_published` | confirmed people in the Players directory, and player-page discoverability |
+| `draws_published` | draw-roster people in the Players directory, draws, and seeded entries |
 | `results_published` | result data everywhere: scores, standings, winners, win–loss records, result badges — and **resolved advancement** in draw trees |
 
 Rules the tests pin:
@@ -73,9 +73,11 @@ Rules the tests pin:
 - **My Entries is not gated** — an entrant always sees their own
   submissions. The one exception is per-event result badges, which follow
   `results_published`.
-- The public entrant list shows **confirmed entries only** (SP-P7 §3.2);
-  pending and waitlisted submissions are visible to their own account
-  alone, via `/e/api/me/entries`.
+- The public **Players** directory is one merged projection: confirmed
+  entrants retain their profile links, while published draw-roster people
+  without an Entries identity appear as plain names. Pending and waitlisted
+  submissions remain visible to their own account alone via
+  `/e/api/me/entries`.
 - With draws published but results not, a draw renders **structure and
   schedule without results** — including advancement: the engine
   overwrites feeder slots when a result resolves them, so the projection
@@ -92,6 +94,7 @@ was recorded.
 | Route | Serves | Gate |
 |---|---|---|
 | `GET /e/api/page/{slug}` | the whole tournament page: tournament, org, venue, page content + `regulations{Version,UpdatedAt}`, policy, `publication`, events, entrants (`personKey`, name, club, eventCodes), viewer | entrants list by `entrants_published` |
+| `GET /e/api/page/{slug}/players` | the unified alphabetical player directory: confirmed entrants plus named published draw-roster people; only Entries-backed rows carry `personKey` profile identity | `entrants_published` or `draws_published` |
 | `GET /e/api/page/{slug}/draws` | draw cards: key, code, discipline, kind, size, consolation | `draws_published` (explicit `published: false` envelope) |
 | `GET /e/api/page/{slug}/draws/{key}` | full draw: teams (names, club, seed), segments → rounds (labels) → nodes (sides, result, time, court), RR standings + W/L history pills | `draws_published` (404); results by `results_published` |
 | `GET /e/api/page/{slug}/seeds` | per-event ordered seed lists | `draws_published` |

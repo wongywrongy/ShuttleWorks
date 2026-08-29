@@ -6,6 +6,7 @@
  * capability). "N entered" only — G2 (caps) was declined, so no "of M".
  */
 import type { EntryEventDTO } from '../lib/entryPage.types';
+import { eventCodeLabel } from '../lib/draws.types';
 
 function genderLabel(constraint: string | null): string {
   if (constraint === null) return 'Open to all';
@@ -27,8 +28,10 @@ export function EventRow({
     <li className="flex flex-wrap items-center gap-x-4 gap-y-1 p-4">
       <div className="min-w-0 flex-1 basis-48">
         <p className="font-medium text-foreground">
-          {event.discipline}{' '}
-          <span className="font-normal text-muted-foreground">· {event.code}</span>
+          {event.discipline || "Tournament event"}{' '}
+          <span className="rounded-full border border-rule-soft bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+            {eventCodeLabel(event.code)}
+          </span>
         </p>
         <p className="text-sm text-muted-foreground">
           {genderLabel(event.genderConstraint)}

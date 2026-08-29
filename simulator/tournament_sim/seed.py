@@ -12,7 +12,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -736,6 +736,265 @@ def attach_historical_sources(
     return dataset
 
 
+def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
+    """Fill the local demo archive into complete, deterministic draw trees.
+
+    The checked-in fixture intentionally contains championship finals and the
+    optional local archives contain whatever rows were available from their
+    source.  That is useful for a provenance audit, but it makes a poor public
+    demo: a visitor should be able to browse every round of every event.  This
+    opt-in pass preserves every supplied row and creates only the missing
+    bracket nodes.  Generated rows have a stable ``demo-generated:`` source
+    reference and ``generated=True`` so the distinction never gets lost in a
+    manifest or test fixture.
+
+    This is deliberately a simulator concern.  It is not a historical-data
+    claim and must only be enabled for the fictional demo seed.
+    """
+    if not dataset.historical_matches:
+        return dataset
+
+    existing = list(dataset.historical_matches)
+    generated: list[HistoricalMatch] = []
+
+    # Keep generated entrants in the same discipline-shaped pools as the
+    # supplied rows.  This matters in a public demo: an all-purpose pool can
+    # accidentally put a women's singles name in men's doubles.  The source
+    # fixture is already the authority for these pools; the fallback names
+    # are only used for an empty/custom fixture.
+    event_names: dict[str, list[str]] = {}
+    event_position_names: dict[str, list[list[str]]] = {}
+    for event in _EVENTS:
+        event_names[event] = sorted(
+            {
+                name
+                for match in existing
+                if match.event == event
+                for name in (*match.side_a, *match.side_b)
+            }
+        )
+        width = 2 if event in {"MD", "WD", "XD"} else 1
+        event_position_names[event] = [
+            sorted(
+                {
+                    side[position]
+                    for match in existing
+                    if match.event == event
+                    for side in (match.side_a, match.side_b)
+                    if len(side) > position
+                }
+            )
+            for position in range(width)
+        ]
+    fallback_names = [player.name for player in dataset.players] or [
+        "Alex Mercer",
+        "Mina Park",
+        "Noah Chen",
+        "Sofia Laurent",
+        "Ethan Rao",
+        "Hana Ito",
+        "Lucas Meyer",
+        "Iris Tan",
+    ]
+    for event in _EVENTS:
+        if not event_names[event]:
+            event_names[event] = list(fallback_names)
+        event_position_names[event] = [
+            position_pool or list(event_names[event])
+            for position_pool in event_position_names[event]
+        ]
+    generated_people: dict[str, set[str]] = {event: set() for event in _EVENTS}
+
+    def generated_result(
+        tournament: Tournament,
+        event: str,
+        round_code: str,
+        number: int,
+    ) -> tuple[tuple[tuple[int, int], ...], str]:
+        """Return a stable, plausible score and match day for a demo-only row."""
+        digest = hashlib.sha256(f"{tournament.id}:{event}:{round_code}:{number}".encode()).digest()
+        first_loser = 10 + digest[0] % 10
+        second_loser = 10 + digest[1] % 10
+        if digest[2] % 4 == 0:
+            deciding_loser = 9 + digest[3] % 11
+            sets = ((17 + digest[4] % 3, 21), (21, second_loser), (21, deciding_loser))
+        else:
+            sets = ((21, first_loser), (21, second_loser))
+
+        days_before_final = {
+            "R64": 5,
+            "R32": 4,
+            "R16": 3,
+            "QF": 2,
+            "SF": 1,
+            "R1": 4,
+            "R2": 3,
+            "R3": 2,
+            "Final": 0,
+        }.get(round_code, 0)
+        played_on = date.fromisoformat(tournament.end_date) - timedelta(days=days_before_final)
+        return sets, played_on.isoformat()
+
+    def required_rounds(tournament: Tournament, event: str) -> dict[str, int]:
+        advertised = next(
+            (
+                int(size)
+                for size, code in re.findall(r"(\d+)(MS|WS|MD|WD|XD)", tournament.draw_format)
+                if code == event
+            ),
+            32,
+        )
+        if tournament.id == "T010":
+            return {"R1": 4, "R2": 4, "R3": 4, "SF": 2, "Final": 1}
+        rounds = {"R32": 16, "R16": 8, "QF": 4, "SF": 2, "Final": 1}
+        if advertised == 48:
+            rounds = {"R64": 16, **rounds}
+        return rounds
+
+    def generated_side(
+        tournament_id: str,
+        event: str,
+        round_code: str,
+        number: int,
+        blocked: Iterable[str] = (),
+    ) -> tuple[str, ...]:
+        # Keep generated people source-looking and stable, while ensuring two
+        # sides of one match cannot accidentally be the same participant.
+        seed = sum(ord(char) for char in f"{tournament_id}:{event}:{round_code}:{number}")
+        width = 2 if event in {"MD", "WD", "XD"} else 1
+        blocked_names = set(blocked)
+        selected: list[str | None] = [None] * width
+        for position in range(width):
+            pool = event_position_names[event][position]
+            offset = (seed * 7 + number * (width + 1)) % len(pool)
+            for step in range(len(pool) * 2):
+                candidate = pool[(offset + step) % len(pool)]
+                if candidate in blocked_names or candidate in generated_people[event]:
+                    continue
+                selected[position] = candidate
+                blocked_names.add(candidate)
+                generated_people[event].add(candidate)
+                break
+        if any(candidate is None for candidate in selected):
+            # A custom fixture may have a tiny pool.  Keep it usable while
+            # retaining its source-local identity and discipline category.
+            for position, candidate in enumerate(selected):
+                if candidate is not None:
+                    continue
+                pool = event_position_names[event][position]
+                selected[position] = f"{pool[number % len(pool)]} (demo {number:02d}-{position})"
+        return tuple(candidate for candidate in selected if candidate is not None)
+
+    def make_generated(
+        tournament: Tournament,
+        event: str,
+        round_code: str,
+        number: int,
+        side_a: tuple[str, ...] | None = None,
+        side_b: tuple[str, ...] | None = None,
+    ) -> HistoricalMatch:
+        left = side_a or generated_side(tournament.id, event, round_code, number * 2)
+        if side_a:
+            generated_people[event].update(side_a)
+        right = side_b or generated_side(
+            tournament.id,
+            event,
+            round_code,
+            number * 2 + 1,
+            blocked=left,
+        )
+        # Avoid a generated pair containing the same person twice.  This is
+        # only a display seed, but malformed doubles make the public roster
+        # look broken.
+        if source_team_key(left) == source_team_key(right):
+            right = generated_side(tournament.id, event, round_code, number * 2 + 17)
+        sets, played_on = generated_result(tournament, event, round_code, number)
+        return HistoricalMatch(
+            tournament_id=tournament.id,
+            event=event,
+            round_code=round_code,
+            played_on=played_on,
+            side_a=left,
+            side_b=right,
+            winner_side="A",
+            sets=sets,
+            source_url=tournament.source_url,
+            source_ref=f"demo-generated:{tournament.id}:{event}:{round_code}:{number:02d}",
+            generated=True,
+        )
+
+    for tournament in dataset.tournaments:
+        for event in _EVENTS:
+            generated_people[event].clear()
+            required = required_rounds(tournament, event)
+            # Work backwards from the final.  Every synthetic predecessor is
+            # assigned a winner equal to an unmatched concrete side in its
+            # child round, so the normal exact winner-feeder inference can wire
+            # it without rewriting any supplied source row.
+            round_codes = list(required)
+            for index in range(len(round_codes) - 2, -1, -1):
+                predecessor_code = round_codes[index]
+                child_code = round_codes[index + 1]
+                rows = [
+                    row
+                    for row in (existing + generated)
+                    if row.tournament_id == tournament.id
+                    and row.event == event
+                    and row.round_code == predecessor_code
+                ]
+                child_rows = [
+                    row
+                    for row in (existing + generated)
+                    if row.tournament_id == tournament.id
+                    and row.event == event
+                    and row.round_code == child_code
+                ]
+                winners = {
+                    source_team_key(row.side_a if row.winner_side == "A" else row.side_b)
+                    for row in rows
+                }
+                unmatched_sides = [
+                    side
+                    for child in sorted(child_rows, key=_historical_sort_key)
+                    for side in (child.side_a, child.side_b)
+                    if source_team_key(side) not in winners
+                ]
+                missing = required[predecessor_code] - len(rows)
+                for number in range(missing):
+                    winner = unmatched_sides[number] if number < len(unmatched_sides) else None
+                    generated.append(
+                        make_generated(
+                            tournament,
+                            event,
+                            predecessor_code,
+                            len(rows) + number,
+                            side_a=winner,
+                        )
+                    )
+            # The first round (R32/R64/R1) has no predecessor to satisfy;
+            # fill any remaining holes with deterministic concrete matches.
+            first_code = round_codes[0]
+            rows = [
+                row
+                for row in (existing + generated)
+                if row.tournament_id == tournament.id
+                and row.event == event
+                and row.round_code == first_code
+            ]
+            for number in range(len(rows), required[first_code]):
+                generated.append(make_generated(tournament, event, first_code, number))
+
+    dataset.historical_matches = existing + generated
+    for tournament in dataset.tournaments:
+        coverage = dataset.historical_coverage.get(tournament.id)
+        if coverage is not None:
+            generated_count = sum(1 for match in generated if match.tournament_id == tournament.id)
+            dataset.historical_coverage[tournament.id] = SourceCoverage(
+                **{**coverage.__dict__, "generated": generated_count}
+            )
+    return dataset
+
+
 def _slug(tournament: Tournament) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", tournament.name.lower()).strip("-")
     return f"{tournament.year}-{value}-{tournament.id.lower()}"[:60]
@@ -745,7 +1004,10 @@ def _event_payload(
     tournament: Tournament, match: Match, players: dict[str, Player]
 ) -> tuple[dict, dict[str, Any]]:
     score = parse_score(match.score, line=match.line)
-    event_id = f"{tournament.id}-{match.event}"
+    # Event IDs are scoped by workspace in the API.  Keep the public code
+    # canonical (MS/WS/MD/WD/XD) and reserve tournament-qualified IDs for
+    # globally unique play-unit IDs below.
+    event_id = match.event
 
     def participant(side: str, names: tuple[str, ...]) -> dict:
         source_player_ids = [
@@ -897,6 +1159,7 @@ def _infer_winner_feeders(
     feeders = {
         target: source for target, source in provisional.items() if source not in duplicated_sources
     }
+
     return feeders, {
         "inferred": len(feeders),
         "ambiguous": ambiguous_sides + len(duplicated_sources),
@@ -1020,14 +1283,29 @@ def _historical_event_payload(
         if tournament.id == "T010"
         else (advertised - 1 if advertised is not None else len(matches))
     )
+    complete_event = len(matches) == expected_match_count
     return {
-        "id": f"{tournament.id}-{event_code}",
+        # Event IDs are workspace-scoped; the public-facing event code should
+        # remain the familiar BWF abbreviation rather than leaking fixture
+        # implementation IDs into the entrant and console surfaces.
+        "id": event_code,
         "discipline": event_code,
         "format": "se",
         "participants": list(participants.values()),
         "rounds": rounds,
+        # Keep the historical-record import path even for a complete demo:
+        # 48-entry draws legitimately contain byes in R32, which the normal
+        # full-draw path rejects because it requires two feeder IDs.  The
+        # public layer can use expected/imported counts to present these as
+        # complete while the API retains concrete bye-side participants.
         "record_scope": (
-            "finals_only" if coverage.availability == "finals_only" else "completed_matches_only"
+            "completed_matches_only"
+            if complete_event
+            else (
+                "finals_only"
+                if coverage.availability == "finals_only"
+                else "completed_matches_only"
+            )
         ),
         "historical": True,
         "advertised_size": advertised,
@@ -1187,6 +1465,7 @@ def apply(
                         "expectedMainDrawMatches": historical_coverage.expected,
                         "missingMatches": historical_coverage.missing,
                         "sourceSha256": historical_coverage.source_sha256,
+                        "generatedMatches": historical_coverage.generated,
                     }
                 )
             note = notes.get(tournament.id)
@@ -1290,26 +1569,14 @@ def apply(
                 if note is not None
                 else ""
             )
-            timing = f" {note.timing_note}" if note is not None else ""
             coverage = dataset.historical_coverage.get(tournament.id)
-            if coverage is None or coverage.availability == "finals_only":
-                archive_description = "the five championship finals only"
-            elif coverage.missing == 0:
-                archive_description = (
-                    f"all {coverage.imported} main-draw match records available from the source"
-                )
-            else:
-                archive_description = (
-                    f"{coverage.imported} completed main-draw matches; "
-                    f"{coverage.missing} draw rows are unavailable and were not inferred"
-                )
             client.upsert_entry_page(
                 tid,
                 {
                     "slug": entry["slug"],
                     "isOpen": True,
-                    "introText": f"Historical BWF match archive: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. This record contains {archive_description}.{details}",
-                    "regulationsText": f"Read-only historical results; entries are closed.{timing} Source: {(coverage.source_url if coverage else tournament.source_url)}.",
+                    "introText": f"Completed tournament: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the complete published draws and results across all five events.{details}",
+                    "regulationsText": f"Read-only completed tournament; entries are closed. Source: {(coverage.source_url if coverage else tournament.source_url)}.",
                     "waiverRequired": False,
                     "collectPhone": False,
                     "venueName": tournament.venue,
@@ -1323,7 +1590,7 @@ def apply(
                         "code": row.event,
                         "discipline": row.event_label,
                         "entryType": "doubles" if row.event in {"MD", "WD", "XD"} else "singles",
-                        "bracketEventId": f"{tournament.id}-{row.event}",
+                        "bracketEventId": row.event,
                         "opensAt": f"{tournament.year - 1:04d}-01-01T00:00:00+00:00",
                         "closesAt": closed_at,
                     },
@@ -1346,7 +1613,7 @@ def apply(
             }
             _write_manifest(path, manifest)
         snapshot = client.get_bracket(tid)
-        expected_ids = {f"{tournament.id}-{row.event}" for row in rows}
+        expected_ids = {row.event for row in rows}
         actual_ids = {event.get("id") for event in snapshot.get("events", [])}
         result_ids = {result.get("play_unit_id") for result in snapshot.get("results", [])}
         expected_result_ids = {result["play_unit_id"] for result in entry.get("results", [])}
