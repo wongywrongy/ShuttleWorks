@@ -33,9 +33,11 @@ from scheduler_core.domain.tournament import (
     PlayUnitKind,
     Result,
     TournamentState,
+    TournamentAssignment,
     WinnerSide,
 )
 
+from ..advancement import reconcile_recorded_results
 from ..draw import BracketSlot, Draw
 from ..state import BracketSession, EventMeta, register_draw
 
@@ -128,6 +130,39 @@ def parse_json_payload(body) -> BracketSession:
                 else ("started" if imported_results else "draft")
             ),
             config=dict(draw.event.parameters),
+        )
+
+    # Result rows are facts; successor sides are their projection. Replaying
+    # the facts here makes a completed imported feeder identical to one
+    # completed through the interactive command path.
+    reconcile_recorded_results(state, draws)
+
+    # Import the plan only after every event has registered its play units so
+    # foreign/stale ids fail before any state reaches persistence. Future
+    # rounds are allowed: a pre-built plan can reserve their court/time even
+    # while feeder sides are unresolved.
+    for assignment in getattr(body, "assignments", None) or []:
+        if assignment.play_unit_id not in state.play_units:
+            raise ValueError(
+                f"assignment references unknown play unit {assignment.play_unit_id!r}"
+            )
+        if assignment.play_unit_id in state.assignments:
+            raise ValueError(
+                f"duplicate assignment for play unit {assignment.play_unit_id!r}"
+            )
+        if not 1 <= assignment.court_id <= body.courts:
+            raise ValueError(
+                f"assignment court {assignment.court_id} is outside 1..{body.courts}"
+            )
+        if assignment.slot_id + assignment.duration_slots > body.total_slots:
+            raise ValueError(
+                f"assignment for {assignment.play_unit_id!r} exceeds the plan horizon"
+            )
+        state.assignments[assignment.play_unit_id] = TournamentAssignment(
+            play_unit_id=assignment.play_unit_id,
+            slot_id=assignment.slot_id,
+            court_id=assignment.court_id,
+            duration_slots=assignment.duration_slots,
         )
 
     config = ScheduleConfig(

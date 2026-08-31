@@ -17,17 +17,23 @@
  * because the box does not exist.
  */
 import { eventCodeLabel } from '../lib/draws.types';
+import type { PersonReferenceDTO } from '../lib/person.types';
+import { personRefModel } from '../../public/assets/person-ref.js';
+import { PersonRef } from './PersonRef';
 
 interface DirectoryRow {
-  playerKey?: string;
-  personKey?: string | null;
-  name: string;
+  playerKey: string;
+  person: PersonReferenceDTO;
   club?: string | null;
   eventCodes: string[];
 }
 
-function letterOf(name: string): string {
-  const first = (name[0] ?? '').toUpperCase();
+function searchableName(row: DirectoryRow): string {
+  return personRefModel({ slug: '', identity: row.person.identity, state: row.person.resolution, label: row.person.label }).text;
+}
+
+function letterOf(row: DirectoryRow): string {
+  const first = searchableName(row).charAt(0).toLocaleUpperCase();
   return first >= 'A' && first <= 'Z' ? first : '#';
 }
 
@@ -42,10 +48,10 @@ export function EntrantsList({
   noun?: 'entrant' | 'player';
   linkEventsToDraws?: boolean;
 }) {
-  const sorted = [...entrants].sort((a, b) => a.name.localeCompare(b.name));
+  const sorted = [...entrants].sort((a, b) => searchableName(a).localeCompare(searchableName(b)));
   const groups: { letter: string; rows: DirectoryRow[] }[] = [];
   for (const row of sorted) {
-    const letter = letterOf(row.name);
+    const letter = letterOf(row);
     const last = groups[groups.length - 1];
     if (last && last.letter === letter) last.rows.push(row);
     else groups.push({ letter, rows: [row] });
@@ -60,58 +66,43 @@ export function EntrantsList({
         <div id="entrants-filter-root" className="w-full sm:w-72" />
       </div>
 
-      <div className="gap-6 sm:columns-2 lg:columns-3">
+      <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((group) => (
           <section
             key={group.letter}
             data-letter-group
-            className="mb-6 break-inside-avoid"
+            className="min-w-0"
           >
             <h3 className="border-b border-rule-soft pb-1 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
               {group.letter}
             </h3>
-            <ul className="mt-2 grid gap-2">
+            <ul className="mt-2 grid gap-2.5">
               {group.rows.map((row) => (
                 <li
-                  key={row.playerKey ?? row.personKey ?? row.name}
+                  key={row.playerKey}
                   data-entrant
-                  data-name={row.name.toLowerCase()}
+                  data-name={searchableName(row).toLocaleLowerCase()}
                   data-club={(row.club ?? '').toLowerCase()}
-                  className="text-sm"
+                  className="rounded-md border border-transparent px-2 py-1 text-sm transition-colors hover:border-rule-soft hover:bg-surface-sunken"
                 >
-                  {row.personKey ? (
-                    <a
-                      href={`/e/${encodeURIComponent(slug)}/players/${encodeURIComponent(row.personKey)}`}
-                      className="font-medium text-foreground underline-offset-4 hover:underline"
-                    >
-                      {row.name}
-                    </a>
-                  ) : (
-                    <span className="font-medium text-foreground">{row.name}</span>
-                  )}
+                  <PersonRef
+                    slug={slug}
+                    identity={row.person.identity}
+                    state={row.person.resolution}
+                    label={row.person.label}
+                    className="font-medium"
+                  />
                   {row.eventCodes.length > 0 ? (
                     <span
-                      className="ml-2 inline-flex flex-wrap gap-1"
+                      className="ml-2 text-xs text-muted-foreground"
                       aria-label={row.eventCodes.map(eventCodeLabel).join(' · ')}
                     >
-                      {row.eventCodes.map((code) => (
-                        linkEventsToDraws ? (
-                          <a
-                            key={code}
-                            href={`/e/${encodeURIComponent(slug)}?tab=draws#draw-${encodeURIComponent(eventCodeLabel(code))}`}
-                            className="rounded-full border border-rule-soft bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground"
-                          >
-                            {eventCodeLabel(code)}
-                          </a>
-                        ) : (
-                          <span
-                            key={code}
-                            className="rounded-full border border-rule-soft bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground"
-                          >
-                            {eventCodeLabel(code)}
-                          </span>
-                        )
-                      ))}
+                      {linkEventsToDraws ? row.eventCodes.map((code, index) => (
+                        <span key={code}>
+                          {index > 0 ? ' · ' : ''}
+                          <a href={`/e/${encodeURIComponent(slug)}?tab=draws#draw-${encodeURIComponent(eventCodeLabel(code))}`} className="underline-offset-4 hover:underline">{eventCodeLabel(code)}</a>
+                        </span>
+                      )) : row.eventCodes.map(eventCodeLabel).join(' · ')}
                     </span>
                   ) : null}
                   {row.club ? (

@@ -124,6 +124,20 @@ export function enteredPlayerIds(ev: BracketEventDTO): Set<string> {
   return ids;
 }
 
+/** The other member of a TEAM participant, when the player has one. */
+export function partnerIdForPlayer(
+  ev: Pick<BracketEventDTO, 'participants'>,
+  playerId: string,
+): string | null {
+  const team = (ev.participants ?? []).find(
+    (participant) =>
+      (participant.members?.length ?? 0) > 0 &&
+      (participant.members ?? []).includes(playerId),
+  );
+  if (!team) return null;
+  return (team.members ?? []).find((memberId) => memberId !== playerId) ?? null;
+}
+
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**

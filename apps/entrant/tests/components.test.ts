@@ -18,6 +18,7 @@ import { EmptyState } from '../app/components/EmptyState';
 import { EntrantsList } from '../app/components/EntrantsList';
 import { EventRow } from '../app/components/EventRow';
 import { HeroHeader } from '../app/components/HeroHeader';
+import { MatchCard } from '../app/components/MatchCard';
 import { NowStrip } from '../app/components/NowStrip';
 import { PlayShell } from '../app/components/PlayShell';
 import { SeasonCalendar } from '../app/components/SeasonCalendar';
@@ -208,10 +209,12 @@ describe('NowStrip', () => {
     expect(renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }))).not.toContain('more');
   });
 
-  it('sits on the inverse band tokens, never a literal colour', () => {
+  it('uses a plain live rule with no tinted status band or dot', () => {
     const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
-    expect(html).toContain('bg-surface-inverse');
-    expect(html).toContain('text-surface-inverse-ink');
+    expect(html).toContain('border-s-status-live');
+    expect(html).not.toContain('bg-surface-inverse');
+    expect(html).not.toContain('rounded-full');
+    expect(html).not.toContain('animate-pulse');
     expect(html).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 });
@@ -405,35 +408,35 @@ describe('SeasonControls', () => {
     expect(two).toContain('Filters · 2');
   });
 
-  it('renders ZERO chips and no chip row in the default state (§7 trap 4)', () => {
+  it('renders no active-filter links or row in the default state (§7 trap 4)', () => {
     const html = renderToStaticMarkup(
       h(SeasonControls, { filters: NO_FILTERS, counts: { takingEntries: 0, completed: 0 } }),
     );
-    expect(html).not.toContain('data-chip-row');
+    expect(html).not.toContain('data-active-filter-row');
   });
 
-  it('renders a dismissible chip per active date filter', () => {
+  it('renders a removable text link per active date filter', () => {
     const html = renderToStaticMarkup(
       h(SeasonControls, {
         filters: { ...NO_FILTERS, preset: '7d' },
         counts: { takingEntries: 0, completed: 0 },
       }),
     );
-    expect(html).toContain('data-chip-row');
+    expect(html).toContain('data-active-filter-row');
     expect(html).toContain('Next 7 days');
     expect(html).toContain('Clear all');
-    // Dismissing one chip is a link to the same query minus that param.
+    // Removing one filter is a link to the same query minus that param.
     expect(html).toContain('href="/e/#calendar"');
   });
 
-  it('emits no chip for an UNPARSEABLE bound — it filters nothing', () => {
+  it('emits no link for an UNPARSEABLE bound — it filters nothing', () => {
     const html = renderToStaticMarkup(
       h(SeasonControls, {
         filters: { ...NO_FILTERS, preset: '7d', from: 'abc' },
         counts: { takingEntries: 0, completed: 0 },
       }),
     );
-    expect(html).toContain('data-chip-row');
+    expect(html).toContain('data-active-filter-row');
     expect(html).toContain('Next 7 days');
     expect(html).not.toContain('From abc');
   });
@@ -639,6 +642,17 @@ describe('TimelineCard', () => {
 // ---- EventRow --------------------------------------------------------------
 
 describe('EventRow', () => {
+  it('normalizes legacy underscore event identifiers at the public boundary', () => {
+    const html = renderToStaticMarkup(
+      h(EventRow, {
+        event: event({ code: 'mens_doubles_final', discipline: 'mens_doubles_final' }),
+        entrantsHref: null,
+      }),
+    );
+    expect(html).toContain('Mens Doubles Final');
+    expect(html).not.toContain('mens_doubles_final');
+  });
+
   it('says "N entered" — never "of M", G2 was declined', () => {
     const html = renderToStaticMarkup(h(EventRow, { event: event(), entrantsHref: null }));
     expect(html).toContain('7 entered');
@@ -697,20 +711,20 @@ describe('EventRow', () => {
 describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
   const entrants = [
     {
-      personKey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      name: 'Tom Barker',
+      playerKey: 'entry-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      person: { identity: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Tom Barker' }, resolution: 'resolved' as const, label: null },
       club: 'Riverside BC',
       eventCodes: ['MS', 'XD'],
     },
     {
-      personKey: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-      name: 'Priya Radhakrishnan',
+      playerKey: 'entry-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      person: { identity: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Priya Radhakrishnan' }, resolution: 'resolved' as const, label: null },
       club: null,
       eventCodes: ['XD'],
     },
     {
-      personKey: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-      name: 'Tessa Ngo',
+      playerKey: 'entry-cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      person: { identity: { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Tessa Ngo' }, resolution: 'resolved' as const, label: null },
       club: 'Northside SC',
       eventCodes: ['WS'],
     },
@@ -877,6 +891,53 @@ describe('StickyTotalBar', () => {
     expect(quote).toContain('value="filter"');
     expect(quote).toMatch(/formnovalidate/i);
     expect(html).toContain('Submit entry');
+  });
+});
+
+// ---- MatchCard -------------------------------------------------------------
+
+describe('MatchCard', () => {
+  const match = {
+    eventCode: 'MS',
+    roundLabel: 'Final',
+    sides: [
+      { persons: [], placeholder: 'Player A', winner: false },
+      { persons: [], placeholder: 'Player B', winner: false },
+    ],
+    score: null,
+    decided: false,
+    scheduledTime: null,
+    court: null,
+    status: 'scheduled' as const,
+    durationMinutes: null,
+    updatedAt: null,
+  };
+
+  it('does not render an empty footer for an internal demo source', () => {
+    const html = renderToStaticMarkup(h(MatchCard, {
+      match: {
+        ...match,
+        sourceUrl: 'https://example.test/source',
+        sourceRef: 'demo-generated:T001:MS:F:00',
+      },
+      slug: 'spring-open',
+    }));
+    expect(html).not.toContain('<footer');
+    expect(html).not.toContain('Match source');
+  });
+
+  it('renders a public source without a leading separator when it is the only footer item', () => {
+    const html = renderToStaticMarkup(h(MatchCard, {
+      match: {
+        ...match,
+        sourceUrl: 'https://example.test/source',
+        sourceRef: 'archive-42',
+      },
+      slug: 'spring-open',
+    }));
+    expect(html).toContain('<footer');
+    expect(html).toContain('Match source');
+    expect(html).not.toContain('<span aria-hidden="true"> · </span>');
   });
 });
 

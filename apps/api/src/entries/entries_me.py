@@ -37,6 +37,7 @@ from sqlalchemy import select, tuple_
 
 from entries.entries import roster_id
 from entries.entries_public import _moment_iso
+from entries.entries_site import PublicPersonIdentityDTO, PersonReferenceDTO
 from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
 from db.models import (
@@ -66,11 +67,7 @@ class MyEntryLineDTO(BaseModel):
 
     eventCode: str
     discipline: str
-    playerName: str
-    # The player-page address for "View my results" (§3.1) — the same
-    # person-in-tournament key the public tier uses. Own-data only: every
-    # line on this card is a player this account entered.
-    personKey: str
+    player: PersonReferenceDTO
     state: str
     # E2: the id the withdraw route takes, and whether the entrant may use
     # it right now. Both are needed on the READ because the surface renders
@@ -87,7 +84,7 @@ class MyEntryLineDTO(BaseModel):
     # §3.1 "event lines with partner names" — the ACCEPTED doubles partner,
     # or None. Acceptance is the own-view's whole gate (playing doubles
     # together is mutual visibility); the name, never the nominated email.
-    partnerName: Optional[str] = None
+    partner: Optional[PersonReferenceDTO] = None
 
 
 class MyTournamentCardDTO(BaseModel):
@@ -118,6 +115,66 @@ class MyEntriesDTO(BaseModel):
     # E2: the account's own verification state, so the page can say why the
     # withdraw controls are inert instead of rendering buttons that 403.
     emailVerified: bool = False
+
+
+class ReceiptEntryLineDTO(BaseModel):
+    """One event line on an account-scoped receipt.
+
+    This is intentionally narrower than the operator desk row: contact data,
+    remarks, internal reasons, and roster identifiers do not belong on a
+    receipt.  The accepted partner name is the only cross-account field and
+    is already licensed by the My Entries projection.
+    """
+
+    eventCode: str
+    discipline: str
+    player: PersonReferenceDTO
+    partner: Optional[PersonReferenceDTO] = None
+    state: str
+
+
+class SubmissionReceiptDTO(BaseModel):
+    """The durable receipt for one act owned by the current entrant."""
+
+    submissionId: str
+    slug: Optional[str] = None
+    tournamentName: Optional[str] = None
+    orgName: Optional[str] = None
+    venueName: Optional[str] = None
+    submittedAt: str
+    status: str
+    feeTotalCents: Optional[int] = None
+    paymentState: str
+    paymentNote: Optional[str] = None
+    paymentInstructions: Optional[str] = None
+    regulationsVersionAccepted: Optional[int] = None
+    events: List[ReceiptEntryLineDTO]
+
+
+def _entry_person_ref(entry: Entry) -> PersonReferenceDTO:
+    """Project an own-view entry without constructing a display name.
+
+    ``Entry.player`` is joined by the ORM (the same batched read used by the
+    desk). A missing/erased person is deliberately dead text: even this
+    account-scoped response must not manufacture a route from a name.
+    """
+    player = getattr(entry, "player", None)
+    if player is not None and player.erased_at is None:
+        return PersonReferenceDTO(
+            identity=PublicPersonIdentityDTO(id=str(player.id), name=player.full_name),
+            resolution="resolved",
+            label=None,
+        )
+    name = entry.player_name or "Entrant"
+    return PersonReferenceDTO(
+        identity=PublicPersonIdentityDTO(id=None, name=name),
+        resolution="dead",
+        label=None,
+    )
+
+
+def _ref_name(ref: PersonReferenceDTO) -> str:
+    return ref.identity.name if ref.identity is not None else (ref.label or "")
 
 
 # ---- pure derivations (unit-tested directly) ------------------------------
@@ -281,7 +338,7 @@ def my_entries(
         for e in entries
         if e.partner_entry_id is not None and e.partner_accepted_at is not None
     ]
-    partner_name_by_entry: Dict[uuid.UUID, str] = {}
+    partner_ref_by_entry: Dict[uuid.UUID, PersonReferenceDTO] = {}
     if partner_pairs:
         partner_entries = {
             (pe.tournament_id, pe.id): pe
@@ -319,7 +376,11 @@ def my_entries(
                 continue
             partner = partner_players.get((pe.tournament_id, pe.entry_player_id))
             if partner is not None:
-                partner_name_by_entry[e.id] = partner.full_name
+                partner_ref_by_entry[e.id] = PersonReferenceDTO(
+                    identity=PublicPersonIdentityDTO(id=str(partner.id), name=partner.full_name),
+                    resolution="resolved",
+                    label=None,
+                )
     tournaments = {
         t.id: t
         for t in session.scalars(select(Tournament).where(Tournament.id.in_(tids)))
@@ -364,8 +425,7 @@ def my_entries(
                 MyEntryLineDTO(
                     eventCode=event.code if event else "?",
                     discipline=event.discipline if event else "",
-                    playerName=entry.player_name or "",
-                    personKey=str(entry.entry_player_id or ""),
+                    player=_entry_person_ref(entry),
                     state=_entry_state(entry.state),
                     entryId=str(entry.id),
                     # The route's own predicate, asked rather than
@@ -374,10 +434,10 @@ def my_entries(
                     # button that renders here is one the route will accept.
                     canWithdraw=_can_withdraw(entry, event),
                     resultBadge=event_badges.get(roster_id(entry.entry_player_id)),
-                    partnerName=partner_name_by_entry.get(entry.id),
+                    partner=partner_ref_by_entry.get(entry.id),
                 )
             )
-        lines.sort(key=lambda line: (line.playerName, line.eventCode))
+        lines.sort(key=lambda line: (_ref_name(line.player), line.eventCode))
 
         quotes = [
             s.fee_total_cents for s in own_subs if s.fee_total_cents is not None
@@ -416,6 +476,163 @@ def my_entries(
     # dateless workspace sorts last), then by the act's own recency.
     cards.sort(key=lambda c: (c.date or "", c.submittedAt), reverse=True)
     return MyEntriesDTO(tournaments=cards, emailVerified=bool(entrant.email_verified))
+
+
+def _own_submission(
+    repo: LocalRepository, entrant: AuthEntrant, submission_id: str
+) -> Submission:
+    """Resolve a submission inside the caller's account scope.
+
+    A receipt id is a handle, never a capability.  Invalid, missing, and
+    another account's ids therefore share the same 404.
+    """
+
+    try:
+        wanted = uuid.UUID(submission_id)
+    except (ValueError, TypeError):
+        raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such submission")
+
+    submission = repo.session.scalars(
+        select(Submission).where(
+            Submission.id == wanted,
+            Submission.account_id == uuid.UUID(entrant.id),
+        )
+    ).first()
+    if submission is None:
+        raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such submission")
+    return submission
+
+
+@router.get(
+    "/submissions/{submission_id}",
+    response_model=SubmissionReceiptDTO,
+)
+def submission_receipt(
+    submission_id: str,
+    response: Response,
+    entrant: AuthEntrant = Depends(get_current_entrant),
+    repo: LocalRepository = Depends(get_repository),
+) -> SubmissionReceiptDTO:
+    """Return the complete receipt for one act owned by the current account."""
+
+    response.headers["Cache-Control"] = "private, no-store"
+    submission = _own_submission(repo, entrant, submission_id)
+    session = repo.session
+
+    tournament = session.get(Tournament, submission.tournament_id)
+    page = session.get(EntryPage, submission.tournament_id)
+    org = (
+        session.get(Org, tournament.org_id)
+        if tournament is not None and tournament.org_id is not None
+        else None
+    )
+    entries = list(
+        session.scalars(
+            select(Entry).where(
+                Entry.tournament_id == submission.tournament_id,
+                Entry.submission_id == submission.id,
+            )
+        )
+    )
+    event_ids = {entry.entry_event_id for entry in entries}
+    events = {
+        event.id: event
+        for event in session.scalars(
+            select(EntryEvent).where(
+                EntryEvent.tournament_id == submission.tournament_id,
+                EntryEvent.id.in_(event_ids),
+            )
+        )
+    } if event_ids else {}
+
+    partner_ids = {
+        entry.partner_entry_id
+        for entry in entries
+        if entry.partner_entry_id is not None and entry.partner_accepted_at is not None
+    }
+    partner_entries = {
+        entry.id: entry
+        for entry in session.scalars(
+            select(Entry).where(
+                Entry.tournament_id == submission.tournament_id,
+                Entry.id.in_(partner_ids),
+            )
+        )
+    } if partner_ids else {}
+    partner_player_ids = {
+        entry.entry_player_id
+        for entry in partner_entries.values()
+        if entry.entry_player_id is not None
+    }
+    partner_players = {
+        player.id: player
+        for player in session.scalars(
+            select(EntryPlayer).where(
+                EntryPlayer.tournament_id == submission.tournament_id,
+                EntryPlayer.id.in_(partner_player_ids),
+                EntryPlayer.erased_at.is_(None),
+            )
+        )
+    } if partner_player_ids else {}
+
+    lines: List[ReceiptEntryLineDTO] = []
+    for entry in entries:
+        event = events.get(entry.entry_event_id)
+        partner_entry = partner_entries.get(entry.partner_entry_id)
+        partner = (
+            partner_players.get(partner_entry.entry_player_id)
+            if partner_entry is not None
+            else None
+        )
+        lines.append(
+            ReceiptEntryLineDTO(
+                eventCode=event.code if event is not None else "?",
+                discipline=event.discipline if event is not None else "Tournament event",
+                player=_entry_person_ref(entry),
+                partner=(
+                    PersonReferenceDTO(
+                        identity=PublicPersonIdentityDTO(id=str(partner.id), name=partner.full_name),
+                        resolution="resolved",
+                        label=None,
+                    )
+                    if partner is not None
+                    else None
+                ),
+                state=_entry_state(entry.state),
+            )
+        )
+    lines.sort(key=lambda line: (_ref_name(line.player), line.eventCode))
+
+    live_states = [line.state for line in lines]
+    if live_states and all(state == "withdrawn" for state in live_states):
+        status = "withdrawn"
+    elif live_states and all(state == "entered" for state in live_states):
+        status = "confirmed"
+    else:
+        status = "submitted"
+
+    if submission.fee_total_cents in (None, 0):
+        payment_state = "not_required"
+    elif submission.paid_at is not None:
+        payment_state = "recorded"
+    else:
+        payment_state = "required"
+
+    return SubmissionReceiptDTO(
+        submissionId=str(submission.id),
+        slug=page.slug if page is not None else None,
+        tournamentName=tournament.name if tournament is not None else None,
+        orgName=org.name if org is not None else None,
+        venueName=page.venue_name if page is not None else None,
+        submittedAt=_moment_iso(submission.submitted_at),
+        status=status,
+        feeTotalCents=submission.fee_total_cents,
+        paymentState=payment_state,
+        paymentNote=submission.payment_note,
+        paymentInstructions=page.payment_instructions if page is not None else None,
+        regulationsVersionAccepted=submission.regulations_version_accepted,
+        events=lines,
+    )
 
 
 # ---- the entrant's own writes (E2, program Phase 7) -----------------------
@@ -757,4 +974,3 @@ def erase_my_account(
     erased, kept = retention.erase_account_data(repo.session, account)
     repo.session.commit()
     return AccountErasedDTO(playersErased=erased, submissionsKept=kept)
-

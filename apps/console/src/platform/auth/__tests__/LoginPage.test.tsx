@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { LoginPage } from '../LoginPage';
+import { LoginPage, returnDestination } from '../LoginPage';
 import { apiClient } from '../../../api/client';
 
 vi.mock('../../../api/client', () => ({
@@ -39,6 +39,13 @@ describe('LoginPage', () => {
     vi.mocked(apiClient.register).mockReset();
     vi.mocked(apiClient.login).mockReset();
     vi.mocked(apiClient.resetPassword).mockReset();
+  });
+
+  it('preserves query and hash in the auth return destination', () => {
+    expect(
+      returnDestination({ from: { pathname: '/tournaments/t1/participants', search: '?view=issues', hash: '#selected' } }),
+    ).toBe('/tournaments/t1/participants?view=issues#selected');
+    expect(returnDestination({ from: { pathname: 'https://example.com/phish' } })).toBe('/');
   });
 
   it('sign-in mode asks for a password once and states no policy', async () => {

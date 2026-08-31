@@ -29,7 +29,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
 import { formatSlotTime } from '../../lib/time';
-import { INTERACTIVE_BASE } from '../../lib/utils';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
 import { STALE_CAPTION } from './publicDisplay/freshness';
 import { useFullscreen } from './publicDisplay/useFullscreen';
@@ -39,11 +38,7 @@ import { BoardSwitch } from './publicDisplay/BoardSwitch';
 import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
-import {
-  DEFAULT_DWELL_SECONDS,
-  rotationSlides,
-  slideAt,
-} from './publicDisplay/rotation';
+import { DEFAULT_DWELL_SECONDS, rotationSlides, slideAt } from './publicDisplay/rotation';
 import { CourtsView } from './publicDisplay/CourtsView';
 import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
@@ -55,11 +50,22 @@ import {
   resolveCardSizeClasses,
   resolveGridColsClass,
 } from './publicDisplay/tvSizing';
+import { SyncHealthIndicator } from '../../components/SyncHealthIndicator';
+import { ActiveChoice } from '../../components/ActiveChoice';
+import { formatMatchIdentity, meetMatchIdentityFromStored } from '../../platform/domain/matchIdentity';
 
 // How often the ROTATE placement (Task 9) swaps the main content area
 
 /** How long the NOW CALLING strip holds before the board moves on. */
 const NOW_CALLING_DWELL_MS = 8_000;
+
+function getMatchCode(match: { id: string; eventRank?: string | null; matchNumber?: number | null }): string {
+  const identity = meetMatchIdentityFromStored({
+    event_rank: match.eventRank,
+    sequence: match.matchNumber ?? null,
+  });
+  return formatMatchIdentity(identity, match.id) || '?';
+}
 
 type ViewMode = 'courts' | 'schedule';
 
@@ -70,10 +76,7 @@ type ViewMode = 'courts' | 'schedule';
  *  tournament half of which it cannot see. Meet and Bracket match records are
  *  non-merged by design (ADR 0006) — there is no cross-engine denominator to
  *  state, so the honest fix is to name the half being counted. */
-export function MeetDisplayPage({
-  hybrid = false,
-  preview = false,
-}: { hybrid?: boolean; preview?: boolean } = {}) {
+export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: boolean; preview?: boolean } = {}) {
   const [searchParams] = useSearchParams();
   // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
   // task 9 (`?view=standings` was a real, documented param) must still
@@ -111,7 +114,7 @@ export function MeetDisplayPage({
   // Read-only polling + freshness derivation. See ./publicDisplay/useDisplaySync.ts.
   // `linkDead` = the link itself can never work (invalid/revoked token, deleted
   // workspace); polling has already stopped.
-  const { freshness, terminal: linkDead } = useDisplaySync(now);
+  const { freshness, terminal: linkDead, lastSyncedAt, syncError } = useDisplaySync(now);
 
   // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
@@ -133,17 +136,13 @@ export function MeetDisplayPage({
   // the server returns `[]` for both cases (see MeetStandingRowDTO's doc
   // comment), so a single length check covers both.
   const hasStandings = standings.length > 0;
-  const resolvedStandingsPlacement = standingsPlacement(
-    config?.courtCount ?? 0,
-    config?.standingsMode,
-  );
+  const resolvedStandingsPlacement = standingsPlacement(config?.courtCount ?? 0, config?.standingsMode);
   // The persistent SIDE panel is retired (TV-5): it took roughly a third of
   // the board's width away from the courts, which are what the hall is
   // actually looking at, to hold a table nobody reads continuously. Standings
   // are a rotation slide now. `standingsMode: 'off'` still means off — that
   // is a director saying "not on my board", not a placement preference.
   const standingsEnabled = hasStandings && resolvedStandingsPlacement !== 'off';
-
 
   // Indexing helpers we'll reuse below. O(1) by-matchId lookups so the
   // courts / standings derivations don't re-scan the full matchesByStatus
@@ -236,9 +235,7 @@ export function MeetDisplayPage({
       const upNextAssignment = upNextId ? assignmentByMatchId.get(upNextId) : undefined;
       const upNext = {
         nextMatch: upNextId ? matchMap.get(upNextId) || null : null,
-        nextStartTime: upNextAssignment
-          ? formatSlotTime(upNextAssignment.slotId, config)
-          : undefined,
+        nextStartTime: upNextAssignment ? formatSlotTime(upNextAssignment.slotId, config) : undefined,
       };
 
       const activeId = matchesByCourt.active.get(courtId);
@@ -292,7 +289,10 @@ export function MeetDisplayPage({
   const displayedCourtRows = useMemo(() => {
     if (courtMatches.length === 0) return courtMatches;
     const byId = new Map(courtMatches.map((row) => [row.courtId, row]));
-    const ordered = orderCourts(courtMatches.map((row) => row.courtId), config?.courtOrder);
+    const ordered = orderCourts(
+      courtMatches.map((row) => row.courtId),
+      config?.courtOrder,
+    );
     const visible = visibleCourts(ordered, config?.hiddenCourts);
     return visible.map((id) => byId.get(id)).filter((row): row is (typeof courtMatches)[number] => row != null);
   }, [courtMatches, config?.courtOrder, config?.hiddenCourts]);
@@ -314,7 +314,7 @@ export function MeetDisplayPage({
       if (row.status === 'called' && row.match) {
         return {
           key: row.match.id,
-          code: row.match.eventRank || `M${row.match.matchNumber || '?'}`,
+          code: getMatchCode(row.match),
           courtId: row.courtId,
         };
       }
@@ -336,11 +336,7 @@ export function MeetDisplayPage({
   // owns what the sequence is.
   const dwellSeconds = config?.tvRotationDwellSeconds ?? DEFAULT_DWELL_SECONDS;
   const slides = useMemo(
-    () =>
-      rotationSlides(
-        { standings: standingsEnabled, upNext: upcomingMatches.length > 0 },
-        config?.tvRotationSlides,
-      ),
+    () => rotationSlides({ standings: standingsEnabled, upNext: upcomingMatches.length > 0 }, config?.tvRotationSlides),
     [standingsEnabled, upcomingMatches.length, config?.tvRotationSlides],
   );
   const [rotationSeconds, setRotationSeconds] = useState(0);
@@ -385,8 +381,7 @@ export function MeetDisplayPage({
           <div className="text-center" data-testid="display-link-invalid">
             <div className="text-6xl font-bold tracking-tight">Display link not valid</div>
             <div className="mt-3 text-2xl text-muted-foreground">
-              This link has been turned off or never existed. Ask the tournament
-              desk for a new one.
+              This link has been turned off or never existed. Ask the tournament desk for a new one.
             </div>
           </div>
         ) : (
@@ -405,20 +400,6 @@ export function MeetDisplayPage({
   const totalCount = schedule.assignments.length;
   const progressPct = totalCount === 0 ? 0 : Math.round((finishedCount / totalCount) * 100);
 
-  // TV view tabs: rounded 1px-border chip in sentence-case sans, active
-  // = accent (azure) border + tinted bg + accent text. Readable across a
-  // gym without the mono-uppercase shouting.
-  // Takes the active flag rather than the view id, so the hybrid board switch
-  // (which is never one of this board's views) wears the same chrome.
-  const tabClass = (active: boolean) =>
-    [
-      INTERACTIVE_BASE,
-      'rounded border px-4 py-2 text-base font-semibold',
-      active
-        ? 'border-accent bg-accent/15 text-accent'
-        : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/40 hover:text-foreground',
-    ].join(' ');
-
   // The director picks how courts render: tall strips, multi-column
   // grid, or one-line list. Stored on the tournament config so the
   // venue's setup stays consistent across reloads. The picker UI lives
@@ -429,8 +410,7 @@ export function MeetDisplayPage({
   // thing a passive display cannot do. Stored `strip` maps to `auto` on
   // read, so no workspace needs migrating and a rollback still renders.
   const storedMode = config.tvDisplayMode ?? 'auto';
-  const tvDisplayMode: 'auto' | 'grid' | 'list' =
-    storedMode === 'strip' ? 'auto' : storedMode;
+  const tvDisplayMode: 'auto' | 'grid' | 'list' = storedMode === 'strip' ? 'auto' : storedMode;
 
   // ---- TV sizing + accent knobs (per-tournament) -----------------------
   // Shared with DisplayPreview — see publicDisplay/tvSizing.ts for the
@@ -448,9 +428,7 @@ export function MeetDisplayPage({
   // hall is card area, not how many courts happen to exist. Hidden courts
   // never count: they are never on screen.
   const boardAspect =
-    typeof window === 'undefined' || window.innerHeight === 0
-      ? 16 / 9
-      : window.innerWidth / window.innerHeight;
+    typeof window === 'undefined' || window.innerHeight === 0 ? 16 / 9 : window.innerWidth / window.innerHeight;
   const resolvedColumns =
     tvDisplayMode === 'auto'
       ? autoLayout(displayedCourtRows.length, boardAspect, config.tvGridColumns ?? null).columns
@@ -483,11 +461,13 @@ export function MeetDisplayPage({
     <div
       ref={rootRef}
       data-tv-preset={tvPreset}
+      role={!preview ? 'main' : undefined}
+      aria-label={!preview ? 'Tournament venue display' : undefined}
       /* `relative` anchors the progress footer below. It used to be
          viewport-`fixed`, which is right on the real fullscreen board but
          wrong in the in-shell Preview: the bar spanned the whole window and
          ran underneath the icon rail and the workspace sidebar. */
-      className="relative min-h-[100dvh] bg-background text-foreground selection:bg-accent/30"
+      className={`${preview ? 'relative h-full min-h-0' : 'relative min-h-[100dvh]'} w-full bg-background text-foreground selection:bg-accent/30`}
     >
       {/* Subtle film-grain overlay — adds a barely-there texture to the
           full-screen TV surface so the pure flats don't read as
@@ -518,6 +498,25 @@ export function MeetDisplayPage({
               </div>
             )}
             <LiveStatusPill status={freshness} />
+            <SyncHealthIndicator
+              lastSyncedAt={lastSyncedAt}
+              error={syncError}
+              terminal={linkDead}
+              nowMs={now.getTime()}
+            />
+            {lastSyncedAt ? (
+              <span
+                data-testid="display-last-updated"
+                className="whitespace-nowrap text-xs text-muted-foreground"
+                title={`Last updated ${new Date(lastSyncedAt).toLocaleString()}`}
+              >
+                Updated{' '}
+                {new Date(lastSyncedAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            ) : null}
           </div>
           {/* Venue render keeps the clock and nothing else (TV-8): nobody is
               standing at the TV to press a tab or a fullscreen button, and
@@ -525,34 +524,36 @@ export function MeetDisplayPage({
           <div className="flex items-center gap-3">
             <div className="flex gap-2">
               {preview ? (
-                <>
-                  <button
-                    type="button"
+                <div role="tablist" aria-label="Display view" className="flex gap-2">
+                  <ActiveChoice
+                    active={view === 'courts'}
+                    geometry="segment"
+                    semantics="tab"
                     onClick={() => setView('courts')}
-                    className={tabClass(view === 'courts')}
+                    className="px-4 py-2 text-base font-semibold"
                   >
                     Courts
-                  </button>
-                  <button
-                    type="button"
+                  </ActiveChoice>
+                  <ActiveChoice
+                    active={view === 'schedule'}
+                    geometry="segment"
+                    semantics="tab"
                     onClick={() => setView('schedule')}
-                    className={tabClass(view === 'schedule')}
+                    className="px-4 py-2 text-base font-semibold"
                   >
                     Schedule
-                  </button>
-                </>
+                  </ActiveChoice>
+                </div>
               ) : null}
               {/* The board switch SURVIVES the venue render: on a hybrid
                   workspace it is the only route to the other engine's board,
                   and dropping it would make half the event invisible to the
                   hall. The view tabs go, because rotation already shows what
                   they showed. */}
-              {hybrid ? <BoardSwitch to="bracket" className={tabClass(false)} /> : null}
+              {hybrid ? <BoardSwitch to="bracket" /> : null}
             </div>
             <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
-            {preview ? (
-              <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
-            ) : null}
+            {preview ? <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} /> : null}
           </div>
         </div>
       </div>
@@ -569,9 +570,7 @@ export function MeetDisplayPage({
           data-testid="now-calling-banner"
           className="motion-enter flex items-center justify-center gap-4 bg-status-called-solid px-6 py-3 text-status-called-ink"
         >
-          <span className="text-xl font-extrabold uppercase tracking-[0.12em]">
-            Now calling
-          </span>
+          <span className="text-xl font-extrabold uppercase tracking-[0.12em]">Now calling</span>
           <span className="sw-num text-3xl font-black">
             {nowCalling.code} → Court {nowCalling.courtId}
           </span>
@@ -582,43 +581,28 @@ export function MeetDisplayPage({
           ROTATE placement taking over the screen) materializes the new
           content via the brand recipe rather than snapping in — visible
           from across a gym. */}
-      <div
-        key={view === 'courts' ? `slide-${activeSlide}` : view}
-        className="motion-enter px-6 pb-28 pt-6"
-      >
+      <div key={view === 'courts' ? `slide-${activeSlide}` : view} className="motion-enter px-6 pb-28 pt-6">
         {view === 'courts' && activeSlide === 'standings' ? (
           <div data-testid="standings-rotation-screen">
             <StandingsView standings={standings} />
           </div>
         ) : view === 'courts' && activeSlide === 'upNext' ? (
           <div data-testid="up-next-rotation-screen">
-            <ScheduleView
-              upcomingMatches={upcomingMatches}
-              config={config}
-              playerNames={playerNames}
-            />
+            <ScheduleView upcomingMatches={upcomingMatches} config={config} playerNames={playerNames} />
           </div>
         ) : (
           <>
             {view === 'courts' && (
               <>
                 {freshness === 'stale' && (
-                  <div className="mb-4 text-center text-base text-muted-foreground">
-                    {STALE_CAPTION}
-                  </div>
+                  <div className="mb-4 text-center text-base text-muted-foreground">{STALE_CAPTION}</div>
                 )}
-                <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
-                  {courtsViewNode}
-                </div>
+                <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>{courtsViewNode}</div>
               </>
             )}
 
             {view === 'schedule' && (
-              <ScheduleView
-                upcomingMatches={upcomingMatches}
-                config={config}
-                playerNames={playerNames}
-              />
+              <ScheduleView upcomingMatches={upcomingMatches} config={config} playerNames={playerNames} />
             )}
           </>
         )}
@@ -628,8 +612,7 @@ export function MeetDisplayPage({
       <div className="sticky inset-x-0 bottom-0 border-t border-border bg-background/90 px-6 py-3 backdrop-blur">
         <div className="flex items-center justify-between text-base">
           <div className="text-muted-foreground">
-            {finishedCount} / {totalCount} {hybrid ? 'meet matches' : 'matches'} complete ·{' '}
-            {progressPct}%
+            {finishedCount} / {totalCount} {hybrid ? 'meet matches' : 'matches'} complete · {progressPct}%
           </div>
           {/* Operator diagnostics, not spectator information: "2 active · 2
               called" restates what the court cards already show, in numbers,
@@ -661,11 +644,13 @@ export function MeetDisplayPage({
         >
           <div
             className="h-full origin-left rounded-full transition-transform duration-500 ease-brand"
-            style={{ transform: `scaleX(${progressPct / 100})`, backgroundColor: tvAccent }}
+            style={{
+              transform: `scaleX(${progressPct / 100})`,
+              backgroundColor: tvAccent,
+            }}
           />
         </div>
       </div>
     </div>
   );
 }
-

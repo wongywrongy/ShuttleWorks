@@ -15,9 +15,11 @@ deploy.
    parallel `dev/*` lines where no one could say which was authoritative.
 2. **Keep it short-lived** — days, not weeks. A branch that outlives the work
    it was cut for accumulates merge risk and becomes a second trunk.
-3. **Merge via PR**, so the CI gate runs. Both required jobs (frontend and
-   backend) must be green. `.github/workflows/ci.yml` is the gate; see the
-   lean-gate philosophy in `CLAUDE.md` before tightening it.
+3. **Merge via PR**, so the CI gate runs. All blocking jobs (docs, frontend,
+   entrant, backend, Compose validation, and console browser contracts) must be
+   green. `.github/workflows/ci.yml` is the gate; see the lean-gate philosophy
+   in `CLAUDE.md` before tightening it. The full entrant evidence suite and the
+   simulator remain explicit local/scheduled operations, not PR jobs.
 4. **Delete the branch on merge**, local and remote. A merged label that
    lingers is indistinguishable from active work at a glance.
 

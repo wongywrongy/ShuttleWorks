@@ -71,16 +71,21 @@ const code = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 /**
- * Deliberate, reasoned exceptions. EMPTY on purpose: the sweep that installed
- * this contract resolved every one of the ~70 sites by layout instead, so
- * nothing currently earns a place here.
+ * Deliberate, reasoned exceptions. R-PAIR-7 supersedes the earlier blanket
+ * rule for the shared strict record-table primitive only. Consumers remain
+ * prohibited from implementing their own truncation.
  *
  * An entry is `[relative path, reason]` and is only admissible if the value is
  * genuinely unreadable in full at some supported width AND is rendered in full
  * somewhere the user can reach without hovering (a touch device has no hover).
  * "The row got taller and I preferred it short" is not a reason.
  */
-const ALLOWED: ReadonlyArray<readonly [string, string]> = [];
+const ALLOWED: ReadonlyArray<readonly [string, string]> = [
+  [
+    'components/control-plane/DenseDataTable.tsx',
+    'R-PAIR-7: strict record tables have one elastic identity column; its full value remains in the cell title and reachable row detail.',
+  ],
+];
 
 const allowed = new Set(ALLOWED.map(([file]) => file));
 

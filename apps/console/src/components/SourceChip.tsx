@@ -16,11 +16,12 @@
  * component per the boundary rules enforced by dependency-cruiser.
  */
 import type { MatchSource } from '../platform/domain/match';
+import { MODULE_LABELS } from '../platform/product-shell/types';
 import { EYEBROW_CLASS } from '../lib/utils';
 
 const LABEL: Record<MatchSource, string> = {
-  meet: 'Meet',
-  bracket: 'Bracket',
+  meet: MODULE_LABELS.meet,
+  bracket: MODULE_LABELS.bracket,
 };
 
 // Color budget (2026-07): the chip TEXT names the engine — the sky/violet

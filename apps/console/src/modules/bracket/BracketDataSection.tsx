@@ -18,6 +18,7 @@ import { useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import { useAction } from '../../hooks/useAction';
 import { Row, Section } from '../../platform/engine-config/SettingsControls';
+import { DialogFooter } from '../../components/DialogFooter';
 
 const LINK_CLASSES =
   'inline-flex items-center rounded-sm border border-border bg-card px-3 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40';
@@ -104,7 +105,7 @@ export function BracketDataSection() {
               Every draw, schedule and recorded result in this bracket is
               discarded. This cannot be undone.
             </p>
-            <div className="mt-6 flex justify-between">
+            <DialogFooter align="between">
               <Button
                 variant="ghost"
                 onClick={() => setConfirming(false)}
@@ -120,7 +121,7 @@ export function BracketDataSection() {
               >
                 {reset.pending ? 'Resetting…' : 'Reset bracket'}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         </Modal>
       )}

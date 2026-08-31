@@ -123,8 +123,9 @@ describe('isPlayerActive', () => {
     });
   });
 
-  it('label is "M?" when neither eventRank nor matchNumber are set', () => {
-    expect(isPlayerActive('p5', states, matches).matchLabel).toBe('M?');
+  it('uses the canonical six-character machine-id fallback when identity fields are absent', () => {
+    // F-UNI-22: no surface invents its own anonymous-match spelling.
+    expect(isPlayerActive('p5', states, matches).matchLabel).toBe('nolabe');
   });
 
   it('does NOT flag scheduled or finished matches', () => {

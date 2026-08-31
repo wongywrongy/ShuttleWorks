@@ -44,6 +44,10 @@ jobs:
           cache: "npm"
       - name: Install workspaces
         run: npm ci
+      - name: Interactive token contrast
+        run: npm run test:contrast
+      - name: Token-shaped utility classes resolve
+        run: npm run test:classes
       - name: Lint
         run: npm run lint:scheduler
       - name: Unit tests
@@ -179,6 +183,8 @@ jobs:
       - name: Unit tests (pytest)
         env:
           TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler
+        # The Postgres dialect-parity fixtures rebuild one shared schema, so
+        # this job stays serial. Local SQLite-only suites use xdist via Make.
         run: pytest tests/backend
 
   compose-lint:
@@ -259,19 +265,9 @@ jobs:
           fi
           exit $status
 
-  interaction-smoke:
-    name: Interaction smoke (pressing the UI must not break it)
+  console-browser-contracts:
+    name: Console browser contracts (canonical test database)
     runs-on: ubuntu-latest
-    # The layer the unit suite structurally cannot provide: unit tests mock the
-    # handlers and the stores, so they validate LOGIC, never that pressing the
-    # real UI works. A fully green 1100-test suite coexisted with a viewer who
-    # could not edit anything, Run-view Undo buttons that 409'd on every press,
-    # and a rejected roster delete that killed all further saving.
-    # See tests/e2e/README.md for the maintained owner and execution contract.
-    #
-    # Unlike the older e2e specs this does NOT boot the Docker stack — it runs a
-    # preview build against a local uvicorn + SQLite, which is why it can be a
-    # required gate without the flakiness the lean-gate philosophy warns about.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -288,83 +284,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install ./packages/scheduler-core
           pip install -r apps/api/requirements.txt
-
-      - name: Start backend
-        # apps/api/src is the sys.path root; alembic.ini resolves from
-        # core/paths.py relative to it, so the API still finds its migrations.
-        working-directory: apps/api/src
-        env:
-          DATABASE_URL: sqlite:///./smoke.db
-        run: |
-          python -m uvicorn core.main:app --host 127.0.0.1 --port 8600 --log-level warning &
-          # The loop must FAIL when the service never arrives. Written as a
-          # bare `break` loop it exits 0 after the last sleep whether or not
-          # anything came up, so a dead backend reaches the next step
-          # disguised as a healthy one.
-          for i in $(seq 1 40); do
-            curl -sf http://127.0.0.1:8600/health && break
-            sleep 1
-          done
-          curl -sf http://127.0.0.1:8600/health > /dev/null || {
-            echo "::error::backend never became healthy on 127.0.0.1:8600"
-            exit 1
-          }
-
-      # Two workspaces: one the caller owns, one the caller only views. The seed
-      # script prints `tid=` / `viewerTid=` lines straight into $GITHUB_OUTPUT.
-      - name: Seed the smoke workspaces
-        id: seed
-        run: node tests/e2e/interaction-sweep/seed-smoke.mjs http://127.0.0.1:8600 >> "$GITHUB_OUTPUT"
-
-      # No HTTP path to a viewer role exists (the creator is always written as
-      # `owner`), so the fixture writes the row the API won't. Without this the
-      # viewer-gating test skips and audit finding A2 goes unguarded.
-      - name: Demote the viewer workspace
-        run: |
-          python tests/e2e/interaction-sweep/make-viewer.py \
-            apps/api/src/smoke.db \
-            "${{ steps.seed.outputs.viewerTid }}"
-
-      # The suite asserts on the error harness, so it must be compiled in — that
-      # is what lets a failure name the button that broke.
-      - name: Build the app WITH the error harness
-        working-directory: apps/console
-        env:
-          VITE_ERROR_HARNESS: "1"
-          # REQUIRED. api/client.ts falls back to a hardcoded
-          # http://localhost:8000 for any production build that doesn't set
-          # this, and the backend here is on 8600 — so every API call fails,
-          # AuthContext maps the failure to "signed out" (it cannot tell a
-          # network error from a 401), and AuthGuard redirects to /login.
-          # The suite then presses buttons on a login page and only the two
-          # tests that assert real workspace content notice.
-          #
-          # Every real deployment already sets this (docker-compose*.yml pass
-          # it as a build arg); only this job did not. It went unnoticed
-          # because a developer's untracked apps/console/.env.local supplies
-          # VITE_API_BASE_URL=/api, so local runs pass and CI does not.
-          VITE_API_BASE_URL: /api
-        run: npm run build
-
-      - name: Serve the production build
-        working-directory: apps/console
-        env:
-          VITE_API_PROXY_TARGET: http://127.0.0.1:8600
-        run: |
-          # --host 127.0.0.1 is load-bearing. Without it `vite preview` binds
-          # `localhost`, which resolves to IPv6 ::1 on GitHub runners, while
-          # the readiness check below and E2E_BASE_URL both use IPv4
-          # 127.0.0.1 — so the server is up and unreachable at the same time.
-          npx vite preview --port 4173 --strictPort --host 127.0.0.1 &
-          for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:4173/ > /dev/null && break
-            sleep 1
-          done
-          # Same reason as the backend loop: it must be able to fail.
-          curl -sf http://127.0.0.1:4173/ > /dev/null || {
-            echo "::error::vite preview never became reachable on 127.0.0.1:4173"
-            exit 1
-          }
+          pip install -r simulator/requirements.txt
 
       # Browser install was 219s of a 557s job (40%) — the download, not the
       # tests. The binary is immutable per Playwright version, so it caches on
@@ -389,20 +309,13 @@ jobs:
             npx playwright install --with-deps --only-shell chromium
           fi
 
-      - name: Interaction smoke
-        working-directory: tests/e2e
-        env:
-          E2E_BASE_URL: http://127.0.0.1:4173
-          E2E_MANAGE_STACK: "0"
-          SMOKE_TID: ${{ steps.seed.outputs.tid }}
-          SMOKE_VIEWER_TID: ${{ steps.seed.outputs.viewerTid }}
-          SMOKE_DISPLAY_TOKEN: ${{ steps.seed.outputs.displayToken }}
-        run: npm run test:interaction-smoke
+      - name: Build an isolated canonical fixture and run browser contracts
+        run: bash tests/e2e/run-console-contracts.sh
 
       - name: Upload the failure trace
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: interaction-smoke-report
+          name: console-browser-contracts-report
           path: tests/e2e/playwright-report/
           retention-days: 7

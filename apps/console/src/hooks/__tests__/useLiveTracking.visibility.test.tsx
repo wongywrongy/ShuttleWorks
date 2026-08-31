@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { apiClient } from '../../api/client';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { useLiveTracking } from '../useLiveTracking';
 
 vi.mock('../../api/client', () => ({
@@ -47,7 +48,29 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  useTournamentStore.setState({ matches: [] });
   vi.useRealTimers();
+});
+
+describe('useLiveTracking — Plan read budget', () => {
+  it('hydrates 160 Plan matches with one batched match-state request', async () => {
+    useTournamentStore.setState({
+      matches: Array.from({ length: 160 }, (_, index) => ({
+        id: `match-${index + 1}`,
+      })) as never,
+    });
+
+    const { unmount } = renderHook(() => useLiveTracking(), { wrapper: wrap('plan-large') });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(apiClient.getMatchStates).toHaveBeenCalledTimes(1);
+    expect(apiClient.getMatchStates).toHaveBeenCalledWith('plan-large');
+    unmount();
+  });
 });
 
 describe('useLiveTracking — 5s sync pauses while hidden', () => {

@@ -25,6 +25,9 @@ export interface UseBracketDisplaySyncResult {
   data: BracketTournamentDTO | null;
   freshness: FreshnessState;
   syncError: string | null;
+  /** Epoch milliseconds of the last successful projection read. */
+  lastSyncedAt: number | null;
+  terminal: boolean;
 }
 
 export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
@@ -39,6 +42,7 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
   const [data, setData] = useState<BracketTournamentDTO | null>(null);
   const [lastSyncMs, setLastSyncMs] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [terminal, setTerminal] = useState(false);
 
   useEffect(() => {
     if (!token && !tid) {
@@ -69,7 +73,10 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
         // never succeed, so stop instead of storming the same failure every
         // 10s at a TV nobody is watching. Same `lib/pollPolicy` contract every
         // other polling hook in the app honours.
-        if (isTerminalPollError(err)) stop();
+        if (isTerminalPollError(err)) {
+          setTerminal(true);
+          stop();
+        }
       }
     };
     void pull();
@@ -83,5 +90,5 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
     return deriveFreshness(age, POLL_MS);
   }, [lastSyncMs, now, syncError]);
 
-  return { data, freshness, syncError };
+  return { data, freshness, syncError, lastSyncedAt: lastSyncMs, terminal };
 }

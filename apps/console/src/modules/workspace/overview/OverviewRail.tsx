@@ -2,16 +2,16 @@
  * The Overview's right rail — hairline-divided fact rows, not a card pile.
  * Each row is a door to the surface that owns the fact (SP-UI-1 3d).
  */
-import type { AppTab } from '../../../store/uiStore';
+import { Link } from 'react-router-dom';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 import type { RailRow } from './railRows';
 
 interface Props {
   rows: readonly RailRow[];
-  onNavigate: (segment: AppTab) => void;
+  tid: string;
 }
 
-export function OverviewRail({ rows, onNavigate }: Props) {
+export function OverviewRail({ rows, tid }: Props) {
   if (rows.length === 0) return null;
 
   return (
@@ -20,10 +20,9 @@ export function OverviewRail({ rows, onNavigate }: Props) {
       <ul className="divide-y divide-rule-soft border-t border-rule-soft">
         {rows.map((row) => (
           <li key={row.key}>
-            <button
-              type="button"
+            <Link
+              to={`/tournaments/${encodeURIComponent(tid)}/${row.path}`}
               data-testid={`rail-row-${row.key}`}
-              onClick={() => onNavigate(row.segment)}
               className={[
                 'group flex w-full items-center justify-between gap-3 py-2.5 text-left',
                 'transition-colors duration-fast ease-brand',
@@ -61,7 +60,7 @@ export function OverviewRail({ rows, onNavigate }: Props) {
                   &rsaquo;
                 </span>
               </span>
-            </button>
+            </Link>
           </li>
         ))}
       </ul>

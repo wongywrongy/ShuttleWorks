@@ -53,6 +53,10 @@ class ErrorCode(str, Enum):
     CONFIG_LOCKED = "CONFIG_LOCKED"
     ROSTER_LOCKED = "ROSTER_LOCKED"
     DRAW_STARTED = "DRAW_STARTED"
+    # Setup facade (SP-OPCON-1, ruling R-N A): the section's truth lives in
+    # domain rows now — the Setup page shows a read-only summary and edits
+    # belong on the owning surface.
+    SETUP_SECTION_DOMAIN_OWNED = "SETUP_SECTION_DOMAIN_OWNED"
 
     # Generic input validation (deeper than schema — raised when a
     # converter sees a malformed value that slipped past Pydantic).

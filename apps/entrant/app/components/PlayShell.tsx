@@ -56,13 +56,16 @@ export function PlayShell({
 
   return (
     <div className="flex min-h-screen flex-col">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-20 focus:rounded focus:bg-surface-raised focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-md">
+        Skip to content
+      </a>
       {/* Console banner (2026-08-13): the public tier leads with the solid
           accent bar and the skewed white wordmark chip from the mock. Text on
           the bar is full white (AA against the accent, verified by the token
           contrast gate's text-on-accent pair). */}
       <header className="bg-accent">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-2.5">
-          <a href={DISCOVERY_HREF} className="inline-flex items-center gap-3">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:py-2.5">
+          <a href={DISCOVERY_HREF} className="inline-flex min-h-8 items-center gap-3" aria-label="ShuttleWorks tournaments home">
             <span className="inline-block -skew-x-12 bg-card px-3 py-1.5 shadow-md">
               <span className="inline-block skew-x-12 font-display text-[15px] font-extrabold tracking-tight text-accent">
                 ShuttleWorks
@@ -79,13 +82,13 @@ export function PlayShell({
               no padding of its own. */}
           <a
             href={signedIn ? '/e/me/entries' : '/e/login'}
-            className="ml-auto inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
+            className="ml-auto inline-flex min-h-8 items-center rounded px-2 text-sm font-semibold text-accent-ink underline-offset-4 hover:bg-accent-ink/10 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
           >
             {signedIn ? 'My entries' : signInLabel}
           </a>
         </div>
       </header>
-      <div className="flex-1">{children}</div>
+      <div id="main-content" className="flex-1">{children}</div>
       <footer className="border-t border-rule-soft">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-baseline justify-between gap-2 px-4 py-6 text-xs text-muted-foreground">
           <p>ShuttleWorks · tournament entries</p>

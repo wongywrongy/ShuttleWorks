@@ -79,7 +79,7 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
   ref,
 ) {
   const fill = selected
-    ? 'bg-accent/10 border-accent text-accent'
+    ? 'bg-action-selected-bg border-accent text-action-selected-foreground'
     : tone === 'state'
       ? STATE_FILL[state]
       : (() => {

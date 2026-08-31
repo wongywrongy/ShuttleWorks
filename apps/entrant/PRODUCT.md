@@ -73,10 +73,12 @@ know who is reading, by design.
 
 **Hard constraints that future work must design within, not around:**
 
-- **Zero client JavaScript. This is a durable product commitment, confirmed 2026-08-11** — not an
-  implementation detail. Every page is server-rendered with native HTML forms; a 4 KB page-weight
-  gate blocks CI, and the CSP is `script-src 'self'`. Interactions are solved natively (GET forms,
-  `?tab=` links, `<details>`, CSS `position: sticky`) or they are reported, not scripted around.
+- **Server-rendered core with bounded route modules.** Every page is complete, readable HTML and
+  every write remains a native form. Same-origin external modules may progressively enhance a
+  route when identity or spatial interaction requires the browser; inline script and framework
+  hydration remain absent. Poster and discovery documents have a blocking 4 KB page-weight budget,
+  while the persistent entry journey has an 8 KB budget including its route module. CSP remains
+  `script-src 'self'`.
 - **The rendering tier never relays credentials.** It cannot read a cookie or an inbound header, so
   it cannot know who is reading a page. Outcomes are carried on the URL, not derived from identity.
 - **A closed or unknown entry page answers a byte-identical 404.** Whether a tournament exists is not
@@ -115,8 +117,9 @@ is not available.
    guess confidently.
 3. **A one-off user learns nothing.** Most entrants use this a few times a year. Familiar structure
    beats clever structure.
-4. **It has to work on the worst connection at the venue.** The zero-JS floor is a user promise, not
-   a technical preference.
+4. **It has to work on the worst connection at the venue.** Complete server-rendered HTML and native
+   form writes are the floor. Small, same-origin route modules may enhance a surface, but a missing
+   module must not strand an entrant or spectator.
 5. **The organiser's tournament, not our platform.** Their fees, their instructions, their
    regulations, their name.
 
@@ -124,8 +127,9 @@ is not available.
 
 - **R11 dual width is a standing requirement**: comfortable on desktop, fully functional at 390px.
   Every public page is verified at both.
-- Zero JavaScript makes native semantics the only mechanism available, which is a floor rather than a
-  ceiling — keyboard reachability, correct announcement and visible focus are in scope for every
-  surface, and a control that only works with a pointer is a defect.
+- The SSR-first baseline makes native semantics the reliable mechanism — keyboard reachability,
+  correct announcement and visible focus are in scope for every surface. Route modules must preserve
+  those semantics and provide a useful native fallback; a control that only works with a pointer is a
+  defect.
 - Junior events mean minors' data (names, birth years) passes through this site. It must not reach a
   URL, a log, or any page that did not need it.

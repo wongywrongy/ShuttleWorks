@@ -1,11 +1,15 @@
 import { Fragment } from 'react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { DotsThree } from '@phosphor-icons/react';
+import { Link } from 'react-router-dom';
 
 export interface OverflowItem {
   key: string;
   label: string;
-  onSelect: () => void;
+  onSelect?: () => void;
+  /** Internal destination. Navigation items are links so their target is
+   * visible, copyable, and compatible with normal browser history. */
+  to?: string;
   destructive?: boolean;
   testId?: string;
   /** Locked: the action is not available in this state.
@@ -62,6 +66,19 @@ export function OverflowMenu({ label, items }: { label?: string; items: Overflow
             <div aria-hidden className="my-1 border-t border-border" />
           ) : null}
           <MenuItem>
+            {item.to && !item.disabled ? (
+              <Link
+                to={item.to}
+                data-testid={item.testId}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  item.onSelect?.();
+                }}
+                className="block min-h-9 w-full whitespace-nowrap px-3 py-2 text-left text-sm text-foreground data-[focus]:bg-muted/60"
+              >
+                {item.label}
+              </Link>
+            ) : (
             <button
               type="button"
               data-testid={item.testId}
@@ -85,10 +102,10 @@ export function OverflowMenu({ label, items }: { label?: string; items: Overflow
               onClick={(e) => {
                 e.stopPropagation();
                 if (item.disabled) return;
-                item.onSelect();
+                item.onSelect?.();
               }}
               className={[
-                'block w-full px-3 py-1.5 text-left text-sm',
+                'block min-h-9 w-full whitespace-nowrap px-3 py-2 text-left text-sm',
                 'data-[focus]:bg-muted/60',
                 item.disabled
                   ? 'cursor-not-allowed text-muted-foreground opacity-60'
@@ -99,6 +116,7 @@ export function OverflowMenu({ label, items }: { label?: string; items: Overflow
             >
               {item.label}
             </button>
+            )}
           </MenuItem>
           </Fragment>
         ))}

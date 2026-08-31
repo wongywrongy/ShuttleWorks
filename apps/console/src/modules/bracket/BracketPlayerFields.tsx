@@ -21,16 +21,20 @@ import {
   type BracketEventDTO,
 } from './eventUpsertPayload';
 import {
-  enteredPlayerIds,
   isEnteredIn,
-  nextTeamId,
+  partnerIdForPlayer,
   sessionDayBounds,
   toUpsertParticipant,
   type BadgeEntry,
 } from './rosterEvents';
-import { disciplineLabel, teamName } from './bracketLabels';
+import {
+  commitBracketPairing,
+  type BracketPairingCommand,
+} from './pairingMutation';
+import { disciplineLabel } from './bracketLabels';
 import { EYEBROW_CLASS } from '../../lib/utils';
 import { isDoublesCode } from '../../lib/doubles';
+import { formatPlayerName } from '../../lib/names';
 
 /** Writes one event's participant list (config echoed by the caller). */
 export type CommitEventFn = (
@@ -38,11 +42,9 @@ export type CommitEventFn = (
   body: BracketEventUpsertIn,
 ) => Promise<void>;
 
-export const FIELD_LABEL_CLASSES =
-  `${EYEBROW_CLASS} text-muted-foreground`;
-
-export const FIELD_INPUT_CLASSES =
-  'w-full rounded-sm border border-border bg-bg-elev px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
+/** The section-label treatment for the expanding player cards (a span, not
+ * `Eyebrow`, so the DOM text stays sentence-case for text queries). */
+const FIELD_LABEL_CLASSES = `${EYEBROW_CLASS} text-muted-foreground`;
 
 /* =========================================================================
  * BracketAvailabilityField / BracketEventsField — the two editors, WITHOUT
@@ -223,17 +225,38 @@ function EventTypeEditor({
     }
   };
 
+  const commitPairing = async (
+    ev: BracketEventDTO,
+    command: BracketPairingCommand,
+  ) => {
+    if (!onCommitEvent) return;
+    setBusyId(ev.id);
+    try {
+      await commitBracketPairing(onCommitEvent, ev, command);
+      setPairingFor(null);
+      setPartnerId('');
+    } catch {
+      // Interceptor surfaces a toast; the snapshot stays untouched.
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleToggle = (ev: BracketEventDTO) => {
     const existing = (ev.participants ?? []).map(toUpsertParticipant);
     if (isEnteredIn(ev, player.id)) {
       // OFF — singles: drop the player's entry; doubles/mixed: drop the
       // team containing them.
-      void commit(
-        ev,
-        existing.filter(
-          (p) => p.id !== player.id && !(p.members ?? []).includes(player.id),
-        ),
-      );
+      if (isDoublesCode(ev.discipline)) {
+        void commitPairing(ev, { type: 'dissolve', playerId: player.id });
+      } else {
+        void commit(
+          ev,
+          existing.filter(
+            (p) => p.id !== player.id && !(p.members ?? []).includes(player.id),
+          ),
+        );
+      }
     } else if (isDoublesCode(ev.discipline)) {
       // ON (doubles) — arm the inline partner select first.
       setPairingFor((curr) => (curr === ev.id ? null : ev.id));
@@ -251,19 +274,16 @@ function EventTypeEditor({
     const partner = roster.find((p) => p.id === partnerId);
     if (!partner) return;
     const wireParticipants = ev.participants ?? [];
-    void commit(ev, [
-      ...wireParticipants.map(toUpsertParticipant),
-      {
-        // ParticipantPicker's synthesis rules: `${eventId}-T{n}` id,
-        // "A / B" display name, member slugs in pick order.
-        id: nextTeamId(ev.id, wireParticipants),
-        name: teamName(player.name, partner.name),
-        members: [player.id, partner.id],
-        // A team row carries ONE key, and it is the nominating player's —
-        // the same half `members[0]` names.
-        ...personKey,
-      },
-    ]);
+    const existingTeam = wireParticipants.find(
+      (participant) =>
+        (participant.members?.length ?? 0) > 0 &&
+        (participant.members ?? []).includes(player.id),
+    );
+    void commitPairing(ev, {
+      type: existingTeam ? 'change' : 'assign',
+      player: { id: player.id, name: player.name, ...personKey },
+      partner: { id: partner.id, name: partner.name, entryPlayerId: partner.entryPlayerId },
+    });
   };
 
   return (
@@ -272,9 +292,30 @@ function EventTypeEditor({
         const isDraft = (ev.status ?? 'draft') === 'draft';
         const entered = isEnteredIn(ev, player.id);
         const busy = busyId === ev.id;
-        const taken = enteredPlayerIds(ev);
+        const pairedIds = new Set(
+          (ev.participants ?? []).flatMap((participant) =>
+            (participant.members?.length ?? 0) > 0 ? participant.members ?? [] : [],
+          ),
+        );
+        const currentPartnerId = isDoublesCode(ev.discipline)
+          ? partnerIdForPlayer(ev, player.id)
+          : null;
+        const currentPartner = currentPartnerId
+          ? roster.find((candidate) => candidate.id === currentPartnerId)
+          : undefined;
+        const currentTeam = isDoublesCode(ev.discipline)
+          ? (ev.participants ?? []).find(
+              (participant) =>
+                (participant.members?.length ?? 0) > 0 &&
+                (participant.members ?? []).includes(player.id),
+            )
+          : undefined;
+        const changing = entered && currentTeam != null && pairingFor === ev.id;
+        if (changing) {
+          for (const memberId of currentTeam.members ?? []) pairedIds.delete(memberId);
+        }
         const partnerOptions = roster
-          .filter((c) => c.id !== player.id && !taken.has(c.id))
+          .filter((c) => c.id !== player.id && !pairedIds.has(c.id))
           .sort((a, b) => a.name.localeCompare(b.name));
         return (
           <div
@@ -300,7 +341,7 @@ function EventTypeEditor({
                     'rounded-sm border px-2 py-0.5 text-2xs font-medium sw-num',
                     'transition-colors duration-fast ease-brand disabled:cursor-not-allowed disabled:opacity-50',
                     entered
-                      ? 'border-accent bg-accent/10 text-accent'
+                      ? 'border-accent bg-action-selected-bg text-action-selected-foreground'
                       : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
                   ].join(' ')}
                 >
@@ -310,7 +351,7 @@ function EventTypeEditor({
                 <span className="flex shrink-0 items-center gap-1.5">
                   {entered ? (
                     <span
-                      className="rounded-sm border border-accent/30 bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent"
+                      className="rounded-sm border border-accent/30 bg-action-selected-bg px-2 py-0.5 text-2xs font-medium text-action-selected-foreground"
                       data-testid={`event-entered-${ev.id}`}
                     >
                       Entered
@@ -326,7 +367,43 @@ function EventTypeEditor({
                 </span>
               )}
             </div>
-            {pairingFor === ev.id && isDraft && !entered ? (
+            {isDoublesCode(ev.discipline) && entered ? (
+              <div className="flex items-center gap-2 pl-11 text-2xs text-muted-foreground">
+                <span data-testid={`partner-${ev.id}`}>
+                  {currentPartner
+                    ? `Partner: ${formatPlayerName(currentPartner.name)}`
+                    : 'Partner missing'}
+                </span>
+                {isDraft && currentTeam ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPairingFor((curr) => (curr === ev.id ? null : ev.id));
+                        setPartnerId('');
+                      }}
+                      disabled={busy || !onCommitEvent}
+                      data-testid={`partner-change-${ev.id}`}
+                      className="text-accent underline-offset-2 hover:underline disabled:opacity-50"
+                    >
+                      Change partner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void commitPairing(ev, { type: 'dissolve', playerId: player.id })
+                      }
+                      disabled={busy || !onCommitEvent}
+                      data-testid={`partner-dissolve-${ev.id}`}
+                      className="text-destructive underline-offset-2 hover:underline disabled:opacity-50"
+                    >
+                      Dissolve pair
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+            {pairingFor === ev.id && isDraft && (!entered || changing) ? (
               <div className="flex items-center gap-1.5 pl-11">
                 <select
                   value={partnerId}

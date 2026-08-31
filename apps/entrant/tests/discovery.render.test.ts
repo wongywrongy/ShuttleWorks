@@ -175,7 +175,7 @@ describe('the control row (§2.3)', () => {
   it('has no chip row at all in the default state (§7 trap 4)', async () => {
     const html = await render();
 
-    expect(html).not.toContain('data-chip-row');
+    expect(html).not.toContain('data-active-filter-row');
   });
 
   it("labels the segments with the server's unfiltered counts, verbatim", async () => {

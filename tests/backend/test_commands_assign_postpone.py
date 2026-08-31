@@ -155,6 +155,36 @@ def test_assign_court_overwrites_existing_assignment(client, tid):
     assert body["version"] == 2
 
 
+def test_live_commands_reject_a_match_with_an_unresolved_side(client, tid):
+    payload = {
+        "config": {
+            "intervalMinutes": 30,
+            "dayStart": "09:00",
+            "dayEnd": "17:00",
+            "courtCount": 4,
+            "defaultRestMinutes": 30,
+            "freezeHorizonSlots": 0,
+        },
+        "matches": [{"id": "future", "sideA": [], "sideB": ["p2"]}],
+        "schedule": {"status": "feasible", "assignments": []},
+    }
+    seeded = client.put(f"/tournaments/{tid}/state", json=payload)
+    assert seeded.status_code == 200, seeded.text
+
+    response = _cmd(
+        client,
+        tid,
+        "future",
+        "assign_court",
+        {"court_id": 1, "time_slot": 4},
+        1,
+    )
+
+    assert response.status_code == 409
+    assert "both participants must be known" in response.json()["message"]
+    assert "Side A" in response.json()["message"]
+
+
 # ---------------------------------------------------------------------------
 # 2. postpone_match
 # ---------------------------------------------------------------------------

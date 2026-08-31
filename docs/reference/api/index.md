@@ -13,8 +13,9 @@ It is for backend and frontend engineers wiring or consuming a route.
 (`apps/console/src/api/dto.generated.ts`) is generated from this same OpenAPI schema, so it never
 drifts from the routes.
 
-The [Signals API](/reference/api/signals) is documented separately because it is the most important
-cross-cutting backend feature.
+The [Signals API](/reference/api/signals) and [Setup API](/reference/api/setup)
+are documented separately because their derived projections carry more
+behavior than a route table can express.
 
 ## Base URL
 
@@ -31,7 +32,7 @@ The default is **relative on purpose**. It used to fall back to a hardcoded
 `http://localhost:8000` for production builds, which fails silently: requests go to a port
 nothing is listening on, `AuthContext` cannot tell a network error from a 401, and the app
 redirects to `/login` — so an unreachable API looks like a sign-in prompt. That bug reached CI
-and made the interaction-smoke suite press buttons on a login page (2026-08-05). Set
+and made the former browser smoke suite press buttons on a login page (2026-08-05). Set
 `VITE_API_BASE_URL` to an absolute URL only when the SPA is genuinely served from a different
 origin than its API.
 
@@ -178,9 +179,13 @@ Two prefixes, both registered without the global auth dependency:
 
 | Method · Path | Purpose |
 | --- | --- |
-| `GET /e/api/page/{slug}` | public: the entry page projection (page config, open events, fee schedule, the entrant list). Strict — entrant **names and event ids only**, opt-outs excluded, no contact data selected in the SQL |
-| `GET /e/api/page/{slug}/players` | public: one alphabetical tournament directory merging confirmed entrants with named draw-roster people. Only a real Entries row carries a `personKey`; imported roster identities never acquire a fabricated profile URL |
-| `GET /e/api/page/{slug}/draws` · `GET …/draws/{key}` | public: published draw cards and full round/match trees. Event labels are public discipline codes rather than importer-qualified ids; results remain independently gated |
+| `GET /e/api/page/{slug}` | public: the tournament projection (phase-aware overview, events, policy, documents, publication state, viewer, and public entrants). Strict — each public person is a `PersonReference` with `{identity: {id, name} | null, resolution, label}`; opt-outs, erased rows, and contact data are excluded |
+| `GET /e/api/page/{slug}/matches` | public: day-first schedule/live projection with timezone, revision, updated time, match state, published Operations court, person references, and URL-backed day/event/player/court/state filters |
+| `GET /e/api/page/{slug}/players` | public: one searchable tournament directory merging confirmed entrants with named draw-roster people. Only a resolved Entries identity carries a person-page id; imported, hidden, erased, and draw-only identities remain dead non-links |
+| `GET /e/api/page/{slug}/players/{personId}` | public: one person's events, accepted public partners, draw paths, current match/court, and published match cards. The route key is the persisted tournament-person id, never a name-derived slug |
+| `GET /e/api/page/{slug}/draws` · `GET …/draws/{key}` | public: published draw cards and full round/match trees. Cards include discipline, format, size, round count, coverage, and champions or remaining work; results and resolved advancement remain independently gated |
+| `GET /e/api/page/{slug}/seeds` | public: ordered seed lines per event; seed is inline text beside PersonReferences, never a status container |
+| `GET /e/api/page/{slug}/winners` | public: champion, runner-up, semifinalists, final score, or the published final still to decide; every person is a PersonReference |
 | `GET /e/api/config` | public: the entrant app's runtime config — the Turnstile **site** key and the auth mode. Cannot require a session: it is read by the page where a session is obtained |
 | `GET /e/api/pages` | public: the **season listing** — `{tournaments, counts, now}`, one read for the whole `/e/` calendar (SP-P8). Each row carries `slug`, `name`, `organizer`, `venueName`, `date`, `eventCount`, `status`, `closesInDays`, `drawsPublished`, `winnersPublished`; `counts` is `{takingEntries, completed}`; `now` is the live pick or `null`. `Cache-Control: public, max-age=30`. Still filtered on `is_open` in SQL, and still the list `/e/sitemap.xml` crawls |
 | `POST /e/api/quote/{slug}` | **session-gated** (R8-C): the R14 running fee total. Shares one `compute_fee_total` with submit, so a quote cannot diverge from the charge |
@@ -209,6 +214,12 @@ cookie and never reach an operator route. Cookie-carrying writes here prove them
 that ships no JavaScript can still submit — there is no path-based CSRF exemption anywhere in
   the app, and `tests/backend/test_csrf_cookie_registry.py` asserts that from source.
 
+Public entrant records are strict projection contracts. New keys require an explicit serializer
+allow-list registration and an exact key-set assertion. The frontend does not construct or parse
+identity strings: `PersonRef` consumes the identity object and uses its persisted id for links.
+Schedule courts are read only from Operations materialization after assignment; planned solver
+assignments are never public.
+
 ::: tip Resolved: the CSP now admits Turnstile, on `/e/signup` only
 Entrant signup used to answer `403 AUTH_CHALLENGE_FAILED` in every deployed stack: the signup
 page loads Turnstile's script from `challenges.cloudflare.com`, the nginx CSP sent
@@ -218,7 +229,7 @@ Fixed by the `$sw_turnstile_origin` map in `infra/nginx/play.conf`, which adds t
 [documented requirement](https://developers.cloudflare.com/turnstile/reference/content-security-policy/)
 — for `/e/signup` and no other path, so the operator console on the same origin still gets
 `script-src 'self'`. The cost is one trusted third-party script host on one public page.
-Held by `e2e/tests/10-entrant-r11-evidence.spec.ts`, which fails if the widget stops rendering
+Held by `tests/e2e/tests/10-entrant-r11-evidence.spec.ts`, which fails if the widget stops rendering
 **or** if the allowance widens past that page.
 :::
 
@@ -254,6 +265,7 @@ and Display (preview source).
 | --- | --- |
 | `GET · POST /tournaments` | list (with [signals](/reference/api/signals)) / create a workspace |
 | `GET · PATCH · DELETE /tournaments/{id}` | summary / update / delete |
+| `GET /tournaments/{id}/setup`, `PATCH …/setup/{section}` | domain-derived Setup checklist and section edits; see the [Setup API](/reference/api/setup) |
 | `GET · PUT /tournaments/{id}/state` | the persisted workspace-state blob (shared). **`PUT` requires `If-Match`** (`412` when missing or malformed, `409` `STATE_VERSION_CONFLICT` when stale — see the concurrency note below); honours `?clearSchedule=true` — see the schedule lock below |
 | `GET …/state/backups`, `POST …/state/backup`, `POST …/state/restore/{file}` | snapshots. Restore rewrites the blob, so its response carries a fresh `ETag` |
 
@@ -402,6 +414,7 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
 ## See also
 
 - [Signals API](/reference/api/signals) — the per-workspace summary on `GET /tournaments`
+- [Setup API](/reference/api/setup) — the domain-derived checklist and section edit facade
 - [Backend structure](/explanation/architecture/backend-structure#route-ownership) — the route-to-module rationale
 - [Data flow](/explanation/architecture/data-flow#the-command-pipeline-write-path) — the command write path
 - [Bracket result queue](/explanation/architecture/bracket-result-queue) and [ADR 0007](/explanation/decisions/0007-bracket-result-command-queue) — the `/bracket/commands` design

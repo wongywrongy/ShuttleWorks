@@ -214,12 +214,14 @@ _SIGNED_IN_PAGE = "/e/login/signed-in"
 # to learn that it was valid once (see ``consume_verification_token``).
 _VERIFIED_PAGE = "/e/verify/done"
 _VERIFY_FAILED_PAGE = "/e/verify/failed"
+_VERIFY_SENT_PAGE = "/e/verify/sent"
 # One target whether or not the address is registered. This is the reset
 # flow's whole non-enumeration property and it is the same shape signup
 # already uses: the page states that mail *would* have been sent.
 _RESET_SENT_PAGE = "/e/reset/sent"
 _RESET_DONE_PAGE = "/e/reset/done"
 _RESET_FAILED_PAGE = "/e/reset/failed"
+_RESET_PASSWORD_FAILED_PAGE = "/e/reset/password-failed"
 
 # Where a form sign-in that did not work sends the browser back to, which is
 # what makes the refusal a PAGE rather than the
@@ -818,6 +820,7 @@ def verify(
 def resend_verification(
     request: Request,
     response: Response,
+    csrf_checked: None = Depends(logout_form_csrf),
     entrant: AuthEntrant = Depends(get_current_entrant),
     repo: LocalRepository = Depends(get_repository),
 ):
@@ -841,7 +844,7 @@ def resend_verification(
         _send_verification(account, token)
     if is_form_post(request):
         return RedirectResponse(
-            url=_LOGIN_PAGE, status_code=status.HTTP_303_SEE_OTHER
+            url=_VERIFY_SENT_PAGE, status_code=status.HTTP_303_SEE_OTHER
         )
     response.status_code = status.HTTP_202_ACCEPTED
     return {"status": "accepted"}
@@ -856,6 +859,7 @@ def request_entrant_password_reset(
     request: Request,
     response: Response,
     body: RequestResetRequest = Depends(request_reset_body),
+    next_raw: str = Depends(form_next),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Mail a reset link. **Always 202, always the same page** (R10, I5).
@@ -890,12 +894,16 @@ def request_entrant_password_reset(
             repo.session.commit()
             # PUBLIC tier (SP-HOST-1 D-9), same reason as verification.
             origin = settings.play_origin
+            return_to = next_target(next_raw, "")
+            reset_query = {"token": token}
+            if return_to:
+                reset_query["next"] = return_to
             _mail(
                 account.email,
                 "Reset your ShuttleWorks entry password",
                 (
                     "A password reset was requested for this address.\n\n"
-                    f"{origin}/e/reset?token={token}\n\n"
+                    f"{origin}/e/reset?{urlencode(reset_query)}\n\n"
                     f"The link expires in "
                     f"{int(settings.reset_token_ttl_minutes)} minutes. "
                     "If you didn't ask for this, ignore this message — your "
@@ -923,6 +931,7 @@ def request_entrant_password_reset(
 def reset_entrant_password(
     request: Request,
     body: ResetRequest = Depends(reset_body),
+    next_raw: str = Depends(form_next),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Consume a reset token and set a new password.
@@ -951,8 +960,13 @@ def reset_entrant_password(
     except AuthError as exc:
         repo.session.rollback()
         if is_form_post(request):
+            retry_query = {"token": body.token}
+            return_to = next_target(next_raw, "")
+            if return_to:
+                retry_query["next"] = return_to
             return RedirectResponse(
-                url=_RESET_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+                url=f"{_RESET_PASSWORD_FAILED_PAGE}?{urlencode(retry_query)}",
+                status_code=status.HTTP_303_SEE_OTHER,
             )
         raise _auth_error(exc)
 
@@ -960,8 +974,14 @@ def reset_entrant_password(
         auth_service.throttle_record_failure(repo.session, ip_key)
         repo.session.commit()
         if is_form_post(request):
+            return_to = next_target(next_raw, "")
+            failed_url = (
+                f"{_RESET_FAILED_PAGE}?{urlencode({'next': return_to})}"
+                if return_to
+                else _RESET_FAILED_PAGE
+            )
             return RedirectResponse(
-                url=_RESET_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+                url=failed_url, status_code=status.HTTP_303_SEE_OTHER
             )
         raise http_error(
             status.HTTP_400_BAD_REQUEST,
@@ -971,8 +991,14 @@ def reset_entrant_password(
 
     repo.session.commit()
     if is_form_post(request):
+        return_to = next_target(next_raw, "")
+        done_url = (
+            f"{_RESET_DONE_PAGE}?{urlencode({'next': return_to})}"
+            if return_to
+            else _RESET_DONE_PAGE
+        )
         return RedirectResponse(
-            url=_RESET_DONE_PAGE, status_code=status.HTTP_303_SEE_OTHER
+            url=done_url, status_code=status.HTTP_303_SEE_OTHER
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

@@ -18,7 +18,7 @@ describe('landingRoute', () => {
   });
   it('lands on the Modules admin when NOTHING is enabled (blank/custom)', () => {
     expect(landingRoute({ id: 'w3', kind: 'meet', modules: [mod('meet', 'available'), mod('bracket', 'available'), mod('display', 'disabled')] }))
-      .toBe('/tournaments/w3/ws-modules');
+      .toBe('/tournaments/w3/administration/modules');
   });
   it('falls back to kind-derived modules when modules absent → Overview', () => {
     expect(landingRoute({ id: 'w4', kind: 'meet', modules: undefined }))

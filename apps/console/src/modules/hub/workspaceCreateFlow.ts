@@ -17,6 +17,6 @@ type CreatedLike = Pick<TournamentSummaryDTO, 'id' | 'kind' | 'modules'>;
 export function landingRoute(created: CreatedLike): string {
   const mods = created.modules ? modulesFromDto(created.modules) : modulesForWorkspace(created.kind);
   const anyEnabled = mods.some((m) => m.status === 'enabled');
-  if (!anyEnabled) return `/tournaments/${created.id}/ws-modules`;
+  if (!anyEnabled) return `/tournaments/${created.id}/administration/modules`;
   return `/tournaments/${created.id}/overview`;
 }

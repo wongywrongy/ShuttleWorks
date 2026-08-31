@@ -135,12 +135,17 @@ def test_the_queue_publishes_in_arrival_order_after_the_close(client):
 
     body = _page(client)
 
-    assert [(r["position"], r["name"]) for r in body["reserves"]] == [
+    assert [
+        (r["position"], r["person"]["identity"]["name"])
+        for r in body["reserves"]
+    ] == [
         (1, "First Reserve"),
         (2, "Second Reserve"),
     ]
     # And the accepted list is unchanged by any of it.
-    assert [e["name"] for e in body["entrants"]] == ["Ada Chen"]
+    assert [e["person"]["identity"]["name"] for e in body["entrants"]] == [
+        "Ada Chen"
+    ]
 
 
 def test_nothing_is_published_while_entries_are_still_open(client):
@@ -204,7 +209,9 @@ def test_an_opted_out_reserve_holds_their_place_and_is_not_printed(client):
 
     reserves = _page(client)["reserves"]
 
-    assert [(r["position"], r["name"]) for r in reserves] == [(2, "Second Reserve")]
+    assert [
+        (r["position"], r["person"]["identity"]["name"]) for r in reserves
+    ] == [(2, "Second Reserve")]
     assert "Quiet One" not in _page(client).__str__()
 
 
@@ -214,16 +221,23 @@ def test_a_withdrawn_or_rejected_entry_is_not_a_reserve(client):
     _seed(world, "Refused", state="rejected", minutes_ago=30)
     _seed(world, "Actually Waiting", state="waitlisted", minutes_ago=20)
 
-    assert [r["name"] for r in _page(client)["reserves"]] == ["Actually Waiting"]
+    assert [
+        r["person"]["identity"]["name"] for r in _page(client)["reserves"]
+    ] == ["Actually Waiting"]
 
 
 def test_the_queue_carries_no_contact_data(client):
-    """The same strict projection as the entrant list: name, club, event,
-    position. An address on a public page is the disclosure invariant I6
-    exists to prevent."""
+    """The same strict projection as the entrant list: person reference,
+    club, event, position. An address on a public page is the disclosure
+    invariant I6 exists to prevent."""
     world = _world(client, closes_at=CLOSED)
     _seed(world, "First Reserve", state="waitlisted", minutes_ago=40)
 
     body = _page(client)
-    assert set(body["reserves"][0]) == {"eventCode", "position", "name", "club"}
+    reserve = body["reserves"][0]
+    assert set(reserve) == {"eventCode", "position", "person", "club"}
+    assert set(reserve["person"]) == {"identity", "resolution", "label"}
+    assert set(reserve["person"]["identity"]) == {"id", "name"}
+    assert reserve["person"]["resolution"] == "resolved"
+    assert reserve["person"]["label"] is None
     assert "parent@example.com" not in str(body)

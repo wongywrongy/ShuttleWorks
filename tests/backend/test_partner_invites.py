@@ -76,6 +76,11 @@ def _verified_entrant(client, mailbox, email):
     return email
 
 
+def _reference_name(reference):
+    """Read the canonical public person reference without flattening it."""
+    return reference["identity"]["name"] if reference is not None else None
+
+
 @pytest.fixture
 def world(client, turnstile, mailbox):
     """A workspace with one DOUBLES event and an open page."""
@@ -789,14 +794,16 @@ def test_partner_names_on_the_own_card(client, world, mailbox):
 
     # Nominated, not accepted: no name yet.
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
-    assert [line["partnerName"] for line in card["events"]] == [None]
+    assert [_reference_name(line["partner"]) for line in card["events"]] == [None]
 
     _verified_entrant(client, mailbox, "sam@example.com")
     _accept(client, token)
 
     # Sam's own card names Alex…
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
-    assert [line["partnerName"] for line in card["events"]] == ["Alex Kim"]
+    assert [_reference_name(line["partner"]) for line in card["events"]] == ["Alex Kim"]
+    assert set(card["events"][0]["partner"]) == {"identity", "resolution", "label"}
+    assert set(card["events"][0]["partner"]["identity"]) == {"id", "name"}
     # …and never the address the invite travelled through.
     assert "sam@example.com" not in str(card)
 
@@ -808,7 +815,7 @@ def test_partner_names_on_the_own_card(client, world, mailbox):
         headers=CSRF,
     )
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
-    assert [line["partnerName"] for line in card["events"]] == ["Sam Ali"]
+    assert [_reference_name(line["partner"]) for line in card["events"]] == ["Sam Ali"]
 
 
 def test_partner_names_on_the_player_page(client, world, mailbox):
@@ -845,9 +852,11 @@ def test_partner_names_on_the_player_page(client, world, mailbox):
     client.cookies.clear()
     body = client.get(f"/e/api/page/pairs-open/players/{alex_key}").json()
     (xd,) = [ev for ev in body["events"] if ev["code"] == "XD"]
-    assert xd["partnerName"] is None  # accepted, but not confirmed → not public
+    assert xd["partner"] is None  # accepted, but not confirmed → not public
 
     _publish_and_confirm(world)
     body = client.get(f"/e/api/page/pairs-open/players/{alex_key}").json()
     (xd,) = [ev for ev in body["events"] if ev["code"] == "XD"]
-    assert xd["partnerName"] == "Sam Ali"
+    assert _reference_name(xd["partner"]) == "Sam Ali"
+    assert set(xd["partner"]) == {"identity", "resolution", "label"}
+    assert set(xd["partner"]["identity"]) == {"id", "name"}

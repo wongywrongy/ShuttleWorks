@@ -27,23 +27,27 @@ import { data } from 'react-router';
 import { PlayShell } from '../components/PlayShell';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
+import { safeNext } from '../lib/nextTarget';
+import { CARD } from '../lib/ui';
 import type { Route } from './+types/resetPassword';
 
 const SENT_SUFFIX = '/sent';
 const DONE_SUFFIX = '/done';
 const FAILED_SUFFIX = '/failed';
+const PASSWORD_FAILED_SUFFIX = '/password-failed';
 
 /** See `verify.tsx` — same clamp, same reason. */
 const MAX_TOKEN = 200;
 
 /** Which of the five this request matched. A closed set, so the component
  * renders one branch and never has to reason about combinations. */
-type ResetView = 'request' | 'set' | 'sent' | 'done' | 'failed';
+type ResetView = 'request' | 'set' | 'sent' | 'done' | 'failed' | 'password-failed';
 
 export interface ResetLoaderData {
   formCsrf: string;
   view: ResetView;
   token: string;
+  next: string;
 }
 
 export async function loader({ request }: { request: Request }) {
@@ -53,7 +57,8 @@ export async function loader({ request }: { request: Request }) {
   const token = raw.length > MAX_TOKEN ? '' : raw;
 
   let view: ResetView;
-  if (url.pathname.endsWith(SENT_SUFFIX)) view = 'sent';
+  if (url.pathname.endsWith(PASSWORD_FAILED_SUFFIX)) view = 'password-failed';
+  else if (url.pathname.endsWith(SENT_SUFFIX)) view = 'sent';
   else if (url.pathname.endsWith(DONE_SUFFIX)) view = 'done';
   else if (url.pathname.endsWith(FAILED_SUFFIX)) view = 'failed';
   else if (url.pathname.endsWith('/forgot')) view = 'request';
@@ -61,7 +66,12 @@ export async function loader({ request }: { request: Request }) {
   // for the address, which is the step that produces a usable link.
   else view = token ? 'set' : 'request';
 
-  const payload: ResetLoaderData = { formCsrf: csrf.token, view, token };
+  const payload: ResetLoaderData = {
+    formCsrf: csrf.token,
+    view,
+    token,
+    next: safeNext(url.searchParams.get('next'), ''),
+  };
   return data(payload, csrf.responseInit);
 }
 
@@ -73,33 +83,36 @@ export const meta: Route.MetaFunction = () => [
   { title: 'Reset your password · ShuttleWorks Tournaments' },
 ];
 
-const CARD = 'grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm';
+const FORM_CARD = `grid gap-4 ${CARD}`;
 
 export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, view, token } = loaderData;
+  const { formCsrf, view, token, next } = loaderData;
 
   return (
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            {view === 'set' ? 'Choose a new password' : 'Reset your password'}
+            {view === 'set' || view === 'password-failed'
+              ? 'Choose a new password'
+              : 'Reset your password'}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {view === 'set'
+            {view === 'set' || view === 'password-failed'
               ? 'This signs you out everywhere else, on every device.'
               : 'We will email you a link that lets you set a new one.'}
           </p>
         </header>
 
         {view === 'request' ? (
-          <div className={CARD}>
+          <div className={FORM_CARD}>
             <form
               method="post"
               action="/e/account/request-password-reset"
               className="grid gap-4"
             >
               <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+              {next ? <input type="hidden" name="next" value={next} /> : null}
               <TextField
                 id="reset-email"
                 label="Email"
@@ -124,23 +137,33 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
         ) : null}
 
         {view === 'sent' ? (
-          <div className={CARD}>
+          <div className={FORM_CARD}>
             {/* The conditional is the point — see the module note. */}
             <Notice tone="info">
               If that address has an account, a reset link is on its way. It is
               good for one hour. Check the spam folder before asking again.
             </Notice>
             <Button asChild variant="outline" className="justify-self-start">
-              <a href="/e/login">Back to sign in</a>
+              <a href={next ? `/e/login?next=${encodeURIComponent(next)}` : '/e/login'}>
+                Back to sign in
+              </a>
             </Button>
           </div>
         ) : null}
 
-        {view === 'set' ? (
-          <div className={CARD}>
+        {view === 'set' || view === 'password-failed' ? (
+          <div className={FORM_CARD}>
+            {view === 'password-failed' ? (
+              <Notice tone="warning">
+                That password does not meet the requirements. Choose at least
+                eight characters and avoid very common passwords. Your reset
+                link is still valid.
+              </Notice>
+            ) : null}
             <form method="post" action="/e/account/reset-password" className="grid gap-4">
               <input type="hidden" name={FORM_FIELD} value={formCsrf} />
               <input type="hidden" name="token" value={token} />
+              {next ? <input type="hidden" name="next" value={next} /> : null}
               <TextField
                 id="reset-password"
                 label="New password"
@@ -155,8 +178,8 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
                 minLength={8}
                 maxLength={128}
                 autoComplete="new-password"
-                // No reveal toggle: this tier ships no client JS, and the
-                // control would be dead on press. Same call as `login.tsx`.
+                // No reveal toggle: this SSR-first route does not load a
+                // password-control module. Same call as `login.tsx`.
                 revealable={false}
               />
               <Button type="submit" className="justify-self-start">
@@ -167,27 +190,31 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
         ) : null}
 
         {view === 'done' ? (
-          <div className={CARD}>
+          <div className={FORM_CARD}>
             <Notice tone="success">
               Your password is set. You have been signed out everywhere else.
               Sign in again with the new one.
             </Notice>
             <Button asChild className="justify-self-start">
-              <a href="/e/login">Sign in</a>
+              <a href={next ? `/e/login?next=${encodeURIComponent(next)}` : '/e/login'}>
+                {next ? 'Sign in and continue' : 'Sign in'}
+              </a>
             </Button>
           </div>
         ) : null}
 
         {view === 'failed' ? (
-          <div className={CARD}>
+          <div className={FORM_CARD}>
             {/* Expired, used and never-valid are one message, for the reason
                 `verify.tsx` gives. Asking again is the fix in all three. */}
             <Notice tone="warning">
-              That reset link is no longer usable, or the password did not meet
-              the minimum length. Ask for a fresh link and try again.
+              That reset link is no longer usable. Ask for a fresh link and try
+              again; no password was changed.
             </Notice>
             <Button asChild variant="outline" className="justify-self-start">
-              <a href="/e/forgot">Email me a new link</a>
+              <a href={next ? `/e/forgot?next=${encodeURIComponent(next)}` : '/e/forgot'}>
+                Email me a new link
+              </a>
             </Button>
           </div>
         ) : null}

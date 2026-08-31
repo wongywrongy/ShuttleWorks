@@ -18,11 +18,12 @@ from scheduler_core.domain.tournament import (
     Participant,
     ParticipantType,
     PlayUnit,
+    Result,
     TournamentState,
     WinnerSide,
 )
 
-from bracket.advancement import record_result
+from bracket.advancement import reconcile_recorded_results, record_result
 from bracket.draw import BYE, BracketSlot, Draw
 
 
@@ -84,6 +85,21 @@ def test_real_result_routes_winner_and_loser():
     p = state.play_units["P"]
     assert f.side_a == ["a"] and f.side_b == ["d"]  # winners
     assert p.side_a == ["b"] and p.side_b == ["c"]  # losers
+
+
+def test_reconcile_recorded_results_repairs_imported_successor_sides():
+    """Stored result facts must derive the same sides as live advancement."""
+    state, draw = _mini_plate_draw()
+    state.results["M0"] = Result(winner_side=WinnerSide.A, finished_at_slot=1)
+    state.results["M1"] = Result(winner_side=WinnerSide.B, finished_at_slot=1)
+
+    touched = reconcile_recorded_results(state, draw)
+
+    assert set(touched) == {"F", "P"}
+    assert state.play_units["F"].side_a == ["a"]
+    assert state.play_units["F"].side_b == ["d"]
+    assert state.play_units["P"].side_a == ["b"]
+    assert state.play_units["P"].side_b == ["c"]
 
 
 def test_walkover_loser_is_bye_and_plate_cascades():

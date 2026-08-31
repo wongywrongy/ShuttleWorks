@@ -4,7 +4,12 @@ import type {
   WorkspaceModule,
   WorkspaceIdentity,
 } from '../product-shell/types';
+import {
+  ENABLEABLE_MODULE_IDS,
+  MODULE_LABELS,
+} from '../product-shell/types';
 import type { WorkspaceModuleDTO } from '../../api/dto';
+import type { AppTab } from '../../store/uiStore';
 
 type Kind = WorkspaceIdentity['kind'];
 
@@ -16,22 +21,16 @@ const MEET_OPERATOR_TABS = new Set([
   'live',
 ]);
 
-/** The one module label map. `/new` used to carry a second copy in
- *  newWorkspaceTemplates.ts alongside the preset seeds; the presets are gone
- *  and the labels live here. */
-export const MODULE_LABELS: Record<ModuleId, string> = {
-  meet: 'Meet',
-  bracket: 'Bracket',
-  display: 'Display',
-  entries: 'Entries',
-};
+/** Kept at this import path for existing callers. The canonical map lives in
+ * product-shell/types so architectural and enableable consumers share it. */
+export { MODULE_LABELS } from '../product-shell/types';
 
 /** Fixed display order for the Module Dock / catalog. Entries goes last: it
  *  is the newest module and the only cloud-only one, so putting it after the
  *  three every workspace has keeps the dock stable for everyone else.
  *  `primaryModuleForOpen` repeats this order and MUST stay in step — the
  *  colocated test pins the two together. */
-const MODULE_ORDER: ModuleId[] = ['meet', 'bracket', 'display', 'entries'];
+const MODULE_ORDER: readonly ModuleId[] = ENABLEABLE_MODULE_IDS;
 
 /** The subset the KIND-DERIVED fallback can produce. Mirrors the backend's
  *  `derive_modules(kind)`, which knows nothing about Entries — an entries row
@@ -52,7 +51,7 @@ export function moduleForTab(tab: string, kind: Kind): ModuleId {
 
 /** The route segment to navigate to when a module is entered. Purely
  *  module-keyed — the workspace kind no longer participates. */
-export function defaultTabForModule(module: ModuleId): string {
+export function defaultTabForModule(module: ModuleId): AppTab {
   if (module === 'bracket') return 'bracket-setup';
   if (module === 'display') return 'tv';
   if (module === 'entries') return 'entries';

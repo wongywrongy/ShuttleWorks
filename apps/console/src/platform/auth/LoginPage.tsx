@@ -20,7 +20,7 @@
  * rejects breached passwords, which the client cannot check.
  */
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams, type Location } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
 import { Button, Card, TextField } from '@scheduler/design-system';
@@ -28,7 +28,19 @@ import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from './passwordPolicy';
 import { SwMonogram } from '../../components/ShuttleWorksMark';
 
 interface FromState {
-  from?: { pathname: string };
+  from?: Pick<Location, 'pathname' | 'search' | 'hash'>;
+}
+
+/**
+ * Preserve the complete return destination supplied by AuthGuard.  Keeping
+ * the query and hash matters for filtered operator views, deep links, and
+ * invite/publication flows; pathname-only redirects silently reset that
+ * context after a successful sign-in.
+ */
+export function returnDestination(state: unknown): string {
+  const from = (state as FromState | null | undefined)?.from;
+  if (!from?.pathname || !from.pathname.startsWith('/')) return '/';
+  return `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`;
 }
 
 type Mode = 'signin' | 'register' | 'forgot';
@@ -88,7 +100,7 @@ export function LoginPage() {
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const from = (location.state as FromState)?.from?.pathname ?? '/';
+  const from = returnDestination(location.state);
 
   /** Form-level error: only what we could not anchor to a field. */
   const formError = failure && !failure.field ? failure.message : null;

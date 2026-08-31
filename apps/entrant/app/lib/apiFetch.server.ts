@@ -72,11 +72,11 @@ export async function apiGet<T>(
 ): Promise<T> {
   // Pins "public projection only" in code, not just convention: a raw path
   // segment (e.g. a slug) concatenated below could otherwise steer the
-  // request at a different backend route via `..`, `?`, or `#` surviving
-  // URL normalization. Reject the prefix miss AND a dot-segment/query/
-  // fragment anywhere in the path — a path starting with `/e/api/` that
-  // still contains `..` can normalize outside it once concatenated.
-  if (!/^\/e\/api\//.test(path) || path.includes('..') || /[?#]/.test(path)) {
+  // request at a different backend route via `..` surviving URL normalization.
+  // Query strings are allowed for public list projections (for example the
+  // Schedule / Live filters), but fragments and dot segments are not.
+  const [pathname, query = ''] = path.split('?');
+  if (!/^\/e\/api\//.test(pathname) || pathname.includes('..') || query.includes('..') || path.includes('#') || path.indexOf('?') !== path.lastIndexOf('?')) {
     throw new Error(`apiGet: rejected non-public-projection path ${path}`);
   }
 

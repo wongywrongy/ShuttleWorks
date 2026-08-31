@@ -17,8 +17,13 @@ import { useMemo } from 'react';
 import type { OpsBlock } from '../opsBlock';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 import { EYEBROW_CLASS } from '../../../lib/utils';
+import { MODULE_LABELS } from '../../../platform/product-shell/types';
+import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
 
-const SOURCE_LABEL: Record<'meet' | 'bracket', string> = { meet: 'Meet', bracket: 'Bracket' };
+const SOURCE_LABEL: Record<'meet' | 'bracket', string> = {
+  meet: MODULE_LABELS.meet,
+  bracket: MODULE_LABELS.bracket,
+};
 const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
   meet: 'bg-module-meet/15 text-module-meet',
   bracket: 'bg-module-bracket/15 text-module-bracket',
@@ -119,7 +124,7 @@ export function PlanCallList({
                   {SOURCE_LABEL[b.source][0]}
                 </span>
                 <span className="w-16 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">
-                  {b.label}
+                  {formatMatchIdentity(b.identity, b.id)}
                 </span>
                 <span className="min-w-[10rem] flex-1 break-words text-sm">
                   {b.sideA}

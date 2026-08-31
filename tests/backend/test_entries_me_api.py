@@ -142,7 +142,11 @@ def _seed_submission(page, email, player_name="Robin Seeded", state="pending",
         )
         session.add(entry)
         session.commit()
-        return {"entry": str(entry.id), "player": str(player.id)}
+        return {
+            "submission": str(submission.id),
+            "entry": str(entry.id),
+            "player": str(player.id),
+        }
     finally:
         session.close()
 
@@ -164,6 +168,69 @@ def _set_tournament_date(page, date_iso):
 
 def test_a_bare_request_is_401(client):
     assert client.get("/e/api/me/entries").status_code == 401
+
+
+def test_a_bare_receipt_request_is_401(client):
+    submission_id = "44444444-4444-4444-8444-444444444444"
+    assert client.get(f"/e/api/me/submissions/{submission_id}").status_code == 401
+
+
+def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile):
+    _sign_in(client, "parent@example.com")
+    seeded = _seed_submission(
+        page,
+        "parent@example.com",
+        player_name="Junior Chen",
+        state="confirmed",
+        fee_total_cents=5500,
+    )
+
+    response = client.get(f"/e/api/me/submissions/{seeded['submission']}")
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "private, no-store"
+    body = response.json()
+    assert set(body) == {
+        "submissionId",
+        "slug",
+        "tournamentName",
+        "orgName",
+        "venueName",
+        "submittedAt",
+        "status",
+        "feeTotalCents",
+        "paymentState",
+        "paymentNote",
+        "paymentInstructions",
+        "regulationsVersionAccepted",
+        "events",
+    }
+    assert body["submissionId"] == seeded["submission"]
+    assert body["slug"] == "winter-cup"
+    assert body["tournamentName"] == "Winter Cup"
+    assert body["venueName"] == "North Hall"
+    assert body["status"] == "confirmed"
+    assert body["feeTotalCents"] == 5500
+    assert body["paymentState"] == "required"
+    assert body["events"] == [
+        {
+            "eventCode": "MS",
+            "discipline": "Men's Singles",
+            "player": {
+                "identity": {"id": seeded["player"], "name": "Junior Chen"},
+                "resolution": "resolved",
+                "label": None,
+            },
+            "partner": None,
+            "state": "entered",
+        }
+    ]
+
+    client.cookies.clear()
+    _sign_in(client, "stranger@example.com")
+    foreign = client.get(f"/e/api/me/submissions/{seeded['submission']}")
+    invalid = client.get("/e/api/me/submissions/not-a-uuid")
+    assert foreign.status_code == invalid.status_code == 404
+    assert foreign.json() == invalid.json()
 
 
 def test_the_answer_is_private_and_uncacheable(client, page, turnstile):
@@ -190,7 +257,7 @@ def test_each_account_sees_its_own_acts_and_nothing_else(client, page, turnstile
     _sign_in(client, "parent@example.com")
     body = client.get("/e/api/me/entries").json()
     (card,) = body["tournaments"]
-    assert [line["playerName"] for line in card["events"]] == ["Junior Chen"]
+    assert [line["player"]["identity"]["name"] for line in card["events"]] == ["Junior Chen"]
     # And the public page shows none of it (pending + unpublished).
     assert client.get(f"/e/api/page/{page['slug']}").json()["entrants"] == []
 
@@ -230,8 +297,7 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
         == {
             "eventCode",
             "discipline",
-            "playerName",
-            "personKey",
+            "player",
             "state",
             # E2: the withdraw affordance's two fields. The id is this
             # account's own entry and the flag is the route's own predicate,
@@ -243,10 +309,15 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
             # the nominated email, which stays on the entry unprojected. The
             # widening is the STOP-approved ruling this exact-set exists to
             # force; both directions in test_partner_names_on_the_own_card.
-            "partnerName",
+            "partner",
         }
         for line in card["events"]
     )
+    for line in card["events"]:
+        assert set(line["player"]) == {"identity", "resolution", "label"}
+        assert set(line["player"]["identity"]) == {"id", "name"}
+        assert line["player"]["resolution"] == "resolved"
+        assert line["partner"] is None
     assert card["slug"] == "winter-cup"
     assert card["tournamentName"] == "Winter Cup"
     assert card["venueName"] == "North Hall"
@@ -288,7 +359,7 @@ def test_a_mixed_submission_is_still_awaiting_with_per_line_states(
                      state="pending")
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
     assert card["status"] == "awaiting"
-    assert {line["playerName"]: line["state"] for line in card["events"]} == {
+    assert {line["player"]["identity"]["name"]: line["state"] for line in card["events"]} == {
         "A Child": "entered",
         "B Child": "awaiting",
     }

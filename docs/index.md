@@ -4,7 +4,7 @@ layout: home
 hero:
   name: ShuttleWorks
   text: Tournament scheduling, as a control plane
-  tagline: One workspace, five architectural modules — Entries, Meet, Bracket, Operations, Display — over a shared CP-SAT engine, plus a zero-JavaScript public tier. This site is the architecture, the module contracts, and the data flow, written for a developer picking the codebase up cold.
+  tagline: One workspace, five architectural modules — Entries, Meet, Bracket, Operations, Display — over a shared CP-SAT engine, plus an SSR-first public tier. This site is the architecture, the module contracts, and the data flow, written for a developer picking the codebase up cold.
   actions:
     - theme: brand
       text: What ShuttleWorks is
@@ -23,8 +23,8 @@ features:
   - title: Five architectural modules
     details: Entries is intake, Meet and Bracket are the engines, Operations is the live-ops layer, Display is the read-only output. Four are user-enableable; Operations is a Tier-2 architectural module.
     link: /explanation/architecture/system-overview
-  - title: A public tier with zero client JavaScript
-    details: The site where a player finds a tournament and enters it is a separate server-rendered app under /e/, held to a blocking 4 KB page-weight budget. Every interaction is native HTML.
+  - title: An SSR-first public tier
+    details: The site where a player finds a tournament and enters it is a separate server-rendered app under /e/. Complete HTML and native writes work without hydration; bounded same-origin route modules enhance search, draws, account state, and entry progress. Poster and discovery pages have a blocking 4 KB budget; the persistent entry journey has an 8 KB budget.
     link: /explanation/architecture/entrant-tier
   - title: Test-enforced module contracts
     details: The seams between modules are declared in a typed, test-enforced descriptor. Each contract page states what crosses the boundary, who owns it, and the clean interface.

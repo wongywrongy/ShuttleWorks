@@ -21,7 +21,6 @@ function depcruise(): { code: number; out: string } {
   try {
     const out = execFileSync('npx', ['depcruise', 'app', '--output-type', 'err'], {
       encoding: 'utf8',
-      shell: true,
     });
     return { code: 0, out };
   } catch (err) {

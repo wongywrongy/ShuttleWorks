@@ -19,6 +19,9 @@ import type {
   ProposedMove,
   ValidationResponseDTO,
   TournamentStateDTO,
+  SetupKey,
+  TournamentSetupDTO,
+  TournamentActivityFeedDTO,
   TournamentSummaryDTO,
   WorkspaceModuleDTO,
   EntryDTO,
@@ -266,6 +269,11 @@ export class StateVersionConflict extends Error {
  *  A missing entry means "never read this workspace", and the write is then
  *  refused with 412 rather than guessed at — fail-closed by construction. */
 const stateEtags = new Map<string, string>();
+
+// Setup is a section-oriented facade over the same versioned tournament
+// document. Keep its validator separate from the legacy state writer so a
+// setup edit can never accidentally reuse a stale token from another route.
+const setupEtags = new Map<string, string>();
 
 /** Thrown when the server rejects a match-state mutation due to a
  *  stale or missing If-Match version (HTTP 412) or a state-machine
@@ -1174,6 +1182,59 @@ class ApiClient {
       }
       throw err;
     }
+  }
+
+  /** Read the canonical workflow-first Setup aggregate and capture its ETag.
+   * The API requires that token for every section write so two operators get a
+   * visible conflict instead of silently losing a change. */
+  async getTournamentSetup(tid: string): Promise<TournamentSetupDTO> {
+    const response = await this.client.get<TournamentSetupDTO>(
+      `/tournaments/${tid}/setup`,
+    );
+    const etag = response.headers?.etag ?? response.headers?.ETag;
+    if (etag) {
+      setupEtags.set(tid, String(etag));
+      stateEtags.set(tid, String(etag));
+    }
+    return response.data;
+  }
+
+  /** Patch exactly one Setup section. The returned aggregate is authoritative
+   * and refreshes the captured ETag for the next section edit. */
+  async patchTournamentSetup(
+    tid: string,
+    section: SetupKey,
+    data: Record<string, unknown>,
+  ): Promise<TournamentSetupDTO> {
+    const etag = setupEtags.get(tid);
+    if (!etag) {
+      throw new Error('Setup must be loaded before it can be saved');
+    }
+    try {
+      const response = await this.client.patch<TournamentSetupDTO>(
+        `/tournaments/${tid}/setup/${section}`,
+        { data },
+        { headers: { 'If-Match': etag } },
+      );
+      const next = response.headers?.etag ?? response.headers?.ETag;
+      if (next) {
+        setupEtags.set(tid, String(next));
+        stateEtags.set(tid, String(next));
+      }
+      return response.data;
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status;
+      if (status === 409 || status === 412) setupEtags.delete(tid);
+      throw error;
+    }
+  }
+
+  /** Durable, server-authored high-impact tournament activity. */
+  async getTournamentActivity(tid: string): Promise<TournamentActivityFeedDTO> {
+    const response = await this.client.get<TournamentActivityFeedDTO>(
+      `/tournaments/${tid}/activity`,
+    );
+    return response.data;
   }
 
   /** List rolling backups (newest first). */

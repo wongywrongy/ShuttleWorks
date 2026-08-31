@@ -49,7 +49,7 @@ export function BracketLiveView({
               className={[
                 'rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
                 m.status === 'on-court'
-                  ? 'bg-accent/15 text-accent'
+                  ? 'bg-action-selected-bg text-action-selected-foreground'
                   : 'border border-border text-muted-foreground',
               ].join(' ')}
             >

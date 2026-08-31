@@ -17,7 +17,7 @@ import { useCommandQueue } from '../../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../../hooks/useBracketResultQueue';
 import { useUiStore } from '../../../store/uiStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
-import { DetailDock, DetailPanel } from '../../../components/control-plane';
+import { DetailDock, MatchInspector } from '../../../components/control-plane';
 import { ConflictBanner } from '../../../components/ConflictBanner';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import type { OpsBlock } from '../opsBlock';
@@ -40,14 +40,16 @@ import type { RunActionKind } from '../runtime/runMachine';
 import { RunSummaryBand } from './RunSummaryBand';
 import { RunCourtGrid } from './RunCourtGrid';
 import { RunQueue } from './RunQueue';
-import { RunInspector } from './RunInspector';
+import { RunAssignmentActions, RunResultActions } from './RunMatchControls';
 import { RunFinished } from './RunFinished';
-import { MeetMatchPanel } from './MeetMatchPanel';
+import { MeetMatchControls } from './MeetMatchControls';
 import { AlertsActivityPanel } from './AlertsActivityPanel';
 import type { MeetRunOps } from './useMeetRunOps';
 import type { Advisory } from '../../../api/dto';
-import { MatchDetailPanel } from '../../bracket/MatchDetailPanel';
+import { BracketMatchControls } from '../../bracket/BracketRunControls';
 import { EYEBROW_CLASS } from '../../../lib/utils';
+import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
+import { RUN_STATUS_LABEL, deriveDriftSlots } from '../runtime/runMachine';
 
 // ── prop contract ─────────────────────────────────────────────────────────
 
@@ -299,7 +301,10 @@ export function RunSurface({
 
   const conflictIds = useMemo(() => Object.keys(conflicts), [conflicts]);
   const labelForMatchId = useCallback(
-    (matchId: string) => matches.find((m) => m.id === matchId)?.label ?? matchId,
+    (matchId: string) => {
+      const match = matches.find((candidate) => candidate.id === matchId);
+      return match ? formatMatchIdentity(match.identity, match.id) : matchId;
+    },
     [matches],
   );
 
@@ -398,20 +403,11 @@ export function RunSurface({
     if (selectedRole !== 'next-later' || selectedMatch?.court == null) return undefined;
     const lane = lanes.find((l) => l.court === selectedMatch.court);
     if (!lane?.now) return undefined;
-    return { code: lane.now.label, court: lane.court };
+    return {
+      code: formatMatchIdentity(lane.now.identity, lane.now.id),
+      court: lane.court,
+    };
   }, [selectedRole, selectedMatch, lanes]);
-
-  /**
-   * MatchDetailPanel reads its subject from `uiStore.bracketSelectedMatchId`,
-   * so Run has to publish its selection there — exactly as the Plan branch
-   * does in OperationsProduct.
-   */
-  const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
-  useEffect(() => {
-    setBracketSelectedMatchId(
-      selectedMatch?.source === 'bracket' ? selectedMatch.id : null,
-    );
-  }, [selectedMatch, setBracketSelectedMatchId]);
 
   /**
    * The rich bracket rail, mounted only once the match is actually PLAYING.
@@ -432,6 +428,63 @@ export function RunSurface({
     selectedMatch?.source === 'meet' &&
     selectedMatch.status !== 'done' &&
     meetOps.matches.some((m) => m.id === selectedMatch.id);
+
+  // F-UNI-14: one already-loaded model feeds the shared inspector. Selecting
+  // a row performs no read; Operations remains the owner of matchStateStore.
+  const selectedInspectorModel = useMemo(() => {
+    if (!selectedMatch) return null;
+    const block = blocks.find((candidate) => candidate.key === selectedMatch.key);
+    const bracketResult =
+      selectedMatch.source === 'bracket'
+        ? bracketData?.results.find((candidate) => candidate.play_unit_id === selectedMatch.id)
+        : undefined;
+    const winner = bracketResult
+      ? bracketResult.winner_side === 'A'
+        ? selectedMatch.sideA
+        : selectedMatch.sideB
+      : null;
+    const drift = deriveDriftSlots({
+      status: selectedMatch.status,
+      plannedSlot: selectedMatch.plannedSlot,
+      span: selectedMatch.span,
+      currentSlot,
+    });
+    const conflict = conflicts[selectedMatch.id];
+    return {
+      key: selectedMatch.key,
+      id: selectedMatch.id,
+      identity: selectedMatch.identity,
+      status: RUN_STATUS_LABEL[selectedMatch.status],
+      sideA: selectedMatch.sideA,
+      sideB: selectedMatch.sideB,
+      assignment: {
+        court: selectedMatch.court != null ? `C${selectedMatch.court}` : null,
+        planned:
+          selectedMatch.plannedSlot != null
+            ? formatSlot?.(selectedMatch.plannedSlot) ?? `S${selectedMatch.plannedSlot}`
+            : null,
+        actualStart:
+          block?.actualStartSlot != null
+            ? formatSlot?.(block.actualStartSlot) ?? `S${block.actualStartSlot}`
+            : null,
+        actualEnd:
+          block?.actualEndSlot != null
+            ? formatSlot?.(block.actualEndSlot) ?? `S${block.actualEndSlot}`
+            : null,
+      },
+      result:
+        selectedMatch.score || winner
+          ? {
+              summary: winner ? `${winner} wins` : `${selectedMatch.score!.sideA}–${selectedMatch.score!.sideB}`,
+              sets: selectedMatch.score?.sets,
+            }
+          : null,
+      conflicts: [
+        ...(conflict ? [conflict.message] : []),
+        ...(drift > 0 ? ['Running over the planned slot.'] : []),
+      ],
+    };
+  }, [selectedMatch, blocks, bracketData, currentSlot, conflicts, formatSlot]);
 
   /** For a queued match: the first court with no Now match. */
   const freeCourt = useMemo((): number | undefined => {
@@ -580,7 +633,7 @@ export function RunSurface({
                   data-testid={`on-deck-${m.key}`}
                   className="inline-flex items-baseline gap-1.5 text-xs"
                 >
-                  <span className="font-semibold sw-num text-2xs text-ink-3">{m.label}</span>
+                  <span className="font-semibold sw-num text-2xs text-ink-3">{formatMatchIdentity(m.identity, m.id)}</span>
                   <span className="text-muted-foreground">
                     {m.sideA} v {m.sideB}
                   </span>
@@ -625,54 +678,83 @@ export function RunSurface({
           width={288}
           testId="run-detail-dock"
         >
-          {selectedMatch ? (
-            // The dock's pane chrome is `DetailPanel`: the `[MATCH] code`
-            // identity header, the close button, Esc, and — when the dock ran
-            // out of room and demoted itself to an overlay — dialog semantics
-            // and outside-click dismissal. This used to be a bare div with a
-            // hand-rolled ✕ that only a mouse could find.
-            <DetailPanel
-              label="Match"
-              value={selectedMatch.label}
-              mono
+          {selectedMatch && selectedInspectorModel ? (
+            <MatchInspector
+              match={selectedInspectorModel}
+              defaultFacet="result"
               onClose={() => setSelectedKey(null)}
               testId="run-detail-panel"
-            >
-              <RunInspector
-                match={selectedMatch}
-                role={selectedRole}
-                nowRef={nowRef}
-                freeCourt={freeCourt}
-                currentSlot={currentSlot}
-                formatSlot={formatSlot}
-                onAction={handleAction}
-                // The meet rail below renders the INTERACTIVE player rows
-                // (check-in / sub / remove) — suppress the inspector's static
-                // name list so the dock says each name once.
-                hidePlayers={showMeetPanel}
-              />
-              {showMeetPanel && selectedMatch ? (
-                <div data-testid="run-meet-panel" className="border-t border-border">
-                  <MeetMatchPanel
+              supplements={{
+                players: showMeetPanel ? (
+                  <MeetMatchControls
                     match={selectedMatch}
                     ops={meetOps!}
+                    facet="players"
                     onFinished={() => completeRecord(selectedMatch.key)}
                     onSelectKey={setSelectedKey}
                   />
-                </div>
-              ) : null}
-              {/* Plain wrapper: it neutralises the panel's own `h-full` so the
-                  two rails stack in this one scroll column. */}
-              {showBracketPanel && bracketData ? (
-                <div data-testid="run-bracket-panel" className="border-t border-border">
-                  {/* RunInspector above already shows the two side names +
-                      "vs" (it is always mounted) — hideIdentity so this
-                      panel adds only what it alone carries: undo-start, set
-                      scores, the armed winner buttons. */}
-                  <MatchDetailPanel data={bracketData} onChange={onBracketData} hideIdentity />
-                </div>
-              ) : null}
-            </DetailPanel>
+                ) : undefined,
+                summary: showMeetPanel ? (
+                  <MeetMatchControls
+                    match={selectedMatch}
+                    ops={meetOps!}
+                    facet="summary"
+                    onFinished={() => completeRecord(selectedMatch.key)}
+                    onSelectKey={setSelectedKey}
+                  />
+                ) : undefined,
+              }}
+              actions={{
+                assignment: (
+                  <>
+                    <RunAssignmentActions
+                      match={selectedMatch}
+                      role={selectedRole}
+                      nowRef={nowRef}
+                      freeCourt={freeCourt}
+                      onAction={handleAction}
+                    />
+                    {showMeetPanel ? (
+                      <MeetMatchControls
+                        match={selectedMatch}
+                        ops={meetOps!}
+                        facet="assignment"
+                        onFinished={() => completeRecord(selectedMatch.key)}
+                        onSelectKey={setSelectedKey}
+                      />
+                    ) : null}
+                  </>
+                ),
+                result: (
+                  <>
+                    <RunResultActions
+                      match={selectedMatch}
+                      role={selectedRole}
+                      nowRef={nowRef}
+                      freeCourt={freeCourt}
+                      onAction={handleAction}
+                      suppressRecord={showMeetPanel}
+                    />
+                    {showMeetPanel ? (
+                      <MeetMatchControls
+                        match={selectedMatch}
+                        ops={meetOps!}
+                        facet="result"
+                        onFinished={() => completeRecord(selectedMatch.key)}
+                        onSelectKey={setSelectedKey}
+                      />
+                    ) : null}
+                    {showBracketPanel && bracketData ? (
+                      <BracketMatchControls
+                        matchId={selectedMatch.id}
+                        data={bracketData}
+                        onChange={onBracketData}
+                      />
+                    ) : null}
+                  </>
+                ),
+              }}
+            />
           ) : null}
         </DetailDock>
       </div>

@@ -64,6 +64,9 @@ services:
       CORS_ORIGINS: http://${DEMO_TAILSCALE_IP}:8090
       PUBLIC_APP_ORIGIN: http://${DEMO_TAILSCALE_IP}:8090
       PUBLIC_PLAY_ORIGIN: http://${DEMO_TAILSCALE_IP}:8091
+      # Private demo clock only. 2026-07-31 places Taipei Open mid-event and
+      # Korea Masters before first play; cloud deployments cannot honor it.
+      SHUTTLEWORKS_DEMO_NOW: "2026-07-31T05:15:00+00:00"
     secrets:
       - demo_database_url
     depends_on:

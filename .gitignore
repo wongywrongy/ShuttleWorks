@@ -55,7 +55,6 @@ coverage/
 /*.md
 !/README.md
 !/CLAUDE.md
-!/REFACTOR_PROGRESS.md
 !/CODE_HEALTH.md
 !/CONTRIBUTING.md
 !/FRONTEND_PROGRESS.md

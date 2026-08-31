@@ -90,10 +90,16 @@ whispered.
 - **The module contract test** (`__tests__/moduleContract.test.ts`) holds every seam's
   declared ownership to the running app, so a renamed endpoint or a claimed-but-unwired
   seam fails CI ([What a module contract is](/reference/contracts/)).
-- **Lean, always-green gates.** CI runs eslint + vitest + depcruise (frontend) and
-  ruff + pytest (backend); the docs site has a **dead-link** gate (`docs:build`) and a
-  **freshness** check (`docs:freshness`). The gates are deliberately lean so they stay
-  green and meaningful. See [Running locally](/how-to/running-locally).
+- **Lean, always-green gates.** CI runs documentation paths/tests/build, console
+  lint/type/unit/boundary checks, entrant lint/type/unit/build/boundary checks,
+  Python lint/import contracts and Postgres-backed pytest, every Compose-file
+  parse including the demo override, and the isolated canonical console browser
+  contracts. `docs:build` is the documentation dead-link gate. `docs:freshness`
+  remains an advisory local signal rather than a CI blocker, because it reads
+  committed Git history and deliberately reports uncommitted docs separately.
+  The full entrant Playwright evidence suite and the simulator are explicit
+  local/scheduled operations, not PR gates. The matrix and commands are kept in
+  [Running locally](/how-to/running-locally) and `tests/e2e/README.md`.
 
 ## Portability
 

@@ -103,6 +103,7 @@ const openPanelFor = (rowId: string) => {
 };
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/');
   mockBracketData = null;
   mockEventUpsert.mockReset();
   mockSetData.mockReset();
@@ -212,6 +213,67 @@ describe('BracketRosterTab — events badges', () => {
     expect(within(benRow).getByText('MD')).toBeInTheDocument();
     expect(within(benRow).queryByText('MS')).not.toBeInTheDocument();
   });
+
+  it('uses one strict fixed-height record row and truncates long names/events', () => {
+    const longName = 'Alexandria Kalyanaraman-Srinivasan';
+    const data = makeBracketData();
+    data.events.push(
+      {
+        id: 'XD',
+        discipline: 'XD',
+        format: 'se',
+        bracket_size: 4,
+        participant_count: 1,
+        rounds: [],
+        status: 'draft',
+        seeded_count: 0,
+        config: {},
+        participants: [{ id: 'p-long', name: longName }],
+      },
+      {
+        id: 'WD',
+        discipline: 'WD',
+        format: 'se',
+        bracket_size: 4,
+        participant_count: 1,
+        rounds: [],
+        status: 'draft',
+        seeded_count: 0,
+        config: {},
+        participants: [{ id: 'p-long', name: longName }],
+      },
+    );
+    // Put the same player in four events so the Events cell must use its
+    // inline overflow marker instead of wrapping a second line.
+    data.events[0].participants = [
+      ...(data.events[0].participants ?? []),
+      { id: 'p-long', name: longName },
+    ];
+    data.events[1].participants = [
+      ...(data.events[1].participants ?? []),
+      { id: 'p-long', name: longName },
+    ];
+    useTournamentStore.setState({
+      bracketPlayers: [
+        ...useTournamentStore.getState().bracketPlayers,
+        { id: 'p-long', name: longName },
+      ],
+    });
+    mockBracketData = data;
+
+    render(<BracketRosterTab />);
+
+    const rows = screen.getAllByTestId(/^roster-row-/);
+    expect(rows).toHaveLength(5);
+    const row = screen.getByTestId('roster-row-p-long');
+    expect(row).toHaveAttribute('data-strict-row', 'true');
+    expect(row).toHaveClass('h-7', 'max-h-7');
+    const playerCell = within(row).getByTitle(longName);
+    expect(playerCell).toHaveAttribute('data-elastic-column', 'player');
+    expect(playerCell).toHaveClass('overflow-hidden', 'whitespace-nowrap');
+    expect(within(row).getByText(/\+2/)).toBeInTheDocument();
+    expect(row.querySelectorAll('[data-strict-cell="true"]')).toHaveLength(3);
+  });
 });
 
 describe('BracketRosterTab — detail panel', () => {
@@ -230,21 +292,33 @@ describe('BracketRosterTab — detail panel', () => {
     );
   });
 
-  // B3 — the panel was a flat `flex flex-col gap-3` with no headings, in a
-  // different order and a different label recipe from Meet's. One grammar,
-  // one order: who they are, when they can play, what they play, free text.
-  it('groups the body into Identity / Availability / Events / Notes, in that order', () => {
+  it('opens the requested player from a pairs-list route handoff', () => {
+    window.history.replaceState(null, '', '/participants/people?player=p-ben-carter');
+    render(<BracketRosterTab />);
+
+    const panel = screen.getByTestId('bracket-player-detail');
+    expect(within(panel).getByText('Ben Carter')).toBeInTheDocument();
+    expect(screen.getByTestId('roster-row-p-ben-carter')).toHaveAttribute(
+      'data-selected',
+      'true',
+    );
+  });
+
+  // F-PAIR-36 / R-PAIR-6 — the person's name is already the panel identity;
+  // the internal roster key was jargon and left an otherwise-empty section.
+  it('groups the operator fields without exposing the raw roster id', () => {
     render(<BracketRosterTab />);
     const panel = openPanelFor('p-alex-tan');
     const eyebrows = within(panel).getAllByText(
-      /^(IDENTITY|AVAILABILITY|EVENTS|NOTES)$/,
+      /^(AVAILABILITY|EVENTS|NOTES)$/,
     );
     expect(eyebrows.map((e) => e.textContent)).toEqual([
-      'IDENTITY',
       'AVAILABILITY',
       'EVENTS',
       'NOTES',
     ]);
+    expect(within(panel).queryByText('Roster ID')).not.toBeInTheDocument();
+    expect(within(panel).queryByText('p-alex-tan')).not.toBeInTheDocument();
   });
 
   // D9 — the fields were uncontrolled (`defaultValue` + `onBlur`). Escape

@@ -24,10 +24,12 @@ import { Button, Notice, TextField } from '@scheduler/design-system/components';
 import { data } from 'react-router';
 
 import { MessagePage } from '../components/MessagePage';
+import { PersonRef } from '../components/PersonRef';
 import { PlayShell } from '../components/PlayShell';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
+import { CARD } from '../lib/ui';
 import type { Route } from './+types/partner';
 
 const ACCEPTED_SUFFIX = '/accepted';
@@ -53,10 +55,16 @@ export interface PartnerLoaderData {
   failed: boolean;
 }
 
-export async function loader({ request }: { request: Request }) {
+export async function loader({
+  request,
+  params,
+}: {
+  request: Request;
+  params?: { token?: string };
+}) {
   const csrf = mintFormCsrf();
   const url = new URL(request.url);
-  const raw = url.searchParams.get('token') ?? '';
+  const raw = params?.token ?? url.searchParams.get('token') ?? '';
   const token = raw.length > MAX_TOKEN ? '' : raw;
   const accepted = url.pathname.endsWith(ACCEPTED_SUFFIX);
   const failed = url.pathname.endsWith(FAILED_SUFFIX);
@@ -96,7 +104,7 @@ export const meta: Route.MetaFunction = () => [
   { title: 'A doubles invitation · ShuttleWorks Tournaments' },
 ];
 
-const CARD = 'grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm';
+const FORM_CARD = `grid gap-4 ${CARD}`;
 
 export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) {
   const { formCsrf, token, invite, accepted, failed } = loaderData;
@@ -105,7 +113,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
     return (
       <PlayShell>
         <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
-          <div className={CARD}>
+          <div className={FORM_CARD}>
             <Notice tone="success">
               You are entered as their partner. The organizer confirms entries,
               so this is not final until they do.
@@ -123,7 +131,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
     return (
       <PlayShell>
         <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
-          <div className={CARD}>
+          <div className={FORM_CARD}>
             <Notice tone="warning">
               That did not go through. Either the invitation is no longer
               usable, or your email address is not confirmed yet. Sign in to
@@ -148,12 +156,19 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
     );
   }
 
+  const invitationPath = `/e/partner/${encodeURIComponent(token)}`;
+
   return (
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            {invite.invitedBy} invited you to play
+            <PersonRef
+              slug={invite.slug ?? ''}
+              identity={{ id: null, name: invite.invitedBy }}
+              state="dead"
+            />{' '}
+            invited you to play
           </h1>
           <p className="text-sm text-muted-foreground">
             {invite.discipline} at {invite.tournamentName ?? 'a tournament'}.
@@ -161,9 +176,9 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
           </p>
         </header>
 
-        <div className={CARD}>
+        <div className={FORM_CARD}>
           {/* Posts across the tier boundary to FastAPI (R8-A), as a native
-              form: this tier ships no client JS. The route requires a
+              form that does not depend on client JS. The route requires a
               signed-in verified account and answers 303 to an outcome page,
               which is what makes the invitation an invitation rather than a
               capability. */}
@@ -200,7 +215,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
                 id="partner-gender"
                 name="gender"
                 required
-                className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-foreground"
+                className="h-10 rounded-md border border-border bg-bg-elev px-3 text-sm text-foreground"
                 defaultValue=""
               >
                 <option value="" disabled>
@@ -239,14 +254,20 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
 
           <p className="border-t border-rule-soft pt-4 text-sm text-muted-foreground">
             You need a confirmed entrant account to accept.{' '}
-            <a className="text-accent underline underline-offset-4" href="/e/login">
+            <a
+              className="text-accent underline underline-offset-4"
+              href={`/e/login?next=${encodeURIComponent(invitationPath)}`}
+            >
               Sign in
             </a>{' '}
             or{' '}
-            <a className="text-accent underline underline-offset-4" href="/e/signup">
+            <a
+              className="text-accent underline underline-offset-4"
+              href={`/e/signup/partner/${encodeURIComponent(token)}`}
+            >
               create one
             </a>{' '}
-            first. This page will still be here.
+            first. You will return to this invitation.
           </p>
         </div>
       </main>

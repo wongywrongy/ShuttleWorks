@@ -6,7 +6,7 @@
  * instead of re-posting an entry. Belt and braces: this module exports no
  * `action`, so there is structurally nothing for a refresh to re-fire.
  *
- * **Why this route reads no submission, and what that buys.**
+ * **Why the loader reads no submission, and what that buys.**
  * `services/submissions.find_for_account` exists precisely so that whoever
  * reads one act *by id* cannot forget to name the account — the 303 puts a
  * submission id in a `Location` header and then in an address bar, where it is
@@ -15,10 +15,10 @@
  * credential (spec §3) and must not grow one — a deputy that forwarded the
  * session cookie would collapse the CSRF argument the whole phase rests on —
  * so an account-scoped fetch is not something this tier can do correctly at
- * all. The receipt is therefore the reference, the total the server itself put
- * in the redirect, and the public page's own branding and payment terms.
- * Listing what was entered is E2 "my entries" (spec §1, Phase 7), and it is
- * fetched from the BROWSER, which holds the cookie.
+ * all. The SSR document therefore contains only the reference and public page
+ * branding. An external, same-origin module then asks the account-scoped
+ * receipt endpoint from the BROWSER, which holds the cookie, and renders the
+ * durable transaction detail without disclosing it through the Node tier.
  *
  * The consequence, stated rather than glossed: entrant B pasting entrant A's
  * receipt URL sees a page assembled from a public projection, their own query
@@ -27,11 +27,8 @@
  * call list and pins that A, B and an anonymous stranger are served the same
  * bytes — both go red the moment a read appears.
  *
- * The total in the query is the server's own (`compute_fee_total`, the same
- * call the write path makes — Seam B), carried the same way the quote redirect
- * already carries it (`api/entries_json.py:485-513`). It is DISPLAY: the query
- * string is editable by whoever holds the URL, so it is shown as the amount
- * recorded and is never posted back or recomputed from.
+ * Query-string totals are deliberately ignored. They are editable by whoever
+ * holds the URL and therefore cannot be the source of truth for a receipt.
  *
  * **There is no "already recorded" state, and that is a ruling, not an
  * omission.** The brief specified a `replayed` flag in the redirect. The
@@ -49,7 +46,6 @@ import { PlayShell } from '../components/PlayShell';
 import { SectionCard } from '../components/SectionCard';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
-import { formatCents } from '../lib/money';
 import type { Route } from './+types/receipt';
 
 /**
@@ -68,7 +64,6 @@ import type { Route } from './+types/receipt';
  */
 export interface ReceiptPage {
   tournamentName: string | null;
-  paymentInstructions: string | null;
 }
 
 export interface ReceiptLoaderData {
@@ -77,10 +72,6 @@ export interface ReceiptLoaderData {
    * fetch only succeeded because they already agree (`loader`, above). */
   slug: string;
   submissionId: string;
-  /** The server-stated total, or `null` when the redirect did not carry one.
-   * Never `0` by default — a zero on a receipt is a claim about money nobody
-   * made (`app/lib/money.ts`). */
-  totalCents: number | null;
 }
 
 /** The redirect only ever names a submission's UUID. Anything else is a
@@ -95,7 +86,6 @@ function notFound(): Response {
 }
 
 export async function loader({
-  request,
   params,
 }: {
   request: Request;
@@ -112,25 +102,12 @@ export async function loader({
     throw err;
   }
 
-  // `request` is read for its URL and for nothing that carries identity — the
-  // structural guards in `tests/entry.loader.test.ts` enumerate this file and
-  // hold that line.
-  const query = new URL(request.url).searchParams;
-  // Validate the RAW string, not the coerced number: `Number('')` is `0`,
-  // `Number('0x10')` is `16`, `Number('1e3')` is `1000` — every one of those
-  // is a well-formed argument to `Number()` and none of them is a total the
-  // server put in the redirect. Only a plain non-negative digit string is.
-  const raw = query.get('totalCents');
-  const total = raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
-
   return {
     page: {
       tournamentName: projection.tournament.name,
-      paymentInstructions: projection.page.paymentInstructions,
     },
     slug,
     submissionId,
-    totalCents: total !== null && Number.isInteger(total) && total >= 0 ? total : null,
   };
 }
 
@@ -155,7 +132,7 @@ export const meta: Route.MetaFunction = ({ data }) => {
 };
 
 export default function Receipt({ loaderData }: Route.ComponentProps) {
-  const { page, slug, submissionId, totalCents } = loaderData;
+  const { page, slug, submissionId } = loaderData;
 
   return (
     // E1: the shell every other page wears. The receipt is the last screen of
@@ -195,19 +172,33 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
             <span className="text-muted-foreground">Reference</span>{' '}
             <code className="tabular-nums">{submissionId}</code>
           </p>
-          {totalCents === null ? null : (
-            <p>
-              <span className="text-muted-foreground">Amount recorded</span>{' '}
-              <strong className="tabular-nums">{formatCents(totalCents)}</strong>
-            </p>
-          )}
         </SectionCard>
 
-        {page.paymentInstructions ? (
-          <SectionCard title="Payment">
-            <p className="whitespace-pre-line">{page.paymentInstructions}</p>
+        <section
+          id="receipt-details-root"
+          data-submission-id={submissionId}
+          data-slug={slug}
+          aria-live="polite"
+          aria-busy="true"
+          className="grid gap-4"
+        >
+          <SectionCard title="Loading receipt details">
+            <p className="text-sm text-muted-foreground">
+              Checking the signed-in account for this entry
+            </p>
           </SectionCard>
-        ) : null}
+        </section>
+
+        <noscript>
+          <SectionCard title="Sign in to view the full receipt">
+            <p>
+              The reference above is safe to keep. Enable JavaScript to load the
+              account-scoped event, partner, fee, and payment details.
+            </p>
+          </SectionCard>
+        </noscript>
+
+        <script type="module" src="/e/assets/receipt.js" />
 
         <p className="text-sm">
           <a

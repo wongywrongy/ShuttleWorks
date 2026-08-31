@@ -6,7 +6,8 @@
   "scripts": {
     "test": "playwright test",
     "test:entrant-evidence": "playwright test tests/10-entrant-r11-evidence.spec.ts",
-    "test:interaction-smoke": "playwright test tests/interaction-smoke.spec.ts",
+    "test:bracket-geometry": "playwright test --config playwright.geometry.config.ts",
+    "test:console-contracts": "playwright test tests/console-browser-contracts.spec.ts",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "report": "playwright show-report",

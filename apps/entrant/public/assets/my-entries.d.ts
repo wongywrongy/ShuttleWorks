@@ -5,11 +5,12 @@
  * copies public/ verbatim; a served .d.ts is inert.)
  */
 
+import type { PersonReferenceDTO } from '../../app/lib/person.types';
+
 export interface MyEntryLine {
   eventCode: string;
   discipline: string;
-  playerName: string;
-  personKey: string;
+  player: PersonReferenceDTO;
   /** Closed on purpose (F-DM-60): `entries_me.py::_entry_state` maps every raw
    *  state through a 6-entry dict with an `awaiting` fail-calm default, so an
    *  unknown future state arrives AS `awaiting` and never as itself. The old
@@ -20,8 +21,8 @@ export interface MyEntryLine {
   /** E2: the server's own `assert_withdrawable`, precomputed. */
   canWithdraw: boolean;
   resultBadge: string | null;
-  /** §3.1: the accepted doubles partner's name, or null. */
-  partnerName: string | null;
+  /** §3.1: the accepted doubles partner, or null. */
+  partner: PersonReferenceDTO | null;
 }
 
 export interface MyTournamentCard {

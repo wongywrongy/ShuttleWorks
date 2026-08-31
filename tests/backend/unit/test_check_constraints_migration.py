@@ -58,6 +58,7 @@ EVENT = "3" * 32
 ENTRY = "4" * 32
 
 PREVIOUS_REVISION = "y9e4f0a2b7c8"
+CHECK_REVISION = "z0f5a1b3c9d2"
 
 #: (table, constraint name, column, a value inside the vocabulary, one
 #: outside it). The names must match ``db/models.py`` exactly — F-DM-11.
@@ -301,7 +302,11 @@ def test_the_batch_rebuilds_changed_nothing_but_the_checks(alembic_cfg):
     # ``or "meet"`` fallback is only sound while this column cannot be NULL.
     assert ("kind", False) in before["tournaments"]["nullability"]
 
-    command.upgrade(cfg, "head")
+    # Compare the one batch-rebuild revision, not every later migration. The
+    # public timing revision legitimately adds tournament columns after P7a;
+    # including it made this focused invariant reject an unrelated schema
+    # addition while claiming the batch rebuild had lost state.
+    command.upgrade(cfg, CHECK_REVISION)
     assert _schema_shapes(engine) == before, "the upgrade rebuild lost something"
 
     command.downgrade(cfg, PREVIOUS_REVISION)

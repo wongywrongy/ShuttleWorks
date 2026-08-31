@@ -124,17 +124,17 @@ afterEach(() => {
 });
 
 describe('receipt loader', () => {
-  it('reads the reference and the server-stated total off the redirect target', async () => {
+  it('reads the reference but never trusts an editable query-string total', async () => {
     vi.stubGlobal('fetch', stubUpstream());
 
     const data = await get('spring-open', SUBMISSION, '?totalCents=3500');
 
     expect(data.submissionId).toBe(SUBMISSION);
-    expect(data.totalCents).toBe(3500);
+    expect(data).not.toHaveProperty('totalCents');
     expect(data.page.tournamentName).toBe('Spring Open');
   });
 
-  it('returns only the three page fields it renders, not the whole projection', async () => {
+  it('returns only the public page field it renders, not the whole projection', async () => {
     // The loader's return value is serialized into the hydration payload
     // verbatim, so "the component does not render it" is not the same as "it
     // is not in the HTML". Pinning the key set is what makes the disclosure
@@ -144,10 +144,7 @@ describe('receipt loader', () => {
 
     const data = await get('spring-open', SUBMISSION);
 
-    expect(Object.keys(data.page).sort()).toEqual([
-      'paymentInstructions',
-      'tournamentName',
-    ]);
+    expect(Object.keys(data.page)).toEqual(['tournamentName']);
   });
 
   it('fetches ONLY the public page projection — never a submission', async () => {
@@ -198,21 +195,18 @@ describe('receipt loader', () => {
     expect(sent).toEqual([]);
   });
 
-  it('treats a junk or absent total as no total, never as 0.00', async () => {
-    // `null` is not `0.00` (`app/lib/money.ts`): a zero on a receipt is a claim
-    // about money nobody made, and the query string is entrant-editable.
+  it('ignores every query-string total form', async () => {
     vi.stubGlobal('fetch', stubUpstream());
 
-    expect((await get('spring-open', SUBMISSION)).totalCents).toBeNull();
-    expect((await get('spring-open', SUBMISSION, '?totalCents=free')).totalCents).toBeNull();
-    expect((await get('spring-open', SUBMISSION, '?totalCents=-1')).totalCents).toBeNull();
-    expect((await get('spring-open', SUBMISSION, '?totalCents=35.5')).totalCents).toBeNull();
-    // `Number('')` is `0`, not NaN — the hole this pins shut: present-but-empty
-    // must not be read as "no total present" collapsing into a false zero.
-    expect((await get('spring-open', SUBMISSION, '?totalCents=')).totalCents).toBeNull();
-    // `Number()` accepts hex and exponent literals a plain digit regex must not.
-    expect((await get('spring-open', SUBMISSION, '?totalCents=0x10')).totalCents).toBeNull();
-    expect((await get('spring-open', SUBMISSION, '?totalCents=1e3')).totalCents).toBeNull();
+    for (const query of [
+      '',
+      '?totalCents=3500',
+      '?totalCents=free',
+      '?totalCents=-1',
+      '?totalCents=35.5',
+    ]) {
+      expect(await get('spring-open', SUBMISSION, query)).not.toHaveProperty('totalCents');
+    }
   });
 
   it('404s an unknown slug, uniformly, carrying no upstream detail', async () => {
@@ -266,7 +260,7 @@ async function fetchEntrant(path: string, headers: HeadersInit = {}): Promise<Re
 const RECEIPT = `/e/spring-open/receipt/${SUBMISSION}?totalCents=3500`;
 
 describe('GET /e/{slug}/receipt/{submissionId}', () => {
-  it('server-renders the reference, the recorded total and the payment terms', async () => {
+  it('server-renders the public reference and mounts the account-scoped detail loader', async () => {
     vi.stubGlobal('fetch', stubUpstream());
 
     const res = await fetchEntrant(RECEIPT);
@@ -274,8 +268,10 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
 
     expect(res.status).toBe(200);
     expect(body).toContain(SUBMISSION);
-    expect(body).toContain('35.00');
-    expect(body).toContain('Bank transfer on the day.');
+    expect(body).not.toContain('35.00');
+    expect(body).not.toContain('Bank transfer on the day.');
+    expect(body).toContain('id="receipt-details-root"');
+    expect(body).toContain('src="/e/assets/receipt.js"');
     expect(body).toContain('href="/e/spring-open"');
     // Nothing to re-fire: no form on this page POSTS anything. It used to
     // read `not.toContain('<form')` — no form of any kind — which E1 made

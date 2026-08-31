@@ -28,10 +28,13 @@ import { HUB_FACETS, facetCounts, matchesFacet, type HubFacetId } from './hubFac
 import { sortBy, type HubSortId } from './hubSort';
 import { SortControl } from './SortControl';
 import { needsAttention } from './hubSignals';
+import { lifecycleChip } from '../../platform/domain/lifecycle';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
 import { HUB_DOCK_MIN_CONTENT_WIDTH, HUB_DOCK_WIDTH } from './hubDockGeometry';
-import { EYEBROW_CLASS } from '../../lib/utils';
+import { EYEBROW_CLASS, TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils';
+import { ActiveChoice } from '../../components/ActiveChoice';
+import { DialogFooter } from '../../components/DialogFooter';
 
 /** The ⌘K handler accepts Ctrl too — the hint should name the key the
  *  user's OS actually has. */
@@ -72,22 +75,19 @@ function FilterChip({
         ? 'text-status-live'
         : 'text-ink-faint';
   return (
-    <button
-      type="button"
+    <ActiveChoice
+      active={active}
+      geometry="segment"
+      semantics="pressed"
       onClick={onClick}
-      aria-pressed={active}
-      className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-2xs transition-colors duration-fast ease-brand ${
-        active
-          ? 'bg-surface-active font-medium text-foreground'
-          : 'text-muted-foreground hover:text-foreground'
-      }`}
+      className="shrink-0 whitespace-nowrap px-2.5 py-1 text-2xs"
     >
       {/* Same "label · count" grammar the match lists use (HUB-2). The two
           strips claimed to share a grammar and did not: this one ran the
           count straight on after a space. */}
       {label} <span className="text-ink-faint">·</span>{' '}
-      <span className={`sw-num ${countTone}`}>{count}</span>
-    </button>
+      <span className={`sw-num ${active ? 'text-current opacity-75' : countTone}`}>{count}</span>
+    </ActiveChoice>
   );
 }
 
@@ -185,6 +185,17 @@ export function HubPage() {
     () => visible.some((t) => !!t.tournamentDate),
     [visible],
   );
+
+  // SP-OPCON-1 SWP-2 (X6 never-varies): when every visible row would carry
+  // the SAME lifecycle chip — e.g. the "Complete" facet, where the strip
+  // already says "Complete · 30" — the per-row chip is suppressed. Any
+  // variation (including some rows unbadged) keeps it.
+  const lifecycleChipVaries = useMemo(() => {
+    const labels = new Set(
+      visible.map((t) => lifecycleChip(t.signals?.phase, t.status)?.text ?? ''),
+    );
+    return labels.size !== 1 || labels.has('');
+  }, [visible]);
 
   // Footer summary counts over the full (unfiltered) list.
   const footerCounts = useMemo(
@@ -374,11 +385,12 @@ export function HubPage() {
                     tournament={t}
                     group={temporalGroupOf(t, todayKey)}
                     showDate={showDates}
+                    showLifecycleBadge={lifecycleChipVaries}
                     selected={t.id === selectedId}
                     onSelect={() => setSelectedId(t.id)}
                     onOpen={(segment) => openTournament(t.id, segment)}
-                    onSetDate={() => navigate(`/tournaments/${t.id}/settings?tab=general`)}
-                    onSettings={() => navigate(`/tournaments/${t.id}/settings`)}
+                    onSetDate={() => navigate(`/tournaments/${t.id}/setup/dates`)}
+                    onSettings={() => navigate(`/tournaments/${t.id}/administration/lifecycle`)}
                     onDelete={t.role === 'owner' ? () => setDeleteTarget(t) : undefined}
                   />
                 ))}
@@ -440,8 +452,8 @@ export function HubPage() {
             key={selected?.id}
             tournament={selected}
             onOpen={openTournament}
-            onSetDate={(id) => navigate(`/tournaments/${id}/settings?tab=general`)}
-            onSettings={(id) => navigate(`/tournaments/${id}/settings`)}
+            onSetDate={(id) => navigate(`/tournaments/${id}/setup/dates`)}
+            onSettings={(id) => navigate(`/tournaments/${id}/administration/lifecycle`)}
             onClose={() => setSelectedId(null)}
           />
         </DetailDock>
@@ -451,16 +463,16 @@ export function HubPage() {
         <Modal onClose={closeDeleteDialog} titleId="delete-tournament-heading">
           <div className="p-6">
             <div className="mb-4 space-y-0.5">
-              <Eyebrow framed tone="destructive">
+              <Eyebrow tone="destructive">
                 DELETE {deleteTarget.kind === 'bracket' ? 'TOURNAMENT' : 'MEET'}
               </Eyebrow>
               <h2
                 id="delete-tournament-heading"
-                className="text-base font-semibold text-foreground"
+                className={TEXT_TITLE}
               >
                 Delete &ldquo;{deleteTarget.name || 'Untitled'}&rdquo;?
               </h2>
-              <p className="text-xs text-muted-foreground">
+              <p className={TEXT_MUTED_XS}>
                 This permanently removes the {deleteTarget.kind === 'bracket' ? 'tournament' : 'meet'},
                 its members, invites, and{' '}
                 {deleteTarget.kind === 'bracket' ? 'bracket events + matches + results' : 'matches + match-states + backups'}.
@@ -475,14 +487,14 @@ export function HubPage() {
                 {deleteError}
               </div>
             )}
-            <div className="mt-6 flex justify-between">
+            <DialogFooter align="between">
               <Button variant="ghost" onClick={closeDeleteDialog} disabled={deleting}>
                 Cancel
               </Button>
               <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
                 {deleting ? 'Deleting…' : 'Delete permanently'}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         </Modal>
       )}

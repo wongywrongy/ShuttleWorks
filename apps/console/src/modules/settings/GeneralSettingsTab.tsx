@@ -6,6 +6,7 @@ import { lifecycleBadge } from '../../platform/domain/lifecycle';
 import { resolvePhase, PHASE_LABEL } from '../../platform/domain/overviewPhase';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
+import { TEXT_MUTED_SM } from '../../lib/utils'
 
 /** General workspace settings: name and date. Persists via `updateTournament`.
  *
@@ -99,7 +100,7 @@ export function GeneralSettingsTab({
                 {/* LIVE drops its chip (R-D, Option A) but keeps its word —
                     an empty labeled row would read as broken, not quiet. */}
                 {derived.text === 'Live' ? (
-                  <span className="text-sm text-muted-foreground">Live</span>
+                  <span className={TEXT_MUTED_SM}>Live</span>
                 ) : (
                   <StatusPill tone={derived.tone} dot>
                     {derived.text}

@@ -2,7 +2,8 @@
 /**
  * Measures the real gzipped weight of the public pages — discovery (`/e/`),
  * the tournament page (`/e/{slug}`) and the enter page (`/e/{slug}/enter`)
- * — on a production build. Spec §7's no-JS posture, as a number.
+ * — on a production build. The bounded progressive-enhancement posture, as
+ * a number.
  *
  * "Page weight" here is what a browser actually pays for: the server-
  * rendered HTML (what a no-JS visitor gets in full) PLUS every script the
@@ -34,10 +35,10 @@
  *
  * OWNER RULING R8-F (2026-08-07) set BUDGET_KB to 123 to cover a ~98.8 KB
  * react-dom + React Router hydration floor. THAT FLOOR IS GONE: this tier
- * ships no client JS (see the note in `app/root.tsx` — the CSP blocked the
- * inline `<Scripts/>` output in every deployed stack anyway, so no visitor
- * ever ran it). The budget below is re-derived from the measurement, not
- * inherited. The gate STAYS BLOCKING.
+ * ships no React hydration (see the note in `app/root.tsx`). Route-scoped
+ * external modules are counted when a measured document references them. The
+ * budget below is re-derived from the measurement, not inherited. The gate
+ * STAYS BLOCKING.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -198,8 +199,12 @@ measured.push(
   ),
 );
 
-// 4 KB per document, all of it HTML, because this tier ships no client JS.
-// With the +10% CI slack that is a 4.4 KB ceiling per page.
+// Poster/discovery documents retain the original 4 KB budget. The approved
+// persistent entry journey has its own 8 KB budget: its measured payload is
+// the complete eligibility/account/participant/events/partner/review markup
+// plus the route-scoped enhancement, including the eight-player ceiling.
+// Keeping the budgets per route prevents that intentional transaction cost
+// from silently buying headroom for every public document.
 //
 // The old number was 123 KB. R8-F derived that from a ~98.8 KB react-dom +
 // React Router HYDRATION FLOOR, and that floor no longer exists — `root.tsx`
@@ -208,8 +213,15 @@ measured.push(
 // measure inside it (G6 stays open — if the enter page outgrows it once
 // real content lands, the budget is re-derived from measurement, gate
 // blocking, per the R8-F precedent).
-const BUDGET_KB = 4;
-const SLACK_KB = BUDGET_KB * 1.1; // +10% CI slack
+const PUBLIC_BUDGET_KB = 4;
+const ENTRY_BUDGET_KB = 8;
+const CI_SLACK = 1.1;
+
+function budgetKbFor(pathname) {
+  return pathname.startsWith('/e/spring-open/enter')
+    ? ENTRY_BUDGET_KB
+    : PUBLIC_BUDGET_KB;
+}
 
 let cssNote = '';
 const cssFile = fs.readdirSync(path.join(clientDir, 'assets')).find((f) => /^app-.*\.css$/.test(f));
@@ -221,20 +233,22 @@ if (cssFile) {
 let failed = false;
 for (const { pathname, htmlGzipBytes, criticalJsBytes, scriptCount } of measured) {
   const totalKb = (htmlGzipBytes + criticalJsBytes) / 1024;
-  const verdict = totalKb <= SLACK_KB ? 'PASS' : 'FAIL';
+  const budgetKb = budgetKbFor(pathname);
+  const ceilingKb = budgetKb * CI_SLACK;
+  const verdict = totalKb <= ceilingKb ? 'PASS' : 'FAIL';
   if (verdict === 'FAIL') failed = true;
   console.log(
     `${pathname.padEnd(24)} HTML ${(htmlGzipBytes / 1024).toFixed(1)} KB gz` +
       ` + JS ${(criticalJsBytes / 1024).toFixed(1)} KB [${scriptCount} scripts]` +
-      ` = ${totalKb.toFixed(1)} KB  ${verdict}`,
+      ` = ${totalKb.toFixed(1)} KB  ${verdict} (budget ${budgetKb} KB +10%)`,
   );
 }
-console.log(`Budget:                ${BUDGET_KB} KB per page (+10% CI slack = ${SLACK_KB.toFixed(1)} KB)${cssNote}`);
+console.log(`Budgets:               public ${PUBLIC_BUDGET_KB} KB; entry ${ENTRY_BUDGET_KB} KB (+10% CI slack)${cssNote}`);
 
 if (!failed) {
   console.log('PASS');
   process.exit(0);
 } else {
-  console.error(`FAIL — at least one page exceeds the ${SLACK_KB.toFixed(1)} KB gate`);
+  console.error('FAIL — at least one page exceeds its route budget');
   process.exit(1);
 }

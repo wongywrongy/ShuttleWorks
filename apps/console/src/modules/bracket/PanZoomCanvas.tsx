@@ -11,12 +11,22 @@
  * Pure frontend (CSS transform), no dependency. Round chips target child
  * elements marked `data-round="<index>"`.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  ArrowCounterClockwise,
+  ArrowsOutLineHorizontal,
+  CornersOut,
+  MagnifyingGlassMinus,
+  MagnifyingGlassPlus,
+} from "@phosphor-icons/react";
 
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 2;
-const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), hi);
+const READABLE_SCALE = 0.65;
+const CANVAS_GUTTER = 24;
+const CANVAS_TOP_INSET = 52;
+const clamp = (n: number, lo: number, hi: number) =>
+  Math.min(Math.max(n, lo), hi);
 
 export function PanZoomCanvas({
   children,
@@ -31,7 +41,7 @@ export function PanZoomCanvas({
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [t, setT] = useState({ x: 24, y: 24, s: 1 });
+  const [t, setT] = useState({ x: CANVAS_GUTTER, y: CANVAS_TOP_INSET, s: 1 });
   const drag = useRef<{ ox: number; oy: number } | null>(null);
 
   // Wheel zoom toward the cursor. Attached natively so we can preventDefault
@@ -51,14 +61,18 @@ export function PanZoomCanvas({
         return { s: ns, x: cx - (cx - prev.x) * k, y: cy - (cy - prev.y) * k };
       });
     };
-    vp.addEventListener('wheel', onWheel, { passive: false });
-    return () => vp.removeEventListener('wheel', onWheel);
+    vp.addEventListener("wheel", onWheel, { passive: false });
+    return () => vp.removeEventListener("wheel", onWheel);
   }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
     // Pan only when dragging the background — let clicks on cards/controls
     // (assign a slot, record a winner) work normally.
-    if ((e.target as HTMLElement).closest('button, a, input, select, [role="button"]')) {
+    if (
+      (e.target as HTMLElement).closest(
+        'button, a, input, select, [role="button"]',
+      )
+    ) {
       return;
     }
     drag.current = { ox: e.clientX - t.x, oy: e.clientY - t.y };
@@ -87,7 +101,23 @@ export function PanZoomCanvas({
       return { s: ns, x: cx - (cx - prev.x) * k, y: cy - (cy - prev.y) * k };
     });
 
-  const fit = () => {
+  const readableView = () => {
+    const content = contentRef.current;
+    const vp = viewportRef.current;
+    if (!content || !vp || content.scrollWidth === 0) return;
+    const widthScale =
+      (vp.clientWidth - CANVAS_GUTTER * 2) / content.scrollWidth;
+    // Do not repeat the old "postage stamp" failure. Large draws open around
+    // two-thirds scale with the Final centered; the canvas is built to pan.
+    const s = clamp(Math.max(widthScale, READABLE_SCALE), MIN_SCALE, 1);
+    setT({
+      s,
+      x: (vp.clientWidth - content.scrollWidth * s) / 2,
+      y: CANVAS_TOP_INSET,
+    });
+  };
+
+  const fitAll = () => {
     const content = contentRef.current;
     const vp = viewportRef.current;
     if (!content || !vp) return;
@@ -96,28 +126,33 @@ export function PanZoomCanvas({
     if (cw === 0 || ch === 0) return;
     // Fill the pane: big draws shrink to fit; small draws scale UP (capped at
     // 1.25 so cards stay proportionate) instead of floating tiny mid-canvas.
-    const s = clamp(Math.min(vp.clientWidth / (cw + 48), vp.clientHeight / (ch + 48)), MIN_SCALE, 1.25);
+    const s = clamp(
+      Math.min(vp.clientWidth / (cw + 48), vp.clientHeight / (ch + 48)),
+      MIN_SCALE,
+      1.25,
+    );
     // Center the content in BOTH axes. Vertical centering keeps the (centered)
     // Final mid-viewport instead of parked at the top — but never push the top
     // above a small margin, so a tall bracket stays reachable from its top edge.
     setT({
       s,
       x: (vp.clientWidth - cw * s) / 2,
-      y: Math.max(24, (vp.clientHeight - ch * s) / 2),
+      y: Math.max(CANVAS_TOP_INSET, (vp.clientHeight - ch * s) / 2),
     });
   };
 
-  const reset = () => setT({ x: 24, y: 24, s: 1 });
+  const reset = () => setT({ x: CANVAS_GUTTER, y: CANVAS_TOP_INSET, s: 1 });
 
-  // Fit + center the content once on mount, so a freshly opened draw lands
-  // with the (centered) Final in view rather than parked at the top-left.
-  // jsdom reports a 0-sized content, so `fit` no-ops there — safe in tests.
+  // Open a readable centered view once on mount. Fitting both axes made a 32-player
+  // bracket technically visible but unreadable (often around 25%). The
+  // canvas can pan vertically, so readable match cards are the better default.
+  // jsdom reports a 0-sized content, so `readableView` no-ops there.
   const didFit = useRef(false);
   useEffect(() => {
     if (didFit.current) return;
     const id = requestAnimationFrame(() => {
       didFit.current = true;
-      fit();
+      readableView();
     });
     return () => cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,13 +162,20 @@ export function PanZoomCanvas({
     const content = contentRef.current;
     const el = content?.querySelector<HTMLElement>(`[data-round="${i}"]`);
     if (!el) return;
-    setT((prev) => ({ ...prev, x: 24 - el.offsetLeft * prev.s }));
+    setT((prev) => ({
+      ...prev,
+      x: CANVAS_GUTTER - el.offsetLeft * prev.s,
+    }));
   };
 
   return (
     // The dotted-lane texture covers the WHOLE pane (not just the content
     // box) so the draw reads as one full-bleed canvas, not a floating card.
-    <div className="gantt-grid relative h-full w-full overflow-hidden bg-card">
+    <div
+      className="gantt-grid relative h-full w-full overflow-hidden bg-background"
+      role="region"
+      aria-label="Bracket draw canvas"
+    >
       <div
         ref={viewportRef}
         onPointerDown={onPointerDown}
@@ -146,8 +188,8 @@ export function PanZoomCanvas({
           ref={contentRef}
           style={{
             transform: `translate(${t.x}px, ${t.y}px) scale(${t.s})`,
-            transformOrigin: '0 0',
-            width: 'max-content',
+            transformOrigin: "0 0",
+            width: "max-content",
           }}
         >
           {children}
@@ -160,7 +202,7 @@ export function PanZoomCanvas({
           floated here, so two halves of the same toolbar sat in two
           containers at two heights (DRAW-2). */}
       {(roundLabels && roundLabels.length > 2) || overlayTrailing ? (
-        <div className="absolute inset-x-2 top-2 flex items-center justify-between gap-2 rounded-sm border border-border bg-card/90 px-1 py-1 shadow-sm backdrop-blur">
+        <div className="absolute inset-x-0 top-0 flex min-h-10 items-center justify-between gap-2 border-b border-border bg-background/95 px-3 py-1.5 backdrop-blur">
           <div className="flex flex-wrap gap-1">
             {roundLabels && roundLabels.length > 2
               ? roundLabels.map((label, i) => (
@@ -176,7 +218,9 @@ export function PanZoomCanvas({
               : null}
           </div>
           {overlayTrailing ? (
-            <div className="flex shrink-0 items-center pr-1">{overlayTrailing}</div>
+            <div className="flex shrink-0 items-center pr-1">
+              {overlayTrailing}
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -192,7 +236,10 @@ export function PanZoomCanvas({
         <CtrlBtn label="Zoom in" onClick={() => zoomBy(1.2)}>
           <MagnifyingGlassPlus className="h-3.5 w-3.5" />
         </CtrlBtn>
-        <CtrlBtn label="Fit to screen" onClick={fit}>
+        <CtrlBtn label="Readable view" onClick={readableView}>
+          <ArrowsOutLineHorizontal className="h-3.5 w-3.5" />
+        </CtrlBtn>
+        <CtrlBtn label="Fit whole draw" onClick={fitAll}>
           <CornersOut className="h-3.5 w-3.5" />
         </CtrlBtn>
         <CtrlBtn label="Reset view" onClick={reset}>

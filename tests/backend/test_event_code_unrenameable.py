@@ -14,12 +14,11 @@ and not a guard. Audited 2026-08-25 over ``apps/api/src``:
   repository's five bulk ``setattr`` loops (``repositories/local.py``) reach
   an ``EntryEvent`` — they patch ``Tournament``, ``Match``, ``BracketMatch``
   and ``MatchState``.
-- The draws/seeds/winners projections key on ``bracket_events.id`` instead
-  (``entries/entries_site.py``: ``drawKey=event.id, eventCode=event.id``).
-  Being half of a composite PRIMARY KEY it cannot be UPDATEd in place — but
-  it is **not** unrenameable: ``POST /bracket`` and ``POST /bracket/import``
-  take it from the request BODY, and neither checks publication. See the
-  characterization at the bottom of this file.
+- The draws/seeds/winners projections now separate ``drawKey`` (the internal
+  bracket-event id used by draw URLs) from ``eventCode`` (the public sporting
+  identity). Rebuilding a draw can change its internal key without silently
+  renaming the public event — the P7 contract that retired the characterization
+  formerly held at the bottom of this file.
 
 Writing a refusal with no caller would be a rule that cannot fire. What can
 rot silently is the *absence*: a later slice adds an event-update route and
@@ -36,8 +35,6 @@ from ``app.openapi()["paths"]``, never ``app.routes``.
   path, and by request-body shape).
 - **P7a-NC4** — every public URL and projection that resolves today still
   resolves afterwards: the characterization the ruling is actually buying.
-- The bracket-side gap R-DM-11(b) does **not** cover, characterized as it
-  actually behaves (debt-log D24).
 """
 from __future__ import annotations
 
@@ -286,58 +283,3 @@ def test_every_public_projection_still_resolves_by_event_code(client):
     player = client.get("/e/api/page/nc4-open/players/" + ada)
     assert player.status_code == 200, player.text
     assert [event["code"] for event in player.json()["events"]] == ["MS"]
-
-
-# ---- the gap R-DM-11(b) does NOT cover (debt-log D24) ---------------------
-
-
-def test_a_published_draw_can_still_be_re_keyed_by_delete_and_recreate(client):
-    """CHARACTERIZATION, not a property. **If this test reds, read it as
-    FIXED — delete it.**
-
-    ``drawKey`` is a live public URL segment and it comes from
-    ``bracket_events.id``, which ``POST /bracket`` reads out of the request
-    body. Nothing on ``DELETE /bracket``, ``POST /bracket`` or
-    ``POST /bracket/import`` looks at the workspace's publication flags — and
-    the 409 on ``POST /bracket`` ("bracket already exists; DELETE /bracket
-    first to recreate") instructs exactly the sequence below. So a published
-    draw's public addresses can be re-keyed silently, and the old URL 404s.
-
-    Deliberately unclosed by P7a: blocking the sequence after publication
-    would block a legitimate draw **rebuild**, not merely a rename, which is
-    a larger live-surface consequence than the one R-DM-11 accepted. Draw
-    identity is what P7b/P7c redesign. Owner ruling: debt-log **D24**.
-    """
-    tid = _make_workspace(client, slug="d24-open", draws_published=True)
-    participants = [{"id": "P%d" % n, "name": "Player %d" % n} for n in (1, 2, 3, 4)]
-    _se4_bracket(client, tid, participants)  # seeds event id "MS"
-
-    assert client.get("/e/api/page/d24-open/draws/MS").status_code == 200
-
-    # The sequence the 409 tells the operator to run — no publication check.
-    assert client.delete("/tournaments/%s/bracket" % tid, headers=CSRF).status_code == 200
-    body = {
-        "courts": 2,
-        "total_slots": 64,
-        "rest_between_rounds": 1,
-        "interval_minutes": 30,
-        "time_limit_seconds": 1.0,
-        "start_time": "2026-09-12T09:00:00",
-        "events": [
-            {
-                "id": "MS-A",  # the SAME draw, a different public address
-                "discipline": "Men's Singles",
-                "format": "se",
-                "participants": participants,
-                "duration_slots": 1,
-            }
-        ],
-    }
-    r = client.post("/tournaments/%s/bracket" % tid, json=body, headers=CSRF)
-    assert r.status_code == 200, r.text
-
-    # The published URL that resolved a moment ago is gone; the draw is not.
-    assert client.get("/e/api/page/d24-open/draws/MS").status_code == 404
-    assert client.get("/e/api/page/d24-open/draws/MS-A").status_code == 200
-    (card,) = client.get("/e/api/page/d24-open/draws").json()["draws"]
-    assert card["drawKey"] == card["eventCode"] == "MS-A"

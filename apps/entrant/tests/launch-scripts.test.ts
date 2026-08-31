@@ -113,7 +113,7 @@ test('keeps the entrant SSR list tied to every createServer test and partitions 
   const unit = all.filter((name) => !ssr.includes(name));
 
   expect(ssr).toEqual(discoveredSsr);
-  expect(ssr).toHaveLength(19);
+  expect(ssr).toHaveLength(21);
   expect(new Set([...unit, ...ssr])).toEqual(new Set(all));
   expect(unit).not.toEqual([]);
   expect(new Set(unit).size + new Set(ssr).size).toBe(all.length);
@@ -123,6 +123,10 @@ test('keeps check full and defines the narrower fast developer gate', () => {
   const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
 
   expect(makefile).toMatch(/^check: check-full$/m);
+  expect(makefile).toMatch(/^PYTEST_WORKERS \?= auto$/m);
+  expect(makefile).toMatch(
+    /^PYTEST_PARALLEL = \$\(if \$\(TEST_POSTGRES_URL\),pytest,pytest -n \$\(PYTEST_WORKERS\) --dist worksteal\)$/m,
+  );
   const full = recipeCommands(makefile, 'check-full');
   const fast = recipeCommands(makefile, 'check-fast');
   expect(full.length).toBeGreaterThan(0);
@@ -139,7 +143,7 @@ test('keeps check full and defines the narrower fast developer gate', () => {
     'npm run depcruise:entrant',
     'ruff check $(PY_SOURCES)',
     'cd apps/api/src && lint-imports --config ../.importlinter',
-    'pytest',
+    '$(PYTEST_PARALLEL)',
     'npm run test:docs',
     'npm run docs:paths',
     'npm run docs:build',
@@ -159,7 +163,7 @@ test('keeps check full and defines the narrower fast developer gate', () => {
     'npm run depcruise:entrant',
     'ruff check $(PY_SOURCES)',
     'cd apps/api/src && lint-imports --config ../.importlinter',
-    "pytest tests/backend/unit -m 'not slow'",
+    "$(PYTEST_PARALLEL) tests/backend/unit -m 'not slow'",
     'npm run test:docs',
     'npm run docs:paths',
     'npm run docs:build',
@@ -195,20 +199,20 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
     join(REPO_ROOT, 'simulator/tournament_sim/factories.py'),
     'utf8',
   );
-  const seed = readFileSync(
-    join(REPO_ROOT, 'tests/e2e/interaction-sweep/seed-smoke.mjs'),
-    'utf8',
-  );
+  const runner = readFileSync(join(REPO_ROOT, 'tests/e2e/run-console-contracts.sh'), 'utf8');
   const interaction = readFileSync(
-    join(REPO_ROOT, 'tests/e2e/tests/interaction-smoke.spec.ts'),
+    join(REPO_ROOT, 'tests/e2e/tests/console-browser-contracts.spec.ts'),
     'utf8',
   );
 
   expect(e2e['test:entrant-evidence']).toBe(
     'playwright test tests/10-entrant-r11-evidence.spec.ts',
   );
-  expect(e2e['test:interaction-smoke']).toBe(
-    'playwright test tests/interaction-smoke.spec.ts',
+  expect(e2e['test:bracket-geometry']).toBe(
+    'playwright test --config playwright.geometry.config.ts',
+  );
+  expect(e2e['test:console-contracts']).toBe(
+    'playwright test tests/console-browser-contracts.spec.ts',
   );
 
   const managed = recipeCommands(makefile, 'test-e2e');
@@ -227,16 +231,16 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
 
   expect(e2eTestFiles()).toEqual([
     '10-entrant-r11-evidence.spec.ts',
-    'interaction-smoke.spec.ts',
+    '11-public-bracket-geometry.spec.ts',
+    'console-browser-contracts.spec.ts',
   ]);
-  expect(interaction).toMatch(/SMOKE_TID is required/);
-  expect(interaction).toMatch(/SMOKE_VIEWER_TID is required/);
-  expect(interaction).toMatch(/SMOKE_DISPLAY_TOKEN is required/);
-  expect(interaction).not.toMatch(/test\.skip\(!viewerTid/);
-  expect(seed).toMatch(/console\.log\(`displayToken=\$\{displayToken\}`\)/);
-  expect(ci).toContain('SMOKE_DISPLAY_TOKEN: ${{ steps.seed.outputs.displayToken }}');
-  expect(ci).toContain('npm run test:interaction-smoke');
-  expect(ci).toContain('SMOKE_VIEWER_TID: ${{ steps.seed.outputs.viewerTid }}');
+  expect(interaction).toMatch(/E2E_TAIPEI_TID/);
+  expect(interaction).toMatch(/E2E_KOREA_TID/);
+  expect(interaction).toMatch(/E2E_DISPLAY_TOKEN/);
+  expect(interaction).not.toMatch(/test\.skip/);
+  expect(runner).toMatch(/--tournament T029 --tournament T030/);
+  expect(runner).toMatch(/check-console-fixture\.py/);
+  expect(ci).toContain('bash tests/e2e/run-console-contracts.sh');
   expect(setup).toMatch(/E2E_REQUIRE_PLAY/);
   expect(setup).toMatch(/npm_lifecycle_event/);
   // The readiness path must hit entrant SSR. `/e/api/config` is owned by
@@ -253,10 +257,13 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
 
 test('waits for the entrant origin only for entrant evidence', () => {
   expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:entrant-evidence' })).toBe(true);
-  expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:interaction-smoke' })).toBe(false);
+  expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:console-contracts' })).toBe(false);
   expect(requiresEntrantOrigin({ E2E_REQUIRE_PLAY: '1' })).toBe(true);
   expect(
-    requiresEntrantOrigin({ E2E_REQUIRE_PLAY: '0', npm_lifecycle_event: 'test:interaction-smoke' }),
+    requiresEntrantOrigin({
+      E2E_REQUIRE_PLAY: '0',
+      npm_lifecycle_event: 'test:console-contracts',
+    }),
   ).toBe(false);
 });
 

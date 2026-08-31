@@ -282,21 +282,22 @@ def test_the_projection_lists_entrant_rows_with_exactly_four_fields(client, page
     """The whole row's key-set, asserted exactly — so a fifth field cannot
     arrive unnoticed (SP-P7 §5's allow-list discipline).
 
-    ``eventCodes`` is SP-P6-2's ruled addition (G5a). ``club`` and
-    ``personKey`` are SP-P7's (§3.2/§3.3): the club is licensed by the C4
-    consent-copy update in ``enter.tsx`` ("name and club"), and the person
-    key is the player-page address — an opaque id, so the assertion below
-    checks it parses as a UUID rather than pinning a value.
+    ``eventCodes`` is SP-P6-2's ruled addition (G5a). ``club`` and ``person``
+    are the public consented fields; the nested identity id is the opaque
+    player-page address.
     """
     _add_entry(page["tid"], page["ms"], player_name="Bo Ferrar", club="Riverside BC")
     payload = _projection(client, page)
 
     (row,) = payload["entrants"]
-    assert set(row) == {"personKey", "name", "club", "eventCodes"}
-    assert row["name"] == "Bo Ferrar"
+    assert set(row) == {"person", "club", "eventCodes"}
+    assert set(row["person"]) == {"identity", "resolution", "label"}
+    assert set(row["person"]["identity"]) == {"id", "name"}
+    assert row["person"]["identity"]["name"] == "Bo Ferrar"
+    assert row["person"]["resolution"] == "resolved"
     assert row["club"] == "Riverside BC"
     assert row["eventCodes"] == ["MS"]
-    uuid.UUID(row["personKey"])  # opaque, but well-formed
+    uuid.UUID(row["person"]["identity"]["id"])  # opaque, but well-formed
     # The projection reaches the player and stops. The account behind the
     # entry is one hop further out and is never selected.
     assert "@example.com" not in json.dumps(payload)
@@ -305,7 +306,7 @@ def test_the_projection_lists_entrant_rows_with_exactly_four_fields(client, page
 def test_an_opted_out_entrant_is_absent_but_a_listed_one_is_present(client, page):
     _add_entry(page["tid"], page["ms"], player_name="Shy Person", list_opt_out=True)
     _add_entry(page["tid"], page["ms"], player_name="Loud Person")
-    names = [row["name"] for row in _projection(client, page)["entrants"]]
+    names = [row["person"]["identity"]["name"] for row in _projection(client, page)["entrants"]]
     assert names == ["Loud Person"]
 
 
@@ -313,7 +314,7 @@ def test_withdrawn_and_rejected_entries_are_not_listed(client, page):
     _add_entry(page["tid"], page["ms"], player_name="Gone Away", state="withdrawn")
     _add_entry(page["tid"], page["ms"], player_name="Turned Down", state="rejected")
     _add_entry(page["tid"], page["ms"], player_name="Still Here")
-    names = [row["name"] for row in _projection(client, page)["entrants"]]
+    names = [row["person"]["identity"]["name"] for row in _projection(client, page)["entrants"]]
     assert names == ["Still Here"]
 
 
@@ -328,7 +329,7 @@ def test_only_confirmed_entries_are_listed(client, page):
     _add_entry(page["tid"], page["ms"], player_name="Bo Accepted", state="confirmed")
 
     payload = _projection(client, page)
-    assert [row["name"] for row in payload["entrants"]] == ["Bo Accepted"]
+    assert [row["person"]["identity"]["name"] for row in payload["entrants"]] == ["Bo Accepted"]
     # And the coupled invariant: the event counts count the same people the
     # list names — the pending and waitlisted rows move neither number.
     assert _event(payload, page["ms"])["entryCount"] == 1
@@ -345,9 +346,9 @@ def test_the_list_never_reveals_entry_state(client, page):
     _add_entry(page["tid"], page["ws"], player_name="Cy Cleared")
 
     rows = _projection(client, page)["entrants"]
-    assert {row["name"] for row in rows} == {"Bo Accepted", "Cy Cleared"}
+    assert {row["person"]["identity"]["name"] for row in rows} == {"Bo Accepted", "Cy Cleared"}
     assert all(
-        set(row) == {"personKey", "name", "club", "eventCodes"} for row in rows
+        set(row) == {"person", "club", "eventCodes"} for row in rows
     )
     serialized = json.dumps(rows).lower()
     for state in ("pending", "confirmed", "waitlisted"):
@@ -398,7 +399,8 @@ def test_unpublishing_actually_stops_the_names_flowing(client, page):
     off state is tested, not just the on state."""
     _add_entry(page["tid"], page["ms"], player_name="Briefly Public")
     assert [
-        row["name"] for row in _projection(client, page)["entrants"]
+        row["person"]["identity"]["name"]
+        for row in _projection(client, page)["entrants"]
     ] == ["Briefly Public"]
 
     response = client.patch(
@@ -452,7 +454,7 @@ def test_the_projection_carries_no_markup_at_all(client, page):
     payload = r.json()
 
     assert payload["page"]["regulationsText"] == "<script>alert('director')</script>"
-    assert payload["entrants"][0]["name"] == "<img src=x onerror=alert(1)>"
+    assert payload["entrants"][0]["person"]["identity"]["name"] == "<img src=x onerror=alert(1)>"
     assert r.headers["content-type"].startswith("application/json")
 
 

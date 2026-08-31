@@ -12,22 +12,29 @@ import { ParticipantPicker, type PickedSingle, type PickedPair } from './Partici
 import type { BracketEventDTO } from './eventUpsertPayload';
 import { formatLabel, disciplineLabel } from './bracketLabels';
 import { isDoublesCode } from '../../lib/doubles';
+import type { BracketPairingCommand } from './pairingMutation';
 
 export function DrawDetailPanel({
   ev,
   players,
+  matchCount = 0,
   onClose,
   onCommitPicks,
+  onOpenPlayer,
+  onPairCommand,
 }: {
   ev: BracketEventDTO;
   players: { id: string; name: string }[];
+  /** Precomputed by the draws index in its single play-unit pass. */
+  matchCount?: number;
   onClose: () => void;
   /** Seed-preserving upsert lives with the surface that owns the data
    *  flow (BracketDrawsTab.commitPicks); the panel only forwards picks. */
   onCommitPicks: (picks: PickedSingle[] | PickedPair[]) => Promise<void>;
+  onOpenPlayer?: (playerId: string) => void;
+  onPairCommand?: (command: BracketPairingCommand) => Promise<void>;
 }) {
   const isDoubles = isDoublesCode(ev.discipline);
-  const configEntries = Object.entries(ev.config ?? {});
   const entered = ev.participants ?? [];
   return (
     <DetailPanel
@@ -41,30 +48,25 @@ export function DrawDetailPanel({
     >
       <DetailPanel.Section eyebrow="Configuration">
         <dl className="space-y-1 text-xs">
-          {/* Format is already the header's sub-line — no need to repeat
-              it here (and repeating it would collide with a plain-text
-              query for "Single elimination" finding two elements). */}
+          {/* F-PAIR-21/22/23, R-PAIR-3: an explicit operator summary. New
+              DTO keys cannot surface here accidentally. Format already
+              lives in the header and is intentionally not repeated. */}
           <div className="flex justify-between gap-3">
-            <dt className="text-muted-foreground">Bracket size</dt>
-            <dd className="sw-num">{ev.bracket_size ?? '–'}</dd>
+            <dt className="text-muted-foreground">Draw size</dt>
+            <dd className="sw-num">{ev.bracket_size ?? 'Not set'}</dd>
           </div>
-          {configEntries.map(([key, value]) => (
-            <div key={key} className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">{key.replaceAll('_', ' ')}</dt>
-              <dd className="sw-num">{String(value)}</dd>
-            </div>
-          ))}
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Entered</dt>
+            <dd className="sw-num">{ev.participant_count ?? entered.length}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Matches</dt>
+            <dd className="sw-num">{matchCount}</dd>
+          </div>
         </dl>
       </DetailPanel.Section>
 
-      <DetailPanel.Section
-        eyebrow="Participants"
-        right={
-          <span className="text-2xs text-muted-foreground sw-num">
-            {ev.participant_count ?? 0} entered
-          </span>
-        }
-      >
+      <DetailPanel.Section eyebrow="Participants">
         <ParticipantPicker
           mode={isDoubles ? 'doubles' : 'singles'}
           eventId={ev.id}
@@ -96,6 +98,15 @@ export function DrawDetailPanel({
           }
           onCommit={onCommitPicks}
           onCancel={onClose}
+          onOpenPlayer={onOpenPlayer}
+          onChangePartner={(pair) => {
+            const playerId = pair.members?.[0] ?? pair.id;
+            onOpenPlayer?.(playerId);
+          }}
+          onDissolvePair={(pair) => {
+            const playerId = pair.members?.[0] ?? pair.id;
+            void onPairCommand?.({ type: 'dissolve', playerId });
+          }}
         />
       </DetailPanel.Section>
     </DetailPanel>

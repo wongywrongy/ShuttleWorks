@@ -86,6 +86,47 @@ from db.session import SessionLocal
 
 log = logging.getLogger("scheduler.repositories")
 
+
+def _project_canonical_setup(document: dict) -> dict:
+    """Keep legacy engine config subordinate to the canonical Setup facade.
+
+    Older clients still PUT the whole state document. Without this projection,
+    a tab loaded before a Setup edit could carry a fresh ETag but overwrite the
+    name, date, court count, or scoring defaults with stale config values.
+    """
+    setup = document.get("setup")
+    if not isinstance(setup, dict):
+        return document
+    config = dict(document.get("config") or {})
+
+    def data_for(key: str) -> dict:
+        section = setup.get(key)
+        data = section.get("data") if isinstance(section, dict) else None
+        return data if isinstance(data, dict) else {}
+
+    general = data_for("general")
+    dates = data_for("dates")
+    venue = data_for("venue")
+    rules = data_for("rules")
+    if general.get("name"):
+        config["tournamentName"] = general["name"]
+    if dates.get("tournamentStart"):
+        config["tournamentDate"] = str(dates["tournamentStart"])[:10]
+    if isinstance(venue.get("courts"), list) and venue["courts"]:
+        config["courtCount"] = len(venue["courts"])
+    for source, target in (
+        ("scoring", "scoringFormat"),
+        ("setsToWin", "setsToWin"),
+        ("pointsPerSet", "pointsPerSet"),
+        ("deuceEnabled", "deuceEnabled"),
+        ("defaultRestMinutes", "defaultRestMinutes"),
+    ):
+        if rules.get(source) is not None:
+            config[target] = rules[source]
+    if config:
+        document["config"] = config
+    return document
+
 # Matches the on-disk shape of the legacy backup files so any UI that
 # parses the filename keeps working.
 _FILENAME_SLUG = re.compile(r"[^a-zA-Z0-9-]+")
@@ -112,7 +153,9 @@ def _backup_filename(payload: dict) -> str:
 
 
 _TOURNAMENT_NAME_FROM_PAYLOAD_KEYS = ("config", "tournamentName")
-_ALLOWED_UPDATE_FIELDS = frozenset({"name", "status", "tournament_date"})
+_ALLOWED_UPDATE_FIELDS = frozenset(
+    {"name", "status", "tournament_date", "tournament_end_date", "time_zone"}
+)
 
 
 def _extract_name(payload: dict) -> Optional[str]:
@@ -211,6 +254,8 @@ class _LocalTournamentRepo:
         name: Optional[str] = None,
         kind: str = "meet",
         tournament_date: Optional[str] = None,
+        tournament_end_date: Optional[str] = None,
+        time_zone: str = "UTC",
         owner_id: Optional[uuid.UUID] = None,
         owner_email: Optional[str] = None,
         org_id: Optional[uuid.UUID] = None,
@@ -222,6 +267,8 @@ class _LocalTournamentRepo:
             name=name,
             kind=kind,
             tournament_date=tournament_date,
+            tournament_end_date=tournament_end_date,
+            time_zone=time_zone,
             data={},
             schema_version=CURRENT_TOURNAMENT_SCHEMA_VERSION,
         )
@@ -348,6 +395,18 @@ class _LocalTournamentRepo:
         new_date = _extract_date(stamped)
         if new_date is not None:
             row.tournament_date = new_date
+        setup = stamped.get("setup") if isinstance(stamped.get("setup"), dict) else {}
+        general_setup = setup.get("general") if isinstance(setup, dict) else None
+        general_data = general_setup.get("data") if isinstance(general_setup, dict) else None
+        if isinstance(general_data, dict):
+            if general_data.get("timezone"):
+                row.time_zone = general_data["timezone"]
+            if general_data.get("status") in {"draft", "active", "archived"}:
+                row.status = general_data["status"]
+        dates_setup = setup.get("dates") if isinstance(setup, dict) else None
+        dates_data = dates_setup.get("data") if isinstance(dates_setup, dict) else None
+        if isinstance(dates_data, dict) and dates_data.get("tournamentEnd"):
+            row.tournament_end_date = str(dates_data["tournamentEnd"])[:10]
         row.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
         # Every committed blob write advances the optimistic-concurrency
         # counter (SP-CLOUD-4). This is the only method that assigns
@@ -1999,9 +2058,10 @@ class LocalRepository:
         # TournamentStateDTO has no ``bracket_session`` field.
         merged = dict(payload)
         if prior.data:
-            for key in ("bracket_session",):
+            for key in ("bracket_session", "setup", "activity"):
                 if key in prior.data and key not in merged:
                     merged[key] = prior.data[key]
+        merged = _project_canonical_setup(merged)
         if clear_bracket_assignments and isinstance(merged.get("bracket_session"), dict):
             session = dict(merged["bracket_session"])
             session.pop("assignments", None)
@@ -2145,6 +2205,21 @@ class LocalRepository:
             self.session.commit()
             raise error
 
+        error = self._validate_concrete_match_sides(
+            match,
+            command_row,
+            command_id=command_id,
+            tournament_id=tournament_id,
+            match_id=match_id,
+            action=action,
+            payload=payload,
+            submitted_by=submitted_by,
+            conflict_error=ce_cls,
+        )
+        if error is not None:
+            self.session.commit()
+            raise error
+
         error = self._validate_assign_court(
             match,
             command_row,
@@ -2281,6 +2356,72 @@ class LocalRepository:
                 ),
             )
         return None
+
+    def _validate_concrete_match_sides(
+        self,
+        match: Match,
+        command_row: Optional[Command],
+        *,
+        command_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        action: str,
+        payload: Optional[dict],
+        submitted_by: uuid.UUID,
+        conflict_error,
+    ):
+        """Reject consequential Meet actions while either side is unknown.
+
+        The Operations SQL row intentionally does not duplicate participant
+        identities. Read the canonical Meet match payload at the command seam;
+        this is one tournament read, not a per-row projection or N+1 loop.
+        """
+        if action not in {"assign_court", "call_to_court", "start_match", "finish_match"}:
+            return None
+        tournament = self.tournaments.get_by_id(tournament_id)
+        data = tournament.data if tournament is not None and isinstance(tournament.data, dict) else {}
+        source_matches = data.get("matches") if isinstance(data, dict) else None
+        if not isinstance(source_matches, list):
+            return None
+        source = next(
+            (
+                candidate
+                for candidate in source_matches
+                if isinstance(candidate, dict) and candidate.get("id") == match_id
+            ),
+            None,
+        )
+        # Legacy projections without a canonical payload predate this safety
+        # property. Do not turn their unrelated commands into false rejects.
+        if source is None:
+            return None
+        missing = [
+            label
+            for label, key in (("Side A", "sideA"), ("Side B", "sideB"))
+            if not isinstance(source.get(key), list) or not source.get(key)
+        ]
+        if not missing:
+            return None
+        reason = (
+            f"Cannot {action.replace('_', ' ')}: both participants must be known. "
+            f"Unresolved: {', '.join(missing)}."
+        )
+        self._stamp_rejection(
+            command_row,
+            command_id=command_id,
+            tournament_id=tournament_id,
+            match_id=match_id,
+            action=action,
+            payload=payload,
+            submitted_by=submitted_by,
+            reason=reason,
+        )
+        return conflict_error(
+            match_id=match_id,
+            current_status=match.status,
+            attempted_status=match.status,
+            message=reason,
+        )
 
     def _validate_assign_court(
         self,

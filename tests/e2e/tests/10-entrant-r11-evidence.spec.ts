@@ -57,12 +57,11 @@
  *
  * 2. **CSP, enforced by a browser.** The policy comes from nginx
  *    (`infra/nginx/security-headers.conf`), not from the app, so no dev server
- *    and no unit test is ever sent one. `entry.render.test.ts` already
- *    proves the STRUCTURAL half in the gate — the rendered entry page
- *    contains no `<script>` at all, and a document with no scripts cannot
- *    violate `script-src`. That is strictly stronger than observing zero
- *    violations, and it is why the entry page below is expected clean.
- *    It does not generalise: `routes/signup.tsx` writes its own
+ *    and no unit test is ever sent one. Entrant route tests prove the
+ *    structural half in the gate: the tier has no framework hydration or
+ *    inline application scripts, and each bounded external route module must
+ *    fit the same-origin CSP and its page-weight budget. That does not
+ *    generalise to Turnstile: `routes/signup.tsx` writes its own
  *    `<script src="https://challenges.cloudflare.com/...">` directly into
  *    the markup, outside the `<Scripts/>` that `root.tsx` dropped, so that
  *    one page needs — and gets, on that path only — a CSP that admits it.
@@ -464,12 +463,13 @@ test.describe('entrant app — R11 evidence', () => {
    * renders when its data exists, and never as a placeholder or a disabled
    * control).
    *
-   * The seed creates three entry EVENTS and no entries, so Overview and
-   * Events must both be tabs and Entrants must be absent from the document —
-   * not greyed, not "no entrants yet", absent. `visibleTabs` is unit-tested
-   * as a pure function; what is asserted here is that the running page obeys
-   * it, and that a `?tab=` naming a gated-off panel falls back to Overview
-   * rather than rendering an empty one.
+   * The seed creates three entry EVENTS and no entries, so Overview,
+   * Schedule / Live, and Events must be tabs while Entrants is absent from
+   * the document — not greyed, not "no entrants yet", absent. Schedule / Live
+   * is a universal route even before matches exist; `visibleTabs` is
+   * unit-tested as a pure function. What is asserted here is that the running
+   * page obeys both rules, and that a `?tab=` naming a gated-off panel falls
+   * back to Overview rather than rendering an empty one.
    */
   test('a tab with no data does not render, and is not addressable by ?tab=', async ({
     page,
@@ -481,7 +481,7 @@ test.describe('entrant app — R11 evidence', () => {
     // readers and that name is the contract, so this breaks if the labelling
     // regresses too.
     const tabs = page.locator('nav[aria-label="Tournament sections"] a');
-    await expect(tabs).toHaveText(['Overview', 'Events']);
+    await expect(tabs).toHaveText(['Overview', 'Schedule / Live', 'Events']);
 
     // The panel, not just the tab: asking for the gated-off one must land on
     // Overview, which is the intro text and the card grid.
@@ -660,6 +660,14 @@ test.describe('entrant app — R11 evidence', () => {
     // pierces open roots only). Verified against the real widget.
     await expect(page.locator('input[name="cf-turnstile-response"]')).not.toHaveValue(
       '',
+      {
+        // The widget is a real third-party integration: on an otherwise idle
+        // development host its redirect plus challenge bootstrap can consume
+        // nearly all of Playwright's global five-second assertion window.
+        // Keep this bounded below the test's 30-second timeout without making
+        // every local assertion inherit an external-network allowance.
+        timeout: 20_000,
+      },
     );
     expect(
       page.frames().map((f) => f.url()),

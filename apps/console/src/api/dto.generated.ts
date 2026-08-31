@@ -1547,6 +1547,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Setup */
+        get: operations["get_setup_tournaments__tournament_id__setup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity
+         * @description Return the durable, server-authored high-impact activity stream.
+         *
+         *     Activity is kept inside the versioned tournament document so local and
+         *     hosted deployments share one storage path without a migration. Clients
+         *     cannot forge it: whole-state writes preserve the server-managed field.
+         */
+        get: operations["get_activity_tournaments__tournament_id__activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/setup/{section}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Setup Section */
+        patch: operations["patch_setup_section_tournaments__tournament_id__setup__section__patch"];
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/modules": {
         parameters: {
             query?: never;
@@ -2218,6 +2276,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/e/api/me/submissions/{submission_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Submission Receipt
+         * @description Return the complete receipt for one act owned by the current account.
+         */
+        get: operations["submission_receipt_e_api_me_submissions__submission_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/e/api/me/entries/{entry_id}/withdraw": {
         parameters: {
             query?: never;
@@ -2430,6 +2508,26 @@ export interface paths {
          *     than on the list.
          */
         get: operations["player_page_e_api_page__slug__players__person_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e/api/page/{slug}/matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Schedule Matches
+         * @description Unified, publication-gated Schedule / Live projection.
+         */
+        get: operations["schedule_matches_e_api_page__slug__matches_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3225,6 +3323,28 @@ export interface components {
              */
             entries: components["schemas"]["ExportedEntryDTO"][];
         };
+        /** ActivityEntry */
+        ActivityEntry: {
+            /** Id */
+            id: string;
+            /** Occurredat */
+            occurredAt: string;
+            /** Actorid */
+            actorId: string;
+            /** Actorname */
+            actorName: string;
+            /** Action */
+            action: string;
+            /** Target */
+            target: string;
+            /** Summary */
+            summary: string;
+        };
+        /** ActivityFeed */
+        ActivityFeed: {
+            /** Entries */
+            entries: components["schemas"]["ActivityEntry"][];
+        };
         /**
          * Advisory
          * @description A live-operations recommendation surfaced to the operator.
@@ -3855,6 +3975,17 @@ export interface components {
             /** Topologyscope */
             topologyScope: string;
             /**
+             * Roundcount
+             * @default 0
+             */
+            roundCount: number;
+            /** Champions */
+            champions?: components["schemas"]["PersonReferenceDTO"][];
+            /** Finalists */
+            finalists?: components["schemas"]["HonorDTO"][];
+            /** Remainingmatchcount */
+            remainingMatchCount?: number | null;
+            /**
              * Historical
              * @default false
              */
@@ -3909,10 +4040,7 @@ export interface components {
         DrawPlayerDTO: {
             /** Playerkey */
             playerKey: string;
-            /** Personkey */
-            personKey?: string | null;
-            /** Name */
-            name: string;
+            person: components["schemas"]["PersonReferenceDTO"];
             /** Club */
             club?: string | null;
             /** Eventcodes */
@@ -3993,10 +4121,7 @@ export interface components {
          *     a name is routine at a club and must not collide into one page.
          */
         EntrantRowDTO: {
-            /** Personkey */
-            personKey: string;
-            /** Name */
-            name: string;
+            person: components["schemas"]["PersonReferenceDTO"];
             /** Club */
             club?: string | null;
             /**
@@ -4723,8 +4848,8 @@ export interface components {
         };
         /** HonorDTO */
         HonorDTO: {
-            /** Names */
-            names: string[];
+            /** Persons */
+            persons?: components["schemas"]["PersonReferenceDTO"][];
             /** Club */
             club?: string | null;
         };
@@ -4878,6 +5003,8 @@ export interface components {
             roster?: components["schemas"]["BracketPlayerDTO"][] | null;
             /** Events */
             events: components["schemas"]["ImportEventIn"][];
+            /** Assignments */
+            assignments?: components["schemas"]["BracketAssignmentIn"][];
         };
         /** InviteAcceptedDTO */
         InviteAcceptedDTO: {
@@ -5332,10 +5459,7 @@ export interface components {
             eventCode: string;
             /** Discipline */
             discipline: string;
-            /** Playername */
-            playerName: string;
-            /** Personkey */
-            personKey: string;
+            player: components["schemas"]["PersonReferenceDTO"];
             /** State */
             state: string;
             /** Entryid */
@@ -5347,8 +5471,7 @@ export interface components {
             canWithdraw: boolean;
             /** Resultbadge */
             resultBadge?: string | null;
-            /** Partnername */
-            partnerName?: string | null;
+            partner?: components["schemas"]["PersonReferenceDTO"] | null;
         };
         /** MyTournamentCardDTO */
         MyTournamentCardDTO: {
@@ -5388,11 +5511,12 @@ export interface components {
         };
         /**
          * NextMatchDTO
-         * @description One upcoming match for the inspector's "Next up" list.
+         * @description One active or upcoming match for the inspector's "Next up" list.
          *
-         *     ``status`` is schedule-derivable only (``"scheduled"``): live called/started
-         *     state lives in the ``match_states`` table, not the loaded ``data`` blob, so
-         *     surfacing it would break the list endpoint's no-per-row-query guarantee.
+         *     Meet status is schedule-derivable only (``"scheduled"``): its live state
+         *     lives in ``match_states``. Bracket assignments already carry their action
+         *     clock in the loaded blob, so those rows can truthfully report ``playing``
+         *     without another query.
          */
         NextMatchDTO: {
             /** Code */
@@ -5520,6 +5644,25 @@ export interface components {
              */
             askBirthYear: boolean;
         };
+        /**
+         * PersonReferenceDTO
+         * @description A person or structural token used by public projections.
+         *
+         *     ``resolution`` is explicit so clients do not infer linkability from the
+         *     presence of a label.  ``identity`` is absent for non-person tokens such as
+         *     ``Bye`` and feeder placeholders.
+         */
+        PersonReferenceDTO: {
+            identity?: components["schemas"]["PublicPersonIdentityDTO"] | null;
+            /**
+             * Resolution
+             * @default dead
+             * @enum {string}
+             */
+            resolution: "resolved" | "dead";
+            /** Label */
+            label?: string | null;
+        };
         /** PlanFinalizedDTO */
         PlanFinalizedDTO: {
             /** Finalized */
@@ -5593,14 +5736,27 @@ export interface components {
             /** Remarks */
             remarks?: string | null;
         };
+        /**
+         * PlayerDrawPathDTO
+         * @description One round in a person's public draw path.
+         */
+        PlayerDrawPathDTO: {
+            /** Roundlabel */
+            roundLabel: string;
+            /** Opponents */
+            opponents?: components["schemas"]["PersonReferenceDTO"][];
+        };
         /** PlayerEventDTO */
         PlayerEventDTO: {
             /** Code */
             code: string;
             /** Discipline */
             discipline: string;
-            /** Partnername */
-            partnerName?: string | null;
+            partner?: components["schemas"]["PersonReferenceDTO"] | null;
+            /** Seed */
+            seed?: number | null;
+            /** Drawpath */
+            drawPath?: components["schemas"]["PlayerDrawPathDTO"][];
         };
         /**
          * PlayerImpact
@@ -5635,11 +5791,26 @@ export interface components {
             scheduledTime?: string | null;
             /** Court */
             court?: number | null;
+            /** Playedon */
+            playedOn?: string | null;
+            /** Localtime */
+            localTime?: string | null;
+            /** Courtlabel */
+            courtLabel?: string | null;
+            /**
+             * Status
+             * @default scheduled
+             */
+            status: string;
+            /** Durationminutes */
+            durationMinutes?: number | null;
+            /** Updatedat */
+            updatedAt?: string | null;
         };
         /** PlayerMatchSideDTO */
         PlayerMatchSideDTO: {
-            /** Names */
-            names: string[];
+            /** Persons */
+            persons?: components["schemas"]["PersonReferenceDTO"][];
             /** Placeholder */
             placeholder?: string | null;
             /**
@@ -5647,29 +5818,18 @@ export interface components {
              * @default false
              */
             winner: boolean;
+            /** Seed */
+            seed?: number | null;
         };
         /** PlayerPageDTO */
         PlayerPageDTO: {
-            /** Personkey */
-            personKey: string;
-            /** Name */
-            name: string;
+            person: components["schemas"]["PersonReferenceDTO"];
             /** Club */
             club?: string | null;
             /** Events */
             events: components["schemas"]["PlayerEventDTO"][];
-            record?: components["schemas"]["PlayerRecordDTO"] | null;
             /** Matches */
             matches: components["schemas"]["PlayerMatchDTO"][];
-        };
-        /** PlayerRecordDTO */
-        PlayerRecordDTO: {
-            /** Played */
-            played: number;
-            /** Wins */
-            wins: number;
-            /** Losses */
-            losses: number;
         };
         /** PlayersDTO */
         PlayersDTO: {
@@ -5779,6 +5939,21 @@ export interface components {
             courtId: number;
         };
         /**
+         * PublicPersonIdentityDTO
+         * @description The only public representation of a persisted tournament person.
+         *
+         *     ``id`` is intentionally nullable: imported draw rows and placeholders have
+         *     no ``entry_players`` row and therefore must never acquire a name-derived
+         *     link.  ``name`` is copied from the authoritative player row (or from the
+         *     imported draw roster when no row exists), never assembled by a caller.
+         */
+        PublicPersonIdentityDTO: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
          * PublicationDTO
          * @description The TD's publication gates (SP-P7 §4), stated so the tier can tell
          *     "gated" from "empty".
@@ -5827,6 +6002,25 @@ export interface components {
                 [key: string]: unknown;
             };
             refusal?: components["schemas"]["RefusalDTO"] | null;
+        };
+        /**
+         * ReceiptEntryLineDTO
+         * @description One event line on an account-scoped receipt.
+         *
+         *     This is intentionally narrower than the operator desk row: contact data,
+         *     remarks, internal reasons, and roster identifiers do not belong on a
+         *     receipt.  The accepted partner name is the only cross-account field and
+         *     is already licensed by the My Entries projection.
+         */
+        ReceiptEntryLineDTO: {
+            /** Eventcode */
+            eventCode: string;
+            /** Discipline */
+            discipline: string;
+            player: components["schemas"]["PersonReferenceDTO"];
+            partner?: components["schemas"]["PersonReferenceDTO"] | null;
+            /** State */
+            state: string;
         };
         /** RecordResultIn */
         RecordResultIn: {
@@ -5918,8 +6112,7 @@ export interface components {
             eventCode: string;
             /** Position */
             position: number;
-            /** Name */
-            name: string;
+            person: components["schemas"]["PersonReferenceDTO"];
             /** Club */
             club?: string | null;
         };
@@ -6046,6 +6239,36 @@ export interface components {
             /** Activecandidateindex */
             activeCandidateIndex?: number | null;
         };
+        /** ScheduleDayFacetDTO */
+        ScheduleDayFacetDTO: {
+            /** Day */
+            day: string;
+            /** Count */
+            count: number;
+        };
+        /** ScheduleFacetsDTO */
+        ScheduleFacetsDTO: {
+            /**
+             * Days
+             * @default []
+             */
+            days: components["schemas"]["ScheduleDayFacetDTO"][];
+            /**
+             * Events
+             * @default []
+             */
+            events: string[];
+            /**
+             * Courts
+             * @default []
+             */
+            courts: number[];
+            /**
+             * States
+             * @default []
+             */
+            states: string[];
+        };
         /**
          * ScheduleHistoryEntry
          * @description Snapshot of a prior committed schedule, kept for revert + audit.
@@ -6065,6 +6288,83 @@ export interface components {
             /** Summary */
             summary?: string | null;
             schedule?: components["schemas"]["ScheduleDTO"] | null;
+        };
+        /** ScheduleMatchDTO */
+        ScheduleMatchDTO: {
+            /** Matchkey */
+            matchKey: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "bracket" | "meet";
+            /** Eventcode */
+            eventCode: string;
+            /** Discipline */
+            discipline?: string | null;
+            /** Roundlabel */
+            roundLabel?: string | null;
+            /**
+             * Status
+             * @default scheduled
+             * @enum {string}
+             */
+            status: "scheduled" | "called" | "live" | "delayed" | "completed" | "walkover" | "retired" | "cancelled";
+            /** Scheduleddate */
+            scheduledDate?: string | null;
+            /** Scheduledtime */
+            scheduledTime?: string | null;
+            /** Court */
+            court?: number | null;
+            /** Sides */
+            sides?: components["schemas"]["ScheduleSideDTO"][];
+            /** Score */
+            score?: number[][] | null;
+            /**
+             * Walkover
+             * @default false
+             */
+            walkover: boolean;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
+        /** ScheduleMatchesDTO */
+        ScheduleMatchesDTO: {
+            /** Published */
+            published: boolean;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ScheduleMatchDTO"][];
+            facets?: components["schemas"]["ScheduleFacetsDTO"];
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Pagesize
+             * @default 25
+             */
+            pageSize: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timeZone: string;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /**
+             * Revision
+             * @default
+             */
+            revision: string;
         };
         /** ScheduleNextRoundOut */
         ScheduleNextRoundOut: {
@@ -6086,6 +6386,18 @@ export interface components {
             infeasible_reasons: string[];
             /** Candidates */
             candidates?: components["schemas"]["BracketScheduleCandidate"][];
+        };
+        /**
+         * ScheduleSideDTO
+         * @description Public side of a scheduled match; contact/account data is absent.
+         */
+        ScheduleSideDTO: {
+            /** Participantkey */
+            participantKey?: string | null;
+            /** Persons */
+            persons?: components["schemas"]["PersonReferenceDTO"][];
+            /** Placeholder */
+            placeholder?: string | null;
         };
         /**
          * SchoolImpact
@@ -6145,8 +6457,8 @@ export interface components {
         SeedLineDTO: {
             /** Seed */
             seed: number;
-            /** Names */
-            names: string[];
+            /** Persons */
+            persons?: components["schemas"]["PersonReferenceDTO"][];
             /** Club */
             club?: string | null;
         };
@@ -6198,6 +6510,58 @@ export interface components {
             rounds: string[][];
             /** Positions */
             positions?: number[] | null;
+        };
+        /** SetupIssue */
+        SetupIssue: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "blocking";
+            /** Message */
+            message: string;
+            /** Path */
+            path?: string | null;
+        };
+        /** SetupPatch */
+        SetupPatch: {
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            };
+        };
+        /** SetupSectionState */
+        SetupSectionState: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "general" | "dates" | "venue" | "events" | "rules" | "entries" | "people" | "public-info";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_started" | "in_progress" | "ready" | "blocked" | "published" | "complete";
+            /** Summary */
+            summary: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Issues */
+            issues?: components["schemas"]["SetupIssue"][];
+            /** Downstreamimpact */
+            downstreamImpact?: string[];
+            /** Updatedat */
+            updatedAt?: string | null;
+            /**
+             * Authority
+             * @default setup
+             * @enum {string}
+             */
+            authority: "setup" | "domain";
         };
         /** SideDTO */
         SideDTO: {
@@ -6405,6 +6769,38 @@ export interface components {
             entriesUpdated: number;
         };
         /**
+         * SubmissionReceiptDTO
+         * @description The durable receipt for one act owned by the current entrant.
+         */
+        SubmissionReceiptDTO: {
+            /** Submissionid */
+            submissionId: string;
+            /** Slug */
+            slug?: string | null;
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Orgname */
+            orgName?: string | null;
+            /** Venuename */
+            venueName?: string | null;
+            /** Submittedat */
+            submittedAt: string;
+            /** Status */
+            status: string;
+            /** Feetotalcents */
+            feeTotalCents?: number | null;
+            /** Paymentstate */
+            paymentState: string;
+            /** Paymentnote */
+            paymentNote?: string | null;
+            /** Paymentinstructions */
+            paymentInstructions?: string | null;
+            /** Regulationsversionaccepted */
+            regulationsVersionAccepted?: number | null;
+            /** Events */
+            events: components["schemas"]["ReceiptEntryLineDTO"][];
+        };
+        /**
          * SuggestedAction
          * @description A pre-filled action the UI can offer as a one-click resolve.
          */
@@ -6463,8 +6859,8 @@ export interface components {
         TeamDTO: {
             /** Participantkey */
             participantKey: string;
-            /** Names */
-            names: string[];
+            /** Persons */
+            persons?: components["schemas"]["PersonReferenceDTO"][];
             /** Club */
             club?: string | null;
             /** Seed */
@@ -6625,6 +7021,18 @@ export interface components {
             kind: string;
             /** Tournamentdate */
             tournamentDate?: string | null;
+            /** Tournamentenddate */
+            tournamentEndDate?: string | null;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timeZone: string;
+            /**
+             * Courtcount
+             * @default 4
+             */
+            courtCount: number;
             /** Modules */
             modules?: components["schemas"]["WorkspaceModuleSeedDTO"][] | null;
         };
@@ -6634,6 +7042,17 @@ export interface components {
             name?: string | null;
             /** Date */
             date?: string | null;
+            /** Enddate */
+            endDate?: string | null;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timeZone: string;
+            /** @default announced */
+            phase: components["schemas"]["TournamentPhase"];
+            /** Updatedat */
+            updatedAt?: string | null;
         };
         /**
          * TournamentMemberDTO
@@ -6676,6 +7095,25 @@ export interface components {
             assignments: components["schemas"]["AssignmentOut"][];
             /** Results */
             results: components["schemas"]["ResultOut"][];
+        };
+        /**
+         * TournamentPhase
+         * @enum {string}
+         */
+        TournamentPhase: "announced" | "entries_open" | "entries_closed" | "draws_published" | "live" | "complete" | "archived";
+        /** TournamentSetup */
+        TournamentSetup: {
+            /** Tournamentid */
+            tournamentId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_started" | "in_progress" | "ready" | "blocked" | "published" | "complete";
+            /** Blockingissuecount */
+            blockingIssueCount: number;
+            /** Sections */
+            sections: components["schemas"]["SetupSectionState"][];
         };
         /**
          * TournamentStateDTO
@@ -6762,6 +7200,13 @@ export interface components {
             kind: string;
             /** Tournamentdate */
             tournamentDate?: string | null;
+            /** Tournamentenddate */
+            tournamentEndDate?: string | null;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timeZone: string;
             /** Createdat */
             createdAt: string;
             /** Updatedat */
@@ -6782,6 +7227,10 @@ export interface components {
             status?: ("draft" | "active" | "archived") | null;
             /** Tournamentdate */
             tournamentDate?: string | null;
+            /** Tournamentenddate */
+            tournamentEndDate?: string | null;
+            /** Timezone */
+            timeZone?: string | null;
         };
         /** TransferOwnershipRequest */
         TransferOwnershipRequest: {
@@ -6964,6 +7413,13 @@ export interface components {
              * @default []
              */
             semifinalists: components["schemas"]["HonorDTO"][];
+            /** Finalscore */
+            finalScore?: number[][] | null;
+            /**
+             * Finalists
+             * @default []
+             */
+            finalists: components["schemas"]["HonorDTO"][];
         };
         /**
          * WithdrawRequest
@@ -9447,6 +9903,106 @@ export interface operations {
             };
         };
     };
+    get_setup_tournaments__tournament_id__setup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentSetup"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_tournaments__tournament_id__activity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityFeed"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_setup_section_tournaments__tournament_id__setup__section__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                section: "general" | "dates" | "venue" | "events" | "rules" | "entries" | "people" | "public-info";
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentSetup"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_modules_tournaments__tournament_id__modules_get: {
         parameters: {
             query?: never;
@@ -10135,6 +10691,37 @@ export interface operations {
             };
         };
     };
+    submission_receipt_e_api_me_submissions__submission_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionReceiptDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     withdraw_entry_e_api_me_entries__entry_id__withdraw_post: {
         parameters: {
             query?: never;
@@ -10385,6 +10972,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlayerPageDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    schedule_matches_e_api_page__slug__matches_get: {
+        parameters: {
+            query?: {
+                day?: string | null;
+                event?: string | null;
+                player?: string | null;
+                court?: number | null;
+                state?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleMatchesDTO"];
                 };
             };
             /** @description Validation Error */

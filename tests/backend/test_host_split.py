@@ -297,7 +297,10 @@ GENERATORS = [
     ("app", "identity.auth_routes", "/login?reset="),
     ("app", "workspaces.tournaments", "/invite/"),
     ("play", "identity.entrants_routes", "/e/verify?token="),
-    ("play", "identity.entrants_routes", "/e/reset?token="),
+    # Reset now encodes a query mapping so an optional safe ``next`` target can
+    # survive alongside the token. Pin the route and encoder expression rather
+    # than the retired hand-concatenated token spelling.
+    ("play", "identity.entrants_routes", "/e/reset?{urlencode(reset_query)}"),
     ("play", "entries.entries_json", "/e/"),
 ]
 

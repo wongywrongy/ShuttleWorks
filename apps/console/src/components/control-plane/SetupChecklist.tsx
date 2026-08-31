@@ -96,7 +96,7 @@ export function SetupChecklist({ steps, variant = 'full', onAction, testId }: Pr
               className={[
                 'shrink-0 rounded-sm border border-border px-2.5 py-1 text-xs font-medium',
                 'text-foreground transition-colors duration-fast ease-brand',
-                'hover:border-accent/40 hover:bg-accent/10 hover:text-accent',
+                'hover:border-accent/40 hover:bg-action-selected-bg hover:text-action-selected-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
               ].join(' ')}
             >

@@ -28,6 +28,10 @@ import type {
   RosterGroupDTO,
 } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
+import {
+  formatMatchIdentity,
+  meetMatchIdentityFromStored,
+} from '../../../platform/domain/matchIdentity';
 
 interface ScheduleDiffViewProps {
   impact: Impact;
@@ -65,6 +69,14 @@ function moveDirection(move: MatchMove): Direction {
   if (move.toSlotId > move.fromSlotId) return 'forward';
   if (move.toSlotId < move.fromSlotId) return 'backward';
   return 'court-only';
+}
+
+function getMoveMatchCode(move: MatchMove): string {
+  const identity = meetMatchIdentityFromStored({
+    event_rank: move.eventRank,
+    sequence: move.matchNumber ?? null,
+  });
+  return formatMatchIdentity(identity, move.matchId) || '?';
 }
 
 const DIRECTION_TONE: Record<Direction, string> = {
@@ -380,6 +392,8 @@ function MoveRow({
       : null;
   const minuteDelta = slotDelta != null ? slotDelta * intervalMinutes : null;
   const tone = DIRECTION_TONE[dir];
+  const matchCode = getMoveMatchCode(move);
+  const eventCode = move.eventRank ? matchCode : null;
 
   // Compact label: "+2h", "−30m", "court", "remove", etc.
   const deltaLabel =
@@ -410,16 +424,16 @@ function MoveRow({
     <li
       className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 px-2 py-1 text-xs hover:bg-muted"
       title={
-        move.eventRank
-          ? `Match #${move.matchNumber ?? '?'} · ${move.eventRank}`
+        eventCode
+          ? `Match #${move.matchNumber ?? '?'} · ${eventCode}`
           : `Match #${move.matchNumber ?? '?'}`
       }
     >
       {/* Match # + event tag */}
       <span className="sw-num text-muted-foreground whitespace-nowrap">
-        {move.matchNumber != null ? `#${move.matchNumber}` : move.matchId.slice(0, 4)}
-        {move.eventRank && (
-          <span className="ml-1 text-foreground">{move.eventRank}</span>
+        {move.matchNumber != null ? `#${move.matchNumber}` : matchCode}
+        {eventCode && (
+          <span className="ml-1 text-foreground">{eventCode}</span>
         )}
       </span>
       {/* Players — wraps into the `minmax(0,1fr)` column; the row grows. */}
@@ -493,4 +507,3 @@ function Pill({
     </span>
   );
 }
-

@@ -18,9 +18,9 @@ apps/                          the deployable surfaces
 │   │   └── api / store / hooks / lib …
 │   ├── Dockerfile             builds the static bundle; served by nginx (config in infra/nginx/)
 │   └── FRONTEND.md            shell + tabs, the store split, theme system
-├── entrant/                   PUBLIC tier — React Router 7 SSR, zero client JS (/e/*)
+├── entrant/                   PUBLIC tier — React Router 7 SSR + bounded route modules (/e/*)
 │   ├── app/                   routes/ (explicit route table), components/, lib/
-│   ├── scripts/               measure-page-weight.mjs (the blocking 4 KB gate)
+│   ├── scripts/               measure-page-weight.mjs (blocking 4 KB public / 8 KB entry gates)
 │   └── tests/                 vitest, incl. source-scan contracts (no truncation, no em dash, no client fee rules)
 └── api/                       FastAPI + persistence + command log
     ├── alembic/               SQLite + Postgres schema migrations
@@ -43,7 +43,7 @@ infra/                         deployment orchestration (Dockerfiles stay with t
 
 tests/
 ├── backend/                   API + solver tests (pytest; rootdir is the repo root)
-└── e2e/                       Playwright specs incl. the required interaction smoke
+└── e2e/                       Playwright entrant evidence + console browser contracts
 
 simulator/                     internal full-workflow HTTP simulator (not in CI)
 tools/                         OpenAPI, documentation, and audit tooling

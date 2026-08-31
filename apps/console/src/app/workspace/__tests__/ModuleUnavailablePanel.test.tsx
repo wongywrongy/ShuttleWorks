@@ -37,4 +37,43 @@ describe('ModuleUnavailablePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Open Settings/ }));
     expect(onSettings).toHaveBeenCalled();
   });
+
+  it('explains a stable guard reason and exposes permission resolution', () => {
+    const onRequest = vi.fn();
+    render(
+      <ModuleUnavailablePanel
+        label="Display"
+        primaryLabel="Meet"
+        onGoToPrimary={() => {}}
+        reason="permission"
+        requiredPermission="display.publish"
+        onRequestPermission={onRequest}
+        actions={[{ label: 'Enable display', onClick: () => {} }]}
+      />,
+    );
+    expect(screen.getByTestId('module-unavailable-reason')).toHaveTextContent(
+      'Your role does not include access to this module. Required permission: display.publish.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Request access' }));
+    expect(onRequest).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Enable display' })).toBeInTheDocument();
+  });
+
+  it('makes Administration · Modules the enablement owner', () => {
+    const onSettings = vi.fn();
+    render(
+      <ModuleUnavailablePanel
+        label="Entries"
+        primaryLabel="Meet"
+        onGoToPrimary={() => {}}
+        onOpenSettings={onSettings}
+        reason="not-enabled"
+      />,
+    );
+    expect(screen.getByTestId('module-unavailable-reason')).toHaveTextContent(
+      'Enable this module to add it to the tournament workflow.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Enable in Administration · Modules' }));
+    expect(onSettings).toHaveBeenCalledOnce();
+  });
 });

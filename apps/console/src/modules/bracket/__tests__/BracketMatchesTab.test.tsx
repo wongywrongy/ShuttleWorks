@@ -205,6 +205,13 @@ describe('<BracketMatchesTab />', () => {
     }
   });
 
+  it('does not call an unassigned court an issue for queue-scheduled bracket matches (SWP-4)', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    expect(screen.queryByText(/Unassigned court/i)).not.toBeInTheDocument();
+    const completed = screen.getByTestId('bracket-match-row-pu-ms-1');
+    expect(completed).not.toHaveTextContent('Waiting on draw');
+  });
+
   it('names the feeder on an unresolved side instead of printing TBD (BMAT-4)', () => {
     const data = makeRichData();
     // The MS final waits on the MS semi. Production draws always carry this
@@ -275,33 +282,43 @@ describe('<BracketMatchesTab />', () => {
   });
 });
 
-/* SP-D7 S4 — rows are clickable anywhere (the surface is read-only) and
- * open the right-docked match DetailPanel. */
-describe('<BracketMatchesTab /> — match detail panel', () => {
-  it('opens the DetailPanel on row click and marks the row selected', () => {
+/* F-UNI-12/F-UNI-17 — rows open the shared MatchInspector in the existing dock. */
+describe('<BracketMatchesTab /> — shared match inspector', () => {
+  it('opens the shared inspector on Summary and marks the row selected', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
     const panel = screen.getByTestId('bracket-match-detail');
     expect(within(panel).getByText('Match')).toBeInTheDocument();
     expect(within(panel).getByText('MS SF1')).toBeInTheDocument();
-    expect(within(panel).getByText("Men's Singles")).toBeInTheDocument();
+    expect(screen.getByTestId('bracket-match-detail-facet-summary')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(screen.getByTestId('bracket-match-row-pu-ms-1')).toHaveAttribute(
       'data-selected',
       'true',
     );
   });
 
-  it('shows the G6 result card for a decided match, the pill for an undecided one', () => {
+  it('shows result controls on Result and plain status for every state', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    // pu-ms-1 has a recorded result → the Result card replaces the pill
-    // (scores + winner dot say "done"; a pill restating it is redundancy).
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
+    expect(screen.getByTestId('bracket-match-detail-status')).toHaveTextContent('Done');
+    expect(screen.getByTestId('bracket-match-detail-status').className).not.toContain('bg-status-');
+    fireEvent.click(screen.getByTestId('bracket-match-detail-facet-result'));
     expect(screen.getByTestId('bracket-match-result-card')).toBeInTheDocument();
-    expect(screen.queryByTestId('bracket-match-status-pill')).toBeNull();
-    // An undecided match keeps the read-only pill.
     fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-2'));
-    const pill = screen.getByTestId('bracket-match-status-pill');
-    expect(pill).toHaveTextContent(/Live|Ready|Pending/);
+    expect(screen.getByTestId('bracket-match-detail-status')).toHaveTextContent('Ready');
+    expect(screen.getByTestId('bracket-match-detail-status').className).not.toContain('bg-status-');
+  });
+
+  it('projects the selected assignment into the shared Assignment facet', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-2'));
+    fireEvent.click(screen.getByTestId('bracket-match-detail-facet-assignment'));
+    const assignment = screen.getByTestId('bracket-match-detail-panel-assignment');
+    expect(within(assignment).getByText('2')).toBeInTheDocument();
+    expect(within(assignment).getByText('09:00')).toBeInTheDocument();
   });
 
   it('closes the panel via the × button', () => {
@@ -317,8 +334,8 @@ describe('<BracketMatchesTab /> — match detail panel', () => {
   });
 });
 
-/* A2-followup gap: the panel-level Contingency section is already gated
- * (bracketContingency.test.tsx / BracketMatchDetailPanel.test.tsx), but
+/* F-UNI-12/F-UNI-17: caller-level Contingency controls are already pinned by
+ * bracketContingency.test.tsx, while this section pins invocation gating;
  * nothing pinned the ROW-level "…" menu itself. Same fixture as above. */
 describe('<BracketMatchesTab /> — row-level contingency menu gating', () => {
   beforeEach(() => {
@@ -353,6 +370,22 @@ describe('<BracketMatchesTab /> — row-level contingency menu gating', () => {
     expect(
       within(row).getByLabelText('Contingency for MS SF2'),
     ).toBeInTheDocument();
+  });
+
+  it('supplies contingency controls only for an editable unfinished match', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-2'));
+    expect(screen.getByTestId('bracket-match-contingency-controls')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-1'));
+    expect(screen.queryByTestId('bracket-match-contingency-controls')).toBeNull();
+  });
+
+  it('does not supply contingency controls to a viewer', () => {
+    useUiStore.setState({ activeTournamentRole: 'viewer' });
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    fireEvent.click(screen.getByTestId('bracket-match-row-pu-ms-2'));
+    expect(screen.queryByTestId('bracket-match-contingency-controls')).toBeNull();
   });
 });
 

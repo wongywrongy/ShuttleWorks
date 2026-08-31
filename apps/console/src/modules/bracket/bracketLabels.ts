@@ -8,6 +8,14 @@
  */
 import type { PlayUnitDTO, BracketTournamentDTO } from '../../api/bracketDto';
 import { DISCIPLINE_NAMES } from '../../lib/disciplineNames';
+// F-UNI-22/F-UNI-26: bracket labels are projections of the shared identity
+// value object; this module remains an adapter for bracket-native coordinates.
+import {
+  bracketMatchIdentity,
+  formatMatchIdentity,
+  type BracketMatchIdentity,
+  type MatchIdentity,
+} from '../../platform/domain/matchIdentity';
 import { descriptorFor } from './formatRegistry';
 
 /** Round-of-K stage name, derived from how many rounds remain to the final.
@@ -25,19 +33,6 @@ function roundStage(roundsFromFinal: number): string {
  *  compass's 'W' is the West consolation bracket. */
 const MAIN_SEGMENT: Record<string, string> = { de: 'W', monrad: 'M', compass: 'E' };
 
-/** Short segment tag for multi-segment formats. The format's main segment
- *  keeps plain stage names; the losers bracket reads 'L'; Monrad
- *  classification plates read as their position range ('5–8'); the plate is
- *  'PL'; compass letters (W/N/S/NE/…) pass through as-is. */
-function segmentShort(segment: string, format: string): string {
-  if (MAIN_SEGMENT[format] === segment) return '';
-  if (segment === 'L') return 'L';
-  if (segment === 'PLATE') return 'PL';
-  const positions = /^P(\d+)_(\d+)$/.exec(segment);
-  if (positions) return `${positions[1]}–${positions[2]}`;
-  return segment;
-}
-
 export interface PlayUnitLabelInput {
   /** Discipline code, e.g. 'MS'. */
   discipline: string;
@@ -54,6 +49,25 @@ export interface PlayUnitLabelInput {
   segment?: string | null;
 }
 
+/** F-UNI-21/F-UNI-22: the bracket adapter's one identity projection. */
+function playUnitIdentity(i: PlayUnitLabelInput): BracketMatchIdentity {
+  const roundRobin = i.format === 'rr';
+  const stage = roundRobin
+    ? `R${i.roundIndex + 1}`
+    : roundStage(i.maxRound - i.roundIndex);
+  return bracketMatchIdentity({
+    event_code: i.discipline,
+    phase: {
+      kind: roundRobin ? 'round_robin' : 'elimination',
+      round_index: i.roundIndex,
+      stage,
+      segment: i.segment ?? null,
+      main_segment: MAIN_SEGMENT[i.format] ?? null,
+    },
+    sequence: i.matchIndex + 1,
+  });
+}
+
 /**
  * Operator-friendly play-unit label, e.g. "MS QF2" / "MS SF1" / "MS F".
  *
@@ -66,20 +80,8 @@ export interface PlayUnitLabelInput {
  * the reset as "MS GF-R").
  */
 export function playUnitLabel(i: PlayUnitLabelInput): string {
-  if (i.format === 'rr') {
-    return `${i.discipline} R${i.roundIndex + 1}·${i.matchIndex + 1}`;
-  }
-  const segment = i.segment ?? undefined;
-  if (segment === 'GF') {
-    // The grand final is (at most) one match per round — no stage ladder.
-    const reset = i.roundIndex > 0 || i.matchIndex > 0;
-    return `${i.discipline} GF${reset ? '-R' : ''}`;
-  }
-  const tag = segment ? segmentShort(segment, i.format) : '';
-  const head = tag ? `${i.discipline} ${tag}` : i.discipline;
-  const fromFinal = i.maxRound - i.roundIndex;
-  if (fromFinal <= 0) return `${head} F`;
-  return `${head} ${roundStage(fromFinal)}${i.matchIndex + 1}`;
+  // F-UNI-22/F-UNI-26: only the shared formatter creates the display string.
+  return formatMatchIdentity(playUnitIdentity(i));
 }
 
 /** Friendly label for every play unit in a bracket snapshot, keyed by id.
@@ -87,7 +89,7 @@ export function playUnitLabel(i: PlayUnitLabelInput): string {
  *  surface never mixes the friendly name with the raw id. maxRound is
  *  computed per (event, segment) so a losers-bracket final reads "MS L F"
  *  while the main draw keeps its own F/SF/QF ladder. */
-export function buildPlayUnitLabels(data: BracketTournamentDTO): Map<string, string> {
+export function buildPlayUnitIdentities(data: BracketTournamentDTO): Map<string, MatchIdentity> {
   const eventById = new Map(data.events.map((e) => [e.id, e]));
   const groupOf = (pu: PlayUnitDTO) => `${pu.event_id}::${pu.segment ?? ''}`;
   const maxRound = new Map<string, number>();
@@ -97,12 +99,12 @@ export function buildPlayUnitLabels(data: BracketTournamentDTO): Map<string, str
       maxRound.set(key, pu.round_index);
     }
   }
-  const out = new Map<string, string>();
+  const out = new Map<string, MatchIdentity>();
   for (const pu of data.play_units) {
     const ev = eventById.get(pu.event_id);
     out.set(
       pu.id,
-      playUnitLabel({
+      playUnitIdentity({
         discipline: ev?.discipline ?? pu.event_id,
         format: ev?.format ?? 'se',
         roundIndex: pu.round_index,
@@ -113,6 +115,17 @@ export function buildPlayUnitLabels(data: BracketTournamentDTO): Map<string, str
     );
   }
   return out;
+}
+
+/** F-UNI-22/F-UNI-26: retain the label map for feeder references while using
+ * the same identity map as every other bracket consumer. */
+export function buildPlayUnitLabels(data: BracketTournamentDTO): Map<string, string> {
+  return new Map(
+    [...buildPlayUnitIdentities(data)].map(([id, identity]) => [
+      id,
+      formatMatchIdentity(identity),
+    ]),
+  );
 }
 
 /** Draw format id ('se' / 'rr' / 'de' / …) → its full name, delegated to

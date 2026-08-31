@@ -20,7 +20,7 @@ import type { ChecklistStep } from '../../../platform/domain/setupChecklist';
 import { checklistProgress } from '../../../platform/domain/setupChecklist';
 import { SetupChecklist } from '../../../components/control-plane/SetupChecklist';
 import { NextUpList } from '../../../components/control-plane/NextUpList';
-import { EYEBROW_CLASS } from '../../../lib/utils';
+import { EYEBROW_CLASS, TEXT_MUTED_SM } from '../../../lib/utils';
 
 interface PanelProps {
   summary: TournamentSummaryDTO;
@@ -201,7 +201,7 @@ function LivePanel({ summary }: PanelProps) {
             items={nextUp}
             linkFor={(n) =>
               n.matchId && n.source
-                ? `/tournaments/${summary.id}/live?select=${n.source}:${n.matchId}`
+                ? `/tournaments/${summary.id}/operations/live?select=${n.source}:${n.matchId}`
                 : null
             }
           />
@@ -219,11 +219,18 @@ function CompletePanel({ summary, onNavigate }: PanelProps) {
         <SectionLabel>Results</SectionLabel>
         <Figures items={[{ value: m ? m.total : '–', label: 'matches played' }]} />
       </div>
-      {/* "View results" lives in the page header (G3.1). */}
+      {/* "View results" / "View draws" lives in the page header (G3.1) and is
+          the right featured action for COMPLETE. Backup is Administration's
+          job, not the phase's next step — a quiet link, not a button
+          (SP-OPCON-1 SWP-3). */}
       <div>
-        <Button variant="outline" onClick={() => onNavigate('ws-sync')}>
+        <button
+          type="button"
+          onClick={() => onNavigate('ws-sync')}
+          className="text-sm text-accent underline underline-offset-2 hover:no-underline"
+        >
           Back up this event
-        </Button>
+        </button>
       </div>
     </section>
   );
@@ -257,7 +264,7 @@ function EntriesPanel({
       <section className="space-y-5">
         <div>
           <SectionLabel>Entries</SectionLabel>
-          <p className="text-sm text-muted-foreground">
+          <p className={TEXT_MUTED_SM}>
             The entry page is published and not open yet. Nobody can enter
             until an event&rsquo;s window opens.
           </p>

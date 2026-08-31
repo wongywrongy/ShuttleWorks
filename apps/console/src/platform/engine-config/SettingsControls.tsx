@@ -30,6 +30,7 @@ import { useState, type ReactNode } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 
 import { Select, TextField, type TextFieldProps } from '@scheduler/design-system/components';
+import { ActiveChoice } from '../../components/ActiveChoice';
 
 /* =========================================================================
  * Row — the only layout primitive in the Setup form.
@@ -265,26 +266,17 @@ export function Seg<T extends string | number>({
       {options.map((opt) => {
         const isActive = opt.value === value;
         return (
-          <button
+          <ActiveChoice
             key={String(opt.value)}
-            type="button"
-            role="radio"
-            aria-checked={isActive}
+            active={isActive}
+            geometry="segment"
+            semantics="radio"
             disabled={disabled}
             onClick={() => onChange(opt.value)}
-            className={[
-              // MOTION.md §6 Seg: explicit duration-fast + ease-brand
-              // so the hover crossfade reads as intentional, not as a
-              // Tailwind default.
-              'px-3 py-1 text-xs font-medium transition-colors duration-fast ease-brand',
-              fill ? 'flex-1 whitespace-nowrap' : '',
-              isActive
-                ? 'bg-accent/15 text-accent'
-                : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-            ].join(' ')}
+            className={`px-3 py-1 text-xs font-medium ${fill ? 'flex-1 whitespace-nowrap' : ''}`}
           >
             {opt.label}
-          </button>
+          </ActiveChoice>
         );
       })}
     </div>

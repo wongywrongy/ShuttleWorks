@@ -1,3 +1,4 @@
+import { identityFixture } from './identityFixture';
 /**
  * UnifiedOpsBoard — keyboard reachability of drag-to-reschedule.
  *
@@ -25,7 +26,7 @@ vi.mock('../../../hooks/useSchedule', () => ({
 
 const blocks: OpsBlock[] = [
   {
-    key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1',
+    key: 'meet:m1', id: 'm1', source: 'meet', identity: identityFixture('MS1'),
     court: 1, slot: 2, span: 1, status: 'scheduled',
     sideA: 'Alice', sideB: 'Bob', playerIds: [], done: false, started: false,
   },

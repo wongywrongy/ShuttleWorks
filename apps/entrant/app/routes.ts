@@ -49,6 +49,9 @@ export default [
   // crafted link to carry, and the constant the field used to hold is still
   // what a non-slug lands on.
   route('signup/:slug', 'routes/signup.tsx', { id: 'signup-for' }),
+  // Invitation-preserving account creation. A path segment keeps the opaque
+  // token inside the strict auth `next` allowlist at both tiers.
+  route('signup/partner/:token', 'routes/signup.tsx', { id: 'signup-partner' }),
   // The login PAGE, node-owned for exactly the reason above: `/e/account/login`
   // is FastAPI's POST and a node GET there is a 405 in production and fine in
   // dev, which is the worst pair. Static, so it ranks above `:slug`.
@@ -92,6 +95,7 @@ export default [
   route('verify', 'routes/verify.tsx'),
   route('verify/done', 'routes/verify.tsx', { id: 'verify-done' }),
   route('verify/failed', 'routes/verify.tsx', { id: 'verify-failed' }),
+  route('verify/sent', 'routes/verify.tsx', { id: 'verify-sent' }),
   // Password reset (E2, Phase 7): ask at `/e/forgot`, set at `/e/reset`, and
   // three outcome paths. `/e/reset/sent` is reached whether or not the
   // address is registered — the non-enumeration property lives in that
@@ -101,12 +105,18 @@ export default [
   route('reset/sent', 'routes/resetPassword.tsx', { id: 'reset-sent' }),
   route('reset/done', 'routes/resetPassword.tsx', { id: 'reset-done' }),
   route('reset/failed', 'routes/resetPassword.tsx', { id: 'reset-failed' }),
+  route('reset/password-failed', 'routes/resetPassword.tsx', { id: 'reset-password-failed' }),
   // The doubles invitation (E3, Phase 8) and its two outcomes. The mailed
   // link is `/e/partner?token=…`; the page previews anonymously and its form
   // posts to a FastAPI route that requires a signed-in verified entrant —
   // which is the whole difference between an invite and the capability token
   // R10 retired. Static, so no workspace can be called "partner".
   route('partner', 'routes/partner.tsx'),
+  // Canonical invitation path used when sign-in interrupts acceptance. The
+  // existing authentication `next` allowlist accepts path segments but no
+  // query strings, so this form preserves the exact task without widening
+  // the redirect contract. Mailed `?token=` links above remain supported.
+  route('partner/:token', 'routes/partner.tsx', { id: 'partner-token' }),
   route('partner/accepted', 'routes/partner.tsx', { id: 'partner-accepted' }),
   route('partner/failed', 'routes/partner.tsx', { id: 'partner-failed' }),
   // `/e/me/entries` — the signed-in entrant's home (SP-P7 §3.1). Static, so
@@ -128,6 +138,10 @@ export default [
   // The entry flow, on its own page off the hub scroll (SP-P6-2 §3, G0
   // approved). `enter` is a sub-segment of `:slug`, so it shadows no
   // workspace slug and needs no backend reservation.
+  // The public match list: a first-class, URL-filterable Schedule / Live
+  // surface for spectators and entrants. It must rank before the catch-all
+  // `:slug` route below, just like the other tournament sub-sections.
+  route(':slug/schedule', 'routes/schedule.tsx'),
   route(':slug/enter', 'routes/enter.tsx'),
   // The regulations reader (SP-P7 §3.7): the overview keeps a document row,
   // the text lives here — routed, deep-linkable, multi-page-tolerant. A

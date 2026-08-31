@@ -124,7 +124,7 @@ export function PlayerSearchPicker({
                 className={[
                   'flex w-full flex-col items-start gap-0.5 rounded px-2 py-1 text-left text-sm transition-colors',
                   i === safeActiveIndex
-                    ? 'bg-accent/10 text-accent'
+                    ? 'bg-action-selected-bg text-action-selected-foreground'
                     : 'text-foreground hover:bg-muted/50',
                 ].join(' ')}
               >

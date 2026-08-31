@@ -295,11 +295,19 @@ def test_the_draws_index_lists_the_draw_with_exact_card_keys(client, bracket_pag
         "matchCoverage",
         "recordScope",
         "topologyScope",
+        "roundCount",
+        "champions",
+        "finalists",
+        "remainingMatchCount",
         "historical",
         "sourceUrl",
     }
     assert card["kind"] == "se"
     assert card["size"] == 4
+    assert card["roundCount"] == 2
+    assert card["champions"] == []
+    assert card["finalists"] == []
+    assert card["remainingMatchCount"] is None
     assert card["hasConsolation"] is False
     assert card["matchCoverage"] == {"imported": 3, "expected": 3, "missing": 0}
     assert card["recordScope"] == "full_draw"
@@ -438,22 +446,19 @@ def test_draw_players_are_published_draw_roster_people_not_profiles(client):
         "players": [
             {
                 "playerKey": "P-A",
-                "personKey": None,
-                "name": "Áda Chen",
+                "person": {"identity": {"id": None, "name": "Áda Chen"}, "resolution": "dead", "label": None},
                 "club": None,
                 "eventCodes": ["MD", "WS"],
             },
             {
                 "playerKey": "P-B",
-                "personKey": None,
-                "name": "Bo Lee",
+                "person": {"identity": {"id": None, "name": "Bo Lee"}, "resolution": "dead", "label": None},
                 "club": None,
                 "eventCodes": ["MD", "WS"],
             },
             {
                 "playerKey": "P-C",
-                "personKey": None,
-                "name": "Cass Doe",
+                "person": {"identity": {"id": None, "name": "Cass Doe"}, "resolution": "dead", "label": None},
                 "club": None,
                 "eventCodes": ["MD"],
             },
@@ -462,13 +467,17 @@ def test_draw_players_are_published_draw_roster_people_not_profiles(client):
         "missingNameCount": 1,
     }
     assert all("href" not in player for player in players["players"])
+    for player in players["players"]:
+        assert set(player["person"]) == {"identity", "resolution", "label"}
+        assert set(player["person"]["identity"]) == {"id", "name"}
+        assert player["person"]["identity"]["id"] is None
 
     detail = client.get("/e/api/page/roster-open/draws/MD").json()
     teams = {team["participantKey"]: team for team in detail["teams"]}
-    assert teams["PAIR-1"]["names"] == ["Áda Chen", "Bo Lee"]
+    assert [p["identity"]["name"] for p in teams["PAIR-1"]["persons"]] == ["Áda Chen", "Bo Lee"]
     # Partial member resolution falls back to the whole source label; it is
     # never split on punctuation into invented people.
-    assert teams["PAIR-2"]["names"] == ["Missing / Cass"]
+    assert [p["identity"]["name"] for p in teams["PAIR-2"]["persons"]] == ["Missing / Cass"]
 
 
 def test_draw_players_are_hidden_until_draws_are_published(client):
@@ -490,8 +499,11 @@ def test_players_directory_preserves_confirmed_entrant_profiles_before_draws(cli
         "players": [
             {
                 "playerKey": f"entry-{person_id}",
-                "personKey": str(person_id),
-                "name": "Ada Chen",
+                "person": {
+                    "identity": {"id": str(person_id), "name": "Ada Chen"},
+                    "resolution": "resolved",
+                    "label": None,
+                },
                 "club": "Riverside BC",
                 "eventCodes": ["MS"],
             }
@@ -773,7 +785,7 @@ def test_seeds_are_gated_by_draws_and_ordered(client, bracket_page):
     assert body["published"] is True
     (event,) = body["events"]
     assert [line["seed"] for line in event["seeds"]] == [1, 2]
-    assert event["seeds"][0]["names"] == ["Ada Chen"]
+    assert [p["identity"]["name"] for p in event["seeds"][0]["persons"]] == ["Ada Chen"]
     assert event["seeds"][0]["club"] == "Riverside BC"
 
     _set_flags(bracket_page["tid"], draws_published=False)
@@ -809,7 +821,16 @@ def test_winners_gate_then_populate_as_the_draw_decides(client, bracket_page):
     assert event["decided"] is True
     assert event["winner"] is not None and event["runnerUp"] is not None
     assert len(event["semifinalists"]) == 2
-    assert set(event["winner"]) == {"names", "club"}
+    assert set(event["winner"]) == {"persons", "club"}
+    assert set(event) == {
+        "eventCode", "discipline", "decided", "winner", "runnerUp",
+        "semifinalists", "finalScore", "finalists",
+    }
+    assert all(
+        set(person) == {"identity", "resolution", "label"}
+        and set(person["identity"]) == {"id", "name"}
+        for person in event["winner"]["persons"]
+    )
 
 
 # ---- player pages (§3.3) --------------------------------------------------
@@ -836,22 +857,27 @@ def test_an_unknown_person_and_a_garbage_key_answer_identically(client, bracket_
 
 def test_the_player_page_header_events_and_upcoming_matches(client, bracket_page):
     body = client.get(f"/e/api/page/{bracket_page['slug']}/players/{bracket_page['ada']}").json()
-    assert set(body) == {"personKey", "name", "club", "events", "record", "matches"}
-    assert body["name"] == "Ada Chen"
+    assert set(body) == {"person", "club", "events", "matches"}
+    assert set(body["person"]) == {"identity", "resolution", "label"}
+    assert body["person"]["identity"]["name"] == "Ada Chen"
     assert body["club"] == "Riverside BC"
     # SP-P7 delta (§3.3): event rows carry the accepted-partner slot. None
     # here — a singles event has no partner; the populated case and its
     # privacy gates live in test_partner_names_on_the_player_page.
-    assert body["events"] == [{"code": "MS", "discipline": "Men's Singles", "partnerName": None}]
-    # Results unpublished: no record claim, and the SF shows as undecided.
-    assert body["record"] is None
+    assert len(body["events"]) == 1
+    assert body["events"][0]["code"] == "MS"
+    assert body["events"][0]["partner"] is None
+    assert body["events"][0]["seed"] == 1
+    assert set(body["events"][0]) == {"code", "discipline", "partner", "seed", "drawPath"}
+    assert all(set(path) == {"roundLabel", "opponents"} for path in body["events"][0]["drawPath"])
+    # Results unpublished: the SF shows as undecided.
     (match,) = body["matches"]
     assert match["decided"] is False and match["score"] is None
     assert match["roundLabel"] == "Semifinals"
     assert match["scheduledTime"] == "10:30" and match["court"] == 1
 
 
-def test_the_record_counts_published_results_only(client, bracket_page):
+def test_player_match_results_follow_publication(client, bracket_page):
     tid, slug = bracket_page["tid"], bracket_page["slug"]
     state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
     sf0 = _units_by_round(state)[0][0]
@@ -860,11 +886,10 @@ def test_the_record_counts_published_results_only(client, bracket_page):
     _record(client, tid, sf0, winner=winner)
 
     body = client.get(f"/e/api/page/{slug}/players/{bracket_page['ada']}").json()
-    assert body["record"] is None  # still unpublished
+    assert all(not match["decided"] for match in body["matches"])
 
     _set_flags(tid, results_published=True)
     body = client.get(f"/e/api/page/{slug}/players/{bracket_page['ada']}").json()
-    assert body["record"] == {"played": 1, "wins": 1, "losses": 0}
     decided = [m for m in body["matches"] if m["decided"]]
     assert decided and any(s["winner"] for s in decided[0]["sides"])
 
@@ -873,7 +898,13 @@ def test_the_record_counts_published_results_only(client, bracket_page):
 
 
 def test_meet_matches_reach_the_player_page_with_gated_scores(client):
-    tid = _make_workspace(client, name="Dual Meet", slug="dual-meet", entrants_published=True)
+    tid = _make_workspace(
+        client,
+        name="Dual Meet",
+        slug="dual-meet",
+        entrants_published=True,
+        draws_published=True,
+    )
     person = _seed_person(tid, "Ada Chen", "Riverside BC", event_code="MS1")
     roster_id = f"entry-{person}"
 
@@ -904,7 +935,8 @@ def test_meet_matches_reach_the_player_page_with_gated_scores(client):
         # The blob is written straight in, bypassing the projection that
         # normally creates the ``matches`` row. Since SP-DM-3 P4 the state row
         # has a composite FK onto it (migration y9e4f0a2b7c8), so the parent
-        # has to exist here too.
+        # has to exist here too. Leave its court empty first to prove the
+        # planning blob's courtId is not public (R-U3).
         session.add(Match(tournament_id=uuid.UUID(tid), id="m1"))
         session.add(
             MatchState(
@@ -922,15 +954,29 @@ def test_meet_matches_reach_the_player_page_with_gated_scores(client):
     body = client.get(f"/e/api/page/dual-meet/players/{person}").json()
     (match,) = body["matches"]
     assert match["eventCode"] == "MS1"
-    assert match["scheduledTime"] == "10:00" and match["court"] == 2
-    assert [side["names"] for side in match["sides"]] == [
+    assert match["scheduledTime"] == "10:00" and match["court"] is None
+    assert [[p["identity"]["name"] for p in side["persons"]] for side in match["sides"]] == [
         ["Ada Chen"],
         ["Rival Person"],
     ]
     # Results unpublished: the finished score exists in match_states and
     # must not reach the page.
     assert match["decided"] is False and match["score"] is None
-    assert body["record"] is None
+
+    # Operations materializes the assignment on the match row. Only now may
+    # the same planned court become public.
+    session = SessionLocal()
+    try:
+        persisted = session.get(Match, (uuid.UUID(tid), "m1"))
+        persisted.court_id = 2
+        session.commit()
+    finally:
+        session.close()
+
+    body = client.get(f"/e/api/page/dual-meet/players/{person}").json()
+    (match,) = body["matches"]
+    assert match["court"] == 2
+    assert match["decided"] is False and match["score"] is None
 
     _set_flags(tid, results_published=True)
     body = client.get(f"/e/api/page/dual-meet/players/{person}").json()
@@ -938,4 +984,143 @@ def test_meet_matches_reach_the_player_page_with_gated_scores(client):
     assert match["decided"] is True
     assert match["score"] == [[21, 15]]
     assert match["sides"][0]["winner"] is True
-    assert body["record"] == {"played": 1, "wins": 1, "losses": 0}
+
+
+def test_mixed_visibility_hides_the_opted_out_event_everywhere(client):
+    """One visible event must not make another opted-out event public."""
+    tid = _make_workspace(
+        client,
+        name="Mixed Visibility Meet",
+        slug="mixed-visibility-meet",
+        entrants_published=True,
+        draws_published=True,
+    )
+    _declare_divisions(client, tid, {"MS": 1, "WS": 1})
+
+    from db.models import (
+        EntrantAccount,
+        Entry,
+        EntryEvent,
+        EntryPlayer,
+        Match,
+        Submission,
+        Tournament,
+    )
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        account = EntrantAccount(
+            email=f"mixed-{uuid.uuid4().hex[:8]}@example.test",
+            password_hash="x",
+        )
+        session.add(account)
+        session.flush()
+        submission = Submission(
+            tournament_id=uuid.UUID(tid),
+            account_id=account.id,
+        )
+        player = EntryPlayer(
+            tournament_id=uuid.UUID(tid),
+            account_id=account.id,
+            full_name="Ada Visible Once",
+            gender="X",
+            club="Privacy BC",
+        )
+        ms = EntryEvent(
+            tournament_id=uuid.UUID(tid),
+            code="MS",
+            discipline="Men's Singles",
+            entry_type="singles",
+            meet_event_id="MS",
+        )
+        ws = EntryEvent(
+            tournament_id=uuid.UUID(tid),
+            code="WS",
+            discipline="Women's Singles",
+            entry_type="singles",
+            meet_event_id="WS",
+        )
+        session.add_all([submission, player, ms, ws])
+        session.flush()
+        session.add_all(
+            [
+                Entry(
+                    tournament_id=uuid.UUID(tid),
+                    entry_event_id=ms.id,
+                    submission_id=submission.id,
+                    entry_player_id=player.id,
+                    state="confirmed",
+                    list_opt_out=False,
+                ),
+                Entry(
+                    tournament_id=uuid.UUID(tid),
+                    entry_event_id=ws.id,
+                    submission_id=submission.id,
+                    entry_player_id=player.id,
+                    state="confirmed",
+                    list_opt_out=True,
+                ),
+            ]
+        )
+        roster_key = f"entry-{player.id}"
+        tournament = session.get(Tournament, uuid.UUID(tid))
+        tournament.data = {
+            "config": {"intervalMinutes": 30, "dayStart": "09:00"},
+            "players": [
+                {
+                    "id": roster_key,
+                    "name": "Ada Visible Once",
+                    "entryPlayerId": str(player.id),
+                },
+                {"id": "opponent", "name": "Imported Opponent"},
+            ],
+            "matches": [
+                {
+                    "id": "visible-match",
+                    "sideA": [roster_key],
+                    "sideB": ["opponent"],
+                    "eventRank": "MS1",
+                },
+                {
+                    "id": "hidden-match",
+                    "sideA": [roster_key],
+                    "sideB": ["opponent"],
+                    "eventRank": "WS1",
+                },
+            ],
+            "schedule": {
+                "assignments": [
+                    {"matchId": "visible-match", "slotId": 0},
+                    {"matchId": "hidden-match", "slotId": 1},
+                ]
+            },
+        }
+        session.add_all(
+            [
+                Match(tournament_id=uuid.UUID(tid), id="visible-match"),
+                Match(tournament_id=uuid.UUID(tid), id="hidden-match"),
+            ]
+        )
+        session.commit()
+        person_id = str(player.id)
+    finally:
+        session.close()
+
+    person_page = client.get(
+        f"/e/api/page/mixed-visibility-meet/players/{person_id}"
+    ).json()
+    assert [event["code"] for event in person_page["events"]] == ["MS"]
+    assert [match["eventCode"] for match in person_page["matches"]] == ["MS1"]
+
+    schedule = client.get("/e/api/page/mixed-visibility-meet/matches").json()
+    by_event = {match["eventCode"]: match for match in schedule["items"]}
+    visible_ref = by_event["MS1"]["sides"][0]["persons"][0]
+    hidden_ref = by_event["WS1"]["sides"][0]["persons"][0]
+    assert visible_ref["identity"]["name"] == "Ada Visible Once"
+    assert visible_ref["resolution"] == "resolved"
+    assert hidden_ref == {
+        "identity": None,
+        "resolution": "dead",
+        "label": "Player not published",
+    }

@@ -138,6 +138,15 @@ describe('apiGet', () => {
     expect(sent).toEqual([]);
   });
 
+  it('allows query strings for public list projections while keeping fragments out', async () => {
+    vi.stubGlobal('fetch', stubFetch(json({ ok: true })));
+    await apiGet('/e/api/page/spring-open/matches?state=live&page=2');
+    expect(sent[0].url).toContain('/e/api/page/spring-open/matches?state=live&page=2');
+    await expect(apiGet('/e/api/page/spring-open/matches#live')).rejects.toThrow(
+      /rejected non-public-projection path/,
+    );
+  });
+
   it('turns an unparseable 2xx body into ApiError, not a null cast to T', async () => {
     vi.stubGlobal(
       'fetch',

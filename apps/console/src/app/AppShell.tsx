@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Eye } from '@phosphor-icons/react';
 import { Notice } from '@scheduler/design-system';
 import { useUiStore } from '../store/uiStore';
@@ -32,7 +32,7 @@ import type {
 import { useWorkspaceModules } from '../platform/domain/useWorkspaceModules';
 import { ModuleUnavailablePanel } from './workspace/ModuleUnavailablePanel';
 import { WorkspaceShellSurface } from '../modules/workspace/WorkspaceShellSurface';
-import { SHELL_SEGMENTS, isAdminSegment } from '../platform/product-shell/workspaceNav';
+import { SHELL_SEGMENTS, isAdminSegment, workflowHref } from '../platform/product-shell/workspaceNav';
 
 /** Whether the active module's pane is the normal module outlet or the
  *  unavailable panel.
@@ -59,6 +59,7 @@ export type ActivePane =
       primary: ModuleId;
       primaryLabel: string;
       canOpenSettings: boolean;
+      reason: 'disabled' | 'not-enabled' | 'unavailable';
     };
 
 export function resolveActivePane(
@@ -87,6 +88,12 @@ export function resolveActivePane(
     primary,
     primaryLabel: primaryWm?.label ?? primary,
     canOpenSettings: active?.status === 'disabled',
+    reason:
+      active?.status === 'disabled'
+        ? 'disabled'
+        : active?.status === 'available'
+          ? 'not-enabled'
+          : 'unavailable',
   };
 }
 
@@ -126,6 +133,7 @@ export function AppShell() {
   const pushToast = useUiStore((s) => s.pushToast);
   const setActiveProposal = useUiStore((s) => s.setActiveProposal);
   const navigate = useNavigate();
+  const location = useLocation();
   const tid = useTournamentId();
   const identity = useWorkspaceIdentity();
   const activeModule = moduleForTab(activeTab, activeTournamentKind);
@@ -256,9 +264,12 @@ export function AppShell() {
         tid={tid ?? ''}
         kind={activeTournamentKind}
         activeTab={activeTab}
-        adminActive={isAdminSegment(activeTab)}
+        adminActive={
+          location.pathname.includes('/administration/') ||
+          (!location.pathname.includes('/publish/') && isAdminSegment(activeTab))
+        }
         onOpenAdmin={() => {
-          if (tid) navigate(`/tournaments/${tid}/ws-members`);
+          if (tid) navigate(`/tournaments/${tid}/administration/team`);
         }}
         onBackToHub={() => navigate('/')}
         statusSlot={<AppStatusPopover />}
@@ -277,19 +288,21 @@ export function AppShell() {
               label={pane.label}
               note={pane.note}
               primaryLabel={pane.primaryLabel}
+              reason={pane.reason}
               onGoToPrimary={() => {
                 if (tid)
-                  navigate(`/tournaments/${tid}/${defaultTabForModule(pane.primary)}`, {
-                    replace: true,
-                  });
+                  navigate(workflowHref(tid, defaultTabForModule(pane.primary)));
               }}
               onOpenSettings={
                 pane.canOpenSettings && tid
                   ? // Deep-link to the in-workspace Modules admin: this panel
                     // shows for a disabled module, so that's where it's enabled.
-                    () => navigate(`/tournaments/${tid}/ws-modules`)
+                    () => navigate(`/tournaments/${tid}/administration/modules`)
                   : undefined
               }
+              // SWP-9/DC-2: no second enable path — the panel's primary
+              // action routes to Administration · Modules, the one owner of
+              // module enablement (where cloud-only gating is explained too).
             />
           )}
         </div>

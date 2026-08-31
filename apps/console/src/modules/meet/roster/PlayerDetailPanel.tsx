@@ -36,6 +36,7 @@ import { useConfirmClick } from '../../../hooks/useConfirmClick';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { PlayerAvailabilityField, PlayerEventsField } from './PlayerFields';
+import { ActiveChoice } from '../../../components/ActiveChoice';
 
 /* =========================================================================
  * DetailDrawer — Meet's consumer of the shared DetailPanel chrome.
@@ -91,22 +92,17 @@ export function DetailDrawer({
           className="flex items-stretch gap-0.5 border-b border-border px-2"
         >
           {occupants.map((occ, i) => (
-            <button
+            <ActiveChoice
               key={occ.id}
-              type="button"
-              role="tab"
-              aria-selected={i === index}
+              active={i === index}
+              geometry="segment"
+              semantics="tab"
               onClick={() => setSeat(i)}
               data-testid={`seat-tab-${i}`}
-              className={[
-                '-mb-px border-b-2 px-3 py-2 text-sm transition-colors duration-fast ease-brand',
-                i === index
-                  ? 'border-b-accent font-semibold text-foreground'
-                  : 'border-b-transparent text-muted-foreground hover:text-foreground',
-              ].join(' ')}
+              className="px-3 py-2 text-sm"
             >
               {occ.name || '(unnamed)'}
-            </button>
+            </ActiveChoice>
           ))}
         </div>
       ) : null}

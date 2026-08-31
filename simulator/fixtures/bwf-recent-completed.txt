@@ -2,6 +2,7 @@
 # generated=2026-08-29
 # scope=30 most recent completed BWF World Tour / BWF Tour Super 100 tournaments identified from public year-summary tables, as of 2026-08-29
 # note=Scores are tournament finals for MS, WS, MD, WD, and XD. Doubles sides are semicolon-separated individual players.
+# demo_overlay=The local seeder preserves this source layer, then presents T029 Taipei as in progress and T030 Korea as upcoming against a private 2026-07-31 demo clock. That operational state is fictional.
 # sources=https://en.wikipedia.org/wiki/2026_BWF_World_Tour ; https://en.wikipedia.org/wiki/2025_BWF_World_Tour ; those tables cite BWF schedule/draw/report references
 # format=pipe-delimited UTF-8 text
 # T|tournament_id|year|date_range|end_date|tournament|host|venue|level|prize|draw_format|source_url

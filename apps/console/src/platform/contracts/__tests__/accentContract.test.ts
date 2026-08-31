@@ -33,15 +33,7 @@ const SRC = path.resolve(HERE, '../../..');
 const REPO = path.resolve(HERE, '../../../../../..');
 const rel = (file: string) => path.relative(REPO, file).split(path.sep).join('/');
 
-/**
- * Accent-inked code slots that are SELECTION state, not identity. Selection
- * is one of the accent's four legitimate jobs; the chip is blue because it is
- * chosen, and it turns body ink when it is not.
- */
-const ALLOWED: Record<string, string> = {
-  'apps/console/src/components/control-plane/EventPicker.tsx':
-    'the picker chip is accent because it is SELECTED — deselecting it drops the accent',
-};
+const ALLOWED: Record<string, string> = {};
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

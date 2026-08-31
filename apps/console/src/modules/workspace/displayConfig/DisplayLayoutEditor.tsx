@@ -182,7 +182,7 @@ function CourtOrderRow({
         >
           Court {courtId}
           {isNew && (
-            <span className="rounded-sm bg-accent/10 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-accent">
+            <span className="rounded-sm bg-action-selected-bg px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-action-selected-foreground">
               New
             </span>
           )}
@@ -205,7 +205,7 @@ function CourtOrderRow({
           A hidden court with a live match does NOT auto-reappear (Q9); the
           director must explicitly click Show. */}
       {hidden && hasLiveMatch && (
-        <div className="mt-1 flex items-center justify-between gap-2 rounded-sm bg-accent/10 px-2 py-1 text-2xs text-accent">
+        <div className="mt-1 flex items-center justify-between gap-2 rounded-sm bg-action-selected-bg px-2 py-1 text-2xs text-action-selected-foreground">
           <span>
             Court {courtId} (hidden) has a live match. Show it?
           </span>

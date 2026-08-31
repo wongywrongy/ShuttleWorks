@@ -1,14 +1,13 @@
 /**
  * My Entries (SP-P7 §3.1) — the page's one script, and the tier's first.
  *
- * **Why a plain external module and not hydration.** This tier ships no
- * client JS by construction (`app/root.tsx`: no `<Scripts/>`, and the CSP
- * has no `'unsafe-inline'` and no nonce, so React Router's inline hydration
- * bootstrap can never execute). My Entries is the first page whose DATA is
+ * **Why a plain external module and not hydration.** The tier is SSR-first:
+ * `app/root.tsx` has no framework hydration bootstrap, while bounded route
+ * modules are allowed where a page needs browser-only data. My Entries is the first page whose DATA is
  * credentialed — node must not read the session (R8-D), so the browser has
  * to — and `script-src 'self'` already permits an external same-origin
  * module. One page, one small script, zero CSP surgery; the pattern scales
- * to the entrants filter without ever restoring inline script execution.
+ * to the entrants filter without restoring framework hydration or inline script execution.
  *
  * **Safety shape:** every string reaches the page through `textContent` —
  * there is no innerHTML and no HTML string assembly anywhere in this file,
@@ -20,6 +19,8 @@
  * exported for the vitest suite (`tests/myEntries.script.test.ts`); the DOM
  * half runs only when the mount point exists.
  */
+
+import { createPersonRef } from './person-ref.js';
 
 // ---- pure decisions -------------------------------------------------------
 
@@ -95,8 +96,9 @@ export function lineChip(cardStatus, state) {
  * card, published entrant pages, and a real person key to point at. */
 export function resultsHref(card, line) {
   if (card.status !== 'played' || !card.entrantsPublished) return null;
-  if (!card.slug || !line.personKey) return null;
-  return `/e/${encodeURIComponent(card.slug)}/players/${encodeURIComponent(line.personKey)}`;
+  const personId = line.player?.identity?.id;
+  if (!card.slug || !personId) return null;
+  return `/e/${encodeURIComponent(card.slug)}/players/${encodeURIComponent(personId)}`;
 }
 
 /**
@@ -185,13 +187,23 @@ function cardEl(doc, card, emailVerified) {
   const lines = el(doc, 'ul', 'mt-3 grid gap-1.5');
   for (const line of card.events ?? []) {
     const row = el(doc, 'li', 'flex flex-wrap items-center gap-x-2 gap-y-1 text-sm');
-    row.appendChild(
-      el(doc, 'span', 'text-foreground',
-        // §3.1: the accepted doubles partner rides the line ("with Sam Ali").
-        // textContent-only like everything here, so a hostile name is inert.
-        `${line.eventCode} · ${line.discipline} · ${line.playerName}` +
-          (line.partnerName ? ` with ${line.partnerName}` : '')),
-    );
+    row.appendChild(el(doc, 'span', 'text-muted-foreground', `${line.eventCode} · ${line.discipline} · `));
+    row.appendChild(createPersonRef(doc, {
+      slug: card.slug ?? '',
+      identity: line.player?.identity ?? null,
+      state: line.player?.resolution ?? 'dead',
+      label: line.player?.label ?? 'Player',
+      className: 'font-medium',
+    }));
+    if (line.partner) {
+      row.appendChild(el(doc, 'span', 'text-muted-foreground', ' with '));
+      row.appendChild(createPersonRef(doc, {
+        slug: card.slug ?? '',
+        identity: line.partner.identity ?? null,
+        state: line.partner.resolution ?? 'dead',
+        label: line.partner.label ?? 'Partner',
+      }));
+    }
     const own = lineChip(card.status, line.state);
     if (own) {
       row.appendChild(

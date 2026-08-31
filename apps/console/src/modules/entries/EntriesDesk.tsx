@@ -48,6 +48,7 @@ import type { EntryCommitResultDTO, EntryDTO } from '../../api/dto';
 import { useAction } from '../../hooks/useAction';
 import { useCanEdit } from '../../hooks/useCanEdit';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
+import { MODULE_LABELS } from '../../platform/product-shell/types';
 import type { EntryGroup } from './entryDisplay';
 import {
   ENTRY_STATE_LABEL,
@@ -58,6 +59,7 @@ import {
   reasonLabel,
   skipReasonLabel,
 } from './entryDisplay';
+import { TEXT_EMPHASIS, TEXT_MUTED_2XS, TEXT_MUTED_XS } from '../../lib/utils'
 
 /** Ruling D1: `pending` is the only state a confirm may start from. Mirrors
  *  `_CONFIRMABLE_FROM` in `entries/entries_routes.py`, which answers 409
@@ -219,12 +221,12 @@ export function EntriesDesk({ tid }: { tid: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ActionsBar
-        title="Entries"
+        title={MODULE_LABELS.entries}
         status={
           loadFailed ? (
             <span className="text-xs text-status-warning-fg">Count unknown</span>
           ) : entries ? (
-            <span className="text-xs text-muted-foreground">
+            <span className={TEXT_MUTED_XS}>
               {entries.length} submitted
             </span>
           ) : null
@@ -510,8 +512,8 @@ function CommitSummary({
       {skipped.length > 0 ? (
         <ul className="mt-1.5 space-y-0.5">
           {skipped.map((s) => (
-            <li key={s.id} className="text-2xs text-muted-foreground">
-              <span className="font-medium text-foreground">
+            <li key={s.id} className={TEXT_MUTED_2XS}>
+              <span className={TEXT_EMPHASIS}>
                 {nameById.get(s.id) ?? s.id}
               </span>{' '}
               skipped: {skipReasonLabel(s.reason)}

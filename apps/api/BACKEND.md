@@ -57,6 +57,32 @@ The HTTP layer lives in `apps/api/src/`. The solver engine lives under
 `pyproject.toml`, so `import scheduler_core` resolves without any
 `sys.path` bootstrap.
 
+## Public entrant projection
+
+The `/e/api/*` routes are a separate unauthenticated data plane from the operator API. They are
+implemented by `entries/entries_json.py`, `entries/entries_public.py`, and
+`entries/entries_site.py`, and return strict allow-list DTOs with exact key-set tests. Public reads
+are projection-only: contact data, account data, unconfirmed submissions, opted-out rows, and erased
+identities are excluded at query time.
+
+Person-bearing fields use one `PersonReferenceDTO` contract:
+
+```text
+identity: { id: persisted tournament-person id | null, name: authoritative display value } | null
+resolution: resolved | dead
+label: structural text for a bye/feeder/otherwise unresolved reference | null
+```
+
+The entrant frontend's `PersonRef` is the only public name renderer. It links only resolved
+references with an id; draw-only names, byes, feeders, hidden/erased identities, and missing ids are
+plain non-links. Doubles are two person references, never a pair entity. Person routes use the
+persisted id and never a name-derived key.
+
+Operations owns live match state and court publication. The schedule projection reads a court only
+from a materialized Operations `Match` assignment, never from a planned solver assignment. Schedule
+responses are day-first, timezone-aware, filterable by event/player/court/state, and carry a revision
+that includes all published inputs needed for conditional requests.
+
 ## Request lifecycle
 
 ```

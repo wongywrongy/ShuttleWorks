@@ -1,5 +1,5 @@
 # Test-only dependencies. The production runtime image must NOT install
-# this file — pytest + httpx (used by `fastapi.testclient.TestClient`)
+# this file — pytest/xdist + httpx2 (used by `fastapi.testclient.TestClient`)
 # add ~25 MB to the wheel set and never run inside the container.
 #
 # Install for local development:
@@ -7,7 +7,15 @@
 -r requirements.txt
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
-httpx>=0.26.0
+# Backend tests isolate their SQLite and data directories per test, so xdist
+# can spread local files across processes without sharing mutable application
+# state. Make automatically stays serial when TEST_POSTGRES_URL enables the
+# shared-schema dialect-parity tests.
+pytest-xdist>=3.8,<4
+# Starlette 1.6 moved TestClient to httpx2. Its compatibility fallback to the
+# retired httpx transport can hang instead of returning a response, so keep
+# the transport it imports explicitly in the development environment.
+httpx2>=2.12,<3
 # ruff pinned to a minor series: new minor releases can add/retune lint
 # rules and would redden the F-only gate on an unrelated PR. Bump deliberately.
 ruff>=0.15,<0.16

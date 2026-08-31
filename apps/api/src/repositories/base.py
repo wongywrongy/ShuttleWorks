@@ -40,6 +40,8 @@ class TournamentRepository(Protocol):
         *,
         name: Optional[str] = None,
         tournament_date: Optional[str] = None,
+        tournament_end_date: Optional[str] = None,
+        time_zone: str = "UTC",
         owner_id: Optional[uuid.UUID] = None,
         owner_email: Optional[str] = None,
     ) -> Tournament:

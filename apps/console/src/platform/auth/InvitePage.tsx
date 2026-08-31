@@ -14,12 +14,12 @@
  * Already-a-member is a happy path: the spec calls for idempotent
  * accept, so a redirect to the tournament happens regardless.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { apiClient } from '../../api/client';
-import type { InviteResolveDTO } from '../../api/dto';
-import { Button, Card } from '@scheduler/design-system';
+import { useCallback, useEffect, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { apiClient } from "../../api/client";
+import type { InviteResolveDTO } from "../../api/dto";
+import { Button, Card } from "@scheduler/design-system";
 
 export function InvitePage() {
   const { token } = useParams<{ token: string }>();
@@ -47,7 +47,7 @@ export function InvitePage() {
         // ignore the error's own message rather than surface a wording
         // difference the API worked to remove.
         setResolveError(
-          'This invite link is not valid. Ask the tournament owner to send you a new one.',
+          "This invite link is not valid. Ask the tournament owner to send you a new one.",
         );
       }
     })();
@@ -62,9 +62,16 @@ export function InvitePage() {
     setAcceptError(null);
     try {
       const r = await apiClient.acceptInvite(token);
-      navigate(`/tournaments/${r.tournamentId}/setup`, { replace: true });
+      navigate(
+        `/tournaments/${encodeURIComponent(r.tournamentId)}/setup/general`,
+        {
+          replace: true,
+        },
+      );
     } catch (err) {
-      setAcceptError(err instanceof Error ? err.message : 'Could not accept invite');
+      setAcceptError(
+        err instanceof Error ? err.message : "Could not accept invite",
+      );
     } finally {
       setAccepting(false);
     }
@@ -97,9 +104,7 @@ export function InvitePage() {
         <h1 className="text-2xl font-medium tracking-tight">Join tournament</h1>
 
         {resolveError && (
-          <div className="text-sm text-status-danger-fg">
-            {resolveError}
-          </div>
+          <div className="text-sm text-status-danger-fg">{resolveError}</div>
         )}
 
         {invite && (
@@ -107,7 +112,7 @@ export function InvitePage() {
             <div className="space-y-1">
               <div className="text-sm text-muted-foreground">You'll join</div>
               <div className="text-lg font-medium">
-                {invite.tournamentName || 'Untitled tournament'}
+                {invite.tournamentName || "Untitled tournament"}
               </div>
               <div className="text-sm text-muted-foreground">
                 as <span className="font-medium">{invite.role}</span>
@@ -115,17 +120,15 @@ export function InvitePage() {
             </div>
 
             {acceptError && (
-              <div className="text-sm text-status-danger-fg">
-                {acceptError}
-              </div>
+              <div className="text-sm text-status-danger-fg">{acceptError}</div>
             )}
 
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => navigate('/')}>
+              <Button variant="ghost" onClick={() => navigate("/")}>
                 Cancel
               </Button>
               <Button onClick={handleAccept} disabled={accepting}>
-                {accepting ? 'Joining…' : 'Accept invitation'}
+                {accepting ? "Joining…" : "Accept invitation"}
               </Button>
             </div>
           </>

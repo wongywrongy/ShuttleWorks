@@ -60,7 +60,7 @@ Quarterfinal, then `Round n`).
 ::: warning Connector lines are alignment-implied
 No explicit connector lines are drawn between rounds yet. A feeder pair and
 its successor line up because the successor is placed at their midpoint, so
-the bracket *reads* as connected — but the joining strokes are visual
+the bracket _reads_ as connected — but the joining strokes are visual
 inference, not rendered geometry. Drawing real connectors is a known
 follow-up.
 :::
@@ -71,28 +71,36 @@ follow-up.
 (`transform: translate(x, y) scale(s)`, `transformOrigin: 0 0`). There is no
 scroll container and no dependency — it is pure frontend CSS transform.
 
-| Gesture / control | Behaviour |
-| --- | --- |
-| Wheel / trackpad | Zoom toward the cursor. Bound natively with `{ passive: false }` so it can `preventDefault`. Scale clamps to `0.2 … 2`. |
-| Drag background | Pan. A pointer-down whose target is inside a `button, a, input, select, [role="button"]` is ignored, so clicking a card (assign a slot, record a winner) still works. |
-| `−` / `%` / `+` | Step zoom by 1.2× about the viewport center; the readout shows the current percentage. |
-| Fit | Re-run fit-and-center (see below). |
-| Reset | Return to `{ x: 24, y: 24, s: 1 }`. |
+| Gesture / control | Behaviour                                                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wheel / trackpad  | Zoom toward the cursor. Bound natively with `{ passive: false }` so it can `preventDefault`. Scale clamps to `0.2 … 2`.                                               |
+| Drag background   | Pan. A pointer-down whose target is inside a `button, a, input, select, [role="button"]` is ignored, so clicking a card (assign a slot, record a winner) still works. |
+| `−` / `%` / `+`   | Step zoom by 1.2× about the viewport center; the readout shows the current percentage.                                                                                |
+| Readable view     | Center the Final and use at least 65% scale so names and scores remain legible. This is the initial view; pan to traverse the wings.                                  |
+| Fit whole draw    | Scale and center both axes for a structural overview.                                                                                                                 |
+| Reset             | Return to 1:1 at the canvas gutter, below the control rail.                                                                                                           |
 
-### Fit centers in both axes
+### Readable first view, optional overview
 
-`fit()` scales to `min(vw / (cw + 48), vh / (ch + 48))`, clamped to
-`0.2 … 1` (never zooms *past* 1:1). It then centers the content
-horizontally and vertically:
+`readableView()` is the mount default. It starts from the available-width
+scale but floors that scale at `0.65`, centers the Final, and pins the content
+below the flush canvas toolbar. It deliberately ignores content height and
+may leave the outer wings off-screen: fitting both axes made a 32-player draw
+complete but unreadable on an ordinary display. The operator pans across and
+vertically without losing legibility.
+
+`fitAll()` remains available for a structural overview. It scales to
+`min(vw / (cw + 48), vh / (ch + 48))`, clamped to `0.2 … 1.25`, then centers
+the content horizontally and vertically:
 
 - `x = (vw − cw·s) / 2`
-- `y = max(24, (vh − ch·s) / 2)`
+- `y = max(52, (vh − ch·s) / 2)`
 
 Vertical centering keeps the centered Final mid-viewport rather than parked
 at the top; the `max(24, …)` floor keeps a tall bracket reachable from its
-top edge. Fit runs once on mount via `requestAnimationFrame` behind a
-`didFit` guard. jsdom reports a zero-sized content, so `fit` no-ops there —
-safe in tests.
+top edge. Fit-width runs once on mount via `requestAnimationFrame` behind a
+`didFit` guard. jsdom reports a zero-sized content, so it no-ops there — safe
+in tests.
 
 ### Round-jump chips
 

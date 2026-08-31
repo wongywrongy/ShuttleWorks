@@ -115,6 +115,23 @@ const RULES: readonly Rule[] = Object.freeze([
  */
 const ALLOWED: readonly { file: string; rule: string; why: string }[] = Object.freeze([
   {
+    file: 'components/MatchCard.tsx',
+    rule: 'truncate',
+    why:
+      'SP-P9 M4 explicitly requires bracket-node names to stay on one line and ' +
+      'truncate with an ellipsis because wrapping changes the fixed 44px node ' +
+      'height and breaks every connector anchor. The full name remains available ' +
+      'through the linked person page and in the adjacent List mode.',
+  },
+  {
+    file: 'components/MatchCard.tsx',
+    rule: 'overflow-hidden',
+    why:
+      'SP-P9 M4 fixes bracket nodes at exactly two 22px rows. This clipping is ' +
+      'limited to the bracket-node variant so a third line cannot silently change ' +
+      'tree geometry; Round and List modes carry the same match without clipping.',
+  },
+  {
     file: 'components/StatusChip.tsx',
     rule: 'nowrap',
     why:

@@ -21,6 +21,10 @@ import { formatElapsed } from '../../../lib/timeFormatters';
 import { sideSurnameLine } from '../../../lib/names';
 import { STATE_WORD } from '../../../lib/stateWords';
 import { formatPlayers, isCourtClosedNow } from './helpers';
+import {
+  formatMatchIdentity,
+  meetMatchIdentityFromStored,
+} from '../../../platform/domain/matchIdentity';
 
 type CourtStatus = 'active' | 'called' | 'empty';
 type CourtDisplayMode = 'list' | 'auto' | 'grid';
@@ -68,6 +72,14 @@ interface CourtsViewProps {
   playerNames: Map<string, string>;
 }
 
+function getMatchCode(match: MatchDTO): string {
+  const identity = meetMatchIdentityFromStored({
+    event_rank: match.eventRank,
+    sequence: match.matchNumber ?? null,
+  });
+  return formatMatchIdentity(identity, match.id) || '?';
+}
+
 export function CourtsView(props: CourtsViewProps) {
   return props.displayMode === 'list' ? (
     <CourtsListMode {...props} />
@@ -108,7 +120,7 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
               {courtId}
             </span>
             <span className="tabular-nums text-base font-semibold text-muted-foreground">
-              {isClosed ? '–' : match ? match.eventRank || `M${match.matchNumber || '?'}` : '–'}
+              {isClosed ? '–' : match ? getMatchCode(match) : '–'}
             </span>
             <span className="min-w-0 break-words">
               {isClosed ? (
@@ -229,7 +241,7 @@ function CourtCard({
 }: CourtCardProps) {
   const { courtId, match, state, status, nextMatch, nextStartTime, laterMatch, laterStartTime } = row;
   const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
-  const code = match ? match.eventRank || `M${match.matchNumber || '?'}` : null;
+  const code = match ? getMatchCode(match) : null;
   const sets = tvShowScores && status === 'active' ? state?.sets ?? [] : [];
   // No per-set breakdown but an aggregate exists → show it as one score
   // column per side, so a score-carrying match never renders scoreless.
@@ -300,7 +312,7 @@ function CourtCard({
                 ships — no new field, no new route. */}
             {nextMatch ? (
               <span className="text-2xs uppercase tracking-[0.06em] text-muted-foreground sw-num">
-                next: {nextMatch.eventRank || `M${nextMatch.matchNumber || '?'}`}
+                next: {getMatchCode(nextMatch)}
                 {nextStartTime ? ` ~${nextStartTime}` : ''}
               </span>
             ) : null}
@@ -442,4 +454,3 @@ function NextUp({
     </div>
   );
 }
-

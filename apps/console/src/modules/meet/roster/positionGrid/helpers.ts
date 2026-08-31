@@ -25,6 +25,7 @@ import { isDoublesCode } from '../../../../lib/doubles';
 // Canonical order lives in lib/eventColors (shared with the bracket's
 // matches list); re-exported here for the meet's existing import sites.
 import { DISCIPLINE_ORDER } from '../../../../lib/eventColors';
+import { decomposeMeetEventRank } from '../../../../platform/domain/matchIdentity';
 export { DISCIPLINE_ORDER as EVENT_ORDER } from '../../../../lib/eventColors';
 
 /**
@@ -124,10 +125,12 @@ export function configuredSlotPosition(
   counts: Record<string, number> | undefined,
 ): number | undefined {
   const count = configuredRankCount(counts, division);
-  if (count === undefined || !rank.startsWith(division)) return undefined;
-  const suffix = rank.slice(division.length);
-  if (!/^[1-9]\d*$/.test(suffix)) return undefined;
-  const position = Number(suffix);
+  if (count === undefined) return undefined;
+  const { event_code, position } = decomposeMeetEventRank(
+    rank,
+    Object.keys(counts ?? {}),
+  );
+  if (event_code !== division || position === null) return undefined;
   return Number.isSafeInteger(position) && position <= count ? position : undefined;
 }
 

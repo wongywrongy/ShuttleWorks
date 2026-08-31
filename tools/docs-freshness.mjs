@@ -114,6 +114,41 @@ export const AREAS = [
       'apps/console/src/modules/entries',
     ],
   },
+  {
+    name: 'Developer verification, demo, and UI evidence',
+    docs: [
+      'docs/how-to/running-locally.md',
+      'tests/e2e/README.md',
+      'simulator/README.md',
+    ],
+    src: [
+      'Makefile',
+      '.github/workflows/ci.yml',
+      'infra/compose',
+      'simulator',
+      'tests/e2e',
+      'tools/demo-compose.sh',
+      'tools/surface-capture.mjs',
+      'tools/surface-capture-status.mjs',
+    ],
+  },
+  {
+    name: 'Design system',
+    docs: [
+      'docs/reference/design-system.md',
+      'docs/reference/surface-map.md',
+      'packages/design-system/DESIGN.md',
+      'packages/design-system/DESIGN_COLOR.md',
+      'apps/console/src/components/README.md',
+    ],
+    src: [
+      'packages/design-system',
+      'apps/console/src/components',
+      'apps/console/src/lib/utils.ts',
+      'apps/entrant/app/lib/ui.ts',
+      'apps/entrant/app/components',
+    ],
+  },
 ]
 
 const args = new Set(process.argv.slice(2))

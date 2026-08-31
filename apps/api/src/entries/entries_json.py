@@ -37,9 +37,10 @@ in the path) is unaffected by design rather than by oversight.
 from __future__ import annotations
 
 import logging
+import hashlib
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import quote, urlencode
 
@@ -68,6 +69,8 @@ from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
 from core.form_csrf import FORM_FIELD, PLAY_CSRF_COOKIE
 from core.form_csrf import form_csrf_token as _form_csrf
+from core.tournament_phase import TournamentPhase, derive_tournament_phase
+from core.demo_clock import utcnow as _demo_utcnow
 from db.models import EntryEvent, EntryPage, Org, Tournament
 from repositories import LocalRepository, get_repository
 # SP-REORG-1 R1: the three throttle symbols this module uses are
@@ -78,6 +81,7 @@ from entries import submissions as submission_service
 from entries.entry_fees import PlayerSelection, compute_fee_total, normalize_fee_schedule
 from entries.entry_form import parse_players
 from entries.entry_policy import check_policy
+from entries.entries_site import PublicPersonIdentityDTO, PersonReferenceDTO
 
 log = logging.getLogger("scheduler.entries.entries_json")
 
@@ -96,7 +100,26 @@ router = APIRouter(prefix="/e/api", tags=["entries-public"])
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return _demo_utcnow()
+
+
+def _bracket_live_states(data: object) -> list[str]:
+    """Translate bracket match-action clocks into lifecycle vocabulary."""
+    if not isinstance(data, dict):
+        return []
+    session = data.get("bracket_session")
+    if not isinstance(session, dict):
+        return []
+    assignments = session.get("assignments")
+    if not isinstance(assignments, list):
+        return []
+    return [
+        "playing"
+        for assignment in assignments
+        if isinstance(assignment, dict)
+        and assignment.get("actual_start_slot") is not None
+        and assignment.get("actual_end_slot") is None
+    ]
 
 
 
@@ -244,8 +267,7 @@ class EntrantRowDTO(BaseModel):
     a name is routine at a club and must not collide into one page.
     """
 
-    personKey: str
-    name: str
+    person: PersonReferenceDTO
     club: Optional[str] = None
     eventCodes: List[str] = []
 
@@ -293,15 +315,13 @@ class PolicyDTO(BaseModel):
 class TournamentDTO(BaseModel):
     name: Optional[str] = None
     # ``tournaments.tournament_date`` verbatim — a nullable ``String(32)``
-    # holding an ISO *date* by CONVENTION only: no time, no zone, no end
-    # date. Deliberately given no ``dateIso`` companion when the events got
-    # theirs (G3): there is no instant here to project. Where the convention
-    # holds this string already is ISO; where it does not, a server-side
-    # parse would either echo the same characters or manufacture a moment
-    # nobody recorded — confidently wrong, which is the defect class this
-    # program spent 2026-08-10 removing. The tier parses it as a date
-    # (``parseIsoDate``) and renders nothing when it will not parse.
+    # holding an ISO *date* by convention. ``endDate`` is the matching
+    # calendar boundary; neither is interpreted as a UTC instant.
     date: Optional[str] = None
+    endDate: Optional[str] = None
+    timeZone: str = "UTC"
+    phase: TournamentPhase = TournamentPhase.ANNOUNCED
+    updatedAt: Optional[str] = None
 
 
 class NamedDTO(BaseModel):
@@ -325,7 +345,7 @@ class ReserveRowDTO(BaseModel):
 
     eventCode: str
     position: int
-    name: str
+    person: PersonReferenceDTO
     club: Optional[str] = None
 
 
@@ -373,6 +393,7 @@ class EntrantConfigDTO(BaseModel):
 @router.get("/page/{slug}", response_model=EntryPageProjection)
 def entry_page_projection(
     request: Request,
+    response: Response,
     slug: str = Path(..., max_length=100),
     repo: LocalRepository = Depends(get_repository),
 ) -> EntryPageProjection:
@@ -385,10 +406,44 @@ def entry_page_projection(
     because it is proven and entrants already read it.
     """
     page, tournament = _resolve(repo, slug)
+    page_revision = hashlib.sha256(
+        "|".join(
+            (
+                str(tournament.state_version),
+                str(tournament.updated_at or ""),
+                str(page.updated_at or ""),
+                str(bool(page.entrants_published)),
+                str(bool(page.draws_published)),
+                str(bool(page.results_published)),
+            )
+        ).encode("utf-8")
+    ).hexdigest()[:24]
+    response.headers["ETag"] = f'"{page_revision}"'
+    response.headers["Cache-Control"] = "public, max-age=30"
+    if request.headers.get("If-None-Match") in {page_revision, f'"{page_revision}"'}:
+        return Response(status_code=304, headers={"ETag": f'"{page_revision}"'})  # type: ignore[return-value]
     entrant, token = _optional_entrant(request, repo)
     now = _utcnow()
     events = _events(repo, tournament.id)
     counts = _entry_counts(repo, tournament.id)
+    match_states = (
+        [row.status for row in repo.match_states.list_for_tournament(tournament.id)]
+        if page.draws_published
+        else []
+    )
+    if page.draws_published:
+        match_states.extend(_bracket_live_states(tournament.data))
+    phase = derive_tournament_phase(
+        status=tournament.status,
+        start_date=tournament.tournament_date,
+        end_date=getattr(tournament, "tournament_end_date", None),
+        time_zone=getattr(tournament, "time_zone", None) or "UTC",
+        entries_open=any(_event_is_open(ev, now) for ev in events),
+        entries_configured=bool(events),
+        draws_published=bool(page.draws_published),
+        match_states=match_states,
+        now=now,
+    )
     org = (
         repo.session.get(Org, tournament.org_id)
         if tournament.org_id is not None
@@ -400,6 +455,18 @@ def entry_page_projection(
             date=(
                 str(tournament.tournament_date)
                 if tournament.tournament_date
+                else None
+            ),
+            endDate=(
+                str(getattr(tournament, "tournament_end_date", None))
+                if getattr(tournament, "tournament_end_date", None)
+                else None
+            ),
+            timeZone=getattr(tournament, "time_zone", None) or "UTC",
+            phase=phase,
+            updatedAt=(
+                _moment_iso(tournament.updated_at)
+                if tournament.updated_at is not None
                 else None
             ),
         ),
@@ -476,8 +543,11 @@ def entry_page_projection(
         entrants=(
             [
                 EntrantRowDTO(
-                    personKey=str(person_id),
-                    name=name,
+                    person=PersonReferenceDTO(
+                        identity=PublicPersonIdentityDTO(id=str(person_id), name=name),
+                        resolution="resolved",
+                        label=None,
+                    ),
                     club=club,
                     eventCodes=codes,
                 )
@@ -493,9 +563,16 @@ def entry_page_projection(
         reserves=(
             [
                 ReserveRowDTO(
-                    eventCode=code, position=position, name=name, club=club
+                    eventCode=code,
+                    position=position,
+                    person=PersonReferenceDTO(
+                        identity=PublicPersonIdentityDTO(id=str(person_id), name=name),
+                        resolution="resolved",
+                        label=None,
+                    ),
+                    club=club,
                 )
-                for code, position, name, club in _reserves(repo, tournament.id)
+                for code, position, person_id, name, club in _reserves(repo, tournament.id)
             ]
             if page.entrants_published and _entries_have_closed(events, now)
             else []

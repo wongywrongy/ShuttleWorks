@@ -1,9 +1,10 @@
+import { identityFixture } from './identityFixture';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { RunQueue } from '../run/RunQueue';
 import type { RunMatch } from '../runtime/runModel';
 
-function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' | 'label'>): RunMatch {
+function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' | 'identity'>): RunMatch {
   return {
     sideA: 'Team A',
     sideB: 'Team B',
@@ -18,9 +19,9 @@ function mkMatch(p: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source' |
 }
 
 const QUEUE: RunMatch[] = [
-  mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1', sideA: 'Alpha', sideB: 'Beta' }),
-  mkMatch({ key: 'bracket:pu1', id: 'pu1', source: 'bracket', label: 'QF1', sideA: 'Gamma', sideB: 'Delta' }),
-  mkMatch({ key: 'meet:m3', id: 'm3', source: 'meet', label: 'MD2', sideA: 'Epsilon', sideB: 'Zeta' }),
+  mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', identity: identityFixture('MS1'), sideA: 'Alpha', sideB: 'Beta' }),
+  mkMatch({ key: 'bracket:pu1', id: 'pu1', source: 'bracket', identity: identityFixture('QF1'), sideA: 'Gamma', sideB: 'Delta' }),
+  mkMatch({ key: 'meet:m3', id: 'm3', source: 'meet', identity: identityFixture('MD2'), sideA: 'Epsilon', sideB: 'Zeta' }),
 ];
 
 describe('RunQueue', () => {
@@ -97,12 +98,12 @@ describe('RunQueue', () => {
 // identical to a playable one, with nothing saying why (audit T2 item 7).
 describe('RunQueue — readiness is legible on the row', () => {
   const READINESS: RunMatch[] = [
-    mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', label: 'MS1' }),
+    mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', identity: identityFixture('MS1') }),
     mkMatch({
-      key: 'bracket:pu9', id: 'pu9', source: 'bracket', label: 'SF1',
+      key: 'bracket:pu9', id: 'pu9', source: 'bracket', identity: identityFixture('SF1'),
       eligible: false, sideA: 'TBD', sideB: 'TBD',
     }),
-    mkMatch({ key: 'meet:m7', id: 'm7', source: 'meet', label: 'MS7', status: 'called' }),
+    mkMatch({ key: 'meet:m7', id: 'm7', source: 'meet', identity: identityFixture('MS7'), status: 'called' }),
   ];
 
   it('separates playable-now, pending-on-an-earlier-result, and already-called', () => {

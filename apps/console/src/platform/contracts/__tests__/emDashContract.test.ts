@@ -115,12 +115,17 @@ const RULES: readonly Rule[] = Object.freeze([
 ]);
 
 /**
- * Deliberate, reasoned exceptions. EMPTY on purpose: every em dash found by
- * the sweep that added this test was repunctuated or restructured instead of
- * allowlisted, and no en dash in the codebase reads as prose rather than a
- * range.
+ * Deliberate, reasoned exceptions. R-PAIR-7 supersedes the earlier blanket
+ * punctuation rule for the strict table primitive's empty-value mark only.
+ * Prose and consumer-owned placeholders remain prohibited.
  */
-const ALLOWED: readonly { file: string; rule: string; why: string }[] = Object.freeze([]);
+const ALLOWED: readonly { file: string; rule: string; why: string }[] = Object.freeze([
+  {
+    file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
+    rule: 'em-dash',
+    why: 'R-PAIR-7 explicitly makes an em dash the shared strict-table empty-value mark.',
+  },
+]);
 
 function isAllowed(file: string, rule: string): boolean {
   return ALLOWED.some((entry) => entry.file === file && entry.rule === rule);

@@ -252,6 +252,7 @@ def _entrants(
         )
         .where(
             Entry.tournament_id == tournament_id,
+            EntryPlayer.erased_at.is_(None),
             Entry.list_opt_out.is_(False),
             Entry.state.in_(_LISTED_STATES),
         )
@@ -327,8 +328,8 @@ def _moment_iso(value: datetime) -> str:
 
 def _reserves(
     repo: LocalRepository, tournament_id: uuid.UUID
-) -> List[Tuple[str, int, str, Optional[str]]]:
-    """The post-close reserve list: ``(event code, position, name, club)``.
+) -> List[Tuple[str, int, uuid.UUID, str, Optional[str]]]:
+    """The post-close reserve list: ``(event code, position, person id, name, club)``.
 
     E4 / spec §7's "post-close acceptance and reserve lists in order". The
     accepted half is already published — that IS ``_entrants``, which lists
@@ -362,6 +363,7 @@ def _reserves(
             EntryEvent.code,
             EntryPlayer.full_name,
             EntryPlayer.club,
+            EntryPlayer.id,
             Entry.list_opt_out,
             Entry.id,
         )
@@ -378,21 +380,22 @@ def _reserves(
         )
         .where(
             Entry.tournament_id == tournament_id,
+            EntryPlayer.erased_at.is_(None),
             Entry.state == "waitlisted",
         )
         .order_by(EntryEvent.code, Entry.submitted_at, Entry.id)
     ).all()
 
-    out: List[Tuple[str, int, str, Optional[str]]] = []
+    out: List[Tuple[str, int, uuid.UUID, str, Optional[str]]] = []
     position_by_code: dict = {}
-    for code, name, club, opted_out, _entry_id in rows:
+    for code, name, club, person_id, opted_out, _entry_id in rows:
         # The position advances for EVERY reserve, printed or not — see the
         # docstring: a dense rank would misstate where an opted-out
         # entrant's neighbours actually stand.
         position_by_code[code] = position_by_code.get(code, 0) + 1
         if opted_out:
             continue
-        out.append((str(code), position_by_code[code], str(name), club))
+        out.append((str(code), position_by_code[code], person_id, str(name), club))
     return out
 
 

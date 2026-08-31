@@ -51,12 +51,15 @@
  */
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
 import { data } from 'react-router';
+import { useContext } from 'react';
 
 import { PlayShell } from '../components/PlayShell';
 import { FORM_FIELD } from '../lib/formField';
 import { safeNext } from '../lib/nextTarget';
 import { mintFormCsrf } from '../lib/formCsrf.server';
+import { EntrantSessionContext } from '../lib/sessionContext';
 import type { Route } from './+types/login';
+import { CARD } from '../lib/ui';
 
 /**
  * Where a successful sign-in lands when the link that brought the entrant here
@@ -114,9 +117,10 @@ export interface LoginLoaderData {
   /**
    * Did a sign-in just succeed with nowhere in particular to go?
    *
-   * `DEFAULT_NEXT`'s destination. Not an identity claim and not a capability:
-   * the URL is typeable, this page cannot read the session cookie, and
-   * nothing here is gated on it — the write is gated at the write.
+   * `DEFAULT_NEXT`'s destination. The URL is typeable, so the route only
+   * removes its form when root's boolean cookie-presence signal is true; it
+   * never treats that signal as identity or authorization. The write remains
+   * gated by FastAPI.
    */
   justSignedIn: boolean;
 }
@@ -200,17 +204,18 @@ export const meta: Route.MetaFunction = () => [
 
 export default function LoginPage({ loaderData }: Route.ComponentProps) {
   const { formCsrf, next, justSignedUp, signInFailed, justSignedIn } = loaderData;
+  const signedIn = useContext(EntrantSessionContext);
+  const showLoginForm = !(justSignedIn && signedIn);
 
   return (
     // E1: the page system, not a bare column. Brief §4 — "auth pages as small
     // centered cards" — so the shell holds a `max-w-md` column and the form
     // sits on the tier's own card skin (`rounded-lg border border-rule-soft
     // bg-surface-raised`, the one every Overview card wears).
-    // The header link is otherwise static (R8-D — no page here can read the
-    // session), but this ROUTE, not a session read, already knows its own
-    // outcome from the PATH (`justSignedIn`, same source as the "You are
-    // signed in" copy below) — so only its label changes here, to stop the
-    // header claiming "Sign in" one breath after the body says it happened.
+    // The shell receives root's boolean cookie-presence signal and therefore
+    // renders `My entries` for an authenticated redirect. The route outcome
+    // still comes from its path; the boolean is never an identity or auth
+    // decision, and only prevents a contradictory second credential form.
     <PlayShell signInLabel={justSignedIn ? 'Switch account' : 'Sign in'}>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
@@ -260,23 +265,23 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
           </Notice>
         ) : null}
 
-        {/* A sign-in that worked but had nowhere to go (`DEFAULT_NEXT`).
-
-            The form still renders below, and deliberately: this page cannot
-            read the session cookie, so hiding it would strand anyone who
-            reached this URL by typing it, and "sign in as someone else" is a
-            real thing to want on a shared device. The copy therefore does not
-            leave the reader looking at an unexplained form — it says what the
-            form is now for. */}
+        {/* A sign-in that worked but had nowhere to go (`DEFAULT_NEXT`). A
+            browser that followed the redirect carries the entrant cookie, so
+            the session-aware branch below offers the next task and no second
+            credential form. A direct visit without a cookie keeps the retry
+            form available, but is not treated as proof of authentication. */}
         {justSignedIn ? (
           <Notice tone="success">
-            You are signed in on this device. Open the entry link your organizer
-            gave you to enter a tournament. The form below signs in a different
-            account.
+            {showLoginForm ? (
+              'You are signed in on this device. Open the entry link your organizer gave you to enter a tournament. The form below signs in a different account.'
+            ) : (
+              'You are signed in on this device. Continue to My entries below.'
+            )}
           </Notice>
         ) : null}
 
-        <div className="grid gap-6 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+        {showLoginForm ? (
+        <div className={`grid gap-6 ${CARD}`}>
           {/*
             Posts ACROSS the tier boundary, not to this page's own URL: all of
             `/e/account/*` is FastAPI's (R8-A). A plain `<form>`, never React
@@ -320,13 +325,13 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
               autoComplete="current-password"
               // **The reveal toggle is deleted, not fixed (E2).** `TextField`
               // gives every password box a "Show password" control by default,
-              // and it is a `<button type="button">` driven by `onClick` — on a
-              // tier that ships no client JS at all it did nothing when pressed.
+              // and it is a `<button type="button">` driven by `onClick` — this
+              // page deliberately has no route-scoped module to support it.
               // A dead control is worse than no control: it teaches the reader
               // that the page is broken on the one screen where they are typing
               // a credential. Making it work needs a script budget this tier
-              // does not have (`root.tsx` renders no `<Scripts/>`; the CSP is
-              // `script-src 'self'`), so the affordance is logged in
+              // does not have on this page (`root.tsx` renders no `<Scripts/>`; the
+              // CSP is `script-src 'self'`), so the affordance is logged in
               // `docs/reference/debt-log.md` rather than built.
               revealable={false}
             />
@@ -334,6 +339,12 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             <Button type="submit" className="justify-self-start">
               Sign in
             </Button>
+            <a
+              className="justify-self-start text-sm text-accent underline underline-offset-4"
+              href={`/e/forgot?next=${encodeURIComponent(next)}`}
+            >
+              Forgot your password?
+            </a>
           </form>
 
           <p className="border-t border-rule-soft pt-4 text-sm text-muted-foreground">
@@ -348,6 +359,19 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             .
           </p>
         </div>
+        ) : (
+          <section className={`grid gap-4 ${CARD}`}>
+            <p className="text-sm text-muted-foreground">
+              Your entrant account is ready to use on this device.
+            </p>
+            <a
+              className="inline-flex min-h-10 items-center justify-center justify-self-start rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90"
+              href="/e/me/entries"
+            >
+              Continue to My entries
+            </a>
+          </section>
+        )}
       </main>
     </PlayShell>
   );

@@ -82,7 +82,8 @@ function walk(dir) {
     }
   }
 }
-walk(join(repoRoot, 'products', 'scheduler', 'frontend', 'src'));
+walk(join(repoRoot, 'apps', 'console', 'src'));
+walk(join(repoRoot, 'apps', 'entrant', 'app'));
 walk(join(repoRoot, 'packages', 'design-system', 'components'));
 
 if (offenders.length) {

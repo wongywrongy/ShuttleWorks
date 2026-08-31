@@ -2,6 +2,7 @@
 # generated=2026-08-29
 # companion_to=bwf_recent_tournaments_players_scores_dataset.txt
 # scope=the same 30 recent completed tournaments used in the match-score dataset
+# demo_overlay=Source notes remain historical; the local product demo fictionally operates Taipei in progress and Korea upcoming on 2026-07-31.
 # format=plain text, one TNOTE block per tournament
 # source_pages=https://en.wikipedia.org/wiki/2026_BWF_World_Tour ; https://en.wikipedia.org/wiki/2025_BWF_World_Tour
 

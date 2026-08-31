@@ -1,9 +1,10 @@
+import { identityFixture } from './identityFixture';
 import { describe, it, expect } from 'vitest';
 import { buildPlanChips, buildLiveChips } from '../runtime/boardPlacements';
 import type { OpsBlock } from '../opsBlock';
 
 const blk = (o: Partial<OpsBlock> & { id: string }): OpsBlock => ({
-  source: 'meet', key: `meet:${o.id}`, label: o.id, span: 1,
+  source: 'meet', key: `meet:${o.id}`, identity: identityFixture(o.id), span: 1,
   status: 'scheduled', sideA: 'A', sideB: 'B', done: false, started: false,
   ...o,
 } as OpsBlock);

@@ -49,8 +49,10 @@ routing. The current module model and its rationale live in the
 Everything above is the **operator console**. A tournament's public face — where a player
 finds it, sees the fees and deadlines, and enters it — is a **second frontend**
 ([`apps/entrant/`](./apps/entrant)) served under `/e/`: React
-Router 7, server-rendered, **zero client JavaScript**, held to a blocking 4 KB per-page weight
-budget. It shares `packages/design-system` with the console and nothing else. See
+Router 7, server-rendered with no framework hydration. Its complete HTML is progressively enhanced
+by small, same-origin route modules only where interaction needs the browser. Poster and discovery
+routes have a blocking 4 KB page-weight budget; the persistent entry journey has an 8 KB budget.
+It shares `packages/design-system` with the console and nothing else. See
 [the entrant tier](./docs/explanation/architecture/entrant-tier.md).
 
 All modules depend on the shared
@@ -169,7 +171,7 @@ apps/
 │       ├── components/        shared UI incl. control-plane/ (HealthDot /
 │       │                      OverflowMenu / SectionCard / EmptyState / Skeleton)
 │       └── api / store / hooks / lib …
-├── entrant/                   PUBLIC tier — React Router 7 SSR, zero client JS, under /e/
+├── entrant/                   PUBLIC tier — React Router 7 SSR + bounded route modules, under /e/
 └── api/                       FastAPI + state machine + command log
     ├── alembic/               SQLite + Postgres schema migrations
     └── src/                   sys.path root: core, db, repositories, shared,

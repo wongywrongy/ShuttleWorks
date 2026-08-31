@@ -129,7 +129,7 @@ describe('WorkspaceOverview', () => {
     it('gives the actionable step a button routing to the fixing surface', () => {
       renderOverview(withPhase('setup'));
       screen.getByTestId('setup-action-scheduled').click();
-      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/schedule');
+      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/operations/plan');
     });
 
     it('renders a blocked step quiet and without an action', () => {
@@ -150,7 +150,7 @@ describe('WorkspaceOverview', () => {
       expect(screen.getByTestId('overview-ready-summary')).toHaveTextContent(/setup complete/i);
       expect(screen.queryByTestId('overview-checklist')).toBeNull();
       screen.getByRole('button', { name: 'Open live day' }).click();
-      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/live');
+      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/operations/live');
     });
 
     it('live: shows counts and the next-up list', () => {
@@ -176,7 +176,7 @@ describe('WorkspaceOverview', () => {
     it('complete: frames the event as results', () => {
       renderOverview(withPhase('complete'));
       screen.getByRole('button', { name: 'View results' }).click();
-      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/matches');
+      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/competition/matches');
     });
 
     it('routes a bracket workspace to the bracket surfaces', () => {
@@ -187,7 +187,7 @@ describe('WorkspaceOverview', () => {
       };
       renderOverview(br);
       screen.getByRole('button', { name: 'View draws' }).click();
-      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/bracket-draws');
+      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/competition/draws');
     });
   });
 
@@ -202,8 +202,10 @@ describe('WorkspaceOverview', () => {
   describe('the rail', () => {
     it('links each fact to the surface that owns it', () => {
       renderOverview(base);
-      screen.getByTestId('rail-row-collaborators').click();
-      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/ws-members');
+      expect(screen.getByTestId('rail-row-collaborators')).toHaveAttribute(
+        'href',
+        '/tournaments/t1/administration/team',
+      );
     });
 
     it('offers "Set date" when the event has no date', () => {

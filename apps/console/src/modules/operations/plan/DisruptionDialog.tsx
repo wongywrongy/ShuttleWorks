@@ -18,6 +18,11 @@ import { useUiStore } from '../../../store/uiStore';
 import { useProposals } from '../../../hooks/useProposals';
 import { formatSlotTime } from '../../../lib/time';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import {
+  formatMatchIdentity,
+  meetMatchIdentityFromStored,
+} from '../../../platform/domain/matchIdentity';
+import { DialogFooter } from '../../../components/DialogFooter';
 
 interface Props {
   isOpen: boolean;
@@ -36,6 +41,14 @@ const TYPE_LABEL: Record<DisruptionType, string> = {
   overrun: 'Match overrun',
   cancellation: 'Match cancelled',
 };
+
+function getMatchLabel(match: { id: string; eventRank?: string | null; matchNumber?: number | null }): string {
+  const identity = meetMatchIdentityFromStored({
+    event_rank: match.eventRank,
+    sequence: match.matchNumber ?? null,
+  });
+  return formatMatchIdentity(identity, match.id) || '?';
+}
 
 export function DisruptionDialog({
   isOpen,
@@ -118,7 +131,7 @@ export function DisruptionDialog({
             </p>
           </div>
           <ScheduleDiffView impact={activeProposal.impact} formatSlot={formatSlot} />
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          <DialogFooter>
             <button
               type="button"
               onClick={handleCancel}
@@ -134,7 +147,7 @@ export function DisruptionDialog({
             >
               {loading ? 'Committing…' : 'Commit repair'}
             </button>
-          </div>
+          </DialogFooter>
         </div>
       </Modal>
     );
@@ -255,7 +268,7 @@ export function DisruptionDialog({
                 onValueChange={(v) => setMatchId(v)}
                 options={matches.map((m) => ({
                   value: m.id,
-                  label: m.eventRank ?? m.id,
+                  label: getMatchLabel(m),
                 }))}
                 ariaLabel="Affected match"
                 size="sm"

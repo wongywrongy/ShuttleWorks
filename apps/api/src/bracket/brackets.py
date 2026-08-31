@@ -75,6 +75,7 @@ from bracket import (
     Draw,
     DrawSegment,
     TournamentDriver,
+    reconcile_recorded_results,
     record_result,
 )
 from bracket import response_cache
@@ -588,6 +589,11 @@ class ImportTournamentIn(StrictModel):
     start_time: Optional[datetime] = None
     roster: Optional[List[BracketPlayerDTO]] = Field(None, max_length=MAX_PLAYERS)
     events: List[ImportEventIn] = Field(..., max_length=MAX_EVENTS)
+    # Pre-paired imports may carry an already-approved operating plan. This
+    # is especially useful for restoring or seeding a tournament: importing
+    # the draw and then issuing one request per match is both slow and prone
+    # to leaving a half-populated plan if the client is interrupted.
+    assignments: List[BracketAssignmentIn] = Field(default_factory=list, max_length=MAX_ASSIGNMENTS)
 
 
 # ---------------------------------------------------------------------------
@@ -959,6 +965,11 @@ def _hydrate_session(repo: LocalRepository, tournament_id: uuid.UUID) -> Optiona
         events_meta[event_row.id] = _event_meta_from_row(event_row, len(participant_rows))
         _hydrate_results(results_by_event.get(event_row.id, []), state)
 
+    # Results are the fact; resolved successor slots are their projection.
+    # Older imports wrote the former without the latter. Derive on hydration
+    # so existing workspaces repair themselves without a data backfill.
+    reconcile_recorded_results(state, draws)
+
     # Assignments live in tournaments.data["bracket_session"]["assignments"]
     # rather than a normalised ``bracket_assignments`` table. Nothing
     # queries inside them, so the blob is enough; promote them only if
@@ -1039,6 +1050,27 @@ def _persist_session_metadata(
     if roster is not None:
         existing["bracketPlayers"] = [player.model_dump(mode="json") for player in roster]
     repo.tournaments.upsert_data(tournament_id, existing)
+
+
+def _materialize_operations_assignment(
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
+    play_unit_id: str,
+    *,
+    court_id: Optional[int],
+    slot_id: Optional[int],
+) -> None:
+    """Project an Operations court decision onto the shared match spine.
+
+    Solver/pin planning deliberately never calls this helper. Public readers
+    consume the Match row and therefore cannot mistake a proposal for a
+    published court assignment (R-U3).
+    """
+    repo.matches.upsert(
+        tournament_id,
+        play_unit_id,
+        {"court_id": court_id, "time_slot": slot_id},
+    )
 
 
 def _persist_event(
@@ -1321,6 +1353,52 @@ def _started_play_unit_ids(state: TournamentState) -> Set[str]:
 
 def _finished_play_unit_ids(state: TournamentState) -> Set[str]:
     return set(state.results.keys())
+
+
+def _unresolved_play_unit_reasons(session: BracketSession, play_unit_id: str) -> List[str]:
+    """Return operator-readable reasons a match lacks a concrete side."""
+    play_unit = session.state.play_units[play_unit_id]
+    draw = session.draws[play_unit.event_id]
+    slot_a, slot_b = draw.slots[play_unit_id]
+    reasons: List[str] = []
+    for side_name, side, slot in (
+        ("Side A", play_unit.side_a, slot_a),
+        ("Side B", play_unit.side_b, slot_b),
+    ):
+        if side:
+            continue
+        feeder_id = slot.feeder_play_unit_id
+        if feeder_id:
+            feeder_state = (
+                "has no recorded result"
+                if feeder_id not in session.state.results
+                else "has a result that did not resolve a participant"
+            )
+            reasons.append(
+                f"{side_name} is waiting for feeder {feeder_id}, which {feeder_state}"
+            )
+        else:
+            reasons.append(f"{side_name} has no participant")
+    return reasons
+
+
+def _require_resolved_play_unit(
+    session: BracketSession,
+    play_unit_id: str,
+    *,
+    action: str,
+) -> None:
+    reasons = _unresolved_play_unit_reasons(session, play_unit_id)
+    if not reasons:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "error": "unresolved_participants",
+            "message": f"Cannot {action}: both participants must be known.",
+            "reasons": reasons,
+        },
+    )
 
 
 def _bracket_locked_play_unit_ids(state: TournamentState, current_slot: int) -> Set[str]:
@@ -2608,6 +2686,7 @@ def record_match_result(
     pu = session.state.play_units.get(body.play_unit_id)
     if pu is None:
         raise HTTPException(status_code=404, detail=f"play_unit {body.play_unit_id!r} not found")
+    _require_resolved_play_unit(session, body.play_unit_id, action="record this result")
 
     # Optimistic concurrency (SP-F3): when the client carries the version it
     # last saw, reject a write whose token is stale — a second operator
@@ -2703,6 +2782,7 @@ def submit_bracket_command(
     pu = session.state.play_units.get(body.play_unit_id)
     if pu is None:
         raise HTTPException(status_code=404, detail=f"play_unit {body.play_unit_id!r} not found")
+    _require_resolved_play_unit(session, body.play_unit_id, action="record this result")
 
     # ---- Optimistic concurrency (mirror record_match_result SP-F3) ---------
     if body.seen_version is not None:
@@ -2778,6 +2858,12 @@ def match_action(
         raise HTTPException(
             status_code=404,
             detail=f"no assignment for play_unit {body.play_unit_id!r}",
+        )
+    if body.action in ("start", "finish"):
+        _require_resolved_play_unit(
+            session,
+            body.play_unit_id,
+            action=f"{body.action} this match",
         )
 
     # A recorded result locks the physical lifecycle: 'start' would
@@ -3034,6 +3120,7 @@ def assign_bracket_court(
             status_code=404,
             detail=f"play_unit {body.play_unit_id!r} not found",
         )
+    _require_resolved_play_unit(session, body.play_unit_id, action="send this match to court")
 
     # Use the play unit's own duration (already normalised during hydration);
     # fall back to 1 slot if somehow absent (belt-and-suspenders).
@@ -3048,6 +3135,16 @@ def assign_bracket_court(
     )
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    # `/bracket/assign` is an Operations action.  Materialise the public
+    # court on the shared operational Match row; planning/solver assignments
+    # remain only in `bracket_session` and are therefore not published.
+    _materialize_operations_assignment(
+        repo,
+        tournament_id,
+        body.play_unit_id,
+        court_id=body.court_id,
+        slot_id=body.slot_id,
+    )
     response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
@@ -3080,6 +3177,15 @@ def unassign_bracket_court(
     session.state.assignments.pop(body.play_unit_id, None)
 
     _persist_session_metadata(repo, tournament_id, session=session)
+    # Clear the same Operations-owned projection written by `/assign`.
+    # This stays idempotent even when the operational row did not exist.
+    _materialize_operations_assignment(
+        repo,
+        tournament_id,
+        body.play_unit_id,
+        court_id=None,
+        slot_id=None,
+    )
     response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 

@@ -1,9 +1,11 @@
 # Settings
 
-Settings is the per-workspace **control-plane admin** — the chrome for managing a
-workspace itself (its venue, people, modules, backups, and lifecycle). This page
-is for engineers working in those admin surfaces; it explains what they own and
-why Settings is deliberately *not* a module in the engine sense.
+Administration and Setup are the per-workspace **control-plane** surfaces. The
+phase-based navigation is Setup / Participants / Competition / Operations /
+Publish / Administration; it is ratified product IA, while the legacy
+`AppTab` values remain renderer keys behind canonical workflow URLs. This page
+explains the control-plane owners and why they are deliberately *not* modules
+in the engine sense.
 
 ## Settings is not a `ModuleId`
 
@@ -21,60 +23,50 @@ Settings is documented here as a "module" only because it is a distinct, owned
 surface area you will work in; functionally it is composition over the existing
 control-plane endpoints.
 
-:::info One word, two surfaces
-"Settings" is overloaded. This page covers the whole per-workspace admin block.
-Separately, the sidebar gear opens an **app-wide** Settings page
+:::info Two scopes
+This page covers the per-workspace control plane. Separately, the sidebar gear
+opens an **app-wide** settings page
 (`GlobalSettingsPage`, route `/settings` — Profile / Security / Sessions /
 Modules defaults / Appearance / Notifications). That global page is account- and
 browser-scoped, not workspace-scoped, and is out of scope here.
 :::
 
-## The admin surfaces
+## The workflow control-plane surfaces
 
-Every surface below is rendered by the shell, not by a module router:
-`modules/workspace/WorkspaceShellSurface.tsx` switches on the URL segment
-(`uiStore.activeTab`) and mounts the matching component. The set of shell-owned
-segments is fixed in `platform/product-shell/workspaceNav.ts` (`SHELL_SEGMENTS` =
-`overview`, `display-config`, plus the six `ADMIN_SEGMENTS`).
-
-In the left nav, **Overview** sits at the top (it is `buildWorkspaceNav`'s
-always-present `nav.overview` item), and the six `ws-*` segments form the
-**Workspace** admin section (`nav.admin.items`) pinned at the bottom.
+`platform/product-shell/workspaceNav.ts` is the canonical route and label
+model. `SetupProduct` owns `/setup` and `/setup/*`; `PublishProduct` owns
+`/publish/*`; `WorkspaceShellSurface` composes Overview and Administration.
+Legacy `ws-*` segments remain internal compatibility keys and are not
+user-facing route vocabulary.
 
 | Surface | Segment | Component | What it does |
 | --- | --- | --- | --- |
-| **Overview** | `overview` | `WorkspaceOverview` | the workspace **readiness checklist** — event name/date/type, attention items, and named setup steps with done/incomplete states (incomplete steps link to their section). Not a metrics dashboard. |
-| **Venue and schedule** | `ws-venue` | `VenueScheduleTab` | the shared venue + day-window fields (see below) |
-| **Members** | `ws-members` | `PeopleAccessTab` | People & Access — lists members with **real identity** (names/emails from the `users` table since SP-CLOUD-2) and their roles |
-| **Sharing** | `ws-sharing` | `SharingTab` | the public display **capability link** (mint / copy / rotate via `…/display-token`) plus collaborator invites — copy-URL link invites (no expiry) and email invites (delivered via the email seam, TTL-bounded) |
-| **Modules** | `ws-modules` | `ModulesSettingsTab` | the module catalog — enable / disable per the dependency rules |
-| **Backups** | `ws-sync` | `SyncBackupsTab` | state-snapshot list / create / restore |
-| **Settings** | `ws-settings` | `GeneralSettingsTab` + `DangerZoneTab` | general details (name / date / status) + the danger zone (archive, delete) |
+| **Overview** | `overview` | `WorkspaceOverview` | phase summary and next actions |
+| **Setup checklist and sections** | `setup`, `setup/*` | `SetupProduct` | one master readiness checklist; section editors or read-only domain summaries |
+| **Site** | `publish/site` | `PublishProduct` → `SharingTab` | single owner of entrant, draw, and result publication flags |
+| **Links and embeds** | `publish/links` | `PublishProduct` → `SharingTab` | capability links, embeds, and token rotation |
+| **Team** | `administration/team` | `PeopleAccessTab` | members, real identities, roles, and invites |
+| **Modules** | `administration/modules` | `ModulesSettingsTab` | module enablement and dependency guards |
+| **Backups** | `administration/backups` | `SyncBackupsTab` | state-snapshot list, create, and restore |
+| **Activity** | `administration/activity` | `ActivityTab` | workspace activity history |
+| **Workspace settings** | `administration/lifecycle` | `GeneralSettingsTab` + `DangerZoneTab` | lifecycle summary, archive and unarchive, and destructive actions |
 
 (`display-config` is also a shell-rendered surface, but it belongs to the
 [Display module](/reference/modules/display), not to the admin block.)
 
-:::tip Overview is `WorkspaceOverview`
-The live Overview is the readiness-checklist `WorkspaceOverview` in
-`modules/workspace/`. (A superseded, counts-oriented `settings/OverviewTab.tsx`
-variant was removed in the 2026-06 debt-paydown cleanup.)
-:::
+The master readiness checklist lives only at `/setup`. Overview can summarize
+phase and next actions, but it must not become a second checklist owner.
 
-## Venue and schedule — a shared surface worth noting
+## Venue ownership
 
-`VenueScheduleTab` (`modules/workspace/VenueScheduleTab.tsx`) is a
-workspace-level surface that hoists the venue + day-window fields that were
-previously duplicated in both the Meet and Bracket Configuration tabs:
+Setup Venue is the organizer-facing owner before a plan exists. Once schedule
+assignments exist, the Setup API reports `authority: domain`, Setup renders the
+actual schedule-backed summary, and editing moves to Operations · Plan. This is
+the same no-parallel-truth rule Events uses once Competition owns draws.
 
-- **Venue** — Courts (`courtCount`, 1–32) and Slot duration (`intervalMinutes`,
-  5–240 min).
-- **Day window** — Start time (`dayStart`) and End time (`dayEnd`).
-
-It reads and writes the same `tournamentStore.config` fields the two engines use
-(via `setConfig`), persisting through the AppShell-mounted `useTournamentState`
-(the debounced `PUT …/state`). No data-model change — it is a single, shared
-editing surface over existing config. Engine-specific timing (rest between
-matches/rounds, breaks) stays in each engine's own Configuration.
+Before that handoff, Setup stores venue identity, address, accessibility notes,
+and the structured court rows in the existing workspace document through the
+Setup facade. There is no parallel readiness table.
 
 ## Modules — enablement is real persisted state
 
@@ -122,10 +114,9 @@ See the [API reference](/reference/api/) for the full endpoint list and the
 - **Settings is chrome, not a module.** Intentionally excluded from the `ModuleId`
   union and the module-contract layer — it composes existing control-plane
   endpoints rather than exposing a seam.
-- **The shared `/state` blob is the persistence.** Venue and schedule and the
-  general settings (name / date / status) live in the tournament `data` blob,
-  written through the same debounced snapshot path as the rest of the workspace
-  document; backups under Sync are full snapshots of that blob.
+- **The shared workspace document remains the persistence.** Setup-owned values
+  and general settings live in the tournament `data` blob; Backups are complete
+  snapshots of that blob. Derived readiness is never persisted beside it.
 
 ## See also
 

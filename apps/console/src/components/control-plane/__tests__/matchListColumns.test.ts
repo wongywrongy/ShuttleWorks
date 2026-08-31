@@ -52,7 +52,7 @@ describe.each(LISTS)(
 
     it('collapses Status first when the surface narrows', () => {
       // jsdom can't evaluate container queries — pin the class strings; the
-      // interaction-smoke Playwright scenario covers the real reflow.
+      // Console browser contracts cover the real reflow.
       expect(columns.map((c) => c.priority ?? 1)).toEqual([1, 1, 1, 1, 2, 1]);
       expect(COL_PRIORITY_CLASS[2]).toBe('hidden @2xl/table:block');
     });

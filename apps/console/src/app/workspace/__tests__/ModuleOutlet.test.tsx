@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ModuleOutlet } from '../ModuleOutlet';
 import { useUiStore } from '../../../store/uiStore';
 
@@ -18,6 +19,9 @@ vi.mock('../../../modules/operations/OperationsProduct', () => ({
 vi.mock('../../../modules/entries/EntriesProduct', () => ({
   EntriesProduct: () => <div data-testid="entries-product" />,
 }));
+vi.mock('../../../modules/setup/SetupProduct', () => ({
+  SetupProduct: ({ tid }: { tid: string }) => <div data-testid="setup-product">{tid}</div>,
+}));
 
 function setTabAndKind(tab: string, kind: 'meet' | 'bracket' | null) {
   useUiStore.getState().setActiveTab(tab as never);
@@ -35,6 +39,19 @@ describe('ModuleOutlet', () => {
     setTabAndKind('roster', 'meet');
     render(<ModuleOutlet />);
     expect(await screen.findByTestId('meet-product')).toBeInTheDocument();
+  });
+
+  it('renders canonical Setup independently of the enabled engine', async () => {
+    setTabAndKind('setup', 'bracket');
+    render(
+      <MemoryRouter initialEntries={['/tournaments/t1/setup/general']}>
+        <Routes>
+          <Route path="/tournaments/:id/*" element={<ModuleOutlet />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId('setup-product')).toHaveTextContent('t1');
+    expect(screen.queryByTestId('bracket-product')).not.toBeInTheDocument();
   });
 
   it('renders DisplayProduct for the tv tab', async () => {

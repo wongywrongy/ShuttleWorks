@@ -260,7 +260,9 @@ describe('ruling R8-A: the /e/ prefix is split across two tiers of the PLAY host
 
   it('keeps the entrant surface on its own rate-limit zone', () => {
     for (const path of ['/e/health', '/e/api/x', '/e/account/login', '/robots.txt']) {
-      expect(onPlay(path).body).toMatch(/limit_req\s+zone=sw_entries/);
+      expect(onPlay(path).body).toMatch(
+        /limit_req\s+zone=sw_entries\s+burst=90\s+nodelay/,
+      );
     }
   });
 
@@ -584,9 +586,9 @@ describe('SP-HOST-1 D-6: the public tier carries the tighter CSP', () => {
     }
   });
 
-  it('gives the public tier the stricter value in every case', () => {
+  it('keeps same-origin connections while tightening framing on public tier', () => {
     const playPort = String(listenPorts('play')[0]);
-    expect(portMap('sw_connect_src')).toEqual({ default: "'self'", [playPort]: "'none'" });
+    expect(portMap('sw_connect_src')).toEqual({ default: "'self'", [playPort]: "'self'" });
     expect(portMap('sw_frame_ancestors')).toEqual({ default: "'self'", [playPort]: "'none'" });
     expect(portMap('sw_frame_options')).toEqual({ default: 'SAMEORIGIN', [playPort]: 'DENY' });
   });

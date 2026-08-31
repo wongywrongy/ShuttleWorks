@@ -20,6 +20,7 @@ from tournament_sim.seed import (
     parse_text,
     preview,
     reset,
+    select_tournaments,
     status,
 )
 from tournament_sim.historical_matches import HistoricalMatch, SourceCoverage
@@ -52,6 +53,64 @@ Source: https://example.test/t
 """
 
 
+SECOND_SOURCE = """# counts tournaments=2 matches=10 unique_players=6
+T|T001|2025|1-6 January|2025-01-06|Demo Open|Paris, France|Demo Hall|Super 100|$110,000|32MS/32WS/32MD/32WD/32XD|https://example.test/t
+T|T002|2025|7-12 January|2025-01-12|Second Open|Lyon, France|Second Hall|Super 100|$110,000|32MS/32WS/32MD/32WD/32XD|https://example.test/t2
+M|M0001|T001|MS|mens_singles_final|Alice|Bob|21-19, 21-18|https://example.test/m
+M|M0002|T001|WS|womens_singles_final|Carol|Dave|21-10, 21-9|https://example.test/m
+M|M0003|T001|MD|mens_doubles_final|Alice;Bob|Dave;Eve|Walkover|https://example.test/m
+M|M0004|T001|WD|womens_doubles_final|Carol;Eve|Alice;Dave|21-19, 10-21, 21-18|https://example.test/m
+M|M0005|T001|XD|mixed_doubles_final|Alice;Carol|Bob;Dave|21-19, 18-21, 21-17|https://example.test/m
+M|M0006|T002|MS|mens_singles_final|Bob|Alice|21-19, 21-18|https://example.test/m2
+M|M0007|T002|WS|womens_singles_final|Dave|Carol|21-10, 21-9|https://example.test/m2
+M|M0008|T002|MD|mens_doubles_final|Dave;Eve|Alice;Bob|Walkover|https://example.test/m2
+M|M0009|T002|WD|womens_doubles_final|Alice;Dave|Carol;Eve|21-19, 10-21, 21-18|https://example.test/m2
+M|M0010|T002|XD|mixed_doubles_final|Bob;Dave|Alice;Carol|21-19, 18-21, 21-17|https://example.test/m2
+P|P0001|Alice
+P|P0002|Bob
+P|P0003|Carol
+P|P0004|Dave
+P|P0005|Eve
+P|P0006|Nur Izzuddin
+"""
+
+
+def test_select_tournaments_filters_every_tournament_owned_collection():
+    dataset = parse_text(SECOND_SOURCE)
+
+    selected = select_tournaments(dataset, ["T002"])
+
+    assert [item.id for item in selected.tournaments] == ["T002"]
+    assert {item.tournament_id for item in selected.matches} == {"T002"}
+    assert selected.selected_tournament_ids == ("T002",)
+    assert preview(selected)["tournamentIds"] == ["T002"]
+
+
+def test_select_tournaments_rejects_unknown_id():
+    with pytest.raises(DatasetError, match="unknown tournament id.*T999"):
+        select_tournaments(parse_text(SOURCE), ["T999"])
+
+
+def test_selected_tournament_ids_are_part_of_the_input_hash():
+    dataset = parse_text(SECOND_SOURCE)
+    assert select_tournaments(dataset, ["T001"]).input_sha256 != select_tournaments(
+        dataset, ["T002"]
+    ).input_sha256
+
+
+def test_manifest_cannot_be_reused_for_a_different_selected_tournament(tmp_path: Path):
+    dataset = parse_text(SECOND_SOURCE)
+    apply(select_tournaments(dataset, ["T001"]), FakeClient(), seed_key="browser", run_dir=tmp_path)
+
+    with pytest.raises(ValueError, match="different source hash"):
+        apply(
+            select_tournaments(dataset, ["T002"]),
+            FakeClient(),
+            seed_key="browser",
+            run_dir=tmp_path,
+        )
+
+
 def test_manifest_write_keeps_the_previous_file_if_atomic_replace_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -80,7 +139,15 @@ class FakeClient:
         self.publications = []
         self.deleted = []
 
-    def create_tournament(self, name, kind="meet", modules=None, tournament_date=None):
+    def create_tournament(
+        self,
+        name,
+        kind="meet",
+        modules=None,
+        tournament_date=None,
+        tournament_end_date=None,
+        time_zone=None,
+    ):
         tid = f"workspace-{len(self.created) + 1}"
         self.created.append((tid, name, kind, tournament_date))
         return {"id": tid}
@@ -231,7 +298,7 @@ def test_apply_checkpoints_and_same_hash_noop(tmp_path: Path):
     assert len(client.imported[0][1]["events"]) == 5
     assert len(client.commands) == 5
     assert len(client.events) == 5
-    assert first["seedFormatVersion"] == 2
+    assert first["seedFormatVersion"] == 3
     assert first["matchCount"] == 5
     assert first["playerCount"] == 5
     assert first["topologyEdgeCount"] == 0
@@ -292,6 +359,20 @@ def test_legacy_manifest_requires_explicit_replace(tmp_path: Path):
     )
     with pytest.raises(ValueError, match="older seed format"):
         apply(dataset, FakeClient(), seed_key="bwf-demo", run_dir=tmp_path)
+
+
+def test_reset_manifest_can_restart_on_a_new_seed_format(tmp_path: Path):
+    dataset = parse_text(SOURCE)
+    (tmp_path / "bwf-demo.json").write_text(
+        '{"seedKey":"bwf-demo","seedFormatVersion":2,"status":"reset",'
+        '"tournaments":{"T001":{"workspaceId":null}}}',
+        encoding="utf-8",
+    )
+
+    output = apply(dataset, FakeClient(), seed_key="bwf-demo", run_dir=tmp_path)
+
+    assert output["status"] == "complete"
+    assert output["seedFormatVersion"] == 3
 
 
 def test_notes_enrich_manifest_and_label_import_as_finals_only(tmp_path: Path):
@@ -388,8 +469,13 @@ def test_complete_demo_draws_fills_all_events_and_marks_generated_rows(tmp_path:
     }
     for match in (row for row in dataset.historical_matches if row.event == "XD"):
         for side in (match.side_a, match.side_b):
-            assert side[0] in xd_first or "(demo " in side[0]
-            assert side[1] in xd_second or "(demo " in side[1]
+            # F-PAIR-34 / R-PAIR-5: exhausted demo pools still preserve the
+            # source-position given name, but fixture sequence bookkeeping
+            # never contaminates the stored identity.
+            assert side[0] in xd_first or len(side[0].split()) >= 2
+            assert side[1] in xd_second or len(side[1].split()) >= 2
+            assert "(demo " not in side[0]
+            assert "(demo " not in side[1]
     finals_after = {
         (match.tournament_id, match.event): (
             match.side_a,

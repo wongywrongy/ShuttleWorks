@@ -13,12 +13,12 @@ govern everything below:
 |---|---|---|
 | The live-day surface | **Live day** (nav item, page eyebrow); **"Open live day"** (buttons) | Retires "Run" as user-facing vocabulary. The route segment `/live` is unchanged. "Run" survives only as a verb ("Run the floor…"). |
 | Plan-readiness chips | **"Plan ready ✓"** (Plan toolbar toggle, off-state **"Mark plan ready"**); **"Plan finalized · ready for live day"** (Live-day header pill) | One lifecycle-chip family across Plan and Live day. |
-| Sharing surface | **Sharing** (nav + H1) | Retires the "Links & access" H1. Section headers inside the page stay descriptive (Public display link, Collaborator invites). Cross-links say "Sharing" — not "Settings → Sharing" — and are real links where the host component allows one. |
+| Publication surfaces | **Site** owns public entrant/draw/result toggles; **Links and embeds** owns capability URLs and rotation | Retires “Sharing”, which no longer names a destination in the phase-based IA. Cross-links name the actual owner. |
 | Workspace settings page | **Workspace settings** (nav + H1) | Revised by SP-CONSOLE-2 R-A. Bare "Settings" is retired as a nav label everywhere: two different surfaces wore it, one per scope, and the rail showed both at once. The scope now rides in the label. |
 | Account surface | **Account** (rail item + chrome title + H1) | R-A's other half. The rail gear owns the word; the avatar chip below it names the *person* (`aria-label` = display name, email fallback), because two rail links to `/settings` both announcing "Account" is the ambiguity the rename would otherwise have created. |
 | Backups surface | **Backups** (nav + H1) | Retires "Sync and backups". There is no sync: the Supabase mirror was removed entirely in SP-CLOUD-3 (ADR 0012), so the nav promised a feature the page could not contain. |
 | Module state at creation | **On / Off** on `/new`; **On / Available / Off** in the Modules catalog | SP-CONSOLE-2 R-B. "Available" and "Off" are the same answer before a workspace exists — neither module is on, and both are one click apart in Modules afterwards — so `/new` asks the question that has a consequence and seeds everything not-On as `available`. The catalog keeps the full tri-state. |
-| Conjunctions | **"and"**, never "&" | "Venue and schedule", "Members and roles", "Court order and visibility", "Alerts and activity". Applies to nav labels, H1s, and section titles. Player-pair name joins ("A / B" or "A & B") are name formatting, not conjunctions, and are governed by the match-presentation rules instead. |
+| Conjunctions | **"and"**, never "&" | "Links and embeds", "Court order and visibility", "Alerts and activity". Applies to nav labels, H1s, and section titles. Player-pair name joins ("A / B" or "A & B") are name formatting, not conjunctions, and are governed by the match-presentation rules instead. |
 | Participant entry (bracket picker) | **"Save participants"** / **"Save pairs"** | Retires "Commit" / "Commit pairs" (git vocabulary). Verified against behavior: these buttons replace the event's participant list only — they do **not** generate or lock the draw, so the directive's suggested "Lock draw" label would have mislabeled them. The action that creates the bracket is the row-level **Generate draw**. |
 | Solver actions (Plan toolbar) | **"Re-plan day"** (full re-solve, replaces the plan); **"Generate meet"** (first solve) | Retires "Re-solve meet" as button copy. Composes with the existing warm-restart action **"Re-plan from here"** (mid-day, keeps started/finished fixed, stays close): *day* = the whole plan from scratch, *from here* = the rest of the day, minimally disturbed. |
 | Module tri-state | **On / Available / Off** (Modules catalog) | Retires "Later". Matches the backend statuses (`enabled` / `available` / `disabled`). The workspace builder no longer offers all three — see "Module state at creation" above. |
@@ -116,7 +116,7 @@ Exactly two, chosen per what the form does:
 2. **Terminal create** — a form the operator leaves on success (New
    workspace): Cancel bottom-left, primary create action bottom-right.
 
-Some surfaces have **no save at all** (Venue and schedule, Display
+Some surfaces have **no save at all** (Venue, Display
 configuration): every field applies as it changes. Those say so in a line under
 the page description rather than growing a button that would lie about when the
 write happens.
@@ -139,8 +139,10 @@ From SP-CONSOLE-2 (X1 / R-A / R-B / WSB-1):
 | "PEND" | "Pending" (CSS uppercases it) |
 | "Next up", "Up Next" | "Up next" |
 | "Sync and backups" | "Backups" |
+| "Sharing" | "Site" or "Links and embeds", according to the destination |
+| "Venue and schedule" | "Venue" |
 | "Settings" as a bare nav label | "Account" or "Workspace settings" |
-| "Collaborators" (Overview rail row) | "Members" |
+| "Collaborators" / "Members" (workspace people destination) | "Team" |
 | "CONTROL PLANE" (page eyebrow) | nothing — the H1 already says it |
 | "Create your next workspace" | "Create a workspace" |
 | "This event" (Hub inspector) | "This workspace" |

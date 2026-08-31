@@ -357,6 +357,16 @@ describe('signup is not an account-enumeration oracle', () => {
     expect(html).toContain('href="/e/login?next=/e/spring-open/enter/signed-in"');
   });
 
+  it('returns account creation and sign-in to the same partner invitation', async () => {
+    const token = 'invite_AbC-123';
+    const html = await render(`/e/signup/partner/${token}`);
+    const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(html)?.[1];
+
+    expect(next).toBe(`/e/partner/${token}`);
+    expect(html).toContain(`href="/e/login?next=/e/partner/${token}"`);
+    expect(html).not.toContain('href="https://');
+  });
+
   it('discards a crafted destination for the constant (E3)', async () => {
     // A slug is one path segment and is percent-encoded before it is
     // composed, so anything that is not slug-shaped stops being a path this

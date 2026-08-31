@@ -163,7 +163,7 @@ describe('VenueScheduleTab — the results lock the read-only banner promised (D
     expect(screen.getByTestId('lock-ribbon').dataset.tier).toBe('results');
     expect(screen.getByRole('link', { name: /View matches/i })).toHaveAttribute(
       'href',
-      '/tournaments/t1/matches',
+      '/tournaments/t1/competition/matches',
     );
     // One lock message, one place (A1.1): the ribbon carries the lock. Under
     // it there is nothing to save, so the Save control is absent too.

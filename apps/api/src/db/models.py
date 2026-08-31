@@ -125,6 +125,18 @@ class Tournament(Base):
     # ISO date string ("2026-02-15") preserved as-is. Stored as String,
     # not Date, to mirror the on-the-wire shape in TournamentConfig.
     tournament_date: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # Calendar end date for multi-day public tournament phases. Kept as an
+    # ISO date string for compatibility with ``tournament_date`` and the
+    # existing JSON contract; never interpreted as a UTC instant.
+    tournament_end_date: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )
+    # IANA venue timezone used when deriving public phase and displaying
+    # tournament-local schedule times. UTC is the safe default for legacy
+    # rows and deployments that have not configured a venue zone yet.
+    time_zone: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="UTC", server_default="UTC"
+    )
     # The full ``TournamentStateDTO`` document - config + groups + players
     # + matches + schedule + history. One blob by choice; sub-entities
     # normalise out only when query needs warrant it.

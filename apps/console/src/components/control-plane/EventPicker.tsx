@@ -229,7 +229,7 @@ export function EventPicker(props: EventPickerProps) {
           return (
             <span
               key={id}
-              className="inline-flex items-center gap-0.5 rounded-sm border border-accent/30 bg-accent/10 py-px pl-1 pr-0.5 text-3xs font-semibold text-accent sw-num"
+              className="inline-flex items-center gap-0.5 rounded-sm border border-accent/30 bg-action-selected-bg py-px pl-1 pr-0.5 text-3xs font-semibold text-action-selected-foreground sw-num"
             >
               {code}
               {locked ? null : (

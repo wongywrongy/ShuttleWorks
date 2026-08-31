@@ -92,6 +92,10 @@ function ratio(a, b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+function luminanceDelta(a, b) {
+  return Math.abs(luminance(hslToRgb(a)) - luminance(hslToRgb(b)));
+}
+
 // ---- the gates --------------------------------------------------------------
 const SURFACES = ['--surface-sunken', '--surface-base', '--surface-raised', '--surface-overlay'];
 const TEXTS = ['--text-primary', '--text-secondary', '--text-muted'];
@@ -107,6 +111,15 @@ function check(theme, label, fg, bg, min) {
   return ok;
 }
 
+function checkDelta(theme, label, a, b, min) {
+  const delta = luminanceDelta(a, b);
+  const ok = delta >= min;
+  if (!ok) failures++;
+  const flag = ok ? 'ok  ' : 'FAIL';
+  console.log(`  ${flag} ${label.padEnd(52)} ${delta.toFixed(3)} (min ${min})`);
+  return ok;
+}
+
 for (const [theme, vars] of [['light', varsOf(lightBlock)], ['dark', varsOf(darkBlock)]]) {
   console.log(`\n=== ${theme} ===`);
   const v = (n) => resolve(vars, n);
@@ -116,6 +129,30 @@ for (const [theme, vars] of [['light', varsOf(lightBlock)], ['dark', varsOf(dark
       check(theme, `${t.slice(2)} on ${s.slice(2)}`, v(t), v(s), 4.5);
 
   check(theme, 'text-on-accent on action-primary', v('--text-on-accent'), v('--action-primary'), 4.5);
+  // Tinted callouts still exist, but selection no longer uses this pair.
+  check(
+    theme,
+    'action-selected-foreground on action-selected-bg',
+    v('--action-selected-foreground'),
+    v('--action-selected-bg'),
+    4.5,
+  );
+  for (const surface of ['--surface-base', '--surface-raised', '--surface-hover']) {
+    check(
+      theme,
+      `action-primary fill vs ${surface.slice(2)}`,
+      v('--action-primary'),
+      v(surface),
+      3.0,
+    );
+    checkDelta(
+      theme,
+      `action-primary luminance vs ${surface.slice(2)}`,
+      v('--action-primary'),
+      v(surface),
+      0.20,
+    );
+  }
   for (const s of ['--surface-base', '--surface-raised'])
     check(theme, `action-primary (link text) on ${s.slice(2)}`, v('--action-primary'), v(s), 4.5);
 
@@ -145,6 +182,22 @@ for (const [theme, vars] of [['light', varsOf(lightBlock)], ['dark', varsOf(dark
   check(theme, 'border-strong (inputs) on surface-raised', v('--border-strong'), v('--surface-raised'), 3.0);
   check(theme, 'border-focus on surface-base', v('--border-focus'), v('--surface-base'), 3.0);
   check(theme, 'border-focus on surface-raised', v('--border-focus'), v('--surface-raised'), 3.0);
+}
+
+// Permanent negative controls: these inputs are deliberately bad. If either
+// helper starts accepting them, the gate itself fails instead of certifying a
+// broken checker.
+if (ratio('213 94% 74%', '0 0% 100%') >= 4.5) {
+  failures++;
+  console.log('\nFAIL negative control: pale blue on white was accepted');
+} else {
+  console.log('\nok   negative control: pale blue on white rejected');
+}
+if (luminanceDelta('214 100% 97%', '0 0% 100%') >= 0.20) {
+  failures++;
+  console.log('FAIL negative control: pale selected tint passed grayscale floor');
+} else {
+  console.log('ok   negative control: pale selected tint rejected by grayscale floor');
 }
 
 console.log(failures === 0 ? '\nAll contrast gates pass.' : `\n${failures} contrast failure(s).`);

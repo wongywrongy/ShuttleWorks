@@ -12,6 +12,8 @@ import type ExcelJSNs from 'exceljs';
 import { defaultEventOrder } from '../roster/positionGrid/helpers';
 import { indexById } from '../../../lib/indexById';
 import { isDoublesCode } from '../../../lib/doubles';
+import { useTournamentStore } from '../../../store/tournamentStore';
+import { meetMatchIdentityFromStored } from '../../../platform/domain/matchIdentity';
 import {
   applyRangeStyle,
   downloadXlsx,
@@ -206,12 +208,6 @@ function sideSchool(
   return [...unique].map((g) => schoolById.get(g) ?? g).join(' / ');
 }
 
-function eventPrefix(rank: string | null | undefined): string {
-  if (!rank) return '';
-  const m = rank.match(/^([A-Z]+)/);
-  return m ? m[1] : rank;
-}
-
 export async function exportMatchesXlsx(
   matches: MatchDTO[],
   players: PlayerDTO[],
@@ -241,12 +237,19 @@ export async function exportMatchesXlsx(
 
   const playerById = indexById(players);
   const schoolById = new Map(groups.map((g) => [g.id, g.name]));
+  const configuredEventCodes = Object.keys(
+    useTournamentStore.getState().config?.rankCounts ?? {},
+  );
 
-  // Group by event prefix in the canonical order. Matches with unknown or
-  // missing prefixes fall into a trailing "Other" bucket.
+  // Group by canonical event code in the canonical order. Matches with
+  // unknown or missing codes fall into a trailing "Other" bucket.
   const byEvent = new Map<string, MatchDTO[]>();
   for (const m of matches) {
-    const p = eventPrefix(m.eventRank) || 'Other';
+    const { event_code } = meetMatchIdentityFromStored({
+      event_rank: m.eventRank,
+      configured_event_codes: configuredEventCodes,
+    });
+    const p = event_code || 'Other';
     if (!byEvent.has(p)) byEvent.set(p, []);
     byEvent.get(p)!.push(m);
   }

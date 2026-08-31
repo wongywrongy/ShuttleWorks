@@ -34,6 +34,7 @@ import { OverviewHeader } from './overview/OverviewHeader';
 import { OverviewRail } from './overview/OverviewRail';
 import { PhasePanels } from './overview/PhasePanels';
 import { buildRailRows } from './overview/railRows';
+import { workflowHref } from '../../platform/product-shell/workspaceNav';
 
 /**
  * Whether a public display link exists. `null` while unknown — not loaded yet,
@@ -77,7 +78,7 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
   const phases = visiblePhases(summary);
   const steps = buildChecklist(summary);
   const railRows = buildRailRows(summary, displayShared);
-  const go = (segment: AppTab) => navigate(`/tournaments/${summary.id}/${segment}`);
+  const go = (segment: AppTab) => navigate(workflowHref(summary.id, segment));
 
   // The phase's primary CTA, hoisted to the header (G3.1). During LIVE this
   // is the single most important control in the product — it must not sit
@@ -114,7 +115,7 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
           a wide canvas. */}
       <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         <PhasePanels phase={phase} summary={summary} steps={steps} onNavigate={go} />
-        <OverviewRail rows={railRows} onNavigate={go} />
+        <OverviewRail rows={railRows} tid={summary.id} />
       </div>
     </div>
   );

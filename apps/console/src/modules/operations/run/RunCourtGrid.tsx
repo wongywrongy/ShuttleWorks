@@ -20,6 +20,8 @@ import { sideNameLines } from '../../../lib/names';
 import { STATE_WORD } from '../../../lib/stateWords';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
+import { MODULE_LABELS } from '../../../platform/product-shell/types';
+import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
 
 export interface RunCourtGridProps {
   lanes: CourtLane[];
@@ -150,6 +152,7 @@ export function RunCourtGrid({
     >
       {lanes.map((lane) => {
         const now = lane.now;
+        const identityLabel = now ? formatMatchIdentity(now.identity, now.id) : '';
         const band = bandFor(now);
         const figure = bandFigure(now);
         const head = (
@@ -207,7 +210,7 @@ export function RunCourtGrid({
             data-source={now.source}
             aria-pressed={selected}
             onClick={() => onSelect(now.key)}
-            title={`${now.source === 'meet' ? 'Meet' : 'Bracket'} · ${now.label} [${now.late ? 'late' : now.status}]`}
+            title={`${MODULE_LABELS[now.source]} · ${identityLabel} [${now.late ? 'late' : now.status}]`}
             className={[
               'flex flex-col overflow-hidden rounded border bg-card text-left shadow-card transition-shadow duration-fast ease-brand',
               selected
@@ -221,7 +224,7 @@ export function RunCourtGrid({
               <SideRow name={now.sideB} />
             </div>
             <div className="mt-auto flex items-center justify-between gap-2 border-t border-rule-soft px-2.5 py-[5px] text-3xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
-              <span className="min-w-0 break-words sw-num">{now.label}</span>
+              <span className="min-w-0 break-words sw-num">{identityLabel}</span>
               <span className="shrink-0 text-accent">Open ›</span>
             </div>
           </button>

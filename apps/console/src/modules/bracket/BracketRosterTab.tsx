@@ -10,48 +10,55 @@
  *
  * Events badges derive from `events[].participants` (works pre-generate)
  * — see rosterEvents.ts. Row delete lives in a per-row overflow menu.
- * The panel body is `BracketPlayerDetailFields` (IDENTITY / AVAILABILITY /
- * EVENTS / NOTES sections).
+ * The panel body is `BracketPlayerDetailFields` (AVAILABILITY / EVENTS /
+ * NOTES sections); the panel header already owns player identity.
  */
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { Download, MagnifyingGlass } from '@phosphor-icons/react';
+import { Download } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import {
   ActionsBar,
-  BandedTable,
+  DenseDataTable,
+  DenseDataToolbar,
+  DenseDataColumnVisibility,
   DetailDock,
   DetailPanel,
   NAME_COL_MIN,
   OverflowMenu,
-  colClass,
   dockMinContentWidth,
   type BandedTableColumn,
+  type DenseDataColumn,
   type OverflowItem,
 } from '../../components/control-plane';
 import { BracketApiContext, useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
+import { useDenseDataState } from '../../hooks/useDenseDataState';
 import { lockedPlayerIds, ROSTER_LOCKED_REASON } from './lockedPlayers';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
 import { playerSlug } from '../../lib/playerSlug';
 import { badgesByPlayerId } from './rosterEvents';
-import { FIELD_INPUT_CLASSES, type CommitEventFn } from './BracketPlayerFields';
+import { type CommitEventFn } from './BracketPlayerFields';
+import { INPUT_INLINE_CLASS } from '../../lib/utils';
 import { BracketPlayerDetailFields } from './BracketPlayerDetailFields';
 import { exportBracketRosterXlsx } from './exports/xlsxExports';
 
-/** Column set for the roster table — canonical px-5 banded rhythm. */
+type RosterViewRow = {
+  player: BracketPlayerDTO;
+  eventLabel: string;
+  issue: string;
+};
+
+/** Column set for the roster detail dock's content floor. The table itself is
+ * owned by DenseDataTable's strict record-row contract; keeping this small
+ * geometry declaration here prevents the dock from collapsing the fixed
+ * Events/Issues/action lanes when a player is selected. */
 const ROSTER_COLUMNS: BandedTableColumn[] = [
-  // Player carries a person name, so it floors at NAME_COL_MIN rather than
-  // collapsing to zero. Events is text codes, which wrap on their own.
+  // Player is the one elastic identity column.
   { label: 'Player', className: `${NAME_COL_MIN} flex-1` },
-  // COPY-4: the header is the column's NAME, not a legend. It read
-  // "Events · [n] seed" — explaining a notation that is absent from every
-  // row until somebody is actually seeded, so on most rosters it annotated
-  // nothing. The `[n]` convention is now stated in a footnote that appears
-  // only when a seeded entry is on screen (BRST-N1's reader problem is still
-  // answered; it is answered next to the thing it describes).
-  { label: 'Events', className: 'min-w-0 flex-1' },
+  { label: 'Events', className: 'w-40 shrink-0' },
+  { label: 'Issues', className: 'w-28 shrink-0' },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
@@ -97,13 +104,6 @@ function BracketRosterTabCore({
   const addPlayer = useTournamentStore((s) => s.addBracketPlayer);
   const updatePlayer = useTournamentStore((s) => s.updateBracketPlayer);
   const deletePlayer = useTournamentStore((s) => s.deleteBracketPlayer);
-  const config = useTournamentStore((s) => s.config);
-  // The session default a blank per-player override falls back to — the same
-  // derivation the solver-side checker runs (constraintChecker.ts).
-  const defaultRestSlots =
-    config && config.intervalMinutes > 0
-      ? Math.ceil(config.defaultRestMinutes / config.intervalMinutes)
-      : null;
 
   // Derived view: player id → sorted badge codes, from each event's own
   // participants (draft draws included — no play_units dependency).
@@ -117,15 +117,76 @@ function BracketRosterTabCore({
     [badgesById],
   );
 
-  const [query, setQuery] = useState('');
+  const [denseState, denseActions] = useDenseDataState({}, 'bracket-roster');
+  const setDenseState = denseActions.setState;
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('player'),
+  );
+  const selectPlayer = useCallback((playerId: string | null) => {
+    setSelectedId(playerId);
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (playerId) url.searchParams.set('player', playerId);
+    else url.searchParams.delete('player');
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
   const selected = players.find((p) => p.id === selectedId) ?? null;
 
-  const filtered = players.filter((p) =>
-    p.name.toLowerCase().includes(query.toLowerCase()),
-  );
+  const duplicateNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    players.forEach((player) => {
+      const name = player.name.trim().toLocaleLowerCase();
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    });
+    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([name]) => name));
+  }, [players]);
+  const rosterRows = useMemo<RosterViewRow[]>(() => players.map((player) => {
+    const badges = badgesById.get(player.id) ?? [];
+    return {
+      player,
+      eventLabel: badges.map((badge) => badge.code).join(' · '),
+      issue: duplicateNames.has(player.name.trim().toLocaleLowerCase())
+        ? 'Duplicate name'
+        : badges.length === 0 ? 'No event' : '',
+    };
+  }), [players, badgesById, duplicateNames]);
+  const rosterColumns = useMemo<DenseDataColumn<RosterViewRow>[]>(() => [
+    { id: 'player', label: 'Player', accessor: (row) => row.player.name, className: 'min-w-0' },
+    {
+      id: 'events', label: 'Events', accessor: (row) => row.eventLabel, className: 'w-40',
+      render: (_value, row) => {
+        const badges = badgesById.get(row.player.id) ?? [];
+        if (badges.length === 0) return null;
+        const shown = badges.slice(0, 2);
+        const remainder = badges.length - shown.length;
+        return (
+          <span
+            className="block min-w-0 whitespace-nowrap text-xs"
+            title={badges.map((badge) => badge.code).join(' · ') || undefined}
+          >
+            {shown.map((badge, index) => (
+              <span key={badge.code}>
+                {index > 0 ? <span aria-hidden="true"> · </span> : null}
+                <span className="font-medium text-foreground">{badge.code}</span>
+                {badge.seed != null ? <span className="font-normal text-muted-foreground"> [{badge.seed}]</span> : null}
+              </span>
+            ))}
+            {remainder > 0 ? <span className="text-muted-foreground">{shown.length > 0 ? ' · ' : ''}+{remainder}</span> : null}
+          </span>
+        );
+      },
+    },
+    { id: 'issue', label: 'Issues', accessor: (row) => row.issue, className: 'w-28', mobile: true, render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null },
+  ], [badgesById]);
+  const filteredCount = useMemo(() => {
+    const query = denseState.search.trim().toLocaleLowerCase();
+    return query ? rosterRows.filter((row) => `${row.player.name} ${row.eventLabel} ${row.issue}`.toLocaleLowerCase().includes(query)).length : rosterRows.length;
+  }, [denseState.search, rosterRows]);
 
   const commitAdd = () => {
     const name = draft.trim();
@@ -161,7 +222,7 @@ function BracketRosterTabCore({
         disabledReason: ROSTER_LOCKED_REASON,
         onSelect: () => {
           deletePlayer(p.id);
-          if (selectedId === p.id) setSelectedId(null);
+          if (selectedId === p.id) selectPlayer(null);
         },
       },
     ];
@@ -176,28 +237,14 @@ function BracketRosterTabCore({
             <span className="text-sm font-semibold text-foreground tabular-nums">
               {players.length} player{players.length === 1 ? '' : 's'}
             </span>
-            {query.trim() && filtered.length !== players.length ? (
+            {denseState.search.trim() && filteredCount !== players.length ? (
               <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
-                · showing {filtered.length}
+                · showing {filteredCount}
               </span>
             ) : null}
           </>
         }
       >
-        <div className="relative">
-          <MagnifyingGlass
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search players…"
-            aria-label="Search players"
-            className="h-7 w-56 rounded-sm border border-border bg-card pl-7 pr-2 text-xs outline-none transition-colors duration-fast ease-brand placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/30"
-          />
-        </div>
         <button
           type="button"
           onClick={() => void exportBracketRosterXlsx(players, badgesById)}
@@ -223,72 +270,50 @@ function BracketRosterTabCore({
           `relative` anchors the dock's narrow-viewport overlay fallback. */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
-          <BandedTable
-            columns={ROSTER_COLUMNS}
-            rows={filtered}
-            rowId={(p) => p.id}
-            onRowClick={(p) =>
-              setSelectedId((prev) => (prev === p.id ? null : p.id))
+          <DenseDataToolbar
+            state={denseState}
+            onStateChange={setDenseState}
+            selectedCount={selectedIds.length}
+          >
+            <DenseDataColumnVisibility
+              columns={rosterColumns}
+              state={denseState}
+              onStateChange={setDenseState}
+            />
+            {selectedIds.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedIds.some((id) => locked.has(id))) return;
+                  selectedIds.forEach((id) => deletePlayer(id));
+                  setSelectedIds([]);
+                }}
+                disabled={selectedIds.some((id) => locked.has(id))}
+                title={selectedIds.some((id) => locked.has(id)) ? ROSTER_LOCKED_REASON : 'Delete selected players'}
+                className={`${INTERACTIVE_BASE} min-h-9 rounded-md border border-border px-2.5 text-sm text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                Delete selected
+              </button>
+            ) : null}
+          </DenseDataToolbar>
+          <DenseDataTable
+            columns={rosterColumns}
+            rows={rosterRows}
+            state={denseState}
+            onStateChange={setDenseState}
+            rowId={(row) => row.player.id}
+            selectable
+            selectedIds={selectedIds}
+            onSelectedIdsChange={setSelectedIds}
+            activeRowId={selectedId}
+            onRowClick={(row) =>
+              selectPlayer(selectedId === row.player.id ? null : row.player.id)
             }
-            selectedId={selectedId}
-            rowClassName={() => 'group'}
-            rowTestId={(p) => `roster-row-${p.id}`}
-            renderRow={(p) => (
-              <>
-                <span
-                  role="cell"
-                  className={`${colClass(ROSTER_COLUMNS[0])} break-words text-2sm text-foreground`}
-                >
-                  {p.name}
-                </span>
-                <span
-                  role="cell"
-                  className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
-                >
-                  {/* Text codes, not chips (BRST-N2, R-E Option A): a chip
-                      per entry on every row was decoration — the codes ARE
-                      the data. Seed follows its code as `[n]` (BRST-N1);
-                      the vertical "who's in X?" scan lives on the draw's
-                      own participant list, one click away on Draws. */}
-                  {(badgesById.get(p.id) ?? []).map((b) => (
-                    <span
-                      key={b.code}
-                      className="whitespace-nowrap font-medium text-foreground sw-num"
-                      title={b.seed != null ? `${b.code} · seeded ${b.seed}` : b.code}
-                    >
-                      {b.code}
-                      {b.seed != null ? (
-                        <span className="font-normal text-muted-foreground"> [{b.seed}]</span>
-                      ) : null}
-                    </span>
-                  ))}
-                  {/* Min rest lost its column (BRST-1). It held the session
-                      default for every player — a column of identical 1s,
-                      which is a column that says nothing — and the value is
-                      still edited in the row detail. Only a player who
-                      DIFFERS from the default is worth a mark here. */}
-                  {p.restSlots != null && p.restSlots !== defaultRestSlots ? (
-                    <span
-                      className="whitespace-nowrap text-3xs text-muted-foreground sw-num"
-                      title={`Minimum rest between this player's matches: ${p.restSlots} slot${p.restSlots === 1 ? '' : 's'} (default is ${defaultRestSlots ?? 1})`}
-                    >
-                      rest {p.restSlots}
-                    </span>
-                  ) : null}
-                </span>
-
-                <span
-                  role="cell"
-                  className="flex w-8 shrink-0 justify-end opacity-0 transition-opacity duration-fast ease-brand focus-within:opacity-100 group-hover:opacity-100"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <OverflowMenu
-                    label={`Actions for ${p.name}`}
-                    items={rowOverflowItems(p)}
-                  />
-                </span>
-              </>
-            )}
+            rowTestId={(row) => `roster-row-${row.player.id}`}
+             renderActions={(row) => <OverflowMenu label={`Actions for ${row.player.name}`} items={rowOverflowItems(row.player)} />}
+            strictRows
+            elasticColumnId="player"
+            emptyState={players.length === 0 ? 'No players yet. Add the first one.' : 'No players match the current view.'}
           />
           {adding && (
             <div className="border-b border-border px-5 py-2">
@@ -306,16 +331,9 @@ function BracketRosterTabCore({
                     setDraft('');
                   }
                 }}
-                className={FIELD_INPUT_CLASSES}
+                className={INPUT_INLINE_CLASS}
               />
             </div>
-          )}
-          {filtered.length === 0 && !adding && (
-            <p className="px-5 py-6 text-sm text-muted-foreground">
-              {players.length === 0
-                ? 'No players yet. Add the first one.'
-                : 'No players match the search.'}
-            </p>
           )}
           {/* COPY-4: the seed legend, shown only when a seeded entry is
               actually on screen. One footnote for the whole table, not a
@@ -337,7 +355,7 @@ function BracketRosterTabCore({
               variant="docked"
               label="Player"
               value={selected.name || '(unnamed)'}
-              onClose={() => setSelectedId(null)}
+              onClose={() => selectPlayer(null)}
               testId="bracket-player-detail"
             >
               <BracketPlayerDetailFields
@@ -356,4 +374,3 @@ function BracketRosterTabCore({
     </div>
   );
 }
-

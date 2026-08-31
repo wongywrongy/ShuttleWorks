@@ -17,6 +17,10 @@ import type {
   TournamentConfig,
 } from '../api/dto';
 import { timeToSlot } from '../lib/time';
+import {
+  formatMatchIdentity,
+  meetMatchIdentityFromStored,
+} from '../platform/domain/matchIdentity';
 
 type TrafficLight = 'green' | 'yellow' | 'red';
 
@@ -49,6 +53,14 @@ export function getMatchPlayerIds(match: MatchDTO): string[] {
   return playerIds;
 }
 
+function getMatchLabel(match: MatchDTO): string {
+  const identity = meetMatchIdentityFromStored({
+    event_rank: match.eventRank,
+    sequence: match.matchNumber ?? null,
+  });
+  return formatMatchIdentity(identity, match.id) || '?';
+}
+
 // timeToSlot imported from timeUtils.ts
 
 /**
@@ -75,7 +87,7 @@ export function isPlayerActive(
       return {
         active: true,
         matchId: match.id,
-        matchLabel: match.eventRank || `M${match.matchNumber || '?'}`,
+        matchLabel: getMatchLabel(match),
         status: state.status,
       };
     }
@@ -173,7 +185,7 @@ export function isPlayerResting(
       resting: true,
       availableAtSlot,
       matchId: lastFinished.match.id,
-      matchLabel: lastFinished.match.eventRank || `M${lastFinished.match.matchNumber || '?'}`,
+      matchLabel: getMatchLabel(lastFinished.match),
     };
   }
 

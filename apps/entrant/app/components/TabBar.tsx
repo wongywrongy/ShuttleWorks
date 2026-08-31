@@ -8,28 +8,31 @@
  * spirit), and the tabs themselves exist only when their data does
  * (`visibleTabs`).
  */
-import type { Tab } from '../lib/phase';
+import type { Tab } from "../lib/phase";
+import { Fragment } from "react";
 
 const TAB_LABELS: Readonly<Record<Tab, string>> = Object.freeze({
-  overview: 'Overview',
-  events: 'Events',
-  entrants: 'Entrants',
-  players: 'Players',
-  draws: 'Draws',
-  seeds: 'Seeded entries',
-  winners: 'Winners',
+  overview: "Overview",
+  events: "Events",
+  entrants: "Entrants",
+  players: "Players",
+  draws: "Draws",
+  seeds: "Seeded entries",
+  winners: "Winners",
 });
 
 export function TabBar({
   tabs,
   active,
   hrefFor,
+  scheduleHref,
 }: {
   tabs: readonly Tab[];
-  active: Tab;
+  active: Tab | "schedule";
   hrefFor: (tab: Tab) => string;
+  scheduleHref?: string;
 }) {
-  if (tabs.length < 2) return null;
+  if (tabs.length < 2 && !scheduleHref) return null;
   return (
     // `overflow-x-auto`: six tabs at 380px scroll INSIDE the strip (R11 —
     // the page itself never scrolls sideways). Scroll, not truncation:
@@ -37,21 +40,38 @@ export function TabBar({
     <nav aria-label="Tournament sections" className="-mb-px overflow-x-auto">
       <ul className="flex gap-6 text-sm">
         {tabs.map((tab) => (
-          // `shrink-0`: a two-word label ("Seeded entries") must scroll as
-          // one unit, not fold to fit.
-          <li key={tab} className="shrink-0">
-            <a
-              href={hrefFor(tab)}
-              aria-current={tab === active ? 'page' : undefined}
-              className={`inline-block border-b-2 pb-2.5 pt-1 ${
-                tab === active
-                  ? 'border-action-primary font-medium text-foreground'
-                  : 'border-transparent text-muted-foreground hover:border-rule-control hover:text-foreground'
-              }`}
-            >
-              {TAB_LABELS[tab]}
-            </a>
-          </li>
+          <Fragment key={tab}>
+            {/* `shrink-0`: a two-word label ("Seeded entries") must scroll as
+                one unit, not fold to fit. */}
+            <li className="shrink-0">
+              <a
+                href={hrefFor(tab)}
+                aria-current={tab === active ? "page" : undefined}
+                className={`inline-block border-b-2 pb-2.5 pt-1 ${
+                  tab === active
+                    ? "border-action-primary font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-rule-control hover:text-foreground"
+                }`}
+              >
+                {TAB_LABELS[tab]}
+              </a>
+            </li>
+            {tab === "overview" && scheduleHref ? (
+              <li className="shrink-0">
+                <a
+                  href={scheduleHref}
+                  aria-current={active === "schedule" ? "page" : undefined}
+                  className={`inline-block border-b-2 pb-2.5 pt-1 ${
+                    active === "schedule"
+                      ? "border-action-primary font-medium text-foreground"
+                      : "border-transparent text-muted-foreground hover:border-rule-control hover:text-foreground"
+                  }`}
+                >
+                  Schedule / Live
+                </a>
+              </li>
+            ) : null}
+          </Fragment>
         ))}
       </ul>
     </nav>

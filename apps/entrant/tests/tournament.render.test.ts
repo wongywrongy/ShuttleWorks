@@ -165,8 +165,7 @@ describe('the tab bar and its panels (Z6)', () => {
       players: [
         {
           playerKey: 'entry-ada',
-          personKey: 'ada',
-          name: 'Ada Lovelace',
+          person: { identity: { id: 'ada', name: 'Ada Lovelace' }, resolution: 'resolved', label: null },
           club: 'Analytical BC',
           eventCodes: ['MS'],
         },
@@ -182,7 +181,7 @@ describe('the tab bar and its panels (Z6)', () => {
     expect(html).not.toContain('?tab=draws#draw-MS');
   });
 
-  it('renders no tab bar at all below two tabs', async () => {
+  it('keeps Schedule / Live reachable even when no data tabs apply', async () => {
     const html = await render({
       ...PAGE,
       events: [],
@@ -190,7 +189,9 @@ describe('the tab bar and its panels (Z6)', () => {
       publication: { ...PAGE.publication, entrants: false },
     });
 
-    expect(html).not.toContain('Tournament sections');
+    expect(html).toContain('Tournament sections');
+    expect(html).toContain('href="/e/spring-open/schedule"');
+    expect(html).toContain('Schedule / Live');
     expect(html).not.toContain('?tab=');
   });
 
@@ -272,9 +273,8 @@ describe('the panels', () => {
     const roster = {
       published: true,
       players: PAGE.entrants.map((row) => ({
-        playerKey: row.personKey,
-        personKey: row.personKey,
-        name: row.name,
+        playerKey: `entry-${row.person.identity.id}`,
+        person: row.person,
         club: row.club,
         eventCodes: row.eventCodes,
       })),
@@ -285,7 +285,8 @@ describe('the panels', () => {
 
     // One row per person now — Ada's two events ride HER row as codes.
     expect(html.match(/Ada Lovelace/g)).toHaveLength(1);
-    expect(html).toContain('>MS<');
+    expect(html).toContain('MS · WD');
+    expect(html).not.toContain('rounded-full">MS');
     // Letter headers, alphabetical: Ada under A, Grace under G, Katherine under K.
     expect(html).toMatch(/>A<[\s\S]*Ada Lovelace[\s\S]*>G<[\s\S]*Grace Hopper[\s\S]*>K<[\s\S]*Katherine Johnson/);
     // Names link to player pages, keyed by person — never by name.

@@ -12,15 +12,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { GearSix, SignOut } from '@phosphor-icons/react';
 import { useAuth } from '../context/AuthContext';
 import { SwMonogram } from '../components/ShuttleWorksMark';
-
-function railItemClass(active: boolean): string {
-  return [
-    'flex h-10 w-10 items-center justify-center rounded-md transition-colors',
-    active
-      ? 'bg-accent/10 text-accent'
-      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-  ].join(' ');
-}
+import { ActiveChoice } from '../components/ActiveChoice';
 
 export function AppSidebar() {
   const location = useLocation();
@@ -39,33 +31,33 @@ export function AppSidebar() {
       aria-label="Global"
       className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-card/40 py-3"
     >
-      {/* Home — the brand monogram IS the go-home affordance (SP-UI-1): one
-          object for "this is ShuttleWorks" and "back to the Hub". The generic
-          House glyph said neither. Active state is a ring rather than
-          railItemClass's accent tint, which the solid tile would swallow. */}
-      <Link
+      {/* The brand monogram remains the go-home affordance; the target wrapper,
+          not the mark itself, owns the shared selected treatment. */}
+      <ActiveChoice
         to="/"
+        active={onHub}
+        geometry="row"
+        semantics="page"
         title="Home"
         aria-label="Home"
-        aria-current={onHub ? 'page' : undefined}
-        className="flex h-10 w-10 items-center justify-center rounded-md transition-colors hover:bg-muted/40"
+        className="flex h-10 w-10 items-center justify-center p-0"
       >
-        <SwMonogram
-          className={onHub ? 'ring-2 ring-accent/60 ring-offset-2 ring-offset-card' : ''}
-        />
-      </Link>
+        <SwMonogram />
+      </ActiveChoice>
 
       <div className="mt-2 flex flex-1 flex-col items-center gap-1">
-        <Link
+        <ActiveChoice
           to="/settings"
+          active={onSettings}
+          geometry="row"
+          semantics="page"
           title="Account"
           aria-label="Account"
-          aria-current={onSettings ? 'page' : undefined}
           data-testid="global-settings-link"
-          className={railItemClass(onSettings)}
+          className="flex h-10 w-10 items-center justify-center p-0"
         >
           <GearSix className="h-5 w-5" aria-hidden />
-        </Link>
+        </ActiveChoice>
       </div>
 
       {/* Who you are signed in as. The gear above is the Account surface's nav
@@ -87,7 +79,7 @@ export function AppSidebar() {
           aria-label="Sign out"
           data-testid="sidebar-sign-out"
           onClick={() => void signOut()}
-          className={railItemClass(false)}
+          className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <SignOut className="h-5 w-5" aria-hidden />
         </button>

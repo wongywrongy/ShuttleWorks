@@ -199,7 +199,14 @@ def test_the_page_projection_carries_the_public_blocks(client, page):
     r = client.get(f"/e/api/page/{page['slug']}")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["tournament"] == {"name": "Spring Open", "date": "2026-09-12"}
+    assert {
+        "name": body["tournament"]["name"],
+        "date": body["tournament"]["date"],
+    } == {"name": "Spring Open", "date": "2026-09-12"}
+    assert body["tournament"]["endDate"] is None
+    assert body["tournament"]["timeZone"] == "UTC"
+    assert body["tournament"]["phase"] == "entries_open"
+    assert body["tournament"]["updatedAt"]
     assert body["page"]["slug"] == "spring-open"
     assert body["page"]["introText"] == "All welcome."
     assert body["page"]["regulationsVersion"] == 3
@@ -305,10 +312,11 @@ def test_the_projection_never_carries_an_entrants_contact_data(
 
     The key set is asserted EXACTLY rather than by absence of known-bad
     names, which is why it moved when each ruled addition landed —
-    ``eventCodes`` (SP-P6-2 G5a), then ``personKey`` and ``club`` (SP-P7,
-    C4 updating the consent copy to "name and club") — instead of quietly
-    tolerating them: a fifth field still fails here, and a field the
-    consent copy does not cover is a ruling, not a refactor.
+    ``eventCodes`` (SP-P6-2 G5a), then ``club`` (SP-P7, C4 updating the
+    consent copy to "name and club"), then the universal ``person`` reference
+    (SP-P9) — instead of quietly tolerating them. A fourth row field or a
+    fourth person-reference field still fails here, and a field the consent
+    copy does not cover is a ruling, not a refactor.
     """
     assert _seed_one_entry(client, page).status_code == 303
     _confirm_all(page)
@@ -319,9 +327,18 @@ def test_the_projection_never_carries_an_entrants_contact_data(
     r = client.get(f"/e/api/page/{page['slug']}")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert [row["name"] for row in body["entrants"]] == ["Alice Chen"]
+    assert [row["person"]["identity"]["name"] for row in body["entrants"]] == [
+        "Alice Chen"
+    ]
     assert all(
-        set(row) == {"personKey", "name", "club", "eventCodes"}
+        set(row) == {"person", "club", "eventCodes"}
+        for row in body["entrants"]
+    )
+    assert all(
+        set(row["person"]) == {"identity", "resolution", "label"}
+        and set(row["person"]["identity"]) == {"id", "name"}
+        and row["person"]["resolution"] == "resolved"
+        and row["person"]["label"] is None
         for row in body["entrants"]
     )
     assert "parent@example.com" not in r.text
@@ -359,7 +376,9 @@ def test_one_person_entering_two_events_is_listed_once(client, page, entrant):
     client.cookies.clear()
 
     body = client.get(f"/e/api/page/{page['slug']}").json()
-    assert [row["name"] for row in body["entrants"]] == ["Alice Chen"]
+    assert [row["person"]["identity"]["name"] for row in body["entrants"]] == [
+        "Alice Chen"
+    ]
     # Negative control: the per-event counts are a different query and must
     # still see BOTH entries.
     counts = {ev["id"]: ev["entryCount"] for ev in body["events"]}
@@ -420,7 +439,10 @@ def test_two_entrants_who_share_a_name_are_both_listed(client, page, entrant):
     client.cookies.clear()
 
     body = client.get(f"/e/api/page/{page['slug']}").json()
-    assert [row["name"] for row in body["entrants"]] == ["Alice Chen", "Alice Chen"]
+    assert [row["person"]["identity"]["name"] for row in body["entrants"]] == [
+        "Alice Chen",
+        "Alice Chen",
+    ]
 
 
 def test_one_person_entering_across_two_submissions_is_one_person(
@@ -456,7 +478,9 @@ def test_one_person_entering_across_two_submissions_is_one_person(
     client.cookies.clear()
 
     body = client.get(f"/e/api/page/{page['slug']}").json()
-    assert [row["name"] for row in body["entrants"]] == ["Alice Chen"]
+    assert [row["person"]["identity"]["name"] for row in body["entrants"]] == [
+        "Alice Chen"
+    ]
     assert sorted(body["entrants"][0]["eventCodes"]) == ["MS", "WS"]
     # Both entries really exist — the adoption merged the PERSON, not the acts.
     counts = {ev["id"]: ev["entryCount"] for ev in body["events"]}
@@ -493,7 +517,10 @@ def test_a_person_without_a_birth_year_is_never_guessed_together(
     client.cookies.clear()
 
     body = client.get(f"/e/api/page/{page['slug']}").json()
-    assert [row["name"] for row in body["entrants"]] == ["Alice Chen", "Alice Chen"]
+    assert [row["person"]["identity"]["name"] for row in body["entrants"]] == [
+        "Alice Chen",
+        "Alice Chen",
+    ]
 
 
 def test_an_entrants_row_carries_their_event_codes_without_re_duplicating(
@@ -540,7 +567,10 @@ def test_an_entrants_row_carries_their_event_codes_without_re_duplicating(
     client.cookies.clear()
 
     body = client.get(f"/e/api/page/{page['slug']}").json()
-    assert [(row["name"], row["eventCodes"]) for row in body["entrants"]] == [
+    assert [
+        (row["person"]["identity"]["name"], row["eventCodes"])
+        for row in body["entrants"]
+    ] == [
         ("Alice Chen", ["MS", "WS"]),
         ("Bob Lee", ["WS"]),
         ("Bob Lee", ["WS"]),

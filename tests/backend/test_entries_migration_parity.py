@@ -266,15 +266,17 @@ RENDER_TIER: dict[str, tuple[str, str] | str] = {
     # carrying a CSRF nonce — is pinned separately in entry.loader.test.ts.
     "test_the_page_carries_its_own_security_headers": (
         _INGRESS, "applies the shared security-headers snippet on every entrant path"),
-    "test_the_page_now_allows_no_script_at_all": (
-        _RENDER, "carries no script and no challenge widget at all"),
+    "test_the_page_now_allows_no_script_at_all":
+        "superseded by the approved same-origin entry-wizard module; the "
+        "successor pins exactly one external module and forbids inline script",
     "test_the_page_carries_no_challenge_widget": (
-        _RENDER, "carries no script and no challenge widget at all"),
+        _RENDER, "carries only the approved same-origin journey module and no challenge widget"),
     # ---- the success page ----------------------------------------------
     "test_the_success_page_carries_no_manage_code": (
-        _RECEIPT, "server-renders the reference, the recorded total and the payment terms"),
-    "test_the_success_page_lists_every_entry_of_the_act_and_the_total": (
-        _RECEIPT, "server-renders the reference, the recorded total and the payment terms"),
+        _RECEIPT, "server-renders the public reference and mounts the account-scoped detail loader"),
+    "test_the_success_page_lists_every_entry_of_the_act_and_the_total":
+        "superseded by the account-scoped receipt detail loader; the public "
+        "document deliberately carries neither editable totals nor payment terms",
     # ---- deliberate drops, four of them, all the same kind --------------
     #
     # These asserted properties of a hand-rolled `<style>` block that the

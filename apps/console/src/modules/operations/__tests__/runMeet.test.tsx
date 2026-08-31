@@ -1,3 +1,4 @@
+import { identityFixture } from './identityFixture';
 /**
  * SP-CONSOLE-4 C4 — the meet Run migrations.
  *
@@ -14,8 +15,8 @@
  *     the interactive one.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MeetMatchPanel } from '../run/MeetMatchPanel';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { MeetMatchControls } from '../run/MeetMatchControls';
 import { RunFinished } from '../run/RunFinished';
 import { RunSurface } from '../run/RunSurface';
 import type { MeetRunOps } from '../run/useMeetRunOps';
@@ -49,7 +50,7 @@ function mkRunMatch(
   overrides: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source'>,
 ): RunMatch {
   return {
-    label: overrides.key,
+    identity: identityFixture(overrides.key),
     sideA: 'Alice',
     sideB: 'Bob',
     span: 1,
@@ -109,7 +110,7 @@ describe('MeetMatchPanel — score entry', () => {
   it('saves a quick score through updateMatchStatus and fires record completion', async () => {
     const ops = mkOps();
     const onFinished = vi.fn();
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={onFinished} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="result" onFinished={onFinished} />);
 
     fireEvent.click(screen.getByTestId('meet-run-enter-score'));
     fireEvent.change(screen.getByLabelText('Score for Alice'), { target: { value: '21' } });
@@ -128,7 +129,7 @@ describe('MeetMatchPanel — score entry', () => {
 
   it('offers score entry from called too (skip-ahead) — the state route walks the path', () => {
     const ops = mkOps({ matchStates: { m1: { matchId: 'm1', status: 'called' } } });
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="result" onFinished={vi.fn()} />);
     expect(screen.getByTestId('meet-run-enter-score')).toBeInTheDocument();
   });
 });
@@ -138,7 +139,7 @@ describe('MeetMatchPanel — score entry', () => {
 describe('MeetMatchPanel — undo start', () => {
   it('restores the schedule position and walks the state back to scheduled', async () => {
     const ops = mkOps();
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="assignment" onFinished={vi.fn()} />);
 
     fireEvent.click(screen.getByTestId('meet-run-undo-start'));
 
@@ -154,7 +155,7 @@ describe('MeetMatchPanel — undo start', () => {
 
   it('renders no undo-start for a match that has not started', () => {
     const ops = mkOps({ matchStates: { m1: { matchId: 'm1', status: 'called' } } });
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="assignment" onFinished={vi.fn()} />);
     expect(screen.queryByTestId('meet-run-undo-start')).toBeNull();
   });
 });
@@ -168,7 +169,7 @@ describe('MeetMatchPanel — check-in', () => {
 
   it('a player pill toggles confirmPlayer', async () => {
     const ops = mkOps({ matchStates: calledState() });
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="players" onFinished={vi.fn()} />);
 
     fireEvent.click(screen.getByTestId('meet-run-checkin-p1'));
     await waitFor(() => expect(ops.confirmPlayer).toHaveBeenCalledWith('m1', 'p1', true));
@@ -176,7 +177,7 @@ describe('MeetMatchPanel — check-in', () => {
 
   it('"All in" confirms only the still-missing players', async () => {
     const ops = mkOps({ matchStates: calledState({ p1: true }) });
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="players" onFinished={vi.fn()} />);
 
     fireEvent.click(screen.getByTestId('meet-run-checkin-all'));
     await waitFor(() => expect(ops.confirmPlayer).toHaveBeenCalledWith('m1', 'p2', true));
@@ -185,7 +186,7 @@ describe('MeetMatchPanel — check-in', () => {
 
   it('no check-in affordance before the match is called', () => {
     const ops = mkOps({ matchStates: { m1: { matchId: 'm1', status: 'scheduled' } } });
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="players" onFinished={vi.fn()} />);
     expect(screen.queryByTestId('meet-run-checkin-p1')).toBeNull();
   });
 });
@@ -195,7 +196,7 @@ describe('MeetMatchPanel — check-in', () => {
 describe('MeetMatchPanel — roster edits', () => {
   it('substitute picker lists only out-of-match players and calls substitutePlayer', () => {
     const ops = mkOps();
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="players" onFinished={vi.fn()} />);
 
     fireEvent.click(screen.getByTestId('meet-run-sub-p1'));
     // p1/p2 are in the match — not offered; p3 and p9 are.
@@ -207,7 +208,7 @@ describe('MeetMatchPanel — roster edits', () => {
 
   it('remove arms on the first press and removes on the second', () => {
     const ops = mkOps();
-    render(<MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} />);
+    render(<MeetMatchControls match={m1()} ops={ops} facet="players" onFinished={vi.fn()} />);
 
     const btn = screen.getByTestId('meet-run-remove-p2');
     fireEvent.click(btn);
@@ -235,7 +236,7 @@ describe('MeetMatchPanel — shared-player impact', () => {
     });
     const onSelectKey = vi.fn();
     render(
-      <MeetMatchPanel match={m1()} ops={ops} onFinished={vi.fn()} onSelectKey={onSelectKey} />,
+      <MeetMatchControls match={m1()} ops={ops} facet="summary" onFinished={vi.fn()} onSelectKey={onSelectKey} />,
     );
 
     const impact = screen.getByTestId('meet-run-impact');
@@ -313,7 +314,7 @@ describe('RunSurface — meet rail integration', () => {
   ): OpsBlock {
     return {
       key: `${overrides.source}:${overrides.id}`,
-      label: overrides.id,
+      identity: identityFixture(overrides.id),
       span: 1,
       sideA: 'Alice',
       sideB: 'Bob',
@@ -343,14 +344,13 @@ describe('RunSurface — meet rail integration', () => {
     );
   }
 
-  it('selecting a playing meet match mounts the meet rail and hides the static player list', () => {
+  it('selecting a playing meet match opens the shared result facet', () => {
     renderSurface(mkOps());
 
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
-    expect(screen.getByTestId('run-meet-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('run-detail-panel')).toBeInTheDocument();
     expect(screen.getByTestId('meet-run-enter-score')).toBeInTheDocument();
-    // The interactive rows replace the inspector's static names.
-    expect(screen.queryByTestId('run-inspector-players')).toBeNull();
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-summary'));
     expect(screen.getByTestId('meet-run-players')).toBeInTheDocument();
   });
 
@@ -360,8 +360,9 @@ describe('RunSurface — meet rail integration', () => {
     // Finished stays as a read-only record — but carries no undo without seams.
     expect(screen.queryByTestId('run-finished-undo-m2')).toBeNull();
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
-    expect(screen.queryByTestId('run-meet-panel')).toBeNull();
-    expect(screen.getByTestId('run-inspector-players')).toBeInTheDocument();
+    expect(screen.getByTestId('run-detail-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-summary'));
+    expect(within(screen.getByTestId('run-detail-panel')).getByText('Alice')).toBeInTheDocument();
   });
 
   it('the Finished section renders the done match from the meetOps seam', () => {

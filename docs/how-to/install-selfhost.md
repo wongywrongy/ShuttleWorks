@@ -126,7 +126,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | `587` / `''` / `''` / `ShuttleWorks <no-reply@localhost>` | – | as your provider requires | not read | Mail silently fails. |
 | `PUBLIC_APP_ORIGIN` | `''` | – | **required** | not read | The **operator** origin (`https://${APP_HOSTNAME}`). Workspace invites and operator password resets come out relative and unclickable. |
 | `PUBLIC_PLAY_ORIGIN` | `''` | – | **required** | not read | The **public** origin (`https://${PLAY_HOSTNAME}`). Blank falls back to `PUBLIC_APP_ORIGIN`, which mails entrants a verify/reset link pointing at the Access-fronted console — a link they cannot open. |
-| `CORS_ORIGINS` | localhost list | default | **the operator hostname, alone** | not read | The browser blocks API calls. Never `*` — the API refuses to start, because Starlette answers a wildcard under `allow_credentials` by echoing whatever Origin asked. The **play** origin is deliberately absent: the entrant tier makes no browser-side API calls, so there is nothing to allow. |
+| `CORS_ORIGINS` | localhost list | default | **the operator hostname, alone** | not read | The browser blocks API calls. Never `*` — the API refuses to start, because Starlette answers a wildcard under `allow_credentials` by echoing whatever Origin asked. The **play** origin is deliberately absent: the entrant tier's route modules use same-origin calls, so there is nothing to allow. |
 | `TRUSTED_PROXY_IPS` | `[]` (trust nothing) | leave empty | **compose subnet** (defaulted) | not read | See §6 — this is the one that locks out every user at once. Must match the API's peer (`frontend` nginx), not cloudflared. |
 | `OPS_TOKEN` | `''` (guard off) | leave empty | **required** (`OPS_TOKEN_FILE`) | not read | Without it `/health/ready\|deep\|metrics` publish worker ids, live job ids and the schema revision to anyone who can reach the hostname. |
 | `PROCESS_ROLE` | `api` | – | `api` | `worker` (set automatically) | Set by `worker.py` itself; only override to be explicit. |
@@ -293,7 +293,7 @@ so a director cannot mint an entry page that collides with the split.
 The edge configuration lives in `infra/nginx/play.conf`, with the shared
 http-context pieces (rate-limit zones, cookie maps, the realip trust boundary)
 in `infra/nginx/http-shared.conf`: a `sw_entries` `limit_req` zone (**120 r/m,
-burst 30**, the same number `sw_display` uses) applied at all four `/e/`
+burst 90**) applied at all four `/e/`
 locations. There is no SPA on this tier to fall back to — anything outside
 `/e/` returns 404, and there is no `root` for it to serve from even by
 accident.
@@ -303,7 +303,10 @@ signed-out entrant's happy path is seven metered requests (page → signup page 
 POST signup → back to the page → quote → POST submit → receipt), so the
 original 20 r/m burst=5 gave a capacity of six: one reload or one mistyped
 password was a `429`, and a second entrant behind the same venue NAT within
-~18 s was a `429`. Do not lower it without re-counting that flow.
+~18 s was a `429`. The current burst also covers a rapid multi-page review and
+roughly twelve simultaneous cold flows behind one venue NAT; the sustained
+rate remains 120 r/m. Do not lower it without re-counting both page assets and
+the submission flow.
 
 The zone stays under `/e/` rather than moving to `/api/` on purpose — `/api/`
 is served on the Access-fronted operator hostname, and an entrant login behind
@@ -342,14 +345,13 @@ Steps 1 and 3 are where things stand:
    SP-E1-2 moved the challenge off the entry page and onto entrant **signup**
    (ruling R10 — a puzzle in front of a route that already requires an account
    charges every honest entrant to slow an attacker who has already signed up).
-   The entry page ships **no client JavaScript at all**: the React Router 7
-   tier renders no `<Scripts/>`, the acknowledgment gate is the HTML `required`
-   attribute, and the gender filtering and running fee total are server round
-   trips rather than script. (Until SP-PROGRAM-1 Phase 6 the page was rendered
-   by FastAPI and set its own `script-src 'none'` header; the header is now the
-   shared nginx snippet's, and the page has nothing to run under it either
-   way.) So there is nothing left on `/e/{slug}` for the intersection of the
-   page policy and the nginx policy to break.
+   The entry page has no framework hydration and remains complete HTML: the
+   acknowledgment gate is the HTML `required` attribute, while gender filtering
+   and the running fee total are server round trips. The entry journey may load
+   its bounded same-origin `entry-wizard.js` enhancement within the 8 KB route
+   budget; native form submission remains the fallback. (Until SP-PROGRAM-1
+   Phase 6 the page was rendered by FastAPI and set its own `script-src 'none'`
+   header; the header is now the shared nginx snippet's.)
 
    **The signup page is a different story, and it cost a policy change.** It
    renders `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js">`

@@ -1,3 +1,4 @@
+import { identityFixture } from './identityFixture';
 import { describe, it, expect, vi } from 'vitest';
 import { runAction } from '../runtime/runActions';
 
@@ -21,7 +22,7 @@ const m = (o: any) => {
     key: o.key ?? `${source}:${o.id}`,
     id: o.id,
     source,
-    label: o.id,
+    identity: identityFixture(o.id),
     sideA: 'A',
     sideB: 'B',
     span: 1,

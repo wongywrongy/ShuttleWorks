@@ -8,7 +8,7 @@ import stylesheet from './app.css?url';
 import type { Route } from './+types/root';
 
 /**
- * **There is deliberately no `<Scripts/>`: this tier ships no client JS.**
+ * **There is deliberately no `<Scripts/>`: this tier ships no hydration.**
  *
  * `<Scripts/>` emits two INLINE `<script>` blocks — the
  * `window.__reactRouterContext` assignment and the `type="module"` import that
@@ -19,12 +19,12 @@ import type { Route } from './+types/root';
  * `react-router dev` only because Vite sends no CSP — a dev/prod asymmetry, not
  * a feature.
  *
- * Removing it makes prod the only behaviour rather than papering over the
- * split, and it costs nothing, because there is nothing to hydrate. No route
- * uses a hook, an event handler, or React Router's `<Form>`/`useFetcher`; every
- * form is a plain `<form>` posting straight to FastAPI (see
- * `routes/entry.form.tsx`), and gender is a native `<select>` precisely because
- * the design system's Radix `Select` cannot submit unhydrated.
+ * Removing it makes prod the only hydration behaviour rather than papering
+ * over the split. Public routes still use plain forms posting straight to
+ * FastAPI (see `routes/entry.form.tsx`), while a few pages opt into narrowly
+ * scoped external modules for browser-only work such as My Entries reads and
+ * the recoverable signup human-check controller. No route relies on React
+ * Router hydration, `<Form>`, or `useFetcher`.
  *
  * `<Links/>` and `<Meta/>` stay: the stylesheet and the SEO tags are
  * server-rendered and are the whole point.
@@ -33,8 +33,8 @@ import type { Route } from './+types/root';
  * `<Scripts/>` too, so edits need a browser refresh rather than a hot update.
  * Every route here is server-rendered, so a refresh IS the update.
  *
- * IF CLIENT JS IS EVER ADDED HERE: restoring `<Scripts/>` alone will not work.
- * The CSP comes from nginx, so it needs a per-response nonce minted in
+ * IF HYDRATION IS EVER ADDED HERE: restoring `<Scripts/>` alone will not
+ * work. The CSP comes from nginx, so it needs a per-response nonce minted in
  * `entry.server.tsx` and threaded into both the header and `<Scripts nonce>`.
  *
  * ponytail: `build/client/` still contains the (now unreferenced) client

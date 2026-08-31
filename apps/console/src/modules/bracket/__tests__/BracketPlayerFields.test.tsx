@@ -12,6 +12,26 @@ const bracketData = {
   ],
 } as unknown as BracketTournamentDTO;
 
+const pairedBracketData = {
+  events: [
+    {
+      id: 'MD',
+      discipline: 'MD',
+      format: 'se',
+      status: 'draft',
+      participants: [
+        {
+          id: 'MD-T7',
+          name: 'Ana / Bruno',
+          members: ['p-ana', 'p-bruno'],
+          seed: 2,
+          entryPlayerId: 'ep-ana',
+        },
+      ],
+    },
+  ],
+} as unknown as BracketTournamentDTO;
+
 const ana: BracketPlayerDTO = {
   id: 'p-ana',
   name: 'Ana',
@@ -21,6 +41,10 @@ const bruno: BracketPlayerDTO = {
   id: 'p-bruno',
   name: 'Bruno',
   entryPlayerId: 'ep-bruno',
+};
+const cleo: BracketPlayerDTO = {
+  id: 'p-cleo',
+  name: 'Cleo',
 };
 
 /** Renders the field with the given category already expanded by click. */
@@ -101,5 +125,98 @@ describe('BracketEventsField — manual roster assignment keeps the person key',
     expect(onCommitEvent.mock.calls[0][1].participants).toEqual([
       { id: 'p-cleo', name: 'Cleo' },
     ]);
+  });
+
+  it('shows the current partner from the event snapshot', () => {
+    render(
+      <BracketEventsField
+        player={ana}
+        roster={[ana, bruno]}
+        bracketData={pairedBracketData}
+        badges={[]}
+        onCommitEvent={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('events-category-doubles'));
+
+    expect(screen.getByTestId('partner-MD')).toHaveTextContent('Partner: Bruno');
+  });
+
+  it('reports a missing partner without inventing a singleton', () => {
+    const missingPartnerData = {
+      events: [
+        {
+          id: 'MD',
+          discipline: 'MD',
+          format: 'se',
+          status: 'draft',
+          participants: [
+            { id: 'MD-T7', name: 'Ana / missing', members: ['p-ana', 'p-gone'] },
+          ],
+        },
+      ],
+    } as unknown as BracketTournamentDTO;
+    render(
+      <BracketEventsField
+        player={ana}
+        roster={[ana]}
+        bracketData={missingPartnerData}
+        badges={[]}
+        onCommitEvent={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('events-category-doubles'));
+
+    expect(screen.getByTestId('partner-MD')).toHaveTextContent('Partner missing');
+  });
+
+  it('changes a current pair through the canonical command seam', async () => {
+    const onCommitEvent = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BracketEventsField
+        player={ana}
+        roster={[ana, bruno, cleo]}
+        bracketData={pairedBracketData}
+        badges={[]}
+        onCommitEvent={onCommitEvent}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('events-category-doubles'));
+    fireEvent.click(screen.getByTestId('partner-change-MD'));
+    fireEvent.change(screen.getByTestId('partner-select-MD'), {
+      target: { value: 'p-cleo' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('partner-confirm-MD'));
+    });
+
+    expect(onCommitEvent.mock.calls[0][1].participants).toEqual([
+      {
+        id: 'MD-T7',
+        name: 'Ana / Cleo',
+        members: ['p-ana', 'p-cleo'],
+        seed: 2,
+        entryPlayerId: 'ep-ana',
+      },
+    ]);
+  });
+
+  it('dissolves a current pair without adding singleton participants', async () => {
+    const onCommitEvent = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BracketEventsField
+        player={ana}
+        roster={[ana, bruno]}
+        bracketData={pairedBracketData}
+        badges={[]}
+        onCommitEvent={onCommitEvent}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('events-category-doubles'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('partner-dissolve-MD'));
+    });
+
+    expect(onCommitEvent.mock.calls[0][1].participants).toEqual([]);
   });
 });

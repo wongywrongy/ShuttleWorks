@@ -45,7 +45,9 @@ an event: the cloud dependency ends at commit, and nothing on event day reads an
 ::: tip There are two frontends
 The operator console (`apps/console`) is the React + Vite SPA. The public
 [**entrant tier**](/explanation/architecture/entrant-tier) (`apps/entrant`) is a separate
-server-rendered React Router app under `/e/` that ships **zero client JavaScript**. It is not a
+server-rendered React Router app under `/e/` with no framework hydration. Complete HTML and native
+form writes are the baseline; small, same-origin route modules progressively enhance browser-heavy
+surfaces such as entry progress, My Entries, player filtering, and bracket paths. It is not a
 module — it is a delivery tier in front of the Entries module's public data plane.
 
 Since SP-HOST-1 the two are also two **origins**: the console and `/api/` are served on

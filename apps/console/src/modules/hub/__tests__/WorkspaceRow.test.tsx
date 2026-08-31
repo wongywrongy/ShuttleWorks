@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { WorkspaceRow } from '../WorkspaceRow';
 import type { TournamentSummaryDTO } from '../../../api/dto';
 
@@ -53,7 +54,7 @@ describe('WorkspaceRow', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'View draws' }));
-    expect(onOpen).toHaveBeenCalledWith('bracket-draws');
+    expect(onOpen).toHaveBeenCalledWith('competition/draws');
   });
 
   it('names what needs attention where the module glyphs used to sit (HUB-3)', () => {
@@ -175,11 +176,17 @@ describe('WorkspaceRow', () => {
   it('Delete lives in the overflow menu, not inline', () => {
     const onDelete = vi.fn();
     render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} onDelete={onDelete} />,
+      <MemoryRouter>
+        <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} onDelete={onDelete} />
+      </MemoryRouter>,
     );
     // No inline Delete button on the row surface.
     expect(screen.queryByRole('button', { name: /^Delete/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.getByRole('menuitem', { name: 'Open administration' })).toHaveAttribute(
+      'href',
+      '/tournaments/t1/administration/lifecycle',
+    );
     fireEvent.click(screen.getByTestId('overflow-delete'));
     expect(onDelete).toHaveBeenCalled();
   });

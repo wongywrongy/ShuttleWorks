@@ -3,6 +3,8 @@ import { useAction } from '../../hooks/useAction';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState, OverflowMenu, PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useTournamentBackups } from '../../hooks/useTournamentBackups';
+import { TEXT_TITLE } from '../../lib/utils'
+import { DialogFooter } from '../../components/DialogFooter';
 
 /** Human-readable file size: B / KB / MB. */
 function fmtBytes(n: number): string {
@@ -32,6 +34,22 @@ function fmtTime(iso: string): string {
     : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+/** The list is grouped by day, but every recovery point still needs its
+ * exact moment for incident review and operator confidence. */
+function fmtTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+}
+
 /** Sync & Backups: list the workspace's state backups, create a new one, and
  *  restore from one (with confirm). Wired through the shared `useTournamentBackups`
  *  hook — the single seam for backup actions — so a restore re-hydrates the live
@@ -49,32 +67,71 @@ export function SyncBackupsTab() {
   } = useTournamentBackups();
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  const [retryKind, setRetryKind] = useState<'create' | 'restore' | 'delete' | null>(null);
   const restoring = busyAction === restoreTarget;
   const deleting = busyAction === deleteTarget;
+
+  const createFlow = useCallback(async () => {
+    await createBackup();
+    setFeedback({ kind: 'success', message: 'Recovery point created.' });
+    setRetryKind(null);
+  }, [createBackup]);
 
   // `busyAction` alone did NOT stop a double-press: it's React state, so it
   // doesn't apply until the next render and a second click in the same tick
   // still fired a second `POST /state/backup` (audit C1). `useAction`'s lock is
   // a ref, so it takes effect immediately.
-  const backupAction = useAction(createBackup, {
+  const backupAction = useAction(createFlow, {
     errorMessage: 'Could not create the backup',
+    onError: (err) => {
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : 'Backup failed.' });
+      setRetryKind('create');
+    },
   });
+  const restoreFlow = useCallback(async () => {
+    if (!restoreTarget) return;
+    // A restore is destructive. Snapshot the current state first and abort
+    // if that recovery point cannot be created.
+    await createBackup();
+    await restoreBackup(restoreTarget);
+    setRestoreTarget(null);
+    setFeedback({ kind: 'success', message: 'Workspace restored. A recovery point was saved first.' });
+    setRetryKind(null);
+  }, [createBackup, restoreBackup, restoreTarget]);
   const restoreAction = useAction(
-    useCallback(async () => {
-      if (!restoreTarget) return;
-      await restoreBackup(restoreTarget); // hook re-hydrates the store + refreshes
-      setRestoreTarget(null);
-    }, [restoreTarget, restoreBackup]),
-    { errorMessage: 'Could not restore the backup' },
+    restoreFlow,
+    {
+      errorMessage: 'Could not restore the backup',
+      onError: (err) => {
+        setFeedback({ kind: 'error', message: err instanceof Error ? err.message : 'Restore failed.' });
+        setRetryKind('restore');
+      },
+    },
   );
+  const deleteFlow = useCallback(async () => {
+    if (!deleteTarget) return;
+    await deleteBackup(deleteTarget);
+    setDeleteTarget(null);
+    setFeedback({ kind: 'success', message: 'Backup deleted.' });
+    setRetryKind(null);
+  }, [deleteBackup, deleteTarget]);
   const deleteAction = useAction(
-    useCallback(async () => {
-      if (!deleteTarget) return;
-      await deleteBackup(deleteTarget);
-      setDeleteTarget(null);
-    }, [deleteTarget, deleteBackup]),
-    { errorMessage: 'Could not delete the backup' },
+    deleteFlow,
+    {
+      errorMessage: 'Could not delete the backup',
+      onError: (err) => {
+        setFeedback({ kind: 'error', message: err instanceof Error ? err.message : 'Delete failed.' });
+        setRetryKind('delete');
+      },
+    },
   );
+
+  const retry = () => {
+    if (retryKind === 'create') void backupAction.run();
+    else if (retryKind === 'restore') void restoreAction.run();
+    else if (retryKind === 'delete') void deleteAction.run();
+  };
 
   // Group by calendar day so a grown list scans by "Today / Aug 12", not by
   // filename. Entries arrive newest-first, so same-day rows are adjacent.
@@ -99,7 +156,10 @@ export function SyncBackupsTab() {
           </p>
         </div>
         <Button
-          onClick={() => void backupAction.run()}
+          onClick={() => {
+            setFeedback(null);
+            void backupAction.run();
+          }}
           disabled={backupAction.pending || busyAction === 'create'}
           aria-busy={backupAction.pending}
         >
@@ -113,6 +173,24 @@ export function SyncBackupsTab() {
           className="rounded border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
           {error}
+        </div>
+      ) : null}
+
+      {feedback ? (
+        <div
+          role={feedback.kind === 'error' ? 'alert' : 'status'}
+          className={`flex items-center justify-between gap-3 rounded border p-3 text-sm ${
+            feedback.kind === 'error'
+              ? 'border-destructive/30 bg-destructive/10 text-destructive'
+              : 'border-status-live/30 bg-status-live/10 text-status-live'
+          }`}
+        >
+          <span>{feedback.message}</span>
+          {feedback.kind === 'error' ? (
+            <Button variant="outline" size="xs" onClick={retry}>
+              Retry
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -154,8 +232,15 @@ export function SyncBackupsTab() {
                           {b.origin === 'manual' ? 'Manual' : 'Auto'}
                         </span>
                         <span className="text-muted-foreground"> · </span>
-                        {fmtTime(b.modifiedAt)}
+                        <time dateTime={b.modifiedAt} title={fmtTimestamp(b.modifiedAt)}>
+                          {fmtTimestamp(b.modifiedAt)}
+                        </time>
                         <span className="text-muted-foreground"> · {fmtBytes(b.sizeBytes)}</span>
+                      </div>
+                      <div className="mt-1 text-2xs text-muted-foreground">
+                        <span data-testid={`backup-eligibility-${b.filename}`}>Eligible to restore</span>
+                        <span aria-hidden="true"> · </span>
+                        {b.origin === 'manual' ? 'Retained until deleted' : 'Automatic retention'}
                       </div>
                     </div>
                     {/* An ACTION, not text. `variant="ghost"` at the default size put
@@ -217,7 +302,7 @@ export function SyncBackupsTab() {
       {deleteTarget && (
         <Modal onClose={() => !deleting && setDeleteTarget(null)} titleId="delete-backup-heading">
           <div className="p-6">
-            <h2 id="delete-backup-heading" className="text-base font-semibold text-foreground">
+            <h2 id="delete-backup-heading" className={TEXT_TITLE}>
               Delete the backup from{' '}
               {(() => {
                 const d = entries.find((e) => e.filename === deleteTarget);
@@ -229,7 +314,7 @@ export function SyncBackupsTab() {
               The snapshot <span className="font-mono">{deleteTarget}</span> is
               removed permanently. The workspace itself is not touched.
             </p>
-            <div className="mt-6 flex justify-between">
+            <DialogFooter align="between">
               <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>
                 Cancel
               </Button>
@@ -241,7 +326,7 @@ export function SyncBackupsTab() {
               >
                 {deleting || deleteAction.pending ? 'Deleting…' : 'Delete backup'}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         </Modal>
       )}
@@ -249,17 +334,18 @@ export function SyncBackupsTab() {
       {restoreTarget && (
         <Modal onClose={() => !restoring && setRestoreTarget(null)} titleId="restore-backup-heading">
           <div className="p-6">
-            <h2 id="restore-backup-heading" className="text-base font-semibold text-foreground">
+            <h2 id="restore-backup-heading" className={TEXT_TITLE}>
               Restore the backup from{' '}
               {target ? `${dayLabel(target.modifiedAt)}, ${fmtTime(target.modifiedAt)}` : restoreTarget}?
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              This replaces the workspace&rsquo;s matches, results, and settings with
-              the snapshot <span className="font-mono">{restoreTarget}</span>. Changes
-              made since it are discarded. Consider creating a backup of the current
-              state first.
+              A recovery point of the current workspace will be created before this
+              restore. If that safety snapshot cannot be saved, the restore will not
+              run. Then this replaces the workspace&rsquo;s matches, results, and settings
+              with <span className="font-mono">{restoreTarget}</span>; changes made
+              since it are discarded.
             </p>
-            <div className="mt-6 flex justify-between">
+            <DialogFooter align="between">
               <Button variant="ghost" onClick={() => setRestoreTarget(null)} disabled={restoring}>
                 Cancel
               </Button>
@@ -270,7 +356,7 @@ export function SyncBackupsTab() {
               >
                 {restoring || restoreAction.pending ? 'Restoring…' : 'Restore workspace'}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         </Modal>
       )}

@@ -7,21 +7,24 @@
  * rather than only by hand-editing the URL. It is absent entirely on
  * single-engine workspaces — nothing to switch to.
  *
- * Chrome comes from the caller (`className`) so the chip is the same object
- * as the view tabs it sits beside on whichever board is hosting it.
+ * It uses the same shared segment primitive as the adjacent view choices.
  */
 import { useSearchParams } from 'react-router-dom';
+import { MODULE_LABELS } from '../../../platform/product-shell/types';
+import { ActiveChoice } from '../../../components/ActiveChoice';
 
-export function BoardSwitch({ to, className }: { to: 'meet' | 'bracket'; className: string }) {
+export function BoardSwitch({ to }: { to: 'meet' | 'bracket' }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const label = to === 'bracket' ? 'Bracket' : 'Meet';
+  const label = MODULE_LABELS[to];
 
   return (
-    <button
-      type="button"
+    <ActiveChoice
+      active={false}
+      geometry="segment"
+      semantics="pressed"
       data-testid={`board-switch-${to}`}
       aria-label={`Show the ${label.toLowerCase()} board`}
-      className={className}
+      className="px-4 py-2 text-base font-semibold"
       onClick={() => {
         const next = new URLSearchParams(searchParams);
         next.set('board', to);
@@ -32,6 +35,6 @@ export function BoardSwitch({ to, className }: { to: 'meet' | 'bracket'; classNa
       }}
     >
       {label}
-    </button>
+    </ActiveChoice>
   );
 }

@@ -61,7 +61,9 @@ describe('SyncBackupsTab', () => {
       }),
     );
     fireEvent.click(screen.getByRole('button', { name: /restore workspace/i }));
+    await waitFor(() => expect(createBackup).toHaveBeenCalled());
     await waitFor(() => expect(restoreBackup).toHaveBeenCalledWith('b1.json'));
+    expect(screen.getByRole('status')).toHaveTextContent(/recovery point was saved first/i);
   });
 
   /* Ten rows, ten controls all announced as "Restore", is a list a screen
@@ -104,6 +106,19 @@ describe('SyncBackupsTab — WSB-2/3/4', () => {
     expect(within(screen.getByTestId('backup-m.json')).getByText('Manual')).toBeInTheDocument();
     // The filename is no longer a standing second line on every row.
     expect(within(screen.getByTestId('backup-a.json')).queryByText('a.json')).toBeNull();
+    expect(screen.getByTestId('backup-eligibility-a.json')).toHaveTextContent(/eligible to restore/i);
+    expect(within(screen.getByTestId('backup-a.json')).getByText(/2026/)).toBeInTheDocument();
+  });
+
+  it('explains the pre-restore recovery point before confirmation', () => {
+    render(<SyncBackupsTab />);
+    fireEvent.click(
+      within(screen.getByTestId('backup-b1.json')).getByRole('button', {
+        name: 'Restore backup b1.json',
+      }),
+    );
+    expect(screen.getByText(/recovery point of the current workspace will be created/i)).toBeInTheDocument();
+    expect(screen.getByText(/if that safety snapshot cannot be saved/i)).toBeInTheDocument();
   });
 
   it('the Restore row button is neutral — the red moved into the confirm (WSB-2)', () => {

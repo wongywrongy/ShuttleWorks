@@ -18,6 +18,8 @@
  * their own seam; that split is intentional, not an omission.
  */
 
+import type { MatchIdentity } from './matchIdentity';
+
 /** Which engine a match originated from. */
 export type MatchSource = 'meet' | 'bracket';
 
@@ -33,8 +35,8 @@ export interface Match {
   /** `${source}:${id}` — the stable cross-module key (dnd-kit id, React key,
    *  placement key). Always build it with `matchKey`. */
   key: string;
-  /** Short display label painted on the chip (event rank / bracket round). */
-  label: string;
+  /** F-UNI-21/22: decomposed human identity; render through the one formatter. */
+  identity: MatchIdentity;
   /** Key for `getEventColor` (event rank / discipline). */
   colorKey?: string;
   /** Assigned court (1-based) when scheduled, else undefined. */
@@ -57,6 +59,17 @@ export interface Match {
    *  `sideA`/`sideB` above stay DISPLAY strings; these are the identities
    *  behind them. */
   playerIds: string[];
+  /** Recorded score once finished (SP-OPCON-1 SWP-1). Both engines speak the
+   *  same set shape (ADR 0006): meet fills `sideA`/`sideB` from the live
+   *  match state (its aggregate), bracket derives them as sets-won from the
+   *  result's set list and carries the sets. Absent while unplayed — and for
+   *  a score-less finish (walkover/retirement), where `done` alone is the
+   *  truth and renderers must not paint a fabricated 0–0. */
+  score?: {
+    sideA: number;
+    sideB: number;
+    sets?: { sideA: number; sideB: number }[];
+  };
   /** True once a result exists / the match is finished (no more reschedule). */
   done: boolean;
   /** True once the match has been started on court. */

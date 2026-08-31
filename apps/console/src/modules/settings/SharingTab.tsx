@@ -6,6 +6,7 @@ import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { apiClient } from '../../api/client';
 import type { EntryPageDTO, InviteRole, InviteSummaryDTO } from '../../api/dto';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
+import { TEXT_MUTED_2XS } from '../../lib/utils'
 
 const ROLE_OPTIONS = [
   { value: 'operator', label: 'Operator' },
@@ -41,8 +42,18 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /** Sharing: the public display link (its own primitive) + invite-link
- *  management (create with role, list with status/expiry, copy, revoke). */
-export function SharingTab({ tid }: { tid: string }) {
+ *  management (create with role, list with status/expiry, copy, revoke).
+ *  `scope` lets the workflow Publish surface expose the same stateful
+ *  controls under their actual jobs without cloning token/invite logic. */
+export type SharingScope = 'all' | 'site' | 'links' | 'team';
+
+export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: SharingScope }) {
+  const showDisplay = scope === 'all' || scope === 'links';
+  const showSite = scope === 'all' || scope === 'site';
+  // Collaborator invitations are an Administration > Team and access job.
+  // They remain in the legacy all-in-one surface only for compatibility;
+  // canonical Publish > Links contains public/display links, not permissions.
+  const showInvites = scope === 'all' || scope === 'team';
   const origin = window.location.origin;
 
   // Public display link is a CAPABILITY link (SP-CLOUD-2): minted server-side,
@@ -70,6 +81,7 @@ export function SharingTab({ tid }: { tid: string }) {
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
+    if (!showDisplay) return;
     let cancelled = false;
     apiClient
       .getDisplayToken(tid)
@@ -84,9 +96,10 @@ export function SharingTab({ tid }: { tid: string }) {
     return () => {
       cancelled = true;
     };
-  }, [tid]);
+  }, [showDisplay, tid]);
 
   useEffect(() => {
+    if (!showSite) return;
     let cancelled = false;
     setEntryPage(null);
     apiClient
@@ -97,7 +110,7 @@ export function SharingTab({ tid }: { tid: string }) {
     return () => {
       cancelled = true;
     };
-  }, [tid]);
+  }, [showSite, tid]);
 
   async function publish(
     key: 'entrantsPublished' | 'drawsPublished' | 'resultsPublished',
@@ -124,6 +137,11 @@ export function SharingTab({ tid }: { tid: string }) {
 
   // Initial / tid-change load, guarded so a late response can't overwrite newer state.
   useEffect(() => {
+    if (!showInvites) {
+      setInvites([]);
+      setInvitesFailed(false);
+      return;
+    }
     let cancelled = false;
     setInvites(null);
     setInvitesFailed(false);
@@ -134,7 +152,7 @@ export function SharingTab({ tid }: { tid: string }) {
     return () => {
       cancelled = true;
     };
-  }, [tid]);
+  }, [showInvites, tid]);
 
   // Clear the "Copied" flash timer on unmount.
   useEffect(() => () => clearTimeout(copiedTimer.current), []);
@@ -184,20 +202,33 @@ export function SharingTab({ tid }: { tid: string }) {
   }
 
   const now = Date.now();
+  const heading = scope === 'site'
+    ? 'Public site'
+    : scope === 'links'
+      ? 'Links and embeds'
+      : scope === 'team'
+        ? 'Team access'
+        : 'Links and access';
+  const intro = scope === 'site'
+    ? 'Choose which tournament information is public.'
+    : scope === 'links'
+      ? 'Manage view-only display links and revoke access deliberately.'
+      : scope === 'team'
+        ? 'Invite operators and control their workspace access.'
+        : 'Public links and collaborator access are separate. Share each deliberately.';
 
   return (
     <div>
       <div className="pb-4">
-        <h2 className="text-base font-semibold tracking-tight text-foreground">Sharing</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">{heading}</h2>
         <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
-          The public display link is view-only; collaborator invites let people sign in
-          and operate this workspace. They are separate. Share each deliberately.
+          {intro}
         </p>
       </div>
 
       {/* Public display link — read-only, separate from collaborator invites.
           Hidden entirely when the caller isn't the owner (mint 404s). */}
-      {!displayTokenDenied && (
+      {showDisplay && !displayTokenDenied && (
         <SectionCard eyebrow="PUBLIC DISPLAY LINK" testId="sharing-public">
           <p className="mb-2 text-xs text-muted-foreground">
             Anyone with this link can view the read-only venue display: no sign-in required.
@@ -253,7 +284,7 @@ export function SharingTab({ tid }: { tid: string }) {
                 decision is being made — not as resting text warning about an
                 action nobody has taken (WSS-2, WSM-1's principle). At rest
                 the line only says what the button does. */}
-            <p className="text-2xs text-muted-foreground">
+            <p className={TEXT_MUTED_2XS}>
               {confirmRotate.armed
                 ? 'Every venue display goes blank until you re-share the new link. Press Escape to cancel.'
                 : 'Revokes the current link immediately and issues a new one.'}
@@ -266,7 +297,7 @@ export function SharingTab({ tid }: { tid: string }) {
           no entry page — there is no public tournament page to gate. The
           card is deliberately minimal: three independent, reversible
           toggles; the software flags, the operator decides. */}
-      {entryPage !== null && (
+      {showSite && entryPage !== null && (
         <SectionCard eyebrow="PUBLIC SITE" testId="sharing-publication">
           <p className="mb-3 text-xs text-muted-foreground">
             What the public tournament page shows beyond the entry form.
@@ -313,7 +344,7 @@ export function SharingTab({ tid }: { tid: string }) {
       )}
 
       {/* Collaborator invite links. */}
-      <SectionCard eyebrow="COLLABORATOR INVITES" testId="sharing-invites">
+      {showInvites && <SectionCard eyebrow="COLLABORATOR INVITES" testId="sharing-invites">
         <p className="mb-2 text-xs text-muted-foreground">
           Invited people can sign in and operate this workspace. Revoke a link any time.
         </p>
@@ -408,7 +439,7 @@ export function SharingTab({ tid }: { tid: string }) {
             })
           )}
         </ul>
-      </SectionCard>
+      </SectionCard>}
     </div>
   );
 }

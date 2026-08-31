@@ -34,6 +34,7 @@ import {
   TimeInput,
   UnitSlot,
 } from '../../platform/engine-config/SettingsControls';
+import { ActiveChoice } from '../../components/ActiveChoice';
 
 /** Dirty check for the draft. `TournamentConfig` holds an array (`breaks`) and
  *  a record (`courtOverrides`), so a key-by-key `===` sweep would call an
@@ -130,7 +131,7 @@ export function VenueScheduleTab() {
           every other primary action on every other surface uses. */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Venue and schedule</h2>
+          <h2 className="text-lg font-semibold text-foreground">Venue</h2>
           <p className={`mt-0.5 text-sm text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
             The courts and day window for this workspace. Both Meet and Bracket
             schedule against these.
@@ -163,7 +164,7 @@ export function VenueScheduleTab() {
           action={
             tid ? (
               <Link
-                to={`/tournaments/${tid}/matches`}
+                to={`/tournaments/${tid}/competition/matches`}
                 className="ml-1 font-medium text-accent hover:underline"
               >
                 View matches →
@@ -264,10 +265,11 @@ export function VenueScheduleTab() {
                       (c) => {
                         const pinned = current.courtOverrides?.[c] === 'pinned';
                         return (
-                          <button
+                          <ActiveChoice
                             key={c}
-                            type="button"
-                            aria-pressed={pinned}
+                            active={pinned}
+                            geometry="segment"
+                            semantics="pressed"
                             data-testid={`court-override-${c}`}
                             onClick={() => {
                               const next: Record<number, 'pinned' | 'pool'> = {
@@ -277,15 +279,10 @@ export function VenueScheduleTab() {
                               else next[c] = 'pinned';
                               set('courtOverrides', next);
                             }}
-                            className={[
-                              'border px-2.5 py-1 text-xs font-medium sw-num transition-colors duration-fast ease-brand',
-                              pinned
-                                ? 'border-accent/40 bg-accent/15 text-accent'
-                                : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                            ].join(' ')}
+                            className="px-2.5 py-1 text-xs font-medium sw-num"
                           >
                             C{c}
-                          </button>
+                          </ActiveChoice>
                         );
                       },
                     )}

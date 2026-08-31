@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ShuttleWorks public universality and usability · M0–M5</title>
+  <link rel="stylesheet" href=".agents/skills/shuttleworks-design/styles.css">
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      color-scheme: light;
+      --paper: #f4f6f9;
+      --ink: #080d18;
+      --muted: #647084;
+      --rule: #dce2ea;
+      --raised: #fff;
+      --soft: #eef2f7;
+      --blue: #2563eb;
+      --live: #16865c;
+    }
+    body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-sans); }
+    a { color: inherit; }
+    .top { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--rule); background: rgba(244,246,249,.96); backdrop-filter: blur(12px); }
+    .top-in { width: min(100% - 32px, 1152px); margin: auto; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .wordmark { border: 1px solid #9aa5b5; border-radius: 6px; padding: 5px 10px; font-weight: 700; letter-spacing: -.02em; }
+    .jump { display: flex; gap: 18px; overflow-x: auto; font-size: 13px; white-space: nowrap; }
+    .jump a { text-decoration: none; color: var(--muted); }
+    .jump a:hover, .jump a:focus-visible { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+    .intro, .screen { width: min(100% - 32px, 1152px); margin: 0 auto; }
+    .intro { padding: 68px 0 44px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, .7fr); gap: 72px; align-items: end; }
+    .eyebrow, .label { color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 8px 0 14px; max-width: 760px; font-size: clamp(36px, 6vw, 66px); line-height: .98; letter-spacing: -.055em; }
+    .lede { margin: 0; max-width: 65ch; color: var(--muted); font-size: 16px; line-height: 1.65; }
+    .rulings { border-left: 2px solid var(--blue); padding-left: 18px; display: grid; gap: 9px; color: var(--muted); font-size: 13px; }
+    .screen { margin-bottom: 56px; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; background: var(--raised); box-shadow: 0 18px 48px rgba(35,49,70,.09); }
+    .screen-head { padding: 18px 22px; border-bottom: 1px solid var(--rule); display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+    .screen-head h2 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+    .screen-head p { margin: 0; color: var(--muted); font-size: 12px; }
+    .canvas { padding: 28px; }
+    .person { color: var(--ink); text-decoration: none; text-underline-offset: 4px; }
+    .person:hover { text-decoration: underline; }
+    .person:focus-visible { outline: 3px solid rgba(37,99,235,.2); border-radius: 2px; }
+    .person.winner { font-weight: 650; }
+    .person.dead { color: var(--muted); }
+    .muted { color: var(--muted); }
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .hair { height: 1px; background: var(--rule); }
+    .seg { display: inline-grid; grid-auto-flow: column; border: 1px solid #bdc6d3; border-radius: 8px; overflow: hidden; }
+    .seg a { min-height: 38px; padding: 9px 14px; border-right: 1px solid #bdc6d3; text-decoration: none; font-size: 13px; font-weight: 600; }
+    .seg a:last-child { border-right: 0; }
+    .seg .on { background: var(--ink); color: #fff; }
+    .m0-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+    .specimen { min-height: 128px; padding: 18px; border-right: 1px solid var(--rule); display: grid; align-content: space-between; gap: 24px; }
+    .specimen:last-child { border-right: 0; }
+    .specimen p { margin: 0; font-size: 12px; color: var(--muted); }
+    .pair { display: inline-flex; align-items: baseline; gap: 7px; }
+    .player-layout { max-width: 780px; display: grid; gap: 24px; }
+    .player-hero { padding: 28px 0 24px; border-bottom: 1px solid var(--rule); }
+    .player-hero h3 { margin: 4px 0 10px; font-size: 32px; letter-spacing: -.035em; }
+    .event-line { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--muted); font-size: 13px; }
+    .live-line { margin-top: 22px; padding: 4px 0 4px 16px; border-left: 2px solid var(--live); display: grid; gap: 4px; }
+    .entries { border-top: 1px solid var(--rule); }
+    .entry-row { display: grid; grid-template-columns: 160px 1fr; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--rule); }
+    .path { display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; font-size: 13px; }
+    .round-note { color: var(--muted); font-size: 10px; }
+    .match { border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+    .match.live { border-left: 2px solid var(--live); }
+    .match-context { padding: 9px 14px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; gap: 20px; font-size: 11px; color: var(--muted); }
+    .competitor { min-height: 42px; display: grid; grid-template-columns: 18px minmax(0,1fr) repeat(3, 32px); align-items: center; padding: 0 14px; border-bottom: 1px solid var(--rule); font-size: 13px; }
+    .competitor:last-child { border-bottom: 0; }
+    .score { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .lost { color: #8b95a4; }
+    .match-foot { padding: 7px 14px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    .schedule-top { display: grid; gap: 20px; }
+    .days { display: flex; overflow-x: auto; border-bottom: 1px solid var(--rule); }
+    .day { min-width: 128px; padding: 11px 14px 13px; border-right: 1px solid var(--rule); text-decoration: none; }
+    .day strong, .day span { display: block; }
+    .day strong { font-size: 13px; }
+    .day span { margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .day.on { box-shadow: inset 0 -2px var(--blue); }
+    .filters { display: grid; grid-template-columns: repeat(4,1fr) 1.15fr; gap: 10px; }
+    .control { min-height: 40px; border: 1px solid #bdc6d3; border-radius: 7px; padding: 9px 11px; color: var(--muted); font-size: 12px; }
+    .now-band { border-left: 2px solid var(--live); padding: 6px 0 6px 14px; font-size: 13px; }
+    .time-group { margin-top: 24px; display: grid; grid-template-columns: 88px 1fr; gap: 18px; }
+    .time-label { padding-top: 12px; font: 600 13px var(--font-mono); }
+    .schedule-row { display: grid; grid-template-columns: 110px minmax(210px,1fr) 90px 84px; gap: 14px; align-items: center; min-height: 66px; border-top: 1px solid var(--rule); font-size: 12px; }
+    .side-stack { display: grid; gap: 3px; font-size: 13px; }
+    .court-grid { margin-top: 24px; display: grid; grid-template-columns: repeat(3,1fr); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+    .court { min-width: 0; border-right: 1px solid var(--rule); }
+    .court:last-child { border-right: 0; }
+    .court h4 { margin: 0; padding: 13px 14px; border-bottom: 1px solid var(--rule); font-size: 13px; }
+    .queue { padding: 0 14px; }
+    .queue-item { padding: 14px 0; border-bottom: 1px solid var(--rule); }
+    .queue-item:last-child { border-bottom: 0; }
+    .queue-label { margin-bottom: 6px; color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .draw-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+    .draw-card { position: relative; min-height: 196px; padding: 20px; border: 1px solid var(--rule); border-radius: 12px; display: grid; grid-template-columns: 48px 1fr; gap: 16px; }
+    .draw-card:hover { border-color: #a9b4c3; }
+    .draw-primary::after { content: ""; position: absolute; inset: 0; }
+    .glyph { width: 42px; height: 42px; display: grid; place-items: center; font-size: 25px; color: var(--muted); }
+    .draw-card h3 { margin: 1px 0 4px; font-size: 18px; }
+    .draw-meta { color: var(--muted); font-size: 12px; }
+    .champion-line { position: relative; z-index: 2; margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 13px; }
+    .bracket-tools { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 20px; }
+    .follow { color: var(--muted); font-size: 12px; }
+    .bracket-scroll { overflow-x: auto; padding-bottom: 12px; }
+    .bracket { min-width: 1040px; display: grid; grid-template-columns: 220px 44px 220px 44px 220px 44px 220px; }
+    .round-col { height: 394px; display: flex; flex-direction: column; justify-content: space-between; }
+    .round-title { height: 24px; margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .05em; }
+    .round-body { height: 362px; display: flex; flex-direction: column; justify-content: space-between; }
+    .bnode { height: 44px; flex: 0 0 44px; border: 1px solid var(--rule); background: #fff; overflow: hidden; }
+    .bline { height: 22px; display: grid; grid-template-columns: minmax(0,1fr) 48px; align-items: center; padding: 0 7px; border-bottom: 1px solid var(--rule); font-size: 11px; }
+    .bline:last-child { border-bottom: 0; }
+    .bname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bscore { text-align: right; font: 500 10px var(--font-mono); }
+    .links { height: 362px; margin-top: 32px; display: flex; flex-direction: column; }
+    .brace { flex: 1; display: grid; grid-template: 1fr 1fr / 1fr 1fr; }
+    .brace::before { content: ""; grid-area: 1 / 1 / 3 / 2; border-top: 1px solid #b8c1ce; border-right: 1px solid #b8c1ce; border-bottom: 1px solid #b8c1ce; }
+    .brace::after { content: ""; grid-area: 1 / 2 / 3 / 3; align-self: center; border-top: 1px solid #b8c1ce; }
+    .winners { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
+    .winner-card { padding: 22px; border: 1px solid var(--rule); border-radius: 12px; }
+    .winner-card h3 { margin: 0; font-size: 14px; }
+    .champ { margin: 30px 0 4px; font-size: 31px; line-height: 1.05; letter-spacing: -.035em; }
+    .final-score { margin: 0 0 24px; color: var(--muted); font-size: 12px; }
+    .places { display: grid; grid-template-columns: repeat(2,1fr); gap: 18px; padding-top: 17px; }
+    .places p { margin: 4px 0 0; font-size: 13px; }
+    .footer { padding: 8px 16px 56px; text-align: center; color: var(--muted); font-size: 12px; }
+    @media (max-width: 720px) {
+      .top-in { min-height: 56px; }
+      .wordmark { flex: 0 0 auto; }
+      .intro { grid-template-columns: 1fr; gap: 28px; padding-top: 42px; }
+      .screen { width: min(100% - 20px, 1152px); margin-bottom: 28px; border-radius: 10px; }
+      .screen-head { display: grid; padding: 15px 16px; }
+      .canvas { padding: 18px 14px; }
+      .m0-grid { grid-template-columns: 1fr; }
+      .specimen { min-height: 100px; border-right: 0; border-bottom: 1px solid var(--rule); }
+      .specimen:last-child { border-bottom: 0; }
+      .player-hero h3 { font-size: 27px; }
+      .entry-row { grid-template-columns: 1fr; gap: 8px; }
+      .competitor { grid-template-columns: 18px minmax(0,1fr) repeat(3,27px); padding: 0 9px; }
+      .days { margin-inline: -14px; padding-left: 14px; }
+      .filters { grid-template-columns: 1fr 1fr; }
+      .filters .control:last-child { grid-column: 1 / -1; }
+      .time-group { grid-template-columns: 1fr; gap: 4px; }
+      .schedule-row { grid-template-columns: 80px minmax(0,1fr); padding: 10px 0; }
+      .schedule-row > :nth-child(3), .schedule-row > :nth-child(4) { color: var(--muted); }
+      .court-grid { grid-template-columns: 1fr; }
+      .court { border-right: 0; border-bottom: 1px solid var(--rule); }
+      .court:last-child { border-bottom: 0; }
+      .draw-grid, .winners { grid-template-columns: 1fr; }
+      .draw-card { min-height: 180px; grid-template-columns: 38px 1fr; padding: 17px; }
+      .bracket-tools { align-items: flex-start; flex-direction: column; }
+      .bracket { min-width: 920px; grid-template-columns: 190px 38px 190px 38px 190px 38px 190px; }
+      .champ { font-size: 27px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top-in">
+      <div class="wordmark">ShuttleWorks</div>
+      <nav class="jump" aria-label="Mockup screens">
+        <a href="#m0">M0 PersonRef</a><a href="#m1">M1 Person</a><a href="#m2">M2 Schedule</a><a href="#m3">M3 Draws</a><a href="#m4">M4 Bracket</a><a href="#m5">M5 Winners</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <div>
+        <div class="eyebrow">SP-P9 · binding visual artifact</div>
+        <h1>Find anyone. Follow every match.</h1>
+        <p class="lede">The public tournament tier becomes one connected directory: every resolvable name opens the person’s tournament page, schedules organize around the day and the court, and brackets stay readable without adding decorative state containers.</p>
+      </div>
+      <div class="rulings">
+        <div>Draw-only names without an identity ID remain plain text.</div>
+        <div>Doubles are two people, never a pair page.</div>
+        <div>Courts appear only after Operations assigns them.</div>
+        <div>Routes use persisted identity IDs.</div>
+      </div>
+    </section>
+
+    <article class="screen" id="m0">
+      <header class="screen-head"><h2>M0 · PersonRef</h2><p>One renderer, four states</p></header>
+      <div class="canvas">
+        <div class="m0-grid">
+          <div class="specimen"><div class="label">Resolved</div><a class="person" href="#m1">An Se-young</a><p>Body ink. Underline only on hover.</p></div>
+          <div class="specimen"><div class="label">Winner</div><a class="person winner" href="#m1">Chen Yu Fei</a><p>Weight 650. No icon or colour.</p></div>
+          <div class="specimen"><div class="label">Doubles</div><div class="pair"><a class="person" href="#m1">Seo Seung Jae</a><span class="muted">/</span><a class="person" href="#m1">Kang Min Hyuk</a><span class="muted">[1]</span></div><p>Two independent targets; seed outside both.</p></div>
+          <div class="specimen"><div class="label">Dead</div><span class="person dead">Winner of QF 2</span><p>No href, focus stop, or pointer cursor.</p></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="screen" id="m1">
+      <header class="screen-head"><h2>M1 · Person in this tournament</h2><p>One page for every entered event</p></header>
+      <div class="canvas">
+        <div class="player-layout">
+          <section class="player-hero">
+            <div class="label">Korea Masters · player</div>
+            <h3><a class="person" href="#m1" aria-current="page">An Se-young</a></h3>
+            <div class="event-line"><span>Women’s Singles [1]</span><span>Women’s Doubles with <a class="person" href="#m1">Kim Hye Jeong</a></span></div>
+            <div class="live-line"><strong>On court now</strong><span>Women’s Singles semifinal against <a class="person" href="#m1">Akane Yamaguchi</a> · Court 1</span></div>
+          </section>
+          <section>
+            <div class="label">Entries and paths</div>
+            <div class="entries">
+              <div class="entry-row"><strong>Women’s Singles <span class="muted">[1]</span></strong><div class="path"><span class="round-note">R16</span><a class="person" href="#m1">Pai Yu Po</a><span>→</span><span class="round-note">QF</span><a class="person" href="#m1">Busanan Ongbamrungphan</a><span>→</span><span class="round-note">SF</span><a class="person" href="#m1">Akane Yamaguchi</a></div></div>
+              <div class="entry-row"><strong>Women’s Doubles</strong><div class="path"><span>with</span><a class="person" href="#m1">Kim Hye Jeong</a><span>·</span><span class="round-note">QF</span><a class="person" href="#m1">Jeong Na Eun</a><span>/</span><a class="person" href="#m1">Kim Hye Rin</a></div></div>
+            </div>
+          </section>
+          <section>
+            <div class="label" style="margin-bottom:10px">Matches</div>
+            <article class="match">
+              <div class="match-context"><span>WS · Quarterfinal</span><span>Completed</span></div>
+              <div class="competitor"><span>✓</span><a class="person winner" href="#m1">An Se-young</a><span class="score">21</span><span class="score">18</span><span class="score">21</span></div>
+              <div class="competitor"><span></span><a class="person" href="#m1">Busanan Ongbamrungphan</a><span class="score lost">17</span><span class="score">21</span><span class="score lost">14</span></div>
+              <div class="match-foot">29 August · Court 2 · 54 min</div>
+            </article>
+          </section>
+        </div>
+      </div>
+    </article>
+
+    <article class="screen" id="m2">
+      <header class="screen-head"><h2>M2 · Schedule / Live</h2><p>Day first; time and court are organizations</p></header>
+      <div class="canvas schedule-top">
+        <nav class="days" aria-label="Tournament days"><a class="day" href="#m2"><strong>Thu 27 Aug</strong><span>42 matches</span></a><a class="day on" href="#m2"><strong>Fri 28 Aug</strong><span>38 matches</span></a><a class="day" href="#m2"><strong>Sat 29 Aug</strong><span>20 matches</span></a><a class="day" href="#m2"><strong>Sun 30 Aug</strong><span>10 matches</span></a></nav>
+        <div class="filters"><div class="control">All events</div><div class="control">Player</div><div class="control">All courts</div><div class="control">All states</div><div class="control">Search schedule</div></div>
+        <div style="display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap"><div class="seg"><a class="on" href="#m2">By time</a><a href="#m2b">By court</a></div><span class="muted" style="font-size:12px">Tournament time · Asia/Seoul</span></div>
+        <div class="now-band"><strong>Now</strong> · 3 matches on court, 2 called</div>
+        <section class="time-group"><div class="time-label">10:00</div><div>
+          <div class="schedule-row"><div><strong>WS</strong><br><span class="muted">Round of 16</span></div><div class="side-stack"><a class="person" href="#m1">An Se-young</a><a class="person" href="#m1">Pai Yu Po</a></div><div>Court 1</div><div>Live now</div></div>
+          <div class="schedule-row"><div><strong>MD</strong><br><span class="muted">Quarterfinal</span></div><div class="side-stack"><span><a class="person" href="#m1">Seo Seung Jae</a> / <a class="person" href="#m1">Kang Min Hyuk</a></span><span><a class="person" href="#m1">Lee Jhe Huei</a> / <a class="person" href="#m1">Yang Po Hsuan</a></span></div><div>Court 3</div><div>Called</div></div>
+        </div></section>
+        <section class="time-group"><div class="time-label">11:30</div><div><div class="schedule-row"><div><strong>MS</strong><br><span class="muted">Semifinal</span></div><div class="side-stack"><a class="person" href="#m1">Kunlavut Vitidsarn</a><a class="person" href="#m1">Kodai Naraoka</a></div><div>Court pending</div><div>Scheduled</div></div></div></section>
+      </div>
+    </article>
+
+    <article class="screen" id="m2b">
+      <header class="screen-head"><h2>M2b · Schedule by court</h2><p>Court columns are queues, not forecasts</p></header>
+      <div class="canvas">
+        <div class="seg"><a href="#m2">By time</a><a class="on" href="#m2b">By court</a></div>
+        <div class="court-grid">
+          <section class="court"><h4>Court 1</h4><div class="queue"><div class="queue-item"><div class="queue-label">Now</div><strong>WS · R16</strong><div class="side-stack"><a class="person" href="#m1">An Se-young</a><a class="person" href="#m1">Pai Yu Po</a></div></div><div class="queue-item"><div class="queue-label">Next</div><strong>MS · QF</strong><div class="side-stack"><a class="person" href="#m1">Lee Chia Hao</a><a class="person" href="#m1">Weng Hong Yang</a></div></div><div class="queue-item"><div class="queue-label">Then</div><strong>WD · QF</strong><div class="side-stack"><a class="person" href="#m1">Kim So Yeong</a> / <a class="person" href="#m1">Kong Hee Yong</a></div></div></div></section>
+          <section class="court"><h4>Court 2</h4><div class="queue"><div class="queue-item"><div class="queue-label">Now</div><strong>XD · QF</strong><div class="side-stack"><a class="person" href="#m1">Seo Seung Jae</a> / <a class="person" href="#m1">Chae Yu Jung</a></div></div><div class="queue-item"><div class="queue-label">Next</div><strong>WS · QF</strong><div class="side-stack"><a class="person" href="#m1">Chen Yu Fei</a><a class="person" href="#m1">Gregoria Mariska Tunjung</a></div></div></div></section>
+          <section class="court"><h4>Court 3</h4><div class="queue"><div class="queue-item"><div class="queue-label">Now</div><strong>MD · QF</strong><div class="side-stack"><a class="person" href="#m1">Seo Seung Jae</a> / <a class="person" href="#m1">Kang Min Hyuk</a></div></div><div class="queue-item"><div class="queue-label">Next</div><strong>WD · QF</strong><div class="side-stack"><a class="person" href="#m1">Jeong Na Eun</a> / <a class="person" href="#m1">Kim Hye Jeong</a></div></div></div></section>
+        </div>
+      </div>
+    </article>
+
+    <article class="screen" id="m3">
+      <header class="screen-head"><h2>M3 · Draw index</h2><p>The card opens the draw; people remain independent links</p></header>
+      <div class="canvas draw-grid">
+        <article class="draw-card"><div class="glyph">⌁</div><div><h3><a class="draw-primary" href="#m4">Women’s Singles</a></h3><div class="draw-meta">WS · Elimination · 32 players · 5 rounds</div><div class="champion-line"><div class="label">Champion</div><a class="person winner" href="#m1">An Se-young</a></div></div></article>
+        <article class="draw-card"><div class="glyph">≋</div><div><h3><a class="draw-primary" href="#m4">Men’s Doubles</a></h3><div class="draw-meta">MD · Monrad · 16 pairs · 4 rounds</div><div class="champion-line"><div class="label">To decide</div><span>Final: <a class="person" href="#m1">Seo Seung Jae</a> / <a class="person" href="#m1">Kang Min Hyuk</a> vs <a class="person" href="#m1">Lee Jhe Huei</a> / <a class="person" href="#m1">Yang Po Hsuan</a></span></div></div></article>
+        <article class="draw-card"><div class="glyph">⊞</div><div><h3><a class="draw-primary" href="#m4">Mixed Doubles Group A</a></h3><div class="draw-meta">XD · Round robin · 6 pairs · 5 rounds</div><div class="champion-line"><div class="label">To decide</div><span>Two group matches remain</span></div></div></article>
+        <article class="draw-card"><div class="glyph">⌁</div><div><h3><a class="draw-primary" href="#m4">Men’s Singles</a></h3><div class="draw-meta">MS · Elimination · 32 players · 5 rounds</div><div class="champion-line"><div class="label">Champion</div><a class="person winner" href="#m1">Kunlavut Vitidsarn</a></div></div></article>
+      </div>
+    </article>
+
+    <article class="screen" id="m4">
+      <header class="screen-head"><h2>M4 · Bracket</h2><p>44px nodes, 6px base gap, CSS braces</p></header>
+      <div class="canvas">
+        <div class="bracket-tools"><div class="seg"><a class="on" href="#m4">Bracket</a><a href="#m4">Round</a><a href="#m4">List</a></div><div class="follow">Following <a class="person" href="#m1">An Se-young</a> · Clear</div></div>
+        <div class="bracket-scroll" aria-label="Women’s Singles elimination bracket">
+          <div class="bracket">
+            <section class="round-col"><div class="round-title">ROUND OF 16</div><div class="round-body">
+              <div class="bnode"><div class="bline"><a class="person bname" href="#m1">An Se-young [1]</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Pai Yu Po</a><span class="bscore lost">12 15</span></div></div>
+              <div class="bnode"><div class="bline"><a class="person bname" href="#m1">Busanan Ongbamrungphan</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Sung Shuo Yun</a><span class="bscore lost">18 17</span></div></div>
+              <div class="bnode"><div class="bline"><a class="person bname" href="#m1">Akane Yamaguchi [4]</a><span class="bscore">21 18 21</span></div><div class="bline"><a class="person bname" href="#m1">Kim Ga Eun</a><span class="bscore lost">16 21 14</span></div></div>
+              <div class="bnode"><div class="bline"><a class="person bname" href="#m1">Gregoria Mariska Tunjung</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Yeo Jia Min</a><span class="bscore lost">19 17</span></div></div>
+              <div class="bnode"><div class="bline"><a class="person bname" href="#m1">Chen Yu Fei [2]</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Pornpawee Chochuwong</a><span class="bscore lost">15 13</span></div></div>
+              <div class="bnode"><div class="bline"><a class="person bname" href="#m1">Han Yue</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Mia Blichfeldt</a><span class="bscore lost">17 19</span></div></div>
+              <div class="bnode"><div class="bline"><a class="person bname" href="#m1">Wang Zhi Yi [3]</a><span class="bscore">21 19 21</span></div><div class="bline"><a class="person bname" href="#m1">Putri Kusuma Wardani</a><span class="bscore lost">14 21 17</span></div></div>
+              <div class="bnode"><div class="bline"><a class="person bname" href="#m1">Michelle Li</a><span class="bscore">21 21</span></div><div class="bline"><span class="person dead bname">Bye</span><span class="bscore"></span></div></div>
+            </div></section>
+            <div class="links"><span class="brace"></span><span class="brace"></span><span class="brace"></span><span class="brace"></span></div>
+            <section class="round-col"><div class="round-title">QUARTERFINALS</div><div class="round-body"><div class="bnode"><div class="bline"><a class="person bname" href="#m1">An Se-young [1]</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Busanan Ongbamrungphan</a><span class="bscore lost">18 16</span></div></div><div class="bnode"><div class="bline"><a class="person bname" href="#m1">Akane Yamaguchi [4]</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Gregoria Mariska Tunjung</a><span class="bscore lost">17 19</span></div></div><div class="bnode"><div class="bline"><a class="person bname" href="#m1">Chen Yu Fei [2]</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Han Yue</a><span class="bscore lost">13 18</span></div></div><div class="bnode"><div class="bline"><a class="person bname" href="#m1">Wang Zhi Yi [3]</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Michelle Li</a><span class="bscore lost">19 15</span></div></div></div></section>
+            <div class="links"><span class="brace"></span><span class="brace"></span></div>
+            <section class="round-col"><div class="round-title">SEMIFINALS</div><div class="round-body"><div class="bnode"><div class="bline"><a class="person bname" href="#m1">An Se-young [1]</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Akane Yamaguchi [4]</a><span class="bscore lost">17 16</span></div></div><div class="bnode"><div class="bline"><a class="person bname" href="#m1">Chen Yu Fei [2]</a><span class="bscore">21 21</span></div><div class="bline"><a class="person bname" href="#m1">Wang Zhi Yi [3]</a><span class="bscore lost">18 15</span></div></div></div></section>
+            <div class="links"><span class="brace"></span></div>
+            <section class="round-col"><div class="round-title">FINAL</div><div class="round-body" style="justify-content:center"><div class="bnode"><div class="bline"><a class="person winner bname" href="#m1">An Se-young [1]</a><span class="bscore">21 18 21</span></div><div class="bline"><a class="person bname" href="#m1">Chen Yu Fei [2]</a><span class="bscore lost">16 21 13</span></div></div></div></section>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="screen" id="m5">
+      <header class="screen-head"><h2>M5 · Winners</h2><p>Rank through type, space, and order</p></header>
+      <div class="canvas winners">
+        <article class="winner-card"><h3>Women’s Singles <span class="muted">· WS</span></h3><div class="champ"><a class="person winner" href="#m1">An Se-young</a></div><p class="final-score mono">21–16 · 18–21 · 21–13</p><div class="hair"></div><div class="places"><div><div class="label">Runner-up</div><p><a class="person" href="#m1">Chen Yu Fei</a></p></div><div><div class="label">Semifinalists</div><p><a class="person" href="#m1">Akane Yamaguchi</a><br><a class="person" href="#m1">Wang Zhi Yi</a></p></div></div></article>
+        <article class="winner-card"><h3>Men’s Doubles <span class="muted">· MD</span></h3><div style="margin-top:30px"><div class="label">Final to decide</div><p style="font-size:17px;line-height:1.55"><a class="person" href="#m1">Seo Seung Jae</a> / <a class="person" href="#m1">Kang Min Hyuk</a><br><span class="muted">against</span><br><a class="person" href="#m1">Lee Jhe Huei</a> / <a class="person" href="#m1">Yang Po Hsuan</a></p><p class="muted" style="font-size:12px">Sunday · Court assignment pending</p></div></article>
+      </div>
+    </article>
+  </main>
+
+  <footer class="footer">ShuttleWorks public tier · SP-P9 · research snapshot 29 August 2026</footer>
+</body>
+</html>

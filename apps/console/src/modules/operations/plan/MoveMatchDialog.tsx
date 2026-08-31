@@ -33,6 +33,12 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';
 import { formatSlotTime, timeToSlot, slotToTime } from '../../../lib/time';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import {
+  formatMatchIdentity,
+  meetMatchIdentityFromStored,
+} from '../../../platform/domain/matchIdentity';
+import { ActiveChoice } from '../../../components/ActiveChoice';
+import { DialogFooter } from '../../../components/DialogFooter';
 
 interface Props {
   isOpen: boolean;
@@ -139,7 +145,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
             impact={activeProposal.impact}
             formatSlot={formatSlotForDiff}
           />
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          <DialogFooter>
             <button
               type="button"
               onClick={handleCancel}
@@ -155,7 +161,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
             >
               {loading ? 'Committing…' : 'Commit move'}
             </button>
-          </div>
+          </DialogFooter>
         </div>
       </Modal>
     );
@@ -182,9 +188,14 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
 
   // Inputs view — pick mode + values, then Preview.
   const currentTime = slotToTime(assignment.slotId, config);
+  const identity = meetMatchIdentityFromStored({
+    event_rank: match.eventRank,
+    sequence: match.matchNumber ?? null,
+  });
+  const canonicalLabel = formatMatchIdentity(identity, match.id) || '?';
   const matchLabel = match.matchNumber != null
-    ? `#${match.matchNumber}${match.eventRank ? ` ${match.eventRank}` : ''}`
-    : match.id.slice(0, 6);
+    ? `#${match.matchNumber}${match.eventRank ? ` ${canonicalLabel}` : ''}`
+    : canonicalLabel;
 
   // Side names for the header (helps the operator visually confirm
   // they're moving the right match).
@@ -217,32 +228,27 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
           </p>
         </div>
 
-        {/* Mode segmented control */}
-        <div className="flex rounded border border-border bg-muted p-0.5">
-          <button
-            type="button"
+        <div role="radiogroup" aria-label="Move mode" className="flex gap-1">
+          <ActiveChoice
+            active={mode === 'postpone'}
+            geometry="segment"
+            semantics="radio"
             onClick={() => setMode('postpone')}
-            className={`${INTERACTIVE_BASE} flex-1 rounded px-2 py-1 text-xs font-medium ${
-              mode === 'postpone'
-                ? 'bg-card text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="flex-1 px-2 py-1 text-xs font-medium"
           >
             <Clock aria-hidden="true" className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
             Postpone
-          </button>
-          <button
-            type="button"
+          </ActiveChoice>
+          <ActiveChoice
+            active={mode === 'move-to'}
+            geometry="segment"
+            semantics="radio"
             onClick={() => setMode('move-to')}
-            className={`${INTERACTIVE_BASE} flex-1 rounded px-2 py-1 text-xs font-medium ${
-              mode === 'move-to'
-                ? 'bg-card text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="flex-1 px-2 py-1 text-xs font-medium"
           >
             <ArrowRight aria-hidden="true" className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
             Move to…
-          </button>
+          </ActiveChoice>
         </div>
 
         {/* Mode-specific inputs */}

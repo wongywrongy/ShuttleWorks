@@ -3,6 +3,7 @@ import { useUiStore } from '../../store/uiStore';
 import { moduleForTab } from '../../platform/domain/moduleModel';
 import { TabSkeleton } from '../../components/TabSkeleton';
 import { isOperationsSegment } from '../../modules/operations/operationsSegments';
+import { useTournamentIdOrNull } from '../../hooks/useTournamentId';
 
 // Lazy-load the four module products so entering a workspace parses only
 // the active module's code. Previously all four were statically imported
@@ -29,6 +30,9 @@ const EntriesProduct = lazy(() =>
     default: m.EntriesProduct,
   })),
 );
+const SetupProduct = lazy(() =>
+  import('../../modules/setup/SetupProduct').then((m) => ({ default: m.SetupProduct })),
+);
 
 interface ModuleOutletProps {
   /** Which engines this workspace runs (resolved from the real module
@@ -45,10 +49,13 @@ interface ModuleOutletProps {
 export function ModuleOutlet({ engines }: ModuleOutletProps) {
   const activeTab = useUiStore((s) => s.activeTab);
   const kind = useUiStore((s) => s.activeTournamentKind);
+  const tid = useTournamentIdOrNull();
   const module = moduleForTab(activeTab, kind);
 
   const child =
-    isOperationsSegment(activeTab) ? (
+    activeTab === 'setup' && tid ? (
+      <SetupProduct tid={tid} />
+    ) : isOperationsSegment(activeTab) ? (
       <OperationsProduct engines={engines} />
     ) : module === 'bracket' ? (
       <BracketProduct />

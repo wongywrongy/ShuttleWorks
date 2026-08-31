@@ -103,9 +103,10 @@ Five modules share one anatomy — **intake → engine → emit**:
 
 - **Entrant tier** — the second frontend: a server-rendered React Router app at
   `apps/entrant`, served under `/e/` **on its own public hostname**
-  (`play.<domain>`, no Cloudflare Access), shipping **zero client
-  JavaScript**. Not a module; a delivery tier in front of Entries' public data
-  plane. See [Entrant tier](/explanation/architecture/entrant-tier).
+  (`play.<domain>`, no Cloudflare Access), using SSR-first HTML with no framework
+  hydration and bounded same-origin route modules for progressive enhancement. Not
+  a module; a delivery tier in front of Entries' public data plane. See
+  [Entrant tier](/explanation/architecture/entrant-tier).
 - **Origin split** — the operator console (`app.<domain>`) and the entrant tier
   (`play.<domain>`) are separate hostnames so a browser treats them as separate
   origins, which is what scopes cookies and storage apart. Two ports of one

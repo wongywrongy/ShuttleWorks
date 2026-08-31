@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Button, Modal } from '@scheduler/design-system';
 import { apiClient } from '../../api/client';
 import type { TournamentMemberDTO, TournamentSummaryDTO } from '../../api/dto';
@@ -12,6 +11,8 @@ import {
   roleOptionsFor,
   type MemberRole,
 } from './memberActions';
+import { SharingTab } from './SharingTab';
+import { TEXT_EMPHASIS, TEXT_TITLE } from '../../lib/utils'
 
 const ROLE_LEGEND: { role: string; desc: string }[] = [
   { role: 'Owner', desc: 'Full control: modules, sharing, delete.' },
@@ -274,11 +275,7 @@ export function PeopleAccessTab({
             <li className="p-3 text-sm text-muted-foreground">Loading…</li>
           ) : members.length === 0 ? (
             <li className="p-3 text-sm text-muted-foreground">
-              No members yet. Invite collaborators from the{' '}
-              <Link to={`/tournaments/${tid}/ws-sharing`} className="text-accent hover:underline">
-                Sharing
-              </Link>{' '}
-              tab.
+              No members yet. Create an invitation below to add the first collaborator.
             </li>
           ) : (
             members.map((m) => {
@@ -391,19 +388,14 @@ export function PeopleAccessTab({
             })
           )}
         </ul>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Invite people from{' '}
-          <Link to={`/tournaments/${tid}/ws-sharing`} className="text-accent hover:underline">
-            Sharing
-          </Link>
-          {': '}collaborator invite links carry a role.
-        </p>
       </div>
+
+      <SharingTab tid={tid} scope="team" />
 
       {pending && (
         <Modal onClose={() => setPending(null)} titleId={titleId}>
           <div className="space-y-4 p-5">
-            <h2 id={titleId} className="text-base font-semibold text-foreground">
+            <h2 id={titleId} className={TEXT_TITLE}>
               {pending.kind === 'remove'
                 ? 'Remove member'
                 : pending.kind === 'leave'
@@ -414,7 +406,7 @@ export function PeopleAccessTab({
             <div className="space-y-2 text-sm text-muted-foreground">
               {pending.kind === 'remove' && (
                 <p data-testid="confirm-body">
-                  <span className="font-medium text-foreground">
+                  <span className={TEXT_EMPHASIS}>
                     {displayNameFor(pending.member, summary) ?? shortId(pending.member.userId)}
                   </span>{' '}
                   will immediately lose access to this workspace. You can invite them again
@@ -429,7 +421,7 @@ export function PeopleAccessTab({
               )}
               {pending.kind === 'transfer' && (
                 <p data-testid="confirm-body">
-                  <span className="font-medium text-foreground">
+                  <span className={TEXT_EMPHASIS}>
                     {displayNameFor(pending.member, summary) ?? shortId(pending.member.userId)}
                   </span>{' '}
                   will become the owner of this workspace. You will become an operator, and

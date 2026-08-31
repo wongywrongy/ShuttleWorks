@@ -1,3 +1,4 @@
+import { identityFixture } from './identityFixture';
 import { describe, it, expect } from 'vitest';
 import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, packBlockLanes } from '../opsBlock';
 import { buildLiveChips } from '../runtime/boardPlacements';
@@ -17,7 +18,7 @@ const cfg = {
 } as TournamentConfig;
 
 function ob(p: Partial<OpsBlock> & Pick<OpsBlock, 'source' | 'id'>): OpsBlock {
-  return { key: `${p.source}:${p.id}`, label: p.id, span: 1, status: 'scheduled', sideA: 'A', sideB: 'B', playerIds: [], done: false, started: false, ...p };
+  return { key: `${p.source}:${p.id}`, identity: identityFixture(p.id), span: 1, status: 'scheduled', sideA: 'A', sideB: 'B', playerIds: [], done: false, started: false, ...p };
 }
 
 describe('opsBlock builders', () => {
@@ -36,6 +37,14 @@ describe('opsBlock builders', () => {
     const states: Record<string, MatchStateDTO> = { m1: { status: 'started' } as MatchStateDTO };
     const [b] = meetToOpsBlocks(matches, schedule, states, { p1: 'Alice', p2: 'Bob' }, cfg);
     expect(b).toMatchObject({ source: 'meet', id: 'm1', key: 'meet:m1', court: 2, slot: 4, span: 1, status: 'started', started: true, done: false, sideA: 'Alice', sideB: 'Bob' });
+  });
+
+  it('flags a legacy live Meet row whose canonical side is unresolved', () => {
+    const matches = [{ id: 'm1', sideA: [], sideB: ['p2'], eventRank: 'MS1' }] as unknown as MatchDTO[];
+    const states: Record<string, MatchStateDTO> = { m1: { status: 'started' } as MatchStateDTO };
+    const [block] = meetToOpsBlocks(matches, null, states, { p2: 'Bob' }, cfg);
+    expect(block.sideA).toBe('Participant unresolved: action required');
+    expect(block.sideB).toBe('Bob');
   });
 
   it('a started meet block surfaces actualStartSlot (no end) from match-state timing', () => {
@@ -85,6 +94,58 @@ describe('opsBlock builders', () => {
     expect(b).toMatchObject({ source: 'bracket', id: 'MS-R0-0', key: 'bracket:MS-R0-0', court: 1, slot: 0, done: true, status: 'finished' });
   });
 
+  it('keeps a feeder label for a genuinely future match', () => {
+    const data = {
+      participants: [],
+      events: [{ id: 'MS', discipline: 'MS', format: 'se' }],
+      play_units: [
+        {
+          id: 'F', event_id: 'MS', round_index: 1, match_index: 0,
+          side_a: null, side_b: null,
+          slot_a: { participant_id: null, feeder_play_unit_id: 'SF1' },
+          slot_b: { participant_id: null, feeder_play_unit_id: 'SF2' },
+        },
+      ],
+      assignments: [],
+      results: [],
+    } as unknown as BracketTournamentDTO;
+
+    const [block] = bracketToOpsBlocks(data);
+    expect(block.sideA).toMatch(/^Winner of /);
+    expect(block.sideB).toMatch(/^Winner of /);
+  });
+
+  it('never renders feeder placeholders for started or finished legacy rows', () => {
+    const base = {
+      participants: [],
+      events: [{ id: 'MS', discipline: 'MS', format: 'se' }],
+      play_units: [
+        {
+          id: 'F', event_id: 'MS', round_index: 1, match_index: 0,
+          side_a: null, side_b: null,
+          slot_a: { participant_id: null, feeder_play_unit_id: 'SF1' },
+          slot_b: { participant_id: null, feeder_play_unit_id: 'SF2' },
+        },
+      ],
+    };
+    const started = bracketToOpsBlocks({
+      ...base,
+      assignments: [{ play_unit_id: 'F', court_id: 1, slot_id: 4, duration_slots: 1, actual_start_slot: 4 }],
+      results: [],
+    } as unknown as BracketTournamentDTO)[0];
+    const finished = bracketToOpsBlocks({
+      ...base,
+      assignments: [{ play_unit_id: 'F', court_id: 1, slot_id: 4, duration_slots: 1 }],
+      results: [{ play_unit_id: 'F', winner_side: 'A' }],
+    } as unknown as BracketTournamentDTO)[0];
+
+    for (const block of [started, finished]) {
+      expect(block.sideA).toBe('Participant unresolved: action required');
+      expect(block.sideB).toBe('Participant unresolved: action required');
+      expect(`${block.sideA} ${block.sideB}`).not.toMatch(/Winner of|Loser of/);
+    }
+  });
+
   it('a finished bracket block surfaces actualStartSlot and actualEndSlot from the assignment', () => {
     const data = {
       participants: [{ id: 'x1', name: 'Cara' }, { id: 'x2', name: 'Dan' }],
@@ -109,6 +170,44 @@ describe('opsBlock builders', () => {
     const [b] = bracketToOpsBlocks(data);
     expect(b.actualStartSlot).toBeUndefined();
     expect(b.actualEndSlot).toBeUndefined();
+  });
+
+  it('a scored bracket result carries its sets onto the block (SP-OPCON-1 SWP-1)', () => {
+    const data = {
+      participants: [{ id: 'x1', name: 'Cara' }, { id: 'x2', name: 'Dan' }],
+      events: [{ id: 'MS', discipline: 'MS' }],
+      play_units: [{ id: 'MS-R0-0', event_id: 'MS', side_a: ['x1'], side_b: ['x2'], slot_a: {}, slot_b: {} }],
+      assignments: [{ play_unit_id: 'MS-R0-0', court_id: 1, slot_id: 0, duration_slots: 1, actual_start_slot: 0 }],
+      results: [{ play_unit_id: 'MS-R0-0', winner_side: 'A', score: { sets: [{ sideA: 21, sideB: 15 }, { sideA: 19, sideB: 21 }, { sideA: 21, sideB: 12 }] } }],
+    } as unknown as BracketTournamentDTO;
+    const [b] = bracketToOpsBlocks(data);
+    expect(b.score).toEqual({
+      sideA: 2,
+      sideB: 1,
+      sets: [{ sideA: 21, sideB: 15 }, { sideA: 19, sideB: 21 }, { sideA: 21, sideB: 12 }],
+    });
+  });
+
+  it('a walkover (score-less) result yields NO score — never a fabricated 0–0', () => {
+    const data = {
+      participants: [{ id: 'x1', name: 'Cara' }, { id: 'x2', name: 'Dan' }],
+      events: [{ id: 'MS', discipline: 'MS' }],
+      play_units: [{ id: 'MS-R0-0', event_id: 'MS', side_a: ['x1'], side_b: ['x2'], slot_a: {}, slot_b: {} }],
+      assignments: [],
+      results: [{ play_unit_id: 'MS-R0-0', winner_side: 'A', walkover: true }],
+    } as unknown as BracketTournamentDTO;
+    const [b] = bracketToOpsBlocks(data);
+    expect(b.score).toBeUndefined();
+    expect(b.done).toBe(true);
+  });
+
+  it('a finished meet block carries the live state score + sets', () => {
+    const matches = [{ id: 'm', sideA: ['p1'], sideB: ['p2'], eventRank: 'MS1' }] as any;
+    const states = {
+      m: { matchId: 'm', status: 'finished', score: { sideA: 2, sideB: 0 }, sets: [{ sideA: 21, sideB: 10 }, { sideA: 21, sideB: 17 }] },
+    } as any;
+    const [b] = meetToOpsBlocks(matches, null, states, { p1: 'P1', p2: 'P2' }, null);
+    expect(b.score).toEqual({ sideA: 2, sideB: 0, sets: [{ sideA: 21, sideB: 10 }, { sideA: 21, sideB: 17 }] });
   });
 
   it('parseOpsKey round-trips and rejects junk', () => {

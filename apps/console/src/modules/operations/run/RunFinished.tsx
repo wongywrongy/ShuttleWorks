@@ -15,6 +15,7 @@ import { useConfirmClick } from '../../../hooks/useConfirmClick';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import type { RunMatch } from '../runtime/runModel';
 import type { MeetRunOps } from './useMeetRunOps';
+import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
 
 export interface RunFinishedProps {
   /** The full Run match list — this component filters to `done` itself. */
@@ -48,7 +49,19 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
   const [updating, setUpdating] = useState(false);
 
   const undoable = match.source === 'meet' && !!meetOps;
-  const score = undoable ? meetOps!.matchStates[match.id]?.score : undefined;
+  // SWP-1: the score rides the match itself (both engines fill `Match.score`
+  // in their adapters), so bracket rows show their recorded sets here — the
+  // old read went through `meetOps.matchStates`, a store bracket play-unit
+  // ids can never appear in, which painted "no score" beside 155 scored
+  // matches on a finished bracket day.
+  const score = match.score ?? (undoable ? meetOps!.matchStates[match.id]?.score : undefined);
+  const sets = match.score?.sets;
+  const scoreLine =
+    sets && sets.length > 0
+      ? sets.map((set) => `${set.sideA}–${set.sideB}`).join(', ')
+      : score
+        ? `${score.sideA}–${score.sideB}`
+        : null;
 
   const handleUndo = async () => {
     if (!meetOps) return;
@@ -70,20 +83,18 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
 
   return (
     <li className="flex items-center gap-2 px-4 py-1.5 text-xs">
-      <span className={`${EYEBROW_CLASS} shrink-0 text-muted-foreground`}>{match.label}</span>
+      <span className={`${EYEBROW_CLASS} shrink-0 text-muted-foreground`}>{formatMatchIdentity(match.identity, match.id)}</span>
       {match.court != null && (
         <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">C{match.court}</span>
       )}
       <span className="min-w-0 flex-1 break-words text-muted-foreground">
         {match.sideA} <span className="text-muted-foreground/70">vs</span> {match.sideB}
       </span>
-      {score ? (
+      {scoreLine ? (
         <span className="sw-num shrink-0 text-xs font-semibold tabular-nums text-status-started">
-          {score.sideA}–{score.sideB}
+          {scoreLine}
         </span>
-      ) : (
-        <span className="shrink-0 text-3xs text-muted-foreground">no score</span>
-      )}
+      ) : null}
       {undoable && (
         <button
           type="button"

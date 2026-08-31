@@ -509,6 +509,72 @@ export interface TournamentStateDTO {
   standings?: MeetStandingRowDTO[];
 }
 
+// Canonical workflow-first Setup facade. These types intentionally mirror the
+// section-oriented API rather than leaking the legacy state-blob shape into
+// the Setup product. Section data is open because each section has a distinct
+// validated schema on the API, while the envelope and issue vocabulary stay
+// stable for task-list rendering.
+export type SetupKey =
+  | 'general'
+  | 'dates'
+  | 'venue'
+  | 'events'
+  | 'rules'
+  | 'entries'
+  | 'people'
+  | 'public-info';
+
+export type SetupStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'ready'
+  | 'blocked'
+  | 'published'
+  | 'complete';
+
+export interface SetupIssueDTO {
+  code: string;
+  severity: 'info' | 'warning' | 'blocking';
+  message: string;
+  path?: string | null;
+}
+
+export type SetupSectionData = Record<string, unknown>;
+
+export interface SetupSectionStateDTO {
+  key: SetupKey;
+  status: SetupStatus;
+  summary: string;
+  data: SetupSectionData;
+  issues: SetupIssueDTO[];
+  downstreamImpact: string[];
+  updatedAt?: string | null;
+  /** Who owns this section's truth (SP-OPCON-1 ruling R-N A): `domain` =
+   * derived from real rows, read-only here — edit on the owning surface. */
+  authority: 'setup' | 'domain';
+}
+
+export interface TournamentSetupDTO {
+  tournamentId: string;
+  status: SetupStatus;
+  blockingIssueCount: number;
+  sections: SetupSectionStateDTO[];
+}
+
+export interface TournamentActivityEntryDTO {
+  id: string;
+  occurredAt: string;
+  actorId: string;
+  actorName: string;
+  action: string;
+  target: string;
+  summary: string;
+}
+
+export interface TournamentActivityFeedDTO {
+  entries: TournamentActivityEntryDTO[];
+}
+
 // ---- Proposal pipeline (two-phase commit) -------------------------------
 
 export interface ScheduleHistoryEntry {
@@ -882,6 +948,8 @@ export interface TournamentSummaryDTO {
   status: TournamentStatus;
   kind: TournamentKind;
   tournamentDate: string | null;
+  tournamentEndDate?: string | null;
+  timeZone?: string;
   createdAt: string;
   updatedAt: string;
   /** Caller's role on this tournament — non-null in list responses
@@ -902,6 +970,9 @@ export interface TournamentCreateDTO {
   name?: string | null;
   kind?: TournamentKind;
   tournamentDate?: string | null;
+  tournamentEndDate?: string | null;
+  timeZone?: string;
+  courtCount?: number;
   /** Optional explicit module seed (control-plane templates). When present,
    *  the backend persists this set instead of the kind-derived one. */
   modules?: WorkspaceModuleDTO[];
@@ -911,6 +982,8 @@ export interface TournamentUpdateDTO {
   name?: string | null;
   status?: TournamentStatus;
   tournamentDate?: string | null;
+  tournamentEndDate?: string | null;
+  timeZone?: string;
 }
 
 // ---- Auth (self-hosted cookie sessions, SP-CLOUD-2) ----------------------

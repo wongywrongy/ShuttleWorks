@@ -58,8 +58,7 @@ function CalendarRow({ row }: { row: SeasonRow }) {
     <li className="relative flex items-center gap-4 border-t border-rule-soft px-4 py-3 transition-colors duration-fast ease-brand hover:bg-surface-sunken">
       <DateBadge date={row.date} />
       {/* Task 11 QA, 380px: the status cell used to be a sibling of the date
-          badge with an UNCONDITIONAL `min-w-[8rem] shrink-0`, and the chip
-          inside it does not wrap (`StatusChip`, allowlisted). That set the
+          badge with an unconditional `min-w-[8rem] shrink-0`. That set the
           card's min-content width to ~364px against a 348px content box, so
           the page scrolled sideways and the control row could not wrap —
           against R11. Below `sm:` the badge keeps its line with the name and

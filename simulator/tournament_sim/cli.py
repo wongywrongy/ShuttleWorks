@@ -94,6 +94,13 @@ def _build_parser() -> argparse.ArgumentParser:
                 metavar="TID=HTML",
                 help="cached daily-results page; repeat for T027 and T028",
             )
+            command_parser.add_argument(
+                "--tournament",
+                action="append",
+                default=[],
+                metavar="TID",
+                help="seed only this validated tournament; repeat for multiple ids",
+            )
         if command in {"apply", "resume", "status", "reset"}:
             command_parser.add_argument("--seed-key", required=True)
         if command in {"apply", "resume"}:
@@ -163,6 +170,10 @@ def main(argv: list[str] | None = None) -> int:
                 daily_results_paths=daily_paths,
             )
             complete_demo_historical_draws(dataset)
+            if args.tournament:
+                from .seed import select_tournaments
+
+                dataset = select_tournaments(dataset, args.tournament)
             return dataset
 
         if args.seed_cmd == "status":

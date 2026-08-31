@@ -104,6 +104,86 @@ def record_result(
     return affected
 
 
+def reconcile_recorded_results(
+    state: TournamentState,
+    draws: DrawSource,
+) -> List[PlayUnitId]:
+    """Rebuild resolved successor sides from already-recorded results.
+
+    Normal result entry calls :func:`record_result`, so propagation happens at
+    write time. Imports and legacy rows can arrive with results already stored;
+    replay those immutable facts in round order instead of preserving a second,
+    contradictory state where a finished feeder still renders as ``Winner of``.
+    This is an in-memory derivation and never invents a result.
+    """
+    draw_map = _as_draws(draws)
+    touched: List[PlayUnitId] = []
+    seen: set[PlayUnitId] = set()
+    for draw in draw_map.values():
+        for round_ids in draw.rounds:
+            for play_unit_id in round_ids:
+                recorded = state.results.get(play_unit_id)
+                if recorded is None:
+                    continue
+                play_unit = state.play_units[play_unit_id]
+                # Do not turn an unrecoverable terminal row into a fabricated
+                # BYE. The live-operation guard reports that row instead.
+                if recorded.winner_side == WinnerSide.A and not play_unit.side_a:
+                    continue
+                if recorded.winner_side == WinnerSide.B and not play_unit.side_b:
+                    continue
+                changed = _propagate_recorded_result_into_empty_slots(
+                    draw,
+                    play_unit_id,
+                    recorded,
+                )
+                for downstream_id in changed:
+                    if downstream_id not in seen:
+                        seen.add(downstream_id)
+                        touched.append(downstream_id)
+    return touched
+
+
+def _propagate_recorded_result_into_empty_slots(
+    draw: Draw,
+    play_unit_id: PlayUnitId,
+    recorded: Result,
+) -> List[PlayUnitId]:
+    """Project one stored result without erasing historical provenance.
+
+    Historical imports may intentionally carry both a concrete engine side and
+    a feeder slot for verified topology. Only empty successor sides represent
+    the legacy/import drift this reconciliation repairs.
+    """
+    winner = _winner_participant_id(draw, play_unit_id, recorded.winner_side)
+    loser = _loser_participant_id(
+        draw,
+        play_unit_id,
+        recorded.winner_side,
+        walkover=recorded.walkover,
+        reason=recorded.reason,
+    )
+    changed_ids: List[PlayUnitId] = []
+    for downstream_id, downstream in draw.play_units.items():
+        if play_unit_id not in downstream.dependencies:
+            continue
+        slot_a, slot_b = draw.slots[downstream_id]
+        changed = False
+        if slot_a.feeder_play_unit_id == play_unit_id and not downstream.side_a:
+            fed = winner if slot_a.feeder_take == "winner" else loser
+            slot_a = BracketSlot.of_participant(fed or BYE)
+            changed = True
+        if slot_b.feeder_play_unit_id == play_unit_id and not downstream.side_b:
+            fed = winner if slot_b.feeder_take == "winner" else loser
+            slot_b = BracketSlot.of_participant(fed or BYE)
+            changed = True
+        if changed:
+            draw.slots[downstream_id] = (slot_a, slot_b)
+            _refresh_play_unit_sides(draw, downstream_id)
+            changed_ids.append(downstream_id)
+    return changed_ids
+
+
 def auto_walkover_byes(state: TournamentState, draw: Draw) -> None:
     """Record walkover results for any R0 PlayUnit with a BYE side.
 

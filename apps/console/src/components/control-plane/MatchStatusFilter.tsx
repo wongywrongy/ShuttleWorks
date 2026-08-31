@@ -8,6 +8,7 @@
  * the `?q=` search contract — a pasted link restores the operator's view.
  */
 import { STATUS_LABEL, type MatchListStatus } from './matchStatus';
+import { ActiveChoice } from '../ActiveChoice';
 
 export type MatchStatusFilterValue = MatchListStatus | 'all';
 
@@ -40,21 +41,18 @@ export function MatchStatusFilter({
         const countTone =
           value === 'live' && count > 0 ? 'text-status-live' : 'text-ink-faint';
         return (
-          <button
+          <ActiveChoice
             key={value}
-            type="button"
+            active={isActive}
+            geometry="segment"
+            semantics="pressed"
             onClick={() => onChange(value)}
-            aria-pressed={isActive}
             data-testid={`${testIdPrefix}-status-${value}`}
-            className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-2xs transition-colors duration-fast ease-brand ${
-              isActive
-                ? 'bg-surface-active font-medium text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="shrink-0 whitespace-nowrap px-2.5 py-1 text-2xs"
           >
             {value === 'all' ? 'All' : STATUS_LABEL[value]} ·{' '}
-            <span className={`sw-num ${countTone}`}>{count}</span>
-          </button>
+            <span className={`sw-num ${isActive ? 'text-current opacity-75' : countTone}`}>{count}</span>
+          </ActiveChoice>
         );
       })}
     </div>

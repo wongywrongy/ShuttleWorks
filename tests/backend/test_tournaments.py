@@ -197,11 +197,11 @@ def test_delete_returns_204_then_404(client):
 # ---- Scoped state ------------------------------------------------------
 
 
-def test_state_get_returns_204_on_empty(client):
-    """Tournament created without a name has no seeded config → still 204."""
+def test_create_without_identity_still_seeds_valid_setup_state(client):
     created = client.post("/tournaments", json={}).json()
     r = client.get(f"/tournaments/{created['id']}/state")
-    assert r.status_code == 204
+    assert r.status_code == 200
+    assert r.json()["config"]["courtCount"] == 4
 
 
 def test_create_seeds_config_with_name_and_date(client):
@@ -218,6 +218,16 @@ def test_create_seeds_config_with_name_and_date(client):
     cfg = state.json()["config"]
     assert cfg["tournamentName"] == "Spring Open"
     assert cfg["tournamentDate"] == "2026-06-01"
+
+
+def test_create_commits_essential_venue_scale_atomically(client):
+    response = client.post(
+        "/tournaments",
+        json={"name": "Large venue", "courtCount": 12},
+    )
+    assert response.status_code == 201
+    state = client.get(f"/tournaments/{response.json()['id']}/state")
+    assert state.json()["config"]["courtCount"] == 12
 
 
 def test_create_without_date_seeds_only_name(client):

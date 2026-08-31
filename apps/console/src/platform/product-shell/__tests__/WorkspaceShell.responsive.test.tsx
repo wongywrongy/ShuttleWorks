@@ -76,14 +76,14 @@ describe('WorkspaceShell — narrow viewports', () => {
     const drawer = screen.getByRole('dialog');
     expect(drawer).toHaveAccessibleName(/workspace sections/i);
     expect(screen.getByTestId('ws-nav-overview')).toBeInTheDocument();
-    expect(screen.getByTestId('ws-nav-ws-modules')).toBeInTheDocument();
+    expect(screen.getByTestId('ws-nav-administration-modules')).toBeInTheDocument();
   });
 
   it('closes itself once it has navigated — the drawer is not left over the surface', async () => {
     window.innerWidth = 390;
     renderShell();
     await userEvent.click(screen.getByRole('button', { name: /workspace sections/i }));
-    await userEvent.click(screen.getByTestId('ws-nav-ws-modules'));
+    await userEvent.click(screen.getByTestId('ws-nav-administration-modules'));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 

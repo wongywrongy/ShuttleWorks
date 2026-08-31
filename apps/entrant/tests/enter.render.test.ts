@@ -218,10 +218,12 @@ describe('the entry form, unhydrated', () => {
     );
   });
 
-  it('carries no script and no challenge widget at all', async () => {
+  it('carries only the approved same-origin journey module and no challenge widget', async () => {
     const html = await render();
 
-    expect(html).not.toContain('<script');
+    expect(html.match(/<script/g)).toHaveLength(1);
+    expect(html).toContain('<script type="module" src="/e/assets/entry-wizard.js"');
+    expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
     expect(html).not.toContain('cf-turnstile');
     expect(html).not.toContain('challenges.cloudflare.com');
   });

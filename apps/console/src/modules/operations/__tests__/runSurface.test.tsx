@@ -1,3 +1,4 @@
+import { identityFixture } from './identityFixture';
 /**
  * RunSurface integration tests.
  *
@@ -71,10 +72,8 @@ vi.mock('../../../hooks/useBracketResultQueue', () => ({
   useBracketResultQueue: () => ({ submit: mockBracketResultSubmit }),
 }));
 
-// uiStore stays REAL: `bracketSelectedMatchId` is a genuine seam here (Run
-// publishes its selection, MatchDetailPanel subscribes to it), so a stub that
-// doesn't notify subscribers would test nothing. Toasts are inert without a
-// toast host mounted.
+// uiStore stays real for the surface's unrelated toast and lifecycle seams.
+// Toasts are inert without a toast host mounted.
 
 // ── 3. Test helpers ────────────────────────────────────────────────────────────
 
@@ -86,7 +85,7 @@ function mkBlock(
   const id = overrides.id;
   return {
     key: `${source}:${id}`,
-    label: id,
+    identity: identityFixture(id),
     span: 1,
     sideA: 'Alice',
     sideB: 'Bob',
@@ -101,7 +100,7 @@ function mkMatch(
   overrides: Partial<RunMatch> & Pick<RunMatch, 'key' | 'id' | 'source'>,
 ): RunMatch {
   return {
-    label: overrides.key,
+    identity: identityFixture(overrides.key),
     sideA: 'Alice',
     sideB: 'Bob',
     span: 1,
@@ -131,19 +130,19 @@ function mkLane(court: number, now?: RunMatch, depth?: number): CourtLane {
 function makeAutoFillBlocks(): OpsBlock[] {
   return [
     mkBlock({
-      id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+      id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
       court: 1, slot: 5, span: 1, status: 'started',
       sideA: 'Alice', sideB: 'Bob',
     }),
     mkBlock({
-      id: 'm2', source: 'meet', key: 'meet:m2', label: 'MS2',
+      id: 'm2', source: 'meet', key: 'meet:m2', identity: identityFixture('MS2'),
       status: 'scheduled', sideA: 'Carol', sideB: 'Dave',
       court: undefined, slot: undefined,
     }),
     // Bracket block (bracketData=null → eligibleBracketIds empty → ineligible).
     // Exercises the bracket branch of toRunMatches and the mixed-source total.
     mkBlock({
-      id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+      id: 'pu1', source: 'bracket', key: 'bracket:pu1', identity: identityFixture('QF1'),
       status: 'scheduled', sideA: 'Team X', sideB: 'Team Y',
       court: undefined, slot: undefined,
     }),
@@ -323,12 +322,12 @@ describe('RunSurface — the inspector is hosted by DetailDock', () => {
     );
 
     // Nothing selected → no rail at all (so no fixed 288px column to steal).
-    expect(screen.queryByTestId('run-inspector')).toBeNull();
+    expect(screen.queryByTestId('run-detail-panel')).toBeNull();
 
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
 
     const dock = screen.getByTestId('run-detail-dock');
-    expect(dock).toContainElement(screen.getByTestId('run-inspector'));
+    expect(dock).toContainElement(screen.getByTestId('run-detail-panel'));
   });
 });
 
@@ -406,17 +405,17 @@ describe('RunSurface — auto-pull after record empties a court', () => {
     // This models the server state after the record was confirmed.
     const postRecordBlocks: OpsBlock[] = [
       mkBlock({
-        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
         court: 1, slot: 5, span: 1, status: 'finished',
         sideA: 'Alice', sideB: 'Bob',
       }),
       mkBlock({
-        id: 'm2', source: 'meet', key: 'meet:m2', label: 'MS2',
+        id: 'm2', source: 'meet', key: 'meet:m2', identity: identityFixture('MS2'),
         status: 'scheduled', sideA: 'Carol', sideB: 'Dave',
         court: undefined, slot: undefined,
       }),
       mkBlock({
-        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', identity: identityFixture('QF1'),
         status: 'scheduled', sideA: 'Team X', sideB: 'Team Y',
         court: undefined, slot: undefined,
       }),
@@ -449,12 +448,12 @@ describe('RunSurface — auto-pull skips ineligible queue head', () => {
     // m1: playing on court 1; m2: TBD sides → eligible=false → nextEligible returns undefined
     const blocks: OpsBlock[] = [
       mkBlock({
-        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
         court: 1, slot: 5, span: 1, status: 'started',
         sideA: 'Alice', sideB: 'Bob',
       }),
       mkBlock({
-        id: 'm2', source: 'meet', key: 'meet:m2', label: 'MS2',
+        id: 'm2', source: 'meet', key: 'meet:m2', identity: identityFixture('MS2'),
         status: 'scheduled', sideA: 'TBD', sideB: 'TBD',
         court: undefined, slot: undefined,
       }),
@@ -487,7 +486,7 @@ describe('RunSurface — queued match Send to free court fires assign', () => {
     // m1 in queue (no court); court 1 is free (no matches on it)
     const blocks: OpsBlock[] = [
       mkBlock({
-        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
         status: 'scheduled', sideA: 'Alice', sideB: 'Bob',
         court: undefined, slot: undefined,
       }),
@@ -505,6 +504,7 @@ describe('RunSurface — queued match Send to free court fires assign', () => {
 
     // Click queue row to select m1
     fireEvent.click(screen.getByTestId('run-queue-row-meet:m1'));
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-assignment'));
 
     // Inspector should show "Send to C1" (freeCourt=1)
     const sendBtn = screen.getByTestId('run-act-send');
@@ -558,7 +558,7 @@ describe('RunSurface — Fix 2: calledBracketIds cleared on postpone', () => {
     // by Fix 2, returning status to 'scheduled').
     const blocks: OpsBlock[] = [
       mkBlock({
-        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', identity: identityFixture('QF1'),
         court: 1, slot: 5, status: 'scheduled', sideA: 'Alice', sideB: 'Bob',
       }),
     ];
@@ -581,6 +581,7 @@ describe('RunSurface — Fix 2: calledBracketIds cleared on postpone', () => {
     // Call → calledBracketIds adds 'pu1' → status overlays to 'called'
     fireEvent.click(screen.getByTestId('run-act-call'));
     expect(screen.queryByTestId('run-act-call')).toBeNull();
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-assignment'));
     expect(screen.getByTestId('run-act-postpone')).toBeInTheDocument();
 
     // Postpone → Fix 2: clears calledBracketIds → status re-derives as 'scheduled'
@@ -588,6 +589,7 @@ describe('RunSurface — Fix 2: calledBracketIds cleared on postpone', () => {
     fireEvent.click(screen.getByTestId('run-act-postpone'));
 
     // Flag cleared: status is 'scheduled' again → Call button reappears, Postpone gone
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-result'));
     expect(screen.getByTestId('run-act-call')).toBeInTheDocument();
     expect(screen.queryByTestId('run-act-postpone')).toBeNull();
     expect(mockBracketUnassign).toHaveBeenCalledWith({ play_unit_id: 'pu1' });
@@ -604,7 +606,7 @@ describe('RunSurface — meet Postpone moves the match from the lane to the queu
     // A called meet match on court 1 — it should be in the board, not the queue.
     const calledBlocks: OpsBlock[] = [
       mkBlock({
-        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
         court: 1, slot: 5, status: 'called', sideA: 'Alice', sideB: 'Bob',
       }),
     ];
@@ -625,6 +627,7 @@ describe('RunSurface — meet Postpone moves the match from the lane to the queu
 
     // Select the match → inspector opens showing Postpone for a called match.
     fireEvent.click(screen.getByTestId('run-card-meet:m1'));
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-assignment'));
     expect(screen.getByTestId('run-act-postpone')).toBeInTheDocument();
 
     // Click Postpone → should fire meetSubmit('postpone_match', 'm1', {}).
@@ -637,7 +640,7 @@ describe('RunSurface — meet Postpone moves the match from the lane to the queu
     // Here we model the resulting OpsBlock as the parent would pass after the update.
     const postponedBlocks: OpsBlock[] = [
       mkBlock({
-        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
         court: undefined, slot: undefined, status: 'scheduled',
         sideA: 'Alice', sideB: 'Bob',
       }),
@@ -677,7 +680,7 @@ describe('RunSurface — in-flight assign guard (no double-assign across courts)
     // it lives in the overlaid `queue`/`matches`, not in the board.
     const blocks: OpsBlock[] = [
       mkBlock({
-        id: 'm1', source: 'meet', key: 'meet:m1', label: 'MS1',
+        id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
         status: 'scheduled', sideA: 'Alice', sideB: 'Bob',
         court: undefined, slot: undefined,
       }),
@@ -696,6 +699,7 @@ describe('RunSurface — in-flight assign guard (no double-assign across courts)
     // Select the queued match → inspector offers "Send to C1" (freeCourt = the
     // first court with no Now match).
     fireEvent.click(screen.getByTestId('run-queue-row-meet:m1'));
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-assignment'));
     const sendBtn = screen.getByTestId('run-act-send');
     expect(sendBtn.textContent).toMatch(/Send to C1/);
 
@@ -730,7 +734,7 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
   it('offers Undo start for a PLAYING bracket match, and does not before it starts', () => {
     const playing: OpsBlock[] = [
       mkBlock({
-        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', identity: identityFixture('QF1'),
         court: 1, slot: 5, status: 'started', sideA: 'Alice', sideB: 'Bob',
       }),
     ];
@@ -747,6 +751,7 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
 
     fireEvent.click(screen.getByTestId('run-card-bracket:pu1'));
     expect(screen.getByRole('button', { name: 'Undo start' })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-summary'));
 
     // A bracket match that has NOT started keeps the plain run inspector — the
     // panel would otherwise duplicate its Start button beside the inspector's.
@@ -754,7 +759,7 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
       <RunSurface
         blocks={[
           mkBlock({
-            id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+            id: 'pu1', source: 'bracket', key: 'bracket:pu1', identity: identityFixture('QF1'),
             court: 1, slot: 5, status: 'called', sideA: 'Alice', sideB: 'Bob',
           }),
         ]}
@@ -765,6 +770,7 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
       />,
     );
     expect(screen.queryByRole('button', { name: 'Undo start' })).toBeNull();
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-result'));
     expect(screen.getByTestId('run-act-start')).toBeInTheDocument();
   });
 
@@ -778,7 +784,7 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
   it('does not repeat the team names + vs between the inspector and the bracket panel', () => {
     const playing: OpsBlock[] = [
       mkBlock({
-        id: 'pu1', source: 'bracket', key: 'bracket:pu1', label: 'QF1',
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', identity: identityFixture('QF1'),
         court: 1, slot: 5, status: 'started', sideA: 'Alice', sideB: 'Bob',
       }),
     ];
@@ -797,6 +803,7 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
     // The rich panel really did mount (Undo start only exists there) — so the
     // counts below are not vacuous.
     expect(screen.getByRole('button', { name: 'Undo start' })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('run-detail-panel-facet-summary'));
 
     // The court CARD names the sides (Console grid, by design) and the
     // inspector names them once more — but the embedded bracket panel must

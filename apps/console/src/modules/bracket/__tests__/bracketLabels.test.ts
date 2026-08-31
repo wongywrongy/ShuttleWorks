@@ -23,8 +23,10 @@ describe('playUnitLabel — single elimination stage names', () => {
   it('5-round event (maxRound=4): R0→R32, R1→R16, R2→QF, R3→SF, R4→F', () => {
     const at = (roundIndex: number) =>
       playUnitLabel({ discipline: 'WD', format: 'se', roundIndex, matchIndex: 0, maxRound: 4 });
-    expect(at(0)).toBe('WD R321');   // round of 32, match 1
-    expect(at(1)).toBe('WD R161');   // round of 16
+    // SP-OPCON-1 SWP-10: R-of-K stages carry the same `·` delimiter as
+    // round-robin — bare "R321" was unreadable as R32 m1 vs R3 m21.
+    expect(at(0)).toBe('WD R32·1');  // round of 32, match 1
+    expect(at(1)).toBe('WD R16·1');  // round of 16
     expect(at(2)).toBe('WD QF1');
     expect(at(3)).toBe('WD SF1');
     expect(at(4)).toBe('WD F');

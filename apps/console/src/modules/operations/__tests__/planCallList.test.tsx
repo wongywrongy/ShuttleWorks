@@ -1,3 +1,4 @@
+import { identityFixture } from './identityFixture';
 /**
  * CP4 (ADR 0015): in queue mode the Plan board shows the ordered call list
  * plus a feasibility band — the promise a queue solve actually makes —
@@ -9,7 +10,7 @@ import { PlanCallList } from '../plan/PlanCallList';
 import type { OpsBlock } from '../opsBlock';
 
 const blk = (o: Partial<OpsBlock> & { id: string }): OpsBlock => ({
-  source: 'meet', key: `meet:${o.id}`, label: o.id, span: 1,
+  source: 'meet', key: `meet:${o.id}`, identity: identityFixture(o.id), span: 1,
   status: 'scheduled', sideA: 'A', sideB: 'B', playerIds: [],
   done: false, started: false,
   ...o,

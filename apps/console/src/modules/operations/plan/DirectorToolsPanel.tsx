@@ -26,6 +26,7 @@ import { useMatchStateStore } from '../../../store/matchStateStore';
 import { useUiStore } from '../../../store/uiStore';
 import { formatSlotTime } from '../../../lib/time';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { DialogFooter } from '../../../components/DialogFooter';
 
 export function DirectorToolsPanel() {
   const config = useTournamentStore((s) => s.config);
@@ -304,7 +305,7 @@ export function DirectorToolsPanel() {
               </p>
             </div>
             <ScheduleDiffView impact={activeProposal.impact} formatSlot={formatSlot} />
-            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <DialogFooter>
               <button
                 type="button"
                 onClick={handleCancelProposal}
@@ -320,7 +321,7 @@ export function DirectorToolsPanel() {
               >
                 {loading ? 'Committing…' : 'Commit'}
               </button>
-            </div>
+            </DialogFooter>
           </div>
         </Modal>
       )}

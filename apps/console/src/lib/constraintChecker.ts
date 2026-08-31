@@ -10,6 +10,10 @@ import type {
 } from '../api/dto';
 import { indexById } from '../lib/indexById';
 import { getMatchPlayerIds } from './trafficLight';
+import {
+  formatMatchIdentity,
+  meetMatchIdentityFromStored,
+} from '../platform/domain/matchIdentity';
 
 /**
  * Compute constraint violations from current schedule assignments
@@ -40,14 +44,15 @@ export function computeConstraintViolations(
 /**
  * Get match display label (M1, M2, etc. or eventRank)
  */
-function getMatchLabel(match: MatchDTO): string {
-  if (match.matchNumber) {
-    return `M${match.matchNumber}`;
-  }
-  if (match.eventRank) {
-    return match.eventRank;
-  }
-  return match.id.slice(0, 6);
+function getMatchLabel(match: MatchDTO | undefined, fallbackId?: string): string {
+  const identity = meetMatchIdentityFromStored({
+    // Constraint descriptions historically prefer the ordinal when it is
+    // present; retain that visible order while routing formatting through
+    // the canonical Meet identity seam.
+    event_rank: match?.matchNumber != null ? null : match?.eventRank,
+    sequence: match?.matchNumber ?? null,
+  });
+  return formatMatchIdentity(identity, match?.id ?? fallbackId) || '?';
 }
 
 /**
@@ -104,8 +109,8 @@ function checkPlayerOverlap(
       if (slots[i].end > slots[i + 1].start) {
         const match1 = matchMap.get(slots[i].matchId);
         const match2 = matchMap.get(slots[i + 1].matchId);
-        const label1 = match1 ? getMatchLabel(match1) : slots[i].matchId.slice(0, 6);
-        const label2 = match2 ? getMatchLabel(match2) : slots[i + 1].matchId.slice(0, 6);
+        const label1 = getMatchLabel(match1, slots[i].matchId);
+        const label2 = getMatchLabel(match2, slots[i + 1].matchId);
         violations.push({
           type: 'overlap',
           severity: 'hard',
@@ -151,8 +156,8 @@ function checkRestViolations(
       if (gap < restSlots && gap >= 0) {
         const match1 = matchMap.get(schedule[i].matchId);
         const match2 = matchMap.get(schedule[i + 1].matchId);
-        const label1 = match1 ? getMatchLabel(match1) : schedule[i].matchId.slice(0, 6);
-        const label2 = match2 ? getMatchLabel(match2) : schedule[i + 1].matchId.slice(0, 6);
+        const label1 = getMatchLabel(match1, schedule[i].matchId);
+        const label2 = getMatchLabel(match2, schedule[i + 1].matchId);
         violations.push({
           type: 'rest',
           severity: 'soft',
@@ -198,7 +203,7 @@ function checkCourtCapacity(
     if (matchIds.length > 1) {
       const labels = matchIds.map(id => {
         const match = matchMap.get(id);
-        return match ? getMatchLabel(match) : id.slice(0, 6);
+        return getMatchLabel(match, id);
       });
       const [courtId, slotId] = key.split('-');
       violations.push({

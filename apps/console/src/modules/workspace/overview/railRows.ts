@@ -11,7 +11,6 @@
  * every workspace landing to render a glance-only fact — logged as debt rather
  * than paid for. See docs/reference/debt-log.md.
  */
-import type { AppTab } from '../../../store/uiStore';
 import type { TournamentSummaryDTO } from '../../../api/dto';
 
 export interface RailRow {
@@ -20,7 +19,8 @@ export interface RailRow {
   value: string;
   /** Attention-toned when the value is a gap the operator may want to close. */
   tone?: 'muted' | 'warning';
-  segment: AppTab;
+  /** Canonical route beneath /tournaments/:id. */
+  path: string;
   /** Verb shown instead of the value when there is nothing to state yet. */
   actionLabel?: string;
 }
@@ -52,7 +52,7 @@ export function buildRailRows(
     label: 'Event date',
     value: date ?? 'Not set',
     tone: date ? undefined : 'warning',
-    segment: 'ws-settings',
+    path: 'setup/dates',
     actionLabel: date ? undefined : 'Set date',
   });
 
@@ -66,7 +66,7 @@ export function buildRailRows(
     value:
       displayShared === null ? '–' : displayShared ? 'Active' : 'Not shared',
     tone: displayShared ? undefined : 'muted',
-    segment: 'ws-sharing',
+    path: 'publish/displays',
   });
 
   const collab = summary.signals?.collaboration;
@@ -77,9 +77,9 @@ export function buildRailRows(
       // The row names the workspace surface it links to (Members), and the
       // value is the count alone — "Collaborators: 1 member" said the same
       // noun twice (OV-3).
-      label: 'Members',
+      label: 'Team',
       value: `${collab.memberCount}` + (invites > 0 ? ` · ${invites} invited` : ''),
-      segment: 'ws-members',
+      path: 'administration/team',
     });
   }
 

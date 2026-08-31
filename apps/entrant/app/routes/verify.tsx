@@ -27,15 +27,19 @@
  */
 import { Button, Notice } from '@scheduler/design-system/components';
 import { data } from 'react-router';
+import { useContext } from 'react';
 
 import { PlayShell } from '../components/PlayShell';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
+import { EntrantSessionContext } from '../lib/sessionContext';
 import type { Route } from './+types/verify';
+import { CARD } from '../lib/ui';
 
 /** Suffixes of the two outcome paths bound to this module (`app/routes.ts`). */
 const DONE_SUFFIX = '/done';
 const FAILED_SUFFIX = '/failed';
+const SENT_SUFFIX = '/sent';
 
 /**
  * Upper bound on the token we will echo back into a form.
@@ -55,6 +59,7 @@ export interface VerifyLoaderData {
   token: string;
   verified: boolean;
   failed: boolean;
+  sent: boolean;
 }
 
 export async function loader({ request }: { request: Request }) {
@@ -66,6 +71,7 @@ export async function loader({ request }: { request: Request }) {
     token: raw.length > MAX_TOKEN ? '' : raw,
     verified: url.pathname.endsWith(DONE_SUFFIX),
     failed: url.pathname.endsWith(FAILED_SUFFIX),
+    sent: url.pathname.endsWith(SENT_SUFFIX),
   };
   return data(payload, csrf.responseInit);
 }
@@ -80,7 +86,8 @@ export const meta: Route.MetaFunction = () => [
 ];
 
 export default function VerifyPage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, token, verified, failed } = loaderData;
+  const { formCsrf, token, verified, failed, sent } = loaderData;
+  const signedIn = useContext(EntrantSessionContext);
 
   return (
     <PlayShell>
@@ -96,7 +103,7 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
         </header>
 
         {verified ? (
-          <div className="grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+          <div className={`grid gap-4 ${CARD}`}>
             <Notice tone="success">
               Your email address is confirmed. Any entries you already sent are
               now with the organizer.
@@ -111,19 +118,42 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
           /* One message for expired, already-used and never-valid — see the
              module note. "Ask for a new one" is the action, and it works in
              every one of those cases, which is why no diagnosis is owed. */
-          <div className="grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+          <div className={`grid gap-4 ${CARD}`}>
             <Notice tone="warning">
-              That confirmation link is no longer usable. Sign in and ask for a
-              new one. It takes a moment, and the new link replaces this one.
+              That confirmation link is no longer usable. Your saved entries
+              are unchanged, and a fresh link will replace this one.
             </Notice>
+            {signedIn ? (
+              <form method="post" action="/e/account/resend-verification">
+                <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                <Button type="submit">Send a new confirmation email</Button>
+              </form>
+            ) : (
+              <Button asChild variant="outline" className="justify-self-start">
+                <a href="/e/login?next=/e/verify/failed">Sign in to request a new link</a>
+              </Button>
+            )}
+          </div>
+        ) : null}
+
+        {sent ? (
+          <div className={`grid gap-4 ${CARD}`}>
+            <Notice tone="success">
+              A fresh confirmation link has been sent to your account email.
+              Open the newest message; your saved entries are unchanged.
+            </Notice>
+            <p className="text-sm text-muted-foreground">
+              Delivery can take a few minutes. Check spam or junk mail before
+              requesting another link.
+            </p>
             <Button asChild variant="outline" className="justify-self-start">
-              <a href="/e/login">Sign in</a>
+              <a href="/e/me/entries">See my entries</a>
             </Button>
           </div>
         ) : null}
 
-        {!verified && !failed ? (
-          <div className="grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+        {!verified && !failed && !sent ? (
+          <div className={`grid gap-4 ${CARD}`}>
             {token ? (
               <form method="post" action="/e/account/verify" className="grid gap-4">
                 <input type="hidden" name={FORM_FIELD} value={formCsrf} />

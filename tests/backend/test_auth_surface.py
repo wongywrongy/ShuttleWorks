@@ -166,6 +166,12 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "roster people; only real entry players receive profile keys, and no "
         "contact data is selected"
     ),
+    ("GET", "/e/api/page/{slug}/matches"): (
+        "the public Schedule / Live projection — draws_published gates every "
+        "operational query, results_published gates scores and terminal result "
+        "states, and the explicit DTO contains names and schedule facts but no "
+        "entrant contact or account data"
+    ),
     ("GET", "/e/api/page/{slug}/seeds"): (
         "per-event seed lists — seeds are draw facts, so draws_published "
         "gates them; the same published:false envelope when off"

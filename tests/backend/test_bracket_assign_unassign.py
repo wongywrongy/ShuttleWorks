@@ -8,6 +8,8 @@ TDD — write tests RED first, then implement.
 """
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -109,6 +111,20 @@ def test_assign_places_unit_at_court_and_slot(bracket_client, seeded_bracket):
     assert a["court_id"] == 1
     assert a["slot_id"] == 3
 
+    # Operations assignment is also the public projection source. Solver
+    # planning stays in the bracket-session blob and never writes this row.
+    from db.models import Match
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        operational = session.get(Match, (uuid.UUID(tid), sf0))
+        assert operational is not None
+        assert operational.court_id == 1
+        assert operational.time_slot == 3
+    finally:
+        session.close()
+
 
 def test_assign_does_not_disturb_other_units(bracket_client, seeded_bracket):
     """After assigning sf0, sf1 stays unassigned — the solver was NOT run."""
@@ -190,6 +206,22 @@ def test_unassign_removes_assignment(bracket_client, seeded_bracket):
     assert sf0_assignments == [], "sf0 should be unassigned after unassign"
     assert len(sf1_assignments) == 1, "sf1 assignment must survive the unassign"
 
+    from db.models import Match
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        sf0_operational = session.get(Match, (uuid.UUID(tid), sf0))
+        sf1_operational = session.get(Match, (uuid.UUID(tid), sf1))
+        assert sf0_operational is not None
+        assert sf0_operational.court_id is None
+        assert sf0_operational.time_slot is None
+        assert sf1_operational is not None
+        assert sf1_operational.court_id == 2
+        assert sf1_operational.time_slot == 3
+    finally:
+        session.close()
+
 
 def test_unassign_nonexistent_assignment_is_noop(bracket_client, seeded_bracket):
     """Unassigning a play unit with no assignment returns 200 (no-op)."""
@@ -211,3 +243,61 @@ def test_assign_unknown_play_unit_returns_404(bracket_client, seeded_bracket):
         json={"play_unit_id": "nonexistent-unit", "court_id": 1, "slot_id": 1},
     )
     assert r.status_code == 404, r.text
+
+
+def test_unresolved_future_match_cannot_be_sent_to_court(bracket_client, seeded_bracket):
+    tid, _sf0, _sf1 = seeded_bracket
+    state = bracket_client.get(f"/tournaments/{tid}/bracket").json()
+    final = next(unit for unit in state["play_units"] if unit["round_index"] == 1)
+
+    response = bracket_client.post(
+        f"/tournaments/{tid}/bracket/assign",
+        json={"play_unit_id": final["id"], "court_id": 1, "slot_id": 8},
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["error"] == "unresolved_participants"
+    assert final["slot_a"]["feeder_play_unit_id"] in " ".join(detail["reasons"])
+
+
+def test_unresolved_planned_match_cannot_start_or_record_result(bracket_client):
+    tid = seed_tournament(bracket_client, "Unresolved Planned Match")
+    payload = {
+        "courts": 2,
+        "total_slots": 32,
+        "events": [
+            {
+                "id": "MS",
+                "participants": [
+                    {"id": f"P{i}", "name": f"Player {i}"} for i in range(1, 5)
+                ],
+                "rounds": [
+                    [
+                        {"id": "SF1", "side_a": ["P1"], "side_b": ["P2"]},
+                        {"id": "SF2", "side_a": ["P3"], "side_b": ["P4"]},
+                    ],
+                    [{"id": "F", "feeder_a": "SF1", "feeder_b": "SF2"}],
+                ],
+            }
+        ],
+        "assignments": [
+            {"play_unit_id": "F", "court_id": 1, "slot_id": 8, "duration_slots": 1}
+        ],
+    }
+    imported = bracket_client.post(f"/tournaments/{tid}/bracket/import", json=payload)
+    assert imported.status_code == 200, imported.text
+
+    started = bracket_client.post(
+        f"/tournaments/{tid}/bracket/match-action",
+        json={"play_unit_id": "F", "action": "start"},
+    )
+    result = bracket_client.post(
+        f"/tournaments/{tid}/bracket/results",
+        json={"play_unit_id": "F", "winner_side": "A"},
+    )
+
+    assert started.status_code == 409
+    assert result.status_code == 409
+    assert started.json()["detail"]["error"] == "unresolved_participants"
+    assert result.json()["detail"]["error"] == "unresolved_participants"

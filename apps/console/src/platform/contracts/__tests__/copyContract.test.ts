@@ -21,7 +21,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildWorkspaceNav } from '../../product-shell/workspaceNav';
+import { buildWorkflowNavigation } from '../../product-shell/workspaceNav';
 import type { ModuleId } from '../../product-shell/types';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -42,6 +42,11 @@ const RULES: Rule[] = [
     // Operations → Courts". Courts has never been a destination in this nav.
     pattern: /Operations\s*→\s*(?!Plan\b|Live day\b)\w+/g,
     why: 'Operations has exactly two destinations: Plan and Live day (buildWorkspaceNav)',
+  },
+  {
+    id: 'retired-workflow-labels',
+    pattern: /label:\s*["'](?:Sharing|Members|Sync and backups|Venue and schedule)["']|>\s*(?:Sharing|Sync and backups|Venue and schedule)\s*</g,
+    why: 'phase navigation uses Site, Team, Backups, Venue, and Links and embeds',
   },
   {
     id: 'stale-nav-bracket',
@@ -114,8 +119,28 @@ describe('COPY-5 — banned phrases never reach a surface', () => {
     // Ties the rule to the nav model rather than to a memory of it: rename a
     // destination and this fails, instead of the guard quietly allowing a name
     // that no longer exists.
-    const nav = buildWorkspaceNav('meet', new Set<ModuleId>(['meet']));
+    const nav = buildWorkflowNavigation('meet', new Set<ModuleId>(['meet']));
     const ops = nav.sections.find((s) => s.id === 'operations');
     expect(ops?.items.map((i) => i.label)).toEqual(['Plan', 'Live day']);
+  });
+
+  it('the canonical workflow nav contains no retired restructure labels', () => {
+    const nav = buildWorkflowNavigation(
+      'bracket',
+      new Set<ModuleId>(['entries', 'bracket', 'display']),
+    );
+    const labels = [
+      nav.overview.label,
+      ...nav.sections.flatMap((section) => [section.label, ...section.items.map((item) => item.label)]),
+      nav.admin.label,
+      ...nav.admin.items.map((item) => item.label),
+    ];
+    expect(labels).not.toEqual(expect.arrayContaining([
+      'Sharing',
+      'Members',
+      'Sync and backups',
+      'Venue and schedule',
+    ]));
+    expect(labels).toContain('Links and embeds');
   });
 });

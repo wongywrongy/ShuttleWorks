@@ -18,12 +18,13 @@
 import { Button } from '@scheduler/design-system/components';
 
 import { PlayShell } from './PlayShell';
+import { CARD } from '../lib/ui';
 
 export function MessagePage({ heading, body }: { heading: string; body: string }) {
   return (
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-4 px-4 py-16 md:py-24">
-        <div className="grid justify-items-start gap-3 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+        <div className={`grid justify-items-start gap-3 ${CARD}`}>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
             {heading}
           </h1>

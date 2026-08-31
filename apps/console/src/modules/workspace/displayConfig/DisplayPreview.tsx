@@ -49,6 +49,7 @@ import {
   resolveCardSizeClasses,
   resolveGridColsClass,
 } from '../../display/publicDisplay/tvSizing';
+import { TEXT_MUTED_2XS } from '../../../lib/utils'
 
 // Natural (unscaled) render box for the sample board, then shrunk into a
 // bordered "TV bezel" frame via CSS transform — the wrapper's actual
@@ -174,7 +175,7 @@ export function DisplayPreview({ config }: { config: TournamentConfig | null }) 
         className="mb-1.5 flex items-baseline gap-2"
       >
         <Eyebrow tone="accent">Sample data</Eyebrow>
-        <span className="text-2xs text-muted-foreground">
+        <span className={TEXT_MUTED_2XS}>
           Players, scores and courts are invented. Layout, size, colour and
           columns are your real settings.
         </span>

@@ -25,6 +25,9 @@ import {
   seasonSections,
   statusCell,
   timelineModel,
+  normalizeTournamentPhase,
+  phaseLabel,
+  tournamentPhase,
   totalBarState,
   viewRows,
   visibleBlocks,
@@ -521,6 +524,21 @@ describe('totalBarState', () => {
 });
 
 // ---- timelineModel ---------------------------------------------------------
+
+describe('public tournament lifecycle', () => {
+  it('normalizes newer and season-projection status names', () => {
+    expect(normalizeTournamentPhase('in_progress_live')).toBe('live');
+    expect(normalizeTournamentPhase('completed_winners')).toBe('complete');
+    expect(normalizeTournamentPhase('unknown')).toBeNull();
+    expect(phaseLabel('draws_published')).toBe('Draws published');
+  });
+
+  it('falls back to publication and entry facts when lifecycle is absent', () => {
+    expect(tournamentPhase({ publication: { draws: true, results: false }, events: [] })).toBe('draws_published');
+    expect(tournamentPhase({ publication: { draws: false, results: false }, events: [{ isOpen: true }] })).toBe('entries_open');
+    expect(tournamentPhase({ publication: { draws: false, results: false }, events: [] })).toBe('entries_closed');
+  });
+});
 
 describe('timelineModel', () => {
   it('renders agreed moments singly, disagreements as per-event variance', () => {

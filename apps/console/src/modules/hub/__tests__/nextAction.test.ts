@@ -19,6 +19,12 @@ describe('nextActionFor', () => {
   it('defaults to Open with no reason', () => {
     expect(nextActionFor(t())).toEqual({ label: 'Open', reasonCode: null });
   });
+
+  it('routes attention actions to the canonical workflow destination', () => {
+    expect(rowActionFor(t('NO_ROSTER'), 'upcoming').segment).toBe('participants/people');
+    expect(rowActionFor(t('NOT_SCHEDULED'), 'upcoming').segment).toBe('operations/plan');
+    expect(rowActionFor(t('NO_BRACKET'), 'upcoming').segment).toBe('competition/draws');
+  });
 });
 
 describe('rowActionFor', () => {
@@ -39,12 +45,12 @@ describe('rowActionFor', () => {
     expect(rowActionFor(bracket, 'upcoming')).toEqual({
       label: 'View draws',
       kind: 'results',
-      segment: 'bracket-draws',
+      segment: 'competition/draws',
     });
     expect(rowActionFor({ ...bracket, signals: undefined }, 'past')).toEqual({
       label: 'View draws',
       kind: 'results',
-      segment: 'bracket-draws',
+      segment: 'competition/draws',
     });
   });
 });

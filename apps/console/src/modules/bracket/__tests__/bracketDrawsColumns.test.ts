@@ -11,32 +11,40 @@
  * A rendering test would not have caught it: both cells render, and jsdom has
  * no layout. The invariant is lexical, so the test is too.
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const SRC = readFileSync(
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../BracketDrawsTab.tsx'),
-  'utf8',
+  path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../BracketDrawsTab.tsx",
+  ),
+  "utf8",
 );
 
-describe('the Draws row cannot drift from its column spec', () => {
-  it('every body cell takes its geometry from DRAW_COLUMNS', () => {
+describe("the Draws row cannot drift from its column spec", () => {
+  it("every body cell takes its geometry from DRAW_COLUMNS", () => {
     // Each `role="cell"` opens a body cell; its className must reference the
     // spec rather than restating a width that the spec can move out from under.
     const cells = SRC.split('role="cell"').slice(1);
     expect(cells.length).toBeGreaterThanOrEqual(7);
     const offenders = cells
       .map((chunk, i) => [i, chunk.slice(0, 220)] as const)
-      .filter(([, chunk]) => !chunk.includes('colClass(DRAW_COLUMNS['))
-      .map(([i, chunk]) => `cell ${i}: ${chunk.split('\n')[1]?.trim() ?? chunk.slice(0, 80)}`);
+      .filter(([, chunk]) => !chunk.includes("colClass(DRAW_COLUMNS["))
+      .map(
+        ([i, chunk]) =>
+          `cell ${i}: ${chunk.split("\n")[1]?.trim() ?? chunk.slice(0, 80)}`,
+      );
     expect(offenders).toEqual([]);
   });
 
-  it('no body cell restates a bare Tailwind width', () => {
+  it("no body cell restates a bare Tailwind width", () => {
     // The specific shape that drifted: `className="w-16 shrink-0 …"`.
-    const cells = SRC.split('role="cell"').slice(1).map((c) => c.slice(0, 220));
+    const cells = SRC.split('role="cell"')
+      .slice(1)
+      .map((c) => c.slice(0, 220));
     for (const chunk of cells) {
       expect(chunk, chunk.slice(0, 90)).not.toMatch(/className="[^"]*\bw-\d/);
     }
@@ -67,29 +75,40 @@ function declaredPx(cls: string): number {
   return step ? parseFloat(step[1]) * 4 : 0;
 }
 
-describe('the Draws row fits its width budget', () => {
+describe("the Draws row fits its width budget", () => {
   // Parsed from the source so the test reads the shipped spec, not a copy.
-  const specBlock = SRC.slice(SRC.indexOf('const DRAW_COLUMNS'), SRC.indexOf('];', SRC.indexOf('const DRAW_COLUMNS')));
-  const classNames = [...specBlock.matchAll(/className: '([^']+)'/g)].map((m) => m[1]);
+  const specBlock = SRC.slice(
+    SRC.indexOf("const DRAW_COLUMNS"),
+    SRC.indexOf("];", SRC.indexOf("const DRAW_COLUMNS")),
+  );
+  const classNames = [
+    ...specBlock.matchAll(/className:\s*["']([^"']+)["']/g),
+  ].map((m) => m[1]);
 
-  it('declares seven columns', () => {
+  it("declares seven columns", () => {
     expect(classNames).toHaveLength(7);
   });
 
-  it('every column, at its declared floor, fits the content box', () => {
+  it("every column, at its declared floor, fits the content box", () => {
     const declared = classNames.map(declaredPx);
     // A column declaring nothing would silently pass; none may.
     expect(declared.filter((px) => px === 0)).toEqual([]);
     const total =
-      declared.reduce((a, b) => a + b, 0) + GAP_PX * (classNames.length - 1) + INSET_PX;
-    expect(total, `columns total ${total}px against a ${CONTENT_BUDGET_PX}px box`).
-      toBeLessThanOrEqual(CONTENT_BUDGET_PX);
+      declared.reduce((a, b) => a + b, 0) +
+      GAP_PX * (classNames.length - 1) +
+      INSET_PX;
+    expect(
+      total,
+      `columns total ${total}px against a ${CONTENT_BUDGET_PX}px box`,
+    ).toBeLessThanOrEqual(CONTENT_BUDGET_PX);
   });
 
-  it('the growing column carries a floor, so it cannot be crushed to zero', () => {
-    const grower = classNames.find((c) => c.includes('flex-1'));
+  it("the growing column carries a floor, so it cannot be crushed to zero", () => {
+    const grower = classNames.find((c) => c.includes("flex-1"));
     expect(grower).toBeDefined();
-    expect(grower, 'the flex-1 column must not be min-w-0').not.toContain('min-w-0');
+    expect(grower, "the flex-1 column must not be min-w-0").not.toContain(
+      "min-w-0",
+    );
     expect(declaredPx(grower!)).toBeGreaterThan(0);
   });
 });

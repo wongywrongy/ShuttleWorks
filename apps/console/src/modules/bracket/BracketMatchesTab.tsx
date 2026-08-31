@@ -5,43 +5,54 @@
  * every event. The list is a read-only projection (edit the draw in
  * Draw / Events to change matches) grouped by event on the shared
  * BandedTable shell, mirroring the meet's grouped match list; clicking
- * a row (anywhere — the rows hold no editors) opens the right-docked
- * match DetailPanel with the sides' player cards and the read-only
- * status pill. The list feeds Operations (Courts / Live) just like the
- * meet's matches do.
+ * a row (anywhere — the rows hold no editors) opens the shared right-docked
+ * MatchInspector. F-UNI-12/F-UNI-17: Bracket supplies identity, snapshot data
+ * and its authorized controls; it no longer owns match-detail chrome.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Download, MagnifyingGlass } from '@phosphor-icons/react';
+import { Download } from '@phosphor-icons/react';
 import type { BracketTournamentDTO, PlayUnitDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
 import { useCanEdit } from '../../hooks/useCanEdit';
 import {
   ActionsBar,
-  BandedTable,
+  DenseDataTable,
+  DenseDataToolbar,
   DetailDock,
   EmptyState,
+  DEFAULT_DENSE_DATA_STATE,
   MatchStatusFilter,
   BRACKET_MATCH_CELL,
   BRACKET_MATCH_LIST_COLUMNS,
   BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   MatchStatus,
+  MatchInspector,
   OverflowMenu,
   parseMatchStatusFilter,
   ScoreLane,
   STATUS_LABEL,
-  type BandedTableGroup,
+  type DenseDataColumn,
   type BracketMatchStatus,
+  type MatchInspectorModel,
 } from '../../components/control-plane';
 import { formatSideName } from '../../lib/names';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
-import { buildPlayUnitLabels, disciplineLabel, sideLabel } from './bracketLabels';
+import { formatMatchIdentity } from '../../platform/domain/matchIdentity';
+import { matchKey } from '../../platform/domain/match';
 import {
-  BracketMatchDetailPanel,
+  buildPlayUnitIdentities,
+  disciplineLabel,
+  sideLabel,
+} from './bracketLabels';
+import {
+  BracketMatchContingencyControls,
+  BracketMatchPlayerControls,
   type ContingencyReason,
-} from './BracketMatchDetailPanel';
+} from './BracketMatchControls';
 import { type CommitEventFn } from './BracketPlayerFields';
+import { formatBracketSlot } from './formatBracketSlot';
 import {
   exportBracketMatchesXlsx,
   type BracketMatchExportRow,
@@ -71,14 +82,20 @@ export function BracketMatchesTab({
 }) {
   const api = useBracketApi();
   const canEdit = useCanEdit();
-  // Same URL-backed `?q=` contract as Meet Matches — the URL is the shared
-  // source of truth, so a pasted link restores the operator's filter.
+  // Preserve the existing shared `?q=` deep-link contract. Other dense table
+  // state remains local until the matches route can own a complete query
+  // namespace; search is the high-value handoff for this surface.
   const [query, setQuery] = useSearchParamState('q', '');
+  const [denseState, setDenseStateLocal] = useState(() => ({ ...DEFAULT_DENSE_DATA_STATE, search: query }));
+  const setDenseState = (next: typeof denseState) => {
+    setDenseStateLocal(next);
+    if (next.search !== query) setQuery(next.search);
+  };
   // Status facet (?status=) — the same strip Meet Matches renders.
   const [statusParam, setStatusParam] = useSearchParamState('status', '');
   const statusFilter = parseMatchStatusFilter(statusParam);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Row-menu deep-link into the detail panel's Contingency section (a
+  // Row-menu deep-link into the shared inspector's Bracket action controls (a
   // winner must still be chosen there — this only pre-selects the kind).
   const [contingency, setContingency] = useState<ContingencyReason | null>(null);
 
@@ -106,16 +123,21 @@ export function BracketMatchesTab({
     () => new Map(data.results.map((r) => [r.play_unit_id, r])),
     [data.results],
   );
-  // Operator-friendly play-unit labels ("MS QF1") — the same names the
-  // Draw / Live / Operations surfaces show, instead of the raw
-  // R{round}·M{match} indices.
-  const labelById = useMemo(() => buildPlayUnitLabels(data), [data]);
+  // F-UNI-12/F-UNI-17: the list and inspector consume one identity projection
+  // from the already-fetched bracket snapshot.
+  const identityById = useMemo(() => buildPlayUnitIdentities(data), [data]);
+  const labelById = useMemo(
+    () => new Map(
+      [...identityById].map(([id, identity]) => [id, formatMatchIdentity(identity)]),
+    ),
+    [identityById],
+  );
 
   // Row form of the label INSIDE its event group (G6): the group band
   // already says "MS", so "MS QF1" rows repeat it — row identity is "QF1".
   // Exports and titles keep the full label.
   const shortLabelById = useMemo(() => {
-    // `buildPlayUnitLabels` prefixes with the raw discipline CODE — strip
+    // The shared formatter prefixes with the raw discipline CODE — strip
     // exactly that, not the long `disciplineLabel` form.
     const prefixByEvent = new Map(
       data.events.map((ev) => [ev.id, `${ev.discipline} `]),
@@ -187,7 +209,7 @@ export function BracketMatchesTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.play_units, assignmentByPu, resultByPu]);
 
-  const q = query.toLowerCase().trim();
+  const q = denseState.search.toLowerCase().trim();
   // Group every play unit by its event, ordered by the events list, then
   // by round / match index within the event. Each unit is numbered
   // BEFORE the search filter runs so a row's `#` is a stable per-event
@@ -254,20 +276,128 @@ export function BracketMatchesTab({
     })),
   );
 
-  // Grouped-table view of the same data for the shared BandedTable shell.
-  const tableGroups: BandedTableGroup<NumberedUnit>[] = groups.map(
-    ({ ev, units }) => ({
-      key: ev.id,
-      code: ev.id,
-      label: disciplineLabel(ev.discipline),
-      items: units,
-      testId: `bracket-match-group-${ev.id}`,
-    }),
-  );
+  const matchColumns = useMemo<DenseDataColumn<NumberedUnit>[]>(() => [
+    {
+      id: 'match', label: 'Match', accessor: ({ pu }) => shortLabelById.get(pu.id) ?? pu.id,
+      className: BRACKET_MATCH_CELL.event, mobile: true, cellTitle: ({ pu }) => pu.id,
+      render: (_value, { pu }) => <span className="font-semibold text-foreground sw-num" title={pu.id}>{shortLabelById.get(pu.id) ?? pu.id}</span>,
+    },
+    {
+      id: 'sideA', label: BRACKET_MATCH_LIST_COLUMNS[2].label, accessor: ({ pu }) => resolveSide(pu.side_a), className: BRACKET_MATCH_CELL.side,
+      render: (_value, { pu }) => renderSide(pu.side_a, pu.slot_a),
+    },
+    {
+      id: 'sideB', label: BRACKET_MATCH_LIST_COLUMNS[3].label, accessor: ({ pu }) => resolveSide(pu.side_b), className: BRACKET_MATCH_CELL.side,
+      render: (_value, { pu }) => renderSide(pu.side_b, pu.slot_b),
+    },
+    {
+      id: 'status', label: BRACKET_MATCH_LIST_COLUMNS[4].label, accessor: ({ pu }) => statusOf(pu.id), align: 'right', className: BRACKET_MATCH_CELL.status,
+      render: (_value, { pu }) => {
+        const result = resultByPu.get(pu.id);
+        const sets = result?.score?.sets ?? [];
+        const reason = result?.reason ?? (result?.walkover ? 'walkover' : null);
+        return <span data-testid={`bracket-match-status-${pu.id}`} className="inline-flex min-w-0 items-center justify-end">{sets.length > 0 || reason ? <ScoreLane sets={sets} reason={reason} /> : <MatchStatus status={statusOf(pu.id)} />}</span>;
+      },
+    },
+    {
+      // SP-OPCON-1 SWP-4: exceptions only. "Unassigned court" is NOT an issue
+      // for a bracket match — courts are assigned at play time by Operations
+      // (queue scheduling), and a result can be recorded with no assignment at
+      // all, so the old predicate stamped every row of a finished event. The
+      // one real exception this list can see is an unresolved feeder on an
+      // unplayed match. Rows without an issue render NOTHING (X6: a column
+      // painting the same word on every row is decoration, not information).
+      id: 'issue', label: 'Issues',
+      accessor: ({ pu }) =>
+        !resultByPu.has(pu.id) && ((pu.side_a?.length ?? 0) === 0 || (pu.side_b?.length ?? 0) === 0)
+          ? 'Waiting on draw'
+          : '',
+      mobile: true,
+      render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null,
+    },
+  ], [labelById, resultByPu, shortLabelById]);
 
   const selected = selectedId
     ? data.play_units.find((pu) => pu.id === selectedId) ?? null
     : null;
+
+  const participantNameById = useMemo(
+    () => Object.fromEntries(
+      data.participants.map((participant) => [participant.id, participant.name]),
+    ),
+    [data.participants],
+  );
+  const selectedInspectorModel = useMemo<MatchInspectorModel | null>(() => {
+    if (!selected) return null;
+    const identity = identityById.get(selected.id);
+    if (!identity) return null;
+    const assignment = assignmentByPu.get(selected.id);
+    const result = resultByPu.get(selected.id) ?? null;
+    const sideValue = (ids: string[] | null, slot: PlayUnitDTO['slot_a']) => {
+      if (ids && ids.length > 0) {
+        return ids.map((id) => participantById.get(id)?.name ?? id).join(' / ');
+      }
+      if (slot.feeder_play_unit_id || slot.participant_id) {
+        return sideLabel(ids, slot, participantNameById, labelById);
+      }
+      return 'TBD';
+    };
+    const sideA = sideValue(selected.side_a, selected.slot_a);
+    const sideB = sideValue(selected.side_b, selected.slot_b);
+    const winner = result?.winner_side === 'A'
+      ? sideA
+      : result?.winner_side === 'B'
+        ? sideB
+        : null;
+    const sets = (result?.score?.sets ?? []).filter(
+      (set) => typeof set?.sideA === 'number' && typeof set?.sideB === 'number',
+    );
+    const status: BracketMatchStatus = result
+      ? 'done'
+      : assignment?.started && !assignment.finished
+        ? 'live'
+        : assignment
+          ? 'ready'
+          : 'pending';
+
+    // F-UNI-12/F-UNI-17: the shared model is a pure projection of the one
+    // fetched snapshot; MatchInspector performs no Bracket read of its own.
+    return {
+      key: matchKey('bracket', selected.id),
+      id: selected.id,
+      identity,
+      status: STATUS_LABEL[status],
+      sideA,
+      sideB,
+      assignment: assignment
+        ? {
+            court: assignment.court_id,
+            planned: formatBracketSlot(assignment.slot_id, data),
+            actualStart: assignment.actual_start_slot != null
+              ? formatBracketSlot(assignment.actual_start_slot, data)
+              : null,
+            actualEnd: assignment.actual_end_slot != null
+              ? formatBracketSlot(assignment.actual_end_slot, data)
+              : null,
+          }
+        : undefined,
+      result: result
+        ? {
+            summary: winner ? `${winner} won` : 'Result recorded.',
+            sets,
+          }
+        : null,
+    };
+  }, [
+    assignmentByPu,
+    data,
+    identityById,
+    labelById,
+    participantById,
+    participantNameById,
+    resultByPu,
+    selected,
+  ]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -289,21 +419,6 @@ export function BracketMatchesTab({
           </>
         }
       >
-        <div className="relative">
-          <MagnifyingGlass
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search event or player…"
-            aria-label="Search matches"
-            data-testid="bracket-matches-search"
-            className="h-7 w-56 rounded-sm border border-border bg-card pl-7 pr-2 text-xs outline-none transition-colors duration-fast ease-brand placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/30"
-          />
-        </div>
         <button
           type="button"
           onClick={() => void exportBracketMatchesXlsx(exportRows)}
@@ -336,111 +451,29 @@ export function BracketMatchesTab({
                 onChange={(v) => setStatusParam(v === 'all' ? '' : v)}
                 testIdPrefix="bracket-matches"
               />
-              <div className="min-h-0 flex-1 overflow-auto">
-              <BandedTable
-                columns={BRACKET_MATCH_LIST_COLUMNS}
-                groups={tableGroups}
-                rowId={({ pu }) => pu.id}
-                onRowClick={({ pu }) =>
-                  setSelectedId((prev) => (prev === pu.id ? null : pu.id))
-                }
-                selectedId={selectedId}
-                rowTestId={({ pu }) => `bracket-match-row-${pu.id}`}
-                renderRow={({ pu }) => {
-                  const status = statusOf(pu.id);
-                  const result = resultByPu.get(pu.id);
-                  const sets = result?.score?.sets ?? [];
-                  const reason =
-                    result?.reason ?? (result?.walkover ? 'walkover' : null);
-                  // `winner_side` can be 'none' (double W.O.) — no dot then.
-                  const winner =
-                    result?.winner_side === 'A' || result?.winner_side === 'B'
-                      ? result.winner_side
-                      : null;
-                  return (
-                    <>
-                      {/* Gutter spacer — Meet's warning-icon slot;
-                          empty here but kept so the columns start
-                          at the same x on both surfaces. */}
-                      <span role="cell" className={`${BRACKET_MATCH_CELL.warnGutter} shrink-0`} />
-                      {/* Friendly label, group prefix stripped (the band
-                          header already carries "MS"); raw id kept on title
-                          for traceability (it's also the row testid).
-                          px-1.5 mirrors the inner inset of Meet's
-                          editable event field. `break-words` is the backstop
-                          for a longer operator discipline code: it grows the
-                          row rather than spilling into Side A. */}
-                      <span
-                        role="cell"
-                        className={`${BRACKET_MATCH_CELL.event} break-words px-1.5 text-2sm font-semibold text-foreground sw-num`}
-                        title={pu.id}
-                      >
-                        {shortLabelById.get(pu.id) ?? pu.id}
-                      </span>
-                      {/* Winner by WEIGHT, not by a green dot floating before
-                          the name — green reads as live at scan speed, which a
-                          finished match is not (BMAT-2 / MAT-3). */}
-                      <span
-                        role="cell"
-                        className={`${BRACKET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed text-foreground ${
-                          winner === 'A' ? 'font-semibold' : ''
-                        }`}
-                      >
-                        {renderSide(pu.side_a, pu.slot_a)}
-                      </span>
-                      <span
-                        role="cell"
-                        className={`${BRACKET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed text-foreground ${
-                          winner === 'B' ? 'font-semibold' : ''
-                        }`}
-                      >
-                        {renderSide(pu.side_b, pu.slot_b)}
-                      </span>
-                      <span
-                        role="cell"
-                        data-testid={`bracket-match-status-${pu.id}`}
-                        className={`${BRACKET_MATCH_CELL.status} flex items-center justify-end`}
-                      >
-                        {/* X6-D (supersedes X3): a finished row's score IS
-                            its status — no DONE label beside it. See the
-                            meet list. */}
-                        {sets.length > 0 || reason ? (
-                          <ScoreLane sets={sets} reason={reason} />
-                        ) : (
-                          <MatchStatus status={status} />
-                        )}
-                      </span>
-                      <span
-                        role="cell"
-                        className={`flex ${BRACKET_MATCH_CELL.actionGutter} shrink-0 items-center justify-center`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {status !== 'done' && canEdit ? (
-                          <OverflowMenu
-                            label={`Contingency for ${labelById.get(pu.id) ?? pu.id}`}
-                            items={(['walkover', 'retired', 'forfeit'] as const).map(
-                              (r) => ({
-                                key: r,
-                                label: CONTINGENCY_MENU_LABEL[r],
-                                testId: `bracket-match-menu-${r}-${pu.id}`,
-                                onSelect: () => {
-                                  setSelectedId(pu.id);
-                                  setContingency(r);
-                                },
-                              }),
-                            )}
-                          />
-                        ) : null}
-                      </span>
-                    </>
-                  );
-                }}
+              <DenseDataToolbar
+                state={denseState}
+                onStateChange={setDenseState}
+                searchTestId="bracket-matches-search"
+                searchPlaceholder="Search event or player…"
               />
-              {shown === 0 ? (
-                <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                  No matches match the current filters.
-                </div>
-              ) : null}
+              <div className="min-h-0 flex-1 overflow-auto">
+                <DenseDataTable
+                  columns={matchColumns}
+                  rows={groups.flatMap(({ units }) => units)}
+                  state={denseState}
+                  onStateChange={setDenseState}
+                  rowId={({ pu }) => pu.id}
+                  rowTestId={({ pu }) => `bracket-match-row-${pu.id}`}
+                  onRowClick={({ pu }) => setSelectedId((prev) => (prev === pu.id ? null : pu.id))}
+                  activeRowId={selectedId}
+                  groupBy={({ pu }) => {
+                    const event = data.events.find((candidate) => candidate.id === pu.event_id);
+                    return { key: pu.event_id, label: event ? disciplineLabel(event.discipline) : pu.event_id, testId: `bracket-match-group-${pu.event_id}` };
+                  }}
+                  renderActions={({ pu }) => statusOf(pu.id) !== 'done' && canEdit ? <OverflowMenu label={`Contingency for ${labelById.get(pu.id) ?? pu.id}`} items={(['walkover', 'retired', 'forfeit'] as const).map((reason) => ({ key: reason, label: CONTINGENCY_MENU_LABEL[reason], testId: `bracket-match-menu-${reason}-${pu.id}`, onSelect: () => { setSelectedId(pu.id); setContingency(reason); } }))} /> : null}
+                  emptyState="No matches match the current filters."
+                />
               </div>
             </>
           )}
@@ -453,23 +486,53 @@ export function BracketMatchesTab({
           open={selected != null}
           minContentWidth={BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
         >
-        {selected ? (
-          <BracketMatchDetailPanel
+        {selected && selectedInspectorModel ? (
+          <MatchInspector
             key={selected.id}
-            pu={selected}
-            data={data}
-            label={labelById.get(selected.id) ?? selected.id}
-            status={statusOf(selected.id)}
-            labelById={labelById}
+            match={selectedInspectorModel}
+            defaultFacet="summary"
+            testId="bracket-match-detail"
             onClose={() => {
               setSelectedId(null);
               setContingency(null);
             }}
-            onCommitEvent={commitEvent}
-            initialContingency={contingency}
-            onRecordContingency={
-              canEdit
-                ? async (reason, winner) => {
+            supplements={{
+              summary: statusOf(selected.id) !== 'done' ? (
+                <BracketMatchPlayerControls
+                  pu={selected}
+                  data={data}
+                  labelById={labelById}
+                  onCommitEvent={commitEvent}
+                  mode="summary"
+                />
+              ) : undefined,
+              result: statusOf(selected.id) === 'done' ? (
+                <BracketMatchPlayerControls
+                  pu={selected}
+                  data={data}
+                  labelById={labelById}
+                  onCommitEvent={commitEvent}
+                  mode="result"
+                />
+              ) : undefined,
+            }}
+            actions={{
+              summary: canEdit && statusOf(selected.id) !== 'done' ? (
+                <BracketMatchContingencyControls
+                  sideALabel={sideLabel(
+                    selected.side_a,
+                    selected.slot_a,
+                    participantNameById,
+                    labelById,
+                  )}
+                  sideBLabel={sideLabel(
+                    selected.side_b,
+                    selected.slot_b,
+                    participantNameById,
+                    labelById,
+                  )}
+                  initial={contingency}
+                  onRecord={async (reason, winner) => {
                     const next = await api.recordResultCommand({
                       play_unit_id: selected.id,
                       winner_side: winner,
@@ -478,9 +541,10 @@ export function BracketMatchesTab({
                     });
                     onData?.(next);
                     setContingency(null);
-                  }
-                : null
-            }
+                  }}
+                />
+              ) : undefined,
+            }}
           />
         ) : null}
         </DetailDock>

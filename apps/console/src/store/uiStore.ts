@@ -242,10 +242,6 @@ interface UiState {
   unlockModalState: UnlockModalState | null;
   setUnlockModalState: (state: UnlockModalState | null) => void;
 
-  // Bracket Live tab — selected match id for MatchDetailPanel.
-  bracketSelectedMatchId: string | null;
-  setBracketSelectedMatchId: (id: string | null) => void;
-
   // Bracket Schedule + Live filter strip — per-event enabled flag.
   // Empty map (default) means every event is on.  Only entries
   // explicitly set to ``false`` are dimmed.
@@ -282,7 +278,6 @@ const INITIAL: Pick<
   | 'advisories'
   | 'suggestions'
   | 'unlockModalState'
-  | 'bracketSelectedMatchId'
   | 'bracketScheduleEventFilter'
 > = {
   activeTab: 'setup',
@@ -308,7 +303,6 @@ const INITIAL: Pick<
   advisories: [],
   suggestions: [],
   unlockModalState: null,
-  bracketSelectedMatchId: null,
   bracketScheduleEventFilter: {},
 };
 
@@ -388,7 +382,6 @@ export const useUiStore = create<UiState>((set, get) => ({
   setSuggestions: (suggestions) => set({ suggestions }),
   setUnlockModalState: (unlockModalState) => set({ unlockModalState }),
 
-  setBracketSelectedMatchId: (bracketSelectedMatchId) => set({ bracketSelectedMatchId }),
   setBracketScheduleEventFilter: (bracketScheduleEventFilter) => set({ bracketScheduleEventFilter }),
 
   reset: () => set({ ...INITIAL }),

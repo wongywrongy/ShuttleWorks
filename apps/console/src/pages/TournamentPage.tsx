@@ -17,13 +17,17 @@
  * ``useSuggestions``, etc.) read the same id via ``useParams`` /
  * ``useTournamentId`` — no prop drilling required.
  */
-import { useEffect, useLayoutEffect, type ReactNode } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
-import { AppShell } from '../app/AppShell';
-import { useTournamentKind } from '../hooks/useTournamentKind';
-import { useUiStore, type AppTab } from '../store/uiStore';
-import { MEET_TAB_IDS, BRACKET_TAB_IDS } from '../lib/bracketTabs';
-import { SHELL_SEGMENTS, ENTRIES_SEGMENTS } from '../platform/product-shell/workspaceNav';
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
+import { AppShell } from "../app/AppShell";
+import { useTournamentKind } from "../hooks/useTournamentKind";
+import { useUiStore, type AppTab } from "../store/uiStore";
+import { MEET_TAB_IDS, BRACKET_TAB_IDS } from "../lib/bracketTabs";
+import {
+  SHELL_SEGMENTS,
+  ENTRIES_SEGMENTS,
+  workflowRouteForPath,
+} from "../platform/product-shell/workspaceNav";
 
 // URL-routable trailing segments: every meet tab id + every bracket tab id +
 // the workspace-shell segments (overview / display-config / ws-* admin).
@@ -48,16 +52,45 @@ const KIND_AGNOSTIC: ReadonlySet<AppTab> = new Set<AppTab>([
   ...ENTRIES_SEGMENTS,
 ]);
 
+// `setup` is absent deliberately: bare /setup is the readiness-checklist
+// landing (a registered WORKFLOW_ROUTES entry), not a section root.
+const WORKFLOW_SECTION_DEFAULTS: Readonly<Record<string, string>> = {
+  participants: "participants/people",
+  competition: "competition/matches",
+  operations: "operations/plan",
+  publish: "publish/site",
+  administration: "administration/team",
+};
+
 export function TournamentPage() {
   const params = useParams<{ id?: string }>();
   const location = useLocation();
   const tid = params.id ?? null;
+  const activeTournamentKind = useUiStore(
+    (state) => state.activeTournamentKind,
+  );
   // The trailing segment IS the surface key. `pop()` on the bare
   // /tournaments/{id} URL returns the id itself — that's "no segment", not a
   // bad one, and keeps rendering the workspace.
-  const segment = location.pathname.split('/').filter(Boolean).pop() ?? '';
+  const pathParts = location.pathname.split("/").filter(Boolean);
+  const tournamentIndex = tid ? pathParts.indexOf(tid) : -1;
+  const trailingParts =
+    tournamentIndex >= 0 ? pathParts.slice(tournamentIndex + 1) : [];
+  const workflowPath = trailingParts.join("/");
+  const sectionRootDestination =
+    WORKFLOW_SECTION_DEFAULTS[workflowPath] ?? null;
+  const workflowRoute = workflowRouteForPath(
+    workflowPath,
+    activeTournamentKind,
+  );
+  const segment = trailingParts[trailingParts.length - 1] ?? "";
+  const isBareTournamentPath = trailingParts.length === 0;
+  const routeTab = workflowRoute?.tab;
   const unknownSegment =
-    segment !== tid && !_TAB_SEGMENTS.has(segment as AppTab);
+    !isBareTournamentPath &&
+    !sectionRootDestination &&
+    !workflowRoute &&
+    !_TAB_SEGMENTS.has(segment as AppTab);
 
   // Load the tournament's kind so the AppShell + TabBar can render
   // meet-style or bracket-style chrome. The hook is a no-op when tid
@@ -84,21 +117,33 @@ export function TournamentPage() {
     // An unrecognised segment renders not-found below; it must not leave a
     // stale tab (or a guessed kind) behind it.
     if (!tid || unknownSegment) return;
-    if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
-      // Segment IS the tab id, 1:1. No translation.
+    if (routeTab) {
+      useUiStore.getState().setActiveTab(routeTab);
+    } else if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
+      // Legacy segment IS the tab id, 1:1. No translation.
       useUiStore.getState().setActiveTab(segment as AppTab);
+    } else if (isBareTournamentPath) {
+      useUiStore.getState().setActiveTab("overview");
     }
     // Optimistic kind: any bracket-* segment → bracket; otherwise meet. Skip
     // for kind-agnostic shell segments (overview / ws-* / display-config) —
     // there ``useTournamentKind``'s async fetch is the only source of truth, so
     // we don't flash the wrong engine's groups on a bracket workspace.
-    if (segment && !KIND_AGNOSTIC.has(segment as AppTab)) {
-      const optimisticKind: 'meet' | 'bracket' = segment.startsWith('bracket-')
-        ? 'bracket'
-        : 'meet';
+    if (segment && !workflowRoute && !KIND_AGNOSTIC.has(segment as AppTab)) {
+      const optimisticKind: "meet" | "bracket" = segment.startsWith("bracket-")
+        ? "bracket"
+        : "meet";
       useUiStore.getState().setActiveTournamentKind(optimisticKind);
     }
-  }, [tid, segment, unknownSegment]);
+  }, [
+    tid,
+    segment,
+    routeTab,
+    workflowRoute,
+    workflowPath,
+    isBareTournamentPath,
+    unknownSegment,
+  ]);
 
   // No kind-based snap: a tab whose module isn't enterable for this workspace
   // is preserved so the AppShell guard can show the unavailable panel (rather
@@ -131,10 +176,26 @@ export function TournamentPage() {
           This workspace has been deleted, or it isn&rsquo;t shared with your
           account. Ask whoever runs it for an invite.
         </p>
-        <Link to="/" replace className="text-sm text-accent underline underline-offset-2">
+        <Link
+          to="/"
+          replace
+          className="text-sm text-accent underline underline-offset-2"
+        >
           Go to your workspaces
         </Link>
       </NotFound>
+    );
+  }
+
+  // Section labels are navigational landmarks. A copied or hand-entered root
+  // should land on that workflow's first real surface, not a 404 or a page
+  // with no active child in the sidebar.
+  if (sectionRootDestination) {
+    return (
+      <Navigate
+        to={`/tournaments/${encodeURIComponent(tid)}/${sectionRootDestination}`}
+        replace
+      />
     );
   }
 

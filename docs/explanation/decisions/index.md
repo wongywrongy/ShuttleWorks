@@ -28,6 +28,9 @@ references a longer source, it names the file rather than duplicating it.
 | [0014](/explanation/decisions/0014-workspace-vs-tournament-vocabulary) | Workspace is the product word; tournament is the storage word | Accepted |
 | [0015](/explanation/decisions/0015-court-policy) | Court policy: queue-run vs court-tied scheduling | Accepted |
 | [0016](/explanation/decisions/0016-demo-production-parity-and-durability) | Private demo production parity and durability | Accepted |
+| [0017](/explanation/decisions/0017-domain-derived-setup-readiness) | Derive Setup readiness from domain state; domain-owned sections are read-only | Accepted |
+| [0018](/explanation/decisions/0018-public-person-universality) | Public person universality and tournament-scoped identity | Accepted (2026-08-31) |
+| [0019](/explanation/decisions/0019-design-system-consolidation-pass) | Design-system consolidation pass and its recorded deferrals | Accepted (2026-08-31) |
 
 ## Format
 

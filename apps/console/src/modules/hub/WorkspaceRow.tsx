@@ -106,6 +106,11 @@ interface RowProps {
    *  instead of rendering a rail of muted em-dashes (2026-07 cleanup). */
   showDate?: boolean;
   selected: boolean;
+  /** False when every visible row would carry the SAME lifecycle chip — the
+   *  facet strip already states it once ("Complete · 30"), so repeating it
+   *  per row is decoration (X6 never-varies). The health dot and Attention
+   *  column keep carrying per-row signal. SP-OPCON-1 SWP-2. */
+  showLifecycleBadge?: boolean;
   onSelect: () => void;
   onOpen: (segment?: string) => void;
   onSetDate: () => void;
@@ -118,6 +123,7 @@ export function WorkspaceRow({
   group,
   showDate = true,
   selected,
+  showLifecycleBadge = true,
   onSelect,
   onOpen,
   onSetDate,
@@ -131,14 +137,21 @@ export function WorkspaceRow({
   // (Archived > Live > Complete); resting setup/ready rows stay unbadged —
   // the facet strip and next action already say it — and LIVE is
   // suppressed since R-D (the HealthDot and next action already say it).
-  const badge = lifecycleChip(tournament.signals?.phase, tournament.status);
+  const badge = showLifecycleBadge
+    ? lifecycleChip(tournament.signals?.phase, tournament.status)
+    : null;
   const receded = group === 'past';
   // "Set date" (and any reason-coded setup step) is the attention-y next
   // action — it warms to amber; Open/View results stay quiet.
   const attention = action.kind === 'set-date';
 
   const overflowItems: OverflowItem[] = [
-    { key: 'settings', label: 'Workspace settings', onSelect: onSettings },
+    {
+      key: 'settings',
+      label: 'Open administration',
+      to: `/tournaments/${encodeURIComponent(tournament.id)}/administration/lifecycle`,
+      onSelect: onSettings,
+    },
     ...(onDelete
       ? [{ key: 'delete', label: 'Delete', onSelect: onDelete, destructive: true, separator: true, testId: 'overflow-delete' } as OverflowItem]
       : []),
@@ -220,7 +233,7 @@ export function WorkspaceRow({
           // a touch device or to an eye scanning the list.
           attention
             ? 'text-status-warning group-hover:bg-status-warning/10'
-            : 'text-accent group-hover:bg-accent/10',
+            : 'text-accent group-hover:bg-action-selected-bg group-hover:text-action-selected-foreground',
         ].join(' ')}
       >
         <span className="min-w-0 break-words">{action.label}</span>

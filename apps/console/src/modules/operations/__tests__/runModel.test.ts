@@ -1,10 +1,11 @@
+import { identityFixture } from './identityFixture';
 import { describe, it, expect } from 'vitest';
 import { toRunMatches, deriveCourtLanes, deriveQueue, nextEligible, onDeck, busyPlayers, restShortKeys, deriveSummary } from '../runtime/runModel';
 import { buildLiveChips } from '../runtime/boardPlacements';
 import type { OpsBlock } from '../opsBlock';
 
 const blk = (o: Partial<OpsBlock> & { id: string }): OpsBlock => ({
-  source: 'meet', key: `meet:${o.id}`, label: o.id, span: 1,
+  source: 'meet', key: `meet:${o.id}`, identity: identityFixture(o.id), span: 1,
   status: 'scheduled', sideA: 'A', sideB: 'B', playerIds: [], done: false, started: false,
   ...o,
 } as OpsBlock);

@@ -13,10 +13,12 @@ import json
 import os
 import re
 import tempfile
-from dataclasses import dataclass, field
-from datetime import date, timedelta
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import quote_plus
+from zoneinfo import ZoneInfo
 
 from .client import SimClient
 from .historical_matches import (
@@ -36,7 +38,43 @@ from .rng import command_uuid
 _SCORE_RE = re.compile(r"^\s*(\d+)\s*[-–]\s*(\d+)\s*$")
 _DEFAULT_RUN_DIR = Path(".local-testing/demo/data/import-runs")
 _EVENTS = ("MS", "WS", "MD", "WD", "XD")
-_SEED_FORMAT_VERSION = 2
+_SEED_FORMAT_VERSION = 3
+_DEMO_GENERATOR_VERSION = 5
+_DEMO_DEFAULT_COURT_COUNT = 8
+_DEMO_LIVE_COURT_COUNT = 6
+_DEMO_INTERVAL_MINUTES = 30
+_DEMO_LIVE_TOURNAMENT = "T029"
+_DEMO_UPCOMING_TOURNAMENT = "T030"
+# Clean, deterministic surnames used only when a custom/demo historical
+# fixture exhausts its source-local player pool.  They replace the former
+# ``(demo 03-1)`` suffixes, which leaked fixture bookkeeping into a person's
+# stored display name (F-PAIR-34, R-PAIR-5).
+_DEMO_FALLBACK_SURNAMES = (
+    "Adler",
+    "Bennett",
+    "Calder",
+    "Delgado",
+    "Ellison",
+    "Farrell",
+    "Gibson",
+    "Hawthorne",
+    "Ibarra",
+    "Jensen",
+    "Kessler",
+    "Laurent",
+    "Mendoza",
+    "Navarro",
+    "Ortega",
+    "Prescott",
+    "Quintero",
+    "Reeves",
+    "Sato",
+    "Tremblay",
+    "Upton",
+    "Varela",
+    "Whitaker",
+    "Yamada",
+)
 _KNOCKOUT_PREDECESSOR = {
     "R32": "R64",
     "R16": "R32",
@@ -44,6 +82,14 @@ _KNOCKOUT_PREDECESSOR = {
     "SF": "QF",
     "Final": "SF",
 }
+
+
+def _demo_court_count(tournament_id: str) -> int:
+    return (
+        _DEMO_LIVE_COURT_COUNT
+        if tournament_id == _DEMO_LIVE_TOURNAMENT
+        else _DEMO_DEFAULT_COURT_COUNT
+    )
 
 
 class DatasetError(ValueError):
@@ -133,6 +179,8 @@ class Dataset:
     historical_matches: list[HistoricalMatch] = field(default_factory=list)
     historical_coverage: dict[str, SourceCoverage] = field(default_factory=dict)
     historical_source_hashes: dict[str, str] = field(default_factory=dict)
+    demo_generator_version: int | None = None
+    selected_tournament_ids: tuple[str, ...] = ()
 
     @property
     def input_sha256(self) -> str:
@@ -140,6 +188,8 @@ class Dataset:
             "source": self.source_sha256,
             "notes": self.notes_sha256,
             "historicalSources": self.historical_source_hashes,
+            "demoGeneratorVersion": self.demo_generator_version,
+            "selectedTournamentIds": self.selected_tournament_ids,
         }
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -920,12 +970,41 @@ def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
                 break
         if any(candidate is None for candidate in selected):
             # A custom fixture may have a tiny pool.  Keep it usable while
-            # retaining its source-local identity and discipline category.
+            # retaining its source-local discipline category.  A plausible
+            # clean name is stored as the identity; fixture sequence data
+            # never becomes an operator-facing parenthetical suffix.
             for position, candidate in enumerate(selected):
                 if candidate is not None:
                     continue
                 pool = event_position_names[event][position]
-                selected[position] = f"{pool[number % len(pool)]} (demo {number:02d}-{position})"
+                source_name = pool[(seed + number + position) % len(pool)]
+                given_name = source_display_name(source_name).split()[0]
+                surname_count = len(_DEMO_FALLBACK_SURNAMES)
+                offset = (seed + number * (width + 1) + position) % surname_count
+                replacement = None
+                # Single and compound surnames provide 576 deterministic,
+                # human-readable identities per given name before failure.
+                for step in range(surname_count * surname_count):
+                    first = _DEMO_FALLBACK_SURNAMES[(offset + step) % surname_count]
+                    cycle = step // surname_count
+                    surname = (
+                        first
+                        if cycle == 0
+                        else f"{first}-{_DEMO_FALLBACK_SURNAMES[(offset + cycle) % surname_count]}"
+                    )
+                    proposed = f"{given_name} {surname}"
+                    key = person_key(proposed)
+                    if key in blocked_names or key in generated_people[event]:
+                        continue
+                    replacement = proposed
+                    blocked_names.add(key)
+                    generated_people[event].add(key)
+                    break
+                if replacement is None:
+                    raise DatasetError(
+                        [f"{tournament_id} {event}: clean demo identity pool exhausted"]
+                    )
+                selected[position] = replacement
         return tuple(candidate for candidate in selected if candidate is not None)
 
     def make_generated(
@@ -1027,7 +1106,42 @@ def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
             for number in range(len(rows), required[first_code]):
                 generated.append(make_generated(tournament, event, first_code, number))
 
-    dataset.historical_matches = existing + generated
+    # Every demo match carries a court and a local start time, including
+    # source finals whose upstream archive did not publish those fields. The
+    # assignment is intentionally deterministic and visibly plausible: eight
+    # courts, half-hour waves beginning at 09:00 on each match day.
+    completed = existing + generated
+    enriched: list[HistoricalMatch] = []
+    for tournament in dataset.tournaments:
+        tournament_rows = [row for row in completed if row.tournament_id == tournament.id]
+        by_day = _group_by(tournament_rows, lambda row: row.played_on)
+        for played_on in sorted(by_day):
+            ordered = sorted(
+                by_day[played_on],
+                key=lambda row: (
+                    ROUND_LABELS.get(row.round_code, row.round_code),
+                    row.event,
+                    row.identity,
+                ),
+            )
+            for index, match in enumerate(ordered):
+                wave = index // _DEMO_DEFAULT_COURT_COUNT
+                local = (datetime.combine(date.min, time(9, 0)) + timedelta(
+                    minutes=wave * _DEMO_INTERVAL_MINUTES * 2
+                )).strftime("%H:%M")
+                enriched.append(
+                    replace(
+                        match,
+                        local_time=match.local_time or local,
+                        court=(
+                            match.court
+                            or f"Court {(index % _DEMO_DEFAULT_COURT_COUNT) + 1}"
+                        ),
+                    )
+                )
+
+    dataset.historical_matches = enriched
+    dataset.demo_generator_version = _DEMO_GENERATOR_VERSION
     for tournament in dataset.tournaments:
         coverage = dataset.historical_coverage.get(tournament.id)
         if coverage is not None:
@@ -1289,7 +1403,7 @@ def _historical_event_payload(
                     if (match.identity, "B") in feeders
                     else None
                 ),
-                "duration_slots": 1,
+                "duration_slots": 2,
                 "played_on": match.played_on,
                 "local_time": match.local_time,
                 "court_label": match.court,
@@ -1440,6 +1554,350 @@ def preview(dataset: Dataset) -> dict:
     return output
 
 
+def select_tournaments(dataset: Dataset, tournament_ids: Iterable[str]) -> Dataset:
+    """Return a deterministic subset after the source has been fully validated.
+
+    Selection deliberately happens after parsing, provenance attachment and
+    demo draw completion. A browser fixture therefore exercises the same
+    canonical data builder as the long-lived demo database while paying the
+    API/import cost for only the workspaces it actually asserts.
+    """
+
+    requested = tuple(dict.fromkeys(value.strip() for value in tournament_ids if value.strip()))
+    if not requested:
+        raise DatasetError(["--tournament requires at least one tournament id"])
+
+    available = {tournament.id for tournament in dataset.tournaments}
+    unknown = sorted(set(requested) - available)
+    if unknown:
+        raise DatasetError(
+            [
+                "unknown tournament id(s): "
+                + ", ".join(unknown)
+                + "; available ids: "
+                + ", ".join(sorted(available))
+            ]
+        )
+
+    selected = set(requested)
+    matches = [match for match in dataset.matches if match.tournament_id in selected]
+    used_names = {
+        name
+        for match in matches
+        for name in (*match.winner_players, *match.runner_up_players)
+    }
+    return replace(
+        dataset,
+        tournaments=[t for t in dataset.tournaments if t.id in selected],
+        matches=matches,
+        players=[player for player in dataset.players if player.name in used_names],
+        notes=[note for note in dataset.notes if note.tournament_id in selected],
+        historical_matches=[
+            match for match in dataset.historical_matches if match.tournament_id in selected
+        ],
+        historical_coverage={
+            tournament_id: coverage
+            for tournament_id, coverage in dataset.historical_coverage.items()
+            if tournament_id in selected
+        },
+        selected_tournament_ids=tuple(sorted(selected)),
+    )
+
+
+def _demo_timezone(tournament: Tournament) -> str:
+    location = tournament.host.casefold()
+    zones = (
+        (("taiwan", "taipei"), "Asia/Taipei"),
+        (("south korea", "iksan", "asan"), "Asia/Seoul"),
+        (("japan", "tokyo", "kumamoto"), "Asia/Tokyo"),
+        (("china", "hangzhou", "changzhou"), "Asia/Shanghai"),
+        (("india", "cuttack", "guwahati", "lucknow"), "Asia/Kolkata"),
+        (("malaysia", "kuala lumpur"), "Asia/Kuala_Lumpur"),
+        (("indonesia", "jakarta"), "Asia/Jakarta"),
+        (("thailand", "bangkok"), "Asia/Bangkok"),
+        (("singapore",), "Asia/Singapore"),
+        (("macau",), "Asia/Macau"),
+        (("australia", "sydney"), "Australia/Sydney"),
+        (("canada", "markham"), "America/Toronto"),
+        (("california", "united states"), "America/Los_Angeles"),
+        (("denmark", "odense"), "Europe/Copenhagen"),
+        (("france", "cesson", "orléans"), "Europe/Paris"),
+        (("germany", "saarbrücken", "mülheim"), "Europe/Berlin"),
+        (("england", "birmingham"), "Europe/London"),
+        (("switzerland", "basel"), "Europe/Zurich"),
+    )
+    return next((zone for needles, zone in zones if any(value in location for value in needles)), "UTC")
+
+
+def _demo_dates(tournament: Tournament, rows: list[HistoricalMatch]) -> tuple[date, date]:
+    # These two dates are the narrative anchors for the private demo clock.
+    if tournament.id == _DEMO_LIVE_TOURNAMENT:
+        return date(2026, 7, 28), date(2026, 8, 2)
+    if tournament.id == _DEMO_UPCOMING_TOURNAMENT:
+        return date(2026, 8, 4), date(2026, 8, 9)
+    end = date.fromisoformat(tournament.end_date)
+    starts = [date.fromisoformat(row.played_on) for row in rows]
+    return (min(starts) if starts else end), end
+
+
+def _demo_setup_sections(
+    tournament: Tournament,
+    rows: list[HistoricalMatch],
+    *,
+    slug: str,
+) -> dict[str, dict]:
+    start, end = _demo_dates(tournament, rows)
+    timezone_name = _demo_timezone(tournament)
+    courts = [
+        {
+            "id": f"court-{number}",
+            "name": f"Court {number}",
+            "group": "TV courts" if number <= 2 else "Field courts",
+            "available": True,
+            "notes": "Instant-review court" if number <= 2 else "Standard competition court",
+        }
+        for number in range(1, _demo_court_count(tournament.id) + 1)
+    ]
+    sessions = [
+        {
+            "id": f"day-{index + 1}",
+            "date": day.isoformat(),
+            "name": "Finals" if day == end else f"Competition day {index + 1}",
+            "startTime": "09:00",
+            "endTime": "19:00" if day < end else "17:00",
+            "courtIds": [court["id"] for court in courts],
+            "notes": "Doors open 60 minutes before first scheduled match.",
+        }
+        for index in range((end - start).days + 1)
+        for day in [start + timedelta(days=index)]
+    ]
+    event_names = {
+        "MS": "Men's singles",
+        "WS": "Women's singles",
+        "MD": "Men's doubles",
+        "WD": "Women's doubles",
+        "XD": "Mixed doubles",
+    }
+    events = [
+        {
+            "id": code,
+            "name": event_names[code],
+            "code": code,
+            "discipline": code,
+            "category": "Open",
+            "eligibility": "BWF member in good standing; one entry per discipline.",
+            "capacity": 32,
+            "entryFeeMinor": 7500 if code in {"MD", "WD", "XD"} else 5000,
+            "status": "published" if tournament.id == _DEMO_UPCOMING_TOURNAMENT else "complete" if end < date(2026, 7, 31) else "open",
+        }
+        for code in _EVENTS
+    ]
+    opening = start - timedelta(days=90)
+    deadline = start - timedelta(days=14)
+    withdrawal = start - timedelta(days=10)
+    draw_publication = start - timedelta(days=7)
+    map_query = quote_plus(f"{tournament.venue}, {tournament.host}")
+    safe_slug = slug.removesuffix(f"-{tournament.id.lower()}")
+    return {
+        "general": {
+            "name": f"{tournament.name} ({tournament.year})",
+            "publicName": f"{tournament.name} {tournament.year}",
+            "organizer": "ShuttleWorks BWF Demo Circuit",
+            "tournamentNumber": tournament.id,
+            "tournamentType": tournament.level.lower().replace(" ", "-"),
+            "season": str(tournament.year),
+            "status": "active",
+            "timezone": timezone_name,
+        },
+        "dates": {
+            "entryOpening": f"{opening.isoformat()}T09:00:00",
+            "entryDeadline": f"{deadline.isoformat()}T23:59:00",
+            "withdrawalDeadline": f"{withdrawal.isoformat()}T23:59:00",
+            "drawPublication": f"{draw_publication.isoformat()}T12:00:00",
+            "tournamentStart": f"{start.isoformat()}T09:00:00",
+            "tournamentEnd": f"{end.isoformat()}T19:00:00",
+            "dailySessions": sessions,
+        },
+        "venue": {
+            "venueName": tournament.venue,
+            "address": f"{tournament.venue}, {tournament.host}",
+            "mapLink": f"https://www.google.com/maps/search/?api=1&query={map_query}",
+            "courts": courts,
+            "accessibilityNotes": "Step-free spectator entrance, accessible seating, and an accessible changing room are available.",
+        },
+        "events": {"events": events},
+        "rules": {
+            "format": "single-elimination",
+            "scoring": "badminton",
+            "setsToWin": 2,
+            "pointsPerSet": 21,
+            "deuceEnabled": True,
+            "defaultRestMinutes": 30,
+            "drawSize": 32,
+            "seedCount": 8,
+            "separationPolicy": "Separate seeded entries and avoid same-association first-round matches where practical.",
+            "walkoverPolicy": "Report to control 30 minutes before play; ten-minute grace period after court call.",
+            "retirementPolicy": "The umpire records the completed score and retirement reason before the next match is called.",
+        },
+        "entries": {
+            "registrationMethod": "online",
+            "partnerRules": "Doubles partners must confirm the pairing before the entry deadline.",
+            "paymentRequired": True,
+            "refundPolicy": "Full refund before the withdrawal deadline; no refund after draws are published.",
+            "waitlistEnabled": True,
+            "organizerApprovalRequired": True,
+            "requiredFields": ["name", "email", "phone", "association", "bwf-id"],
+        },
+        "people": {
+            "contacts": [
+                {"id": "director", "role": "tournament-director", "name": "Mei Lin", "email": "director@example.test", "phone": "+886 2 5550 0101", "public": True},
+                {"id": "referee", "role": "referee", "name": "Daniel Park", "email": "referee@example.test", "phone": "+82 2 5550 0192", "public": False},
+                {"id": "venue", "role": "venue-operations", "name": "Aisha Rahman", "email": "venue@example.test", "phone": "+60 3 5550 0124", "public": False},
+            ]
+        },
+        "public-info": {
+            "publicSlug": slug,
+            "visibility": "public",
+            "description": f"Fictional, badminton-plausible demo of the {tournament.level} {tournament.name} at {tournament.venue}.",
+            "regulationsUrl": f"https://example.test/{safe_slug}/regulations.pdf",
+            "logoUrl": f"https://example.test/{safe_slug}/logo.svg",
+            "bannerUrl": f"https://example.test/{safe_slug}/banner.jpg",
+        },
+    }
+
+
+def _demo_operational_event(event: dict, tournament_id: str) -> dict:
+    if tournament_id not in {_DEMO_LIVE_TOURNAMENT, _DEMO_UPCOMING_TOURNAMENT}:
+        return event
+    output = {**event, "record_scope": "full_draw", "historical": False}
+    output.pop("topology_scope", None)
+    output.pop("topology_edge_count", None)
+    completed_rounds = {"R64", "R32", "R16", "QF"}
+    for round_code, units in zip(output.get("round_codes") or [], output["rounds"]):
+        for index, unit in enumerate(units):
+            # Taipei is deliberately caught during the opening round: ten of
+            # sixteen matches per discipline are complete, six remain. That
+            # leaves six concrete-participant matches live and another 24
+            # concrete matches waiting before the feeder-dependent rounds.
+            taipei_opening_complete = round_code == "R32" and index < 10
+            if (
+                tournament_id == _DEMO_UPCOMING_TOURNAMENT
+                or round_code not in completed_rounds
+                or (
+                    tournament_id == _DEMO_LIVE_TOURNAMENT
+                    and not taipei_opening_complete
+                )
+            ):
+                unit.pop("result", None)
+    return output
+
+
+def _parse_demo_time(value: str | None) -> time:
+    for pattern in ("%H:%M", "%I:%M %p", "%I.%M %p"):
+        try:
+            return datetime.strptime(value or "", pattern).time()
+        except ValueError:
+            continue
+    return time(9, 0)
+
+
+def _demo_plan(
+    tournament: Tournament,
+    rows: list[HistoricalMatch],
+    events: list[dict],
+) -> tuple[str, int, list[dict], list[str]]:
+    start, end = _demo_dates(tournament, rows)
+    zone = ZoneInfo(_demo_timezone(tournament))
+    start_at = datetime.combine(start, time(9, 0), tzinfo=zone)
+    court_count = _demo_court_count(tournament.id)
+    assignments: list[dict] = []
+    live_candidates: list[str] = []
+    if tournament.id == _DEMO_LIVE_TOURNAMENT:
+        by_event = [
+            [
+                unit["id"]
+                for round_code, units in zip(
+                    event.get("round_codes") or [], event["rounds"]
+                )
+                if round_code == "R32"
+                for unit in units
+                if unit.get("result") is None
+            ]
+            for event in events
+        ]
+        # One live match from every discipline, then a second MS match, gives
+        # all six courts distinct, concrete work without making the floor look
+        # artificially single-discipline.
+        live_candidates = [group[0] for group in by_event if group]
+        live_candidates.extend(by_event[0][1:2] if by_event else [])
+        live_candidates = live_candidates[:court_count]
+    live_position = {play_unit_id: index for index, play_unit_id in enumerate(live_candidates)}
+    pending_round_index: dict[str, int] = {}
+    for event in events:
+        round_codes = event.get("round_codes") or []
+        for round_index, units in enumerate(event["rounds"]):
+            round_code = round_codes[round_index] if round_index < len(round_codes) else ""
+            for index, unit in enumerate(units):
+                played_on = date.fromisoformat(unit.get("played_on") or start.isoformat())
+                local = _parse_demo_time(unit.get("local_time"))
+                minute_offset = max(
+                    0,
+                    (played_on - start).days * 24 * 60
+                    + local.hour * 60
+                    + local.minute
+                    - 9 * 60,
+                )
+                court_match = re.search(r"(\d+)", unit.get("court_label") or "")
+                # Scheduler courts are operator-facing and one-based. Keep the
+                # imported plan in the same 1..court_count domain so no surface
+                # ever renders a synthetic "Court 0".
+                court_id = (
+                    ((int(court_match.group(1)) - 1) if court_match else index)
+                    % court_count
+                ) + 1
+                slot_id = minute_offset // _DEMO_INTERVAL_MINUTES
+                if tournament.id == _DEMO_LIVE_TOURNAMENT and unit.get("result") is None:
+                    if unit["id"] in live_position:
+                        position = live_position[unit["id"]]
+                        slot_id = 152  # 2026-07-31 13:00 Asia/Taipei
+                        court_id = position + 1
+                    else:
+                        position = pending_round_index.get(round_code, 0)
+                        pending_round_index[round_code] = position + 1
+                        if round_code == "R32":
+                            slot_id = 154 + 2 * (position // court_count)
+                        elif round_code == "R16":
+                            slot_id = 192 + 2 * (position // court_count)
+                        elif round_code == "QF":
+                            slot_id = 206 + 2 * (position // court_count)
+                        elif round_code == "SF":
+                            slot_id = 240 + 2 * (position // court_count)
+                        else:  # Finals
+                            slot_id = 246 + 2 * (position // court_count)
+                        court_id = (position % court_count) + 1
+                    # Keep the remaining concrete R32 wave in the live-day
+                    # queue. Its source row still carries the planned court
+                    # and local time (and every later round stays on Plan), but
+                    # an Operations assignment means "physically on court",
+                    # so importing these 24 as assigned would truthfully leave
+                    # the queue empty while six matches are playing.
+                    if round_code == "R32" and unit["id"] not in live_position:
+                        continue
+                assignments.append(
+                    {
+                        "play_unit_id": unit["id"],
+                        "slot_id": slot_id,
+                        "court_id": court_id,
+                        "duration_slots": int(unit.get("duration_slots") or 2),
+                    }
+                )
+    total_slots = max(
+        (end - start).days * 48 + 48,
+        max((item["slot_id"] + item["duration_slots"] for item in assignments), default=1),
+    )
+    return start_at.isoformat(), total_slots, assignments, live_candidates
+
+
 def apply(
     dataset: Dataset,
     client: SimClient,
@@ -1450,13 +1908,24 @@ def apply(
 ) -> dict:
     """Apply one complete dataset, checkpointing each phase in a manifest."""
     path = _run_path(run_dir, seed_key)
+    input_hash = (
+        dataset.input_sha256
+        if dataset.historical_matches or dataset.selected_tournament_ids
+        else dataset.source_sha256
+    )
     prior = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    # A guarded reset is explicit permission to start this seed key over. It
+    # must remain usable across a format upgrade; otherwise the operator has
+    # deleted the scoped workspaces yet is told to use --replace against a
+    # manifest whose workspace ids have already been cleared.
+    if prior and prior.get("status") == "reset":
+        prior = None
     same_format = bool(prior and prior.get("seedFormatVersion") == _SEED_FORMAT_VERSION)
     same_source = bool(
         same_format
         and prior
         and prior.get("inputSha256", prior.get("sourceSha256"))
-        == (dataset.input_sha256 if dataset.historical_matches else dataset.source_sha256)
+        == input_hash
     )
     if prior and not same_source and not replace:
         if not same_format:
@@ -1466,7 +1935,7 @@ def apply(
         )
     if prior and same_source and prior.get("status") == "complete" and not replace:
         return {**prior, "noop": True}
-    if prior and (replace or prior.get("status") == "reset"):
+    if prior and replace:
         for old in prior.get("tournaments", {}).values():
             old_tid = old.get("workspaceId")
             if old_tid:
@@ -1483,15 +1952,21 @@ def apply(
     manifest["seedFormatVersion"] = _SEED_FORMAT_VERSION
     manifest["sourceSha256"] = dataset.source_sha256
     manifest["notesSha256"] = dataset.notes_sha256
-    manifest["inputSha256"] = (
-        dataset.input_sha256 if dataset.historical_matches else dataset.source_sha256
-    )
+    manifest["inputSha256"] = input_hash
     manifest["historicalSourceSha256"] = dataset.historical_source_hashes
+    manifest["selectedTournamentIds"] = list(dataset.selected_tournament_ids)
     by_tournament = dataset.matches_by_tournament
     historical_by_tournament = dataset.historical_by_tournament
     notes = dataset.notes_by_tournament
     for tournament in dataset.tournaments:
         entry = manifest["tournaments"].setdefault(tournament.id, {})
+        rows = by_tournament[tournament.id]
+        historical_rows = historical_by_tournament.get(tournament.id, [])
+        demo_seed = dataset.demo_generator_version is not None and bool(historical_rows)
+        demo_start, demo_end = _demo_dates(tournament, historical_rows) if demo_seed else (
+            date.fromisoformat(tournament.end_date),
+            date.fromisoformat(tournament.end_date),
+        )
         if not entry.get("workspaceId"):
             workspace = client.create_tournament(
                 f"{tournament.name} ({tournament.year})",
@@ -1500,7 +1975,9 @@ def apply(
                     {"moduleId": "bracket", "status": "enabled"},
                     {"moduleId": "display", "status": "enabled"},
                 ],
-                tournament_date=tournament.end_date,
+                tournament_date=demo_start.isoformat(),
+                tournament_end_date=demo_end.isoformat() if demo_seed else None,
+                time_zone=_demo_timezone(tournament) if demo_seed else None,
             )
             entry["workspaceId"] = workspace["id"]
             entry["slug"] = _slug(tournament)
@@ -1526,6 +2003,14 @@ def apply(
                 ),
                 "identityScope": "source_local_name",
             }
+            if demo_seed:
+                source_metadata["operationalDemoState"] = (
+                    "in_progress"
+                    if tournament.id == _DEMO_LIVE_TOURNAMENT
+                    else "upcoming"
+                    if tournament.id == _DEMO_UPCOMING_TOURNAMENT
+                    else "complete"
+                )
             if historical_coverage is not None:
                 source_metadata.update(
                     {
@@ -1550,8 +2035,13 @@ def apply(
             entry["source"] = source_metadata
             _write_manifest(path, manifest)
         tid = entry["workspaceId"]
-        rows = by_tournament[tournament.id]
-        historical_rows = historical_by_tournament.get(tournament.id, [])
+        if demo_seed and not entry.get("setupSeeded"):
+            client.seed_setup_sections(
+                tid,
+                _demo_setup_sections(tournament, historical_rows, slug=entry["slug"]),
+            )
+            entry["setupSeeded"] = True
+            _write_manifest(path, manifest)
         if not entry.get("bracketImported"):
             events = []
             results = []
@@ -1565,14 +2055,17 @@ def apply(
                         raise ValueError(
                             f"historical source has no {event_code} rows for {tournament.id}"
                         )
-                    events.append(
-                        _historical_event_payload(
+                    event_payload = _historical_event_payload(
                             tournament,
                             event_code,
                             event_rows,
                             coverage,
                             identities,
                         )
+                    events.append(
+                        _demo_operational_event(event_payload, tournament.id)
+                        if demo_seed
+                        else event_payload
                     )
                 roster = identities.roster
             else:
@@ -1589,18 +2082,28 @@ def apply(
                     for player in players.values()
                     if player.name in used_names
                 ]
-            client.import_bracket(
-                tid,
-                {
-                    "courts": 2,
+            import_body = {
+                    "courts": _demo_court_count(tournament.id) if demo_seed else 2,
                     "total_slots": 16,
                     "rest_between_rounds": 1,
-                    "interval_minutes": 30,
+                    "interval_minutes": _DEMO_INTERVAL_MINUTES,
                     "time_limit_seconds": 5,
                     "roster": roster,
                     "events": events,
-                },
-            )
+                }
+            if demo_seed:
+                start_time, total_slots, assignments, live_match_ids = _demo_plan(
+                    tournament, historical_rows, events
+                )
+                import_body.update(
+                    {
+                        "start_time": start_time,
+                        "total_slots": total_slots,
+                        "assignments": assignments,
+                    }
+                )
+                entry["liveMatchIds"] = live_match_ids
+            client.import_bracket(tid, import_body)
             if results:
                 imported = client.get_bracket(tid)
                 units = {unit["event_id"]: unit for unit in imported.get("play_units", [])}
@@ -1618,6 +2121,14 @@ def apply(
             entry["topologyEdgeCount"] = sum(
                 int(event.get("topology_edge_count") or 0) for event in events
             )
+            if historical_rows:
+                entry["expectedResultCount"] = sum(
+                    1
+                    for event in events
+                    for event_round in event["rounds"]
+                    for unit in event_round
+                    if unit.get("result") is not None
+                )
             _write_manifest(path, manifest)
         if not entry.get("resultsRecorded"):
             for result in entry["results"]:
@@ -1630,8 +2141,17 @@ def apply(
                 client.bracket_command(tid, body)
             entry["resultsRecorded"] = True
             _write_manifest(path, manifest)
+        if demo_seed and not entry.get("liveMatchesStarted"):
+            for play_unit_id in entry.get("liveMatchIds", []):
+                client.bracket_match_action(tid, play_unit_id, "start")
+            entry["liveMatchesStarted"] = True
+            _write_manifest(path, manifest)
         if not entry.get("entryPage"):
-            closed_at = f"{tournament.end_date}T23:59:59+00:00"
+            closed_at = (
+                f"{(demo_start - timedelta(days=14)).isoformat()}T23:59:59+00:00"
+                if demo_seed
+                else f"{tournament.end_date}T23:59:59+00:00"
+            )
             note = notes.get(tournament.id)
             details = (
                 f" {note.level_description[:1].upper()}{note.level_description[1:]} "
@@ -1640,13 +2160,30 @@ def apply(
                 else ""
             )
             coverage = dataset.historical_coverage.get(tournament.id)
+            demo_state = (
+                "Tournament in progress"
+                if tournament.id == _DEMO_LIVE_TOURNAMENT and demo_seed
+                else "Upcoming tournament"
+                if tournament.id == _DEMO_UPCOMING_TOURNAMENT and demo_seed
+                else "Completed tournament"
+            )
+            intro_text = (
+                f"{demo_state}: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the published draws and available results across all five events.{details}"
+                if demo_seed
+                else f"Completed tournament: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the complete published draws and results across all five events.{details}"
+            )
+            regulations_text = (
+                f"Fictional operational demo; entries are closed and match details are populated for visual testing. Source reference: {(coverage.source_url if coverage else tournament.source_url)}."
+                if demo_seed
+                else f"Read-only completed tournament; entries are closed. Source: {(coverage.source_url if coverage else tournament.source_url)}."
+            )
             client.upsert_entry_page(
                 tid,
                 {
                     "slug": entry["slug"],
                     "isOpen": True,
-                    "introText": f"Completed tournament: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the complete published draws and results across all five events.{details}",
-                    "regulationsText": f"Read-only completed tournament; entries are closed. Source: {(coverage.source_url if coverage else tournament.source_url)}.",
+                    "introText": intro_text,
+                    "regulationsText": regulations_text,
                     "waiverRequired": False,
                     "collectPhone": False,
                     "venueName": tournament.venue,
@@ -1666,7 +2203,11 @@ def apply(
                     },
                 )
             client.patch_entry_page_publication(
-                tid, {"drawsPublished": True, "resultsPublished": True}
+                tid,
+                {
+                    "drawsPublished": True,
+                    "resultsPublished": tournament.id != _DEMO_UPCOMING_TOURNAMENT or not demo_seed,
+                },
             )
             projection = client.entry_page_projection(entry["slug"])
             if projection.status_code != 200:
@@ -1687,7 +2228,11 @@ def apply(
         actual_ids = {event.get("id") for event in snapshot.get("events", [])}
         result_ids = {result.get("play_unit_id") for result in snapshot.get("results", [])}
         expected_result_ids = {result["play_unit_id"] for result in entry.get("results", [])}
-        expected_result_count = len(historical_rows) if historical_rows else len(rows)
+        expected_result_count = int(
+            entry.get("expectedResultCount")
+            if entry.get("expectedResultCount") is not None
+            else len(historical_rows) if historical_rows else len(rows)
+        )
         result_mismatch = len(snapshot.get("results", [])) != expected_result_count or (
             not historical_rows and result_ids != expected_result_ids
         )

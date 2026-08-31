@@ -5,6 +5,15 @@ import type { HubGroupId } from './hubGrouping';
 // per-step action must never name the same action two ways (SP-UI-1).
 import { REASON_ACTION } from '../../platform/domain/setupChecklist';
 
+const REASON_DESTINATION: Record<string, string> = {
+  NO_MODULES_ENABLED: 'administration/modules',
+  NO_ROSTER: 'participants/people',
+  NO_BRACKET: 'competition/draws',
+  NOT_SCHEDULED: 'operations/plan',
+  NO_DATE: 'setup/dates',
+  NO_VENUE: 'setup/venue',
+};
+
 /** The primary next action for a workspace — the first mapped attention reason,
  *  else "Open". Pure; degrades to Open when signals are absent. */
 export function nextActionFor(t: TournamentSummaryDTO): { label: string; reasonCode: string | null } {
@@ -40,17 +49,21 @@ export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAct
   const br = t.kind === 'bracket';
   if (t.status !== 'archived') {
     if (phase === 'live')
-      return { label: 'Open live day', kind: 'open', segment: br ? 'bracket-live' : 'live' };
+      return { label: 'Open live day', kind: 'open', segment: 'operations/live' };
     if (phase === 'complete')
       return br
-        ? { label: 'View draws', kind: 'results', segment: 'bracket-draws' }
-        : { label: 'View results', kind: 'results', segment: 'matches' };
+        ? { label: 'View draws', kind: 'results', segment: 'competition/draws' }
+        : { label: 'View results', kind: 'results', segment: 'competition/results' };
   }
   if (group === 'undated') return { label: 'Set date', kind: 'set-date' };
   if (group === 'past')
     return br
-      ? { label: 'View draws', kind: 'results', segment: 'bracket-draws' }
-      : { label: 'View results', kind: 'results', segment: 'matches' };
+      ? { label: 'View draws', kind: 'results', segment: 'competition/draws' }
+      : { label: 'View results', kind: 'results', segment: 'competition/results' };
   const next = nextActionFor(t);
-  return { label: next.reasonCode ? next.label : 'Open workspace', kind: 'open' };
+  return {
+    label: next.reasonCode ? next.label : 'Open workspace',
+    kind: 'open',
+    segment: next.reasonCode ? REASON_DESTINATION[next.reasonCode] : undefined,
+  };
 }

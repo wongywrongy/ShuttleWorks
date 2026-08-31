@@ -30,13 +30,19 @@ function line(over: Partial<MyEntryLine> = {}): MyEntryLine {
   return {
     eventCode: 'MS',
     discipline: "Men's Singles",
-    playerName: 'Ada Chen',
-    personKey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    player: {
+      identity: {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        name: 'Ada Chen',
+      },
+      resolution: 'resolved',
+      label: null,
+    },
     state: 'entered',
     entryId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     canWithdraw: true,
     resultBadge: null,
-    partnerName: null,
+    partner: null,
     ...over,
   };
 }
@@ -107,7 +113,9 @@ describe('the pure decisions', () => {
     expect(
       resultsHref(card({ status: 'played', entrantsPublished: false }), line()),
     ).toBeNull();
-    expect(resultsHref(card({ status: 'played' }), line({ personKey: '' }))).toBeNull();
+    expect(resultsHref(card({ status: 'played' }), line({
+      player: { identity: { id: null, name: 'Ada Chen' }, resolution: 'dead', label: null },
+    }))).toBeNull();
   });
 
   it('renders a date without inventing one', () => {
@@ -156,8 +164,15 @@ describe('the DOM render', () => {
       tournaments: [
         card({
           events: [
-            line({ eventCode: 'XD', partnerName: 'Sam Ali' }),
-            line({ partnerName: null }),
+            line({
+              eventCode: 'XD',
+              partner: {
+                identity: { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Sam Ali' },
+                resolution: 'resolved',
+                label: null,
+              },
+            }),
+            line({ partner: null }),
           ],
         }),
       ],
@@ -182,7 +197,13 @@ describe('the DOM render', () => {
       tournaments: [
         card({
           tournamentName: '<img src=x onerror=alert(1)>',
-          events: [line({ playerName: '<script>alert(2)</script>' })],
+          events: [line({
+            player: {
+              identity: { id: null, name: '<script>alert(2)</script>' },
+              resolution: 'dead',
+              label: null,
+            },
+          })],
         }),
       ],
     });

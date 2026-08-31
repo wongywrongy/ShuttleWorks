@@ -35,7 +35,8 @@
  * dependency. It establishes ownership by REFERENCING the existing seams, not
  * by re-wiring them. No slice moves; no control-plane edit.
  */
-import type { ModuleId } from '../product-shell/types';
+import type { ArchModuleId } from '../product-shell/types';
+export type { ArchModuleId } from '../product-shell/types';
 import type { AppTab } from '../../store/uiStore';
 import { apiClient } from '../../api/client';
 import type {
@@ -57,13 +58,6 @@ import type {
   AssignmentDTO,
   PlayUnitDTO,
 } from '../../api/bracketDto';
-
-/**
- * Tier-2 ids extend the Tier-1 `ModuleId` with the architectural
- * `'operations'` module. Type-level only — this never reads the
- * `workspace_modules` vocabulary at runtime.
- */
-export type ArchModuleId = ModuleId | 'operations';
 
 /**
  * The registry of DTO type names that cross the wire today. Used purely to

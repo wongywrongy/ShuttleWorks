@@ -58,6 +58,8 @@ import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 import { useTournamentId } from '../../../hooks/useTournamentId';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
+import { decomposeMeetEventRank } from '../../../platform/domain/matchIdentity';
+import { ActiveChoice } from '../../../components/ActiveChoice';
 
 export function RosterTab() {
   const tid = useTournamentId();
@@ -460,7 +462,12 @@ export function RosterTab() {
                 title={selectedRank}
                 mono
                 subtitle={
-                  EVENT_LABEL[selectedRank.match(/^[A-Z]+/)?.[0] ?? '']?.full
+                  EVENT_LABEL[
+                    decomposeMeetEventRank(
+                      selectedRank,
+                      Object.keys(configuredRankCounts),
+                    ).event_code
+                  ]?.full
                 }
                 occupants={positionOccupants}
                 groups={groups}
@@ -497,9 +504,8 @@ export function RosterTab() {
 
 /* =========================================================================
  * SchoolTabs — horizontal school selector at the top of the content area
- * (just below the actions bar). Mirrors the settings-shell tab-strip
- * grammar (underline-active) so the Meet surfaces read as one family; the
- * per-school player count rides each tab.
+ * (just below the actions bar). It uses the console's shared solid-selection
+ * grammar; the per-school player count rides each tab.
  * ========================================================================= */
 function SchoolTabs({
   groups,
@@ -518,34 +524,30 @@ function SchoolTabs({
   return (
     <div
       data-testid="school-tabs"
+      role="tablist"
+      aria-label="Schools"
       className="flex shrink-0 items-stretch gap-0.5 overflow-x-auto overflow-y-hidden border-b border-border bg-card px-2"
     >
       {groups.map((g) => {
         const isActive = g.id === activeSchoolId;
         return (
-          <button
+          <ActiveChoice
             key={g.id}
-            type="button"
+            active={isActive}
+            geometry="segment"
+            semantics="tab"
             onClick={() => onSelect(g.id)}
             data-testid={`school-pill-${g.id}`}
-            aria-current={isActive ? 'page' : undefined}
-            className={[
-              'relative -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors duration-fast ease-brand',
-              isActive
-                ? 'border-b-accent font-semibold text-foreground'
-                : 'border-b-transparent text-muted-foreground hover:text-foreground',
-            ].join(' ')}
+            className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm"
           >
             {/* No width cap: the pill bar is `overflow-x-auto`, so a long
                 school name widens its pill and the bar scrolls — the pill
                 is the only place that name is written. */}
             <span>{g.name}</span>
-            <span
-              className={`tabular-nums text-2xs ${isActive ? 'text-accent' : 'text-muted-foreground'}`}
-            >
+            <span className="tabular-nums text-2xs opacity-75">
               {counts.get(g.id) ?? 0}
             </span>
-          </button>
+          </ActiveChoice>
         );
       })}
     </div>

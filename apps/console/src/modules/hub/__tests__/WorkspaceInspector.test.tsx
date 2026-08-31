@@ -164,7 +164,7 @@ describe('WorkspaceInspector', () => {
   it('the secondary action opens workspace settings', () => {
     const onSettings = vi.fn();
     render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={onSettings} onClose={noop} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Workspace settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Administration' }));
     expect(onSettings).toHaveBeenCalledWith('t1');
   });
 });

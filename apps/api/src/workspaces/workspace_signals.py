@@ -99,11 +99,12 @@ class MatchMetricsDTO(BaseModel):
 
 
 class NextMatchDTO(BaseModel):
-    """One upcoming match for the inspector's "Next up" list.
+    """One active or upcoming match for the inspector's "Next up" list.
 
-    ``status`` is schedule-derivable only (``"scheduled"``): live called/started
-    state lives in the ``match_states`` table, not the loaded ``data`` blob, so
-    surfacing it would break the list endpoint's no-per-row-query guarantee.
+    Meet status is schedule-derivable only (``"scheduled"``): its live state
+    lives in ``match_states``. Bracket assignments already carry their action
+    clock in the loaded blob, so those rows can truthfully report ``playing``
+    without another query.
     """
     code: str
     timeLabel: Optional[str] = None
@@ -224,7 +225,12 @@ def _bracket_setup(counts: RowCounts) -> dict:
 
 def _slot_time_label(day_start, interval, slot) -> Optional[str]:
     """``"HH:MM"`` for ``day_start + slot*interval`` minutes, or ``None`` when
-    ``day_start`` is missing/unparseable. Capped at 23:59 (same-day only)."""
+    ``day_start`` is missing/unparseable.
+
+    Slot ids span the whole tournament plan. Wrap at midnight so a day-five
+    09:00 assignment still says 09:00; clamping every later day to 23:59 made
+    otherwise-populated demo plans look corrupt.
+    """
     if not day_start:
         return None
     try:
@@ -233,7 +239,7 @@ def _slot_time_label(day_start, interval, slot) -> Optional[str]:
     except (ValueError, TypeError):
         return None
     total = base + max(0, int(slot or 0)) * max(0, int(interval or 0))
-    total = min(total, 23 * 60 + 59)
+    total %= 24 * 60
     return f"{total // 60:02d}:{total % 60:02d}"
 
 
@@ -351,23 +357,44 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         except (ValueError, TypeError):
             day_start = None
 
+    resolved_ids = counts.bracket_resolved_ids
+    playing_assignments = [
+        assignment
+        for assignment in assignments
+        if isinstance(assignment, dict)
+        and assignment.get("actual_start_slot") is not None
+        and assignment.get("actual_end_slot") is None
+        and assignment.get("play_unit_id") not in resolved_ids
+    ]
+    busy_courts = {
+        assignment.get("court_id")
+        for assignment in playing_assignments
+        if assignment.get("court_id") is not None
+    }
+    court_count = session.get("courts")
+
     metrics = MatchMetricsDTO(
         total=counts.bracket_matches,
         scheduled=len(assignments),
         toDo=to_do,
         played=len(counts.bracket_resolved_ids),
+        playing=len(playing_assignments),
+        courtsFree=(
+            max(0, int(court_count) - len(busy_courts))
+            if isinstance(court_count, int) and court_count > 0
+            else None
+        ),
     )
 
     def slot_of(a):
         v = a.get("slot_id") if isinstance(a, dict) else None
         return v if isinstance(v, int) else 0
 
-    # Next-up = upcoming only. A unit is done when it has a RECORDED RESULT
+    # Next-up = active or upcoming. A unit is done when it has a RECORDED RESULT
     # (``resolved_ids`` — the draw-board record-winner/walkover flow) or a
     # finished match-action clock (``actual_end_slot``). Filtering on the
     # clock alone kept board-recorded winners listed as upcoming (review
     # finding). ``scheduled`` above still counts every assignment.
-    resolved_ids = counts.bracket_resolved_ids
     ordered = sorted(
         (
             a
@@ -384,7 +411,11 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
             code=str(a.get("play_unit_id") or ""),
             timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
             courtLabel=_court_label(a.get("court_id")),
-            status="scheduled",
+            status=(
+                "playing"
+                if a.get("actual_start_slot") is not None
+                else "scheduled"
+            ),
             matchId=str(a.get("play_unit_id") or "") or None,
             source="bracket",
         ))

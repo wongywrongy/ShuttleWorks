@@ -26,6 +26,7 @@ import { useTournamentIdOrNull } from './useTournamentId';
 import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { isTerminalPollError } from '../lib/pollPolicy';
 import { mergeMatchStates } from '../lib/mergeMatchStates';
+import { getMatchLabel } from '../lib/matchUtils';
 
 // The transition table lives in `platform/domain/matchTransitions` — a mirror
 // of the backend contract, unit-tested against it. It used to be defined here
@@ -41,7 +42,9 @@ import { mergeMatchStates } from '../lib/mergeMatchStates';
  *  `useActivityLog`'s sibling helper. */
 function matchLabelOf(matchId: string): string {
   const m = useTournamentStore.getState().matches.find((mm) => mm.id === matchId);
-  return m?.matchNumber != null ? `Match M${m.matchNumber}` : `Match ${matchId.slice(0, 8)}`;
+  // F-UNI-22/23: conflict copy uses the same identity formatter as every
+  // match surface (including the single six-character machine-id fallback).
+  return `Match ${getMatchLabel(m, matchId)}`;
 }
 
 export function useLiveTracking() {
@@ -79,6 +82,8 @@ export function useLiveTracking() {
   const [terminalFor, setTerminalFor] = useState<string | null>(null);
   const pollSource = tid || displayToken || '';
   const pollTerminal = !!pollSource && terminalFor === pollSource;
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const loadMatchStates = useCallback(async () => {
     if (!tid && !tokenMode) return;
@@ -89,8 +94,11 @@ export function useLiveTracking() {
       const localStates = useMatchStateStore.getState().matchStates;
 
       setMatchStates(mergeMatchStates(backendStates, localStates));
+      setLastSyncedAt(Date.now());
+      setSyncError(null);
     } catch (error) {
       if (isTerminalPollError(error)) setTerminalFor(pollSource);
+      setSyncError(error instanceof Error ? error.message : 'Connection lost');
       console.error('Failed to load match states:', error);
     }
   }, [setMatchStates, tid, tokenMode, displayToken, pollSource]);
@@ -104,8 +112,11 @@ export function useLiveTracking() {
       const localStates = useMatchStateStore.getState().matchStates;
 
       setMatchStates(mergeMatchStates(backendStates, localStates));
+      setLastSyncedAt(Date.now());
+      setSyncError(null);
     } catch (error) {
       if (isTerminalPollError(error)) setTerminalFor(pollSource);
+      setSyncError(error instanceof Error ? error.message : 'Connection lost');
       console.error('Failed to sync match states:', error);
     }
   }, [setMatchStates, tid, tokenMode, displayToken, pollSource]);
@@ -513,5 +524,8 @@ export function useLiveTracking() {
     importStates,
     resetStates,
     syncMatchStates,
+    lastSyncedAt,
+    syncError,
+    pollTerminal,
   };
 }

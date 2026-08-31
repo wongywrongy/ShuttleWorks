@@ -55,7 +55,11 @@ describe('TournamentPage URL → store sync', () => {
   it('sets activeTab = "setup" when mounted at /setup', () => {
     mountAt('/tournaments/t1/setup');
     expect(useUiStore.getState().activeTab).toBe('setup');
-    expect(useUiStore.getState().activeTournamentKind).toBe('meet');
+    // SP-OPCON-1 RDY-3: /setup is the kind-agnostic checklist landing (a
+    // registered workflow route), so no optimistic kind is guessed — the
+    // fetched summary is the only source of truth. The old 'meet' guess
+    // came from the legacy tab branch and was simply wrong on brackets.
+    expect(useUiStore.getState().activeTournamentKind).toBeNull();
   });
 
   it('sets activeTab = "tv" when mounted at /tv', () => {

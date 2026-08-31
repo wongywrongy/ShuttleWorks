@@ -15,6 +15,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Public bracket geometry (SP-P9 M4). Each destination owns one equal flex
+ * slot. The pseudo-elements share a grid cell: the first draws the
+ * three-sided feeder brace and the second draws its stub. No measured layout,
+ * absolute positioning, or SVG is involved. */
+.bracket-link-slot {
+  display: grid;
+}
+
+.bracket-link-slot::before,
+.bracket-link-slot::after {
+  content: '';
+  grid-area: 1 / 1;
+}
+
+.bracket-link-slot::before {
+  align-self: center;
+  width: 50%;
+  height: 50%;
+  border-block: 1px solid hsl(var(--border-control));
+  border-inline-end: 1px solid hsl(var(--border-control));
+}
+
+.bracket-link-slot::after {
+  align-self: center;
+  justify-self: end;
+  width: 50%;
+  border-block-start: 1px solid hsl(var(--border-control));
+}
+
+.bracket-slot,
+.bracket-link-slot {
+  transition: opacity 120ms ease, color 120ms ease;
+}
+
+[data-bracket-grid].has-person-path .bracket-slot:not(.is-person-path),
+[data-bracket-grid].has-person-path .bracket-link-slot:not(.is-person-path) {
+  opacity: 0.32;
+}
+
+.bracket-link-slot.is-person-path::before,
+.bracket-link-slot.is-person-path::after {
+  border-color: hsl(var(--action-primary));
+  border-width: 2px;
+}
+
 /* 2026-08-11 design audit, finding #8 (optional, zero page-weight cost: CSS
  * is not counted toward the HTML+JS page-weight gate — scripts/measure-page-
  * weight.mjs — so this costs nothing against the 4 KB budget). This tier does

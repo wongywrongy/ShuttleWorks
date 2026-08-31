@@ -289,6 +289,7 @@
     --action-primary:       var(--blue-7);
     --action-primary-hover: var(--blue-8);
     --action-selected-bg:   var(--blue-1);
+    --action-selected-foreground: var(--text-primary);
 
     /* Status — fg/bg pairs. fg clears 4.5:1 on white AND on its bg tint. */
     --status-success-fg: var(--green-7);
@@ -463,6 +464,7 @@
     --action-primary:       var(--blue-5);   /* #6D9BE4 */
     --action-primary-hover: var(--blue-4);   /* #90B1EC */
     --action-selected-bg:   var(--blue-10);  /* #14213D */
+    --action-selected-foreground: var(--text-primary);
 
     /* Status — desaturated fg on deep tints */
     --status-success-fg: var(--green-4);

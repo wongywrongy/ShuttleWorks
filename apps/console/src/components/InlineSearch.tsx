@@ -13,7 +13,8 @@
  */
 import { useEffect, useRef } from 'react';
 import { MagnifyingGlass, X } from '@phosphor-icons/react';
-import { INTERACTIVE_BASE, INTERACTIVE_BASE_QUIET } from '../lib/utils';
+import { INTERACTIVE_BASE_QUIET } from '../lib/utils';
+import { ActiveChoice } from './ActiveChoice';
 
 export interface FilterChipGroup {
   label: string;
@@ -142,21 +143,16 @@ function FilterGroup({ group }: { group: FilterChipGroup }) {
         {group.options.map((opt) => {
           const isActive = group.active.has(opt.id);
           return (
-            <button
+            <ActiveChoice
               key={opt.id}
-              type="button"
+              active={isActive}
+              geometry="segment"
+              semantics="pressed"
               onClick={() => group.onToggle(opt.id)}
-              aria-pressed={isActive}
-              className={[
-                INTERACTIVE_BASE,
-                'inline-flex h-6 items-center rounded border px-2 text-2xs font-medium',
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-              ].join(' ')}
+              className="inline-flex h-6 items-center px-2 py-0 text-2xs font-medium"
             >
               {opt.label}
-            </button>
+            </ActiveChoice>
           );
         })}
       </div>

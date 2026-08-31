@@ -14,6 +14,8 @@ import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 import { STATE_WORD } from '../../lib/stateWords';
 import { InlineSearch } from '../../components/InlineSearch';
+import { MODULE_LABELS } from '../../platform/product-shell/types';
+import { formatMatchIdentity } from '../../platform/domain/matchIdentity';
 
 interface Props {
   blocks: OpsBlock[];
@@ -108,7 +110,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
     return blocks.filter((b) => {
       if (sources.size > 0 && !sources.has(b.source)) return false;
       if (needle === '') return true;
-      return `${b.label} ${b.sideA} ${b.sideB}`.toLowerCase().includes(needle);
+      return `${formatMatchIdentity(b.identity, b.id)} ${b.sideA} ${b.sideB}`.toLowerCase().includes(needle);
     });
   }, [blocks, searchable, query, sources]);
 
@@ -121,7 +123,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
     return { upNext: up, waiting: wait, finished: fin };
   }, [visible]);
 
-  const row = (b: OpsBlock) => {
+  const row = (b: OpsBlock, showLocation: boolean, showStatusMarker: boolean) => {
     const dot = b.done
       ? 'bg-status-done'
       : b.started
@@ -147,12 +149,23 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
           onSelect ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : ''
         } ${isSelected ? 'bg-muted/40' : ''}`}
       >
-        <span aria-hidden className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
+        {showStatusMarker ? (
+          <span
+            aria-hidden
+            data-testid="ops-status-marker"
+            className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`}
+          />
+        ) : null}
         {/* Same match-code grammar as the Run queue rows. */}
-        <span className="w-20 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">{b.label}</span>
-        <span className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
-          {b.court != null ? `C${b.court} · S${b.slot}` : '–'}
-        </span>
+        <span className="w-20 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">{formatMatchIdentity(b.identity, b.id)}</span>
+        {/* SP-OPCON-1 SWP-6: the section owns this column. If no row in a
+            section has a court (the 155-row completed bracket capture), the
+            column does not mount at all rather than becoming empty ballast. */}
+        {showLocation ? (
+          <span data-testid="ops-row-location" className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
+            {b.court != null ? `C${b.court} · S${b.slot}` : ''}
+          </span>
+        ) : null}
         <span className="min-w-[10rem] flex-1 break-words text-2sm">
           {b.sideA}
           <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
@@ -167,15 +180,24 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
     );
   };
 
-  const section = (title: string, items: OpsBlock[]) =>
-    items.length > 0 ? (
+  const section = (title: string, items: OpsBlock[]) => {
+    if (items.length === 0) return null;
+    const showLocation = items.some((candidate) => candidate.court != null);
+    const statusMarkers = new Set(
+      items.map((candidate) =>
+        candidate.done ? 'done' : candidate.started ? 'started' : candidate.court != null ? 'called' : 'waiting',
+      ),
+    );
+    const showStatusMarker = statusMarkers.size > 1;
+    return (
       <>
         <li className={`border-y border-border bg-muted/40 px-4 py-1 ${EYEBROW_CLASS} text-muted-foreground`}>
           {title} · {items.length}
         </li>
-        {items.map(row)}
+        {items.map((item) => row(item, showLocation, showStatusMarker))}
       </>
-    ) : null;
+    );
+  };
 
   const emptySearch =
     searchable && visible.length === 0 && blocks.length > 0 ? (
@@ -202,8 +224,8 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
               {
                 label: 'Engine',
                 options: [
-                  { id: 'meet', label: 'Meet' },
-                  { id: 'bracket', label: 'Bracket' },
+                  { id: 'meet', label: MODULE_LABELS.meet },
+                  { id: 'bracket', label: MODULE_LABELS.bracket },
                 ],
                 active: sources,
                 onToggle: (id) =>

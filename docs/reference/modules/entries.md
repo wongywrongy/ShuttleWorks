@@ -94,11 +94,26 @@ reserve list's positions stay truthful rather than closing up over the
 rows it may not show.
 
 The public Players directory is the shared seam between Entries and
-Bracket. Confirmed `entry_players` keep their stable profile identity,
-club, and event membership; named participants that exist only in a
-published imported draw are merged as non-profile rows. This keeps one
-complete tournament directory without claiming that source-local names
-are entrant accounts.
+Bracket. Confirmed `entry_players` keep their stable tournament-person
+identity, club, and event membership; named participants that exist only in
+a published imported draw are merged as dead, non-profile references. This
+keeps one complete tournament directory without claiming that source-local
+names are entrant accounts.
+
+Every public person-bearing projection uses the `PersonReference` contract
+from [the entrant tier](/explanation/architecture/entrant-tier#public-keys-and-privacy):
+an identity object with an opaque persisted id, an explicit resolution state,
+and a formatter-owned display label. `PersonRef` is the only public name
+renderer. Missing ids, byes, feeders, hidden/erased rows, and draw-only names
+cannot become links. A doubles pair is two event-scoped people; there is no
+pair identity or pair page.
+
+Publication is also the boundary for operational data. The public schedule
+reads a court only after Operations has materialized an assignment; a planned
+solver assignment is not a published court. The schedule is day-first and
+supports stable URL filters by organization, event, player, court, and state.
+Scores, standings, winners, and resolved draw advancement remain behind
+`results_published`.
 
 ## Signals (Q9)
 
@@ -133,7 +148,7 @@ Backend, all under `apps/api/src/`:
 | `entries/retention.py` | The sweep and the account scrub |
 | `entries/entries_json.py` | Public page projection, quote, submit (`/e/api`) |
 | `entries/entries_me.py` | The entrant's own record, export, erasure (`/e/api/me`) |
-| `entries/entries_site.py` | Public draws/seeds/winners/player pages |
+| `entries/entries_site.py` | Public schedule, draws, seeds, winners, and tournament-person pages |
 | `entries/entries_public.py` | Shared projection helpers, no routes |
 | `identity/entrants_routes.py` | Entrant accounts: signup, login, verification, reset (`/e/account`) |
 | `workspaces/entries_facts.py` | The counted facts the control plane reads |

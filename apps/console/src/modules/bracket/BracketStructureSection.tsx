@@ -23,7 +23,7 @@
  * Links are id-qualified (``/tournaments/:id/<segment>``) exactly like the
  * WorkspaceSidebar — never the bare ``/<segment>`` form.
  */
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useBracket } from '../../hooks/useBracket';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { Row, Section } from '../../platform/engine-config/SettingsControls';
@@ -35,10 +35,7 @@ const NAV_LINK_CLASSES =
 
 export function BracketStructureSection() {
   const tid = useTournamentId();
-  const navigate = useNavigate();
   const { data } = useBracket();
-  const go = (segment: string) =>
-    navigate(`/tournaments/${tid}/${segment}`, { replace: true });
 
   const events = data?.events ?? [];
 
@@ -79,27 +76,25 @@ export function BracketStructureSection() {
       <Row
         label="Draws"
         control={
-          <button
-            type="button"
+          <Link
+            to={`/tournaments/${tid}/competition/draws`}
             data-testid="bracket-open-draws"
-            onClick={() => go('bracket-draws')}
             className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES}`}
           >
-            Manage draws →
-          </button>
+            Open draws →
+          </Link>
         }
       />
       <Row
         label="Participant pool"
         control={
-          <button
-            type="button"
+          <Link
+            to={`/tournaments/${tid}/participants/people`}
             data-testid="bracket-open-roster"
-            onClick={() => go('bracket-roster')}
             className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES}`}
           >
-            Manage participants →
-          </button>
+            Open roster →
+          </Link>
         }
         last
       />

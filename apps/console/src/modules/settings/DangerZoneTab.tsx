@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Modal } from '@scheduler/design-system';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
+import { TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils'
+import { DialogFooter } from '../../components/DialogFooter';
 
 /** Archive / delete the workspace. Delete is irreversible and confirmed. */
 export function DangerZoneTab({
@@ -53,7 +55,7 @@ export function DangerZoneTab({
       <div className="flex items-center justify-between gap-4 rounded border border-border p-4">
         <div>
           <div className="text-sm font-medium text-foreground">Archive workspace</div>
-          <div className="text-xs text-muted-foreground">
+          <div className={TEXT_MUTED_XS}>
             {archived
               ? 'Archived: hidden from the active list. Unarchive to bring it back.'
               : 'Hide it from the active list. Unarchive any time.'}
@@ -67,7 +69,7 @@ export function DangerZoneTab({
       <div className="flex items-center justify-between gap-4 rounded border border-destructive/30 bg-destructive/5 p-4">
         <div>
           <div className="text-sm font-medium text-foreground">Delete workspace</div>
-          <div className="text-xs text-muted-foreground">
+          <div className={TEXT_MUTED_XS}>
             Permanently removes the workspace, its members, invites, and all data.
             Can&rsquo;t be undone.
           </div>
@@ -80,21 +82,21 @@ export function DangerZoneTab({
       {confirming && (
         <Modal onClose={() => !busy && setConfirming(false)} titleId="ws-delete-heading">
           <div className="p-6">
-            <h2 id="ws-delete-heading" className="text-base font-semibold text-foreground">
+            <h2 id="ws-delete-heading" className={TEXT_TITLE}>
               Delete &ldquo;{summary?.name || 'Untitled'}&rdquo;?
             </h2>
             <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
               This permanently removes the {isBracket ? 'tournament' : 'meet'}, its members,
               invites, and all data. Can&rsquo;t be undone.
             </p>
-            <div className="mt-6 flex justify-between">
+            <DialogFooter align="between">
               <Button variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>
                 Cancel
               </Button>
               <Button variant="destructive" onClick={del} disabled={busy}>
                 {busy ? 'Deleting…' : 'Delete permanently'}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         </Modal>
       )}

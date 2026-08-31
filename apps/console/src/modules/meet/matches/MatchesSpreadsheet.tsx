@@ -9,8 +9,9 @@
  * the row click could not open the detail pane. That is the surface the owner
  * described as "a direct row replacement", and it is why `✕ remove player`
  * and `✕ remove match` ended up 23px apart at the right edge. Every editor
- * now lives in `MatchDetailPanel`, which the row click opens; what is left
- * here reads, and the only control in a row is the armed match delete.
+ * now lives in the shared match detail surface, which the row click opens;
+ * what is left here reads, and the only control in a row is the armed match
+ * delete.
  *
  * Search/Add-match/Export live in the page-header row owned by
  * `MatchesTab` — those affordances do NOT render here. This component
@@ -23,31 +24,37 @@ import {
   BandedTable,
   ColumnHeaderRow,
   DetailDock,
+  MatchInspector,
   MatchStatusFilter,
   MEET_MATCH_CELL,
   MEET_MATCH_LIST_COLUMNS,
   MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   MatchStatus,
+  STATUS_LABEL,
   parseMatchStatusFilter,
   ScoreLane,
   setsWinner,
   type BandedTableGroup,
   type MatchListStatus,
+  type MatchInspectorModel,
   type SetPair,
 } from '../../../components/control-plane';
 import { formatPlayerName } from '../../../lib/names';
 import { useTournamentStore } from '../../../store/tournamentStore';
-import { useMatchStateStore } from '../../../store/matchStateStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO } from '../../../api/dto';
 import { useSearchParamState, useSearchParamSet } from '../../../hooks/useSearchParamState';
 import { useDisruptions } from './useDisruptions';
 import { EVENT_LABEL, EVENT_ORDER } from '../roster/positionGrid/helpers';
-import { MatchDetailPanel } from './MatchDetailPanel';
+import { MeetMatchControls } from './MeetMatchControls';
 import { meetMatchStatus } from './meetMatchStatus';
 import { maxSeverity, type MatchIssue } from './validateMatch';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 import { getActiveAssignments } from '../../../lib/getActiveAssignments';
+import { meetMatchIdentityFromStored } from '../../../platform/domain/matchIdentity';
+import { slotToTime } from '../../../lib/time';
+import { formatIsoClock } from '../../../lib/timeFormatters';
+import { useMatchStateSnapshot } from '../../../hooks/useMatchStateSnapshot';
 
 /** Stable empty-array reference so MatchRow's useMemo deps don't churn
  *  when a match has no disruptions. */
@@ -66,12 +73,19 @@ export function MatchesSpreadsheet({
 } = {}) {
   const matches = useTournamentStore((s) => s.matches);
   const players = useTournamentStore((s) => s.players);
+  const groups = useTournamentStore((s) => s.groups);
+  const updateMatch = useTournamentStore((s) => s.updateMatch);
   const deleteMatch = useTournamentStore((s) => s.deleteMatch);
   const schedule = useTournamentStore((s) => s.schedule);
-  const matchStates = useMatchStateStore((s) => s.matchStates);
-  const assignedIds = useMemo(
-    () => new Set(getActiveAssignments(schedule).map((a) => a.matchId)),
+  const config = useTournamentStore((s) => s.config);
+  const matchStates = useMatchStateSnapshot();
+  const activeAssignments = useMemo(
+    () => getActiveAssignments(schedule),
     [schedule],
+  );
+  const assignedIds = useMemo(
+    () => new Set(activeAssignments.map((assignment) => assignment.matchId)),
+    [activeAssignments],
   );
 
   // Subscribes to the same URL-backed search the page header writes to.
@@ -89,6 +103,10 @@ export function MatchesSpreadsheet({
   const [typeFilter] = useSearchParamSet('type');
 
   const playerById = usePlayerMap();
+  const configuredEventCodes = useMemo(
+    () => Object.keys(config?.rankCounts ?? {}),
+    [config?.rankCounts],
+  );
 
   // One status per match, computed once — feeds the filter strip counts,
   // the status facet, and each row's Status cell.
@@ -134,8 +152,11 @@ export function MatchesSpreadsheet({
         if (!hits) return false;
       }
       if (eventActive) {
-        const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
-        if (!eventFilter.has(prefix)) return false;
+        const { event_code } = meetMatchIdentityFromStored({
+          event_rank: m.eventRank,
+          configured_event_codes: configuredEventCodes,
+        });
+        if (!eventFilter.has(event_code)) return false;
       }
       if (schoolActive) {
         const groupIds = new Set(
@@ -160,20 +181,81 @@ export function MatchesSpreadsheet({
     statusFilter,
     statusById,
     playerById,
+    configuredEventCodes,
   ]);
 
   const disruptions = useDisruptions();
 
-  // Selected match — a click ANYWHERE in a row opens the right-docked match
-  // DetailPanel, which is where the match is edited. Derived find so a
-  // deleted match auto-dismisses the panel. Memoized so a re-render that
-  // doesn't touch `matches`/`selectedId` doesn't re-scan the full match
-  // array every time.
+  // Selected match — a click ANYWHERE in a row opens the right-docked shared
+  // match detail surface, which is where the match is edited. Derived find so
+  // a deleted match auto-dismisses the surface. Memoized so a re-render that
+  // doesn't touch `matches`/`selectedId` doesn't re-scan the full match array.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedMatch = useMemo(
     () => matches.find((m) => m.id === selectedId) ?? null,
     [matches, selectedId],
   );
+  const selectedContext = useMemo(() => {
+    if (!selectedMatch) return null;
+
+    const status = statusById.get(selectedMatch.id) ?? 'pending';
+    const state = matchStates[selectedMatch.id];
+    const assignment = activeAssignments.find(
+      (candidate) => candidate.matchId === selectedMatch.id,
+    );
+    const identity = meetMatchIdentityFromStored({
+      event_rank: selectedMatch.eventRank,
+      sequence: selectedMatch.matchNumber,
+      configured_event_codes: configuredEventCodes,
+    });
+    const resultSets: SetPair[] =
+      status !== 'done'
+        ? []
+        : state?.sets?.length
+          ? state.sets
+          : state?.score
+            ? [state.score]
+            : [];
+
+    const sideLabel = (ids: string[]) => {
+      const labels = ids.map((id) => playerById.get(id)?.name || id);
+      return labels.length > 0 ? labels.join(' / ') : 'No players';
+    };
+
+    const model: MatchInspectorModel = {
+      key: `meet:${selectedMatch.id}`,
+      id: selectedMatch.id,
+      identity,
+      status: STATUS_LABEL[status],
+      sideA: sideLabel(selectedMatch.sideA ?? []),
+      sideB: sideLabel(selectedMatch.sideB ?? []),
+      assignment: {
+        court: state?.actualCourtId ?? assignment?.courtId ?? null,
+        planned: assignment
+          ? config
+            ? slotToTime(assignment.slotId, config)
+            : `Slot ${assignment.slotId}`
+          : null,
+        actualStart: state?.actualStartTime
+          ? formatIsoClock(state.actualStartTime)
+          : null,
+        actualEnd: state?.actualEndTime
+          ? formatIsoClock(state.actualEndTime)
+          : null,
+      },
+      result: resultSets.length > 0 ? { sets: resultSets } : null,
+    };
+
+    return { model, status, eventCode: identity.event_code, resultSets };
+  }, [
+    selectedMatch,
+    statusById,
+    matchStates,
+    activeAssignments,
+    configuredEventCodes,
+    playerById,
+    config,
+  ]);
 
   // "+ Add match" lands the operator on the new match's editor. It used to
   // focus the row's own event Select; the editors have moved, so the pane
@@ -184,19 +266,22 @@ export function MatchesSpreadsheet({
     onFocusConsumed?.();
   }, [pendingFocusId, onFocusConsumed]);
 
-  // Group the filtered matches by event prefix so each discipline gets
+  // Group the filtered matches by event code so each discipline gets
   // its own collapsible section. Section order follows EVENT_ORDER; any
   // match with no/unknown rank collects into a trailing "Unassigned"
   // group keyed by the '—' sentinel. Collapse state lives inside the
   // shared BandedTable shell (default all-expanded, as before). Memoized
-  // (with the regex-per-match grouping pass) so an unrelated re-render
+  // (with the identity decomposition pass) so an unrelated re-render
   // doesn't rebuild these on every render — only when `filteredMatches`
   // actually changes.
   const tableGroups = useMemo<BandedTableGroup<MatchDTO>[]>(() => {
     const groupsByPrefix = new Map<string, MatchDTO[]>();
     for (const m of filteredMatches) {
-      const prefix = (m.eventRank ?? '').match(/^[A-Z]+/)?.[0] ?? '';
-      const key = prefix || '–';
+      const { event_code } = meetMatchIdentityFromStored({
+        event_rank: m.eventRank,
+        configured_event_codes: configuredEventCodes,
+      });
+      const key = event_code || '–';
       if (!groupsByPrefix.has(key)) groupsByPrefix.set(key, []);
       groupsByPrefix.get(key)!.push(m);
     }
@@ -216,7 +301,7 @@ export function MatchesSpreadsheet({
         testId: `match-group-${label}`,
       };
     });
-  }, [filteredMatches]);
+  }, [filteredMatches, configuredEventCodes]);
 
   if (matches.length === 0) {
     return (
@@ -236,6 +321,18 @@ export function MatchesSpreadsheet({
         ? 'shadow-[inset_3px_0_0_hsl(var(--status-warning))]'
         : '';
   };
+  const selectedControlProps = selectedMatch && selectedContext
+    ? {
+        match: selectedMatch,
+        status: selectedContext.status,
+        eventCode: selectedContext.eventCode,
+        resultSets: selectedContext.resultSets,
+        players,
+        groups,
+        rankCounts: config?.rankCounts,
+        onUpdateMatch: updateMatch,
+      }
+    : null;
 
   return (
     <>
@@ -299,12 +396,32 @@ export function MatchesSpreadsheet({
         open={selectedMatch != null}
         minContentWidth={MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH}
       >
-        {selectedMatch ? (
-          <MatchDetailPanel
+        {selectedMatch && selectedContext && selectedControlProps ? (
+          <MatchInspector
             key={selectedMatch.id}
-            match={selectedMatch}
-            status={statusById.get(selectedMatch.id) ?? 'pending'}
+            match={selectedContext.model}
+            defaultFacet="summary"
             onClose={() => setSelectedId(null)}
+            supplements={{
+              players: (
+                <MeetMatchControls
+                  {...selectedControlProps}
+                  slot="players"
+                />
+              ),
+              summary: (
+                <MeetMatchControls
+                  {...selectedControlProps}
+                  slot="summary"
+                />
+              ),
+              result: (
+                <MeetMatchControls
+                  {...selectedControlProps}
+                  slot="result"
+                />
+              ),
+            }}
           />
         ) : null}
       </DetailDock>

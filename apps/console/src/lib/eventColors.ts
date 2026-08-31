@@ -1,3 +1,5 @@
+import { decomposeMeetEventRank } from '../platform/domain/matchIdentity';
+
 /**
  * Per-event-type palette shared between every gantt-style view.
  * Keys are the rank prefix (`MS`, `WD`, …); the rank suffix (e.g. `MS1`)
@@ -62,8 +64,11 @@ const DEFAULT_EVENT_COLOR: EventColor = {
   label: 'Unknown',
 };
 
-export function getEventColor(eventRank: string | undefined | null): EventColor {
+export function getEventColor(
+  eventRank: string | undefined | null,
+  configuredEventCodes: readonly string[] = [],
+): EventColor {
   if (!eventRank) return DEFAULT_EVENT_COLOR;
-  const prefix = eventRank.match(/^[A-Z]+/)?.[0] ?? '';
-  return EVENT_COLORS[prefix] ?? DEFAULT_EVENT_COLOR;
+  const { event_code } = decomposeMeetEventRank(eventRank, configuredEventCodes);
+  return EVENT_COLORS[event_code] ?? DEFAULT_EVENT_COLOR;
 }

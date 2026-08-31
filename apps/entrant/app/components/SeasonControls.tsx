@@ -1,15 +1,15 @@
 /**
  * §2.3: the one control row above the calendar — search, the three view
- * segments, the date-filter panel, and the chips that say what is active.
+ * segments, the date-filter panel, and plain links that say what is active.
  *
- * Zero client JS, four native mechanisms (Z1): search and the date range are
+ * No framework hydration, four native mechanisms (Z1): search and the date range are
  * GET forms; each segment is a LINK carrying the whole current query with the
  * view swapped (the retired `FilterStrip`'s facet idiom, reimplemented here
  * because it dies with that file); the filter panel is a `<details>`, styled
  * as an anchored popover from `sm:` up and as a bottom sheet below it, in CSS
- * alone; each chip is a link to the same URL minus one parameter.
+ * alone; each active-filter link points to the same URL minus one parameter.
  *
- * **The chips row exists only when a DATE filter is set** (§7 trap 4). A
+ * **The active-filter row exists only when a DATE filter is set** (§7 trap 4). A
  * default page has nothing to dismiss, and a row of "all dates"-style chips
  * describing a state the entrant never chose is chrome pretending to be
  * feedback. The search text is deliberately not a chip: it is visible in the
@@ -28,6 +28,7 @@ import {
   type Filters,
   type View,
 } from '../lib/phase';
+import { INPUT_SKIN } from '../lib/ui';
 
 const ACTION = '/e/#calendar';
 
@@ -79,12 +80,12 @@ function Hidden({ name, value }: { name: string; value: string | null }) {
   );
 }
 
-/** One dismissible chip: the label, and an `×` link to this query minus it. */
-function FilterChip({ label, href }: { label: string; href: string }) {
+/** One removable filter as an unboxed text link. */
+function ActiveFilterLink({ label, href }: { label: string; href: string }) {
   return (
     <a
       href={href}
-      className="inline-flex items-center gap-1.5 rounded-full border border-rule-control bg-surface-raised px-2.5 py-1 text-xs text-foreground hover:border-rule-control hover:bg-surface-sunken"
+      className="inline-flex items-center gap-1.5 border-b border-rule-control py-1 text-xs text-foreground hover:border-foreground"
     >
       {label}
       <span aria-hidden className="text-muted-foreground">
@@ -136,7 +137,7 @@ export function SeasonControls({
             defaultValue={filters.q}
             placeholder="Search tournaments"
             aria-label="Search tournaments, organizers or venues"
-            className="h-9 w-full min-w-0 max-w-sm rounded border border-rule-control bg-bg-elev px-3 text-sm text-foreground placeholder:text-muted-foreground"
+            className={`h-9 w-full min-w-0 max-w-sm rounded px-3 placeholder:text-muted-foreground ${INPUT_SKIN}`}
           />
           <Button type="submit" size="sm">
             Search
@@ -179,7 +180,7 @@ export function SeasonControls({
                   type="date"
                   name="from"
                   defaultValue={filters.from ?? ''}
-                  className="h-9 min-w-0 rounded border border-rule-control bg-bg-elev px-2 text-sm text-foreground"
+                  className={`h-9 min-w-0 rounded px-2 ${INPUT_SKIN}`}
                 />
               </label>
               <label className="grid gap-1 text-xs font-medium text-muted-foreground">
@@ -188,7 +189,7 @@ export function SeasonControls({
                   type="date"
                   name="to"
                   defaultValue={filters.to ?? ''}
-                  className="h-9 min-w-0 rounded border border-rule-control bg-bg-elev px-2 text-sm text-foreground"
+                  className={`h-9 min-w-0 rounded px-2 ${INPUT_SKIN}`}
                 />
               </label>
 
@@ -228,21 +229,21 @@ export function SeasonControls({
       </nav>
 
       {dateFilterActive(filters) ? (
-        <div data-chip-row="" className="flex flex-wrap items-center gap-2">
+        <div data-active-filter-row="" className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {filters.preset === null ? null : (
-            <FilterChip
+            <ActiveFilterLink
               label={PRESET_LABELS[filters.preset]}
               href={queryHref(filters, { preset: null })}
             />
           )}
           {/* Parsed, like `dateFilterActive` and `rowMatches`: an unparseable
-              bound narrows nothing, so it gets no chip describing a filter the
+              bound narrows nothing, so it gets no link describing a filter the
               list is not under. */}
           {parseIsoDate(filters.from) === null ? null : (
-            <FilterChip label={`From ${filters.from}`} href={queryHref(filters, { from: null })} />
+            <ActiveFilterLink label={`From ${filters.from}`} href={queryHref(filters, { from: null })} />
           )}
           {parseIsoDate(filters.to) === null ? null : (
-            <FilterChip label={`To ${filters.to}`} href={queryHref(filters, { to: null })} />
+            <ActiveFilterLink label={`To ${filters.to}`} href={queryHref(filters, { to: null })} />
           )}
           <a
             href={queryHref(filters, NO_DATES)}

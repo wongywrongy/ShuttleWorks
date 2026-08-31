@@ -6,6 +6,8 @@
  * may be shown.
  */
 
+import type { PersonReferenceDTO } from './person.types';
+
 /** The format tag — the keys of the API's `FORMAT_REGISTRY`
  *  (`apps/api/src/bracket/formats/__init__.py`). Every write path validates
  *  against that registry (`FormatId = Annotated[str, AfterValidator(...)]`),
@@ -27,6 +29,10 @@ export interface DrawCardDTO {
   topologyScope: string;
   historical: boolean;
   sourceUrl: string | null;
+  roundCount: number;
+  champions: PersonReferenceDTO[];
+  finalists: HonorDTO[];
+  remainingMatchCount: number | null;
 }
 
 export interface MatchCoverageDTO {
@@ -37,9 +43,7 @@ export interface MatchCoverageDTO {
 
 export interface DrawPlayerDTO {
   playerKey: string;
-  name: string;
-  /** Opaque entry person id when this roster row has a public profile. */
-  personKey?: string | null;
+  person: PersonReferenceDTO;
   club?: string | null;
   eventCodes: string[];
 }
@@ -66,7 +70,7 @@ export interface DrawsIndexDTO {
 
 export interface TeamDTO {
   participantKey: string;
-  names: string[];
+  persons: PersonReferenceDTO[];
   club: string | null;
   seed: number | null;
 }
@@ -143,7 +147,7 @@ export interface DrawDetailDTO {
 
 export interface SeedLineDTO {
   seed: number;
-  names: string[];
+  persons: PersonReferenceDTO[];
   club: string | null;
 }
 
@@ -159,7 +163,7 @@ export interface SeedsDTO {
 }
 
 export interface HonorDTO {
-  names: string[];
+  persons: PersonReferenceDTO[];
   club: string | null;
 }
 
@@ -170,6 +174,8 @@ export interface WinnersEventDTO {
   winner: HonorDTO | null;
   runnerUp: HonorDTO | null;
   semifinalists: HonorDTO[];
+  finalScore: number[][] | null;
+  finalists: HonorDTO[];
 }
 
 export interface WinnersDTO {
@@ -202,12 +208,21 @@ export function kindLabel(kind: DrawKind): string {
 export function eventCodeLabel(code: string): string {
   const normalized = code.trim().toUpperCase();
   const suffix = normalized.match(/(?:^|-)(MS|WS|MD|WD|XD)$/)?.[1];
-  return suffix ?? normalized;
+  if (suffix) return suffix;
+  // Legacy imports occasionally expose a storage slug as the event code.
+  // Keep the public badge readable instead of leaking `mens_doubles_final`.
+  return normalized.includes('_') || normalized.includes('-')
+    ? normalized
+        .replace(/[_-]+/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : normalized;
 }
 
 /** Human event name for a projection that does not carry its discipline. */
 export function eventDisciplineLabel(code: string): string {
   const compact = eventCodeLabel(code);
+  const source = code.trim();
   return (
     {
       MS: "Men's Singles",
@@ -215,7 +230,10 @@ export function eventDisciplineLabel(code: string): string {
       MD: "Men's Doubles",
       WD: "Women's Doubles",
       XD: 'Mixed Doubles',
-    }[compact] ?? code.trim()
+    }[compact] ?? (source.includes('_') || source.includes('-') ? source
+      .replace(/[_-]+/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (letter) => letter.toUpperCase()) : source)
   );
 }
 

@@ -47,6 +47,12 @@ function setModule(label: string, state: 'On' | 'Off') {
   fireEvent.click(within(group).getByRole('radio', { name: state }));
 }
 
+function advanceToReview() {
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+}
+
 const m = (moduleId: string, status: string) => ({ moduleId, status, config: null });
 
 const seedFor = (call: unknown) =>
@@ -73,13 +79,14 @@ describe('NewWorkspacePage', () => {
     vi.mocked(apiClient.putTournamentState).mockReset();
   });
 
-  it('offers modules and courts directly, with no preset templates', () => {
+  it('starts with type and module choices, with no preset templates', () => {
     mount({ current: '' });
     expect(screen.getByRole('heading', { name: 'New workspace' })).toBeInTheDocument();
     for (const label of ['Meet', 'Bracket', 'Display']) {
       expect(screen.getByRole('radiogroup', { name: label })).toBeInTheDocument();
     }
-    expect(screen.getByLabelText('Courts')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Tournament type' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Courts')).toBeNull();
     // The presets are gone, not merely relabelled.
     for (const gone of [/Meet Day/i, /Bracket Tournament/i, /Hybrid Event/i, /Blank Workspace/i]) {
       expect(screen.queryByText(gone)).toBeNull();
@@ -98,6 +105,7 @@ describe('NewWorkspacePage', () => {
     mount(loc);
     setModule('Bracket', 'Off');
     setModule('Display', 'On');
+    advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(loc.current).toBe('/tournaments/w1/overview'));
     const body = vi.mocked(apiClient.createTournament).mock.calls[0][0];
@@ -117,6 +125,7 @@ describe('NewWorkspacePage', () => {
     mount(loc);
     setModule('Meet', 'Off');
     setModule('Bracket', 'On');
+    advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(loc.current).toBe('/tournaments/w2/overview'));
     const body = vi.mocked(apiClient.createTournament).mock.calls[0][0];
@@ -131,8 +140,9 @@ describe('NewWorkspacePage', () => {
     setModule('Meet', 'Off');
     // Warn, never block — the state is recoverable from Modules.
     expect(screen.getByTestId('modules-hint')).toHaveTextContent(/opens on Modules/i);
+    advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/ws-modules'));
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/administration/modules'));
   });
 
   it('warns when Display has no engine to show', () => {
@@ -142,36 +152,35 @@ describe('NewWorkspacePage', () => {
     expect(screen.getByTestId('modules-hint')).toHaveTextContent(/Display needs Meet or Bracket/i);
   });
 
-  it('seeds the court count through a follow-up state write', async () => {
+  it('seeds the court count in the atomic create request', async () => {
     returnCreated('w5', [m('meet', 'enabled')]);
-    vi.mocked(apiClient.getTournamentState).mockResolvedValue({
-      config: { courtCount: 2 },
-    } as never);
     const loc = { current: '' };
     mount(loc);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.change(screen.getByLabelText('Courts'), { target: { value: '9' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(loc.current).toBe('/tournaments/w5/overview'));
-    const [, state] = vi.mocked(apiClient.putTournamentState).mock.calls[0];
-    expect((state as { config: { courtCount: number } }).config.courtCount).toBe(9);
+    expect(vi.mocked(apiClient.createTournament).mock.calls[0][0].courtCount).toBe(9);
+    expect(apiClient.putTournamentState).not.toHaveBeenCalled();
   });
 
-  it('still creates the workspace when the court write fails', async () => {
-    // The director already committed to creating it; losing the workspace over
-    // a court count that Venue & schedule can fix is the worse outcome.
+  it('does not perform a follow-up state write after creation', async () => {
     returnCreated('w6', [m('meet', 'enabled')]);
-    vi.mocked(apiClient.getTournamentState).mockRejectedValue(new Error('boom'));
     const loc = { current: '' };
     mount(loc);
-    fireEvent.change(screen.getByLabelText('Courts'), { target: { value: '7' } });
+    advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(loc.current).toBe('/tournaments/w6/overview'));
+    expect(apiClient.putTournamentState).not.toHaveBeenCalled();
   });
 
   it('falls back to kind-derived modules when the create response omits modules', async () => {
     vi.mocked(apiClient.createTournament).mockResolvedValue({ id: 'w7', kind: 'meet' } as never);
     const loc = { current: '' };
     mount(loc);
+    advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(loc.current).toBe('/tournaments/w7/overview'));
   });
@@ -180,6 +189,7 @@ describe('NewWorkspacePage', () => {
     vi.mocked(apiClient.createTournament).mockRejectedValue(new Error('server said no'));
     const loc = { current: '' };
     mount(loc);
+    advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('server said no'));
     expect(loc.current).toBe('/new');

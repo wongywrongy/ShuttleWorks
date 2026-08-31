@@ -42,3 +42,18 @@ export function defaultOperationsSegment(
 export function opsPlanMode(phase: WorkspacePhase | null | undefined): OpsPlanMode {
   return phase === 'complete' ? 'plan-review' : 'plan';
 }
+
+/** Whether Run's header shows the plan-readiness chips at all (SP-OPCON-1
+ *  SWP-1). On a COMPLETE day there is no plan left to finalize: "Plan not
+ *  finalized · Open Plan" over 155/155 played matches is a demand to prepare
+ *  a day that already happened (evidence S19), and the finalized variant's
+ *  "ready for live day" is equally stale. Every other phase keeps both —
+ *  the handoff indicator is the point of the chip while a day is upcoming
+ *  or running. The fuller lifecycle matrix for `planFinalized`'s OTHER
+ *  consumers (lateness/running semantics in RunSurface) is ledger-noted,
+ *  not changed here. */
+export function showPlanReadinessChips(
+  phase: WorkspacePhase | null | undefined,
+): boolean {
+  return phase !== 'complete';
+}

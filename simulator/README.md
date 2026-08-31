@@ -96,13 +96,13 @@ tokens for display. Accents, punctuation, initials, and word order remain
 unchanged; the importer rejects duplicate partners and self-opponents after
 normalization.
 
-The demo still imports through `completed_matches_only`, not `full_draw`.
-That path retains concrete completed sides and represents the 16 legitimate
-first-round byes in a 48-entry draw. Standard elimination events carry their
-complete adjacent winner graph; the World Tour Finals retains three group
-rounds followed by semifinals and a final, with the semifinal-to-final edges
-that this bracket model can express. This is presentation data for a local
-walkthrough, not a claim that ShuttleWorks already models group qualification.
+Completed workspaces still import through `completed_matches_only`. The local
+operational overlay imports Taipei and Korea through `full_draw`: Taipei keeps
+140 results, schedules all 155 matches, and leaves eight semifinals on court;
+Korea schedules all 155 but records no results. Every generated/source match
+gets a deterministic court and local time, and all eight Setup sections are
+populated. This is presentation data for a local walkthrough, not a historical
+claim or a claim that ShuttleWorks already models group qualification.
 
 ## Scenarios
 

@@ -1,8 +1,9 @@
 /**
- * The Bracket roster panel's body: IDENTITY / AVAILABILITY / EVENTS / NOTES.
+ * The Bracket roster panel's body: AVAILABILITY / EVENTS / NOTES.
  *
- * Four `DetailPanel.Section`s in the order Meet's player panel uses — who
- * they are, when they can play, what they play, free text last. It was a flat
+ * Three `DetailPanel.Section`s — when they can play, what they play, free
+ * text last. Identity already lives in the panel header; an internal roster
+ * id is not an operator task (F-PAIR-36, R-PAIR-6). It was a flat
  * `flex flex-col gap-3` with no headings, in a different order and a different
  * label recipe from Meet's (console IA pass, Theme 2).
  *
@@ -21,9 +22,9 @@ import type { BadgeEntry } from './rosterEvents';
 import {
   BracketAvailabilityField,
   BracketEventsField,
-  FIELD_INPUT_CLASSES,
   type CommitEventFn,
 } from './BracketPlayerFields';
+import { INPUT_INLINE_CLASS } from '../../lib/utils';
 
 export function BracketPlayerDetailFields({
   player,
@@ -42,21 +43,6 @@ export function BracketPlayerDetailFields({
 }) {
   return (
     <>
-      {/* The name itself is the panel header — repeating it here would be a
-          second copy in a 380px pane. What identity adds is the stable key
-          the exports, the draw participants and the URLs all use. */}
-      <DetailPanel.Section eyebrow="Identity">
-        <Row pane
-          last
-          label="Roster ID"
-          control={
-            <span className="text-xs text-muted-foreground sw-num">
-              {player.id}
-            </span>
-          }
-        />
-      </DetailPanel.Section>
-
       <DetailPanel.Section eyebrow="Availability">
         <div className="flex flex-col gap-1">
           <BracketAvailabilityField
@@ -82,7 +68,7 @@ export function BracketPlayerDetailFields({
                   onUpdate(player.id, { restSlots: next });
                 }
               }}
-              className={`${FIELD_INPUT_CLASSES} sw-num w-28`}
+              className={`${INPUT_INLINE_CLASS} sw-num w-28`}
             />
           }
         />
@@ -112,7 +98,7 @@ export function BracketPlayerDetailFields({
           aria-label="Notes"
           placeholder="Anything the director should know"
           onChange={(e) => onUpdate(player.id, { notes: e.target.value })}
-          className={FIELD_INPUT_CLASSES}
+          className={INPUT_INLINE_CLASS}
         />
       </DetailPanel.Section>
     </>

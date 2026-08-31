@@ -1,5 +1,13 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
 import { IconContext } from '@phosphor-icons/react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { AuthProvider } from '../context/AuthContext';
@@ -44,7 +52,13 @@ function Fallback() {
  *  to the matched segment and produce /bracket/bracket-setup). */
 function BracketLegacyRedirect() {
   const { id } = useParams<{ id: string }>();
-  return <Navigate to={`/tournaments/${id}/bracket-setup`} replace />;
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: `/tournaments/${id}/setup/general`, search: location.search, hash: location.hash }}
+      replace
+    />
+  );
 }
 
 /** The standalone workspace-settings page was absorbed into the workspace
@@ -63,8 +77,43 @@ const _SETTINGS_TAB_TO_SEGMENT: Record<string, string> = {
 function WorkspaceSettingsRedirect() {
   const { id } = useParams<{ id: string }>();
   const [sp] = useSearchParams();
-  const seg = _SETTINGS_TAB_TO_SEGMENT[sp.get('tab') ?? ''] ?? 'ws-settings';
-  return <Navigate to={`/tournaments/${id}/${seg}`} replace />;
+  const location = useLocation();
+  const tab = sp.get('tab') ?? '';
+  const canonical =
+    tab === 'venue'
+      ? 'setup/venue'
+      : tab === 'people'
+        ? 'administration/team'
+        : tab === 'modules'
+          ? 'administration/modules'
+          : tab === 'sharing'
+            ? 'publish/site'
+            : tab === 'sync'
+              ? 'administration/backups'
+              : tab === 'overview'
+                ? 'overview'
+                : 'administration/lifecycle';
+  // Keep the old map as a type-checked compatibility record. It documents
+  // where each historical tab lived even though the visible destination is
+  // now the workflow-first route above.
+  void _SETTINGS_TAB_TO_SEGMENT;
+  return (
+    <Navigate
+      to={{ pathname: `/tournaments/${id}/${canonical}`, search: location.search, hash: location.hash }}
+      replace
+    />
+  );
+}
+
+function TournamentRootRedirect() {
+  const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: `/tournaments/${id}/overview`, search: location.search, hash: location.hash }}
+      replace
+    />
+  );
 }
 
 function App() {
@@ -133,6 +182,7 @@ function App() {
                     segment. Replace semantics so history stays clean. */}
                 <Route path="/tournaments/:id/bracket" element={<BracketLegacyRedirect />} />
                 <Route path="/tournaments/:id/settings" element={<WorkspaceSettingsRedirect />} />
+                <Route path="/tournaments/:id" element={<TournamentRootRedirect />} />
                 <Route path="/tournaments/:id/*" element={<TournamentPage />} />
                 {/* Fallback (authenticated paths). */}
                 <Route path="*" element={<Navigate to="/" replace />} />

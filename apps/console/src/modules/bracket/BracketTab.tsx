@@ -12,29 +12,38 @@
  * ``TabBar`` (``activeTab`` is a ``bracket-*`` id), with a
  * ``BracketViewHeader`` strip above the active view.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from "react";
+import {
+  Link,
+  Navigate,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
-import { BracketApiProvider } from '../../api/bracketClient';
+import { BracketApiProvider } from "../../api/bracketClient";
 
-import { useBracket } from '../../hooks/useBracket';
-import { useUiStore } from '../../store/uiStore';
-import { useTournamentStore } from '../../store/tournamentStore';
-import { isBracketTab, bracketTabView } from '../../lib/bracketTabs';
-import { reconcileBracketRoster } from './bracketMigration';
-import { ConfigSurface, LockedFieldset } from '../../platform/engine-config/ConfigSurface';
-import { EngineConfigForm } from '../../platform/engine-config/EngineConfigForm';
-import { LockRibbon } from '../../components/status/LockRibbon';
-import { requestClearScheduleOnNextSave } from '../../hooks/useTournamentState';
-import { useBracketScheduleLock } from './useBracketScheduleLock';
-import { BracketStructureSection } from './BracketStructureSection';
-import { BracketRosterTab } from './BracketRosterTab';
-import { BracketDrawsTab } from './BracketDrawsTab';
-import { BracketMatchesTab } from './BracketMatchesTab';
-import { BracketViewHeader } from './BracketViewHeader';
-import { DrawView, type BracketLayoutMode } from './DrawView';
-import { BracketEmptyState } from './BracketEmptyState';
-import { BracketInlineNotice } from './BracketInlineNotice';
+import { useBracket } from "../../hooks/useBracket";
+import { useUiStore } from "../../store/uiStore";
+import { useTournamentStore } from "../../store/tournamentStore";
+import { isBracketTab, bracketTabView } from "../../lib/bracketTabs";
+import { reconcileBracketRoster } from "./bracketMigration";
+import {
+  ConfigSurface,
+  LockedFieldset,
+} from "../../platform/engine-config/ConfigSurface";
+import { EngineConfigForm } from "../../platform/engine-config/EngineConfigForm";
+import { LockRibbon } from "../../components/status/LockRibbon";
+import { requestClearScheduleOnNextSave } from "../../hooks/useTournamentState";
+import { useBracketScheduleLock } from "./useBracketScheduleLock";
+import { BracketStructureSection } from "./BracketStructureSection";
+import { BracketRosterTab } from "./BracketRosterTab";
+import { BracketDrawsTab } from "./BracketDrawsTab";
+import { BracketMatchesTab } from "./BracketMatchesTab";
+import { BracketViewHeader } from "./BracketViewHeader";
+import { DrawView, type BracketLayoutMode } from "./DrawView";
+import { BracketEmptyState } from "./BracketEmptyState";
+import { BracketInlineNotice } from "./BracketInlineNotice";
 
 export function BracketTab() {
   const params = useParams<{ id: string }>();
@@ -64,12 +73,12 @@ function BracketTabBody() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const goToDraws = () =>
-    navigate(`/tournaments/${params.id}/bracket-draws`, { replace: true });
-  const [eventId, setEventId] = useState<string>('');
+    navigate(`/tournaments/${params.id}/competition/draws`);
+  const [eventId, setEventId] = useState<string>("");
   // SE draw-canvas layout. Session-only (plain state, no persistence);
   // lives here — beside ``eventId`` — because the toggle renders in
   // ``BracketViewHeader`` while ``DrawView`` consumes it.
-  const [drawLayout, setDrawLayout] = useState<BracketLayoutMode>('one-sided');
+  const [drawLayout, setDrawLayout] = useState<BracketLayoutMode>("one-sided");
   const activeTab = useUiStore((s) => s.activeTab);
   const setBracketDataReady = useUiStore((s) => s.setBracketDataReady);
 
@@ -97,10 +106,10 @@ function BracketTabBody() {
   // on the draw they picked, not just the first one.
   useEffect(() => {
     if (!data || data.events.length === 0) {
-      setEventId('');
+      setEventId("");
       return;
     }
-    const requested = searchParams.get('event');
+    const requested = searchParams.get("event");
     if (requested && data.events.some((e) => e.id === requested)) {
       if (eventId !== requested) setEventId(requested);
       return;
@@ -116,7 +125,7 @@ function BracketTabBody() {
   // the Draw canvas flashes its "No draw generated" empty state. Resolve the
   // id at render; the state stays the operator's choice once it exists.
   const activeEventId =
-    data?.events.find((e) => e.id === eventId)?.id ?? data?.events[0]?.id ?? '';
+    data?.events.find((e) => e.id === eventId)?.id ?? data?.events[0]?.id ?? "";
 
   // First-load migration: a LEGACY bracket (participants, no ``bracketPlayers``)
   // gets its roster extracted once, gated by ``bracketRosterMigrated`` so a
@@ -133,8 +142,12 @@ function BracketTabBody() {
   // wholly empty-roster-only.
   const bracketPlayers = useTournamentStore((s) => s.bracketPlayers);
   const setBracketPlayers = useTournamentStore((s) => s.setBracketPlayers);
-  const bracketRosterMigrated = useTournamentStore((s) => s.bracketRosterMigrated);
-  const setBracketRosterMigrated = useTournamentStore((s) => s.setBracketRosterMigrated);
+  const bracketRosterMigrated = useTournamentStore(
+    (s) => s.bracketRosterMigrated,
+  );
+  const setBracketRosterMigrated = useTournamentStore(
+    (s) => s.setBracketRosterMigrated,
+  );
 
   useEffect(() => {
     if (!data) return;
@@ -143,12 +156,18 @@ function BracketTabBody() {
     const derived = reconcileBracketRoster(data);
     if (derived.length > 0) setBracketPlayers(derived);
     setBracketRosterMigrated(true);
-  }, [data, bracketPlayers, bracketRosterMigrated, setBracketPlayers, setBracketRosterMigrated]);
+  }, [
+    data,
+    bracketPlayers,
+    bracketRosterMigrated,
+    setBracketPlayers,
+    setBracketRosterMigrated,
+  ]);
 
   // ``activeTab`` is normalized to a ``bracket-*`` id by
   // ``TournamentPage`` once kind resolves; fall back to 'setup'
   // defensively for the first render before that effect runs.
-  const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : 'setup';
+  const view = isBracketTab(activeTab) ? bracketTabView(activeTab) : "setup";
   // `?section=` is gone with the Engine/Events switcher — Configuration is
   // one surface, so there is no sub-section for the URL to carry. Old links
   // still resolve; the param is simply ignored.
@@ -168,7 +187,7 @@ function BracketTabBody() {
     return new Promise<boolean>((resolve) => {
       setUnlockModalState({
         open: true,
-        actionDescription: 'save engine settings (clears the bracket schedule)',
+        actionDescription: "save engine settings (clears the bracket schedule)",
         resolve: (confirmed: boolean) => {
           if (confirmed) requestClearScheduleOnNextSave();
           setUnlockModalState(null);
@@ -180,7 +199,7 @@ function BracketTabBody() {
 
   // Setup, Roster, and Events do NOT depend on bracket-events data.
   // Draw/Schedule/Live render the events' draws/Gantts; they need data.
-  const needsBracketData = view === 'draw' || view === 'matches';
+  const needsBracketData = view === "draw" || view === "matches";
   if (needsBracketData && !data) {
     return (
       <div className="min-h-full bg-card">
@@ -207,7 +226,7 @@ function BracketTabBody() {
       {/* Setup / Roster / Events own their tab-local header strips —
           rendering the view header there produced a double-header
           stack the meet never shows. */}
-      {data && view === 'draw' && (
+      {data && view === "draw" && (
         <BracketViewHeader
           data={data}
           eventId={activeEventId}
@@ -233,9 +252,13 @@ function BracketTabBody() {
           selector persists across switches. */}
       <div
         key={view}
-        className="min-h-0 flex-1 overflow-auto"
+        className={
+          view === "draw"
+            ? "min-h-0 flex-1 overflow-hidden"
+            : "min-h-0 flex-1 overflow-auto"
+        }
       >
-        {view === 'setup' && (
+        {view === "setup" && (
           <ConfigSurface
             ribbons={
               bracketScheduleLocked ? (
@@ -244,7 +267,7 @@ function BracketTabBody() {
                   locked
                   action={
                     <Link
-                      to={`/tournaments/${params.id}/bracket-draws`}
+                      to={`/tournaments/${params.id}/competition/draws`}
                       className="ml-1 font-medium text-accent hover:underline"
                     >
                       View draws →
@@ -272,18 +295,21 @@ function BracketTabBody() {
             </LockedFieldset>
           </ConfigSurface>
         )}
-        {view === 'roster' && <BracketRosterTab />}
+        {view === "roster" && <BracketRosterTab />}
         {/* The standalone Events surface was folded into Draws — creating a
             draw now opens a layer on the Draws tab instead of a separate
             page. Old ``bracket-events`` links redirect here. */}
-        {view === 'events' && (
-          <Navigate to={`/tournaments/${params.id}/bracket-draws`} replace />
+        {view === "events" && (
+          <Navigate
+            to={`/tournaments/${params.id}/competition/draws`}
+            replace
+          />
         )}
-        {view === 'draws' && <BracketDrawsTab />}
-        {view === 'matches' && data && (
+        {view === "draws" && <BracketDrawsTab />}
+        {view === "matches" && data && (
           <BracketMatchesTab data={data} onData={setData} />
         )}
-        {view === 'draw' && data && (
+        {view === "draw" && data && (
           <div className="h-full overflow-hidden">
             <DrawView
               data={data}

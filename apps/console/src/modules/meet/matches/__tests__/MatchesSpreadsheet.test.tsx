@@ -9,12 +9,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MatchesSpreadsheet } from '../MatchesSpreadsheet';
+import { useMatchStateStore } from '../../../../store/matchStateStore';
 import { useTournamentStore } from '../../../../store/tournamentStore';
 import { useUiStore } from '../../../../store/uiStore';
 import type {
   MatchDTO,
+  MatchStateDTO,
   PlayerDTO,
   RosterGroupDTO,
+  ScheduleDTO,
   TournamentConfig,
 } from '../../../../api/dto';
 
@@ -69,6 +72,9 @@ const MATCHES: MatchDTO[] = [
 
 const CONFIG: Partial<TournamentConfig> = {
   rankCounts: { MS: 2, WD: 1, XD: 1 },
+  dayStart: '09:00',
+  dayEnd: '17:00',
+  intervalMinutes: 30,
 };
 
 beforeEach(() => {
@@ -77,7 +83,9 @@ beforeEach(() => {
     groups: GROUPS,
     players: PLAYERS,
     matches: MATCHES,
+    schedule: null,
   });
+  useMatchStateStore.setState({ matchStates: {} });
   // These tests have always been about an OPERATOR editing the match list; they
   // just never had to say so. The write gate (audit A2) fails CLOSED on an unset
   // role, so state the role the fixture always implied. A viewer's view of this
@@ -174,7 +182,7 @@ describe('<MatchesSpreadsheet />', () => {
     // pane is where the rest of the player record already lives.
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m5'));
-    const panel = screen.getByTestId('match-detail-panel');
+    const panel = screen.getByTestId('match-inspector');
     // One card per player, each carrying its own school chip — the code
     // in text, the full name in the chip's tooltip (G6/M2.6).
     expect(within(panel).getAllByTitle('Alpha High').length).toBeGreaterThanOrEqual(2);
@@ -202,16 +210,19 @@ describe('<MatchesSpreadsheet />', () => {
   });
 });
 
-/* SP-D7 S4 — row click opens the match DetailPanel; the row's inline
- * editors keep working and never open it. */
-describe('<MatchesSpreadsheet /> — match detail panel', () => {
-  it('opens the DetailPanel on a row-background click and marks the row selected', () => {
+/* SP-D7 S4 / F-UNI-11 — row click opens the shared match detail surface. */
+describe('<MatchesSpreadsheet /> — shared match detail surface', () => {
+  it('opens the shared component on a row-background click and marks the row selected', () => {
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m1'));
-    const panel = screen.getByTestId('match-detail-panel');
+    const panel = screen.getByTestId('match-inspector');
     const header = within(panel).getByText('Match').closest('header')!;
     expect(within(header).getByText('MS1')).toBeInTheDocument();
-    expect(within(header).getByText("Men's Singles")).toBeInTheDocument();
+    expect(screen.getByTestId('match-inspector-facet-summary')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('match-inspector-status')).toHaveTextContent('Pending');
     expect(screen.getByTestId('match-row-m1')).toHaveAttribute(
       'data-selected',
       'true',
@@ -222,7 +233,7 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m1');
     fireEvent.click(within(row).getByText('Aiko'));
-    expect(screen.getByTestId('match-detail-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('match-inspector')).toBeInTheDocument();
   });
 
   it('opens the panel from a click on a side cell\'s EMPTY space (no dead zone)', () => {
@@ -233,15 +244,44 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     // and must open the panel (SP-D7 live finding: cell-wide swallow made
     // most of the row read as click-dead).
     fireEvent.click(within(row).getByTestId('player-cell-side-a'));
-    expect(screen.getByTestId('match-detail-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('match-inspector')).toBeInTheDocument();
   });
 
   it('has NO per-match Slots editor anywhere (a match takes exactly one slot)', () => {
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m1'));
-    const panel = screen.getByTestId('match-detail-panel');
+    const panel = screen.getByTestId('match-inspector');
     expect(within(panel).queryByLabelText('Slots')).not.toBeInTheDocument();
     expect(within(panel).queryByText('Slots')).not.toBeInTheDocument();
+  });
+
+  it('builds the Assignment facet from the loaded schedule and match state', () => {
+    useTournamentStore.setState({
+      schedule: {
+        assignments: [
+          { matchId: 'm1', slotId: 2, courtId: 7, durationSlots: 1 },
+        ],
+      } as ScheduleDTO,
+    });
+    useMatchStateStore.setState({
+      matchStates: {
+        m1: {
+          matchId: 'm1',
+          status: 'started',
+          actualCourtId: 9,
+          actualStartTime: '2026-08-31T10:15:00Z',
+        } as MatchStateDTO,
+      },
+    });
+
+    renderSheet();
+    fireEvent.click(screen.getByTestId('match-row-m1'));
+    fireEvent.click(screen.getByTestId('match-inspector-facet-assignment'));
+    const assignment = screen.getByTestId('match-inspector-panel-assignment');
+    expect(within(assignment).getByText('9')).toBeInTheDocument();
+    expect(within(assignment).getByText('10:00')).toBeInTheDocument();
+    const started = within(assignment).getByText('Started');
+    expect(started.nextElementSibling).toHaveTextContent(/\d{2}:\d{2}/);
   });
 
   it('arms on the first delete press and does NOT delete (audit F1 guard)', () => {
@@ -258,7 +298,7 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
   it('dismisses the panel when the selected match is deleted (two-click confirm)', () => {
     renderSheet();
     fireEvent.click(screen.getByTestId('match-row-m1'));
-    expect(screen.getByTestId('match-detail-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('match-inspector')).toBeInTheDocument();
     const row = screen.getByTestId('match-row-m1');
     // Arm, then confirm.
     fireEvent.click(within(row).getByTestId('match-delete-m1'));
@@ -267,7 +307,7 @@ describe('<MatchesSpreadsheet /> — match detail panel', () => {
     // The dock retains the pane while its close-width transition runs;
     // completing the transition unmounts it.
     fireEvent.transitionEnd(screen.getByTestId('detail-dock'));
-    expect(screen.queryByTestId('match-detail-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('match-inspector')).not.toBeInTheDocument();
   });
 
   it('will not delete a match for a viewer, however many times it is pressed', () => {

@@ -1,11 +1,12 @@
 import type { MatchStatus } from '../../../platform/domain/match';
+import type { MatchIdentity } from '../../../platform/domain/matchIdentity';
 import type { OpsBlock } from '../opsBlock';
 import type { BoardChip } from './boardPlacements';
 import { fromEngineStatus, deriveTimeliness, can, type RunStatus, type Timeliness } from './runMachine';
 
 export interface RunMatch {
   key: string; id: string; source: 'meet' | 'bracket';
-  label: string; colorKey?: string; sideA: string; sideB: string;
+  identity: MatchIdentity; colorKey?: string; sideA: string; sideB: string;
   court?: number; plannedSlot?: number; span: number;
   /** `late` stays the wide "past its planned start at all" flag the board and
    *  the summary already read; `timeliness` is the tier a renderer needs to
@@ -17,6 +18,10 @@ export interface RunMatch {
   /** ACTUAL end slot once finished. Carried so the rest flag can tell when a
    *  player actually came off court, not when the plan said they would. */
   actualEndSlot?: number;
+  /** Recorded score once finished — carried from `Match.score` (SWP-1) so the
+   *  Finished list can render bracket results without reaching into a store
+   *  that structurally cannot hold them. */
+  score?: OpsBlock['score'];
 }
 
 const TBD = 'TBD';
@@ -39,7 +44,7 @@ export function toRunMatches(
         ? b.sideA !== TBD && b.sideB !== TBD
         : (eligibleBracketIds?.has(b.id) ?? false);
     return {
-      key: b.key, id: b.id, source: b.source, label: b.label, colorKey: b.colorKey,
+      key: b.key, id: b.id, source: b.source, identity: b.identity, colorKey: b.colorKey,
       sideA: b.sideA, sideB: b.sideB, playerIds: b.playerIds,
       court: b.court ?? undefined, plannedSlot: b.slot,
       span: b.span ?? 1, status,
@@ -51,6 +56,7 @@ export function toRunMatches(
       timeliness: 'ontime' as const,
       eligible,
       actualEndSlot: b.actualEndSlot,
+      score: b.score,
     };
   });
 }

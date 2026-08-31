@@ -20,6 +20,7 @@
  */
 import type { Placement } from '@scheduler/design-system/components';
 import type { OpsBlock } from '../opsBlock';
+import type { MatchIdentity } from '../../../platform/domain/matchIdentity';
 import { fromEngineStatus, deriveLate, deriveDriftSlots, type RunStatus } from './runMachine';
 
 export interface BoardChip {
@@ -36,7 +37,8 @@ export interface BoardChip {
    *  `▸+N` marker). Only scheduled/called chips are ever pushed; playing and
    *  done chips are facts and anchor where they actually happened. */
   pushedSlots: number;
-  label: string;
+  /** F-UNI-22: rendered only through the canonical identity formatter. */
+  identity: MatchIdentity;
   colorKey?: string;
   /** The planned duration — drives the planned-end marker on the live board. */
   plannedSpan: number;
@@ -74,7 +76,7 @@ export function buildPlanChips(blocks: OpsBlock[]): BoardChip[] {
       late: false,
       overrunSlots: 0,
       pushedSlots: 0, // the plan board shows the PLAN: nothing is pushed
-      label: b.label,
+      identity: b.identity,
       colorKey: b.colorKey,
       plannedSpan,
     };
@@ -211,7 +213,7 @@ export function buildLiveChips(blocks: OpsBlock[], currentSlot: number, running 
       // Overrun measures past the PLANNED end (plannedSlot + plannedSpan).
       overrunSlots: deriveDriftSlots({ status: state, plannedSlot, span: plannedSpan, currentSlot }),
       pushedSlots: 0, // assigned by the pushback pass below
-      label: b.label,
+      identity: b.identity,
       colorKey: b.colorKey,
       plannedSpan,
       sideA: b.sideA,

@@ -38,6 +38,7 @@
 import type { TournamentSummaryDTO } from '../../api/dto';
 import type { WorkspacePhase } from '../../platform/domain/lifecycle';
 import { resolvePhase } from '../../platform/domain/overviewPhase';
+import { MODULE_LABELS } from '../../platform/product-shell/types';
 import { needsAttention } from './hubSignals';
 
 export type HubFacetId =
@@ -68,7 +69,7 @@ export interface HubFacet {
  *  order an event actually travels, then the cross-cutting facets. */
 export const HUB_FACETS: HubFacet[] = [
   { id: 'all', label: 'All' },
-  { id: 'entries', label: 'Entries' },
+  { id: 'entries', label: MODULE_LABELS.entries },
   { id: 'setup', label: 'Setup' },
   { id: 'ready', label: 'Ready' },
   { id: 'live', label: 'Live' },

@@ -13,6 +13,9 @@ vi.mock('../../../api/client', () => ({
     removeMember: vi.fn(),
     leaveTournament: vi.fn(),
     transferOwnership: vi.fn(),
+    listInvites: vi.fn(),
+    createInvite: vi.fn(),
+    revokeInvite: vi.fn(),
   },
 }));
 
@@ -46,6 +49,10 @@ const SECOND_OWNER = {
   email: 'two@x.com', displayName: 'Owen Two',
 };
 
+beforeEach(() => {
+  vi.mocked(apiClient.listInvites).mockResolvedValue([]);
+});
+
 function mockMembers(...rows: unknown[]) {
   vi.mocked(apiClient.listMembers).mockResolvedValue(rows as never);
 }
@@ -64,7 +71,7 @@ describe('PeopleAccessTab — display (pre-existing behaviour)', () => {
   it('renders the roles legend, the owner, and members from listMembers', async () => {
     mockMembers({ userId: 'u-abc', role: 'operator', joinedAt: '2026-01-01T00:00:00Z' });
     render(<PeopleAccessTab tid="t1" summary={summary} />);
-    expect(screen.getByText('Operator')).toBeInTheDocument(); // legend entry
+    expect(screen.getAllByText('Operator').length).toBeGreaterThan(0); // legend and invite-role option
     expect(screen.getByText(/owner@x\.com/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId('member-u-abc')).toBeInTheDocument());
   });

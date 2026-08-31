@@ -58,8 +58,7 @@ export interface EntryEventDTO {
 export interface EntrantListRowDTO {
   /** The player-page address (SP-P7 §3.3): an opaque person-in-tournament
    * id, never the name — two entrants sharing a name is routine at a club. */
-  personKey: string;
-  name: string;
+  person: import('./person.types').PersonReferenceDTO;
   /** Free text off `entry_players`, licensed by the C4 consent-copy update
    * ("name and club") in `enter.tsx`. */
   club: string | null;
@@ -75,7 +74,7 @@ export interface ReserveRowDTO {
    *  place, so the printed numbers can skip one. Render the number, never
    *  the position in the list. */
   position: number;
-  name: string;
+  person: import('./person.types').PersonReferenceDTO;
   club: string | null;
 }
 
@@ -112,6 +111,10 @@ export interface EntryPolicyDTO {
 export interface EntryTournamentDTO {
   name: string | null;
   date: string | null;
+  endDate: string | null;
+  timeZone: string;
+  phase: 'announced' | 'entries_open' | 'entries_closed' | 'draws_published' | 'live' | 'complete' | 'archived';
+  updatedAt: string | null;
 }
 
 export interface EntryNamedDTO {

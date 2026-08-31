@@ -1,12 +1,10 @@
 /**
- * Tests for DisplayConfig's "Board layout" + "Preview" mount (Task 6).
- * The existing Feeds + Public link sections are untouched (no coverage
- * regression to guard there — verified by inspection, not duplicated here).
- * tv* fields only drive the Meet board, so the new sections are gated to
- * Meet-enabled workspaces.
+ * Publish → Displays keeps module-owned board settings beside a real preview
+ * of the minted public capability projection. Meet-only layout controls stay
+ * gated to Meet; the public preview remains available to bracket workspaces.
  */
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 // The Sharing mentions are real <Link>s now (D2.1) — renders need a router.
 import { MemoryRouter } from 'react-router-dom';
 import { DisplayConfig } from '../DisplayConfig';
@@ -18,6 +16,10 @@ const MEET_ON: WorkspaceModule[] = [{ id: 'meet', label: 'Meet', status: 'enable
 const BRACKET_ONLY: WorkspaceModule[] = [
   { id: 'meet', label: 'Meet', status: 'disabled' },
   { id: 'bracket', label: 'Bracket', status: 'enabled' },
+];
+const MEET_OFF: WorkspaceModule[] = [
+  { id: 'meet', label: 'Meet', status: 'disabled' },
+  { id: 'bracket', label: 'Bracket', status: 'available' },
 ];
 
 // The public link is minted server-side (`/tournaments/{id}/display-token`),
@@ -52,17 +54,30 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
     expect(screen.getByTestId('display-preview-frame')).toBeInTheDocument();
   });
 
-  it('hides Board layout + Preview for a bracket-only workspace (tv* fields do not drive it)', () => {
+  it('keeps the published preview for a bracket-only workspace while hiding Meet-only controls', async () => {
     render(<DisplayConfig tid="t1" modules={BRACKET_ONLY} />, { wrapper: MemoryRouter });
     expect(screen.queryByRole('heading', { name: 'Board layout' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Preview' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Preview' })).toBeInTheDocument();
+    expect(await screen.findByTestId('display-preview-iframe')).toHaveAttribute(
+      'src',
+      `${window.location.origin}/display?token=cap-tok`,
+    );
   });
 
-  it('still renders the existing Feeds + Public link sections untouched', () => {
+  it('renders Board sources + Public link with explicit module state', () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
-    expect(screen.getByRole('heading', { name: 'Feeds' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Board sources' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Public link' })).toBeInTheDocument();
     expect(screen.getByLabelText('Public display URL')).toBeInTheDocument();
+    expect(screen.getByText('Enabled')).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
+  });
+
+  it('distinguishes a disabled source from one that is available to enable', () => {
+    render(<DisplayConfig tid="t1" modules={MEET_OFF} />, { wrapper: MemoryRouter });
+    expect(screen.getByText('Off')).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Modules →' })).toHaveLength(2);
   });
 
   // The link on this tab used to be `${origin}/display?id=<uuid>` under the
@@ -87,53 +102,13 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
     expect(screen.queryByLabelText('Public display URL')).toBeNull();
   });
 
-  // Locks the headline feature end-to-end: editor -> store -> preview, with
-  // no Save step. Proves the "live" in "live preview" isn't just correct by
-  // construction (new config object -> selector re-render -> new prop) but
-  // actually observable: toggling "Show scores" makes the sample match's
-  // score disappear from the preview frame in the SAME render pass, with no
-  // debounced PUT needed (setConfig writes to the store synchronously).
-  it('reflects an unsaved editor edit in the preview immediately (live-draft preview)', () => {
+  it('uses the minted capability URL for the inline preview, never the viewer-gated route', async () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     const preview = screen.getByTestId('display-preview-frame');
-    // Console board cards render the score per SIDE row (11 / 7), not as a
-    // joined "11–7" aggregate — assert both columns are on the board.
-    expect(within(preview).getByText('11')).toBeInTheDocument();
-    expect(within(preview).getByText('7')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Show scores' }));
-
-    expect(within(preview).queryByText('11')).toBeNull();
-    expect(within(preview).queryByText('7')).toBeNull();
-  });
-});
-
-/**
- * Defect D7: the Preview rendered "MS1 A. Ntumba vs D. Reyes", 11-7, on four
- * courts, with nothing saying it was invented. It is a fixed fixture on
- * purpose (a schedule-less workspace would otherwise preview the board's "no
- * schedule" placeholder, and the point here is to preview LAYOUT) — but an
- * unlabelled board that shows names and scores teaches the operator something
- * false about their own event.
- */
-describe('<DisplayConfig /> — the Preview says its data is a sample', () => {
-  it('captions the preview, before the board, naming what is invented', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
-    const caption = screen.getByTestId('display-preview-caption');
-    expect(caption).toHaveTextContent(/sample data/i);
-    expect(caption).toHaveTextContent(/players, scores and courts are invented/i);
-    // Read BEFORE the board it describes, not after it.
-    expect(
-      caption.compareDocumentPosition(screen.getByTestId('display-preview-frame')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-  });
-
-  it('carries the sample warning in the accessible name too', () => {
-    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
-    expect(screen.getByTestId('display-preview-frame')).toHaveAttribute(
-      'aria-label',
-      'Board layout preview, sample data',
-    );
+    const iframe = await screen.findByTestId('display-preview-iframe');
+    expect(preview).toHaveAttribute('aria-label', 'Published venue board preview');
+    expect(iframe).toHaveAttribute('src', `${window.location.origin}/display?token=cap-tok`);
+    expect(iframe).not.toHaveAttribute('src', expect.stringContaining('?id='));
+    expect(apiClient.getDisplayToken).toHaveBeenCalledTimes(1);
   });
 });

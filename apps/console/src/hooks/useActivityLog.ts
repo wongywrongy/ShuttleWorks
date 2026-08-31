@@ -19,10 +19,13 @@ import { useTournamentStore } from '../store/tournamentStore';
 import { useAlertStore } from '../store/alertStore';
 import type { MatchStateDTO } from '../api/dto';
 import type { AlertEntry } from '../platform/domain/alertModel';
+import { getMatchLabel } from '../lib/matchUtils';
 
 function matchLabel(matchId: string): string {
   const m = useTournamentStore.getState().matches.find((mm) => mm.id === matchId);
-  return m?.matchNumber != null ? `Match M${m.matchNumber}` : `Match ${matchId.slice(0, 6)}`;
+  // F-UNI-22/23: activity copy decorates the canonical identity; it does not
+  // mint another M{n}/id-prefix convention.
+  return `Match ${getMatchLabel(m, matchId)}`;
 }
 
 /** Human sentence for a transition into `status`. Returns null for

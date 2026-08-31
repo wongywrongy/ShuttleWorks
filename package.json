@@ -24,6 +24,8 @@
     "build:all": "npm run build:scheduler && npm run build:entrant",
     "lint:scheduler": "npm run -w apps/console lint",
     "lint:entrant": "npm run -w apps/entrant lint",
+    "test:contrast": "node packages/design-system/scripts/check-contrast.mjs",
+    "test:classes": "node packages/design-system/scripts/check-classes.mjs",
     "typecheck:entrant": "npm run -w apps/entrant typecheck",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",

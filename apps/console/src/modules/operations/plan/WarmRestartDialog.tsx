@@ -23,6 +23,7 @@ import { formatSlotTime } from '../../../lib/time';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { DialogFooter } from '../../../components/DialogFooter';
 
 interface Props {
   isOpen: boolean;
@@ -86,7 +87,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
 
           <ScheduleDiffView impact={activeProposal.impact} formatSlot={formatSlot} />
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          <DialogFooter>
             <button
               type="button"
               onClick={handleCancel}
@@ -102,7 +103,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
             >
               {loading ? 'Committing…' : 'Commit replan'}
             </button>
-          </div>
+          </DialogFooter>
         </div>
       </Modal>
     );

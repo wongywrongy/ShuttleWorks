@@ -11,7 +11,9 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from datetime import date
 from typing import List, Literal, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from pydantic import BaseModel, Field, ValidationError
@@ -91,6 +93,8 @@ class TournamentSummaryDTO(BaseModel):
     status: TournamentStatus = "draft"
     kind: str = "meet"
     tournamentDate: Optional[str] = None
+    tournamentEndDate: Optional[str] = None
+    timeZone: str = "UTC"
     createdAt: str
     updatedAt: str
     role: Optional[str] = None
@@ -112,6 +116,9 @@ class TournamentCreateDTO(StrictModel):
     name: Optional[str] = Field(default=None, max_length=200)
     kind: str = Field(default="meet", max_length=20)
     tournamentDate: Optional[str] = Field(default=None, max_length=32)
+    tournamentEndDate: Optional[str] = Field(default=None, max_length=32)
+    timeZone: str = Field(default="UTC", max_length=64)
+    courtCount: int = Field(default=4, ge=1, le=64)
     # One seed row per module; the vocabulary is fixed and tiny, so this
     # bound only exists to stop a payload repeating it indefinitely.
     modules: Optional[List[WorkspaceModuleSeedDTO]] = Field(default=None, max_length=20)
@@ -121,6 +128,8 @@ class TournamentUpdateDTO(StrictModel):
     name: Optional[str] = Field(default=None, max_length=200)
     status: Optional[TournamentStatus] = None
     tournamentDate: Optional[str] = Field(default=None, max_length=32)
+    tournamentEndDate: Optional[str] = Field(default=None, max_length=32)
+    timeZone: Optional[str] = Field(default=None, max_length=64)
 
 
 class BackupEntryDTO(BaseModel):
@@ -159,6 +168,8 @@ def _to_summary(
         status=row.status,  # type: ignore[arg-type]
         kind=getattr(row, "kind", "meet"),
         tournamentDate=row.tournament_date,
+        tournamentEndDate=getattr(row, "tournament_end_date", None),
+        timeZone=getattr(row, "time_zone", None) or "UTC",
         createdAt=row.created_at.isoformat() if row.created_at else "",
         updatedAt=row.updated_at.isoformat() if row.updated_at else "",
         role=role,
@@ -358,6 +369,18 @@ def create_tournament(
             ErrorCode.INVALID_INPUT,
             f"kind must be 'meet' or 'bracket', got {body.kind!r}",
         )
+    if body.tournamentDate and body.tournamentEndDate:
+        try:
+            if date.fromisoformat(body.tournamentEndDate) < date.fromisoformat(
+                body.tournamentDate
+            ):
+                raise ValueError("tournamentEndDate must be on or after tournamentDate")
+        except ValueError as exc:
+            raise http_error(400, ErrorCode.INVALID_INPUT, str(exc))
+    try:
+        ZoneInfo(body.timeZone)
+    except Exception:
+        raise http_error(400, ErrorCode.INVALID_INPUT, "timeZone must be a valid IANA timezone")
     # Validate the seed up front (both checks are pure — no row needed) so a
     # rejected seed never leaves an orphan tournament/member row behind.
     if body.modules is not None:
@@ -408,6 +431,8 @@ def create_tournament(
         name=body.name,
         kind=body.kind,
         tournament_date=body.tournamentDate,
+        tournament_end_date=body.tournamentEndDate or body.tournamentDate,
+        time_zone=body.timeZone,
         owner_id=user_uuid,
         owner_email=user.email,
         org_id=personal_org_id(repo.session, user_uuid),
@@ -425,26 +450,26 @@ def create_tournament(
     # required TournamentConfig fields (intervalMinutes, dayStart, etc.).
     # ``commit_tournament_state`` skips the backup snapshot when data is
     # still empty (the freshly-created default), so this is a cheap
-    # upsert-only path.  Only seed when the caller supplied at least a name
-    # or date; an anonymous create stays at 204 / no state.
-    if body.name or body.tournamentDate:
-        seeded_config: dict = {
-            "intervalMinutes": 30,
-            "dayStart": "09:00",
-            "dayEnd": "18:00",
-            "breaks": [],
-            "courtCount": 4,
-            "defaultRestMinutes": 0,
-            "freezeHorizonSlots": 0,
-        }
-        if body.name:
-            seeded_config["tournamentName"] = body.name
-        if body.tournamentDate:
-            seeded_config["tournamentDate"] = body.tournamentDate
-        repo.commit_tournament_state(
-            row.id,
-            {"config": seeded_config},
-        )
+    # upsert-only path. Every created tournament gets a valid configuration;
+    # otherwise the creation wizard could succeed while its venue-scale write
+    # failed separately, leaving an underconfigured workspace.
+    seeded_config: dict = {
+        "intervalMinutes": 30,
+        "dayStart": "09:00",
+        "dayEnd": "18:00",
+        "breaks": [],
+        "courtCount": body.courtCount,
+        "defaultRestMinutes": 0,
+        "freezeHorizonSlots": 0,
+    }
+    if body.name:
+        seeded_config["tournamentName"] = body.name
+    if body.tournamentDate:
+        seeded_config["tournamentDate"] = body.tournamentDate
+    repo.commit_tournament_state(
+        row.id,
+        {"config": seeded_config},
+    )
     modules = _modules_for(row, repo)
     counts = _counts_for([row.id], repo)
     return _to_summary(
@@ -503,6 +528,7 @@ def update_tournament(
     The wire-format DTO uses camelCase ``tournamentDate``; we translate
     to the snake_case column name here.
     """
+    row = _resolve_tournament(tournament_id, repo)
     fields: dict = {}
     if body.name is not None:
         fields["name"] = body.name
@@ -510,14 +536,33 @@ def update_tournament(
         fields["status"] = body.status
     if body.tournamentDate is not None:
         fields["tournament_date"] = body.tournamentDate
+    if body.tournamentEndDate is not None:
+        fields["tournament_end_date"] = body.tournamentEndDate
+    if body.timeZone is not None:
+        try:
+            ZoneInfo(body.timeZone)
+        except Exception:
+            raise http_error(
+                400, ErrorCode.INVALID_INPUT, "timeZone must be a valid IANA timezone"
+            )
+        fields["time_zone"] = body.timeZone
+
+    candidate_start = body.tournamentDate if body.tournamentDate is not None else row.tournament_date
+    candidate_end = (
+        body.tournamentEndDate
+        if body.tournamentEndDate is not None
+        else getattr(row, "tournament_end_date", None)
+    )
+    if candidate_start and candidate_end:
+        try:
+            if date.fromisoformat(candidate_end) < date.fromisoformat(candidate_start):
+                raise ValueError("tournamentEndDate must be on or after tournamentDate")
+        except ValueError as exc:
+            raise http_error(400, ErrorCode.INVALID_INPUT, str(exc))
 
     row = repo.tournaments.update(tournament_id, fields)
-    if row is None:
-        raise http_error(
-            404,
-            ErrorCode.STATE_CORRUPT,
-            f"tournament not found: {tournament_id}",
-        )
+    if row is None:  # defensive: _resolve_tournament already checked it
+        raise http_error(404, ErrorCode.STATE_CORRUPT, f"tournament not found: {tournament_id}")
     role: Optional[str] = None
     user_uuid = user.as_uuid()
     if user_uuid is not None:

@@ -17,16 +17,19 @@
  *   - grouped: `groups=[{key,label,items,…}]` — a `GroupBandHeader` per
  *     group (collapse state internal, all expanded initially).
  */
-import { useState, type ReactNode } from 'react';
-import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
+import { useState, type ReactNode } from "react";
+import {
+  SELECTABLE_ROW_FOCUS,
+  selectableRowProps,
+} from "../../lib/selectableRow";
 import {
   COLUMN_HEADER_ROW_CLASSES,
   ColumnHeaderRow,
   GroupBandHeader,
   colClass,
   type BandedListColumn,
-} from './BandedList';
-import { bandedRowClasses } from './bandedDockWidth';
+} from "./BandedList";
+import { bandedRowClasses } from "./bandedDockWidth";
 
 export interface BandedTableColumn extends BandedListColumn {
   /** Optional second-tier label under the main label for two-tier
@@ -45,6 +48,10 @@ export interface BandedTableGroup<T> {
   detail?: string;
   items: T[];
   testId?: string;
+  /** Render the collapsible band above this group. A caller may suppress the
+   *  band for singleton groups while retaining grouped ordering for a mixed
+   *  table whose other groups genuinely need a band. */
+  showBand?: boolean;
   /** A control belonging to the band rather than to a row in it — see
    *  `GroupBandHeader`'s `action`. */
   action?: ReactNode;
@@ -126,7 +133,7 @@ export function BandedTable<T>({
           key={id}
           {...(rowAttrs?.(item) ?? {})}
           data-testid={rowTestId?.(item)}
-          data-selected={selected ? 'true' : undefined}
+          data-selected={selected ? "true" : undefined}
           role="row"
           aria-selected={click ? selected : undefined}
           {...(click && {
@@ -136,12 +143,14 @@ export function BandedTable<T>({
           })}
           className={[
             rowShell,
-            onRowClick ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : '',
-            selected ? 'bg-accent/10 shadow-[inset_2px_0_0_hsl(var(--accent))]' : '',
-            rowClassName?.(item) ?? '',
+            onRowClick ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : "",
+            selected
+              ? "bg-accent/10 shadow-[inset_2px_0_0_hsl(var(--accent))]"
+              : "",
+            rowClassName?.(item) ?? "",
           ]
             .filter(Boolean)
-            .join(' ')}
+            .join(" ")}
         >
           {renderRow(item)}
         </div>
@@ -162,14 +171,15 @@ export function BandedTable<T>({
           <ColumnHeaderRow columns={columns} inset={headerInset} />
         )}
       </div>
-      {groups
-        ? groups.map((g) => {
-            const isCollapsed = collapsed.has(g.key);
-            return (
-              // One rowgroup per band: the collapse toggle then owns a real
-              // section, so collapsing it removes a group of rows rather than
-              // an unexplained stretch of text.
-              <div role="rowgroup" key={g.key}>
+      {groups ? (
+        groups.map((g) => {
+          const isCollapsed = collapsed.has(g.key);
+          return (
+            // One rowgroup per band: the collapse toggle then owns a real
+            // section, so collapsing it removes a group of rows rather than
+            // an unexplained stretch of text.
+            <div role="rowgroup" key={g.key}>
+              {g.showBand !== false ? (
                 <div role="row">
                   <div role="cell" aria-colspan={columns.length}>
                     <GroupBandHeader
@@ -184,11 +194,16 @@ export function BandedTable<T>({
                     />
                   </div>
                 </div>
-                {!isCollapsed ? renderRows(g.items) : null}
-              </div>
-            );
-          })
-        : <div role="rowgroup">{renderRows(rows ?? [])}</div>}
+              ) : null}
+              {g.showBand === false || !isCollapsed
+                ? renderRows(g.items)
+                : null}
+            </div>
+          );
+        })
+      ) : (
+        <div role="rowgroup">{renderRows(rows ?? [])}</div>
+      )}
     </div>
   );
 }
@@ -201,7 +216,7 @@ export function BandedTable<T>({
  */
 function TwoTierHeaderRow({
   columns,
-  inset = 'px-5',
+  inset = "px-5",
 }: {
   columns: BandedTableColumn[];
   inset?: string;
@@ -210,9 +225,9 @@ function TwoTierHeaderRow({
     <div
       role="row"
       className={[
-        'flex items-start gap-3 border-b border-border bg-muted/40 py-1.5',
+        "flex items-start gap-3 border-b border-border bg-muted/40 py-1.5",
         inset,
-      ].join(' ')}
+      ].join(" ")}
     >
       {columns.map((col, i) => (
         // Label-less spacer columns stay columnheaders — see ColumnHeaderRow.
@@ -222,9 +237,9 @@ function TwoTierHeaderRow({
           // Two-tier cells stack label over sub-label with `flex flex-col`,
           // so a collapsed-priority column must restore to `flex` (the
           // default `block` restore would unstack this one).
-          className={['flex flex-col', colClass(col, 'flex')]
+          className={["flex flex-col", colClass(col, "flex")]
             .filter(Boolean)
-            .join(' ')}
+            .join(" ")}
         >
           <span className={COLUMN_HEADER_ROW_CLASSES}>{col.label}</span>
           {col.subLabel ? (

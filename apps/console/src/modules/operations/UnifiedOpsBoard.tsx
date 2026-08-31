@@ -39,12 +39,15 @@ import { useBracketApi } from '../../api/bracketClient';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { MatchChip } from '../../components/MatchChip';
+import { MODULE_LABELS } from '../../platform/product-shell/types';
+import { formatMatchIdentity } from '../../platform/domain/matchIdentity';
 import { fromEngineStatus } from './runtime/runMachine';
 import { buildPlanChips, type BoardChip } from './runtime/boardPlacements';
 import type { MatchDTO, ScheduleDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { OpsBlock } from './opsBlock';
 import { parseOpsKey, packBlockLanes, chipLanePx } from './opsBlock';
+import { ActiveChoice } from '../../components/ActiveChoice';
 
 interface Conflict { description: string }
 interface Validation { feasible: boolean; conflicts: Conflict[] }
@@ -141,7 +144,10 @@ export function UnifiedOpsBoard({
   const autoZoom = useMemo(() => {
     if (placed.length === 0) return 1;
     const maxLanes = Math.max(1, ...[...lanes.values()].map((l) => l.laneCount));
-    const longest = placed.reduce((m, b) => Math.max(m, b.label.length), 0);
+    const longest = placed.reduce(
+      (m, b) => Math.max(m, formatMatchIdentity(b.identity, b.id).length),
+      0,
+    );
     // Shared basis with the Run board (chipLanePx) so Plan and Run cells are
     // the SAME size at Auto fit; lane splits multiply the per-lane need.
     const neededLanePx = chipLanePx(longest);
@@ -340,15 +346,16 @@ export function UnifiedOpsBoard({
     // Plan board (Run is scrollbar-separated, so it keeps its own border-t).
     <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1 text-2xs">
       <span className="text-muted-foreground">Time</span>
-      <button
-        type="button"
+      <ActiveChoice
+        active={auto}
+        geometry="segment"
+        semantics="pressed"
         onClick={() => setAuto(true)}
-        aria-pressed={auto}
         title="Auto-fit cells to be readable"
-        className={`rounded border px-1.5 py-0.5 ${auto ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-card text-muted-foreground hover:bg-muted/60'}`}
+        className="px-1.5 py-0.5"
       >
         Auto
-      </button>
+      </ActiveChoice>
       <button type="button" aria-label="Less time per cell" onClick={() => zoomBy(1 / 1.25)} className="h-5 w-5 rounded border border-border bg-card leading-none hover:bg-muted/60">−</button>
       <span className="w-9 text-center tabular-nums text-muted-foreground">{Math.round(timeZoom * 100)}%</span>
       <button type="button" aria-label="More time per cell" onClick={() => zoomBy(1.25)} className="h-5 w-5 rounded border border-border bg-card leading-none hover:bg-muted/60">+</button>
@@ -459,6 +466,7 @@ function BlockView({
   translucent: boolean;
   dragDelta: { x: number; y: number } | null;
 }) {
+  const identityLabel = formatMatchIdentity(block.identity, block.id);
   // Finished matches are inert (no reschedule).
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `block:${block.key}`,
@@ -469,7 +477,7 @@ function BlockView({
   return (
     <MatchChip
       ref={setNodeRef}
-      label={block.label}
+      label={identityLabel}
       source={block.source}
       state={fromEngineStatus(block.status)}
       selected={selected}
@@ -490,7 +498,7 @@ function BlockView({
         opacity: translucent && !isDragging ? 0.4 : 1,
       }}
       className={`px-1.5 ${block.done ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}
-      title={`${block.source === 'meet' ? 'Meet' : 'Bracket'} · ${block.label}: ${block.sideA} vs ${block.sideB} [${block.status}]`}
+      title={`${MODULE_LABELS[block.source]} · ${identityLabel}: ${block.sideA} vs ${block.sideB} [${block.status}]`}
     />
   );
 }

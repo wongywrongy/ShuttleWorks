@@ -36,6 +36,10 @@ export interface MeetRunOps {
   removePlayer: (matchId: string, playerId: string) => void;
   undoStart: (matchId: string) => void;
   analyzeImpact: (matchId: string) => ImpactAnalysis | null;
+  /** Optional for lightweight test/adaptor implementations. */
+  lastSyncedAt?: number | null;
+  syncError?: string | null;
+  pollTerminal?: boolean;
 }
 
 export function useMeetRunOps(): MeetRunOps {
@@ -142,6 +146,9 @@ export function useMeetRunOps(): MeetRunOps {
       removePlayer,
       undoStart,
       analyzeImpact,
+      lastSyncedAt: liveTracking.lastSyncedAt,
+      syncError: liveTracking.syncError,
+      pollTerminal: liveTracking.pollTerminal,
     }),
     [
       matches,
@@ -154,6 +161,9 @@ export function useMeetRunOps(): MeetRunOps {
       removePlayer,
       undoStart,
       analyzeImpact,
+      liveTracking.lastSyncedAt,
+      liveTracking.syncError,
+      liveTracking.pollTerminal,
     ],
   );
 }

@@ -25,13 +25,16 @@ confidently wrong (the 2026-08-10 defect class).
 
 from __future__ import annotations
 
+import hashlib
+import json
 import unicodedata
 import uuid
+from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Path, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from entries.entries import roster_id
@@ -41,6 +44,9 @@ from db.models import (
     EntryEvent,
     EntryPage,
     EntryPlayer,
+    Match,
+    BracketMatch,
+    BracketResult,
     MeetEvent,
     Tournament,
 )
@@ -123,20 +129,6 @@ def _meet_divisions(repo: LocalRepository, tournament: Tournament) -> List[str]:
     )
 
 
-def _clubs_by_roster_id(repo: LocalRepository, tournament_id) -> Dict[str, Optional[str]]:
-    """``entry-{entry_player_id}`` → club, for every entered person.
-
-    The commit seam's deterministic roster id (``entries/entries._player_id``)
-    is the join between an entered human and their roster/participant
-    appearances. A participant that never came through Entries simply is
-    not in this map and renders club-less — calm, not wrong.
-    """
-    rows = repo.session.execute(
-        select(EntryPlayer.id, EntryPlayer.club).where(EntryPlayer.tournament_id == tournament_id)
-    ).all()
-    return {roster_id(pid): club for pid, club in rows}
-
-
 def _bracket_roster_names(tournament: Tournament) -> Dict[str, str]:
     """Canonical bracket-roster id → public display name.
 
@@ -156,16 +148,258 @@ def _bracket_roster_names(tournament: Tournament) -> Dict[str, str]:
     return out
 
 
-def _participant_names(participant, roster_names: Dict[str, str]) -> List[str]:
-    """Resolve a draw participant without parsing its presentation label."""
+@dataclass(frozen=True)
+class PublicPersonDirectory:
+    """The one batched, privacy-aware person projection for a tournament.
+
+    ``identities`` contains only confirmed, non-opted-out, non-erased people.
+    ``hidden`` deliberately remembers entry-backed ids which have no visible
+    event.  That distinction matters: an imported draw name is safe to show
+    as dead text, while an erased/opted-out entry must not fall back to the
+    bracket blob's copied name.  ``clubs`` follows the same visibility gate.
+    """
+
+    identities: Dict[str, PublicPersonIdentityDTO]
+    hidden: frozenset[str]
+    clubs: Dict[str, Optional[str]]
+    visible_events: Dict[str, frozenset[str]]
+
+
+def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDirectory:
+    """Batch the Entries → bracket identity join for one public document.
+
+    The bracket's roster key is deliberately retained as a structural key;
+    the persisted ``EntryPlayer.id`` is the only value that may become a
+    person URL.  This one query is shared by each projection's complete
+    document and avoids a lookup per node/side (the common draw N+1 trap).
+    Erased and fully hidden rows are retained only as non-linkable keys, so
+    historical references degrade to a generic dead token instead of
+    falling back to a copied bracket name.
+    """
+    rows = repo.session.execute(
+        select(
+            EntryPlayer.id,
+            EntryPlayer.full_name,
+            EntryPlayer.club,
+            EntryEvent.code,
+            EntryEvent.bracket_event_id,
+            EntryEvent.meet_event_id,
+            Entry.state,
+            Entry.list_opt_out,
+            EntryPlayer.erased_at,
+        )
+        .select_from(EntryPlayer)
+        .join(
+            Entry,
+            (Entry.tournament_id == EntryPlayer.tournament_id)
+            & (Entry.entry_player_id == EntryPlayer.id),
+        )
+        .outerjoin(
+            EntryEvent,
+            (EntryEvent.tournament_id == Entry.tournament_id)
+            & (EntryEvent.id == Entry.entry_event_id),
+        )
+        .where(
+            EntryPlayer.tournament_id == tournament_id,
+        )
+    ).all()
+    identities: Dict[str, PublicPersonIdentityDTO] = {}
+    hidden: set[str] = set()
+    clubs: Dict[str, Optional[str]] = {}
+    visible_events: Dict[str, set[str]] = {}
+    for (
+        player_id,
+        name,
+        club,
+        event_code,
+        bracket_event_id,
+        meet_event_id,
+        state,
+        opted_out,
+        erased_at,
+    ) in rows:
+        key = roster_id(player_id)
+        visible = (
+            erased_at is None
+            and state == "confirmed"
+            and not opted_out
+            and isinstance(name, str)
+            and bool(name.strip())
+        )
+        if visible:
+            identities.setdefault(
+                key, PublicPersonIdentityDTO(id=str(player_id), name=name.strip())
+            )
+            if isinstance(event_code, str):
+                visible_events.setdefault(key, set()).add(event_code)
+            if isinstance(bracket_event_id, str) and bracket_event_id:
+                visible_events.setdefault(key, set()).add(bracket_event_id)
+            if isinstance(meet_event_id, str) and meet_event_id:
+                visible_events.setdefault(key, set()).add(meet_event_id)
+            # A club is an expressly public field, but only on a visible
+            # event.  Keep the first stable non-empty value if events differ.
+            if key not in clubs or clubs[key] is None:
+                clubs[key] = club.strip() if isinstance(club, str) and club.strip() else None
+        else:
+            hidden.add(key)
+    hidden.difference_update(identities)
+    return PublicPersonDirectory(
+        identities=identities,
+        hidden=frozenset(hidden),
+        clubs=clubs,
+        visible_events={key: frozenset(values) for key, values in visible_events.items()},
+    )
+
+
+def _dead_person(name: str) -> PersonReferenceDTO:
+    """A display-only imported name; it must not be focusable or linkable."""
+    return PersonReferenceDTO(
+        identity=PublicPersonIdentityDTO(id=None, name=name),
+        resolution="dead",
+        label=None,
+    )
+
+
+def _visible_event_scope(
+    identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
+    roster_key: str,
+    primary: str,
+    alias: Optional[str] = None,
+) -> str:
+    """Choose the stored visible-event key without parsing a rank string."""
+    if not isinstance(identities, PublicPersonDirectory):
+        return primary
+    allowed = identities.visible_events.get(roster_key, frozenset())
+    if primary in allowed:
+        return primary
+    if alias is not None and alias in allowed:
+        return alias
+    return primary
+
+
+def _person_ref(
+    roster_key: Optional[str],
+    *,
+    name: Optional[str],
+    identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
+    label: Optional[str] = None,
+    event_code: Optional[str] = None,
+) -> PersonReferenceDTO:
+    if isinstance(identities, PublicPersonDirectory):
+        visible = roster_key is not None and roster_key in identities.identities
+        if visible and event_code is not None:
+            event_events = identities.visible_events.get(roster_key, frozenset())
+            visible = not event_events or event_code in event_events
+        if visible:
+            return PersonReferenceDTO(identity=identities.identities[roster_key], resolution="resolved")
+        if roster_key is not None and (
+            roster_key in identities.hidden or roster_key in identities.identities
+        ):
+            return PersonReferenceDTO(identity=None, resolution="dead", label="Player not published")
+    elif roster_key is not None and roster_key in identities:
+        return PersonReferenceDTO(identity=identities[roster_key], resolution="resolved")
+    if name:
+        return _dead_person(name)
+    return PersonReferenceDTO(identity=None, resolution="dead", label=label or "TBD")
+
+
+def _participant_person_keys(participant) -> List[str]:
+    """Canonical person keys carried by one event-scoped participant."""
     if participant.members:
-        resolved = [roster_names[m] for m in participant.members if m in roster_names]
-        # Partial member resolution would display a one-person doubles side.
-        # Keep the unsplit source label in that case: honest and reversible.
-        if len(resolved) == len(participant.members):
-            return resolved
-    roster_name = roster_names.get(participant.id)
-    return [roster_name or participant.name]
+        return list(participant.members)
+    entry_player_id = getattr(participant, "entryPlayerId", None)
+    return [roster_id(entry_player_id) if entry_player_id else participant.id]
+
+
+def _participant_people(
+    participant,
+    roster_names: Dict[str, str],
+    identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
+    event_code: Optional[str] = None,
+) -> List[PersonReferenceDTO]:
+    """Resolve participant people without inventing or leaking identities.
+
+    Imported pair records sometimes contain only a partial member mapping. In
+    that case the source label is the only honest public identity: rendering a
+    missing token beside one resolved member would turn one pair into two
+    invented person records. Entry-backed hidden people are different. Their
+    copied source label may contain private identity data, so those members
+    must continue to resolve independently to the generic unpublished token.
+    """
+    person_keys = _participant_person_keys(participant)
+    if participant.members:
+        privacy_protected = False
+        fully_resolved = True
+        for member in person_keys:
+            if isinstance(identities, PublicPersonDirectory):
+                visible_identity = member in identities.identities and (
+                    event_code is None
+                    or _event_public_for_person(identities, member, event_code)
+                )
+                privacy_protected = privacy_protected or (
+                    member in identities.hidden
+                    or (member in identities.identities and not visible_identity)
+                )
+            else:
+                visible_identity = member in identities
+            if member not in roster_names and not visible_identity:
+                fully_resolved = False
+
+        source_name = getattr(participant, "name", None)
+        if not fully_resolved and not privacy_protected and source_name:
+            return [_dead_person(source_name)]
+
+        # ``members`` is the authoritative pair composition. Resolve each
+        # member independently so a hidden/erased member becomes the generic
+        # dead reference instead of leaking through a composite pair label.
+        return [
+            _person_ref(
+                member,
+                name=roster_names.get(member),
+                identities=identities,
+                event_code=event_code,
+            )
+            for member in person_keys
+        ]
+    name = roster_names.get(participant.id) or getattr(participant, "name", None)
+    roster_key = person_keys[0]
+    return [_person_ref(roster_key, name=name, identities=identities, event_code=event_code)]
+
+
+def _event_public_for_person(
+    identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
+    roster_key: str,
+    event_code: Optional[str],
+    event_alias: Optional[str] = None,
+) -> bool:
+    """Return whether an entry-backed person is public in this event.
+
+    Imported draw-only people are not members of the directory and remain
+    display-only dead references under R-U1.
+    """
+    if not isinstance(identities, PublicPersonDirectory):
+        return True
+    if roster_key not in identities.identities and roster_key not in identities.hidden:
+        return True
+    allowed = identities.visible_events.get(roster_key, frozenset())
+    return bool(
+        (event_code is not None and event_code in allowed)
+        or (event_alias is not None and event_alias in allowed)
+    )
+
+
+def _event_public_club(
+    roster_key: str,
+    clubs: Dict[str, Optional[str]],
+    identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
+    event_code: Optional[str],
+    event_alias: Optional[str] = None,
+) -> Optional[str]:
+    if not _event_public_for_person(
+        identities, roster_key, event_code, event_alias
+    ):
+        return None
+    return clubs.get(roster_key)
 
 
 def _alphabetic_name_key(name: str) -> str:
@@ -198,6 +432,10 @@ class DrawCardDTO(BaseModel):
     matchCoverage: "MatchCoverageDTO"
     recordScope: str
     topologyScope: str
+    roundCount: int = 0
+    champions: List[PersonReferenceDTO] = Field(default_factory=list)
+    finalists: List["HonorDTO"] = Field(default_factory=list)
+    remainingMatchCount: Optional[int] = None
     historical: bool = False
     sourceUrl: Optional[str] = None
 
@@ -215,12 +453,38 @@ class DrawsIndexDTO(BaseModel):
     divisions: List[str] = []
 
 
+class PublicPersonIdentityDTO(BaseModel):
+    """The only public representation of a persisted tournament person.
+
+    ``id`` is intentionally nullable: imported draw rows and placeholders have
+    no ``entry_players`` row and therefore must never acquire a name-derived
+    link.  ``name`` is copied from the authoritative player row (or from the
+    imported draw roster when no row exists), never assembled by a caller.
+    """
+
+    id: Optional[str] = None
+    name: str
+
+
+class PersonReferenceDTO(BaseModel):
+    """A person or structural token used by public projections.
+
+    ``resolution`` is explicit so clients do not infer linkability from the
+    presence of a label.  ``identity`` is absent for non-person tokens such as
+    ``Bye`` and feeder placeholders.
+    """
+
+    identity: Optional[PublicPersonIdentityDTO] = None
+    resolution: Literal["resolved", "dead"] = "dead"
+    label: Optional[str] = None
+
+
 class TeamDTO(BaseModel):
     """One participant of a draw — the lookup table match nodes reference,
     so a pair's names travel once, not once per round they survive."""
 
     participantKey: str
-    names: List[str]
+    persons: List[PersonReferenceDTO] = Field(default_factory=list)
     club: Optional[str] = None
     seed: Optional[int] = None
 
@@ -235,8 +499,7 @@ class DrawPlayerDTO(BaseModel):
     """
 
     playerKey: str
-    personKey: Optional[str] = None
-    name: str
+    person: PersonReferenceDTO
     club: Optional[str] = None
     eventCodes: List[str]
 
@@ -313,7 +576,7 @@ class StandingRowDTO(BaseModel):
     gamesLost: int
     pointsWon: int
     pointsLost: int
-    # W/L pills in play order (§3.4's History column).
+    # Plain W/L history values in play order (§3.4's History column).
     history: List[str] = []
 
 
@@ -338,7 +601,7 @@ class DrawDetailDTO(BaseModel):
 
 class SeedLineDTO(BaseModel):
     seed: int
-    names: List[str]
+    persons: List[PersonReferenceDTO] = Field(default_factory=list)
     club: Optional[str] = None
 
 
@@ -354,7 +617,7 @@ class SeedsDTO(BaseModel):
 
 
 class HonorDTO(BaseModel):
-    names: List[str]
+    persons: List[PersonReferenceDTO] = Field(default_factory=list)
     club: Optional[str] = None
 
 
@@ -365,6 +628,8 @@ class WinnersEventDTO(BaseModel):
     winner: Optional[HonorDTO] = None
     runnerUp: Optional[HonorDTO] = None
     semifinalists: List[HonorDTO] = []
+    finalScore: Optional[List[List[int]]] = None
+    finalists: List[HonorDTO] = []
 
 
 class WinnersDTO(BaseModel):
@@ -382,13 +647,23 @@ class PlayerEventDTO(BaseModel):
     # partner line no less than on the list), and the partner has not opted
     # out of publication or been erased. Never the nominated EMAIL, which
     # lives on the entry precisely so it is never projected.
-    partnerName: Optional[str] = None
+    partner: Optional[PersonReferenceDTO] = None
+    seed: Optional[int] = None
+    drawPath: List["PlayerDrawPathDTO"] = Field(default_factory=list)
+
+
+class PlayerDrawPathDTO(BaseModel):
+    """One round in a person's public draw path."""
+
+    roundLabel: str
+    opponents: List[PersonReferenceDTO] = Field(default_factory=list)
 
 
 class PlayerMatchSideDTO(BaseModel):
-    names: List[str]
+    persons: List[PersonReferenceDTO] = Field(default_factory=list)
     placeholder: Optional[str] = None
     winner: bool = False
+    seed: Optional[int] = None
 
 
 class PlayerMatchDTO(BaseModel):
@@ -400,22 +675,90 @@ class PlayerMatchDTO(BaseModel):
     decided: bool = False
     scheduledTime: Optional[str] = None
     court: Optional[int] = None
-
-
-class PlayerRecordDTO(BaseModel):
-    played: int
-    wins: int
-    losses: int
+    playedOn: Optional[str] = None
+    localTime: Optional[str] = None
+    courtLabel: Optional[str] = None
+    status: str = "scheduled"
+    durationMinutes: Optional[int] = None
+    updatedAt: Optional[str] = None
 
 
 class PlayerPageDTO(BaseModel):
-    personKey: str
-    name: str
+    person: PersonReferenceDTO
     club: Optional[str] = None
     events: List[PlayerEventDTO]
-    # None when results are unpublished — a 0-0 record would be a claim.
-    record: Optional[PlayerRecordDTO] = None
     matches: List[PlayerMatchDTO]
+
+
+class ScheduleSideDTO(BaseModel):
+    """Public side of a scheduled match; contact/account data is absent."""
+
+    participantKey: Optional[str] = None
+    persons: List[PersonReferenceDTO] = Field(default_factory=list)
+    placeholder: Optional[str] = None
+
+
+class ScheduleMatchDTO(BaseModel):
+    matchKey: str
+    source: Literal["bracket", "meet"]
+    eventCode: str
+    discipline: Optional[str] = None
+    roundLabel: Optional[str] = None
+    status: Literal[
+        "scheduled", "called", "live", "delayed", "completed", "walkover", "retired", "cancelled"
+    ] = "scheduled"
+    scheduledDate: Optional[str] = None
+    scheduledTime: Optional[str] = None
+    court: Optional[int] = None
+    sides: List[ScheduleSideDTO] = Field(default_factory=list)
+    score: Optional[List[List[int]]] = None
+    walkover: bool = False
+    updatedAt: Optional[str] = None
+
+
+class ScheduleDayFacetDTO(BaseModel):
+    day: str
+    count: int
+
+
+class ScheduleFacetsDTO(BaseModel):
+    days: List[ScheduleDayFacetDTO] = []
+    events: List[str] = []
+    courts: List[int] = []
+    states: List[str] = []
+
+
+class ScheduleMatchesDTO(BaseModel):
+    published: bool
+    items: List[ScheduleMatchDTO] = []
+    facets: ScheduleFacetsDTO = Field(default_factory=ScheduleFacetsDTO)
+    page: int = 1
+    pageSize: int = 25
+    total: int = 0
+    timeZone: str = "UTC"
+    updatedAt: Optional[str] = None
+    revision: str = ""
+
+
+@dataclass(frozen=True)
+class ScheduleRuntimeSnapshot:
+    """One read model shared by schedule, player and bracket projections.
+
+    The operations rows are intentionally absent when the schedule is not
+    published.  Besides avoiding needless work, this is a privacy gate: a
+    caller cannot accidentally make an unpublished page's ETag depend on a
+    private live-ops write.  ``revision`` covers every public value sourced
+    by the snapshot, including court publication and person visibility.
+    """
+
+    directory: PublicPersonDirectory
+    courts: Dict[str, int]
+    states: Dict[str, object]
+    bracket_revisions: List[Tuple[str, int, str]]
+    bracket_results: List[Tuple[str, str, str, bool, str]]
+    meet_labels: Dict[str, str]
+    meet_event_keys: Dict[str, str]
+    revision: str
 
 
 # ---- knockout round vocabulary -------------------------------------------
@@ -600,21 +943,38 @@ def _teams(
     event,
     clubs: Dict[str, Optional[str]],
     roster_names: Optional[Dict[str, str]] = None,
+    identities: Optional[PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO]] = None,
+    event_code: Optional[str] = None,
 ) -> List[TeamDTO]:
     roster_names = roster_names or {}
+    identities = identities or {}
     out = []
+    event_alias = _event_public_code(event)
     for participant in event.participants:
-        names = _participant_names(participant, roster_names)
-        club = clubs.get(participant.id)
-        if participant.members and club is None:
-            for member in participant.members:
-                club = clubs.get(member)
+        people = _participant_people(participant, roster_names, identities, event_code)
+        person_keys = _participant_person_keys(participant)
+        club = _event_public_club(
+            person_keys[0],
+            clubs,
+            identities,
+            event_code,
+            event_alias,
+        )
+        if len(person_keys) > 1 and club is None:
+            for member in person_keys[1:]:
+                club = _event_public_club(
+                    member,
+                    clubs,
+                    identities,
+                    event_code,
+                    event_alias,
+                )
                 if club is not None:
                     break
         out.append(
             TeamDTO(
                 participantKey=participant.id,
-                names=names,
+                persons=people,
                 club=club,
                 seed=participant.seed,
             )
@@ -798,22 +1158,51 @@ def draws_index(
         return DrawsIndexDTO(published=False, resultsPublished=False)
 
     payload = _bracket(repo, tournament.id)
-    draws = (
-        [
-            DrawCardDTO(
-                drawKey=event.id,
-                eventCode=_event_public_code(event),
-                discipline=event.discipline,
-                kind=event.format,
-                size=event.bracket_size or event.participant_count,
-                hasConsolation=_has_consolation(event),
-                **_event_projection_meta(event),
+    draws = []
+    if payload is not None:
+        identities = _public_identities(repo, tournament.id)
+        units, results, _ = _bracket_indexes(payload)
+        roster_names = _bracket_roster_names(tournament)
+        for event in payload.events:
+            champions: List[PersonReferenceDTO] = []
+            finalist_honors: List[HonorDTO] = []
+            winner_key = None
+            if page.results_published:
+                winner_key, _, _ = _event_winner(event, units, results)
+                teams = {
+                    t.participantKey: t
+                    for t in _teams(
+                        event,
+                        identities.clubs,
+                        roster_names,
+                        identities,
+                        event.id,
+                    )
+                }
+                final_unit = _event_final_unit(event, units)
+                finalist_honors = _finalist_honors(final_unit, teams)
+                if winner_key:
+                    team = teams.get(winner_key)
+                    champions = team.persons if team is not None else []
+            draws.append(
+                DrawCardDTO(
+                    drawKey=event.id,
+                    eventCode=_event_public_code(event),
+                    discipline=event.discipline,
+                    kind=event.format,
+                    size=event.bracket_size or event.participant_count,
+                    hasConsolation=_has_consolation(event),
+                    roundCount=max((len(segment.rounds) for segment in _event_segments(event)), default=len(event.rounds)),
+                    champions=champions,
+                    finalists=finalist_honors,
+                    remainingMatchCount=(
+                        _remaining_match_count(event, units, results)
+                        if page.results_published and not winner_key
+                        else None
+                    ),
+                    **_event_projection_meta(event),
+                )
             )
-            for event in payload.events
-        ]
-        if payload is not None
-        else []
-    )
     return DrawsIndexDTO(
         published=True,
         resultsPublished=bool(page.results_published),
@@ -844,8 +1233,15 @@ def draw_detail(
     knockout = event.format in _KNOCKOUT_FORMATS
     units, results, assignments = _bracket_indexes(payload)
     locator = _unit_locator(event, knockout)
-    clubs = _clubs_by_roster_id(repo, tournament.id)
     roster_names = _bracket_roster_names(tournament)
+    runtime = _schedule_runtime_snapshot(
+        repo,
+        tournament,
+        page,
+        bracket_payload=payload,
+    )
+    identities = runtime.directory
+    operational_courts = runtime.courts
 
     segments_out: List[SegmentDTO] = []
     for segment in _event_segments(event):
@@ -897,7 +1293,7 @@ def draw_detail(
                         scheduledTime=_slot_time(
                             payload, assignment.slot_id if assignment else None
                         ),
-                        court=assignment.court_id if assignment else None,
+                        court=operational_courts.get(unit.id),
                         playedOn=unit.played_on,
                         localTime=unit.local_time,
                         courtLabel=unit.court_label,
@@ -954,7 +1350,13 @@ def draw_detail(
         resultsPublished=results_on,
         **_event_projection_meta(event),
         identityScope=(event.config or {}).get("identity_scope"),
-        teams=_teams(event, clubs, roster_names),
+        teams=_teams(
+            event,
+            identities.clubs,
+            roster_names,
+            identities,
+            event.id,
+        ),
         segments=segments_out,
         standings=standings,
     )
@@ -978,6 +1380,7 @@ def players_index(
         return PlayersDTO(published=False)
 
     entrant_rows = list(_entrants(repo, tournament.id)) if page.entrants_published else []
+    identities = _public_identities(repo, tournament.id)
     entrants_by_roster_id = {
         roster_id(person_id): {
             "personKey": str(person_id),
@@ -994,8 +1397,14 @@ def players_index(
         for event in payload.events:
             code = _event_public_code(event)
             for participant in event.participants:
-                player_ids = participant.members or [participant.id]
-                for player_id in player_ids:
+                for player_id in _participant_person_keys(participant):
+                    if not _event_public_for_person(
+                        identities,
+                        player_id,
+                        event.id,
+                        code,
+                    ):
+                        continue
                     events_by_player.setdefault(player_id, set()).add(code)
 
     # A confirmed entrant can exist before a draw, or can be omitted from a
@@ -1007,16 +1416,25 @@ def players_index(
     players = [
         DrawPlayerDTO(
             playerKey=player_id,
-            personKey=(entrants_by_roster_id.get(player_id) or {}).get("personKey"),
-            name=(entrants_by_roster_id.get(player_id) or {}).get("name")
-            or roster_names[player_id],
+            person=_person_ref(
+                player_id,
+                name=(entrants_by_roster_id.get(player_id) or {}).get("name")
+                or roster_names.get(player_id),
+                identities=identities,
+            ),
             club=(entrants_by_roster_id.get(player_id) or {}).get("club"),
             eventCodes=sorted(event_codes),
         )
         for player_id, event_codes in events_by_player.items()
         if player_id in roster_names or player_id in entrants_by_roster_id
     ]
-    players.sort(key=lambda row: (_alphabetic_name_key(row.name), row.name, row.playerKey))
+    players.sort(
+        key=lambda row: (
+            _alphabetic_name_key(row.person.identity.name if row.person.identity else row.person.label or ""),
+            row.person.identity.name if row.person.identity else row.person.label or "",
+            row.playerKey,
+        )
+    )
     return PlayersDTO(
         published=True,
         players=players,
@@ -1040,8 +1458,8 @@ def seeds(
     if payload is None:
         return SeedsDTO(published=True)
 
-    clubs = _clubs_by_roster_id(repo, tournament.id)
     roster_names = _bracket_roster_names(tournament)
+    identities = _public_identities(repo, tournament.id)
     events_out = []
     for event in payload.events:
         seeded = sorted(
@@ -1057,10 +1475,37 @@ def seeds(
                 seeds=[
                     SeedLineDTO(
                         seed=p.seed,
-                        names=_participant_names(p, roster_names),
-                        club=clubs.get(p.id)
+                        persons=_participant_people(
+                            p,
+                            roster_names,
+                            identities,
+                            event.id,
+                        ),
+                        club=_event_public_club(
+                            _participant_person_keys(p)[0],
+                            identities.clubs,
+                            identities,
+                            event.id,
+                            _event_public_code(event),
+                        )
                         or next(
-                            (clubs[m] for m in (p.members or []) if m in clubs and clubs[m]),
+                            (
+                                _event_public_club(
+                                    m,
+                                    identities.clubs,
+                                    identities,
+                                    event.id,
+                                    _event_public_code(event),
+                                )
+                                for m in _participant_person_keys(p)[1:]
+                                if _event_public_club(
+                                    m,
+                                    identities.clubs,
+                                    identities,
+                                    event.id,
+                                    _event_public_code(event),
+                                )
+                            ),
                             None,
                         ),
                     )
@@ -1074,7 +1519,53 @@ def seeds(
 def _honor(payload_team: Optional[TeamDTO]) -> Optional[HonorDTO]:
     if payload_team is None:
         return None
-    return HonorDTO(names=payload_team.names, club=payload_team.club)
+    return HonorDTO(persons=payload_team.persons, club=payload_team.club)
+
+
+def _finalist_honors(final_unit, teams: Dict[str, TeamDTO]) -> List[HonorDTO]:
+    """Keep final sides grouped, especially for doubles.
+
+    ``finalParticipants`` flattened four doubles players into one list and
+    made the public page unable to express who was playing whom.  Each side
+    is one HonorDTO, with its two PersonRefs retained in order.
+    """
+    if final_unit is None:
+        return []
+    out: List[HonorDTO] = []
+    for side in (final_unit.side_a or [], final_unit.side_b or []):
+        persons: List[PersonReferenceDTO] = []
+        club: Optional[str] = None
+        for key in side:
+            if key == _BYE:
+                continue
+            team = teams.get(key)
+            if team is None:
+                continue
+            persons.extend(team.persons)
+            club = club or team.club
+        if persons:
+            out.append(HonorDTO(persons=persons, club=club))
+    return out
+
+
+def _remaining_match_count(event, units, results) -> int:
+    """Count unresolved match positions without treating BYEs as matches."""
+    unit_ids = {
+        unit_id
+        for segment in _event_segments(event)
+        for round_ids in segment.rounds
+        for unit_id in round_ids
+    }
+    return sum(
+        1
+        for unit_id in unit_ids
+        if unit_id not in results
+        and unit_id in units
+        and not (
+            _BYE in (units[unit_id].side_a or [])
+            or _BYE in (units[unit_id].side_b or [])
+        )
+    )
 
 
 @router.get("/winners", response_model=WinnersDTO)
@@ -1094,14 +1585,25 @@ def winners(
     if payload is None:
         return WinnersDTO(published=True)
 
-    clubs = _clubs_by_roster_id(repo, tournament.id)
     roster_names = _bracket_roster_names(tournament)
+    identities = _public_identities(repo, tournament.id)
     units, results, _ = _bracket_indexes(payload)
     events_out = []
     for event in payload.events:
-        teams = {t.participantKey: t for t in _teams(event, clubs, roster_names)}
+        teams = {
+            t.participantKey: t
+            for t in _teams(
+                event,
+                identities.clubs,
+                roster_names,
+                identities,
+                event.id,
+            )
+        }
         entry = _event_winner(event, units, results)
         winner_key, runner_key, semi_keys = entry
+        final_unit = _event_final_unit(event, units)
+        final_result = results.get(final_unit.id) if final_unit is not None else None
         events_out.append(
             WinnersEventDTO(
                 eventCode=_event_public_code(event),
@@ -1114,6 +1616,8 @@ def winners(
                     for honor in (_honor(teams.get(k)) for k in semi_keys)
                     if honor is not None
                 ],
+                finalScore=_score_rows(final_result.score) if final_result is not None else None,
+                finalists=_finalist_honors(final_unit, teams),
             )
         )
     return WinnersDTO(published=True, events=events_out)
@@ -1191,6 +1695,24 @@ def _event_winner(event, units, results):
     return winner_key, runner_key, semi_keys
 
 
+def _event_final_unit(event, units):
+    """Return the structural final unit for a result/finalist projection."""
+    if event.format not in _KNOCKOUT_FORMATS:
+        return None
+    segments = _event_segments(event)
+    deciding = None
+    for segment in segments:
+        positions = getattr(segment, "positions", None)
+        if positions and 1 in range(positions[0], positions[-1] + 1):
+            deciding = segment
+            break
+    if deciding is None:
+        deciding = next((s for s in segments if s.id in {"GF", "W"}), segments[0] if segments else None)
+    if deciding is None or not deciding.rounds or len(deciding.rounds[-1]) != 1:
+        return None
+    return units.get(deciding.rounds[-1][0])
+
+
 # ---- the player page (§3.3) ----------------------------------------------
 
 
@@ -1201,7 +1723,7 @@ def player_page(
     person_key: str = Path(..., max_length=64),
     repo: LocalRepository = Depends(get_repository),
 ) -> PlayerPageDTO:
-    """One person's tournament: events, matches, record.
+    """One person's tournament: events, draw paths, and matches.
 
     Discoverability rides ``entrants_published`` (§4) — with the list
     unpublished, a person page answers the uniform 404 like everything
@@ -1218,7 +1740,7 @@ def player_page(
         raise _not_found()
 
     person = repo.session.get(EntryPlayer, (tournament.id, person_id))
-    if person is None:
+    if person is None or person.erased_at is not None:
         raise _not_found()
     entries = list(
         repo.session.scalars(
@@ -1226,12 +1748,25 @@ def player_page(
                 Entry.tournament_id == tournament.id,
                 Entry.entry_player_id == person_id,
                 Entry.state == "confirmed",
+                Entry.list_opt_out.is_(False),
             )
         )
     )
     if not entries:
         raise _not_found()
     response.headers["Cache-Control"] = _CACHE
+    payload = _bracket(repo, tournament.id) if page.draws_published else None
+    runtime = _schedule_runtime_snapshot(
+        repo,
+        tournament,
+        page,
+        bracket_payload=payload,
+    )
+    identities = runtime.directory
+    identity_key = roster_id(person_id)
+    if identity_key not in identities.identities:
+        raise _not_found()
+    page_updated_at = tournament.updated_at.isoformat() if tournament.updated_at else None
 
     events_by_id = {
         ev.id: ev
@@ -1248,7 +1783,7 @@ def player_page(
         for e in entries
         if e.partner_entry_id is not None and e.partner_accepted_at is not None
     ]
-    partner_name_by_event: dict = {}
+    partner_ref_by_event: dict = {}
     if partner_ids:
         partner_entries = {
             pe.id: pe
@@ -1283,28 +1818,31 @@ def player_page(
                 continue
             partner = partner_players.get(pe.entry_player_id)
             if partner is not None:
-                partner_name_by_event[e.entry_event_id] = partner.full_name
+                partner_ref_by_event[e.entry_event_id] = _person_ref(
+                    roster_id(partner.id), name=partner.full_name, identities=identities
+                )
 
-    player_events = sorted(
-        {
-            (event.code, event.discipline, partner_name_by_event.get(event.id))
-            for event in (events_by_id.get(e.entry_event_id) for e in entries)
-            if event is not None
-        },
-        key=lambda row: (row[0], row[1]),
-    )
+    player_events_by_code = {
+        event.code: (event.code, event.discipline, partner_ref_by_event.get(event.id))
+        for event in (events_by_id.get(e.entry_event_id) for e in entries)
+        if event is not None
+    }
+    player_events = sorted(player_events_by_code.values(), key=lambda row: (row[0], row[1]))
 
     results_on = bool(page.results_published)
     roster_id_str = roster_id(person_id)
     matches: List[PlayerMatchDTO] = []
-    wins = losses = 0
 
     # ---- bracket-origin matches --------------------------------------
-    payload = _bracket(repo, tournament.id)
+    operational_courts = runtime.courts
     if payload is not None and page.draws_published:
         roster_names = _bracket_roster_names(tournament)
         units, results, assignments = _bracket_indexes(payload)
         for event in payload.events:
+            public_event_code = _event_public_code(event)
+            visible_event_keys = identities.visible_events.get(identity_key, frozenset())
+            if event.id not in visible_event_keys and public_event_code not in visible_event_keys:
+                continue
             mine = {
                 p.id
                 for p in event.participants
@@ -1314,7 +1852,16 @@ def player_page(
                 continue
             knockout = event.format in _KNOCKOUT_FORMATS
             locator = _unit_locator(event, knockout)
-            teams = {t.participantKey: t for t in _teams(event, {}, roster_names)}
+            teams = {
+                t.participantKey: t
+                for t in _teams(
+                    event,
+                    identities.clubs,
+                    roster_names,
+                    identities,
+                    event.id,
+                )
+            }
             for segment in _event_segments(event):
                 total = len(segment.rounds)
                 for r_index, round_ids in enumerate(segment.rounds):
@@ -1351,9 +1898,10 @@ def player_page(
                             )
                             sides.append(
                                 PlayerMatchSideDTO(
-                                    names=team.names if team else [],
+                                    persons=team.persons if team else [],
                                     placeholder=("Bye" if projected.bye else projected.placeholder),
                                     winner=bool(decided and result.winner_side == side_tag),
+                                    seed=team.seed if team else None,
                                 )
                             )
                         # Involvement AS THE PUBLIC VIEW KNOWS IT: the same
@@ -1363,13 +1911,13 @@ def player_page(
                         # the result through the match list's mere growth.
                         if not projected_keys & mine:
                             continue
-                        if decided:
-                            my_side = "A" if (set(unit.side_a or []) & mine) else "B"
-                            if result.winner_side == my_side:
-                                wins += 1
-                            else:
-                                losses += 1
                         assignment = assignments.get(unit_id)
+                        match_status = (
+                            "walkover" if result is not None and result.walkover
+                            else "completed" if decided
+                            else "live" if assignment is not None and assignment.actual_start_slot is not None
+                            else "scheduled"
+                        )
                         matches.append(
                             PlayerMatchDTO(
                                 eventCode=_event_public_code(event),
@@ -1381,27 +1929,148 @@ def player_page(
                                     payload,
                                     assignment.slot_id if assignment else None,
                                 ),
-                                court=assignment.court_id if assignment else None,
+                                court=operational_courts.get(unit_id),
+                                playedOn=unit.played_on,
+                                localTime=unit.local_time,
+                                courtLabel=unit.court_label,
+                                status=match_status,
+                                durationMinutes=(
+                                    assignment.duration_slots * payload.interval_minutes
+                                    if assignment is not None
+                                    else None
+                                ),
+                                updatedAt=page_updated_at,
                             )
                         )
 
+    # Build the person's draw path from the already-hydrated bracket. This
+    # walks in-memory units (no per-round or per-opponent queries) and keeps
+    # the same results gate as the match projection.
+    event_details: Dict[str, Tuple[Optional[int], List[PlayerDrawPathDTO]]] = {}
+    if payload is not None and page.draws_published:
+        path_units, path_results, _ = _bracket_indexes(payload)
+        path_roster_names = _bracket_roster_names(tournament)
+        for event in payload.events:
+            public_event_code = _event_public_code(event)
+            visible_event_keys = identities.visible_events.get(identity_key, frozenset())
+            if event.id not in visible_event_keys and public_event_code not in visible_event_keys:
+                continue
+            mine = {
+                p.id
+                for p in event.participants
+                if p.id == roster_id_str or roster_id_str in (p.members or [])
+            }
+            if not mine:
+                continue
+            knockout = event.format in _KNOCKOUT_FORMATS
+            locator = _unit_locator(event, knockout)
+            teams = {
+                t.participantKey: t
+                for t in _teams(
+                    event,
+                    identities.clubs,
+                    path_roster_names,
+                    identities,
+                    event.id,
+                )
+            }
+            seed = next(
+                (p.seed for p in event.participants if p.id in mine or roster_id_str in (p.members or [])),
+                None,
+            )
+            path: List[PlayerDrawPathDTO] = []
+            for segment in _event_segments(event):
+                total = len(segment.rounds)
+                for r_index, round_ids in enumerate(segment.rounds):
+                    opponents: List[PersonReferenceDTO] = []
+                    for unit_id in round_ids:
+                        unit = path_units.get(unit_id)
+                        if unit is None:
+                            continue
+                        projected_sides = [
+                            _side(
+                                unit,
+                                unit.side_a,
+                                unit.slot_a,
+                                locator,
+                                path_units,
+                                path_results,
+                                results_on,
+                            ),
+                            _side(
+                                unit,
+                                unit.side_b,
+                                unit.slot_b,
+                                locator,
+                                path_units,
+                                path_results,
+                                results_on,
+                            ),
+                        ]
+                        projected_keys = [
+                            side.participantKey for side in projected_sides if side.participantKey
+                        ]
+                        if not set(projected_keys) & mine:
+                            continue
+                        mine_side = 0 if projected_sides[0].participantKey in mine else 1
+                        opponent_side = projected_sides[1 - mine_side]
+                        opponent_key = opponent_side.participantKey
+                        if opponent_key is None:
+                            if opponent_side.placeholder:
+                                opponents.append(
+                                    PersonReferenceDTO(
+                                        identity=None,
+                                        resolution="dead",
+                                        label=opponent_side.placeholder,
+                                    )
+                                )
+                            continue
+                        team = teams.get(opponent_key)
+                        if team is not None:
+                            opponents.extend(team.persons)
+                        else:
+                            opponents.append(
+                                PersonReferenceDTO(identity=None, resolution="dead", label="Opponent TBD")
+                            )
+                    if opponents:
+                        path.append(
+                            PlayerDrawPathDTO(
+                                roundLabel=_round_label(total, r_index, knockout),
+                                opponents=opponents,
+                            )
+                        )
+            event_details[public_event_code] = (seed, path)
+
     # ---- meet-origin matches -----------------------------------------
-    meet = _meet_matches(repo, tournament, roster_id_str, results_on)
+    meet = _meet_matches(
+        repo,
+        tournament,
+        roster_id_str,
+        results_on,
+        identities,
+        states=runtime.states,
+        operational_courts=runtime.courts,
+        meet_event_keys=runtime.meet_event_keys,
+    )
     matches.extend(meet.matches)
-    wins += meet.wins
-    losses += meet.losses
 
     return PlayerPageDTO(
-        personKey=str(person_id),
-        name=person.full_name,
-        club=person.club,
+        person=PersonReferenceDTO(
+            identity=PublicPersonIdentityDTO(id=str(person.id), name=person.full_name),
+            resolution="resolved",
+            label=None,
+        ),
+        club=identities.clubs.get(identity_key),
         events=[
-            PlayerEventDTO(code=code, discipline=discipline, partnerName=partner)
+            PlayerEventDTO(
+                code=code,
+                discipline=discipline,
+                partner=partner,
+                seed=event_details.get(code, (None, []))[0],
+                drawPath=event_details.get(code, (None, []))[1],
+            )
             for code, discipline, partner in player_events
         ],
-        record=(
-            PlayerRecordDTO(played=wins + losses, wins=wins, losses=losses) if results_on else None
-        ),
         matches=matches,
     )
 
@@ -1409,12 +2078,18 @@ def player_page(
 class _MeetMatches:
     def __init__(self):
         self.matches: List[PlayerMatchDTO] = []
-        self.wins = 0
-        self.losses = 0
 
 
 def _meet_matches(
-    repo: LocalRepository, tournament: Tournament, roster_id: str, results_on: bool
+    repo: LocalRepository,
+    tournament: Tournament,
+    target_roster_id: str,
+    results_on: bool,
+    identities: Optional[PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO]] = None,
+    *,
+    states: Optional[Dict[str, object]] = None,
+    operational_courts: Optional[Dict[str, int]] = None,
+    meet_event_keys: Optional[Dict[str, str]] = None,
 ) -> _MeetMatches:
     """The Meet half: matches from the state blob, scores from
     ``match_states`` — the Display board's exact sources, projected down to
@@ -1422,9 +2097,10 @@ def _meet_matches(
     advancement), so structure leaks no results; scores and finishes are
     the gated half."""
     out = _MeetMatches()
+    identities = identities or {}
     data = tournament.data or {}
     players = {p.get("id"): p for p in data.get("players", []) if isinstance(p, dict)}
-    if roster_id not in players:
+    if target_roster_id not in players:
         return out
 
     config = data.get("config") or {}
@@ -1434,41 +2110,54 @@ def _meet_matches(
     assignments = {
         a.get("matchId"): a for a in schedule.get("assignments", []) if isinstance(a, dict)
     }
-    states = (
-        {row.match_id: row for row in repo.match_states.list_for_tournament(tournament.id)}
-        if results_on
-        else {}
-    )
+    states = states or {}
+    operational_courts = operational_courts or {}
+    meet_event_keys = meet_event_keys or {}
 
-    def names_for(ids):
-        return [
-            players[pid]["name"]
-            for pid in (ids or [])
-            if pid in players and players[pid].get("name")
-        ]
+    def people_for(ids, event_key: str, event_rank: str):
+        refs = []
+        for pid in ids or []:
+            player = players.get(pid)
+            name = player.get("name") if player else None
+            # Meet's player row carries the typed Entries provenance when it
+            # came from a person. Prefer that over interpreting the opaque
+            # roster id; hand-entered rows remain dead references.
+            entry_id = player.get("entryPlayerId") if player else None
+            key = roster_id(entry_id) if entry_id else pid
+            scope = _visible_event_scope(identities, key, event_key, event_rank)
+            refs.append(
+                _person_ref(
+                    key,
+                    name=name,
+                    identities=identities,
+                    event_code=scope,
+                )
+            )
+        return refs
 
     for match in data.get("matches", []):
         if not isinstance(match, dict):
             continue
         side_a = match.get("sideA") or []
         side_b = match.get("sideB") or []
-        if roster_id not in side_a and roster_id not in side_b:
+        if target_roster_id not in side_a and target_roster_id not in side_b:
             continue
+        event_rank = match.get("eventRank") or ""
+        event_key = meet_event_keys.get(event_rank, event_rank)
+        if isinstance(identities, PublicPersonDirectory):
+            visible = identities.visible_events.get(target_roster_id, frozenset())
+            if event_key not in visible and event_rank not in visible:
+                continue
         state = states.get(match.get("id"))
         finished = (
-            state is not None
+            results_on
+            and state is not None
             and state.status == "finished"
             and state.score_side_a is not None
             and state.score_side_b is not None
         )
         winner_a = bool(finished and state.score_side_a > state.score_side_b)
         winner_b = bool(finished and state.score_side_b > state.score_side_a)
-        if finished:
-            on_a = roster_id in side_a
-            if (winner_a and on_a) or (winner_b and not on_a):
-                out.wins += 1
-            elif winner_a or winner_b:
-                out.losses += 1
         assignment = assignments.get(match.get("id"))
         scheduled = None
         if (
@@ -1480,20 +2169,508 @@ def _meet_matches(
             scheduled = _hhmm_plus(day_start, assignment["slotId"] * interval)
         out.matches.append(
             PlayerMatchDTO(
-                eventCode=match.get("eventRank") or "",
+                eventCode=event_rank,
                 roundLabel=None,
                 sides=[
-                    PlayerMatchSideDTO(names=names_for(side_a), winner=winner_a),
-                    PlayerMatchSideDTO(names=names_for(side_b), winner=winner_b),
+                    PlayerMatchSideDTO(
+                        persons=people_for(side_a, event_key, event_rank),
+                        winner=winner_a,
+                    ),
+                    PlayerMatchSideDTO(
+                        persons=people_for(side_b, event_key, event_rank),
+                        winner=winner_b,
+                    ),
                 ],
                 score=([[state.score_side_a, state.score_side_b]] if finished else None),
                 decided=finished,
                 scheduledTime=scheduled,
-                court=(
-                    assignment.get("courtId")
-                    if assignment is not None and isinstance(assignment.get("courtId"), int)
+                court=operational_courts.get(match.get("id")),
+                playedOn=None,
+                localTime=None,
+                courtLabel=None,
+                status=(
+                    "completed" if finished
+                    else "live" if state is not None and state.status in {"playing", "called"}
+                    else "scheduled"
+                ),
+                durationMinutes=(
+                    int(assignment.get("durationSlots", 1)) * interval
+                    if assignment is not None and isinstance(interval, int)
                     else None
                 ),
+                updatedAt=(tournament.updated_at.isoformat() if tournament.updated_at else None),
             )
         )
     return out
+
+
+# ---- schedule / live projection ------------------------------------------
+
+
+def _schedule_runtime_snapshot(
+    repo: LocalRepository,
+    tournament: Tournament,
+    page: EntryPage,
+    *,
+    bracket_payload=None,
+) -> ScheduleRuntimeSnapshot:
+    """Materialize all schedule dependencies in bounded, batched reads.
+
+    This is deliberately the sole source for both the schedule ETag and its
+    projections.  In particular, court assignments come from Operations'
+    ``matches.court_id`` rows rather than the planning blob.  A court change
+    therefore changes the revision immediately instead of being hidden behind
+    a stale 304 response.
+    """
+    directory = _public_identities(repo, tournament.id)
+    courts: Dict[str, int] = {}
+    states: Dict[str, object] = {}
+    bracket_revisions: List[Tuple[str, int, str]] = []
+    bracket_results: List[Tuple[str, str, str, bool, str]] = []
+    meet_labels: Dict[str, str] = {}
+    meet_event_keys: Dict[str, str] = {}
+    if page.draws_published:
+        match_rows = list(
+            repo.session.scalars(select(Match).where(Match.tournament_id == tournament.id))
+        )
+        courts = {
+            row.id: row.court_id
+            for row in match_rows
+            if row.court_id is not None
+        }
+        state_rows = repo.match_states.list_for_tournament(tournament.id)
+        states = {row.match_id: row for row in state_rows}
+        if bracket_payload is not None:
+            bracket_revisions = [
+                (
+                    row.id,
+                    row.version,
+                    json.dumps(
+                        [
+                            row.played_on,
+                            row.local_time,
+                            row.court_label,
+                            row.source_url,
+                            row.source_ref,
+                        ],
+                        separators=(",", ":"),
+                    ),
+                )
+                for row in bracket_payload.play_units
+            ]
+            bracket_revisions.extend(
+                (
+                    f"assignment:{row.play_unit_id}",
+                    0,
+                    json.dumps(
+                        [
+                            row.slot_id,
+                            row.duration_slots,
+                            row.actual_start_slot,
+                            row.actual_end_slot,
+                            row.started,
+                            row.finished,
+                        ],
+                        separators=(",", ":"),
+                    ),
+                )
+                for row in bracket_payload.assignments
+            )
+            bracket_results = [
+                (
+                    row.play_unit_id,
+                    row.winner_side,
+                    json.dumps(row.score, sort_keys=True, separators=(",", ":"))
+                    if row.score is not None
+                    else "",
+                    bool(row.walkover),
+                    row.reason or "",
+                )
+                for row in bracket_payload.results
+            ]
+        else:
+            bracket_revisions = [
+                (row.id, row.version, row.updated_at.isoformat() if row.updated_at else "")
+                for row in repo.session.scalars(
+                    select(BracketMatch).where(BracketMatch.tournament_id == tournament.id)
+                )
+            ]
+            bracket_results = [
+                (
+                    f"{row.bracket_event_id}:{row.bracket_match_id}",
+                    row.winner_side,
+                    json.dumps(row.score, sort_keys=True, separators=(",", ":"))
+                    if row.score is not None
+                    else "",
+                    bool(row.walkover),
+                    row.reason or "",
+                )
+                for row in repo.session.scalars(
+                    select(BracketResult).where(BracketResult.tournament_id == tournament.id)
+                )
+            ]
+        if tournament.kind == "meet":
+            for row in repo.session.scalars(
+                select(MeetEvent).where(MeetEvent.tournament_id == tournament.id)
+            ):
+                meet_labels[row.id] = row.label
+                meet_event_keys[row.id] = row.id
+                for position in range(1, row.slot_count + 1):
+                    meet_labels[f"{row.id}{position}"] = row.label
+                    meet_event_keys[f"{row.id}{position}"] = row.id
+
+    identity_fingerprint = {
+        "visible": sorted(
+            (
+                key,
+                identity.id,
+                identity.name,
+                directory.clubs.get(key),
+                sorted(directory.visible_events.get(key, frozenset())),
+            )
+            for key, identity in directory.identities.items()
+        ),
+        "hidden": sorted(directory.hidden),
+    }
+    source = {
+        "stateVersion": tournament.state_version,
+        "updatedAt": tournament.updated_at.isoformat() if tournament.updated_at else "",
+        "pageUpdatedAt": page.updated_at.isoformat() if page.updated_at else "",
+        "flags": [bool(page.draws_published), bool(page.results_published)],
+        "courts": sorted(courts.items()),
+        "matchStates": sorted(
+            (
+                row.match_id,
+                row.status,
+                row.score_side_a,
+                row.score_side_b,
+                row.updated_at.isoformat() if row.updated_at else "",
+            )
+            for row in states.values()
+        ),
+        "bracket": sorted(bracket_revisions),
+        "bracketResults": sorted(bracket_results),
+        "meetLabels": sorted(meet_labels.items()),
+        "meetEventKeys": sorted(meet_event_keys.items()),
+        "identities": identity_fingerprint,
+    }
+    revision = hashlib.sha256(
+        json.dumps(source, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:24]
+    return ScheduleRuntimeSnapshot(
+        directory=directory,
+        courts=courts,
+        states=states,
+        bracket_revisions=bracket_revisions,
+        bracket_results=bracket_results,
+        meet_labels=meet_labels,
+        meet_event_keys=meet_event_keys,
+        revision=revision,
+    )
+
+
+def _revision_for_schedule(repo: LocalRepository, tournament: Tournament, page: EntryPage) -> str:
+    """Compatibility seam for callers that only need the public token."""
+    return _schedule_runtime_snapshot(repo, tournament, page).revision
+
+
+def _bracket_schedule_matches(
+    payload,
+    *,
+    results_on: bool,
+    tournament_date: Optional[str],
+    updated_at: Optional[str],
+    roster_names: Optional[Dict[str, str]] = None,
+    identities: Optional[PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO]] = None,
+    operational_courts: Optional[Dict[str, int]] = None,
+) -> List[ScheduleMatchDTO]:
+    units, results, assignments = _bracket_indexes(payload)
+    roster_names = roster_names or {}
+    identities = identities or {}
+    operational_courts = operational_courts or {}
+    clubs = identities.clubs if isinstance(identities, PublicPersonDirectory) else {}
+    out: List[ScheduleMatchDTO] = []
+    for event in payload.events:
+        teams = {
+            t.participantKey: t
+            for t in _teams(
+                event,
+                clubs,
+                roster_names,
+                identities,
+                event.id,
+            )
+        }
+        knockout = event.format in _KNOCKOUT_FORMATS
+        locator = _unit_locator(event, knockout)
+        segments = _event_segments(event)
+        for segment in segments:
+            total = len(segment.rounds)
+            for r_index, round_ids in enumerate(segment.rounds):
+                label = _round_label(total, r_index, knockout)
+                for unit_id in round_ids:
+                    unit = units.get(unit_id)
+                    if unit is None:
+                        continue
+                    assignment = assignments.get(unit_id)
+                    result = results.get(unit_id) if results_on else None
+                    started = bool(assignment and assignment.actual_start_slot is not None)
+                    if result is not None and results_on:
+                        state = "walkover" if result.walkover else (
+                            "retired" if result.reason == "retired" else "completed"
+                        )
+                    elif started:
+                        state = "live"
+                    else:
+                        state = "scheduled"
+                    sides: List[ScheduleSideDTO] = []
+                    for cached, slot in ((unit.side_a, unit.slot_a), (unit.side_b, unit.slot_b)):
+                        projected = _side(
+                            unit, cached, slot, locator, units, results, results_on
+                        )
+                        team = teams.get(projected.participantKey) if projected.participantKey else None
+                        sides.append(
+                            ScheduleSideDTO(
+                                participantKey=projected.participantKey,
+                                persons=team.persons if team else [],
+                                placeholder=("Bye" if projected.bye else projected.placeholder),
+                            )
+                        )
+                    scheduled = _slot_time(payload, assignment.slot_id if assignment else None)
+                    out.append(ScheduleMatchDTO(
+                        matchKey=f"{event.id}:{unit.id}",
+                        source="bracket",
+                        eventCode=_event_public_code(event),
+                        discipline=event.discipline,
+                        roundLabel=label,
+                        status=state,
+                        scheduledDate=tournament_date if scheduled else None,
+                        scheduledTime=scheduled,
+                        court=operational_courts.get(unit_id),
+                        sides=sides,
+                        score=_score_rows(result.score) if result is not None and results_on else None,
+                        walkover=bool(result.walkover) if result is not None and results_on else False,
+                        updatedAt=updated_at,
+                    ))
+    return out
+
+
+def _meet_schedule_matches(
+    tournament: Tournament,
+    *,
+    results_on: bool,
+    tournament_date: Optional[str],
+    updated_at: Optional[str],
+    identities: Optional[PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO]] = None,
+    states: Optional[Dict[str, object]] = None,
+    operational_courts: Optional[Dict[str, int]] = None,
+    meet_labels: Optional[Dict[str, str]] = None,
+    meet_event_keys: Optional[Dict[str, str]] = None,
+) -> List[ScheduleMatchDTO]:
+    data = tournament.data or {}
+    identities = identities or {}
+    players = {
+        p.get("id"): p
+        for p in data.get("players", [])
+        if isinstance(p, dict) and isinstance(p.get("id"), str)
+    }
+    config = data.get("config") or {}
+    day_start = config.get("dayStart")
+    interval = config.get("intervalMinutes")
+    assignments = {
+        a.get("matchId"): a
+        for a in ((data.get("schedule") or {}).get("assignments") or [])
+        if isinstance(a, dict)
+    }
+    states = states or {}
+    # ``schedule.assignments`` is the planning document.  A court is public
+    # only after Operations has materialized that assignment on the Match
+    # row; planned slot/time remains useful before then.
+    operational_courts = operational_courts or {}
+    # F-UNI-23: materialize the configured division→position identities from
+    # stored MeetEvent fields in the existing batched read. Public schedule
+    # projection can then look up `U101` directly without parsing an opaque
+    # rank string (and numeric division codes remain unambiguous).
+    labels: dict[str, str] = meet_labels or {}
+    event_keys = meet_event_keys or {}
+    out: List[ScheduleMatchDTO] = []
+    for match in data.get("matches", []):
+        if not isinstance(match, dict) or not isinstance(match.get("id"), str):
+            continue
+        match_id = match["id"]
+        state_row = states.get(match_id)
+        raw_state = state_row.status if state_row is not None else "scheduled"
+        if results_on:
+            state = {
+                "playing": "live",
+                "finished": "completed",
+                "retired": "retired",
+            }.get(raw_state, raw_state if raw_state in {"called", "delayed", "cancelled"} else "scheduled")
+        else:
+            state = "live" if raw_state in {"playing", "called"} else "scheduled"
+        assignment = assignments.get(match_id)
+        scheduled = None
+        if assignment and isinstance(day_start, str) and isinstance(interval, int) and isinstance(assignment.get("slotId"), int):
+            scheduled = _hhmm_plus(day_start, assignment["slotId"] * interval)
+
+        event_code = match.get("eventRank") or ""
+        event_key = event_keys.get(event_code, event_code)
+
+        def people_for(ids):
+            refs = []
+            for pid in ids or []:
+                player = players.get(pid)
+                name = player.get("name") if player else None
+                entry_id = player.get("entryPlayerId") if player else None
+                key = roster_id(entry_id) if entry_id else pid
+                scope = _visible_event_scope(identities, key, event_key, event_code)
+                refs.append(
+                    _person_ref(
+                        key,
+                        name=name,
+                        identities=identities,
+                        event_code=scope,
+                    )
+                )
+            return refs
+
+        score = None
+        if results_on and state_row is not None and state_row.score_side_a is not None and state_row.score_side_b is not None:
+            score = [[state_row.score_side_a, state_row.score_side_b]]
+        event_discipline = labels.get(event_code)
+        out.append(
+            ScheduleMatchDTO(
+                matchKey=f"meet:{match_id}",
+                source="meet",
+                eventCode=event_code,
+                discipline=event_discipline,
+                status=state,
+                scheduledDate=tournament_date if scheduled else None,
+                scheduledTime=scheduled,
+                court=operational_courts.get(match_id),
+                sides=[
+                    ScheduleSideDTO(persons=people_for(match.get("sideA"))),
+                    ScheduleSideDTO(persons=people_for(match.get("sideB"))),
+                ],
+                score=score,
+                updatedAt=updated_at,
+            )
+        )
+    return out
+
+
+@router.get("/matches", response_model=ScheduleMatchesDTO)
+def schedule_matches(
+    request: Request,
+    response: Response,
+    slug: str = Path(..., max_length=100),
+    day: Optional[str] = Query(default=None, max_length=32),
+    event: Optional[str] = Query(default=None, max_length=100),
+    player: Optional[str] = Query(default=None, max_length=120),
+    court: Optional[int] = Query(default=None, ge=0),
+    state: Optional[str] = Query(default=None, max_length=20),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    repo: LocalRepository = Depends(get_repository),
+) -> ScheduleMatchesDTO:
+    """Unified, publication-gated Schedule / Live projection."""
+    entry_page, tournament = _page(repo, slug)
+    updated_at = tournament.updated_at.isoformat() if tournament.updated_at else None
+    payload = _bracket(repo, tournament.id) if entry_page.draws_published else None
+    runtime = _schedule_runtime_snapshot(
+        repo,
+        tournament,
+        entry_page,
+        bracket_payload=payload,
+    )
+    revision = runtime.revision
+    response.headers["Cache-Control"] = _CACHE
+    response.headers["ETag"] = f'"{revision}"'
+    if request.headers.get("If-None-Match") in {revision, f'"{revision}"'}:
+        return Response(status_code=304, headers={"ETag": f'"{revision}"'})  # type: ignore[return-value]
+    if not entry_page.draws_published:
+        return ScheduleMatchesDTO(
+            published=False,
+            timeZone=getattr(tournament, "time_zone", None) or "UTC",
+            updatedAt=updated_at,
+            revision=revision,
+            page=page,
+            pageSize=page_size,
+        )
+
+    matches: List[ScheduleMatchDTO] = []
+    identities = runtime.directory
+    if payload is not None:
+        matches.extend(
+            _bracket_schedule_matches(
+                payload,
+                results_on=bool(entry_page.results_published),
+                tournament_date=tournament.tournament_date,
+                updated_at=updated_at,
+                roster_names=_bracket_roster_names(tournament),
+                identities=identities,
+                operational_courts=runtime.courts,
+            )
+        )
+    if tournament.kind == "meet":
+        matches.extend(
+            _meet_schedule_matches(
+                tournament,
+                results_on=bool(entry_page.results_published),
+                tournament_date=tournament.tournament_date,
+                updated_at=updated_at,
+                identities=identities,
+                states=runtime.states,
+                operational_courts=runtime.courts,
+                meet_labels=runtime.meet_labels,
+                meet_event_keys=runtime.meet_event_keys,
+            )
+        )
+
+    def contains_player(item: ScheduleMatchDTO) -> bool:
+        if not player:
+            return True
+        needle = player.casefold()
+        return any(
+            needle in ref.identity.name.casefold()
+            for side in item.sides
+            for ref in side.persons
+            if ref.identity is not None
+        ) or any(player == side.participantKey for side in item.sides if side.participantKey)
+
+    facets_source = list(matches)
+    if day:
+        matches = [m for m in matches if m.scheduledDate == day]
+    if event:
+        matches = [m for m in matches if m.eventCode.casefold() == event.casefold()]
+    if player:
+        matches = [m for m in matches if contains_player(m)]
+    if court is not None:
+        matches = [m for m in matches if m.court == court]
+    if state:
+        matches = [m for m in matches if m.status == state]
+    matches.sort(key=lambda m: (m.scheduledDate is None, m.scheduledDate or "", m.scheduledTime is None, m.scheduledTime or "", m.matchKey))
+
+    day_counts: Dict[str, int] = {}
+    for item in facets_source:
+        if item.scheduledDate:
+            day_counts[item.scheduledDate] = day_counts.get(item.scheduledDate, 0) + 1
+    facets = ScheduleFacetsDTO(
+        days=[ScheduleDayFacetDTO(day=value, count=day_counts[value]) for value in sorted(day_counts)],
+        events=sorted({m.eventCode for m in facets_source if m.eventCode}),
+        courts=sorted({m.court for m in facets_source if m.court is not None}),
+        states=sorted({m.status for m in facets_source}),
+    )
+    total = len(matches)
+    start = (page - 1) * page_size
+    return ScheduleMatchesDTO(
+        published=True,
+        items=matches[start : start + page_size],
+        facets=facets,
+        page=page,
+        pageSize=page_size,
+        total=total,
+        timeZone=getattr(tournament, "time_zone", None) or "UTC",
+        updatedAt=updated_at,
+        revision=revision,
+    )

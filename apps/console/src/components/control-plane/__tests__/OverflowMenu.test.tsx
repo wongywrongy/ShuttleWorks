@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { OverflowMenu } from '../OverflowMenu';
 
 describe('OverflowMenu', () => {
@@ -49,5 +50,20 @@ describe('OverflowMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
     fireEvent.click(screen.getByTestId('sep-delete'));
     expect(onDelete).toHaveBeenCalled();
+  });
+
+  it('renders destinations as real links', () => {
+    render(
+      <MemoryRouter>
+        <OverflowMenu
+          items={[{ key: 'admin', label: 'Open administration', to: '/tournaments/t1/administration/lifecycle' }]}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.getByRole('menuitem', { name: 'Open administration' })).toHaveAttribute(
+      'href',
+      '/tournaments/t1/administration/lifecycle',
+    );
   });
 });

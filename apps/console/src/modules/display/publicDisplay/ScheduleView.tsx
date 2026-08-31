@@ -8,6 +8,10 @@
 import type { ScheduleAssignment, MatchDTO, TournamentConfig } from '../../../api/dto';
 import { formatSlotTime } from '../../../lib/time';
 import { formatPlayers } from './helpers';
+import {
+  formatMatchIdentity,
+  meetMatchIdentityFromStored,
+} from '../../../platform/domain/matchIdentity';
 
 interface UpcomingItem {
   assignment: ScheduleAssignment;
@@ -18,6 +22,15 @@ interface ScheduleViewProps {
   upcomingMatches: UpcomingItem[];
   config: TournamentConfig;
   playerNames: Map<string, string>;
+}
+
+function getMatchCode(match: MatchDTO | undefined): string {
+  if (!match) return 'M?';
+  const identity = meetMatchIdentityFromStored({
+    event_rank: match.eventRank,
+    sequence: match.matchNumber ?? null,
+  });
+  return formatMatchIdentity(identity, match.id) || 'M?';
 }
 
 export function ScheduleView({
@@ -42,7 +55,7 @@ export function ScheduleView({
               className="flex items-center gap-5 rounded-sm border border-border bg-card/60 px-5 py-4"
             >
               <div className="w-20 text-xl font-bold text-foreground">
-                {match?.eventRank || `M${match?.matchNumber || '?'}`}
+                {getMatchCode(match)}
               </div>
               <div className="w-14 text-lg font-semibold text-accent tabular-nums">
                 C{assignment.courtId}

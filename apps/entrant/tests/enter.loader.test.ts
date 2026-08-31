@@ -388,7 +388,7 @@ async function fetchEntrant(path: string, mode = 'development'): Promise<Respons
 }
 
 describe('GET /e/{slug}/enter', () => {
-  it('server-renders the page and the key, with no JavaScript in play', async () => {
+  it('server-renders the complete page and key before optional enhancement', async () => {
     // The upstream response carries a Set-Cookie so the assertion below has
     // something it could actually fail on — a loader that copied every
     // upstream header onto its own Response would have left a bare `stubJson`

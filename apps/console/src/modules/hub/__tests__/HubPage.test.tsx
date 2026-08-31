@@ -174,6 +174,29 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByTestId('hub-footer')).toHaveTextContent('1 archived');
   });
 
+  it('suppresses a never-varying Complete chip already stated by the facet (SWP-2)', async () => {
+    const completeSignals = {
+      health: 'good' as const,
+      attention: [],
+      modules: { enabled: 2, available: 0, disabled: 0, comingSoon: 0 },
+      setup: { events: true, draws: true },
+      collaboration: { memberCount: 1, activeInviteCount: 0 },
+      phase: 'complete' as const,
+    };
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      { id: 'c1', name: 'Complete One', kind: 'bracket' as const, role: 'owner' as const,
+        tournamentDate: '2026-07-01', status: 'active' as const, signals: completeSignals },
+      { id: 'c2', name: 'Complete Two', kind: 'bracket' as const, role: 'owner' as const,
+        tournamentDate: '2026-07-02', status: 'active' as const, signals: completeSignals },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Complete One')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Complete\b/ }));
+    expect(screen.getByRole('button', { name: /^Complete\b/ })).toHaveTextContent('2');
+    expect(screen.queryByTestId('row-lifecycle')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('row-attention')).toHaveLength(2);
+  });
+
   it('"New workspace" navigates to the dedicated /new surface', async () => {
     const loc = { current: '' };
     mount(loc);

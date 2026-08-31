@@ -42,6 +42,57 @@ export type ChipState =
 
 export type CtaState = { kind: 'enter'; href: string } | { kind: 'closed' };
 
+/** Public lifecycle supplied by newer page projections. Older projections do
+ * not carry this field, so the presentation falls back to publication facts
+ * and the server's event-open bit. */
+export type TournamentPhase =
+  | 'announced'
+  | 'entries_open'
+  | 'entries_closed'
+  | 'draws_published'
+  | 'live'
+  | 'complete'
+  | 'archived';
+
+export function phaseLabel(phase: TournamentPhase): string {
+  switch (phase) {
+    case 'announced': return 'Announced';
+    case 'entries_open': return 'Entries open';
+    case 'entries_closed': return 'Entries closed';
+    case 'draws_published': return 'Draws published';
+    case 'live': return 'Live now';
+    case 'complete': return 'Complete';
+    case 'archived': return 'Archived';
+  }
+}
+
+/** Accept the status spellings used by the season projection as an additive
+ * compatibility layer. Unknown values intentionally return null. */
+export function normalizeTournamentPhase(value: unknown): TournamentPhase | null {
+  if (typeof value !== 'string') return null;
+  if (value === 'in_progress_live') return 'live';
+  if (value === 'in_progress') return 'draws_published';
+  if (value === 'completed_winners') return 'complete';
+  return Object.prototype.hasOwnProperty.call({
+    announced: true, entries_open: true, entries_closed: true,
+    draws_published: true, live: true, complete: true, archived: true,
+  }, value) ? value as TournamentPhase : null;
+}
+
+export function tournamentPhase(input: {
+  phase?: unknown;
+  status?: unknown;
+  publication?: { draws: boolean; results: boolean };
+  events?: readonly Pick<PhaseEvent, 'isOpen'>[];
+}): TournamentPhase {
+  const explicit = normalizeTournamentPhase(input.phase) ?? normalizeTournamentPhase(input.status);
+  if (explicit) return explicit;
+  if (input.publication?.results) return 'complete';
+  if (input.publication?.draws) return 'draws_published';
+  if (input.events?.some((event) => event.isOpen)) return 'entries_open';
+  return 'entries_closed';
+}
+
 /**
  * Where a tournament sits in its life, decided by the SERVER (SP-P8 Task 2,
  * `GET /e/api/pages`). The tier never re-derives it: `in_progress_live` in

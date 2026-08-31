@@ -15,7 +15,7 @@
  * this workspace runs — single-engine workspaces arrive here after the
  * SP-CONSOLE-4 routing flip; actions render per engine.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
@@ -24,25 +24,20 @@ import { useTournamentId } from '../../hooks/useTournamentId';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useMatchStateStore } from '../../store/matchStateStore';
 import { useUiStore } from '../../store/uiStore';
-import { useCommandQueue } from '../../hooks/useCommandQueue';
-import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { useActivityLog } from '../../hooks/useActivityLog';
-import { EYEBROW_CLASS } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
 import { slotToTime } from '../../lib/time';
 import { bracketOccupiedWindows } from '../../lib/bracketOccupancy';
-import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { Advisory } from '../../api/dto';
 import { BracketScheduleModal } from '../bracket/BracketScheduleModal';
 import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
-import { meetToOpsBlocks, bracketToOpsBlocks, parseOpsKey, type OpsBlock } from './opsBlock';
+import { meetToOpsBlocks, bracketToOpsBlocks } from './opsBlock';
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { UnifiedOpsList } from './UnifiedOpsList';
-import { OpsDetailRail } from './OpsDetailRail';
-import { DetailDock, DetailPanel } from '../../components/control-plane';
+import { DetailDock, MatchInspector } from '../../components/control-plane';
 import { RunSurface } from './run/RunSurface';
 import { useMeetRunOps } from './run/useMeetRunOps';
-import type { OperationalAction } from './operationalWriteback';
 import { isLiveSegment } from './operationsSegments';
 import { useAction } from '../../hooks/useAction';
 import { PlanToolbar } from './plan/PlanToolbar';
@@ -53,7 +48,10 @@ import { PlanCallList } from './plan/PlanCallList';
 import { StaleBanner } from './plan/StaleBanner';
 import { SuggestionsRail } from './plan/SuggestionsRail';
 import { dialogForAdvisory, type PlanDialog } from './plan/planDialogs';
-import { opsPlanMode } from './lifecycleMatrix';
+import { opsPlanMode, showPlanReadinessChips } from './lifecycleMatrix';
+import { SyncHealthIndicator } from '../../components/SyncHealthIndicator';
+import { resolvePlanView } from './plan/planView';
+import { STATE_WORD } from '../../lib/stateWords';
 
 export interface OperationsEngines {
   meet: boolean;
@@ -72,7 +70,6 @@ export function OperationsProduct({ engines }: { engines?: OperationsEngines }) 
 function OperationsBody({ engines }: { engines: OperationsEngines }) {
   const tid = useTournamentId();
   const activeTab = useUiStore((s) => s.activeTab);
-  const pushToast = useUiStore((s) => s.pushToast);
   const phase = useUiStore((s) => s.activeTournamentPhase);
   const isLive = isLiveSegment(activeTab);
   const review = opsPlanMode(phase) === 'plan-review';
@@ -151,6 +148,10 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   );
 
   const blocks = useMemo(() => [...meetBlocks, ...bracketBlocks], [meetBlocks, bracketBlocks]);
+  const planView = useMemo(
+    () => resolvePlanView(blocks, config, schedule),
+    [blocks, config, schedule],
+  );
   const courtCount = useMemo(() => {
     const fromCfg = config?.courtCount ?? data?.courts ?? 0;
     const fromBlocks = blocks.reduce((m, b) => Math.max(m, b.court ?? 0), 0);
@@ -203,64 +204,16 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
     () => blocks.find((b) => b.key === selectedKey) ?? null,
     [blocks, selectedKey],
   );
-  // Keep the bracket store id in sync so OpsDetailRail's MatchDetailPanel
-  // (bracket) tracks the Courts-branch selection.
-  const setBracketSelectedMatchId = useUiStore((s) => s.setBracketSelectedMatchId);
-  useEffect(() => {
-    const p = selectedKey ? parseOpsKey(selectedKey) : null;
-    setBracketSelectedMatchId(p?.source === 'bracket' ? p.id : null);
-  }, [selectedKey, setBracketSelectedMatchId]);
-
-  // ---- write-back (Courts branch OpsDetailRail; RunSurface owns its own) ----
-  const { submit: meetSubmit } = useCommandQueue();
-  const { submit: bracketSubmit } = useBracketResultQueue({
-    onOptimistic: () => {},
-    onSettled: (dto: BracketTournamentDTO) => setData(dto),
-    onConflict: (kind, message) =>
-      pushToast({
-        level: kind === 'stale_version' ? 'warn' : 'error',
-        message: kind === 'stale_version' ? 'Result already recorded' : 'Could not record result',
-        detail: message,
-      }),
-  });
-
-  const onAction = useCallback(
-    (block: OpsBlock, action: OperationalAction) => {
-      if (block.source === 'meet') {
-        if (action.kind === 'call') return void meetSubmit('call_to_court', block.id);
-        if (action.kind === 'start') return void meetSubmit('start_match', block.id);
-        if (action.kind === 'finish') return void meetSubmit('finish_match', block.id);
-        return;
-      }
-      // bracket
-      if (action.kind === 'start') {
-        void bracketApi.matchAction({ play_unit_id: block.id, action: 'start' }).then(setData).catch(() => {});
-        return;
-      }
-      if (action.kind === 'recordWinner') {
-        const pu = data?.play_units.find((u) => u.id === block.id);
-        void bracketSubmit({ matchId: block.id, winnerSide: action.winnerSide, seenVersion: pu?.version ?? 0 });
-      }
-    },
-    [meetSubmit, bracketApi, bracketSubmit, data, setData],
-  );
-
   const title = isLive ? 'Live day' : 'Plan';
-  // COPY-2: only the subtitle that VARIES survives. "Run the floor: by court,
-  // then the queue" and "Plan the day: drag to reschedule, generate, schedule
-  // rounds" were permanent chrome — they said the same thing on every visit
-  // for the life of the workspace, which is a caption on the nav label the
-  // operator already read. The review line stays: it appears only once the
-  // day is complete, so it is state, not decoration. The one drag hint the
-  // product keeps lives next to the grid it describes (UnifiedOpsBoard).
-  const subtitle = !isLive && review ? 'The day is complete: review how it ran' : null;
-
+  // COPY-2: the Plan toolbar owns the one complete-day review statement.
+  // Permanent instructional subtitles were removed from this header; the one
+  // drag hint the product keeps lives next to the grid it describes
+  // (UnifiedOpsBoard).
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-card">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`${EYEBROW_CLASS} text-muted-foreground`}>{title}</span>
-          {subtitle ? <span className="text-xs text-muted-foreground">{subtitle}</span> : null}
         </div>
         {/* Plan is the planning surface: build / adjust the plan. Run runs
             what Plan produced — no scheduling actions there. */}
@@ -280,8 +233,13 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
         ) : (
           // Run: keep the readiness indicator (Plan → Run handoff) in the single
           // header — Run runs what Plan produced; the toggle itself lives on Plan.
-          <div>
-            {planFinalized ? (
+          <div className="flex items-center gap-3">
+            <SyncHealthIndicator
+              lastSyncedAt={meetOps.lastSyncedAt ?? null}
+              error={meetOps.syncError}
+              terminal={meetOps.pollTerminal}
+            />
+            {!showPlanReadinessChips(phase) ? null : planFinalized ? (
               <span
                 data-testid="run-plan-finalized"
                 className="inline-flex items-center rounded-full border border-status-done/30 bg-status-done/10 px-2.5 py-0.5 text-xs font-medium text-status-done"
@@ -370,7 +328,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                     within one match. If the solve FELL BACK to pinned
                     (closed-court windows, CP8-v1), the grid is the honest
                     view again, with a banner saying why. */}
-                {config?.courtPolicy === 'queue' && schedule?.effectivePolicy !== 'pinned' ? (
+                {planView.mode === 'call-list' ? (
                   <PlanCallList
                     blocks={blocks}
                     courtCount={courtCount}
@@ -384,7 +342,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                   />
                 ) : (
                   <>
-                    {config?.courtPolicy === 'queue' && schedule?.effectivePolicy === 'pinned' ? (
+                    {planView.effectivePolicy === 'pinned' && config?.courtPolicy === 'queue' ? (
                       <div
                         data-testid="plan-policy-fallback"
                         className="border-b border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground"
@@ -394,16 +352,38 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                         closures clear.
                       </div>
                     ) : null}
-                    <UnifiedOpsBoard
-                      blocks={blocks}
-                      courtCount={courtCount}
-                      currentSlot={currentSlot}
-                      selectedKey={selectedKey}
-                      onSelect={setSelectedKey}
-                      meet={{ config, matches, schedule }}
-                      onBracketData={setData}
-                      formatSlot={formatSlot}
-                    />
+                    {planView.mode === 'list' ? (
+                      <div
+                        data-testid="plan-grid-unavailable"
+                        className="border-b border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground"
+                      >
+                        No court and time assignments are available. Matches remain in the list below;
+                        no placement has been inferred.
+                      </div>
+                    ) : (
+                      <>
+                        {planView.unassignedCount > 0 ? (
+                          <div
+                            data-testid="plan-unassigned-notice"
+                            className="border-b border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground"
+                          >
+                            {planView.unassignedCount} match{planView.unassignedCount === 1 ? '' : 'es'}
+                            {' '}{planView.unassignedCount === 1 ? 'lacks' : 'lack'} a court and time assignment and
+                            remain in the list below.
+                          </div>
+                        ) : null}
+                        <UnifiedOpsBoard
+                          blocks={blocks}
+                          courtCount={courtCount}
+                          currentSlot={currentSlot}
+                          selectedKey={selectedKey}
+                          onSelect={setSelectedKey}
+                          meet={{ config, matches, schedule }}
+                          onBracketData={setData}
+                          formatSlot={formatSlot}
+                        />
+                      </>
+                    )}
                   </>
                 )}
                 {engines.meet ? <SolveTelemetryPanel /> : null}
@@ -417,26 +397,56 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
 
               <DetailDock open={selectedBlock != null} width={320}>
                 {selectedBlock ? (
-                  // Pane chrome: identity header, close, Esc, and dialog
-                  // semantics when the dock demotes itself to an overlay.
-                  <DetailPanel
-                    label="Match"
-                    value={selectedBlock.label}
-                    mono
+                  <MatchInspector
+                    match={{
+                      key: selectedBlock.key,
+                      id: selectedBlock.id,
+                      identity: selectedBlock.identity,
+                      status: selectedBlock.done
+                        ? STATE_WORD.done
+                        : selectedBlock.started
+                          ? STATE_WORD.live
+                          : selectedBlock.court != null
+                            ? STATE_WORD.scheduled
+                            : 'Awaiting court',
+                      sideA: selectedBlock.sideA,
+                      sideB: selectedBlock.sideB,
+                      assignment: {
+                        court: selectedBlock.court != null ? `C${selectedBlock.court}` : null,
+                        planned: selectedBlock.slot != null ? formatSlot(selectedBlock.slot) : null,
+                        actualStart:
+                          selectedBlock.actualStartSlot != null
+                            ? formatSlot(selectedBlock.actualStartSlot)
+                            : null,
+                        actualEnd:
+                          selectedBlock.actualEndSlot != null
+                            ? formatSlot(selectedBlock.actualEndSlot)
+                            : null,
+                      },
+                      result: selectedBlock.score
+                        ? {
+                            summary: `${selectedBlock.score.sideA}–${selectedBlock.score.sideB}`,
+                            sets: selectedBlock.score.sets,
+                          }
+                        : null,
+                    }}
+                    defaultFacet="assignment"
                     onClose={() => setSelectedKey(null)}
                     testId="ops-detail-panel"
-                  >
-                    <OpsDetailRail
-                      block={selectedBlock}
-                      data={data}
-                      onBracketChange={setData}
-                      onAction={onAction}
-                      live={false}
-                      onRequestMove={
-                        review ? undefined : (matchId) => setPlanDialog({ kind: 'move', matchId })
-                      }
-                    />
-                  </DetailPanel>
+                    actions={{
+                      assignment:
+                        selectedBlock.source === 'meet' && !selectedBlock.done && !review ? (
+                          <button
+                            type="button"
+                            className={`${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card px-2 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
+                            data-testid="ops-rail-move-btn"
+                            onClick={() => setPlanDialog({ kind: 'move', matchId: selectedBlock.id })}
+                          >
+                            Move or postpone…
+                          </button>
+                        ) : null,
+                    }}
+                  />
                 ) : null}
               </DetailDock>
             </div>

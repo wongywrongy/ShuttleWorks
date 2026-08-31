@@ -38,11 +38,17 @@ import { formCsrfToken } from '../app/lib/formCsrf.server';
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 afterAll(() => vite.close());
 
-async function fetchPath(path: string, mode = 'development'): Promise<Response> {
+async function fetchPath(
+  path: string,
+  mode = 'development',
+  cookie?: string,
+): Promise<Response> {
   const build = (await vite.ssrLoadModule(
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
-  return createRequestHandler(build, mode)(new Request(`http://entrant.test${path}`));
+  return createRequestHandler(build, mode)(
+    new Request(`http://entrant.test${path}`, cookie ? { headers: { cookie } } : undefined),
+  );
 }
 
 const render = async (path = '/e/login') => (await fetchPath(path)).text();
@@ -67,6 +73,12 @@ describe('the login form, unhydrated', () => {
     // A form with no submit control cannot be submitted without script, which
     // every other assertion here would sail straight past.
     expect(html).toMatch(/<button[^>]*type="submit"/);
+  });
+
+  it('offers password recovery from the sign-in form', async () => {
+    const html = await render();
+    expect(html).toContain('href="/e/forgot?next=%2Fe%2Flogin%2Fsigned-in"');
+    expect(html).toContain('Forgot your password?');
   });
 
   it('names the fields exactly as LoginRequest reads them', async () => {
@@ -216,9 +228,9 @@ describe('every control on these pages works with no JavaScript', () => {
     async (page) => {
       // **E2.** The design system's `TextField` adds a "Show password" toggle
       // to every `type="password"` input, and it is a `<button type="button">`
-      // driven by `onClick`. This tier renders no client JS at all
+      // driven by `onClick`. This page renders no route-scoped client module
       // (`app/root.tsx` has no `<Scripts/>`, and the CSP is `script-src
-      // 'self'`), so pressing it did nothing at all — a dead control, which
+      // 'self'`), so pressing it would do nothing — a dead control, which
       // teaches the reader the page is broken. `revealable={false}` deletes
       // it; a JS-backed reveal would need a script budget the tier does not
       // have, and is logged in `docs/reference/debt-log.md` instead.
@@ -235,7 +247,12 @@ describe('every control on these pages works with no JavaScript', () => {
             ? await fetchSignup()
             : await render('/e/login');
 
-      expect(html).not.toMatch(/<button[^>]*type="button"/i);
+      if (page === 'entry') {
+        expect(html).toContain('hidden="" data-entry-wizard-controls=');
+        expect(html).toContain('<script type="module" src="/e/assets/entry-wizard.js"');
+      } else {
+        expect(html).not.toMatch(/<button[^>]*type="button"/i);
+      }
       expect(html).not.toContain('Show password');
       expect(html).not.toContain('Hide password');
       // Non-vacuity: these documents DO carry buttons, so the assertions
@@ -324,12 +341,22 @@ describe('next is a same-origin entrant path or it is discarded', () => {
     expect(await render('/e/login')).not.toContain('You are signed in on this device');
   });
 
+  it('does not show a second sign-in form after a successful authenticated redirect', async () => {
+    const html = await (
+      await fetchPath('/e/login/signed-in', 'development', 'sw_play_session=session-value')
+    ).text();
+
+    expect(html).toContain('You are signed in on this device');
+    expect(html).toContain('Continue to My entries');
+    expect(html).not.toContain('action="/e/account/login"');
+  });
+
   // 2026-08-12 browser pass: the shared header (`PlayShell`) is static and
   // always said "Sign in" — including on this very page, right under body
-  // copy that says the opposite. This tier cannot read the session (R8-D),
-  // but the ROUTE knows its own outcome (same `justSignedIn` flag the body
-  // copy above already reads from the PATH, not the cookie), so only the
-  // header on this specific document needs to stop contradicting the page.
+  // copy that says the opposite. Root can observe only entrant cookie
+  // presence (R8-D still forbids relaying the credential), while the ROUTE
+  // knows its own outcome from the PATH. The authenticated branch therefore
+  // removes the contradictory second form.
   it('the header does not invite a "Sign in" the body just said already happened', async () => {
     const signedIn = await render(DEFAULT_NEXT);
     const plain = await render('/e/login');
@@ -352,7 +379,7 @@ describe('the shared header sign-in link meets the 24px tap-target floor', () =>
     const link = /<a href="\/e\/login"[^>]*>/.exec(html)?.[0] ?? '';
 
     expect(link).toBeTruthy();
-    expect(link).toMatch(/\bmin-h-6\b/);
+    expect(link).toMatch(/\bmin-h-8\b/);
   });
 });
 

@@ -37,6 +37,7 @@ from operations import match_state_routes as match_state
 from ops import health as health_api  # SP-CLOUD-3 — liveness / readiness / queue metrics
 from solve_rail import solve_jobs_routes as solve_jobs_api  # SP-CLOUD-1 — async solve rail
 from workspaces import tournaments  # Step 2 — replaces the legacy /tournament/state singleton router
+from workspaces import setup as setup_api  # canonical workflow-first tournament setup facade
 from workspaces import workspace_modules  # Workspace-modules program #1 — per-workspace module state
 from core.body_limit import BodyLimitMiddleware
 from core.config import settings
@@ -436,6 +437,7 @@ app.include_router(match_state.router, dependencies=_AUTH_DEP)
 app.include_router(commands.router, dependencies=_AUTH_DEP)
 app.include_router(brackets.router, dependencies=_AUTH_DEP)
 app.include_router(tournaments.router, dependencies=_AUTH_DEP)
+app.include_router(setup_api.router, dependencies=_AUTH_DEP)
 app.include_router(workspace_modules.router, dependencies=_AUTH_DEP)
 # Entries: the operator desk only. The public slug page and submit
 # endpoint are a separate surface with their own (allowlisted) auth

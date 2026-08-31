@@ -31,6 +31,39 @@ export {
   type BandedTableGroup,
 } from './BandedTable';
 export {
+  DenseDataTable,
+  DenseDataPagination,
+  DenseDataToolbar,
+  DenseDataColumnVisibility,
+  type DenseDataTableProps,
+} from './DenseDataTable';
+export {
+  DEFAULT_DENSE_DATA_STATE,
+  getDenseDataPage,
+  getDenseDataFacetOptions,
+  getDefaultHiddenColumns,
+  isDenseColumnVisible,
+  toggleDenseFilter,
+  setDenseSort,
+  clearDenseDataFilters,
+  decodeDenseDataState,
+  encodeDenseDataState,
+  mergeDenseDataStateParams,
+  createDenseDataViewStore,
+  denseDataViewStorageKey,
+  type DenseDataColumn,
+  type DenseDataDensity,
+  type DenseDataFacetOption,
+  type DenseDataPage,
+  type DenseDataPageSize,
+  type DenseDataSavedView,
+  type DenseDataSort,
+  type DenseDataSortDirection,
+  type DenseDataState,
+  type DenseDataStorage,
+  type DenseDataViewStore,
+} from './denseData';
+export {
   MEET_MATCH_LIST_COLUMNS,
   BRACKET_MATCH_LIST_COLUMNS,
   MEET_MATCH_CELL,
@@ -65,6 +98,13 @@ export {
   type MatchStatusFilterValue,
 } from './MatchStatusFilter';
 export { DetailPanel } from './DetailPanel';
+export {
+  MatchInspector,
+  type MatchInspectorFacet,
+  type MatchInspectorModel,
+  type MatchInspectorProps,
+  type MatchInspectorSlots,
+} from './MatchInspector';
 export { DetailDock } from './DetailDock';
 export { DockModeContext } from './dockMode';
 export {

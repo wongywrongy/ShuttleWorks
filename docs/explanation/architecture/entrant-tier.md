@@ -1,120 +1,116 @@
 # Entrant tier (the public site)
 
-The public tournament site — discovery, tournament pages, the entry flow,
-and (since SP-P7) entrant surfaces: My Entries, player directories, player
-pages, draws, seeds, and winners. It is a **separate frontend workspace**
-(`apps/entrant/`), not part of the operator SPA.
+The public tournament site is a separate frontend workspace (`apps/entrant/`), served under `/e/`
+on the public play origin. It covers discovery, tournament information, schedules, players, draws,
+results, and the entry/account journey. It is not part of the operator SPA and it never changes
+operator state directly.
 
-## Shape
+## Delivery model
 
-- **React Router 7, server-rendered.** A node process renders documents;
-  each tab/page switch is a full document load. There is no Zustand, no
-  client data store; state lives in URLs and loaders.
-- **`apiGet` is the only outbound seam** (`apps/entrant/app/lib/apiFetch.server.ts`):
-  GET only, `/e/api/` paths only, a frozen `accept`-only header allowlist.
-  Node never relays credentials (ruling R8-D), so an SSR document can never
-  know who is signed in — `ViewerDTO.signedIn` is always `false` on the
-  server render, pinned by `tests/backend/test_entrant_ssr_contract.py`.
-- **Writes go browser → nginx → FastAPI directly** (form posts and, since
-  SP-P7, cookie-carrying browser fetches). nginx routes `/e/api/` and
-  `/e/account/` to the backend with a cookie allowlist that carries the
-  entrant session cookie; `/e/` goes to node.
-- **Its own hostname, and therefore its own browser origin** (SP-HOST-1).
-  `play.<domain>` serves this tier from port 8081 of the `frontend` container
-  with no Cloudflare Access policy on it; the operator console and `/api/` are
-  `app.<domain>` on port 8080, behind Access. Two hostnames rather than one
-  split by path, because **origin** is what scopes cookies, `localStorage`,
-  IndexedDB and service-worker registration, and the `Path=` attribute on a
-  cookie is not enforced against same-origin script. Under the old shared
-  origin an operator's `sw_session` was reachable from code running here.
-  Nothing in `infra/nginx/` names a hostname — the tunnel routes hostname to
-  port, so the domain stays configuration (`APP_HOSTNAME` / `PLAY_HOSTNAME`).
-- **No browser-side API calls at all**, which is what makes the split free of
-  CORS. `root.tsx` renders no `<Scripts/>`; the one client script is a
-  DOM-only filter. Every write is a native `<form method="post">` to a
-  relative path on this same host — a navigation, not a CORS request — so the
-  operator API's allow-list stays closed to this origin and nothing breaks.
-  Two things enforce that and both demand same-origin: CSP `form-action
-  'self'`, and a host-only `sw_play_session`.
-- **Two principals, two seams.** Entrant accounts (`entrant_accounts` +
-  `entrant_sessions`) are structurally separate from operator users
-(ruling D-A3). `tests/backend/test_cross_principal_sessions.py` sweeps every
-  route with each cookie and holds the reachable sets to their allowlists.
+- **SSR-first, no framework hydration.** React Router renders complete documents. `root.tsx` emits no
+  framework scripts, so the HTML remains useful on a slow connection or when scripts are unavailable.
+- **Bounded progressive enhancement.** Same-origin route modules enhance only browser-dependent
+  surfaces: entry progress, My Entries, receipts, regulations navigation, entrant filtering, and
+  bracket path highlighting. Native forms remain the write path and the page-weight budgets are
+  blocking: 4 KB for poster/discovery routes and 8 KB for the persistent entry journey.
+- **One outbound SSR seam.** `apiGet` (`apps/entrant/app/lib/apiFetch.server.ts`) is GET-only,
+  restricted to `/e/api/` and its frozen `accept` header allow-list. The node renderer never relays
+  credentials, so server renders cannot identify the viewer.
+- **Two origins and two principals.** The operator console is on `app.<domain>` behind Access; the
+  public site is on `play.<domain>` without Access. Entrant accounts and `sw_play_session` are
+  structurally separate from operator users and `sw_session`.
 
-## Public keys and the uniform 404
+Writes go browser → nginx → FastAPI through relative native form posts or same-origin enhancement
+requests. The nginx cookie allow-list carries only entrant session/CSRF cookies. `CSP form-action
+'self'` and host-only cookies enforce the boundary.
 
-The **slug** (`entry_pages.slug`, globally unique) is the only public key;
-raw tournament UUIDs never appear in public URLs. An unknown slug and a
-closed page answer byte-identically (`apps/api/src/entries/entries_public.py::_resolve`), so
-existence is not enumerable. Person pages are keyed by **person id**
-(`entry_players.id` as an opaque `personKey`) — never by name; two
-entrants sharing a name is routine at a club.
+## Public keys and privacy
 
-## The publication model (SP-P7 §4)
+Tournament pages use the globally unique `entry_pages.slug`; raw tournament UUIDs never appear in a
+public URL. A closed page and an unknown slug have the same 404 response. Person pages use the
+persisted tournament-person identity id (`entry_players.id`), never a display name or derived slug.
+The id is opaque and only meaningful inside that tournament.
 
-Three TD-controlled flags on `entry_pages`, all defaulting **off**,
-independent, reversible, flipped from the operator console's Sharing tab
-(`PATCH /tournaments/{id}/entry-page/publication`):
+The public identity contract is:
 
-| Flag | Gates |
+```ts
+type PublicPersonIdentity = { id: string | null; name: string };
+type PersonReference = {
+  identity: PublicPersonIdentity | null;
+  resolution: 'resolved' | 'dead';
+  label: string | null;
+};
+```
+
+The frontend's `PersonRef` is the only name renderer. A resolved reference links to the person's
+tournament page; a winner uses the same link with weight; a bye, feeder placeholder, imported
+draw-only name, hidden identity, erased row, or missing id is a muted non-link. Doubles are two
+person references separated by an element that belongs to neither person. There is no pair page.
+
+## Publication gates
+
+Three independent, reversible, operator-controlled flags determine what enters the public
+projection:
+
+| Flag | Public projection |
 |---|---|
-| `entrants_published` | confirmed people in the Players directory, and player-page discoverability |
-| `draws_published` | draw-roster people in the Players directory, draws, and seeded entries |
-| `results_published` | result data everywhere: scores, standings, winners, win–loss records, result badges — and **resolved advancement** in draw trees |
+| `entrants_published` | confirmed, non-opted-out people and discoverable person pages |
+| `draws_published` | draw structure, published roster references, and seeds |
+| `results_published` | scores, standings, winners, match outcomes, and resolved advancement |
 
-Rules the tests pin:
+Gating occurs in the query/projection layer, not in the renderer. Contact data, account data,
+unconfirmed submissions, and hidden/erased identities are never fetched into public DTOs. A draw-only
+name without a persisted public person identity remains a dead reference under R-U1. The same public
+directory merges confirmed entrant people with named published draw-roster people; only the former
+have a person page.
 
-- Gating happens **at the query**, never in the renderer: unpublishing
-  actually stops the data flowing (`test_entries_page_api.py`,
-  `test_entries_site_api.py` off-state tests).
-- Gated and empty answer the same 200; the page projection's
-  `publication` block is how the tier tells them apart. No error shape
-  distinguishes an unpublished state.
-- **My Entries is not gated** — an entrant always sees their own
-  submissions. The one exception is per-event result badges, which follow
-  `results_published`.
-- The public **Players** directory is one merged projection: confirmed
-  entrants retain their profile links, while published draw-roster people
-  without an Entries identity appear as plain names. Pending and waitlisted
-  submissions remain visible to their own account alone via
-  `/e/api/me/entries`.
-- With draws published but results not, a draw renders **structure and
-  schedule without results** — including advancement: the engine
-  overwrites feeder slots when a result resolves them, so the projection
-  reconstructs the pre-result placeholder ("Winner of SF 1") from the
-  resulted dependency (`api/entries_site._derivation`).
+## Projection API
 
-## The projection API
+All public reads are strict allow-list projections with exact key-set tests. Results arrive already
+gated; the display tier does not infer publication state or create alerts.
 
-All public reads live under `/e/api/` and are strict, field-by-field
-allow-list projections (key-set-exact tests). Times derived from slot
-grids are **venue-local naive strings** — no zone is stamped because none
-was recorded.
-
-| Route | Serves | Gate |
+| Route | Purpose | Gate |
 |---|---|---|
-| `GET /e/api/page/{slug}` | the whole tournament page: tournament, org, venue, page content + `regulations{Version,UpdatedAt}`, policy, `publication`, events, entrants (`personKey`, name, club, eventCodes), viewer | entrants list by `entrants_published` |
-| `GET /e/api/page/{slug}/players` | the unified alphabetical player directory: confirmed entrants plus named published draw-roster people; only Entries-backed rows carry `personKey` profile identity | `entrants_published` or `draws_published` |
-| `GET /e/api/page/{slug}/draws` | draw cards: key, code, discipline, kind, size, consolation | `draws_published` (explicit `published: false` envelope) |
-| `GET /e/api/page/{slug}/draws/{key}` | full draw: teams (names, club, seed), segments → rounds (labels) → nodes (sides, result, time, court), RR standings + W/L history pills | `draws_published` (404); results by `results_published` |
-| `GET /e/api/page/{slug}/seeds` | per-event ordered seed lists | `draws_published` |
-| `GET /e/api/page/{slug}/winners` | winner / runner-up / semifinalists per event, `decided` flag | `results_published` |
-| `GET /e/api/page/{slug}/players/{personKey}` | header (name, club), events, matches (both engines), win–loss record | `entrants_published` (404); results by `results_published` |
-| `GET /e/api/me/entries` | entrant-session-authed: one card per tournament — status lifecycle (`awaiting`/`entered`/`played`/`withdrawn`), summed quoted totals, per-event lines + gated result badges | session; `Cache-Control: private, no-store` |
+| `GET /e/api/pages` | season discovery with lifecycle status, counts, and live pick | open page |
+| `GET /e/api/page/{slug}` | tournament identity, phase-aware overview, events, policy, documents, and public entrants | page open; entrants list by `entrants_published` |
+| `GET /e/api/page/{slug}/matches` | schedule/live matches, day/event/court/state facets, timezone, revision and updated time | schedule publication |
+| `GET /e/api/page/{slug}/players` | searchable tournament directory and public person references | entrants or draws publication |
+| `GET /e/api/page/{slug}/players/{personId}` | one person's events, partners, draw paths, published matches, and current court state | entrants publication; results independently gated |
+| `GET /e/api/page/{slug}/draws` | draw cards with discipline, format, size, rounds, coverage, and champions/remaining work | draws publication |
+| `GET /e/api/page/{slug}/draws/{drawKey}` | segments, rounds, nodes, person references, published scores, courts, and standings | draws publication; results independently gated |
+| `GET /e/api/page/{slug}/seeds` | ordered seed lines per event | draws publication |
+| `GET /e/api/page/{slug}/winners` | champion, runner-up, semifinalists, final score, or published final still to decide | results publication |
+| `GET /e/api/me/entries` | signed-in entrant's private entries and next actions | entrant session; private/no-store |
 
-Draw structure is projected from the bracket module's own serialized
-session (`api/brackets._serialize_session`, through its short-TTL
-`response_cache`) — the same read the operator surface and Display
-consume, so the public tier cannot drift from the real draw. Meet
-matches come from the state blob + `match_states`, the Display
-precedent. Standings are `apps/api/src/bracket/standings.py` (BWF chain),
-embedded by the same serializer.
+Schedule reads are day-first. The UI preserves day, event, player, court, state, and organization
+filters in the URL while switching between By time and By court. Courts appear only from Operations'
+materialized assignment (R-U3), never from planned solver assignments. The live band is absent unless
+the selected day is today and at least one published match is live.
 
-## Privacy discipline
+## Draw and match consumption
 
-Public rows carry: name, club, seed, event participation, published
-results — nothing else. Contact data is structurally absent (never
-fetched-then-hidden). The consent copy on the entry form names exactly
-what is published ("name and club"); a field joins a public DTO only
-after the copy that consents to it does, and every public DTO has a
-key-set-exact test that fails on any addition.
+The draw index uses a whole-card link and a stable format glyph. The bracket uses exactly two-line
+nodes, fixed-width tabular score columns, CSS brace connectors, and a 6px base gap. Its Bracket / Round
+/ List control preserves the selected person filter. Round and List are the linear accessible
+equivalents; each node includes visually hidden context describing the published opponent/path.
+
+Person pages use the operator match anatomy: event/round context, two competitor rows, aligned
+per-game scores, winner mark or a left rule for a live match (never both), then quiet date/court/
+duration metadata. The page is person-in-tournament only; career history, rankings, head-to-head,
+and cross-tournament records belong to a later registry program.
+
+## Entrant journey
+
+The entry flow is one context-preserving journey: Eligibility → Account → Participant → Events →
+Partner (when needed) → Review → Payment (when needed) → Submitted → Receipt. Account creation,
+verification, password reset, and partner invitations return to the tournament and preserve saved
+entry state. My Entries groups Draft, Email unverified, Partner pending, Payment required, Submitted,
+Changes requested, Confirmed, Withdrawn, and Completed states by their next action.
+
+## Source of truth
+
+The backend projection is implemented in `apps/api/src/entries/entries_site.py`,
+`entries_public.py`, and `entries_json.py`; frontend mirrors live in
+`apps/entrant/app/lib/`. The binding visual artifact is
+[`public-universality-usability-v2.html`](https://github.com/wongywrongy/ShuttleWorks/blob/main/public-universality-usability-v2.html), and the dated
+implementation/audit record is [SP-P9 findings](/audits/2026-08-SP-P9-findings).

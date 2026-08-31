@@ -83,6 +83,9 @@ export function useTournamentBackups(): TournamentBackups {
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Backup failed');
+      // Keep the rejection visible to an action orchestrator. Consumers such
+      // as the restore flow must not continue after a failed recovery point.
+      throw err;
     } finally {
       setBusyAction(null);
     }
@@ -96,8 +99,9 @@ export function useTournamentBackups(): TournamentBackups {
         const restored = await apiClient.restoreTournamentBackup(tid, filename);
         applyStateToStore(restored);
         await refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Restore failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Restore failed');
+      throw err;
       } finally {
         setBusyAction(null);
       }
@@ -112,8 +116,9 @@ export function useTournamentBackups(): TournamentBackups {
       try {
         await apiClient.deleteTournamentBackup(tid, filename);
         await refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Delete failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+      throw err;
       } finally {
         setBusyAction(null);
       }

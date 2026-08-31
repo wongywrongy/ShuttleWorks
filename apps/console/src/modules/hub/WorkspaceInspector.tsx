@@ -28,6 +28,7 @@ import type { TournamentSummaryDTO } from '../../api/dto';
 import { StatusPill } from '../../components/StatusPill';
 import { lifecycleBadge, lifecycleChip } from '../../platform/domain/lifecycle';
 import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
+import { MODULE_LABELS } from '../../platform/product-shell/types';
 import { attentionReasons, moduleCountsOf, readinessOf } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, temporalGroupOf } from './hubGrouping';
@@ -128,7 +129,7 @@ export function WorkspaceInspector({
     <DetailPanel
       label="Workspace"
       value={tournament.name || 'Untitled'}
-      sub={`${fmtDate(tournament.tournamentDate)} · ${tournament.kind === 'bracket' ? 'Bracket' : 'Meet'}`}
+      sub={`${fmtDate(tournament.tournamentDate)} · ${MODULE_LABELS[tournament.kind === 'bracket' ? 'bracket' : 'meet']}`}
       onClose={onClose}
       testId="workspace-inspector"
     >
@@ -150,7 +151,7 @@ export function WorkspaceInspector({
           className="shrink-0"
           onClick={() => onSettings(tournament.id)}
         >
-          Workspace settings
+          Administration
         </Button>
       </div>
 
@@ -280,7 +281,7 @@ export function WorkspaceInspector({
             items={tournament.signals?.nextUp ?? []}
             linkFor={(n) =>
               n.matchId && n.source
-                ? `/tournaments/${tournament.id}/live?select=${n.source}:${n.matchId}`
+                ? `/tournaments/${tournament.id}/operations/live?select=${n.source}:${n.matchId}`
                 : null
             }
           />

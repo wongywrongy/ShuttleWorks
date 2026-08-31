@@ -2,16 +2,19 @@
  * `GET /e/api/page/{slug}/players/{personKey}` mirrored in TypeScript
  * (`apps/api/src/entries/entries_site.py` — PlayerPageDTO and friends).
  *
- * `record` is null while results are unpublished — a 0-0 record would be a
- * claim (§4); `score`/`decided` arrive already gated server-side, so the
- * renderer never decides what may be shown, only how.
+ * Scores and decided state arrive already gated server-side, so the renderer
+ * never decides what may be shown, only how. Cross-tournament records are
+ * intentionally not part of this person-in-tournament projection.
  */
 
+import type { PersonReferenceDTO } from './person.types';
+
 export interface PlayerMatchSideDTO {
-  names: string[];
+  persons: PersonReferenceDTO[];
   /** "Winner of SF 1" / "Loser of R1 5" / "Bye" / "TBD" when unnamed. */
   placeholder: string | null;
   winner: boolean;
+  seed?: number | null;
 }
 
 export interface PlayerMatchDTO {
@@ -24,6 +27,12 @@ export interface PlayerMatchDTO {
   /** Venue-local HH:MM; null until scheduled. */
   scheduledTime: string | null;
   court: number | null;
+  courtLabel?: string | null;
+  playedOn?: string | null;
+  localTime?: string | null;
+  status?: 'scheduled' | 'called' | 'live' | 'delayed' | 'completed' | 'walkover' | 'retired' | 'cancelled' | null;
+  durationMinutes?: number | null;
+  updatedAt?: string | null;
 }
 
 export interface PlayerEventDTO {
@@ -31,20 +40,14 @@ export interface PlayerEventDTO {
   discipline: string;
   /** §3.3 "with <partner>" — the accepted, publicly-visible doubles partner,
    *  or null (singles, no acceptance yet, or the partner is not public). */
-  partnerName: string | null;
-}
-
-export interface PlayerRecordDTO {
-  played: number;
-  wins: number;
-  losses: number;
+  partner?: PersonReferenceDTO | null;
+  seed?: number | null;
+  drawPath: Array<{ roundLabel: string; opponents: PersonReferenceDTO[] }>;
 }
 
 export interface PlayerPageDTO {
-  personKey: string;
-  name: string;
+  person: PersonReferenceDTO;
   club: string | null;
   events: PlayerEventDTO[];
-  record: PlayerRecordDTO | null;
   matches: PlayerMatchDTO[];
 }

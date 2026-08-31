@@ -25,6 +25,7 @@ describe('resolveActivePane', () => {
       expect(r.label).toBe('Bracket');
       expect(r.primary).toBe('meet');
       expect(r.canOpenSettings).toBe(false);
+      expect(r.reason).toBe('unavailable');
     }
   });
   it('panel offers settings only when the module is disabled', () => {
@@ -68,6 +69,7 @@ describe('resolveActivePane — unknown/absent module fails closed', () => {
       expect(r.primary).toBe('meet');
       // Nothing to "enable" — the row does not exist to be turned on.
       expect(r.canOpenSettings).toBe(false);
+      expect(r.reason).toBe('unavailable');
     }
   });
 

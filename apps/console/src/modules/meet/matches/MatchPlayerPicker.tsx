@@ -40,7 +40,7 @@ function PickerRow({
       className={[
         'flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left text-xs',
         'transition-colors duration-fast ease-brand',
-        selected ? 'bg-accent/10 text-accent' : 'text-foreground hover:bg-muted/40',
+        selected ? 'bg-action-selected-bg text-action-selected-foreground' : 'text-foreground hover:bg-muted/40',
       ].join(' ')}
     >
       <span>{playerLabel(player, groups)}</span>

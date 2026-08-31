@@ -21,7 +21,7 @@ from .formats import (
     generate_round_robin,
     generate_single_elimination,
 )
-from .advancement import record_result
+from .advancement import reconcile_recorded_results, record_result
 from .scheduler import RoundResult, TournamentDriver
 
 __all__ = [
@@ -34,4 +34,5 @@ __all__ = [
     "generate_round_robin",
     "generate_single_elimination",
     "record_result",
+    "reconcile_recorded_results",
 ]

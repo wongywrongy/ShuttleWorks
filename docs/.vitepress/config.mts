@@ -30,7 +30,7 @@ const STAMP = gitStamp()
 export default defineConfig({
   title: 'ShuttleWorks',
   description:
-    'Architecture, module contracts, and data flow for ShuttleWorks — a CP-SAT tournament scheduling control plane (Entries · Meet · Bracket · Operations · Display) with a zero-JavaScript public entrant tier.',
+    'Architecture, module contracts, and data flow for ShuttleWorks — a CP-SAT tournament scheduling control plane (Entries · Meet · Bracket · Operations · Display) with an SSR-first public entrant tier and bounded same-origin route modules.',
   lang: 'en-US',
 
   srcDir: '.',
@@ -146,6 +146,7 @@ export default defineConfig({
           { text: 'Operations to Display (Seam D)', link: '/reference/contracts/operations-display' },
           { text: 'API: overview and route ownership', link: '/reference/api/' },
           { text: 'API: signals', link: '/reference/api/signals' },
+          { text: 'API: setup', link: '/reference/api/setup' },
           { text: 'Workspace keys: the four kinds', link: '/reference/workspace-keys' },
         ],
       },
@@ -154,6 +155,8 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: 'Repo layout', link: '/reference/repo-layout' },
+          { text: 'Design system', link: '/reference/design-system' },
+          { text: 'Surface map', link: '/reference/surface-map' },
           { text: 'Glossary', link: '/reference/glossary' },
           { text: 'Debt log', link: '/reference/debt-log' },
           { text: 'Recipes', link: '/examples/' },
@@ -203,6 +206,11 @@ export default defineConfig({
           { text: '0012 - Remove the Supabase mirror', link: '/explanation/decisions/0012-remove-the-supabase-mirror' },
           { text: '0013 - Shared-UI promotion policy', link: '/explanation/decisions/0013-shared-ui-promotion-policy' },
           { text: '0014 - Workspace vs tournament vocabulary', link: '/explanation/decisions/0014-workspace-vs-tournament-vocabulary' },
+          { text: '0015 - Court policy', link: '/explanation/decisions/0015-court-policy' },
+          { text: '0016 - Demo production parity', link: '/explanation/decisions/0016-demo-production-parity-and-durability' },
+          { text: '0017 - Domain-derived Setup readiness', link: '/explanation/decisions/0017-domain-derived-setup-readiness' },
+          { text: '0018 - Public person universality', link: '/explanation/decisions/0018-public-person-universality' },
+          { text: '0019 - Design-system consolidation pass', link: '/explanation/decisions/0019-design-system-consolidation-pass' },
         ],
       },
     ],

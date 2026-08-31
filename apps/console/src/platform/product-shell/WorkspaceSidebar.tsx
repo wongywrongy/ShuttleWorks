@@ -1,25 +1,22 @@
 /**
- * The workspace left sidebar — primary in-workspace navigation, in three tiers:
- *  - Tier 1: section triggers (uppercase label + chevron). Clicking
- *    toggles that section open/closed; sections are independent — any number can
- *    be open at once. Navigating into a section auto-opens it. Triggers don't
- *    navigate.
- *  - Tier 2: the nav items inside a section. No per-item icons — a left category
- *    guide-line shows membership; the active item gets a left-edge accent bar.
- *  - Tier 3: Overview (always, top) and Workspace admin (always, bottom, below
- *    a divider) — top-level items, never inside a collapsible section.
+ * Workflow-first workspace navigation. A section name is a real destination;
+ * the adjacent disclosure button only shows or hides its child links. The
+ * current section is deliberately quieter than the current page so operators
+ * can distinguish "where I am" from "what belongs to this category".
  */
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CaretRight } from '@phosphor-icons/react';
-import type { AppTab } from '../../store/uiStore';
-import type { ModuleId, WorkspaceModule } from './types';
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { CaretRight } from "@phosphor-icons/react";
+import { ActiveChoice } from "../../components/ActiveChoice";
+import type { AppTab } from "../../store/uiStore";
+import type { ModuleId, WorkspaceModule } from "./types";
 import {
-  buildWorkspaceNav,
-  sectionOfSegment,
+  buildWorkflowNavigation,
+  workflowItemHref,
+  workflowSectionOfPath,
   type WsKind,
   type WsNavItem,
-} from './workspaceNav';
+} from "./workspaceNav";
 
 interface WorkspaceSidebarProps {
   tid: string;
@@ -46,19 +43,39 @@ export function WorkspaceSidebar({
   activeTab,
   onNavigate,
 }: WorkspaceSidebarProps) {
-  const navigate = useNavigate();
+  const location = useLocation();
   // Stable key so the memo doesn't recompute on every render (Set identity).
   const enabledKey = modules
-    .filter((m) => m.status === 'enabled')
+    .filter((m) => m.status === "enabled")
     .map((m) => m.id)
     .sort()
-    .join(',');
+    .join(",");
   const nav = useMemo(
-    () => buildWorkspaceNav(kind, new Set<ModuleId>(enabledKey ? (enabledKey.split(',') as ModuleId[]) : [])),
+    () =>
+      buildWorkflowNavigation(
+        kind,
+        new Set<ModuleId>(
+          enabledKey ? (enabledKey.split(",") as ModuleId[]) : [],
+        ),
+      ),
     [kind, enabledKey],
   );
 
-  const activeSection = sectionOfSegment(nav, activeTab);
+  const pathParts = location.pathname.split("/").filter(Boolean);
+  // React Router gives us a decoded param while `location.pathname` retains
+  // percent-encoding. Compare like with like so workspace names/ids containing
+  // spaces keep their active section and item state.
+  const tournamentIndex = pathParts.findIndex((part) => {
+    try {
+      return decodeURIComponent(part) === tid;
+    } catch {
+      return part === tid;
+    }
+  });
+  const workflowPath =
+    tournamentIndex >= 0 ? pathParts.slice(tournamentIndex + 1).join("/") : "";
+  const activeSection = workflowSectionOfPath(nav, workflowPath);
+  const adminActive = workflowPath.startsWith("administration/");
   // Independent open state — any number of sections can be open at once.
   const [openSections, setOpenSections] = useState<Set<string>>(
     () => new Set(activeSection ? [activeSection] : []),
@@ -66,14 +83,11 @@ export function WorkspaceSidebar({
   // Navigating into a section auto-opens it (without closing the others).
   useEffect(() => {
     if (activeSection) {
-      setOpenSections((prev) => (prev.has(activeSection) ? prev : new Set(prev).add(activeSection)));
+      setOpenSections((prev) =>
+        prev.has(activeSection) ? prev : new Set(prev).add(activeSection),
+      );
     }
   }, [activeSection]);
-
-  const go = (segment: AppTab) => {
-    navigate(`/tournaments/${tid}/${segment}`, { replace: true });
-    onNavigate?.();
-  };
 
   const toggle = (id: string) =>
     setOpenSections((prev) => {
@@ -83,37 +97,34 @@ export function WorkspaceSidebar({
       return next;
     });
 
-  // Console grammar: full-bleed rows, the active item reads as a filled state
-  // (accent tint + accent text + a 3px left bar), nested items sit flush —
-  // the section header above them is the grouping, not an indent guide.
+  // The active page carries the strongest treatment. Workflow groups provide
+  // ownership context; default-state module marks add noise and are omitted.
   const NavItem = ({ item, nested }: { item: WsNavItem; nested?: boolean }) => {
-    const active = item.segment === activeTab;
+    const active = item.path
+      ? item.path === workflowPath
+      : item.segment === activeTab;
     return (
-      <button
-        type="button"
-        data-testid={`ws-nav-${item.segment}`}
-        aria-current={active ? 'page' : undefined}
-        onClick={() => go(item.segment)}
+      <ActiveChoice
+        to={workflowItemHref(tid, item)}
+        active={active}
+        geometry="row"
+        semantics="page"
+        data-testid={`ws-nav-${(item.path ?? item.segment).replaceAll("/", "-")}`}
+        onClick={onNavigate}
         className={[
-          'relative flex w-full items-center py-[7px] pr-2 text-left text-[13px] leading-none',
-          nested ? 'pl-5' : 'pl-3.5',
-          active
-            ? 'bg-accent-bg font-semibold text-accent'
-            : 'text-ink-3 hover:bg-muted/40 hover:text-foreground',
-        ].join(' ')}
+          "flex h-8 min-w-0 items-center gap-2 px-2.5 py-0 text-[13px] leading-none",
+          nested ? "w-full" : "mx-2 w-auto",
+        ].join(" ")}
       >
-        {active ? (
-          <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-accent" />
-        ) : null}
-        {item.label}
-      </button>
+        <span className="min-w-0 flex-1 break-words">{item.label}</span>
+      </ActiveChoice>
     );
   };
 
   return (
     <nav
       aria-label="Workspace"
-      className="flex h-full w-48 shrink-0 flex-col overflow-y-auto border-r border-border bg-card py-2"
+      className="flex h-full w-52 shrink-0 flex-col overflow-y-auto border-r border-border bg-card py-2"
     >
       {/* Tier 3 — Overview (always, top) */}
       <NavItem item={nav.overview} />
@@ -143,34 +154,58 @@ export function WorkspaceSidebar({
           ) : null}
         </div>
       ) : null}
-      <div className="mt-2 space-y-0.5">
+      <div className="mt-2 space-y-1">
         {nav.sections.map((s) => {
           const open = openSections.has(s.id);
+          const containsCurrent = activeSection === s.id;
+          const linksId = `ws-section-${s.id}-links`;
           return (
             <div key={s.id}>
-              <button
-                type="button"
+              <div
                 data-testid={`ws-section-${s.id}`}
-                aria-expanded={open}
-                onClick={() => toggle(s.id)}
-                className="flex w-full items-center justify-between gap-2 px-3.5 pb-0.5 pt-2.5 text-left hover:bg-muted/40"
+                data-active={containsCurrent ? "true" : undefined}
+                className={[
+                  "mx-2 flex h-8 items-center rounded-sm",
+                  containsCurrent
+                    ? "bg-muted/60 text-foreground"
+                    : "text-muted-foreground",
+                ].join(" ")}
               >
-                <span className="text-3xs font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                <Link
+                  to={workflowItemHref(tid, s.items[0])}
+                  onClick={onNavigate}
+                  className={[
+                    "flex h-8 min-w-0 flex-1 items-center rounded-sm px-2 text-xs font-semibold leading-none",
+                    containsCurrent
+                      ? "text-foreground"
+                      : "hover:bg-muted/50 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  ].join(" ")}
+                >
                   {s.label}
-                </span>
-                <CaretRight
-                  aria-hidden
-                  className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
-                />
-              </button>
+                </Link>
+                <button
+                  type="button"
+                  data-testid={`ws-section-${s.id}-toggle`}
+                  aria-label={`${open ? "Hide" : "Show"} ${s.label} links`}
+                  aria-expanded={open}
+                  aria-controls={linksId}
+                  onClick={() => toggle(s.id)}
+                  className="inline-flex size-8 shrink-0 items-center justify-center self-center rounded-sm leading-none text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <CaretRight
+                    aria-hidden
+                    className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`}
+                  />
+                </button>
+              </div>
               {open ? (
-                // Items sit flush under the section header (Console grammar).
-                // No open animation: a nav disclosure is high-frequency
-                // during setup (MOTION.md §2) and `sw-rail-expand` animated
-                // max-height, which §10.2 forbids outright.
-                <div className="mt-0.5">
+                <div
+                  id={linksId}
+                  className="ml-5 mr-2 mt-0.5 border-l border-border py-0.5 pl-1.5"
+                >
                   {s.items.map((it) => (
-                    <NavItem key={it.segment} item={it} nested />
+                    <NavItem key={it.path ?? it.segment} item={it} nested />
                   ))}
                 </div>
               ) : null}
@@ -179,14 +214,26 @@ export function WorkspaceSidebar({
         })}
       </div>
 
-      {/* Tier 3 — Workspace admin (always, bottom) */}
+      {/* Administration uses the same parent/children weight and guide, but
+          stays expanded: module recovery must remain reachable. */}
       <div className="my-2 border-t border-border" />
-      <div className="px-3.5 pb-0.5 text-3xs font-bold uppercase tracking-[0.08em] text-muted-foreground">
+      <Link
+        to={workflowItemHref(tid, nav.admin.items[0])}
+        data-testid="ws-nav-administration"
+        data-active={adminActive ? "true" : undefined}
+        className={[
+          "mx-2 flex h-9 items-center rounded-sm px-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          adminActive
+            ? "bg-muted/60 text-foreground"
+            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+        ].join(" ")}
+        onClick={onNavigate}
+      >
         {nav.admin.label}
-      </div>
-      <div>
+      </Link>
+      <div className="ml-5 mr-2 border-l border-border py-0.5 pl-1.5">
         {nav.admin.items.map((it) => (
-          <NavItem key={it.segment} item={it} />
+          <NavItem key={it.path ?? it.segment} item={it} nested />
         ))}
       </div>
     </nav>

@@ -3,16 +3,21 @@
  * Shared helpers for match-related operations
  */
 import type { MatchDTO } from '../api/dto';
+import {
+  formatMatchIdentity,
+  meetMatchIdentityFromStored,
+} from '../platform/domain/matchIdentity';
 
 /**
  * Get a display label for a match
  * Prefers eventRank > matchNumber > truncated ID
  */
 export function getMatchLabel(match: MatchDTO | undefined, fallbackId?: string): string {
-  if (!match) return fallbackId?.slice(0, 6) || '?';
-  if (match.eventRank) return match.eventRank;
-  if (match.matchNumber) return `M${match.matchNumber}`;
-  return match.id.slice(0, 6);
+  const identity = meetMatchIdentityFromStored({
+    event_rank: match?.eventRank,
+    sequence: match?.matchNumber ?? null,
+  });
+  return formatMatchIdentity(identity, match?.id ?? fallbackId) || '?';
 }
 
 // Re-export getMatchPlayerIds from trafficLight to avoid duplication

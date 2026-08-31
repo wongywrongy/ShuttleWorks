@@ -11,50 +11,57 @@
  * creating a draw no longer teleports the operator to another tab;
  * "New draw" opens a layer right here.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button } from '@scheduler/design-system';
-import { useBracket } from '../../hooks/useBracket';
-import { useBracketApi } from '../../api/bracketClient';
-import { useTournamentId } from '../../hooks/useTournamentId';
-import { useTournamentStore } from '../../store/tournamentStore';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Button } from "@scheduler/design-system";
+import { useBracket } from "../../hooks/useBracket";
+import { useBracketApi } from "../../api/bracketClient";
+import { useTournamentId } from "../../hooks/useTournamentId";
+import { useTournamentStore } from "../../store/tournamentStore";
 import type {
   BracketEventPatchIn,
   BracketEventStatus,
   BracketTournamentDTO,
-} from '../../api/bracketDto';
+} from "../../api/bracketDto";
 import {
   ActionsBar,
   BandedTable,
   DetailDock,
   EmptyState,
+  OverflowMenu,
   colClass,
   dockMinContentWidth,
   type BandedListColumn,
   type BandedTableGroup,
-} from '../../components/control-plane';
-import { disciplineOrderIndex } from '../../lib/eventColors';
-import { isDoublesCode } from '../../lib/doubles';
-import { Modal } from '../../components/common/Modal';
+  type OverflowItem,
+} from "../../components/control-plane";
+import { disciplineOrderIndex } from "../../lib/eventColors";
+import { isDoublesCode } from "../../lib/doubles";
+import { Modal } from "../../components/common/Modal";
 import {
   MAX_EVENT_CODE_LENGTH,
   validateEventCode,
-} from '../../platform/engine-config/MeetEventsSection';
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
-import type { PickedSingle, PickedPair } from './ParticipantPicker';
-import { DrawDetailPanel } from './DrawDetailPanel';
+} from "../../platform/engine-config/MeetEventsSection";
+import { EYEBROW_CLASS, INTERACTIVE_BASE } from "../../lib/utils";
+import type { PickedSingle, PickedPair } from "./ParticipantPicker";
+import { DrawDetailPanel } from "./DrawDetailPanel";
 import {
   buildEventUpsertPayload,
   type BracketEventDTO,
-} from './eventUpsertPayload';
-import { formatLabel, disciplineLabel } from './bracketLabels';
-import { useConfirmClick } from '../../hooks/useConfirmClick';
+} from "./eventUpsertPayload";
+import { formatLabel, disciplineLabel } from "./bracketLabels";
+import { useConfirmClick } from "../../hooks/useConfirmClick";
+import { workflowHref } from "../../platform/product-shell/workspaceNav";
+import {
+  commitBracketPairing,
+  type BracketPairingCommand,
+} from "./pairingMutation";
 import {
   DRAW_FORMATS,
   descriptorFor,
   type FormatConfigField,
   type FormatDescriptor,
-} from './formatRegistry';
+} from "./formatRegistry";
 
 /** One draws-table row — a draw plus everything its cells need, computed
  *  once so renderRow stays a pure projection. */
@@ -70,18 +77,12 @@ interface DrawRow {
   roundComplete: boolean;
 }
 
-/** Column set for the draws table. The trailing unlabeled column hosts the
- *  per-row action buttons (Generate / Configure / Next round / Open). */
+/** Column set for the draws table. The trailing unlabeled column hosts one
+ *  contextual primary plus an overflow menu. */
 // Fixed cells are `shrink-0` so a docked detail pane can never crush them
-// into overlapping their neighbors. Nothing here ellipsises: Format wraps
-// (the row grows) and yields entirely at priority 3; Progress is a
-// fraction + segmented bar (DRW-N1) that cannot wrap by construction —
-// the four-chip tally it replaced line-wrapped at three digits.
-//
-// Progress is FIXED-WIDTH and Format is the grower (defect D4). The two were
-// the other way round, which put the progress content — which cannot
-// reflow — in whatever the row had left over: a 104px sliver colliding
-// with the STATUS chip at 1280px, and a 904px expanse at full width.
+// into overlapping their neighbors. Every value stays on one line at the
+// target viewport: the row is a compact index, while detail belongs in the
+// selected draw's inspector. Progress is one fraction, never a second bar.
 const DRAW_COLUMNS: BandedListColumn[] = [
   // THE ROW'S WIDTH BUDGET. At 1280 the content box is ~950px, and these seven
   // columns have to live inside it. Sized from what each actually holds, after
@@ -95,16 +96,16 @@ const DRAW_COLUMNS: BandedListColumn[] = [
   //
   // So Code is sized for a draw id (~14 chars) rather than for a person's
   // name, and Format carries a real floor instead of `min-w-0` so it can never
-  // be the crush victim again. Total with Format at its floor: 904px.
-  { label: 'Code', className: 'w-28 shrink-0' },
-  { label: 'Format', className: 'min-w-[5rem] flex-1', priority: 3 },
-  { label: 'Size', className: 'w-12 shrink-0 text-right', priority: 2 },
-  { label: 'Entered', className: 'w-16 shrink-0 text-right' },
-  { label: 'Progress', className: 'w-48 shrink-0' },
-  { label: 'Status', className: 'w-28 shrink-0 text-right' },
+  // be the crush victim again.
+  { label: "Code", className: "w-28 shrink-0" },
+  { label: "Format", className: "min-w-[11rem] flex-1", priority: 3 },
+  { label: "Size", className: "w-12 shrink-0 text-right", priority: 2 },
+  { label: "Entered", className: "w-16 shrink-0 text-right" },
+  { label: "Progress", className: "w-20 shrink-0" },
+  { label: "Status", className: "w-20 shrink-0 text-right" },
   // `ml-auto` keeps the action cluster on the right edge in the narrow case
   // where Format has yielded and no column is growing.
-  { label: '', className: 'ml-auto w-56 shrink-0' },
+  { label: "", className: "ml-auto w-40 shrink-0" },
 ];
 
 /** Content floor for the draws dock, derived from DRAW_COLUMNS. The old
@@ -128,16 +129,18 @@ export function BracketDrawsTab() {
   // consume the flag so a refresh doesn't reopen it.
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
-    if (searchParams.get('new') === '1') {
+    if (searchParams.get("new") === "1") {
       setCreating(true);
       const next = new URLSearchParams(searchParams);
-      next.delete('new');
+      next.delete("new");
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
   const events = data?.events ?? [];
-  const configEvent = configFor ? events.find((e) => e.id === configFor) : undefined;
+  const configEvent = configFor
+    ? events.find((e) => e.id === configFor)
+    : undefined;
 
   // Per-draw match-progress tallies (same bucketing as the Draw header's
   // DONE/LIVE/READY/PEND strip). Draft draws have no play-units and so no
@@ -152,23 +155,26 @@ export function BracketDrawsTab() {
   const drawRows = useMemo<DrawRow[]>(
     () =>
       events.map((ev) => {
-        const status: BracketEventStatus = ev.status ?? 'draft';
+        const status: BracketEventStatus = ev.status ?? "draft";
         const partCount = ev.participant_count ?? 0;
         const targetSize = ev.bracket_size ?? partCount;
         const counts = countsByEvent.get(ev.id);
-        const isSwiss = ev.format === 'swiss';
+        const isSwiss = ev.format === "swiss";
         const rawSwissRounds = isSwiss ? ev.config?.swiss_rounds : undefined;
         const swissRounds =
-          typeof rawSwissRounds === 'number' ? rawSwissRounds : undefined;
+          typeof rawSwissRounds === "number" ? rawSwissRounds : undefined;
         const roundComplete =
-          !!counts && counts.live === 0 && counts.ready === 0 && counts.pending === 0;
+          !!counts &&
+          counts.live === 0 &&
+          counts.ready === 0 &&
+          counts.pending === 0;
         return {
           ev,
           status,
           partCount,
           targetSize,
           counts,
-          generated: status !== 'draft',
+          generated: status !== "draft",
           isSwiss,
           swissRounds,
           roundComplete,
@@ -192,6 +198,9 @@ export function BracketDrawsTab() {
         code: discipline,
         label: disciplineLabel(discipline),
         items,
+        // F-UNI-31: singleton bands merely restated the row's code and
+        // doubled a five-draw tournament into ten visual lines.
+        showBand: items.length > 1,
         testId: `bracket-draw-group-${discipline}`,
       }));
   }, [drawRows]);
@@ -228,11 +237,33 @@ export function BracketDrawsTab() {
   // query param so the Draw view lands on the row the operator clicked
   // (not just whichever event happened to be selected).
   const openDraw = (eventId: string) =>
-    navigate(`/tournaments/${tid}/bracket-draw?event=${encodeURIComponent(eventId)}`);
+    navigate(
+      `${workflowHref(tid, "bracket-draw")}?event=${encodeURIComponent(eventId)}`,
+    );
+
+  const openPlayer = (playerId: string) =>
+    navigate(
+      `${workflowHref(tid, "bracket-roster")}?player=${encodeURIComponent(playerId)}`,
+    );
 
   const selectedRow = selectedId
-    ? drawRows.find((r) => r.ev.id === selectedId) ?? null
+    ? (drawRows.find((r) => r.ev.id === selectedId) ?? null)
     : null;
+
+  const commitEvent = useCallback(
+    async (eventId: string, body: Parameters<typeof api.eventUpsert>[1]) => {
+      const next = await api.eventUpsert(eventId, body);
+      setData(next);
+    },
+    [api, setData],
+  );
+
+  const commitPairing = useCallback(
+    async (ev: BracketEventDTO, command: BracketPairingCommand) => {
+      await commitBracketPairing(commitEvent, ev, command);
+    },
+    [commitEvent],
+  );
 
   // Seed-preserving participants commit — relocated from the old in-card
   // picker; the Draw detail panel drives it.
@@ -261,12 +292,20 @@ export function BracketDrawsTab() {
           })
         : (picks as PickedSingle[]).map((p) => {
             const seed = seedOf(p.id);
-            return { id: p.id, name: p.name, ...(seed != null ? { seed } : {}), ...keyOf(p) };
+            return {
+              id: p.id,
+              name: p.name,
+              ...(seed != null ? { seed } : {}),
+              ...keyOf(p),
+            };
           });
-      const next = await api.eventUpsert(ev.id, buildEventUpsertPayload(ev, participants));
-      setData(next);
+      if (isDoubles) {
+        await commitPairing(ev, { type: "replace", participants });
+      } else {
+        await commitEvent(ev.id, buildEventUpsertPayload(ev, participants));
+      }
     },
-    [api, setData],
+    [commitEvent, commitPairing],
   );
 
   return (
@@ -275,7 +314,7 @@ export function BracketDrawsTab() {
         title="Draws"
         status={
           <span className="text-sm font-semibold text-foreground tabular-nums">
-            {events.length} draw{events.length === 1 ? '' : 's'}
+            {events.length} draw{events.length === 1 ? "" : "s"}
           </span>
         }
       >
@@ -322,7 +361,7 @@ export function BracketDrawsTab() {
               // falls back to its full text content — which would swallow
               // "Generate"/"Re-generate" from the nested action buttons and
               // make getByRole('button', { name: /Generate/i }) ambiguous.
-              rowAttrs={(row) => ({ 'aria-label': `Draw ${row.ev.id}` })}
+              rowAttrs={(row) => ({ "aria-label": `Draw ${row.ev.id}` })}
               renderRow={(row) => (
                 <>
                   {/* Body ink, not accent. The code is an identifier, and in
@@ -332,7 +371,7 @@ export function BracketDrawsTab() {
                       that go somewhere. */}
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[0])} break-words text-2sm font-semibold text-foreground sw-num`}
+                    className={`${colClass(DRAW_COLUMNS[0])} whitespace-nowrap text-2sm font-semibold text-foreground sw-num`}
                   >
                     {row.ev.id}
                   </span>
@@ -341,10 +380,12 @@ export function BracketDrawsTab() {
                       change. */}
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[1])} break-words text-xs text-muted-foreground`}
+                    className={`${colClass(DRAW_COLUMNS[1])} whitespace-nowrap text-xs text-muted-foreground`}
                   >
-                    {formatLabel(row.ev.format)}
-                    {row.isSwiss && row.swissRounds !== undefined && row.generated ? (
+                    <span>{formatLabel(row.ev.format)}</span>
+                    {row.isSwiss &&
+                    row.swissRounds !== undefined &&
+                    row.generated ? (
                       <span className="ml-1.5 sw-num">
                         Round {row.ev.rounds.length} of {row.swissRounds}
                       </span>
@@ -352,80 +393,57 @@ export function BracketDrawsTab() {
                   </span>
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[2])} text-xs text-muted-foreground sw-num`}
+                    className={`${colClass(DRAW_COLUMNS[2])} whitespace-nowrap text-xs text-muted-foreground sw-num`}
                   >
                     {row.targetSize}
                   </span>
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[3])} text-right text-xs sw-num ${
+                    className={`${colClass(DRAW_COLUMNS[3])} whitespace-nowrap text-right text-xs sw-num ${
                       row.partCount < row.targetSize
-                        ? 'text-status-warning'
-                        : 'text-muted-foreground'
+                        ? "text-status-warning"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {row.partCount}/{row.targetSize}
                   </span>
-                  <span role="cell" className={colClass(DRAW_COLUMNS[4])}>
+                  <span
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[4])} whitespace-nowrap`}
+                  >
                     {row.counts ? (
                       <DrawProgressCell counts={row.counts} />
                     ) : (
                       <span className="text-xs text-muted-foreground">–</span>
                     )}
                   </span>
-                  <span role="cell" className={`${colClass(DRAW_COLUMNS[5])} flex justify-end`}>
+                  <span
+                    role="cell"
+                    className={`${colClass(DRAW_COLUMNS[5])} flex whitespace-nowrap justify-end`}
+                  >
                     <DrawStatusCell status={row.status} />
                   </span>
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[6])} flex items-center justify-end gap-3`}
+                    className={`${colClass(DRAW_COLUMNS[6])} flex items-center justify-end gap-1 whitespace-nowrap`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ActionCell
-                      status={row.status}
+                      row={row}
                       // WSMOD-2 has-data pattern: a draw that has already been
                       // played cannot be re-generated away (SIG-4).
-                      hasResults={(row.counts?.done ?? 0) + (row.counts?.live ?? 0) > 0}
-                      eventReady={row.partCount > 0 && row.partCount === row.targetSize}
+                      hasResults={
+                        (row.counts?.done ?? 0) + (row.counts?.live ?? 0) > 0
+                      }
+                      eventReady={
+                        row.partCount > 0 && row.partCount === row.targetSize
+                      }
                       onGenerate={() => handleGenerate(row.ev.id, false)}
                       onRegenerate={() => handleGenerate(row.ev.id, true)}
+                      onConfigure={() => setConfigFor(row.ev.id)}
+                      onNextRound={() => handleNextRound(row.ev.id)}
+                      onOpenDraw={() => openDraw(row.ev.id)}
                     />
-                    {row.status === 'draft' && (
-                      <button
-                        type="button"
-                        onClick={() => setConfigFor(row.ev.id)}
-                        data-testid={`bracket-configure-${row.ev.id}`}
-                        className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-                      >
-                        Configure
-                      </button>
-                    )}
-                    {row.isSwiss && row.generated && (
-                      <button
-                        type="button"
-                        onClick={() => handleNextRound(row.ev.id)}
-                        disabled={!row.roundComplete}
-                        data-testid={`bracket-next-round-${row.ev.id}`}
-                        title={
-                          row.roundComplete
-                            ? 'Pair the next Swiss round from standings'
-                            : 'Record every result in the current round first'
-                        }
-                        className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Next round
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => openDraw(row.ev.id)}
-                      disabled={!row.generated}
-                      data-testid={`bracket-open-draw-${row.ev.id}`}
-                      title={row.generated ? `Open the ${row.ev.id} draw` : 'Generate the draw first'}
-                      className="text-xs font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:opacity-40 disabled:no-underline"
-                    >
-                      Open draw →
-                    </button>
                   </span>
                 </>
               )}
@@ -445,7 +463,20 @@ export function BracketDrawsTab() {
               key={selectedRow.ev.id}
               ev={selectedRow.ev}
               players={players}
+              matchCount={
+                selectedRow.counts
+                  ? selectedRow.counts.done +
+                    selectedRow.counts.live +
+                    selectedRow.counts.ready +
+                    selectedRow.counts.pending
+                  : 0
+              }
               onClose={() => setSelectedId(null)}
+              onOpenPlayer={openPlayer}
+              onPairCommand={async (command) => {
+                await commitPairing(selectedRow.ev, command);
+                setSelectedId(null);
+              }}
               onCommitPicks={async (picks) => {
                 await commitPicks(selectedRow.ev, picks);
                 setSelectedId(null);
@@ -507,9 +538,13 @@ interface DrawCounts {
  * Computed for every event in one pass; events with no play-units yet
  * (draft draws) have no entry.
  */
-function drawCountsByEvent(data: BracketTournamentDTO): Map<string, DrawCounts> {
+function drawCountsByEvent(
+  data: BracketTournamentDTO,
+): Map<string, DrawCounts> {
   const resultsById = new Set(data.results.map((r) => r.play_unit_id));
-  const assignmentByPu = new Map(data.assignments.map((a) => [a.play_unit_id, a]));
+  const assignmentByPu = new Map(
+    data.assignments.map((a) => [a.play_unit_id, a]),
+  );
   const byEvent = new Map<string, DrawCounts>();
   for (const pu of data.play_units) {
     let c = byEvent.get(pu.event_id);
@@ -533,136 +568,140 @@ function drawCountsByEvent(data: BracketTournamentDTO): Map<string, DrawCounts> 
   return byEvent;
 }
 
-/**
- * DRW-N1 / SIG-4: the Progress cell — `done/total` in tabular figures plus a
- * thin bar showing **that same fraction and nothing else**.
- *
- * It used to stack three segments (done · live · ready) over an unpainted
- * pending track. The segments did sum to the total, so the arithmetic was
- * right — but the numeral beside the bar said `done/total` while the bar
- * showed a different quantity, and the two disagreed the moment anything was
- * merely assigned. In the 2026-08-19 report that produced two `GENERATED`
- * rows reading `0/7` and `0/15` next to bars filled ~40%: three of seven
- * assigned, nothing played. A reader with no legend has no way to recover
- * that; what they see is a bar claiming progress a draw has not made.
- *
- * One metric per bar, filled proportionally from zero. "Entered vs size"
- * already has the ENTERED column; the full breakdown stays on the tooltip.
- */
+/** F-UNI-33: one progress value, rendered once. */
 function DrawProgressCell({ counts }: { counts: DrawCounts }) {
   const total = counts.done + counts.live + counts.ready + counts.pending;
-  if (total === 0) return <span className="text-xs text-muted-foreground">–</span>;
+  if (total === 0)
+    return <span className="text-xs text-muted-foreground">–</span>;
   return (
     <span
-      className="flex min-w-0 items-center gap-2"
-      title={`${counts.done} done · ${counts.live} live · ${counts.ready} ready · ${counts.pending} pending`}
+      className="text-xs text-foreground sw-num"
       data-testid="draw-progress"
     >
-      <span className="shrink-0 text-xs text-foreground sw-num">
-        {counts.done}/{total}
-      </span>
-      <span
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={counts.done}
-        aria-label="Matches played"
-        className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-sunken"
-      >
-        {counts.done > 0 ? (
-          <span
-            data-testid="draw-progress-fill"
-            className="bg-status-success-fg"
-            style={{ width: `${(counts.done / total) * 100}%` }}
-          />
-        ) : null}
-      </span>
+      {counts.done}/{total}
     </span>
   );
 }
 
 /**
  * DRW-N2 per the X6 ladder: Draft and Generated are pre-live default
- * states → text, two weights. STARTED is silent — the Progress bar's
- * live/done segments already say it — and so is the derived Completed:
- * a full bar with an n/n fraction IS the status (X6-D logic). The
+ * states → text, two weights. STARTED is silent — the Progress fraction
+ * already carries advancement — and so is the derived Completed: an n/n
+ * fraction already says the work is complete (X6-D logic). The
  * column stays because the state set is genuinely distinct (Phase 0
  * verified draft | generated | started + derived completion).
  */
 function DrawStatusCell({ status }: { status: BracketEventStatus }) {
-  if (status === 'draft') {
+  if (status === "draft") {
     return (
       <span className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
         ○ Draft
       </span>
     );
   }
-  if (status === 'generated') {
+  if (status === "generated") {
     return (
-      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>Generated</span>
+      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
+        Generated
+      </span>
     );
   }
   return null;
 }
 
 function ActionCell({
-  status,
+  row,
   hasResults,
   eventReady,
   onGenerate,
   onRegenerate,
+  onConfigure,
+  onNextRound,
+  onOpenDraw,
 }: {
-  status: BracketEventStatus;
+  row: DrawRow;
   /** A result has been recorded (or a match is live) in this draw. */
   hasResults: boolean;
   eventReady: boolean;
   onGenerate: () => void;
   onRegenerate: () => void;
+  onConfigure: () => void;
+  onNextRound: () => void;
+  onOpenDraw: () => void;
 }) {
   // Two-click arm instead of `window.confirm` — the canon bans the native dialog
   // and it blocks the event loop (audit E1). Same shape as Generate-replace on
   // the meet Plan: the first press re-labels the button to name the consequence.
   const confirmRegen = useConfirmClick(onRegenerate);
 
-  if (status === 'draft') {
-    return (
-      // xs (28px). DRAW_COLUMNS carries no name column, so the row reserves
-      // one line (24px) and this button is what actually sets its height;
-      // sm (36px) overflowed the row hairlines and dwarfed the bar controls.
-      <Button variant="brand" size="xs" disabled={!eventReady} onClick={onGenerate}>
-        Generate
-      </Button>
-    );
+  const overflowItems: OverflowItem[] = [];
+
+  if (row.status === "draft") {
+    overflowItems.push({
+      key: "configure",
+      label: "Configure",
+      testId: `bracket-configure-${row.ev.id}`,
+      onSelect: onConfigure,
+    });
   }
-  if (status === 'generated') {
-    // Disabled WITH THE REASON, not hidden (SIG-4, WSMOD-2 has-data pattern).
-    // The arm-to-confirm below already stops an accidental press, but arming
-    // is the wrong answer when the action must not happen at all: a draw with
-    // a recorded result cannot be thrown away, and a control that vanishes
-    // teaches nothing about why.
-    return (
-      <Button
-        variant={confirmRegen.armed ? 'destructive' : 'outline'}
-        size="xs"
-        disabled={hasResults}
-        onClick={confirmRegen.press}
-        onBlur={confirmRegen.reset}
-        title={
-          hasResults
-            ? 'This draw has results. Clear them before re-generating it.'
-            : confirmRegen.armed
-              ? 'Click again to discard the existing draws and re-generate'
-              : 'Re-generate this draw'
-        }
-      >
-        {confirmRegen.armed ? 'Discard draws?' : 'Re-generate'}
-      </Button>
-    );
+
+  if (row.status === "generated") {
+    overflowItems.push({
+      key: "regenerate",
+      label: confirmRegen.armed ? "Discard and re-generate" : "Re-generate",
+      testId: `bracket-regenerate-${row.ev.id}`,
+      destructive: confirmRegen.armed,
+      disabled: hasResults,
+      disabledReason: hasResults
+        ? "This draw has results. Clear them before re-generating it."
+        : undefined,
+      onSelect: confirmRegen.press,
+    });
   }
-  // Started: no generate-family action exists. The STARTED pill (and the
-  // Configuration page's hard-lock ribbon) already say why — a raw
-  // "(locked)" here just read as debug text.
-  return null;
+
+  if (row.isSwiss && row.generated) {
+    overflowItems.push({
+      key: "next-round",
+      label: "Next round",
+      testId: `bracket-next-round-${row.ev.id}`,
+      disabled: !row.roundComplete,
+      disabledReason: !row.roundComplete
+        ? "Record every result in the current round first."
+        : undefined,
+      onSelect: onNextRound,
+    });
+  }
+
+  return (
+    <>
+      {row.status === "draft" ? (
+        <Button
+          variant="brand"
+          size="xs"
+          disabled={!eventReady}
+          onClick={onGenerate}
+          data-testid={`bracket-generate-${row.ev.id}`}
+        >
+          Generate
+        </Button>
+      ) : (
+        <Button
+          variant="brand"
+          size="xs"
+          onClick={onOpenDraw}
+          data-testid={`bracket-open-draw-${row.ev.id}`}
+        >
+          Open draw
+        </Button>
+      )}
+      {overflowItems.length > 0 ? (
+        <OverflowMenu
+          label={`More actions for ${row.ev.id}`}
+          items={overflowItems}
+        />
+      ) : null}
+    </>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -673,7 +712,10 @@ type FieldValues = Record<string, unknown>;
 
 /** Column-target picker fields land as these top-level DTO keys. */
 type ColumnFieldValues = Partial<
-  Pick<BracketEventPatchIn, 'seeded_count' | 'bracket_size' | 'rr_rounds' | 'duration_slots'>
+  Pick<
+    BracketEventPatchIn,
+    "seeded_count" | "bracket_size" | "rr_rounds" | "duration_slots"
+  >
 >;
 
 function defaultFieldValues(fields: FormatConfigField[]): FieldValues {
@@ -687,11 +729,14 @@ function defaultFieldValues(fields: FormatConfigField[]): FieldValues {
 /** Current values for the Configure layer — the event's persisted column
  *  echoes (seeded_count/bracket_size/rr_rounds) and config blob, falling
  *  back to the descriptor's defaults. */
-function eventFieldValues(fields: FormatConfigField[], ev: BracketEventDTO): FieldValues {
+function eventFieldValues(
+  fields: FormatConfigField[],
+  ev: BracketEventDTO,
+): FieldValues {
   const out: FieldValues = {};
   for (const f of fields) {
     const persisted =
-      f.target === 'config'
+      f.target === "config"
         ? ev.config?.[f.key]
         : (ev as unknown as Record<string, unknown>)[f.key];
     const v = persisted ?? f.default;
@@ -712,9 +757,9 @@ function splitFieldPayload(
   const config: Record<string, unknown> = {};
   for (const f of fields) {
     const v = values[f.key];
-    if (v === undefined || v === null || v === '') continue;
-    if (f.kind === 'toggle' && v === false) continue;
-    if (f.target === 'config') config[f.key] = v;
+    if (v === undefined || v === null || v === "") continue;
+    if (f.kind === "toggle" && v === false) continue;
+    if (f.target === "config") config[f.key] = v;
     else column[f.key] = v;
   }
   return {
@@ -724,8 +769,9 @@ function splitFieldPayload(
 }
 
 const FIELD_LABEL_CLASS =
-  'mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground';
-const FIELD_INPUT_CLASS = 'w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm';
+  "mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground";
+const FIELD_INPUT_CLASS =
+  "w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm";
 
 /** One dynamic config input — number / select / toggle per the descriptor. */
 function FieldInput({
@@ -737,7 +783,7 @@ function FieldInput({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
-  if (field.kind === 'toggle') {
+  if (field.kind === "toggle") {
     return (
       <label className="flex items-start gap-2 pt-1">
         <input
@@ -749,18 +795,20 @@ function FieldInput({
         <span className="min-w-0">
           <span className="block text-sm">{field.label}</span>
           {field.help && (
-            <span className="block text-2xs text-muted-foreground">{field.help}</span>
+            <span className="block text-2xs text-muted-foreground">
+              {field.help}
+            </span>
           )}
         </span>
       </label>
     );
   }
-  if (field.kind === 'select') {
+  if (field.kind === "select") {
     return (
       <label className="block">
         <span className={FIELD_LABEL_CLASS}>{field.label}</span>
         <select
-          value={typeof value === 'string' ? value : ''}
+          value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           className={FIELD_INPUT_CLASS}
         >
@@ -770,7 +818,11 @@ function FieldInput({
             </option>
           ))}
         </select>
-        {field.help && <span className="mt-1 block text-2xs text-muted-foreground">{field.help}</span>}
+        {field.help && (
+          <span className="mt-1 block text-2xs text-muted-foreground">
+            {field.help}
+          </span>
+        )}
       </label>
     );
   }
@@ -779,13 +831,19 @@ function FieldInput({
       <span className={FIELD_LABEL_CLASS}>{field.label}</span>
       <input
         type="number"
-        value={typeof value === 'number' ? value : ''}
+        value={typeof value === "number" ? value : ""}
         min={field.min}
         max={field.max}
-        onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+        onChange={(e) =>
+          onChange(e.target.value === "" ? undefined : Number(e.target.value))
+        }
         className={`${FIELD_INPUT_CLASS} sw-num`}
       />
-      {field.help && <span className="mt-1 block text-2xs text-muted-foreground">{field.help}</span>}
+      {field.help && (
+        <span className="mt-1 block text-2xs text-muted-foreground">
+          {field.help}
+        </span>
+      )}
     </label>
   );
 }
@@ -836,20 +894,26 @@ function FormatCard({
       data-testid={`format-card-${descriptor.id}`}
       className={`${INTERACTIVE_BASE} rounded-sm border p-2.5 text-left transition-[border-color,background-color] duration-fast ease-brand ${
         selected
-          ? 'border-accent bg-accent/10'
-          : 'border-border bg-bg-elev hover:border-accent/40'
-      } ${descriptor.implemented ? '' : 'cursor-not-allowed opacity-40'}`}
+          ? "border-accent bg-accent/10"
+          : "border-border bg-bg-elev hover:border-accent/40"
+      } ${descriptor.implemented ? "" : "cursor-not-allowed opacity-40"}`}
     >
       <span className="flex items-center gap-2">
-        <Glyph className={`h-5 w-5 shrink-0 ${selected ? 'text-accent' : 'text-muted-foreground'}`} />
-        <span className="min-w-0 break-words text-sm font-semibold">{descriptor.label}</span>
+        <Glyph
+          className={`h-5 w-5 shrink-0 ${selected ? "text-accent" : "text-muted-foreground"}`}
+        />
+        <span className="min-w-0 break-words text-sm font-semibold">
+          {descriptor.label}
+        </span>
         {!descriptor.implemented && (
           <span className="ml-auto shrink-0 text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Planned
           </span>
         )}
       </span>
-      <span className="mt-1 block text-xs text-muted-foreground">{descriptor.blurb}</span>
+      <span className="mt-1 block text-xs text-muted-foreground">
+        {descriptor.blurb}
+      </span>
       <span className={`mt-1.5 block ${EYEBROW_CLASS} text-accent`}>
         {descriptor.matchesHint}
       </span>
@@ -885,15 +949,17 @@ function NewDrawModal({
   onClose: () => void;
   onCreate: (body: NewDrawSubmitBody) => void;
 }) {
-  const [id, setId] = useState('');
-  const [discipline, setDiscipline] = useState('MS');
-  const [format, setFormat] = useState<string>('se');
-  const [errors, setErrors] = useState<{ id?: string; discipline?: string }>({});
+  const [id, setId] = useState("");
+  const [discipline, setDiscipline] = useState("MS");
+  const [format, setFormat] = useState<string>("se");
+  const [errors, setErrors] = useState<{ id?: string; discipline?: string }>(
+    {},
+  );
   const [values, setValues] = useState<FieldValues>(() =>
-    defaultFieldValues(descriptorFor('se')?.fields ?? []),
+    defaultFieldValues(descriptorFor("se")?.fields ?? []),
   );
   const descriptor = descriptorFor(format) ?? DRAW_FORMATS[0];
-  const titleId = 'new-draw-title';
+  const titleId = "new-draw-title";
 
   const pickFormat = (d: FormatDescriptor) => {
     if (!d.implemented) return;
@@ -909,7 +975,7 @@ function NewDrawModal({
     // literal string "MS" that shipped here (console IA pass, Theme 3).
     // It is NOT deduped: several draws legitimately share one discipline.
     const disciplineResult = validateEventCode(discipline, []);
-    if ('error' in disciplineResult) {
+    if ("error" in disciplineResult) {
       setErrors({ discipline: disciplineResult.error });
       return;
     }
@@ -919,7 +985,9 @@ function NewDrawModal({
     // rule Meet needs because its ranks are prefix+digits.
     const code = id.trim().toUpperCase();
     if (code.length > MAX_EVENT_CODE_LENGTH) {
-      setErrors({ id: `Draw IDs are at most ${MAX_EVENT_CODE_LENGTH} characters.` });
+      setErrors({
+        id: `Draw IDs are at most ${MAX_EVENT_CODE_LENGTH} characters.`,
+      });
       return;
     }
     if (existingIds.includes(code)) {
@@ -964,7 +1032,7 @@ function NewDrawModal({
                 setId(e.target.value);
                 setErrors((prev) => ({ ...prev, id: undefined }));
               }}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
               placeholder="MS"
               aria-invalid={errors.id ? true : undefined}
               /* `uppercase` styles the placeholder too — normal-case keeps the
@@ -972,7 +1040,10 @@ function NewDrawModal({
               className={`${FIELD_INPUT_CLASS} uppercase placeholder:normal-case`}
             />
             {errors.id && (
-              <span role="alert" className="mt-1 block text-2xs text-destructive">
+              <span
+                role="alert"
+                className="mt-1 block text-2xs text-destructive"
+              >
                 {errors.id}
               </span>
             )}
@@ -986,12 +1057,15 @@ function NewDrawModal({
                 setDiscipline(e.target.value);
                 setErrors((prev) => ({ ...prev, discipline: undefined }));
               }}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
               aria-invalid={errors.discipline ? true : undefined}
               className={`${FIELD_INPUT_CLASS} uppercase placeholder:normal-case`}
             />
             {errors.discipline && (
-              <span role="alert" className="mt-1 block text-2xs text-destructive">
+              <span
+                role="alert"
+                className="mt-1 block text-2xs text-destructive"
+              >
                 {errors.discipline}
               </span>
             )}
@@ -1018,7 +1092,9 @@ function NewDrawModal({
             <FormatConfigFields
               fields={descriptor.fields}
               values={values}
-              onChange={(key, v) => setValues((prev) => ({ ...prev, [key]: v }))}
+              onChange={(key, v) =>
+                setValues((prev) => ({ ...prev, [key]: v }))
+              }
             />
           </div>
         )}
@@ -1028,7 +1104,12 @@ function NewDrawModal({
         <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="brand" size="sm" disabled={!id.trim()} onClick={submit}>
+        <Button
+          variant="brand"
+          size="sm"
+          disabled={!id.trim()}
+          onClick={submit}
+        >
           Create draw
         </Button>
       </div>
@@ -1052,8 +1133,10 @@ function DrawConfigModal({
 }) {
   const descriptor = descriptorFor(ev.format);
   const fields = descriptor?.fields ?? [];
-  const [values, setValues] = useState<FieldValues>(() => eventFieldValues(fields, ev));
-  const titleId = 'draw-config-title';
+  const [values, setValues] = useState<FieldValues>(() =>
+    eventFieldValues(fields, ev),
+  );
+  const titleId = "draw-config-title";
 
   const submit = () => {
     const { column, config } = splitFieldPayload(fields, values);
@@ -1079,9 +1162,9 @@ function DrawConfigModal({
       <div className="space-y-4 px-4 py-4">
         <div className="text-xs text-muted-foreground">
           <span className="font-semibold text-foreground sw-num">{ev.id}</span>
-          {' · '}
+          {" · "}
           <span>{disciplineLabel(ev.discipline)}</span>
-          {' · '}
+          {" · "}
           <span>{formatLabel(ev.format)}</span>
         </div>
         {fields.length > 0 ? (
@@ -1101,7 +1184,12 @@ function DrawConfigModal({
         <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="brand" size="sm" disabled={fields.length === 0} onClick={submit}>
+        <Button
+          variant="brand"
+          size="sm"
+          disabled={fields.length === 0}
+          onClick={submit}
+        >
           Save
         </Button>
       </div>

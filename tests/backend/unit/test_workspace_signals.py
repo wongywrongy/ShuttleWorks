@@ -175,6 +175,36 @@ def test_bracket_match_metrics_and_next_up_from_session_blob():
     assert sig.nextUp[1].timeLabel == "09:30"   # slot1 → +30m
 
 
+def test_bracket_live_assignments_report_court_population_and_status():
+    """The bracket action clock is enough to describe the live floor.
+
+    Negative controls: an ended assignment and an unstarted assignment are
+    present but must not inflate ``playing`` or consume a court.
+    """
+    data = {"bracket_session": {
+        "start_time": "2026-07-28T09:00:00", "interval_minutes": 30,
+        "courts": 4,
+        "assignments": [
+            {"play_unit_id": "live", "slot_id": 192, "court_id": 0,
+             "actual_start_slot": 192, "actual_end_slot": None},
+            {"play_unit_id": "done", "slot_id": 190, "court_id": 1,
+             "actual_start_slot": 190, "actual_end_slot": 191},
+            {"play_unit_id": "later", "slot_id": 193, "court_id": 2,
+             "actual_start_slot": None, "actual_end_slot": None},
+        ],
+    }}
+    sig = build_signals(
+        _row(kind="bracket", data=data),
+        _bracket_mods(),
+        RowCounts(bracket_matches=3, bracket_resolved_ids={"done"}),
+    )
+    assert sig.matches.playing == 1
+    assert sig.matches.courtsFree == 3
+    assert sig.nextUp[0].status == "playing"
+    assert sig.nextUp[0].timeLabel == "09:00"  # day five, not clamped to 23:59
+    assert sig.nextUp[1].status == "scheduled"
+
+
 def test_bracket_next_up_excludes_finished_units():
     # Bracket assignments carry actual_end_slot in the session blob, so a
     # finished unit is cheaply dropped from Next-up (meet can't — its blob has

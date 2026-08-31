@@ -1,7 +1,6 @@
 /**
- * Display Configuration — the workspace's public-display settings: which engines
- * feed the display (follows the enabled modules) and the shareable public URL.
- * The live preview itself is the Display · Preview surface.
+ * Display Configuration — the workspace's published board sources, shareable
+ * capability URL, layout settings, and an inline preview of that public projection.
  *
  * Built from the shared settings grammar (`Section` + `Row` + `FieldRow`), the
  * same as Meet and Bracket Configuration. It used to run its own third
@@ -14,23 +13,27 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { Button } from '@scheduler/design-system';
-import type { WorkspaceModule } from '../../platform/product-shell/types';
+import { MODULE_LABELS, type WorkspaceModule } from '../../platform/product-shell/types';
 import { apiClient } from '../../api/client';
-import { useTournamentStore } from '../../store/tournamentStore';
 import { FieldRow, Row, Section } from '../../platform/engine-config/SettingsControls';
 import { DisplayLayoutEditor } from './displayConfig/DisplayLayoutEditor';
-import { DisplayPreview } from './displayConfig/DisplayPreview';
 
-const FEEDS = [
-  { id: 'meet', label: 'Meet' },
-  { id: 'bracket', label: 'Bracket' },
+const BOARD_SOURCES = [
+  { id: 'meet', label: MODULE_LABELS.meet },
+  { id: 'bracket', label: MODULE_LABELS.bracket },
 ];
 
 export function DisplayConfig({ tid, modules }: { tid: string; modules: WorkspaceModule[] }) {
   const [copied, setCopied] = useState(false);
-  const config = useTournamentStore((s) => s.config);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const isOn = (id: string) => modules.some((m) => m.id === id && m.status === 'enabled');
+  const moduleById = (id: string) => modules.find((m) => m.id === id);
+  const sourceState = (id: string): 'Enabled' | 'Available' | 'Off' => {
+    const source = moduleById(id);
+    if (source?.status === 'enabled') return 'Enabled';
+    if (source?.status === 'disabled') return 'Off';
+    return 'Available';
+  };
+  const meetEnabled = sourceState('meet') === 'Enabled';
 
   // The public link is a CAPABILITY link, minted server-side and revocable by
   // rotation (SP-CLOUD-2) — the same `/tournaments/{id}/display-token` seam
@@ -79,116 +82,128 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
         <h2 className="type-display text-2xl text-foreground">Display</h2>
       </div>
 
-      {/* DC-2 asked for real toggles here. Deliberately NOT taken: a feed is
-          on because its MODULE is on, and a switch on this page would be a
-          second place to disable a module — with its own 409-when-it-has-data
-          handling, its own dependency rules, and two surfaces disagreeing the
-          first time one of them was stale. The complaint was that the chips
-          read as ambiguous between a control and a readout, so they read as a
-          readout now: plain state, and a link to the surface that owns it. */}
-      <Section title="Feeds">
-        {FEEDS.map((f, i) => (
-          <Row
-            key={f.id}
-            readOnly
-            label={f.label}
-            last={i === FEEDS.length - 1}
-            control={
-              <span className="inline-flex items-baseline gap-2">
-                <span className={isOn(f.id) ? 'text-foreground' : 'text-muted-foreground'}>
-                  {isOn(f.id) ? 'On' : 'Off'}
-                </span>
-                {i === 0 ? (
-                  <Link
-                    to={`/tournaments/${tid}/ws-modules`}
-                    className="text-xs font-medium text-accent hover:underline"
-                  >
-                    Modules →
-                  </Link>
-                ) : null}
-              </span>
-            }
-          />
-        ))}
-      </Section>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(24rem,1fr)]">
+        <div className="min-w-0 space-y-2">
+          {/* Board availability follows module state. A switch here would create
+              a second owner for module enablement, so these are deliberately
+              plain readouts with a link to the owning settings surface. */}
+          <Section title="Board sources">
+            {BOARD_SOURCES.map((source, index) => {
+              const state = sourceState(source.id);
+              return (
+                <Row
+                  key={source.id}
+                  readOnly
+                  label={source.label}
+                  last={index === BOARD_SOURCES.length - 1}
+                  control={
+                    <span className="inline-flex items-baseline gap-2">
+                      <span className={state === 'Enabled' ? 'text-foreground' : 'text-muted-foreground'}>
+                        {state}
+                      </span>
+                      {state !== 'Enabled' ? (
+                        <Link
+                          to={`/tournaments/${tid}/administration/modules`}
+                          className="text-xs font-medium text-accent hover:underline"
+                        >
+                          Modules →
+                        </Link>
+                      ) : null}
+                    </span>
+                  }
+                />
+              );
+            })}
+          </Section>
 
-      {/* Copy / Open ride the heading rule: they act on the section's one
-          value, and a full row each would have read as two more settings. */}
-      <Section
-        title="Public link"
-        action={
-          publicUrl ? (
-            <span className="inline-flex items-center gap-2">
-              {/* xs (28px) both — the anchor can't be a `Button`, so it mirrors
-                  the variant="outline" chrome by hand. Two controls side by
-                  side at different heights is the kind of near-miss the
-                  grammar exists to stop. */}
-              <Button variant="outline" size="xs" onClick={copy}>
-                {copied ? 'Copied' : 'Copy'}
-              </Button>
-              <a
-                href={publicUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40"
-              >
-                <ArrowSquareOut aria-hidden className="h-4 w-4" />
-                Open
-              </a>
-            </span>
-          ) : null
-        }
-      >
-        {mintFailed ? (
-          <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
-            No public link yet. Only a workspace owner can create one. Ask an owner to
-            share it from{' '}
-            <Link
-              to={`/tournaments/${tid}/ws-sharing`}
-              className="text-accent hover:underline"
-            >
-              Sharing
-            </Link>
-            .
-          </p>
-        ) : (
-          <FieldRow
-            readOnly
-            label="Public display URL"
-            value={publicUrl ?? 'Creating link…'}
-            hint={
-              <>
-                View-only. Anyone with this link can watch, with no sign-in. Rotate it in{' '}
+          {/* Copy and Open act on this section's single value, so they stay in
+              the section action rather than becoming two more setting rows. */}
+          <Section
+            title="Public link"
+            action={
+              publicUrl ? (
+                <span className="inline-flex items-center gap-2">
+                  <Button variant="outline" size="xs" onClick={copy}>
+                    {copied ? 'Copied' : 'Copy'}
+                  </Button>
+                  <a
+                    href={publicUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40"
+                  >
+                    <ArrowSquareOut aria-hidden className="h-4 w-4" />
+                    Open
+                  </a>
+                </span>
+              ) : null
+            }
+          >
+            {mintFailed ? (
+              <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
+                No public link yet. Only a workspace owner can create one. Ask an owner to
+                share it from{' '}
                 <Link
-                  to={`/tournaments/${tid}/ws-sharing`}
+                  to={`/tournaments/${tid}/publish/links`}
                   className="text-accent hover:underline"
                 >
-                  Sharing
-                </Link>{' '}
-                to revoke it.
-              </>
-            }
-            inputClassName="font-mono"
-            last
-          />
-        )}
-      </Section>
+                  Links and embeds
+                </Link>
+                .
+              </p>
+            ) : (
+              <FieldRow
+                readOnly
+                label="Public display URL"
+                value={publicUrl ?? 'Creating link…'}
+                hint={
+                  <>
+                    View-only. Anyone with this link can watch, with no sign-in. Rotate it in{' '}
+                    <Link
+                      to={`/tournaments/${tid}/publish/links`}
+                      className="text-accent hover:underline"
+                    >
+                      Links and embeds
+                    </Link>{' '}
+                    to revoke it.
+                  </>
+                }
+                inputClassName="font-mono"
+                last
+              />
+            )}
+          </Section>
 
-      {/* tv* fields only drive MeetDisplayPage (the bracket board never
-          reads them) — scope the editor + preview to Meet-enabled
-          workspaces so a bracket-only workspace isn't shown controls
-          that would have no visible effect. The editor brings its own
-          Board layout / Court order sections. */}
-      {isOn('meet') && (
-        <>
-          <DisplayLayoutEditor tid={tid} />
+          {/* The tv* fields only drive MeetDisplayPage; bracket boards do not
+              consume them. Keep those controls scoped to Meet while the public
+              preview remains useful for every enabled board source. */}
+          {meetEnabled ? <DisplayLayoutEditor tid={tid} /> : null}
+        </div>
+
+        <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
           <Section title="Preview">
-            <div className="py-3">
-              <DisplayPreview config={config} />
+            <div
+              className="min-h-64 overflow-hidden rounded-sm border border-border bg-card"
+              data-testid="display-preview-frame"
+              aria-label="Published venue board preview"
+            >
+              {publicUrl ? (
+                <iframe
+                  title="Published venue board preview"
+                  src={publicUrl}
+                  className="h-[30rem] w-full border-0"
+                  data-testid="display-preview-iframe"
+                  allowFullScreen
+                />
+              ) : (
+                <div className="flex min-h-64 items-center justify-center px-4 text-sm text-muted-foreground">
+                  Preview unavailable until a public display link is ready.
+                </div>
+              )}
             </div>
           </Section>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

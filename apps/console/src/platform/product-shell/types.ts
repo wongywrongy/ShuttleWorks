@@ -8,6 +8,35 @@ import type { WorkspacePhase } from '../domain/lifecycle';
  *  presence in the real catalog is what drives the nav. */
 export type ModuleId = 'meet' | 'bracket' | 'display' | 'entries';
 
+/** Architectural identity is broader than workspace enablement. Operations
+ * is always present and owns the live-day runtime, while Entries is an
+ * optional intake capability. Keep labels in this shared source so the
+ * catalog, guards, contracts, and navigation cannot drift. */
+export type ArchModuleId = ModuleId | 'operations';
+
+export const MODULE_LABELS: Record<ArchModuleId, string> = {
+  meet: 'Meet',
+  bracket: 'Bracket',
+  operations: 'Operations',
+  display: 'Display',
+  entries: 'Entries',
+};
+
+export const ENABLEABLE_MODULE_IDS: readonly ModuleId[] = [
+  'meet',
+  'bracket',
+  'display',
+  'entries',
+] as const;
+
+export const ARCHITECTURAL_MODULE_IDS: readonly ArchModuleId[] = [
+  'meet',
+  'bracket',
+  'operations',
+  'display',
+  'entries',
+] as const;
+
 /** A module's enablement status within a workspace. Real state comes from the
  *  backend `workspace_modules` table; when absent it is derived from `kind`
  *  (a temporary compatibility bridge).

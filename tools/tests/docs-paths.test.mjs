@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { checkDocument, checkDocs } from '../docs-paths.mjs'
-import { sourceIsNewer, validateManifest } from '../docs-freshness.mjs'
+import { AREAS, sourceIsNewer, validateManifest } from '../docs-freshness.mjs'
 
 test('accepts existing paths, punctuation, and line/symbol suffixes', () => {
   const errors = checkDocument(
@@ -81,6 +81,19 @@ test('fails closed when a freshness manifest root is missing', () => {
 
 test('accepts the checked-in freshness manifest', () => {
   assert.doesNotThrow(() => validateManifest())
+})
+
+test('freshness manifest tracks developer verification and demo operations', () => {
+  const area = AREAS.find((entry) => entry.name === 'Developer verification, demo, and UI evidence')
+  assert.ok(area)
+  assert.deepEqual(area.docs, [
+    'docs/how-to/running-locally.md',
+    'tests/e2e/README.md',
+    'simulator/README.md',
+  ])
+  assert.ok(area.src.includes('Makefile'))
+  assert.ok(area.src.includes('.github/workflows/ci.yml'))
+  assert.ok(area.src.includes('tools/surface-capture-status.mjs'))
 })
 
 test('freshness ordering uses Git ancestry, not second-resolution timestamps', () => {

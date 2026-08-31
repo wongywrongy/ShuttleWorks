@@ -7,8 +7,9 @@ records: 3,917 completed main-draw rows for T001–T026, Japan 155/155, China
 153/155, and five finals each for Taipei and Korea. The local tech-demo layer
 adds 367 deterministic, internally tagged fictional rows for 4,602 complete
 match records. This makes every public draw navigable without converting those
-rows into historical claims. Only the Japan and China daily pages contain
-source-backed court allocations and local estimated times.
+rows into historical claims. The local demo assigns a fictional court and
+venue-local time to every row; only values retained from supplied daily pages
+are source-backed.
 
 ## Current capability
 
@@ -24,12 +25,12 @@ source-backed court allocations and local estimated times.
 | Multi-day venue schedule | Missing | Bracket scheduling is one abstract slot horizon with no date range or IANA venue timezone. |
 | Unified live courts | Partial | Meet and Bracket use the same solver concepts but can reserve physical courts independently. |
 
-The public tech demo presents the completed tournament experience rather than
-source-audit warnings. Its run manifest remains the audit boundary: it records
-source-backed and generated counts separately. Imports still use
-`completed_matches_only` because concrete historical rows and 48-entry byes do
-not fit the live `full_draw` import contract. `full_draw` remains reserved for
-structural imports produced by a bracket generator.
+The public tech demo presents completed, live, and upcoming tournament states
+rather than source-audit warnings. Its run manifest remains the audit boundary:
+it records source-backed and generated counts separately. Completed archives
+use `completed_matches_only`; the fictional operational overlay uses
+`full_draw` for Taipei (140 results, eight live semifinals) and Korea (no
+results). Both carry a complete 155-match court plan.
 
 Player IDs in this archive are deterministic, normalized source-name keys.
 Public display names omit source-only trailing BWF member numbers and normalize

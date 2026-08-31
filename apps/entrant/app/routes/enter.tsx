@@ -43,6 +43,7 @@ import type { EntryEventDTO, EntryPageDTO } from '../lib/entryPage.types';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { formatCents } from '../lib/money';
+import { eventCodeLabel } from '../lib/draws.types';
 import {
   chipState,
   nearestCloseAt,
@@ -50,6 +51,7 @@ import {
   visibleBlocks,
 } from '../lib/phase';
 import type { Route } from './+types/enter';
+import { BUTTON_SECONDARY, CARD, INPUT_SKIN } from '../lib/ui';
 
 export interface EnterLoaderData {
   page: EntryPageDTO;
@@ -207,7 +209,10 @@ function PlayerBlock({
   const ticked = new Set(said.events);
 
   return (
-    <section className="grid gap-4 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+    <section
+      className={`grid gap-4 ${CARD}`}
+      data-entry-player-block
+    >
       <h3 className="text-base font-semibold text-foreground">
         {`Player ${index + 1}`}
         {index === 0 ? null : (
@@ -215,7 +220,8 @@ function PlayerBlock({
         )}
       </h3>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <fieldset id={index === 0 ? 'entry-participant' : undefined} className="grid gap-4 sm:grid-cols-2" data-entry-section="participant">
+        <legend className="sr-only">Participant details</legend>
         <TextField
           id={`${prefix}name`}
           label="Full name"
@@ -239,7 +245,7 @@ function PlayerBlock({
             name="gender"
             required={index === 0}
             defaultValue={said.gender}
-            className="h-9 w-full rounded-sm border border-rule-control bg-bg-elev px-3 text-sm text-foreground"
+            className={`h-9 w-full rounded-sm px-3 ${INPUT_SKIN}`}
           >
             {GENDERS.map(([value, label]) => (
               <option key={value} value={value}>
@@ -272,9 +278,9 @@ function PlayerBlock({
           // year onto the wrong person.
           <input type="hidden" name="birthYear" value="" />
         )}
-      </div>
+      </fieldset>
 
-      <fieldset className="grid gap-1.5 sm:grid-cols-2 sm:gap-x-6">
+      <fieldset id={index === 0 ? 'entry-events' : undefined} className="grid gap-1.5 sm:grid-cols-2 sm:gap-x-6" data-entry-section="events">
         <legend className="mb-1.5 text-sm font-medium text-foreground">Events</legend>
         {offered.map((event) => {
           const value = `${index}:${event.id}`;
@@ -290,7 +296,7 @@ function PlayerBlock({
             >
               <input type="checkbox" name="events" value={value} defaultChecked={ticked.has(value)} />
               <span>
-                {event.discipline} <span className="text-muted-foreground">({event.code})</span>
+                {event.discipline} <span className="text-muted-foreground">({eventCodeLabel(event.code)})</span>
               </span>
               {event.feeCents === null ? null : (
                 <span className="text-xs tabular-nums text-muted-foreground">
@@ -302,8 +308,8 @@ function PlayerBlock({
         })}
         {/* E3: the partner field for every doubles event on offer.
             **Rendered whether or not the event is ticked**, and that is a
-            consequence of the zero-JS constraint rather than an oversight:
-            nothing here can react to a checkbox. The server does the
+            consequence of the no-hydration baseline rather than an oversight:
+            the bounded entry module does not toggle fields client-side. The server does the
             filtering instead — `parse_partners` keeps only the addresses
             whose event this block actually selected — so a stale value in an
             unticked box nominates nobody.
@@ -316,10 +322,10 @@ function PlayerBlock({
         {offered
           .filter((event) => event.entryType === 'doubles')
           .map((event) => (
-            <div key={`partner-${event.id}`} className="sm:col-span-2">
+            <div id={index === 0 ? 'entry-partner' : undefined} key={`partner-${event.id}`} className="sm:col-span-2" data-entry-section="partner">
               <TextField
                 id={`partner-${index}-${event.id}`}
-                label={`Partner's email for ${event.code}`}
+                label={`Partner's email for ${eventCodeLabel(event.code)}`}
                 name={`partner:${index}:${event.id}`}
                 type="email"
                 maxLength={320}
@@ -336,7 +342,7 @@ function PlayerBlock({
         ) : null}
       </fieldset>
 
-      <div>
+      <div data-entry-section="participant">
         <label
           htmlFor={`${prefix}remarks`}
           className="mb-1 block text-xs font-medium text-foreground"
@@ -350,7 +356,7 @@ function PlayerBlock({
           maxLength={2000}
           placeholder="e.g. can't play before 6pm Saturday"
           defaultValue={said.remarks}
-          className="w-full rounded-sm border border-rule-control bg-bg-elev p-2 text-sm text-foreground"
+          className={`w-full rounded-sm p-2 ${INPUT_SKIN}`}
         />
       </div>
     </section>
@@ -374,6 +380,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
   const variant = justSignedIn ? SIGNED_IN_SUFFIX : justSignedUp ? SIGNED_UP_SUFFIX : '';
   const selfPath = `/e/${encodeURIComponent(slug)}/enter${variant}`;
   const openEvents = page.events.filter((event) => event.isOpen);
+  const hasDoubles = openEvents.some((event) => event.entryType === 'doubles');
   const askBirthYear = openEvents.some((event) => event.ageBracketed);
   const cap = page.policy.maxEventsPerPerson;
   // Display only, both lines: the director's own configuration, stated
@@ -432,17 +439,76 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
       </section>
 
       <main className="mx-auto w-full max-w-5xl px-4 py-6 md:py-8">
+        <nav aria-label="Entry progress" className="mb-6 overflow-x-auto rounded-lg border border-rule-soft bg-surface-raised p-4">
+          <ol className="flex min-w-max items-center gap-2 text-xs font-medium text-muted-foreground sm:justify-between sm:gap-3">
+            {[
+              ['eligibility', 'Eligibility'],
+              ['account', 'Account'],
+              ['participant', 'Participant'],
+              ['events', 'Events'],
+              ...(hasDoubles ? [['partner', 'Partner']] : []),
+              ['review', 'Review'],
+              ['submitted', 'Submitted'],
+            ].map(([key, label], index, steps) => (
+              <li key={key} data-entry-step={key} className="flex items-center gap-2">
+                {key === 'submitted' ? (
+                  <span className="inline-flex min-h-8 items-center gap-2 px-2 py-1.5" aria-disabled="true">
+                    <span className="grid h-6 w-6 place-items-center rounded-full border border-rule-control tabular-nums">{index + 1}</span>
+                    <span>{label}</span>
+                  </span>
+                ) : (
+                  <a
+                    href={`#entry-${key}`}
+                    data-wizard-step-link={key}
+                    className="inline-flex min-h-8 items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-sunken hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                  >
+                    <span className="grid h-6 w-6 place-items-center rounded-full border border-rule-control tabular-nums">{index + 1}</span>
+                    <span>{label}</span>
+                  </a>
+                )}
+                {index < steps.length - 1 ? <span aria-hidden="true">→</span> : null}
+              </li>
+            ))}
+          </ol>
+        </nav>
+
+        <section id="entry-eligibility" data-entry-wizard-panel="eligibility" className="mb-6 grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Before you begin</p>
+              <h2 className="mt-1 font-display text-lg font-semibold tracking-tight text-foreground">Check eligibility and cost</h2>
+            </div>
+            <span className="rounded-full border border-rule-control px-2.5 py-1 text-xs font-medium text-muted-foreground">{openEvents.length} open {openEvents.length === 1 ? 'event' : 'events'}</span>
+          </div>
+          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-muted-foreground">Tournament date</dt>
+              <dd className="mt-1 font-medium text-foreground">{page.tournament.date ?? 'To be announced'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Entry deadline</dt>
+              <dd className="mt-1 font-medium text-foreground">{deadline ? deadline : 'See event dates below'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Fees</dt>
+              <dd className="mt-1 font-medium text-foreground">{feeTiers.length > 0 ? feeTiers.map(([count, cents]) => `${count} ${count === '1' ? 'event' : 'events'} · ${formatCents(cents)}`).join(', ') : 'Shown beside each event'}</dd>
+            </div>
+          </dl>
+          <p className="max-w-prose text-sm text-muted-foreground">You can review everything before submitting. Payment, when required, is handled using the organizer&rsquo;s instructions after submission.</p>
+        </section>
+
         {/* Z15 — the shipped R8-E posture: this page cannot know who is
             reading it, so it states what the write will require instead of
             guessing, with the sign-in handoff and a `next` return to THIS
             route's confirming variant. */}
-        {justSignedIn ? (
-          <Notice tone="success">
-            You are signed in. Fill in the form below and press
-            &ldquo;Submit entry&rdquo;.
-          </Notice>
-        ) : (
-          <Notice tone={justSignedUp ? 'success' : 'info'}>
+        <section id="entry-account" data-entry-wizard-panel="account" className="mb-6">
+          {justSignedIn ? (
+            <Notice tone="success">
+              You are signed in. Fill in the form below and press
+              &ldquo;Submit entry&rdquo;.
+            </Notice>
+          ) : (
+            <Notice tone={justSignedUp ? 'success' : 'info'}>
             {/* E3: the sign-up outcome, stated on the page the entrant
                 started from. Landing back on the plain form after creating an
                 account said nothing at all, which is indistinguishable from a
@@ -478,24 +544,27 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             )}
             , and you&rsquo;ll come straight back here. Until you are signed in, nothing
             is recorded.
-          </Notice>
-        )}
+            </Notice>
+          )}
+        </section>
 
         {openEvents.length === 0 ? (
-          <div className="mt-6 grid justify-items-start gap-3">
-            <p className="text-base text-foreground">
-              No event is taking entries right now.
+          <section className="mt-6 grid justify-items-start gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5" data-entry-closed>
+            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">Entries are not available right now</h2>
+            <p className="max-w-prose text-sm text-muted-foreground">
+              No event is taking entries right now. Your tournament information is still available, and the organizer may publish a new entry window or timetable there.
             </p>
             <a
               href={`/e/${encodeURIComponent(slug)}`}
-              className="text-sm text-accent underline underline-offset-4"
+              className={BUTTON_SECONDARY}
             >
-              Back to the tournament page
+              View tournament information
             </a>
-          </div>
+          </section>
         ) : (
           <form
             id="enter"
+            data-entry-wizard
             method="post"
             action={`/e/api/submit/${slug}`}
             encType="application/x-www-form-urlencoded"
@@ -528,6 +597,22 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                 />
               ))}
 
+              <div hidden data-entry-wizard-controls="participant" className="flex flex-wrap gap-2">
+                <button type="button" data-wizard-next="participant" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">Continue to events</button>
+              </div>
+
+              <div hidden data-entry-wizard-controls="events" className="flex flex-wrap gap-2">
+                <button type="button" data-wizard-back="events" className={BUTTON_SECONDARY}>Back to participant</button>
+                <button type="button" data-wizard-next="events" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">{hasDoubles ? 'Continue to partner' : 'Review entry'}</button>
+              </div>
+
+              {hasDoubles ? (
+                <div hidden data-entry-wizard-controls="partner" className="flex flex-wrap gap-2">
+                  <button type="button" data-wizard-back="partner" className={BUTTON_SECONDARY}>Back to events</button>
+                  <button type="button" data-wizard-next="partner" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">Review entry</button>
+                </div>
+              ) : null}
+
               {/* Z12: an explicit action, not a permanently rendered blank
                   card. `formAction` aims at THIS route's own action — a
                   render round trip, no backend call, works signed-out — and
@@ -539,26 +624,32 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                 variant="outline"
                 formAction={selfPath}
                 formNoValidate
+                data-entry-wizard-only="participant"
                 className="justify-self-start"
               >
                 Add another player
               </Button>
 
-              <label className="flex items-start gap-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  name="showAllEvents"
-                  value="on"
-                  defaultChecked={echo.showAllEvents}
-                />
-                <span>
-                  Show every event, including ones not usually open to a player. A
-                  mismatch is accepted &mdash; the organizer sees a flag and decides.
-                </span>
-              </label>
+              <div data-entry-section="events">
+                <label className="flex items-start gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    name="showAllEvents"
+                    value="on"
+                    defaultChecked={echo.showAllEvents}
+                  />
+                  <span>
+                    Show every event, including ones not usually open to a player. A
+                    mismatch is accepted &mdash; the organizer sees a flag and decides.
+                  </span>
+                </label>
+              </div>
 
-              <section className="grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+              <section id="entry-review" data-entry-wizard-panel="review" className={`grid gap-3 ${CARD}`}>
                 <h2 className="text-base font-semibold text-foreground">Before you submit</h2>
+                <div data-entry-review-summary className="grid gap-2 text-sm text-muted-foreground">
+                  <p>Review your participant details and selected events before submitting.</p>
+                </div>
                 <label className="flex items-start gap-2 text-sm text-foreground">
                   <input type="checkbox" name="acknowledged" value="on" required />
                   <span>
@@ -574,12 +665,14 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                 quote formAction; `?signedIn=1` is TRANSPORT on the quote URL
                 (presence only — the backend appends its own suffix), so the
                 write post never carries it. */}
-            <StickyTotalBar
-              state={bar}
-              chip={chip}
-              deadline={deadline}
-              quoteAction={`/e/api/quote/${slug}${justSignedIn ? '?signedIn=1' : ''}`}
-            />
+            <div data-entry-submit-bar>
+              <StickyTotalBar
+                state={bar}
+                chip={chip}
+                deadline={deadline}
+                quoteAction={`/e/api/quote/${slug}${justSignedIn ? '?signedIn=1' : ''}`}
+              />
+            </div>
           </form>
         )}
 
@@ -616,6 +709,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             </span>
           </form>
         </footer>
+        <script type="module" src="/e/assets/entry-wizard.js" />
       </main>
     </PlayShell>
   );

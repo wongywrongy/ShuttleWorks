@@ -47,7 +47,7 @@ ENTRIES_REVISION = "s3d8f2b5c0e1"
 # composite FK, and P7a the schema's first four CHECK constraints — one of
 # them on ``entries.state``. P7b added the ``meet_events`` table and the
 # ``entry_events.meet_event_id`` mapping column.
-HEAD_REVISION = "aa1b6c4e0d3f"
+HEAD_REVISION = "a1b2c3d4e5f6"
 PREVIOUS_REVISION = "r2c7e1f4a9b3"
 
 # Every table the Entries family owns after the R13 reshape. The account

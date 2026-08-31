@@ -5,9 +5,8 @@ import { EYEBROW_CLASS } from '../../lib/utils';
  * Eyebrow — the micro-label overline: `EYEBROW_CLASS` plus a tone.
  *
  * A plain UPPERCASE micro-label in Geist (one family; tracking does the work).
- * The old brutalist `[ … ]` ASCII framing is retired — the `framed` prop is
- * kept for API compatibility but is now a no-op (renders the same plain
- * label), so existing call-sites don't break.
+ * (The old brutalist `[ … ]` ASCII framing, and the no-op `framed` prop that
+ * survived it, are both gone.)
  *
  * The treatment lives in `EYEBROW_CLASS` rather than here because most uses
  * can't be a `<span>`: table group rows, `<h3>` panel headings, and
@@ -20,8 +19,6 @@ export function Eyebrow({
   className = '',
 }: {
   children: ReactNode;
-  /** @deprecated `[ … ]` framing was retired; this prop is now a no-op. */
-  framed?: boolean;
   tone?: 'muted' | 'accent' | 'destructive';
   className?: string;
 }) {

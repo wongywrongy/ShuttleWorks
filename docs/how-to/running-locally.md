@@ -94,7 +94,7 @@ make demo-seed-apply \
 make demo-seed-status
 ```
 
-The full-source apply creates 30 complete demo brackets and 4,602 match rows:
+The full-source apply creates 30 demo brackets and 4,602 match rows:
 4,235 source-backed results plus 367 clearly attributed demo-completion rows.
 Without the optional sources it retains the 150 supplied finals and generates
 4,452 demo rows. The purpose is a complete, realistic product demonstration,
@@ -106,6 +106,39 @@ Re-running the same source is a no-op; `make demo-seed-resume` continues an
 interrupted run. `make demo-seed-reset` takes a database backup first, requires
 the seed key as confirmation, and deletes only workspace IDs recorded in that
 run's manifest.
+
+The private demo Compose profile sets `SHUTTLEWORKS_DEMO_NOW` to
+`2026-07-31T05:15:00Z`. Only `ENVIRONMENT=local` honors that override. It makes
+Taipei Open in progress with populated courts and makes Korea Masters upcoming;
+production/cloud mode fails closed if the override is set. All other
+application clocks continue using real time.
+
+### UI surface review books
+
+With the demo stack healthy, generate the operator and public entrant review
+books from the live Tailscale endpoints:
+
+```bash
+make surface-books
+```
+
+Each PDF starts with an index, then gives every captured surface a stable
+`S01`, `S02`, … reference, a short purpose description, and paired desktop and
+mobile screenshots. Physical pages are numbered in the footer. The stable
+outputs are written under `docs/screenshots/ui-review/` as
+`operator-console-surface-book.pdf` and `public-entrant-surface-book.pdf`.
+
+The capture writes a `.running.json` file after every surface and replaces it
+with a durable `.manifest.json` when complete. Monitor an active or previous
+run from another terminal with:
+
+```bash
+make surface-books-status
+```
+
+The status command reports progress, elapsed time, failed viewports, browser
+console errors, and final artifact paths. A running or partial capture exits
+non-zero so it can also be watched or wrapped by internal automation.
 
 ### Demo backups and recovery
 
@@ -192,6 +225,10 @@ Both targets assume a host backend is already running on `:8600` — they only l
 `make full-dev` backgrounds the first server with `&`, so **run it from Git Bash**; under
 `cmd.exe` `&` sequences instead of backgrounding and the operator SPA blocks forever.
 
+The entrant server renders complete HTML and does not hydrate the React tree. Route-scoped,
+same-origin modules enhance entry progress, My Entries, filtering, regulations, receipts, and
+bracket path highlighting; native links and forms remain the fallback when those modules are absent.
+
 **Two backend variables, one per surface — swapping them fails silently.** The entrant SSR server
 reads `API_BASE_URL` (`entrant/app/lib/apiFetch.server.ts`, which *throws* when it is unset, so
 every API-backed route 500s). `VITE_API_PROXY_TARGET` is read only by the operator SPA's dev proxy
@@ -239,8 +276,10 @@ Postgres, `AUTH_MODE=cloud`, `SESSION_COOKIE_SECURE=true`, and SMTP — see
 
 ```bash
 # Backend + solver unit tests — from the repo root
-pip install -r apps/api/requirements-dev.txt  # one-time (pulls in pytest + httpx)
-pytest
+pip install -r apps/api/requirements-dev.txt  # one-time (pytest, xdist, httpx2)
+make test                      # full suite; xdist workers use all available host CPUs
+PYTEST_WORKERS=4 make test     # cap workers while sharing a smaller machine
+pytest tests/backend/test_tournament_setup.py  # focused/serial; avoids worker startup
 
 # Frontend unit/component tests — from apps/console/
 npm run test:run        # vitest + jsdom + React Testing Library
@@ -264,10 +303,49 @@ make full-dev           # operator :5173 + entrant :5174 (backend on :8600)
 make test-e2e-dev       # entrant evidence against those dev origins
 ```
 
+When `TEST_POSTGRES_URL` is set, the Make targets automatically use serial
+pytest: the dialect-parity fixtures rebuild one shared Postgres schema and must
+not run in competing worker processes.
+
+The default local path is intentionally the high-throughput path for the Linux
+development server: `pytest-xdist` starts one isolated process per available
+CPU (`--dist worksteal`), while each SQLite test gets its own temporary data
+directory. `PYTEST_WORKERS` is the supported cap when a laptop or shared host
+needs less contention. The Postgres parity path is the exception because its
+fixtures rebuild one shared schema; it stays serial for correctness.
+
+If a run is launched inside a restricted Codex or CI sandbox and fails while
+creating a socket, subprocess, or AnyIO blocking portal, rerun the unchanged
+command on the Linux host before treating it as a product failure. Record the
+environment restriction with the result; do not weaken an isolation test or
+silently skip it.
+
+### Durable demo data lifecycle
+
+The Tailscale demo is a production-application-path demonstration with its own
+Postgres bind mount and state directory. It is not a disposable test database:
+
+```bash
+make demo-up
+make demo-seed-preview
+make demo-seed-apply
+make demo-seed-status
+make demo-backup
+make demo-restore-drill
+```
+
+Keep the optional upstream BWF match-data clone and daily-result HTML outside
+the repository. Seed runs are keyed, resumable, and recorded in manifests;
+repeating a completed source is a no-op. `make demo-down` backs up before
+stopping, and `make demo-seed-reset` backs up before removing only workspaces
+owned by that seed key. The default backup directory is outside the checkout;
+copy it off-host for protection from disk loss. See [the demo runbook](#tailscale-tech-demo-on-a-linux-server)
+for the full-source fixture commands and provenance limits.
+
 | Workflow | Owner | Runner and prerequisite |
 | --- | --- | --- |
 | Public entrant layout, IA, CSP and headers | `10-entrant-r11-evidence.spec.ts` | `make test-e2e` on managed compose, or `make test-e2e-dev` after `make full-dev` |
-| Operator/Operations interactions, viewer lockout and public display | `interaction-smoke.spec.ts` | CI only, with the prepared harness build and seeded IDs/token |
+| Canonical Taipei/Korea console data, viewer lockout and public display | `console-browser-contracts.spec.ts` | `make test-console-contracts`; isolated migrated SQLite fixture |
 | Backend state, solving, import and persistence | Backend/unit suites | `make check` and focused backend tests |
 
 ## This documentation site

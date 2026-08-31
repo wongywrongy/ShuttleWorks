@@ -84,20 +84,17 @@
   ],
   "entrants": [
     {
-      "personKey": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      "name": "Ada Lovelace",
+      "person": {"identity": {"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "name": "Ada Lovelace"}, "resolution": "resolved", "label": null},
       "club": "Analytical BC",
       "eventCodes": ["MS", "WD"]
     },
     {
-      "personKey": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      "name": "Grace Hopper",
+      "person": {"identity": {"id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "name": "Grace Hopper"}, "resolution": "resolved", "label": null},
       "club": null,
       "eventCodes": ["WD"]
     },
     {
-      "personKey": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      "name": "Katherine Johnson",
+      "person": {"identity": {"id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "name": "Katherine Johnson"}, "resolution": "resolved", "label": null},
       "club": "Orbit SC",
       "eventCodes": ["MS", "XD"]
     }

@@ -1,3 +1,4 @@
+import { identityFixture } from './identityFixture';
 /**
  * OperationsProduct — Live vs Courts branch rendering.
  *
@@ -21,10 +22,24 @@ const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryR
 
 // ── 1. Hoist mutable tab so vi.mock factories close over it ───────────────
 
-const { mockTab, mockPlanFinalized, mockSchedule } = vi.hoisted(() => ({
+const {
+  mockTab,
+  mockPlanFinalized,
+  mockSchedule,
+  mockPhase,
+  mockConfig,
+  mockMeetBlocks,
+  mockBracketBlocks,
+  mockBracketData,
+} = vi.hoisted(() => ({
   mockTab: { value: 'live' as string },
   mockPlanFinalized: { value: undefined as boolean | undefined },
   mockSchedule: { value: null as unknown },
+  mockPhase: { value: undefined as string | undefined },
+  mockConfig: { value: null as unknown },
+  mockMeetBlocks: { value: [] as unknown[] },
+  mockBracketBlocks: { value: [] as unknown[] },
+  mockBracketData: { value: null as unknown },
 }));
 
 // ── 2. Mock all hook/store/component dependencies ────────────────────────
@@ -49,13 +64,14 @@ vi.mock('../../../api/bracketClient', () => ({
 }));
 
 vi.mock('../../../hooks/useBracket', () => ({
-  useBracket: () => ({ data: null, setData: vi.fn(), refresh: vi.fn(), loading: false, error: null }),
+  useBracket: () => ({ data: mockBracketData.value, setData: vi.fn(), refresh: vi.fn(), loading: false, error: null }),
 }));
 
 vi.mock('../../../store/uiStore', () => ({
   useUiStore: (selector: (s: unknown) => unknown) =>
     selector({
       activeTab: mockTab.value,
+      activeTournamentPhase: mockPhase.value,
       pushToast: vi.fn(),
       setActiveTab: vi.fn(),
       setBracketSelectedMatchId: vi.fn(),
@@ -69,7 +85,7 @@ vi.mock('../../../store/uiStore', () => ({
 vi.mock('../../../store/tournamentStore', () => ({
   useTournamentStore: (selector: (s: unknown) => unknown) =>
     selector({
-      config: null,
+      config: mockConfig.value,
       matches: [],
       schedule: mockSchedule.value,
       players: [],
@@ -126,24 +142,8 @@ vi.mock('../../../hooks/useCurrentSlot', () => ({
 
 // Provide non-empty blocks so OperationsProduct skips the empty-state path.
 vi.mock('../opsBlock', () => ({
-  meetToOpsBlocks: () => [
-    {
-      key: 'meet:m1',
-      source: 'meet',
-      id: 'm1',
-      label: 'MS1',
-      span: 1,
-      status: 'scheduled',
-      court: 1,
-      slot: 0,
-      sideA: 'Alice',
-      sideB: 'Bob',
-      playerIds: [],
-      done: false,
-      started: false,
-    },
-  ],
-  bracketToOpsBlocks: () => [],
+  meetToOpsBlocks: () => mockMeetBlocks.value,
+  bracketToOpsBlocks: () => mockBracketBlocks.value,
   parseOpsKey: (key: string) => {
     const [source, id] = key.split(':');
     return { source, id };
@@ -175,6 +175,17 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockPlanFinalized.value = undefined;
   mockSchedule.value = null;
+  mockPhase.value = undefined;
+  mockConfig.value = null;
+  mockMeetBlocks.value = [
+    {
+      key: 'meet:m1', source: 'meet', id: 'm1', identity: identityFixture('MS1'), span: 1,
+      status: 'scheduled', court: 1, slot: 0, sideA: 'Alice', sideB: 'Bob',
+      playerIds: [], done: false, started: false,
+    },
+  ];
+  mockBracketBlocks.value = [];
+  mockBracketData.value = null;
 });
 
 describe('OperationsProduct — Live segment renders RunSurface', () => {
@@ -194,6 +205,87 @@ describe('OperationsProduct — Courts (Plan) segment renders the interactive bo
     expect(screen.getByTestId('ops-generate-meet')).toBeInTheDocument();
     expect(screen.getByTestId('unified-ops-board')).toBeInTheDocument();
     expect(screen.queryByTestId('run-surface')).toBeNull();
+  });
+});
+
+describe('OperationsProduct — Plan spatial history matrix', () => {
+  const bracketData = {
+    courts: 2, total_slots: 8, rest_between_rounds: 0, interval_minutes: 15,
+    start_time: null, events: [], participants: [], play_units: [], assignments: [], results: [],
+  };
+
+  it.each([
+    ['Meet', true, 'ready'],
+    ['Meet', true, 'complete'],
+    ['Bracket', false, 'ready'],
+    ['Bracket', false, 'complete'],
+  ])('%s · %s keeps the court grid as the default', (_source, meet, phase) => {
+    mockTab.value = 'schedule';
+    mockPhase.value = phase;
+    mockConfig.value = meet ? { courtPolicy: 'pinned' } : null;
+    mockMeetBlocks.value = meet ? mockMeetBlocks.value : [];
+    mockBracketBlocks.value = meet ? [] : [
+      {
+        key: 'bracket:pu1', source: 'bracket', id: 'pu1', identity: identityFixture('MS R1'), span: 1,
+        status: 'scheduled', court: 1, slot: 0, sideA: 'Alice', sideB: 'Bob',
+        playerIds: [], done: false, started: false,
+      },
+    ];
+    mockBracketData.value = meet ? null : bracketData;
+
+    render(<OperationsProduct engines={{ meet, bracket: !meet }} />);
+
+    expect(screen.getByTestId('unified-ops-board')).toBeInTheDocument();
+    if (phase === 'complete') {
+      expect(screen.getByTestId('plan-review-note')).toHaveTextContent('Day complete · reviewing');
+      expect(screen.queryByText('The day is complete: review how it ran')).toBeNull();
+    } else {
+      expect(screen.queryByTestId('plan-review-note')).toBeNull();
+    }
+  });
+
+  it.each([
+    ['Meet', true],
+    ['Bracket', false],
+  ])('%s with no authoritative assignment stays in the list and names the missing history', (_source, meet) => {
+    mockTab.value = 'schedule';
+    mockPhase.value = 'complete';
+    mockConfig.value = meet ? { courtPolicy: 'pinned' } : null;
+    const block = {
+      key: `${meet ? 'meet' : 'bracket'}:unassigned`, source: meet ? 'meet' : 'bracket', id: 'unassigned',
+      identity: identityFixture('MS R1'), span: 1, status: 'finished', court: undefined, slot: undefined,
+      sideA: 'Alice', sideB: 'Bob', playerIds: [], done: true, started: true,
+    };
+    mockMeetBlocks.value = meet ? [block] : [];
+    mockBracketBlocks.value = meet ? [] : [block];
+    mockBracketData.value = meet ? null : bracketData;
+
+    render(<OperationsProduct engines={{ meet, bracket: !meet }} />);
+
+    expect(screen.getByTestId('plan-grid-unavailable')).toHaveTextContent('no placement has been inferred');
+    expect(screen.queryByTestId('unified-ops-board')).toBeNull();
+    expect(screen.getByTestId('unified-ops-list')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-review-note')).toHaveTextContent('Day complete · reviewing');
+  });
+
+  it('uses singular agreement when one assigned grid has one unassigned match', () => {
+    mockTab.value = 'schedule';
+    mockPhase.value = 'ready';
+    mockConfig.value = { courtPolicy: 'pinned' };
+    mockMeetBlocks.value = [
+      mockMeetBlocks.value[0],
+      {
+        key: 'meet:unassigned', source: 'meet', id: 'unassigned', identity: identityFixture('MS R1'), span: 1,
+        status: 'scheduled', court: undefined, slot: undefined, sideA: 'Carol', sideB: 'Dina',
+        playerIds: [], done: false, started: false,
+      },
+    ];
+
+    render(<OperationsProduct engines={{ meet: true, bracket: false }} />);
+
+    expect(screen.getByTestId('plan-unassigned-notice')).toHaveTextContent(
+      '1 match lacks a court and time assignment',
+    );
   });
 });
 

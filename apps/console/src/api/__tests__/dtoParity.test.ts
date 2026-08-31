@@ -94,6 +94,11 @@ const ALIASES: Record<string, string> = {
   CommandRequestDTO: 'CommandRequest',
   CommandResponseDTO: 'CommandResponse',
   ProposedMove: 'ProposedMoveDTO',
+  SetupIssueDTO: 'SetupIssue',
+  SetupSectionStateDTO: 'SetupSectionState',
+  TournamentActivityEntryDTO: 'ActivityEntry',
+  TournamentActivityFeedDTO: 'ActivityFeed',
+  TournamentSetupDTO: 'TournamentSetup',
 };
 
 /** Hand shapes with NO wire twin, each with the reason it has none.

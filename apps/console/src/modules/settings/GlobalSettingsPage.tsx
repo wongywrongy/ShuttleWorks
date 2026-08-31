@@ -19,7 +19,10 @@ import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from '../../platform/auth/passwordPolicy';
 import { FieldRow, Section } from '../../platform/engine-config/SettingsControls';
-import { EYEBROW_CLASS } from '../../lib/utils';
+import { EYEBROW_CLASS, TEXT_MUTED_XS, TEXT_TITLE_SM } from '../../lib/utils';
+import { useViewportBelow } from '../../hooks/useViewportBelow';
+import { SHELL_RAIL_MIN_WIDTH } from '../../platform/product-shell/WorkspaceShell';
+import { ActiveChoice } from '../../components/ActiveChoice';
 
 // Profile/security editing is locked for the local-mode bootstrap identity
 // (no password, no real account); a signed-in account (cloud mode, or any
@@ -262,9 +265,9 @@ function SessionsPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="text-sm font-medium text-foreground">{browser}</div>
-              <div className="text-xs text-muted-foreground">Current session · active now</div>
+              <div className={TEXT_MUTED_XS}>Current session · active now</div>
             </div>
-            <span className="rounded-sm bg-accent/10 px-1.5 py-0.5 text-2xs font-medium text-accent">
+            <span className="rounded-sm bg-action-selected-bg px-1.5 py-0.5 text-2xs font-medium text-action-selected-foreground">
               This device
             </span>
           </div>
@@ -281,7 +284,7 @@ function SessionsPage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-medium text-foreground">Sign out</div>
-            <div className="text-xs text-muted-foreground">End this session on this device.</div>
+            <div className={TEXT_MUTED_XS}>End this session on this device.</div>
           </div>
           <Button variant="destructive" onClick={() => void signOut()}>
             Sign out
@@ -307,41 +310,61 @@ export function GlobalSettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get('section');
   const section = SECTION_IDS.includes(requested ?? '') ? (requested as string) : 'profile';
+  const compact = useViewportBelow(SHELL_RAIL_MIN_WIDTH);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
         <ShuttleWorksMark />
-        <span className="text-sm font-semibold text-foreground">Account</span>
+        <span className={TEXT_TITLE_SM}>Account</span>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <nav className="w-56 shrink-0 space-y-4 overflow-y-auto border-r border-border p-3">
-          {NAV.map((g) => (
-            <div key={g.group} className="space-y-0.5">
-              <div className={`px-2 pb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
-                {g.group}
-              </div>
-              {g.items.map((it) => (
-                <button
-                  key={it.id}
-                  type="button"
-                  data-testid={`global-settings-${it.id}`}
-                  aria-pressed={section === it.id}
-                  onClick={() => setSearchParams({ section: it.id })}
-                  className={[
-                    'block w-full rounded-sm px-2 py-1.5 text-left text-sm',
-                    section === it.id
-                      ? 'bg-accent/10 font-medium text-accent'
-                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                  ].join(' ')}
-                >
-                  {it.label}
-                </button>
+      <div className={`flex min-h-0 flex-1 ${compact ? 'flex-col' : ''}`}>
+        {compact ? (
+          <div className="shrink-0 border-b border-border p-3">
+            <label htmlFor="global-settings-section" className={`mb-1 block ${EYEBROW_CLASS} text-muted-foreground`}>
+              Account section
+            </label>
+            <select
+              id="global-settings-section"
+              data-testid="global-settings-select"
+              value={section}
+              onChange={(event) => setSearchParams({ section: event.target.value })}
+              className="h-9 w-full rounded-sm border border-border-control bg-bg-elev px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {NAV.map((group) => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.items.map((item) => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </optgroup>
               ))}
-            </div>
-          ))}
-        </nav>
+            </select>
+          </div>
+        ) : (
+          <nav aria-label="Account sections" className="w-56 shrink-0 space-y-4 overflow-y-auto border-r border-border p-3">
+            {NAV.map((g) => (
+              <div key={g.group} className="space-y-0.5">
+                <div className={`px-2 pb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
+                  {g.group}
+                </div>
+                {g.items.map((it) => (
+                  <ActiveChoice
+                    key={it.id}
+                    active={section === it.id}
+                    geometry="row"
+                    semantics="page"
+                    data-testid={`global-settings-${it.id}`}
+                    onClick={() => setSearchParams({ section: it.id })}
+                    className="block w-full px-2 py-1.5 text-sm"
+                  >
+                    {it.label}
+                  </ActiveChoice>
+                ))}
+              </div>
+            ))}
+          </nav>
+        )}
 
         <div className="min-w-0 flex-1 overflow-y-auto">
           {section === 'profile' && <ProfilePage />}

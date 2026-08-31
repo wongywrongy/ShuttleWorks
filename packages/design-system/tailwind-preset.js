@@ -154,6 +154,7 @@ module.exports = {
           primary:         'hsl(var(--action-primary))',
           'primary-hover': 'hsl(var(--action-primary-hover))',
           'selected-bg':   'hsl(var(--action-selected-bg))',
+          'selected-foreground': 'hsl(var(--action-selected-foreground))',
         },
         focus: 'hsl(var(--border-focus))',
 

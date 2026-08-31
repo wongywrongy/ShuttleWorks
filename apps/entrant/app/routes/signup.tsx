@@ -65,6 +65,7 @@ import { FORM_FIELD } from '../lib/formField';
 import { safeNext } from '../lib/nextTarget';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import type { Route } from './+types/signup';
+import { CARD } from '../lib/ui';
 
 /** `EntrantConfigDTO` — `api/entries_json.py`. Exactly two keys, both public
  * by nature: a sitekey is rendered into every signup page, and the auth mode
@@ -169,14 +170,24 @@ function entryPathFor(slug: string | undefined): string {
   return slug ? safeNext(`/e/${encodeURIComponent(slug)}/enter`, '') : '';
 }
 
+function invitationPathFor(token: string | undefined): string {
+  return token ? safeNext(`/e/partner/${encodeURIComponent(token)}`, '') : '';
+}
+
 export default function SignupPage({ loaderData, params }: Route.ComponentProps) {
   const { turnstileSiteKey, formCsrf } = loaderData;
+  const contextParams = params as { slug?: string; token?: string };
   // Both suffixes are literals from this file, appended to an already
   // validated path, so composing them cannot invalidate it.
-  const entryPath = entryPathFor(params.slug);
-  const next = entryPath === '' ? ACCOUNT_READY_PAGE : `${entryPath}/created`;
-  const signInHref =
-    entryPath === '' ? '/e/login' : `/e/login?next=${entryPath}/signed-in`;
+  const entryPath = entryPathFor(contextParams.slug);
+  const invitationPath = invitationPathFor(contextParams.token);
+  const next =
+    invitationPath || (entryPath === '' ? ACCOUNT_READY_PAGE : `${entryPath}/created`);
+  const signInDestination =
+    invitationPath || (entryPath ? `${entryPath}/signed-in` : '');
+  const signInHref = signInDestination
+    ? `/e/login?next=${signInDestination}`
+    : '/e/login';
 
   return (
     // E1: the page system, not a bare column. Brief §4 — "auth pages as small
@@ -207,7 +218,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
           run. Ask the organizer to set your account up instead.
         </Notice>
 
-        <div className="grid gap-6 rounded-lg border border-rule-soft bg-surface-raised p-6 shadow-sm">
+        <div className={`grid gap-6 ${CARD}`}>
           {/*
             Posts ACROSS the tier boundary, not to this page's own URL: all of
             `/e/account/*` is FastAPI's (R8-A), and this page is node's, which
@@ -281,8 +292,8 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               hint="At least 8 characters. Very common passwords are refused."
               // Deleted for the reason spelled out in `login.tsx`: `TextField`'s
               // default "Show password" toggle is a `<button type="button">`
-              // with an `onClick`, and this tier ships no client JS, so it was
-              // inert.
+              // with an `onClick`; this form's only module is reserved for the
+              // Turnstile lifecycle, so the credential reveal stays absent.
               revealable={false}
             />
 
@@ -312,15 +323,26 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
                 backend's own config so it cannot drift from the secret it is
                 paired with. */}
             <div
+              id="turnstile-widget"
               className="cf-turnstile"
               data-sitekey={turnstileSiteKey}
               data-action="signup"
             />
+            <p
+              id="turnstile-status"
+              className="text-sm text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
+              Loading the human check
+            </p>
             <script
-              src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+              src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+              data-cfasync="false"
               async
               defer
             />
+            <script type="module" src="/e/assets/turnstile.js" defer />
 
             <Button type="submit" className="justify-self-start">
               Create account

@@ -3,10 +3,11 @@
         demo-up demo-rebuild demo-status demo-down demo-reset \
         demo-backup demo-backup-verify demo-restore-drill demo-restore demo-backup-install \
         demo-seed-preview demo-seed-apply demo-seed-resume demo-seed-status demo-seed-reset \
+        surface-books surface-books-status \
         entrant-dev full-dev local-dev \
         dev-postgres dev-postgres-stop \
         stop logs ps clean \
-        test test-e2e test-e2e-install test-e2e-rebuild test-e2e-dev check check-full check-fast \
+        test test-e2e test-e2e-install test-e2e-rebuild test-e2e-dev test-console-contracts check check-full check-fast \
         sim sim-ephemeral sim-all sim-test \
         generate-api engine-readme
 
@@ -40,6 +41,7 @@ DEMO_SEED_SOURCE_ARGS = $(if $(DEMO_MATCH_DATA),--match-data $(DEMO_MATCH_DATA))
 	$(if $(DEMO_JAPAN_RESULTS),--daily-results T027=$(DEMO_JAPAN_RESULTS)) \
 	$(if $(DEMO_CHINA_RESULTS),--daily-results T028=$(DEMO_CHINA_RESULTS)) \
 	--source-map $(DEMO_SEED_SOURCE_MAP)
+SURFACE_REPORT_DIR ?= docs/screenshots/ui-review
 
 # Every Python tree ruff is expected to lint. Spelled out rather than `.`
 # because pyproject.toml now sits at the repo root, so a bare `ruff check .`
@@ -69,6 +71,8 @@ help:
 	@echo "  make demo-seed-status   Show the resumable import manifest"
 	@echo "  make demo-seed-resume   Resume an interrupted fixture import"
 	@echo "  make demo-seed-reset    Delete only workspaces owned by this seed run"
+	@echo "  make surface-books      Capture numbered operator + entrant UI review PDFs"
+	@echo "  make surface-books-status Summarize the latest capture manifests or active run"
 	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host API on :8600"
 	@echo "  make full-dev           Both surfaces at once: operator :5173 + entrant :5174"
 	@echo "                          (local only — see docs/how-to/running-locally)"
@@ -183,6 +187,23 @@ demo-seed-reset: demo-backup
 	@$(DEMO_SEED_LOCKED) reset --seed-key $(DEMO_SEED_KEY) --confirm $(DEMO_SEED_KEY) \
 		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
 
+# Repeatable visual-review pipeline. Each capture writes an in-progress state
+# file while it runs and a durable manifest beside the PDF when it completes.
+surface-books:
+	@set -eu; \
+	demo_ip="$${DEMO_TAILSCALE_IP:-$$($(DEMO_COMPOSE) ip)}"; \
+	AUTH_ME_URL="http://$$demo_ip:8090/api/auth/me" \
+		node tools/surface-capture.mjs console "http://$$demo_ip:8090" \
+		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
+	node tools/surface-capture.mjs entrant "http://$$demo_ip:8091" \
+		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
+	@$(MAKE) --no-print-directory surface-books-status
+
+surface-books-status:
+	@node tools/surface-capture-status.mjs \
+		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.manifest.json" \
+		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.manifest.json"
+
 scheduler-dev:
 	@echo "Starting development environment..."
 	@echo "API: Docker | Console: npm dev server"
@@ -255,8 +276,17 @@ ps:
 
 # === Tests ===
 
+# The local backend suite gives every test its own SQLite/data directory, so
+# worker processes are isolated. ``auto`` uses the machine's available CPUs;
+# override with ``PYTEST_WORKERS=4`` when sharing a smaller machine. The CI-only
+# Postgres parity tests deliberately share and rebuild one schema, so setting
+# ``TEST_POSTGRES_URL`` falls back to serial pytest. Keep direct one-test
+# invocations serial too, avoiding worker startup cost.
+PYTEST_WORKERS ?= auto
+PYTEST_PARALLEL = $(if $(TEST_POSTGRES_URL),pytest,pytest -n $(PYTEST_WORKERS) --dist worksteal)
+
 test:
-	pytest
+	$(PYTEST_PARALLEL)
 
 test-e2e-install:
 	cd tests/e2e && npm install && npx playwright install --with-deps chromium
@@ -269,6 +299,9 @@ test-e2e-rebuild:
 
 test-e2e-dev:
 	cd tests/e2e && E2E_BASE_URL=http://localhost:5173 E2E_PLAY_BASE_URL=http://localhost:5174 E2E_MANAGE_STACK=0 npm run test:entrant-evidence
+
+test-console-contracts:
+	bash tests/e2e/run-console-contracts.sh
 
 # === Tournament simulator (internal dev tool) ===
 # Full-tournament workflow simulation over the real HTTP API. NOT part of
@@ -335,13 +368,15 @@ engine-readme:
 check: check-full
 
 check-full:
+	npm run test:contrast
+	npm run test:classes
 	npm run lint:scheduler
 # The TYPE gate, and the reason it is spelled out here rather than left to
 # `npm run build`. Until 2026-08-10 `make check` ran lint, vitest, depcruise,
 # ruff and pytest and NO build — so it structurally could not catch a
 # TypeScript error, while CLAUDE.md advertised it as "all local checks at
 # once". A `tsc` break reached a branch through exactly that hole. CI does
-# catch it (the interaction-smoke job runs `npm run build`, and `build` is
+# catch it (the console-browser job runs `npm run build`, and `build` is
 # `tsc -b && vite build`), so this closes a local/CI divergence, not a CI hole.
 #
 # `tsc -b` and not `npm run build`: the type check is the half that gates, the
@@ -381,7 +416,7 @@ check-full:
 # pytest so a boundary break reports in seconds instead of after the ten-minute
 # suite.
 	cd apps/api/src && lint-imports --config ../.importlinter
-	pytest
+	$(PYTEST_PARALLEL)
 	@echo ""
 	@echo "--- docs paths + build (blocking) ---"
 	npm run test:docs
@@ -394,6 +429,8 @@ check-full:
 # replacing the entrant SSR tier and full backend suite with their iteration
 # sized counterparts.
 check-fast:
+	npm run test:contrast
+	npm run test:classes
 	npm run lint:scheduler
 	cd apps/console && npx tsc -b
 	npm --prefix apps/console run test:run
@@ -404,7 +441,7 @@ check-fast:
 	npm run depcruise:entrant
 	ruff check $(PY_SOURCES)
 	cd apps/api/src && lint-imports --config ../.importlinter
-	pytest tests/backend/unit -m 'not slow'
+	$(PYTEST_PARALLEL) tests/backend/unit -m 'not slow'
 	@echo ""
 	@echo "--- docs paths + build (blocking) ---"
 	npm run test:docs

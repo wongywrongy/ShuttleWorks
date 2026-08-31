@@ -10,15 +10,28 @@
  */
 import type { Match, MatchStatus } from '../../platform/domain/match';
 import { matchKey, parseMatchKey } from '../../platform/domain/match';
+import { meetMatchIdentityFromStored } from '../../platform/domain/matchIdentity';
 import type { MatchDTO, ScheduleDTO, MatchStateDTO, TournamentConfig } from '../../api/dto';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
-import { playUnitSideLabels, buildPlayUnitLabels } from '../bracket/bracketLabels';
+import {
+  playUnitSideLabels,
+  buildPlayUnitIdentities,
+  buildPlayUnitLabels,
+} from '../bracket/bracketLabels';
 import { msToSlot, parseMatchStartMs, hasStaleActualTiming } from '../../lib/time';
 
 /** @deprecated Use `Match` from `platform/domain/match`. Kept as an alias. */
 export type OpsBlock = Match;
 
 const TBD = 'TBD';
+const UNRESOLVED_OPERATIONAL_SIDE = 'Participant unresolved: action required';
+
+function operationalSide(label: string, status: MatchStatus): string {
+  if (status === 'scheduled') return label;
+  return label === TBD || /^(Winner|Loser) of /.test(label)
+    ? UNRESOLVED_OPERATIONAL_SIDE
+    : label;
+}
 
 function meetSide(ids: string[] | undefined, nameById: Record<string, string>): string {
   if (!ids || ids.length === 0) return TBD;
@@ -29,12 +42,6 @@ function meetSide(ids: string[] | undefined, nameById: Record<string, string>): 
  *  eye; this keeps the ids for the machine. */
 function meetPlayerIds(m: MatchDTO): string[] {
   return [...new Set([...(m.sideA ?? []), ...(m.sideB ?? []), ...(m.sideC ?? [])])];
-}
-
-function meetLabel(m: MatchDTO): string {
-  if (m.eventRank) return m.eventRank;
-  if (m.matchNumber) return `M${m.matchNumber}`;
-  return m.id.slice(0, 4);
 }
 
 /**
@@ -94,15 +101,25 @@ export function meetToOpsBlocks(
       source: 'meet' as const,
       id: m.id,
       key: matchKey('meet', m.id),
-      label: meetLabel(m),
+      // F-UNI-21/23: Meet's legacy rank is decomposed once at the adapter;
+      // Operations carries the value object, never an opaque display string.
+      identity: meetMatchIdentityFromStored({
+        event_rank: m.eventRank,
+        sequence: m.matchNumber,
+        configured_event_codes: Object.keys(config?.rankCounts ?? {}),
+      }),
       colorKey: m.eventRank ?? undefined,
       court: court ?? undefined,
       slot: slot,
       span: a?.durationSlots ?? 1,
       status,
-      sideA: meetSide(m.sideA, nameById),
-      sideB: meetSide(m.sideB, nameById),
+      sideA: operationalSide(meetSide(m.sideA, nameById), status),
+      sideB: operationalSide(meetSide(m.sideB, nameById), status),
       playerIds: meetPlayerIds(m),
+      score:
+        status === 'finished' && st?.score
+          ? { sideA: st.score.sideA, sideB: st.score.sideB, sets: st.sets }
+          : undefined,
       done: status === 'finished',
       started: status === 'started' || status === 'finished',
       actualStartSlot,
@@ -126,6 +143,23 @@ function bracketPlayerIds(
   return [...new Set(ids)];
 }
 
+/** A bracket result's score in the `Match` contract shape: sets carried
+ *  verbatim, the aggregate derived as sets won per side. A walkover or a
+ *  Simple-mode result has no set list → no score (never a fabricated 0–0). */
+function bracketScore(
+  result: { score?: { sets: { sideA: number; sideB: number }[] } | null } | undefined,
+): Match['score'] {
+  const sets = result?.score?.sets;
+  if (!sets || sets.length === 0) return undefined;
+  let a = 0;
+  let b = 0;
+  for (const set of sets) {
+    if (set.sideA > set.sideB) a++;
+    else if (set.sideB > set.sideA) b++;
+  }
+  return { sideA: a, sideB: b, sets };
+}
+
 /** Build OpsBlocks for the bracket engine from its polled snapshot. */
 export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
   const nameById = Object.fromEntries(data.participants.map((p) => [p.id, p.name]));
@@ -140,25 +174,33 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
   // Operator-friendly labels (e.g. "MS QF2") for BOTH the chip label and the
   // "Winner of …" feeder text — never mix the friendly name with the raw id.
   const labelById = buildPlayUnitLabels(data);
+  const identityById = buildPlayUnitIdentities(data);
   return data.play_units.map((pu) => {
     const a = assignByPu.get(pu.id);
     const result = resultByPu.get(pu.id);
-    const { a: sideA, b: sideB } = playUnitSideLabels(pu, nameById, labelById);
+    const labels = playUnitSideLabels(pu, nameById, labelById);
     const started = a?.actual_start_slot != null;
     const status: MatchStatus = result ? 'finished' : started ? 'started' : 'scheduled';
     return {
       source: 'bracket' as const,
       id: pu.id,
       key: matchKey('bracket', pu.id),
-      label: labelById.get(pu.id) ?? pu.id,
+      // F-UNI-21/22: Bracket and Meet now enter Operations with the same
+      // decomposed identity contract. The machine id remains separate.
+      identity: identityById.get(pu.id)!,
       colorKey: disciplineByEvent.get(pu.event_id) ?? pu.event_id,
       court: a ? a.court_id : undefined,
       slot: a?.slot_id,
       span: a?.duration_slots ?? 1,
       status,
-      sideA,
-      sideB,
+      // A future scheduled match may truthfully name its feeder. Once the
+      // match is started or terminal, an unresolved feeder is an integrity
+      // alert, never a participant label. The server guards this transition;
+      // this projection is the fail-safe for legacy bad rows.
+      sideA: operationalSide(labels.a, status),
+      sideB: operationalSide(labels.b, status),
       playerIds: bracketPlayerIds(pu, membersById),
+      score: bracketScore(result),
       done: result != null,
       started,
       actualStartSlot: a?.actual_start_slot ?? undefined,

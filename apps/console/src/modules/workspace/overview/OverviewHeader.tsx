@@ -1,15 +1,15 @@
 /**
- * The Overview's identity block — name, kind/date line, lifecycle badge, in
- * one tight tier instead of the loose stack it replaced (SP-UI-1 3b).
+ * The Overview's identity block — name, kind/date line, in-header primary
+ * action (G3.1).
  *
- * `action` is the phase's primary CTA (SP-CONSOLE-REFINE G3.1): the primary
- * action lives top-right of the content header, not mid-page below the stats.
+ * No lifecycle pill here (SP-OPCON-1 SWP-3, X4): the shell's
+ * `WorkspaceIdentityBar` already renders the one lifecycle StatusPill for
+ * every workspace page, and this header used to repeat it two lines below —
+ * the evidence workspace read "COMPLETE" twice in one viewport. One family,
+ * one render; the phase stepper below carries progression, not status.
  */
 import type { ReactNode } from 'react';
-import { StatusPill } from '@scheduler/design-system';
 import type { TournamentSummaryDTO } from '../../../api/dto';
-import { lifecycleChip } from '../../../platform/domain/lifecycle';
-import { resolvePhase } from '../../../platform/domain/overviewPhase';
 import { formatEventDate } from './railRows';
 
 export function OverviewHeader({
@@ -21,10 +21,6 @@ export function OverviewHeader({
 }) {
   const kindLabel = summary.kind === 'bracket' ? 'Bracket tournament' : 'Meet day';
   const date = formatEventDate(summary.tournamentDate);
-  // Reuse the SHARED precedence (archived > live > complete) rather than
-  // encoding a fourth reading of the same two fields. LIVE is suppressed
-  // (R-D) — the live panel's "N on court" line already says it.
-  const badge = lifecycleChip(resolvePhase(summary), summary.status);
 
   return (
     <div className="flex items-start justify-between gap-4">
@@ -37,14 +33,7 @@ export function OverviewHeader({
           {date ? ` · ${date}` : ''}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
-        {badge ? (
-          <StatusPill tone={badge.tone} dot className="mt-1">
-            {badge.text}
-          </StatusPill>
-        ) : null}
-        {action}
-      </div>
+      <div className="flex shrink-0 items-center gap-3">{action}</div>
     </div>
   );
 }

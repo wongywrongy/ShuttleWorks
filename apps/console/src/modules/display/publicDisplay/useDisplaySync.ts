@@ -38,6 +38,8 @@ export interface UseDisplaySyncResult {
   freshness: FreshnessState;
   syncError: string | null;
   terminal: boolean;
+  /** Epoch milliseconds of the last successful projection read. */
+  lastSyncedAt: number | null;
 }
 
 export function useDisplaySync(now: Date): UseDisplaySyncResult {
@@ -125,5 +127,5 @@ export function useDisplaySync(now: Date): UseDisplaySyncResult {
     return deriveFreshness(age, TOURNAMENT_POLL_MS);
   }, [lastSyncMs, now, syncError]);
 
-  return { freshness, syncError, terminal };
+  return { freshness, syncError, terminal, lastSyncedAt: lastSyncMs };
 }

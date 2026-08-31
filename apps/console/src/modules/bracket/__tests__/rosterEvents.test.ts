@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { badgesByPlayerId, toUpsertParticipant } from '../rosterEvents';
+import {
+  badgesByPlayerId,
+  partnerIdForPlayer,
+  toUpsertParticipant,
+} from '../rosterEvents';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
 /** Minimal snapshot: only the fields badgesByPlayerId reads. */
@@ -105,5 +109,35 @@ describe('toUpsertParticipant', () => {
     expect(
       toUpsertParticipant({ id: 'MS-T1', name: 'A / B', members: ['a', 'b'], seed: 1 }),
     ).toEqual({ id: 'MS-T1', name: 'A / B', members: ['a', 'b'], seed: 1 });
+  });
+});
+
+describe('partnerIdForPlayer', () => {
+  it('resolves the other TEAM member from the event snapshot', () => {
+    expect(
+      partnerIdForPlayer(
+        {
+          participants: [
+            { id: 'MD-T1', name: 'Ana / Bruno', members: ['p-ana', 'p-bruno'] },
+          ],
+        },
+        'p-ana',
+      ),
+    ).toBe('p-bruno');
+  });
+
+  it('returns null for a singleton or a missing member', () => {
+    expect(
+      partnerIdForPlayer(
+        { participants: [{ id: 'p-ana', name: 'Ana' }] },
+        'p-ana',
+      ),
+    ).toBeNull();
+    expect(
+      partnerIdForPlayer(
+        { participants: [{ id: 'MD-T1', name: 'Ana / ???', members: ['p-ana'] }] },
+        'p-ana',
+      ),
+    ).toBeNull();
   });
 });

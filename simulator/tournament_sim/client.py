@@ -263,13 +263,38 @@ class SimClient:
         kind: str = "meet",
         modules: Optional[list[dict]] = None,
         tournament_date: Optional[str] = None,
+        tournament_end_date: Optional[str] = None,
+        time_zone: Optional[str] = None,
     ) -> dict:
         body: dict[str, Any] = {"name": name, "kind": kind}
         if modules is not None:
             body["modules"] = modules
         if tournament_date is not None:
             body["tournamentDate"] = tournament_date
+        if tournament_end_date is not None:
+            body["tournamentEndDate"] = tournament_end_date
+        if time_zone is not None:
+            body["timeZone"] = time_zone
         return self._json("POST", "/tournaments", json=body, expect=OK_OR_CREATED)
+
+    def update_tournament(self, tid: str, body: dict) -> dict:
+        return self._json("PATCH", f"/tournaments/{tid}", json=body)
+
+    def seed_setup_sections(self, tid: str, sections: dict[str, dict]) -> dict:
+        """Write Setup sections in one optimistic-concurrency chain."""
+        current = self.request("GET", f"/tournaments/{tid}/setup")
+        latest = current.json()
+        etag = current.headers.get("etag")
+        for section, data in sections.items():
+            response = self.request(
+                "PATCH",
+                f"/tournaments/{tid}/setup/{section}",
+                json={"data": data},
+                headers={"If-Match": etag} if etag else {},
+            )
+            latest = response.json()
+            etag = response.headers.get("etag")
+        return latest
 
     def list_tournaments(self) -> list[dict]:
         """``GET /tournaments`` — what the Hub lists for *this* identity.
@@ -278,6 +303,19 @@ class SimClient:
         director does not see another org's events.
         """
         return self._json("GET", "/tournaments")
+
+    def create_invite(self, tid: str, role: str, email: Optional[str] = None) -> dict:
+        """Create a workspace invite through the supported ownership seam."""
+        body: dict[str, str] = {"role": role}
+        if email is not None:
+            body["email"] = email
+        return self._json(
+            "POST", f"/tournaments/{tid}/invites", json=body, expect={201}
+        )
+
+    def accept_invite(self, token: str) -> dict:
+        """Accept an invite as the identity held by this client's cookie jar."""
+        return self._json("POST", f"/invites/{token}/accept")
 
     def delete_tournament(self, tid: str) -> None:
         self.request("DELETE", f"/tournaments/{tid}", expect={204})

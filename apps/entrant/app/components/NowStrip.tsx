@@ -26,19 +26,18 @@ export function NowStrip({ row, moreCount }: { row: SeasonRow; moreCount: number
   ].filter((part): part is string => part !== null && part !== '');
 
   return (
-    <section aria-label="Now playing" className="bg-surface-inverse">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-        <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-status-live" />
-        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-surface-inverse-muted">
+    <section aria-label="Now playing" className="border-y border-rule-soft">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 border-s-2 border-s-status-live px-4 py-3">
+        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Now playing
         </span>
-        <span className="text-sm font-semibold text-surface-inverse-ink">
+        <span className="text-sm font-semibold text-foreground">
           {row.name ?? row.slug}
         </span>
-        <span className="text-sm text-surface-inverse-muted">{parts.join(' · ')}</span>
+        <span className="text-sm text-muted-foreground">{parts.join(' · ')}</span>
         <a
           href={`/e/${encodeURIComponent(row.slug)}?tab=draws`}
-          className="ml-auto text-sm font-semibold text-surface-inverse-ink underline-offset-4 hover:underline"
+          className="ml-auto text-sm font-semibold text-accent underline-offset-4 hover:underline"
         >
           Follow live · draws &amp; results →
         </a>
@@ -47,7 +46,7 @@ export function NowStrip({ row, moreCount }: { row: SeasonRow; moreCount: number
           // "keep reading down this page".
           <a
             href="#calendar"
-            className="text-sm text-surface-inverse-muted underline-offset-4 hover:underline"
+            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
           >
             +{moreCount} more
           </a>

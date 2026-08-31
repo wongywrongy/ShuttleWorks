@@ -1,8 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { DisplayProduct } from '../DisplayProduct';
+import { apiClient } from '../../../api/client';
+
+vi.mock('../../../api/client', () => ({
+  apiClient: {
+    getDisplayToken: vi.fn(),
+  },
+}));
 
 // The embedded public display is heavy + starts its own polling; stub it so
 // these tests focus on DisplayProduct's own routing affordances.
@@ -31,25 +38,33 @@ function renderAt(id: string) {
 }
 
 describe('DisplayProduct', () => {
-  it('opens fullscreen with the workspace id query param (standalone display needs ?id=)', async () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
+      token: 'display-secret',
+      url: '/display?token=display-secret',
+    });
+  });
+
+  it('opens fullscreen with the revocable capability URL', async () => {
     renderAt('abc123');
     // Flush the lazy/Suspense embed so it resolves inside act (pristine output).
     await screen.findByTestId('public-display');
-    const link = screen.getByRole('link', { name: /open fullscreen/i });
-    expect(link).toHaveAttribute('href', '/display?id=abc123');
+    const link = await screen.findByRole('link', { name: /open fullscreen/i });
+    expect(apiClient.getDisplayToken).toHaveBeenCalledWith('abc123');
+    expect(link).toHaveAttribute('href', '/display?token=display-secret');
     expect(link).toHaveAttribute('target', '_blank');
   });
 
-  it('Configure display goes to the Display config surface, not meet setup', async () => {
+  it('Configure display goes to the canonical Display config surface', async () => {
     // This asserted `setup?section=display` — the MEET Configuration page,
     // plus a `?section=` value no switcher has ever had. "Configure display"
-    // landed the operator on meet scoring settings. Display owns
-    // `display-config` (moduleContract ownedSegments).
+    // landed the operator on meet scoring settings. Publish owns the
+    // canonical display configuration destination.
     renderAt('abc123');
     await screen.findByTestId('public-display');
-    await userEvent.click(screen.getByRole('button', { name: /configure display/i }));
+    await userEvent.click(screen.getByRole('link', { name: /configure display/i }));
     expect(screen.getByTestId('loc')).toHaveTextContent(
-      '/tournaments/abc123/display-config',
+      '/tournaments/abc123/publish/displays',
     );
   });
 });

@@ -1,3 +1,4 @@
+import { identityFixture } from './identityFixture';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { UnifiedOpsList } from '../UnifiedOpsList';
@@ -6,7 +7,7 @@ import type { OpsBlock } from '../opsBlock';
 function blk(p: Partial<OpsBlock> & Pick<OpsBlock, 'source' | 'id'>): OpsBlock {
   return {
     key: `${p.source}:${p.id}`,
-    label: p.id,
+    identity: identityFixture(p.id),
     span: 1,
     status: 'scheduled',
     sideA: 'A',
@@ -49,5 +50,40 @@ describe('UnifiedOpsList', () => {
   it('omits action buttons when no handler is passed (read-only Courts overview)', () => {
     render(<UnifiedOpsList blocks={BLOCKS} />);
     expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+  });
+
+  it('removes the location column from a finished section when it never varies', () => {
+    render(
+      <UnifiedOpsList
+        blocks={[
+          blk({ source: 'bracket', id: 'done-1', done: true, status: 'finished' }),
+          blk({ source: 'bracket', id: 'done-2', done: true, status: 'finished' }),
+        ]}
+      />,
+    );
+    expect(screen.queryByTestId('ops-row-location')).not.toBeInTheDocument();
+  });
+
+  it('removes invariant finished markers but keeps markers when a section varies', () => {
+    const { unmount } = render(
+      <UnifiedOpsList
+        blocks={[
+          blk({ source: 'bracket', id: 'done-1', done: true, status: 'finished' }),
+          blk({ source: 'bracket', id: 'done-2', done: true, status: 'finished' }),
+        ]}
+      />,
+    );
+    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(0);
+    unmount();
+
+    render(
+      <UnifiedOpsList
+        blocks={[
+          blk({ source: 'meet', id: 'playing', court: 1, slot: 0, status: 'started', started: true }),
+          blk({ source: 'meet', id: 'scheduled', court: 2, slot: 1, status: 'scheduled' }),
+        ]}
+      />,
+    );
+    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(2);
   });
 });

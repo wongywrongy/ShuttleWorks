@@ -1,4 +1,5 @@
 import { PAGE_BODY_WIDTH } from '../../components/control-plane';
+import { useNavigate } from 'react-router-dom';
 import { useWorkspaceModules } from '../../platform/domain/useWorkspaceModules';
 import { ModuleCatalogRow } from './ModuleCatalogRow';
 
@@ -9,6 +10,7 @@ import { ModuleCatalogRow } from './ModuleCatalogRow';
 const OPERATIONAL_IDS = new Set(['meet', 'bracket']);
 
 export function ModulesSettingsTab({ tid }: { tid: string }) {
+  const navigate = useNavigate();
   const { modules, enable, disable } = useWorkspaceModules(tid);
 
   // Every disable rule now surfaces BEFORE the click. Two were always
@@ -58,6 +60,17 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
               module={m}
               onEnable={() => enable(m.id)}
               onDisable={() => disable(m.id)}
+              hasData={m.hasData}
+              onConfigure={() =>
+                navigate(
+                  {
+                    meet: `/tournaments/${tid}/setup/general`,
+                    bracket: `/tournaments/${tid}/competition/draws`,
+                    display: `/tournaments/${tid}/publish/displays`,
+                    entries: `/tournaments/${tid}/participants/entries`,
+                  }[m.id],
+                )
+              }
               blockedReason={blockedReason(m)}
             />
           ))

@@ -4,10 +4,10 @@
  * `tournament.render.test.ts` harness: the REAL @react-router/dev pipeline,
  * request in, bytes out).
  *
- * My Entries' server half is deliberately empty (R8-D): the assertions here
- * are that the shell says nothing personal, carries the mount point and the
- * ONE external script — and that no loader ran at all (the fetch stub
- * stays uncalled, which is the structural no-relay claim made behavioural).
+ * My Entries' server half only observes the entrant cookie's presence (R8-D):
+ * signed-out documents say how to sign in without mounting the credentialed
+ * script, while signed-in documents carry the mount point and one external
+ * script. No private fetch occurs during either SSR render.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
@@ -30,7 +30,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function respond(body: unknown, status: number, path: string): Promise<Response> {
+async function respond(
+  body: unknown,
+  status: number,
+  path: string,
+  cookie?: string,
+): Promise<Response> {
   vi.stubGlobal(
     'fetch',
     vi.fn(
@@ -45,29 +50,39 @@ async function respond(body: unknown, status: number, path: string): Promise<Res
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
   return createRequestHandler(build, 'development')(
-    new Request(`http://entrant.test${path}`),
+    new Request(`http://entrant.test${path}`, cookie ? { headers: { cookie } } : undefined),
   );
 }
 
-describe('/e/me/entries — the anonymous shell', () => {
-  it('renders heading, mount point, noscript and the one external script', async () => {
+describe('/e/me/entries — the session-aware shell', () => {
+  it('renders a sign-in action for signed-out visitors', async () => {
     const response = await respond(PAGE, 200, '/e/me/entries');
     const html = await response.text();
 
     expect(response.status).toBe(200);
     expect(html).toContain('My entries');
-    expect(html).toContain('id="my-entries-root"');
-    expect(html).toContain('Loading your entries.');
-    expect(html).toContain('<script type="module" src="/e/assets/my-entries.js">');
-    expect(html).toContain('<noscript>');
+    expect(html).toContain('Sign in to see your entries');
+    expect(html).toContain('href="/e/login?next=/e/me/entries"');
+    expect(html).not.toContain('id="my-entries-root"');
+    expect(html).not.toContain('/e/assets/my-entries.js');
     // No inline script anywhere: the root's no-hydration posture holds on
     // the one page that ships browser behaviour.
     expect(html).not.toMatch(/<script(?![^>]*src=)/);
   });
 
-  it('runs NO loader: the API is never called for this document', async () => {
+  it('does not request private data for signed-out visitors', async () => {
     await respond(PAGE, 200, '/e/me/entries');
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it('loads the private browser module only when a session is present', async () => {
+    const html = await (
+      await respond(PAGE, 200, '/e/me/entries', 'sw_play_session=session-value')
+    ).text();
+    expect(html).toContain('id="my-entries-root"');
+    expect(html).toContain('Loading your entries.');
+    expect(html).toContain('<script type="module" src="/e/assets/my-entries.js">');
+    expect(html).toContain('<noscript>');
   });
 
   it('says nothing personal in the document itself', async () => {

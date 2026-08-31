@@ -86,11 +86,18 @@ keeps optimistic updates and rollback in one place.
 
 ## Theme & density
 
-- HSL theme tokens defined in `index.css` under `:root` (light) and
-  `.dark` (dark).
-- Tailwind reads them via the `darkMode: ["class"]` config; semantic
-  utilities like `bg-background`, `text-foreground`, `border-border`,
-  `bg-card`, `bg-muted`, `text-muted-foreground` resolve per theme.
+- HSL theme tokens live in `packages/design-system/tokens.css` under
+  `:root` (light) and `.dark` (dark); `index.css` is a thin shell that
+  just imports them (plus `globals.css`) — do not define tokens in the
+  app. Token rules: `packages/design-system/DESIGN.md` +
+  `DESIGN_COLOR.md`.
+- Tailwind reads them via the shared preset
+  (`packages/design-system/tailwind-preset.js`, `darkMode: ["class"]`);
+  semantic utilities like `bg-background`, `text-foreground`,
+  `border-border`, `bg-card`, `bg-muted`, `text-muted-foreground`
+  resolve per theme. `npm run test:classes` fails on token-shaped
+  utilities the preset doesn't wire; `npm run test:contrast` gates the
+  token values for WCAG AA.
 - `useAppliedTheme()` reads the preference, resolves `system` against
   `prefers-color-scheme`, and toggles `.dark` on `<html>`. Mounted
   once in `AppShell.tsx`.
@@ -101,10 +108,12 @@ keeps optimistic updates and rollback in one place.
 - `modules/display/PublicDisplayPage.tsx` (the TV view) is **intentionally
   dark-only**, audience is gym projection. Don't add a toggle there.
 
-When adding a new surface: prefer semantic tokens. For status colour
-(emerald = live, amber = called, red = blocked) keep the hue and add
-`dark:bg-*-500/15 dark:text-*-300` companions so it stays legible in
-dark mode.
+When adding a new surface: use semantic tokens only. For status colour
+use the `--status-*` families through the preset (`bg-status-live-bg`,
+`text-status-warning`, `bg-status-blocked-bg`, …) — both themes are
+mapped in `tokens.css` and contrast-gated, so no `dark:` companions are
+needed. The stock Tailwind palette (`emerald-*`, `amber-*`, `red-*`) is
+forbidden (DESIGN.md §1.6).
 
 ## Adding a module or a tab
 

@@ -7,6 +7,7 @@ import type { WorkspaceModule, WorkspaceIdentity } from './types';
 import type { AppTab } from '../../store/uiStore';
 import { useViewportBelow } from '../../hooks/useViewportBelow';
 import type { WsKind } from './workspaceNav';
+import { ActiveChoice } from '../../components/ActiveChoice';
 
 /**
  * Below this viewport width the workspace rail becomes an off-canvas drawer.
@@ -125,23 +126,19 @@ export function WorkspaceShell({
           {/* Labelled, not glyph-only: the rail's account gear is the same
               icon with a different scope, and the two are visible at once
               (SP-CONSOLE-REFINE G4). */}
-          <button
-            type="button"
+          <ActiveChoice
+            active={adminActive}
+            geometry="segment"
+            semantics="page"
             data-testid="workspace-admin-gear"
             aria-label="Workspace administration"
-            aria-pressed={adminActive}
             title="Workspace administration"
             onClick={onOpenAdmin}
-            className={[
-              'inline-flex h-7 items-center gap-1.5 rounded px-2 text-xs font-medium transition-colors',
-              adminActive
-                ? 'bg-accent/10 text-accent'
-                : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-            ].join(' ')}
+            className="inline-flex h-7 items-center gap-1.5 px-2 py-0 text-xs font-medium"
           >
             <GearSix aria-hidden className="h-4 w-4" />
             Workspace
-          </button>
+          </ActiveChoice>
           {statusSlot}
         </div>
       </div>
