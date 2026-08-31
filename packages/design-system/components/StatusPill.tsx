@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { cn } from '../lib/utils';
+import { STATUS_TONE, type StatusToneName } from './statusTone';
 
 /**
  * StatusPill — semantic status badge.
@@ -27,25 +28,30 @@ import { cn } from '../lib/utils';
 
 export type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber' | 'idle' | 'done';
 
-const TONE_BG: Record<PillTone, string> = {
-  green:  'bg-status-live-bg text-status-live border border-status-live/40',
-  yellow: 'bg-status-warning-bg text-status-warning border border-status-warning/40',
-  red:    'bg-status-blocked-bg text-status-blocked border border-status-blocked/40',
-  blue:   'bg-status-started-bg text-status-started border border-status-started/40',
-  amber:  'bg-status-called-bg text-status-called border border-status-called/40',
-  idle:   'bg-status-idle-bg text-status-idle border border-status-idle/40',
-  done:   'bg-status-done-bg text-status-done border border-status-done/40',
+/** The legacy pill vocabulary, aliased onto the shared tone source
+ *  (`statusTone.ts`, ADR 0020) so both registers draw one palette. */
+const TONE_NAME: Record<PillTone, StatusToneName> = {
+  green: 'live',
+  yellow: 'warning',
+  red: 'blocked',
+  blue: 'started',
+  amber: 'called',
+  idle: 'idle',
+  done: 'done',
 };
 
-const TONE_DOT: Record<PillTone, string> = {
-  green:  'bg-status-live',
-  yellow: 'bg-status-warning',
-  red:    'bg-status-blocked',
-  blue:   'bg-status-started',
-  amber:  'bg-status-called',
-  idle:   'bg-status-idle',
-  done:   'bg-status-done',
-};
+// Composed at module scope in the pill's historical order — the rendered
+// strings are byte-identical to the previous inline tables.
+const TONE_BG = Object.fromEntries(
+  (Object.keys(TONE_NAME) as PillTone[]).map((t) => {
+    const s = STATUS_TONE[TONE_NAME[t]];
+    return [t, `${s.bg} ${s.text} border ${s.border}`];
+  }),
+) as Record<PillTone, string>;
+
+const TONE_DOT = Object.fromEntries(
+  (Object.keys(TONE_NAME) as PillTone[]).map((t) => [t, STATUS_TONE[TONE_NAME[t]].dot]),
+) as Record<PillTone, string>;
 
 interface Props {
   tone: PillTone;

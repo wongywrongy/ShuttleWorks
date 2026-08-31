@@ -211,6 +211,7 @@ export default defineConfig({
           { text: '0017 - Domain-derived Setup readiness', link: '/explanation/decisions/0017-domain-derived-setup-readiness' },
           { text: '0018 - Public person universality', link: '/explanation/decisions/0018-public-person-universality' },
           { text: '0019 - Design-system consolidation pass', link: '/explanation/decisions/0019-design-system-consolidation-pass' },
+          { text: '0020 - Design-language resolutions', link: '/explanation/decisions/0020-design-language-resolutions' },
         ],
       },
     ],

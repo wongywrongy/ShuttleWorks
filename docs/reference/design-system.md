@@ -16,6 +16,7 @@ Authoritative sources this page indexes (all in the repo, all enforced):
 | `packages/design-system/MOTION.md` | The motion scale (`--motion-*`) and easing vocabulary |
 | ADR 0013 (`docs/explanation/decisions/0013-shared-ui-promotion-policy.md`) | Where shared UI lives and when it moves |
 | ADR 0019 (`docs/explanation/decisions/0019-design-system-consolidation-pass.md`) | The 2026-08 consolidation pass and its recorded deferrals |
+| ADR 0020 (`docs/explanation/decisions/0020-design-language-resolutions.md`) | The design-language rulings: per-tier radius, one status-tone source, EmptyState variants, dialog primaries |
 
 ## Token architecture
 
@@ -98,7 +99,8 @@ cross-module import is a build **error**):
 | --- | --- |
 | `Button` | cva: `variant` (incl. `brand`, `outline`) × `size` (`xs`…, icon), `asChild` |
 | `Card` (+ Header/Footer/Title/Description/Content) | cva: `variant` (default `frame`); deliberately square-cornered (BRAND.md) |
-| `StatusPill` | `tone: green \| yellow \| red \| blue \| amber \| idle \| done` |
+| `StatusPill` | `tone: green \| yellow \| red \| blue \| amber \| idle \| done` — backed by `STATUS_TONE` (`statusTone.ts`), the one tone→class source shared with the entrant `StatusChip` (ADR 0020) |
+| `EmptyState` | `variant: centered \| card \| editorial` — the three tiers' empty-state registers as explicit variants (ADR 0020) |
 | `Notice` | `tone: info \| warning \| danger \| success \| accent` |
 | `TextField` | `size: sm \| md`; always renders a visible `<label>`; hint/error wired to aria |
 | `Select` | Radix; `size: sm \| md`, `clearable`, `mono`. **Not usable on the entrant tier** (portal + client events) |
@@ -126,7 +128,9 @@ styles* of the system:
 | Constant | Location | Treatment |
 | --- | --- | --- |
 | `INTERACTIVE_BASE` / `INTERACTIVE_BASE_QUIET` | `apps/console/src/lib/utils.ts` | Click feedback: transition, focus ring, press scale, disabled |
-| `EYEBROW_CLASS` | same | The 10px semibold uppercase micro-label (tone appended by caller) |
+| `EYEBROW_CLASS` | `packages/design-system/components/textStyles.ts` (re-exported from console `lib/utils.ts`) | The 10px semibold uppercase micro-label (tone appended by caller) |
+| `STATUS_TONE` | `packages/design-system/components/statusTone.ts` | Per-part tone→class map (`bg`/`text`/`border`/`dot`) both status registers compose from |
+| `PANEL_RADIUS` | `apps/console/src/lib/utils.ts` | `rounded-sm` — the deliberate console panel radius (ADR 0020) |
 | `TEXT_MUTED_2XS` / `TEXT_MUTED_XS` / `TEXT_MUTED_SM` | same | The secondary-text ladder |
 | `TEXT_TITLE` / `TEXT_TITLE_SM` | same | Panel/row headings (base/sm semibold) |
 | `TEXT_EMPHASIS` | same | `font-medium text-foreground` inline emphasis |
@@ -174,19 +178,25 @@ not add wrapper elements.
   are partial treatments meant for composition.
 - New identifiers say *workspace*, not *tournament* (ADR 0014).
 
+## Resolved design-language rulings (ADR 0020)
+
+- **Card radius is per-tier by decision**: DS `Card` square (BRAND.md),
+  console panels `rounded-sm` (`PANEL_RADIUS`), entrant cards
+  `rounded-lg` (`CARD`). Two Figma card components.
+- **Status badges**: one tone palette (`STATUS_TONE`), two registers —
+  operator uppercase `rounded-sm` (`StatusPill`), public sentence-case
+  `rounded-full` (entrant `StatusChip`).
+- **EmptyState**: one DS component, three variants
+  (`centered | card | editorial`); the old per-tier components are thin
+  wrappers.
+- **Ops dialog primaries** use `Button variant="default" size="sm"`;
+  dialog cancels, the ink-fill `bg-primary` primaries, and selection
+  chips stay raw by ruling (annotated in place — the open designer
+  questions live in ADR 0020).
+
 ## Known inconsistencies (recorded, not silently normalized)
 
-Deliberately left for a design decision — see ADR 0019:
-
-- **Card radius:** shared `Card` is square (BRAND.md); the entrant card
-  and console panels use `rounded-lg`/`rounded-sm`. Unify before building
-  the Figma card component.
-- **Status pill register:** shared/console `StatusPill` is uppercase
-  `rounded-sm`; entrant `StatusChip` is sentence-case `rounded-full` with
-  the same tone map.
-- **Three EmptyState designs** (console centered zero-state, entrant
-  card, bracket editorial section) share a name, not a design.
 - **Entrant input radius** varies `rounded` vs `rounded-sm` between
   routes (`INPUT_SKIN` call sites).
-- Console raw `<button>` elements (~200) outside dialogs/forms have not
-  been swept onto `Button`; many are legitimate row affordances.
+- Console raw `<button>` elements outside the ops dialogs have not been
+  swept onto `Button`; many are legitimate row affordances.

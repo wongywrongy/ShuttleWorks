@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
+import { EmptyState as DSEmptyState } from '@scheduler/design-system/components';
 
 /** A centered empty/zero-state: a title, optional body, and an optional CTA in
- *  the `action` slot (e.g. a "Create workspace" button). */
+ *  the `action` slot (e.g. a "Create workspace" button). The rendering is the
+ *  design system's `EmptyState variant="centered"` (ADR 0020); this wrapper
+ *  keeps the console's historical prop API. */
 export function EmptyState({
   title,
   body,
@@ -11,11 +14,5 @@ export function EmptyState({
   body?: string;
   action?: ReactNode;
 }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
-      <p className="text-base font-semibold text-foreground">{title}</p>
-      {body ? <p className="max-w-sm text-sm text-muted-foreground">{body}</p> : null}
-      {action ? <div className="mt-2">{action}</div> : null}
-    </div>
-  );
+  return <DSEmptyState variant="centered" title={title} body={body} action={action} />;
 }

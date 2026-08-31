@@ -16,7 +16,12 @@
 /** The raw card surface pair — border tint + raised background. */
 export const CARD_SKIN = 'border-rule-soft bg-surface-raised';
 
-/** The standard entrant card: raised panel, rounded, padded, soft shadow. */
+/**
+ * The standard entrant card: raised panel, rounded, padded, soft shadow.
+ * `rounded-lg` is the DELIBERATE public-tier radius (ADR 0020): the
+ * consumer register is soft, the operator console is sharp
+ * (`rounded-sm`), and the shared DS `Card` stays square (BRAND.md §3).
+ */
 export const CARD = `rounded-lg border ${CARD_SKIN} p-6 shadow-sm`;
 
 /**

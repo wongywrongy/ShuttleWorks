@@ -187,6 +187,7 @@ export function DirectorToolsPanel() {
               className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
             />
           </label>
+          {/* Ink-fill primary (bg-primary): no Button variant renders it (default is accent+glow) — the one divergent primary-action skin, recorded in ADR 0020. */}
           <button
             type="button"
             onClick={handleDelayStart}
@@ -306,6 +307,7 @@ export function DirectorToolsPanel() {
             </div>
             <ScheduleDiffView impact={activeProposal.impact} formatSlot={formatSlot} />
             <DialogFooter>
+              {/* Raw by ruling (ADR 0020): no Button variant reproduces this skin without fighting the component. */}
               <button
                 type="button"
                 onClick={handleCancelProposal}

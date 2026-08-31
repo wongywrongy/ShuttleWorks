@@ -40,8 +40,9 @@ const rel = (file: string) => path.relative(REPO, file).split(path.sep).join('/'
  * Paths are repo-relative. Shrink this list; never grow it without a ruling.
  */
 const ALLOWED: Record<string, string> = {
-  'apps/console/src/modules/bracket/BracketEmptyState.tsx':
-    'a centred empty-state BLOCK inside a surface, not the surface container — it centres within whatever width its host gives it',
+  // BracketEmptyState left this list in ADR 0020: it became a thin wrapper
+  // and its centred block moved into the design-system EmptyState, which
+  // this scan does not walk (the DS is not a console page surface).
   'apps/console/src/modules/hub/NewWorkspacePage.tsx':
     'stands outside the workspace shell — no sidebar, no ActionsBar, so it owns its own page geometry',
   'apps/console/src/modules/workspace/WorkspaceOverview.tsx':

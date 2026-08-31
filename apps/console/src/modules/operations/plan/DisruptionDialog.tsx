@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from 'react';
 
-import { Select } from '@scheduler/design-system/components';
+import { Button, Select } from '@scheduler/design-system/components';
 import type { DisruptionType } from '../../../api/client';
 import { Modal } from '../../../components/common/Modal';
 import { ScheduleDiffView } from './ScheduleDiffView';
@@ -132,6 +132,7 @@ export function DisruptionDialog({
           </div>
           <ScheduleDiffView impact={activeProposal.impact} formatSlot={formatSlot} />
           <DialogFooter>
+            {/* Raw by ruling (ADR 0020): no Button variant reproduces this skin without fighting the component. */}
             <button
               type="button"
               onClick={handleCancel}
@@ -139,14 +140,16 @@ export function DisruptionDialog({
             >
               Cancel
             </button>
-            <button
+            <Button
               type="button"
               onClick={handleCommit}
               disabled={loading}
-              className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+              variant="default"
+              size="sm"
+              className="h-auto py-1.5 font-normal"
             >
               {loading ? 'Committing…' : 'Commit repair'}
-            </button>
+            </Button>
           </DialogFooter>
         </div>
       </Modal>
@@ -299,14 +302,16 @@ export function DisruptionDialog({
           >
             Cancel
           </button>
-          <button
+          <Button
             type="button"
             onClick={handlePreview}
             disabled={loading}
-            className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+            variant="default"
+              size="sm"
+              className="h-auto py-1.5 font-normal"
           >
             {loading ? 'Solving…' : 'Preview impact'}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

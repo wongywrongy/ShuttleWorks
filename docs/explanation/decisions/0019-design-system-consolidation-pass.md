@@ -47,6 +47,9 @@ recorded here. What changed:
 
 ## Deferred by design (the interesting part)
 
+> Items 1–3, and the dialog subset of item 5, were resolved by
+> [ADR 0020](/explanation/decisions/0020-design-language-resolutions).
+
 These looked like consolidation targets and were deliberately left,
 because closing them changes the design, not just the code. They are the
 first questions for the designer:

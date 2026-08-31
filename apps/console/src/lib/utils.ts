@@ -23,26 +23,12 @@ export const INTERACTIVE_BASE =
   "select-none"
 
 /**
- * The micro-label treatment: 10px, semibold, uppercase, wide tracking.
- *
- * COLOUR IS NOT INCLUDED — append your own (`text-muted-foreground` for a
- * plain label, a status token for a state pill). That separation is what
- * lets one constant own every use of this type step without also deciding
- * what each one means.
- *
- * It exists because the string was hand-copied ~56 times. When the design
- * review reweighted section headings, the fix reached only the surfaces that
- * imported a component; Bracket and Display kept the old treatment and
- * looked untouched. A shared type step needs one definition, not a
- * convention.
- *
- * For a plain muted label, prefer the `Eyebrow` component — it is this
- * constant plus the tone. Reach for the constant directly when the element
- * has to be something other than a `<span>` (a `<th>`, an `<h3>`, a `<td>`
- * group row) or when the colour is state-derived.
+ * The micro-label treatment. Definition moved to the design system
+ * (`packages/design-system/components/textStyles.ts`, ADR 0020) so both
+ * apps draw one type step; re-exported here so the ~30 console consumers
+ * keep their import path. See the definition site for the full rationale.
  */
-export const EYEBROW_CLASS =
-  "text-2xs font-semibold uppercase tracking-[0.08em]"
+export { EYEBROW_CLASS } from "@scheduler/design-system/components"
 
 /**
  * The shared text-style ladder — the console's most-repeated className
@@ -63,6 +49,15 @@ export const TEXT_MUTED_SM = "text-sm text-muted-foreground"
 export const TEXT_TITLE = "text-base font-semibold text-foreground"
 export const TEXT_TITLE_SM = "text-sm font-semibold text-foreground"
 export const TEXT_EMPHASIS = "font-medium text-foreground"
+
+/**
+ * The console panel radius (ADR 0020): the operator tier is SHARP —
+ * `rounded-sm` on panels/cards/controls — while the public entrant tier
+ * is soft (`rounded-lg`, see `apps/entrant/app/lib/ui.ts` CARD) and the
+ * shared DS `Card` stays square (BRAND.md §3). Per-tier by decision, not
+ * drift. Adopt opportunistically when touching a file; don't sweep.
+ */
+export const PANEL_RADIUS = "rounded-sm"
 
 /**
  * The inline (unlabeled) input skin — for bare `<input>`s that live inside

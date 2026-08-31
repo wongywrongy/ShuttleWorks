@@ -1,5 +1,4 @@
-import { Button } from '@scheduler/design-system';
-import { EYEBROW_CLASS } from '../../lib/utils';
+import { EmptyState } from '@scheduler/design-system/components';
 
 interface BracketEmptyStateProps {
   eyebrow: string;
@@ -9,6 +8,9 @@ interface BracketEmptyStateProps {
   onAction?: () => void;
 }
 
+/** The bracket module's editorial placeholder. The rendering is the design
+ *  system's `EmptyState variant="editorial"` (ADR 0020); this wrapper keeps
+ *  the module's historical prop API. */
 export function BracketEmptyState({
   eyebrow,
   title,
@@ -17,25 +19,13 @@ export function BracketEmptyState({
   onAction,
 }: BracketEmptyStateProps) {
   return (
-    <section className="mx-auto flex min-h-[280px] max-w-3xl flex-col justify-center px-6 py-10">
-      <div className="border-t border-border pt-5">
-        <p className={`${EYEBROW_CLASS} text-muted-foreground`}>
-          {eyebrow}
-        </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight text-foreground">
-          {title}
-        </h2>
-        <p className="mt-2 max-w-[58ch] text-sm leading-6 text-muted-foreground">
-          {body}
-        </p>
-        {actionLabel && onAction ? (
-          <div className="mt-5">
-            <Button type="button" variant="brand" size="sm" onClick={onAction}>
-              {actionLabel}
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    </section>
+    <EmptyState
+      variant="editorial"
+      eyebrow={eyebrow}
+      title={title}
+      body={body}
+      actionLabel={actionLabel}
+      onAction={onAction}
+    />
   );
 }

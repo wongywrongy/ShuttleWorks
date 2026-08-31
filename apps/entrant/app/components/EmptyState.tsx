@@ -15,8 +15,12 @@
  * instead of a bare `<p>` when there is genuinely nothing to offer. Discovery
  * with no listings at all is the case: nothing to clear, nowhere to send
  * anyone, but still an empty state rather than a sentence in whitespace.
+ *
+ * The rendering is the design system's `EmptyState variant="card"`
+ * (ADR 0020, byte-identical to the markup this file used to inline); this
+ * wrapper keeps the tier's prop API and this docblock.
  */
-import { Button } from '@scheduler/design-system/components';
+import { EmptyState as DSEmptyState } from '@scheduler/design-system/components';
 
 export function EmptyState({
   heading,
@@ -27,15 +31,5 @@ export function EmptyState({
   body: string;
   action?: { label: string; href: string };
 }) {
-  return (
-    <div className="grid justify-items-start gap-3 rounded-lg border border-rule-soft bg-surface-raised p-8 shadow-sm">
-      <p className="text-base font-medium text-foreground">{heading}</p>
-      <p className="text-sm text-muted-foreground">{body}</p>
-      {action ? (
-        <Button asChild variant="outline" size="sm">
-          <a href={action.href}>{action.label}</a>
-        </Button>
-      ) : null}
-    </div>
-  );
+  return <DSEmptyState variant="card" heading={heading} body={body} action={action} />;
 }

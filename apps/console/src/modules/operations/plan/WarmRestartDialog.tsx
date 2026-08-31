@@ -24,6 +24,7 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';
 import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { DialogFooter } from '../../../components/DialogFooter';
+import { Button } from '@scheduler/design-system/components';
 
 interface Props {
   isOpen: boolean;
@@ -88,6 +89,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
           <ScheduleDiffView impact={activeProposal.impact} formatSlot={formatSlot} />
 
           <DialogFooter>
+            {/* Raw by ruling (ADR 0020): no Button variant reproduces this skin without fighting the component. */}
             <button
               type="button"
               onClick={handleCancel}
@@ -95,14 +97,16 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
             >
               Cancel
             </button>
-            <button
+            <Button
               type="button"
               onClick={handleCommit}
               disabled={loading}
-              className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+              variant="default"
+              size="sm"
+              className="h-auto py-1.5 font-normal"
             >
               {loading ? 'Committing…' : 'Commit replan'}
-            </button>
+            </Button>
           </DialogFooter>
         </div>
       </Modal>
@@ -149,14 +153,16 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
           >
             Cancel
           </button>
-          <button
+          <Button
             type="button"
             onClick={handlePreview}
             disabled={loading}
-            className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+            variant="default"
+              size="sm"
+              className="h-auto py-1.5 font-normal"
           >
             {loading ? 'Solving…' : 'Preview impact'}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

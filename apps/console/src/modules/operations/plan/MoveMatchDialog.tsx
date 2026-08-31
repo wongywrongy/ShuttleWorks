@@ -25,7 +25,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock, ArrowRight } from '@phosphor-icons/react';
 
-import { Select } from '@scheduler/design-system/components';
+import { Button, Select } from '@scheduler/design-system/components';
 import { Modal } from '../../../components/common/Modal';
 import { ScheduleDiffView } from './ScheduleDiffView';
 import { useProposals } from '../../../hooks/useProposals';
@@ -146,6 +146,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
             formatSlot={formatSlotForDiff}
           />
           <DialogFooter>
+            {/* Raw by ruling (ADR 0020): no Button variant reproduces this skin without fighting the component. */}
             <button
               type="button"
               onClick={handleCancel}
@@ -153,14 +154,16 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
             >
               Cancel
             </button>
-            <button
+            <Button
               type="button"
               onClick={handleCommit}
               disabled={loading}
-              className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+              variant="default"
+              size="sm"
+              className="h-auto py-1.5 font-normal"
             >
               {loading ? 'Committing…' : 'Commit move'}
-            </button>
+            </Button>
           </DialogFooter>
         </div>
       </Modal>
@@ -311,14 +314,16 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
           >
             Cancel
           </button>
-          <button
+          <Button
             type="button"
             onClick={handlePreview}
             disabled={loading || target == null}
-            className={`${INTERACTIVE_BASE} rounded bg-accent px-3 py-1.5 text-sm text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:opacity-50`}
+            variant="default"
+              size="sm"
+              className="h-auto py-1.5 font-normal"
           >
             {loading ? 'Solving…' : 'Preview impact'}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

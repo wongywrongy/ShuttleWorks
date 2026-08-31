@@ -8,20 +8,26 @@
  * the whole meaning. The component has no judgement of its own: the state
  * arrives decided (`chipState`/`cardChipState`, `lib/phase.ts`).
  */
+import { STATUS_TONE } from '@scheduler/design-system/components';
 import { chipLabel, type ChipState } from '../lib/phase';
+
+/** The shared tone palette (ADR 0020), composed in this register's
+ *  historical order so the rendered string stays byte-identical. */
+const chipTone = (tone: 'live' | 'done') => {
+  const t = STATUS_TONE[tone];
+  return `${t.border} ${t.bg} ${t.text}`;
+};
 
 export function StatusChip({ state }: { state: ChipState }) {
   const open = state.kind === 'entriesOpen';
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
-        open
-          ? 'border-status-live/40 bg-status-live-bg text-status-live'
-          : 'border-status-done/40 bg-status-done-bg text-status-done'
+        open ? chipTone('live') : chipTone('done')
       }`}
     >
       {open ? (
-        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-status-live" />
+        <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${STATUS_TONE.live.dot}`} />
       ) : null}
       {chipLabel(state)}
     </span>
