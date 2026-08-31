@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { checkDocument, checkDocs } from '../docs-paths.mjs'
@@ -66,6 +69,29 @@ test('supports one narrowly explained next-line suppression', () => {
   )
   assert.deepEqual(errors, [
     { file: 'docs/reference/example.md', line: 3, token: 'backend/still-missing.py' },
+  ])
+})
+
+test('accepts only the documented generated-output roots on a clean checkout', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'shuttleworks-doc-paths-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const errors = checkDocument(
+    [
+      '`docs/.vitepress/dist`',
+      '`docs/.vitepress/dist/reference/index.html`',
+      '`docs/screenshots/ui-review/`',
+      '`docs/screenshots/ui-review/operator-console-surface-book.pdf`',
+      '`docs/screenshots/not-a-generated-root/missing.pdf`',
+    ].join('\n'),
+    'docs/reference/example.md',
+    root,
+  )
+  assert.deepEqual(errors, [
+    {
+      file: 'docs/reference/example.md',
+      line: 5,
+      token: 'docs/screenshots/not-a-generated-root/missing.pdf',
+    },
   ])
 })
 

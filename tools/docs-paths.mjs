@@ -7,7 +7,7 @@
  * honest without reading Git history, so it also runs in the docs image.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, extname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -48,6 +48,11 @@ export const DOC_ROOTS = [
 ]
 
 const EXCLUDED = ['docs/.vitepress/']
+
+// Documented build/capture destinations are absent from a clean checkout by
+// design. Keep this exact and small: these roots are gitignored outputs, not
+// exceptions for missing source files.
+const GENERATED_OUTPUTS = ['docs/.vitepress/dist', 'docs/screenshots/ui-review']
 
 const PLACEHOLDER = /[<>{}]/
 const URL_PATTERN = /^(?:https?:|mailto:|file:)/i
@@ -124,6 +129,11 @@ function isDottedSymbol(value) {
   return dot > 0 && basename.slice(dot + 1).includes('_')
 }
 
+function isGeneratedOutput(path, root) {
+  const repoPath = relative(root, path).replaceAll('\\', '/').replace(/\/$/, '')
+  return GENERATED_OUTPUTS.some((output) => repoPath === output || repoPath.startsWith(`${output}/`))
+}
+
 function candidatePath(raw, documentPath, root) {
   const value = stripSuffix(raw)
   if (!value || URL_PATTERN.test(value) || PLACEHOLDER.test(value) || value.includes('${')) return null
@@ -156,7 +166,7 @@ export function checkDocument(content, documentPath, root = REPO_ROOT) {
       const path = candidatePath(raw, documentPath, root)
       if (!path) continue
       if (isDottedSymbol(stripSuffix(raw))) continue
-      if (!existsSync(path)) {
+      if (!existsSync(path) && !isGeneratedOutput(path, root)) {
         errors.push({ file: documentPath, line: index + 1, token: stripSuffix(raw) })
       }
     }

@@ -16,11 +16,10 @@ import tempfile
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
-from .client import SimClient
 from .historical_matches import (
     ROUND_LABELS,
     HistoricalMatch,
@@ -34,6 +33,12 @@ from .historical_matches import (
     source_team_key,
 )
 from .rng import command_uuid
+
+if TYPE_CHECKING:
+    # The parser/preview half is intentionally importable without the optional
+    # simulator HTTP dependency. Runtime callers pass a client into apply/reset;
+    # only static type checking needs its concrete class here.
+    from .client import SimClient
 
 _SCORE_RE = re.compile(r"^\s*(\d+)\s*[-–]\s*(\d+)\s*$")
 _DEFAULT_RUN_DIR = Path(".local-testing/demo/data/import-runs")
