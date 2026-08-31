@@ -370,6 +370,7 @@ check: check-full
 check-full:
 	npm run test:contrast
 	npm run test:classes
+	npm run figma:tokens:check
 	npm run lint:scheduler
 # The TYPE gate, and the reason it is spelled out here rather than left to
 # `npm run build`. Until 2026-08-10 `make check` ran lint, vitest, depcruise,
@@ -431,6 +432,7 @@ check-full:
 check-fast:
 	npm run test:contrast
 	npm run test:classes
+	npm run figma:tokens:check
 	npm run lint:scheduler
 	cd apps/console && npx tsc -b
 	npm --prefix apps/console run test:run

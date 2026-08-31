@@ -48,6 +48,8 @@ jobs:
         run: npm run test:contrast
       - name: Token-shaped utility classes resolve
         run: npm run test:classes
+      - name: Figma token export is current
+        run: npm run figma:tokens:check
       - name: Lint
         run: npm run lint:scheduler
       - name: Unit tests

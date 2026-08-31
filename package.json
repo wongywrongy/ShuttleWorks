@@ -26,6 +26,8 @@
     "lint:entrant": "npm run -w apps/entrant lint",
     "test:contrast": "node packages/design-system/scripts/check-contrast.mjs",
     "test:classes": "node packages/design-system/scripts/check-classes.mjs",
+    "figma:tokens": "node tools/export-figma-tokens.mjs",
+    "figma:tokens:check": "node tools/export-figma-tokens.mjs --check",
     "typecheck:entrant": "npm run -w apps/entrant typecheck",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",

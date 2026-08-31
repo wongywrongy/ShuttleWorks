@@ -57,6 +57,15 @@ mode per theme); the primitive ramps are a second, hidden collection the
 semantic variables alias into. The Tailwind utility names are the
 variable names.
 
+`npm run figma:tokens` (`tools/export-figma-tokens.mjs`) derives
+`packages/design-system/figma-tokens.json` from `tokens.css` — W3C
+`$type`/`$value` tokens in four sets: `primitives`, `semantic/light`,
+`semantic/dark` (identical name sets, hex-resolved through the alias
+chains, so they import as two modes of one collection), and `scales`
+(spacing/radius/type as dimensions). Import with Tokens Studio or any
+design-tokens-aware variables importer; regenerate after any
+`tokens.css` change — the JSON is derived, never edited.
+
 ### Token gates
 
 - `npm run test:contrast` — WCAG AA gate over `tokens.css` (text vs every
@@ -67,6 +76,9 @@ variable names.
   not resolve in the preset (the `bg-bg-subtle` incident class: such
   classes render silently transparent). Scans both apps + the shared
   components. In `make check` and CI.
+- `npm run figma:tokens:check` — fails when the tracked Figma Variables
+  export no longer matches `tokens.css`; run `npm run figma:tokens` to
+  regenerate it. In `make check` and CI.
 
 ## Component tiers
 
