@@ -1030,6 +1030,9 @@ class SolveJob(Base):
     params: Mapped[dict] = mapped_column(JSON, nullable=False)
     # Full solver input (the stateless GenerateScheduleRequest shape).
     input_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+    # W3C Trace Context carrier captured at enqueue.  It contains only
+    # traceparent/tracestate; baggage is intentionally never persisted.
+    trace_context: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Terminal payloads. ``result`` holds the ScheduleDTO for both
     # ``succeeded`` and ``infeasible`` (the DTO carries status +
     # infeasibleReasons); ``error`` is structured {code, message, detail}.

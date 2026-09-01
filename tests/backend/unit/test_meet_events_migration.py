@@ -246,7 +246,7 @@ def test_the_downgrade_actually_runs(alembic_cfg):  # noqa: F811
 
 
 def test_the_revision_id_scheme_is_unambiguous_against_every_older_id():
-    """The single-letter prefix is exhausted at ``z``; ``aa`` continues it.
+    """The single-letter prefix is exhausted at ``z``; ``aa``, ``ab`` continue it.
 
     Every id in the old scheme has a DIGIT as its second character, so a
     two-letter prefix cannot collide with one.
@@ -256,7 +256,7 @@ def test_the_revision_id_scheme_is_unambiguous_against_every_older_id():
         {p.name[:2] for p in versions.glob("*.py") if not p.name.startswith("__")}
     )
     two_letter = [p for p in prefixes if p.isalpha()]
-    assert two_letter == ["aa"], prefixes
+    assert two_letter == ["aa", "ab"], prefixes
     assert MEET_EVENTS_REVISION.startswith("aa")
     assert len(MEET_EVENTS_REVISION) == 12
 

@@ -20,3 +20,14 @@ psycopg[binary]>=3.2
 # self-hosted account system (SP-CLOUD-2).
 argon2-cffi>=23.1
 
+# Optional-at-runtime application telemetry.  These stay on one coordinated
+# OpenTelemetry release because the contrib instrumentations deliberately use
+# beta versioning.  The application imports none of them unless an OTLP
+# endpoint is explicitly configured (see core/telemetry/bootstrap.py).
+opentelemetry-api==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-exporter-otlp-proto-http==1.44.0
+opentelemetry-instrumentation-fastapi==0.65b0
+opentelemetry-instrumentation-sqlalchemy==0.65b0
+opentelemetry-instrumentation-urllib==0.65b0
+opentelemetry-instrumentation-logging==0.65b0

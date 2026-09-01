@@ -45,6 +45,8 @@ from core.dependencies import get_current_user
 from core.exceptions import ConflictError, PreconditionFailedError
 from core.form_csrf import form_csrf_proves
 from core.paths import ALEMBIC_SCRIPTS
+from core.telemetry.bootstrap import configure_telemetry
+from core.version import APP_VERSION
 
 # Give the root logger a handler. Uvicorn's own logging config only
 # configures the ``uvicorn*`` loggers and leaves root untouched, so every
@@ -59,6 +61,11 @@ logging.basicConfig(
 )
 
 log = logging.getLogger("scheduler.app")
+
+# The endpoint check happens before OpenTelemetry is imported.  With the
+# default blank endpoint this returns immediately and changes no handlers,
+# threads, providers or network state.
+telemetry_runtime = configure_telemetry(settings, role="api")
 
 def _run_migrations() -> None:
     """Apply outstanding Alembic migrations on startup.
@@ -99,7 +106,14 @@ async def lifespan(app: FastAPI):
     speculative-solve triggers; handler built in
     ``meet.schedule_suggestions``).
     """
-    log.info("app_startup version=2.0.0")
+    global telemetry_runtime
+    if telemetry_runtime is None or getattr(telemetry_runtime, "_shutdown", False):
+        telemetry_runtime = configure_telemetry(settings, role="api")
+        if telemetry_runtime is not None:
+            telemetry_runtime.instrument_fastapi(app)
+    cycle_telemetry_runtime = telemetry_runtime
+
+    log.info("app_startup version=%s", APP_VERSION)
 
     try:
         _run_migrations()
@@ -139,7 +153,7 @@ async def lifespan(app: FastAPI):
     # EMBEDDED_WORKER=false and runs ``python -m worker`` containers
     # against the same queue instead; the loop code is identical.
     from solve_rail.solve_worker import SolveWorker
-    solve_worker = SolveWorker()
+    solve_worker = SolveWorker(topology="embedded")
     app.state.solve_worker = solve_worker
     if settings.embedded_worker:
         solve_worker.start()
@@ -162,6 +176,10 @@ async def lifespan(app: FastAPI):
         solve_worker.stop()
         log.info("solve_worker stopped")
         log.info("app_shutdown")
+        if cycle_telemetry_runtime is not None:
+            cycle_telemetry_runtime.shutdown()
+            if telemetry_runtime is cycle_telemetry_runtime:
+                telemetry_runtime = None
 
 
 # Interactive API docs are local-mode only (SP-SEC-1, SEC-04).
@@ -194,7 +212,7 @@ _docs_url, _redoc_url, _openapi_url = docs_urls(settings.environment)
 app = FastAPI(
     title="School Sparring Scheduler API",
     description="Stateless scheduling API for school sparring matches using CP-SAT solver",
-    version="2.0.0",
+    version=APP_VERSION,
     lifespan=lifespan,
     docs_url=_docs_url,
     redoc_url=_redoc_url,
@@ -501,6 +519,9 @@ app.include_router(auth_api.router)
 app.include_router(display_api.public_router)
 app.include_router(display_api.manage_router)
 app.include_router(health_api.router)
+
+if telemetry_runtime is not None:
+    telemetry_runtime.instrument_fastapi(app)
 
 
 

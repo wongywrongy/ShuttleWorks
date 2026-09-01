@@ -32,6 +32,18 @@ class Settings(BaseSettings):
     environment: str = "local"  # local | cloud
     log_level: str = "info"
 
+    # ---- OpenTelemetry -------------------------------------------------
+    # A non-empty generic OTLP endpoint is the one activation switch.
+    # Keeping the standard OTel variable names makes the application
+    # backend-neutral and lets an operator repoint it without code changes.
+    # Signal-specific endpoints remain optional standard overrides.
+    otel_exporter_otlp_endpoint: str = ""
+    otel_exporter_otlp_traces_endpoint: str = ""
+    otel_exporter_otlp_logs_endpoint: str = ""
+    otel_exporter_otlp_metrics_endpoint: str = ""
+    otel_exporter_otlp_protocol: str = "http/protobuf"
+    otel_exporter_otlp_timeout: float = 2.0
+
     # Which kind of process this is. `api` serves HTTP (and, in local
     # mode, hosts the embedded solve worker). `worker` is the standalone
     # `python -m worker` container, which serves no HTTP, sets no

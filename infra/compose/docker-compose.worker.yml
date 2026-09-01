@@ -34,6 +34,11 @@ services:
     environment:
       - ENVIRONMENT=cloud
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Same opt-in OTLP seam as the API. No collector/backend is assumed.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS:-}
+      - OTEL_EXPORTER_OTLP_TIMEOUT=${OTEL_EXPORTER_OTLP_TIMEOUT:-2}
       - DATA_DIR=/app/data
       # ───────────────────────────────────────────────────────────────
       # The primary host's TAILNET address, and the restricted role —

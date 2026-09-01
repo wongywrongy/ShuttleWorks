@@ -74,6 +74,12 @@ services:
       - ENVIRONMENT=cloud
       - AUTH_MODE=cloud
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Vendor-neutral application telemetry. Blank is a hard off switch:
+      # no SDK bootstrap, threads, exporters or connection attempts.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS:-}
+      - OTEL_EXPORTER_OTLP_TIMEOUT=${OTEL_EXPORTER_OTLP_TIMEOUT:-2}
       - DATA_DIR=/app/data
       # ONE source of truth for the password: the secret file, read by
       # Postgres via POSTGRES_PASSWORD_FILE and by the API via the

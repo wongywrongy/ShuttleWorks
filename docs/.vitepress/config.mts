@@ -122,6 +122,7 @@ export default defineConfig({
           { text: 'Install: self-hosted', link: '/how-to/install-selfhost' },
           { text: 'Add a worker machine', link: '/how-to/add-a-worker' },
           { text: 'Operations', link: '/how-to/operations' },
+          { text: 'Application telemetry', link: '/how-to/observability' },
         ],
       },
       {

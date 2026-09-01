@@ -29,6 +29,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from db.models import SolveJob, SolveJobStatus, TournamentMember
+from core.telemetry.context import normalize_trace_carrier
 
 log = logging.getLogger("scheduler.solve_jobs")
 
@@ -169,6 +170,7 @@ def enqueue(
     type_: str,
     params: dict,
     input_snapshot: dict,
+    trace_context: Optional[dict[str, str]] = None,
     idempotency_key: Optional[str] = None,
     priority: int = 100,
     max_attempts: int = 2,
@@ -214,6 +216,7 @@ def enqueue(
         status=SolveJobStatus.QUEUED.value,
         params=params,
         input_snapshot=input_snapshot,
+        trace_context=normalize_trace_carrier(trace_context),
         idempotency_key=idempotency_key,
         priority=priority,
         max_attempts=max_attempts,
@@ -322,6 +325,70 @@ def mark_running(session: Session, job: SolveJob) -> SolveJob:
     job.started_at = _utcnow()
     job.heartbeat_at = job.started_at
     return job
+
+
+def queue_snapshot(
+    session: Session,
+    *,
+    lease_seconds: float,
+    now: Optional[datetime] = None,
+) -> dict:
+    """One source for the JSON health response and native product gauges."""
+    now = now or _utcnow()
+    counts = {
+        row[0]: row[1]
+        for row in session.execute(
+            select(SolveJob.status, func.count()).group_by(SolveJob.status)
+        ).all()
+    }
+    oldest_queued = session.execute(
+        select(func.min(SolveJob.created_at)).where(
+            SolveJob.status == SolveJobStatus.QUEUED.value
+        )
+    ).scalar()
+
+    def age(ts) -> Optional[float]:
+        if ts is None:
+            return None
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return max(0.0, (now - ts).total_seconds())
+
+    active_leases = (
+        session.execute(
+            select(SolveJob).where(
+                SolveJob.status.in_(
+                    (SolveJobStatus.CLAIMED.value, SolveJobStatus.RUNNING.value)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    workers = [
+        {
+            "workerId": row.claimed_by,
+            "jobId": str(row.id),
+            "lastHeartbeatAgeSeconds": age(row.heartbeat_at),
+        }
+        for row in active_leases
+        if row.status == SolveJobStatus.RUNNING.value
+    ]
+    leases = {"healthy": 0, "stale": 0}
+    for row in active_leases:
+        heartbeat_age = age(row.heartbeat_at)
+        state = (
+            "stale"
+            if heartbeat_age is None or heartbeat_age > lease_seconds
+            else "healthy"
+        )
+        leases[state] += 1
+    return {
+        "counts": counts,
+        "oldest_queued_age_seconds": age(oldest_queued),
+        "workers": workers,
+        "leases": leases,
+    }
 
 
 def heartbeat(

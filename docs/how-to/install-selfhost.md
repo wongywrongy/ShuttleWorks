@@ -147,6 +147,8 @@ to start without it, or misbehaves in a way you will not notice.
 | `ENTRIES_MAX_PER_IP` / `ENTRIES_WINDOW_SECONDS` / `ENTRIES_LOCK_SECONDS` | `20` / `600` / `300` | ✓ | ✓ | not read | The durable per-IP budget for public entry submissions, on its own `entry:` namespace so an entry flood cannot lock a venue out of signing in. Too low interrupts a club secretary entering a squad. |
 | `DATA_DIR` | `/app/data` | ✓ | ✓ | ✓ | Runtime scratch; the readiness probe checks it is writable. |
 | `LOG_LEVEL` / `HOST` / `PORT` | `info` / `0.0.0.0` / `8000` | ✓ | ✓ | ✓ | The image hardcodes its bind; `HOST`/`PORT` only affect the API entrypoint. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `''` (fully off) | optional | optional | optional | A generic OTLP/HTTP base URL. Empty starts no exporters or connections; unreachable export is fail-open. See [application telemetry](/how-to/observability). |
+| `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_EXPORTER_OTLP_TIMEOUT` | `''` / `2` | optional | optional | optional | Standard OTLP authentication headers and background export timeout. Never put headers in source control. |
 | `POSTGRES_DATA_DIR` | `./data/postgres` | – | compose-only | – | Must be a real local filesystem. `initdb` fails on synced/network paths. |
 | `POSTGRES_BIND_ADDR` | none — **required** | – | compose-only | – | See §5. |
 | `APP_HOSTNAME`, `PLAY_HOSTNAME`, `CLOUDFLARE_TUNNEL_TOKEN` | none — **required** | – | compose-only | – | Compose refuses to start without them. `APP_HOSTNAME` is the operator console (Access on it); `PLAY_HOSTNAME` is the public entrant site (no Access, ever). They replaced a single `PUBLIC_HOSTNAME` — no alias is kept, so a stale `.env` fails loudly rather than booting half-split. |

@@ -75,12 +75,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     log = logging.getLogger("scheduler.worker")
 
+    from core.telemetry.bootstrap import configure_telemetry
+
+    telemetry_runtime = configure_telemetry(
+        settings, role="worker", instance_id=args.worker_id
+    )
+
     if not _wait_for_schema():
         log.error("schema never appeared; is the API up and migrated?")
+        if telemetry_runtime is not None:
+            telemetry_runtime.shutdown()
         return 1
 
     workers = [
-        SolveWorker(worker_id=f"{args.worker_id}-{i}" if args.concurrency > 1 else args.worker_id)
+        SolveWorker(
+            worker_id=f"{args.worker_id}-{i}" if args.concurrency > 1 else args.worker_id,
+            topology="standalone",
+        )
         for i in range(args.concurrency)
     ]
     for w in workers:
@@ -101,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         for w in workers:
             w.stop()
+        if telemetry_runtime is not None:
+            telemetry_runtime.shutdown()
     return 0
 
 

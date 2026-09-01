@@ -36,6 +36,8 @@ from core.schemas import (
 from meet.schedule import GenerateScheduleRequest
 from repositories import LocalRepository, get_repository
 from solve_rail import solve_jobs
+from core.telemetry.context import enqueue_span
+from core.telemetry.instruments import record_job_outcome
 from solve_rail.solve_jobs import (
     ActiveSolveJobConflict,
     UserSolveQuotaExceeded,
@@ -111,18 +113,31 @@ def submit_solve_job(
     """
     session = repo.session
     try:
-        job, created = solve_jobs.enqueue(
-            session,
-            tournament_id=tournament_id,
-            type_=solve_jobs.MEET_SCHEDULE_SOLVE,
-            params=_build_params(body),
-            input_snapshot=body.model_dump(mode="json"),
-            idempotency_key=idempotency_key,
-            max_attempts=settings.job_max_attempts,
-            user_id=user.as_uuid(),
-            max_active_per_user=settings.max_active_solve_jobs_per_user,
-        )
-        session.commit()
+        with enqueue_span(
+            {
+                "shuttleworks.tournament.id": str(tournament_id),
+                "shuttleworks.job.type": solve_jobs.MEET_SCHEDULE_SOLVE,
+                "messaging.system": "database",
+                "messaging.destination.name": "solve_jobs",
+                "messaging.operation.name": "publish",
+                "messaging.operation.type": "create",
+            }
+        ) as trace_context:
+            job, created = solve_jobs.enqueue(
+                session,
+                tournament_id=tournament_id,
+                type_=solve_jobs.MEET_SCHEDULE_SOLVE,
+                params=_build_params(body),
+                input_snapshot=body.model_dump(mode="json"),
+                trace_context=trace_context,
+                idempotency_key=idempotency_key,
+                max_attempts=settings.job_max_attempts,
+                user_id=user.as_uuid(),
+                max_active_per_user=settings.max_active_solve_jobs_per_user,
+            )
+            # Keep the database commit inside the producer span: acceptance is
+            # not complete until both the job and its trace carrier are durable.
+            session.commit()
     except UserSolveQuotaExceeded as exc:
         session.rollback()
         raise http_error(
@@ -191,6 +206,9 @@ def cancel_solve_job(
     job = solve_jobs.get_job(session, tournament_id, job_id)
     if job is None:
         raise http_error(404, ErrorCode.SOLVE_JOB_NOT_FOUND, "solve job not found")
+    was_terminal = solve_jobs.is_terminal(job.status)
     solve_jobs.cancel(session, job)
     session.commit()
+    if not was_terminal:
+        record_job_outcome("cancelled")
     return _job_to_dto(job)

@@ -109,6 +109,19 @@ WORKER_CONCURRENCY=2
 SOLVE_MEMORY_LIMIT_MB=2048
 ```
 
+To correlate this worker's solves with the API request that enqueued them, set
+the same vendor-neutral OTLP base URL used by the API:
+
+```dotenv
+OTEL_EXPORTER_OTLP_ENDPOINT=https://telemetry.example.net:4318
+OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20REDACTED
+```
+
+Leave the endpoint empty for the default fully-off behavior. An unreachable
+receiver never prevents the worker from claiming or solving jobs. See
+[application telemetry](/how-to/observability) for the emitted signals and
+privacy/cardinality contract.
+
 Set `WORKER_ID` explicitly. It is stamped into `solve_jobs.claimed_by` and shown
 by `/health/metrics`, so a stalled lease points at a machine by name instead of
 a hostname-plus-random-suffix.

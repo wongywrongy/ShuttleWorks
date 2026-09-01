@@ -146,6 +146,7 @@ BLOB_VERSIONS: dict[str, Optional[int]] = {
     # -- round-trip-sensitive: an extra key would reach a consumer -----
     "solve_jobs.params": None,  # PINNED determinism input; do not perturb
     "solve_jobs.input_snapshot": None,  # solver input, hashed alongside params
+    "solve_jobs.trace_context": None,  # W3C carrier; protocol-defined flat map
     "workspace_modules.config": None,  # Display tv* layout, goes to the console
     "bracket_participants.meta": None,  # documented "arbitrary round-trip"
     "bracket_matches.meta": None,  # same

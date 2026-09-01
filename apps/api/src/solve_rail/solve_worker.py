@@ -24,11 +24,20 @@ from __future__ import annotations
 import logging
 import socket
 import threading
+import time
 import uuid
 from typing import Callable, Optional
 
 from solve_rail import solve_jobs
 from solve_rail.solve_runner import RunnerOutcome, run_solve_subprocess
+from core.telemetry.context import process_span
+from core.telemetry.instruments import (
+    record_job_outcome,
+    record_queue_wait,
+    record_solve,
+    start_span,
+)
+from core.telemetry.privacy import normalize_solver_status
 
 log = logging.getLogger("scheduler.solve_worker")
 
@@ -51,11 +60,13 @@ class SolveWorker:
         session_factory: Optional[Callable] = None,
         runner: Callable[..., RunnerOutcome] = run_solve_subprocess,
         worker_id: Optional[str] = None,
+        topology: str = "standalone",
     ) -> None:
         self._settings = settings
         self._session_factory = session_factory
         self._runner = runner
         self.worker_id = worker_id or default_worker_id()
+        self.topology = topology
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._tick = 0
@@ -144,20 +155,61 @@ class SolveWorker:
                 return True
             session.commit()
             job_id = job.id
+            tournament_id = job.tournament_id
+            job_type = job.type
+            attempt = job.attempts
+            trace_context = dict(job.trace_context) if job.trace_context else None
+            created_at = job.created_at
+            started_at = job.started_at
             params = dict(job.params)
             input_snapshot = job.input_snapshot
             params.setdefault("memory_limit_mb", settings.solve_memory_limit_mb)
         finally:
             session.close()
 
-        log.info("solve worker %s executing job %s", self.worker_id, job_id)
-        outcome = self._runner(
-            params,
-            input_snapshot,
-            heartbeat=lambda: self._beat(job_id),
-            cancel_check=lambda: self._is_cancelled(job_id),
-        )
-        self._record_outcome(job_id, outcome)
+        with process_span(
+            trace_context,
+            {
+                "shuttleworks.job.id": str(job_id),
+                "shuttleworks.tournament.id": str(tournament_id),
+                "shuttleworks.job.type": job_type,
+                "shuttleworks.job.attempt": attempt,
+                "shuttleworks.worker.id": self.worker_id,
+                "shuttleworks.worker.topology": self.topology,
+                "messaging.system": "database",
+                "messaging.destination.name": "solve_jobs",
+                "messaging.operation.name": "process",
+                "messaging.operation.type": "process",
+            },
+        ):
+            wait_seconds = _elapsed_seconds(created_at, started_at)
+            if wait_seconds is not None:
+                record_queue_wait(wait_seconds)
+            log.info("solve worker %s executing job %s", self.worker_id, job_id)
+            solve_attributes = _input_size_attributes(input_snapshot)
+            solve_started = time.perf_counter()
+            with start_span(
+                "scheduler.solve", kind="internal", attributes=solve_attributes
+            ) as solve_span:
+                try:
+                    outcome = self._runner(
+                        params,
+                        input_snapshot,
+                        heartbeat=lambda: self._beat(job_id),
+                        cancel_check=lambda: self._is_cancelled(job_id),
+                    )
+                except Exception:
+                    elapsed = time.perf_counter() - solve_started
+                    solve_span.set_attribute("shuttleworks.solver.status", "error")
+                    solve_span.set_attribute("shuttleworks.solver.wall_time_s", elapsed)
+                    record_solve(elapsed, "error")
+                    raise
+                elapsed = time.perf_counter() - solve_started
+                status, duration = _annotate_runner_outcome(solve_span, outcome, elapsed)
+                record_solve(duration, status)
+            final_state = self._record_outcome(job_id, outcome)
+            if final_state is not None:
+                record_job_outcome(final_state)
         return True
 
     # ---- helpers -------------------------------------------------------
@@ -210,7 +262,7 @@ class SolveWorker:
         finally:
             session.close()
 
-    def _record_outcome(self, job_id, outcome: RunnerOutcome) -> None:
+    def _record_outcome(self, job_id, outcome: RunnerOutcome) -> Optional[str]:
         session = self._open_session()
         try:
             from db.models import SolveJob
@@ -218,12 +270,12 @@ class SolveWorker:
             job = session.get(SolveJob, job_id)
             if job is None:
                 log.warning("job %s vanished before completion write", job_id)
-                return
+                return None
             if job.status == "cancelled":
                 # The cancel landed while the child was finishing; the
                 # user's decision wins — discard the result.
                 session.commit()
-                return
+                return None
 
             # LEASE OWNERSHIP — the duplicate-write guard.
             #
@@ -263,7 +315,7 @@ class SolveWorker:
                     job.status,
                 )
                 session.commit()
-                return
+                return "lease_lost"
 
             if outcome.kind == "ok":
                 result = outcome.result or {}
@@ -288,8 +340,58 @@ class SolveWorker:
                 )
             session.commit()
             log.info("job %s finished: %s", job_id, job.status)
+            return job.status
         except Exception:
             session.rollback()
             log.exception("failed to record outcome for job %s", job_id)
+            return None
         finally:
             session.close()
+
+
+def _elapsed_seconds(created_at, started_at) -> Optional[float]:
+    if created_at is None or started_at is None:
+        return None
+    if created_at.tzinfo is None and started_at.tzinfo is not None:
+        created_at = created_at.replace(tzinfo=started_at.tzinfo)
+    if started_at.tzinfo is None and created_at.tzinfo is not None:
+        started_at = started_at.replace(tzinfo=created_at.tzinfo)
+    return max(0.0, (started_at - created_at).total_seconds())
+
+
+def _input_size_attributes(input_snapshot: dict) -> dict[str, int]:
+    config = input_snapshot.get("config") or {}
+    attrs = {
+        "shuttleworks.solver.matches": len(input_snapshot.get("matches") or []),
+        "shuttleworks.solver.players": len(input_snapshot.get("players") or []),
+    }
+    for source_keys, target in (
+        (("totalSlots", "total_slots"), "shuttleworks.solver.slots"),
+        (("courtCount", "court_count"), "shuttleworks.solver.courts"),
+    ):
+        value = next((config.get(key) for key in source_keys if config.get(key) is not None), None)
+        if isinstance(value, (int, float)):
+            attrs[target] = int(value)
+    return attrs
+
+
+def _annotate_runner_outcome(span, outcome: RunnerOutcome, elapsed: float) -> tuple[str, float]:
+    result = outcome.result or {}
+    if outcome.kind == "ok":
+        status = normalize_solver_status(result.get("status"))
+    elif outcome.kind == "cancelled":
+        status = "cancelled"
+    else:
+        status = "error"
+    runtime_ms = result.get("runtimeMs", result.get("runtime_ms"))
+    duration = (
+        max(0.0, float(runtime_ms)) / 1000
+        if isinstance(runtime_ms, (int, float))
+        else max(0.0, elapsed)
+    )
+    span.set_attribute("shuttleworks.solver.status", status)
+    span.set_attribute("shuttleworks.solver.wall_time_s", duration)
+    objective = result.get("objectiveScore", result.get("objective_score"))
+    if isinstance(objective, (int, float)):
+        span.set_attribute("shuttleworks.solver.objective", float(objective))
+    return status, duration

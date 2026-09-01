@@ -35,6 +35,7 @@ the scheduler shell.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import logging
 import time
@@ -1982,7 +1983,11 @@ async def schedule_next_round_stream(
             finally:
                 emit({"type": "done"}, critical=True)
 
-        executor_future = loop.run_in_executor(None, solve_in_thread)
+        # ``run_in_executor`` does not propagate contextvars.  Capturing the
+        # request context here keeps the in-process CP-SAT span underneath the
+        # long-lived SSE server span without creating a span per event.
+        solve_context = contextvars.copy_context()
+        executor_future = loop.run_in_executor(None, solve_context.run, solve_in_thread)
 
         try:
             while True:

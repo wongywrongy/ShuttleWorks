@@ -633,6 +633,25 @@ class CPSATScheduler:
         candidate_pool_size: int = 0,
         cancel_token: Optional[CancelToken] = None,
     ) -> ScheduleResult:
+        """Solve with an optional application-owned telemetry observer."""
+        from scheduler_core.telemetry import observe_solve
+
+        stats = self._compute_model_stats()
+        with observe_solve(stats) as finish:
+            result = self._solve(
+                progress_callback=progress_callback,
+                candidate_pool_size=candidate_pool_size,
+                cancel_token=cancel_token,
+            )
+            finish(result)
+            return result
+
+    def _solve(
+        self,
+        progress_callback: Optional[Callable[[dict], None]] = None,
+        candidate_pool_size: int = 0,
+        cancel_token: Optional[CancelToken] = None,
+    ) -> ScheduleResult:
         start_time = time_module.perf_counter()
         log_solve_start()
 

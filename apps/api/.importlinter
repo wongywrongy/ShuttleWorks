@@ -390,10 +390,12 @@ forbidden_modules =
     entries
     ops
 
-; Names: operations, for the conflict metrics /health/metrics publishes.
-; Nothing else - /health must answer even when everything behind it is broken.
+; Names: operations, for the conflict metrics /health/metrics publishes, and
+; solve_rail, which owns the queue/lease snapshot consumed by both the
+; compatibility JSON response and native OTel gauges. /health itself remains
+; dependency-free; only the operational metrics route reaches either package.
 [importlinter:contract:ops-independence]
-name = The health surface names only Operations
+name = The health surface names only Operations and the solve rail
 type = forbidden
 allow_indirect_imports = True
 source_modules =
@@ -405,4 +407,3 @@ forbidden_modules =
     bracket
     display
     entries
-    solve_rail

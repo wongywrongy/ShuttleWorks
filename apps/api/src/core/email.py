@@ -32,6 +32,7 @@ import smtplib
 from email.message import EmailMessage
 
 from core.config import settings
+from core.telemetry.instruments import start_span
 
 log = logging.getLogger("scheduler.email")
 
@@ -69,7 +70,17 @@ def send_email(*, to: str, subject: str, body: str) -> None:
     """
     subject = _header_safe(subject)
     if settings.email_backend == "smtp":
-        _send_smtp(to=to, subject=subject, body=body)
+        with start_span(
+            "email.send",
+            kind="client",
+            attributes={"shuttleworks.email.transport": "smtp"},
+        ) as span:
+            try:
+                _send_smtp(to=to, subject=subject, body=body)
+            except Exception:
+                span.set_attribute("shuttleworks.email.outcome", "error")
+                raise
+            span.set_attribute("shuttleworks.email.outcome", "success")
     else:
         # Console backend: the full message goes to the server log.
         # This is how local invite/reset flows are exercised end-to-end

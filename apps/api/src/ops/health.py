@@ -49,19 +49,19 @@ from __future__ import annotations
 
 import logging
 import secrets as _secrets
-from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import func, select, text
+from sqlalchemy import text
 
 from core.paths import ALEMBIC_INI, ALEMBIC_SCRIPTS
 from core.config import settings
 from operations import conflict_metrics
-from db.models import SolveJob
+from core.version import APP_VERSION
 from repositories import LocalRepository, get_repository
+from solve_rail.solve_jobs import queue_snapshot
 from repositories.local import (
     CURRENT_TOURNAMENT_SCHEMA_VERSION as _CURRENT_TOURNAMENT_SCHEMA_VERSION,
 )
@@ -69,7 +69,7 @@ from repositories.local import (
 router = APIRouter(tags=["health"])
 log = logging.getLogger("scheduler.health")
 
-_VERSION = "2.0.0"
+_VERSION = APP_VERSION
 
 OPS_TOKEN_HEADER = "X-ShuttleWorks-Ops-Token"
 
@@ -271,52 +271,18 @@ def health_metrics(repo: LocalRepository = Depends(get_repository)):
     up. Per-worker, ``lastHeartbeatAgeSeconds > JOB_LEASE_SECONDS`` means
     that worker is about to have its job reaped.
     """
-    now = datetime.now(timezone.utc)
-
-    # Counts every status, including the terminal ones: ``succeeded`` and
-    # ``failed`` are part of this endpoint's response contract, so this
-    # aggregate cannot be narrowed to the live statuses without silently
-    # zeroing two published numbers.
-    #
-    # It is therefore a full aggregate over a table bounded only by
-    # JOB_RETENTION_DAYS. That is fine at present volumes; if solve_jobs
-    # ever grows enough for the scrape to show up, the fix is an index on
-    # ``status``, not a narrower WHERE. Logged in docs/reference/debt-log.md.
-    counts = {
-        row[0]: row[1]
-        for row in repo.session.execute(
-            select(SolveJob.status, func.count()).group_by(SolveJob.status)
-        ).all()
-    }
-
-    oldest_queued = repo.session.execute(
-        select(func.min(SolveJob.created_at)).where(SolveJob.status == "queued")
-    ).scalar()
-
-    def _age(ts) -> Optional[float]:
-        if ts is None:
-            return None
-        if ts.tzinfo is None:  # SQLite hands back naive datetimes
-            ts = ts.replace(tzinfo=timezone.utc)
-        return max(0.0, (now - ts).total_seconds())
-
-    workers = [
-        {
-            "workerId": r.claimed_by,
-            "jobId": str(r.id),
-            "lastHeartbeatAgeSeconds": _age(r.heartbeat_at),
-        }
-        for r in repo.session.execute(
-            select(SolveJob).where(SolveJob.status == "running")
-        ).scalars()
-    ]
+    snapshot = queue_snapshot(
+        repo.session, lease_seconds=settings.job_lease_seconds
+    )
+    counts = snapshot["counts"]
+    workers = snapshot["workers"]
 
     return {
         "queued": counts.get("queued", 0),
         "running": counts.get("running", 0),
         "succeeded": counts.get("succeeded", 0),
         "failed": counts.get("failed", 0),
-        "oldestQueuedAgeSeconds": _age(oldest_queued),
+        "oldestQueuedAgeSeconds": snapshot["oldest_queued_age_seconds"],
         "leaseSeconds": settings.job_lease_seconds,
         "workers": workers,
         "workerCount": len({w["workerId"] for w in workers if w["workerId"]}),

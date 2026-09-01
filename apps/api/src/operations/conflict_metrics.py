@@ -47,6 +47,12 @@ def record(path: str) -> None:
         _total += 1
         _by_path[path] = _by_path.get(path, 0) + 1
         _last_at = datetime.now(timezone.utc).isoformat()
+    # The native metric is additive to the compatibility JSON snapshot.
+    # Import here keeps the telemetry facade out of this module's disabled
+    # import path and avoids changing local behavior.
+    from core.telemetry.instruments import record_state_conflict
+
+    record_state_conflict(path)
 
 
 def snapshot() -> dict:
