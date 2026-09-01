@@ -279,7 +279,7 @@ capture_running_images() {
   : > "$target/running-images.tsv"
   while IFS= read -r container_id; do
     [[ -n "$container_id" ]] || continue
-    docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}\t{{.Id}}\t{{.Image}}\t{{.Config.Image}}\t{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+    docker inspect --format '{{printf "%s\t%s\t%s\t%s\t%s" (index .Config.Labels "com.docker.compose.service") .Id .Image .Config.Image (or (index .Config.Labels "org.opencontainers.image.revision") "")}}' \
       "$container_id" >> "$target/running-images.tsv"
   done < <(docker ps --filter label=com.docker.compose.project=shuttleworks-demo --format '{{.ID}}')
 }

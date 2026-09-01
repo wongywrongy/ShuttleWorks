@@ -81,6 +81,8 @@ test('demo rebuild is a clean, pull-based release rebuild with provenance', () =
   assert.match(launcher, /service_\$\{service\}_image_digest=/)
   assert.match(launcher, /service_\$\{service\}_image_revision=/)
   assert.match(launcher, /capture_running_images "\$tmp"/)
+  assert.match(launcher, /printf "%s\\t%s\\t%s\\t%s\\t%s"/)
+  assert.match(launcher, /or \(index \.Config\.Labels "org\.opencontainers\.image\.revision"\) ""/)
   assert.match(launcher, /org\.opencontainers\.image\.revision/)
   assert.match(launcher, /show_image_provenance\(\)/)
 })
