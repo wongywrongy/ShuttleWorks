@@ -8,6 +8,8 @@ services:
       # scheduler_core/ tree at the top level.
       context: ../..
       dockerfile: apps/api/Dockerfile
+      args:
+        SOURCE_REVISION: ${SOURCE_REVISION:-unknown}
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
     # Optional: pass-through env file. Copy backend/.env.example to
@@ -62,6 +64,8 @@ services:
       # root lockfile and the shared packages/design-system tree.
       context: ../..
       dockerfile: apps/entrant/Dockerfile
+      args:
+        SOURCE_REVISION: ${SOURCE_REVISION:-unknown}
     # No `ports:` — deliberately unreachable except through nginx. A
     # published port would be a second door into the entrant tier that
     # bypasses the Cookie allowlist in nginx.conf, which is the control that
@@ -107,7 +111,8 @@ services:
       context: ../..
       dockerfile: apps/console/Dockerfile
       args:
-        - VITE_API_BASE_URL=/api
+        VITE_API_BASE_URL: /api
+        SOURCE_REVISION: ${SOURCE_REVISION:-unknown}
     # Two ports since SP-HOST-1: 8080 is the operator tier, 8081 the public
     # entrant tier. In production they are two hostnames on the tunnel and
     # therefore two browser ORIGINS; on a laptop they are two host ports,
@@ -163,6 +168,8 @@ services:
       # copy the root lockfile + the docs/ tree and resolve the workspace graph.
       context: ../..
       dockerfile: docs/Dockerfile
+      args:
+        SOURCE_REVISION: ${SOURCE_REVISION:-unknown}
     ports:
       - "${DOCS_HOST_PORT:-8082}:8080"
     restart: unless-stopped

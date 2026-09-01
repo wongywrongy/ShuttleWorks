@@ -21,6 +21,8 @@
 # Stage 2: serve the compiled site with nginx-unprivileged (UID 101, port
 # 8080). Compose remaps host 8081 -> 8080 so it stays clear of the app (:80).
 
+ARG SOURCE_REVISION=unknown
+
 FROM node:24-alpine AS builder
 
 WORKDIR /app
@@ -53,6 +55,9 @@ RUN npm run docs:build
 
 # Stage 2 — serve the static site with the non-root nginx image.
 FROM nginxinc/nginx-unprivileged:alpine
+
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 
 COPY infra/nginx/docs.conf /etc/nginx/conf.d/default.conf
 

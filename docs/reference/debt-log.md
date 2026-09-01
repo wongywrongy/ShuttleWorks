@@ -48,7 +48,7 @@ These are decisions to make, then execute. Nothing here is blocked on effort.
 | D29 | **Entrant identity polish remains deferred.** Player highlighting and the “account has newer details” hint need product behavior and privacy copy before wiring. | Desired public/account behavior | S |
 | D30 | **Compass/Monrad plate winners are not projected publicly.** The public draw projection handles the primary winner path; classification/plate winners remain a format-aware follow-on in `apps/api/src/entries/entries_site.py`. | Public vocabulary and projection shape | S–M |
 | D31 | **`docker-compose.release.yml` is not the canonical production shape.** It still describes a direct-port/local-auth release while self-host production is Postgres, cloud auth, and tunnel ingress. Two files named like production invite config drift. | Retire/rename it, or make its role explicit | S |
-| D32 | **Deployment and backup provenance is not immutable end-to-end.** The canonical self-host stack builds from source, while `docker-compose.release.yml` pulls mutable image tags (default `latest`) rather than digests. Demo backups record `git rev-parse HEAD`, but not whether the checkout was dirty or which image digests ran, so the recorded revision may not fully describe a runtime built from local changes. | Registry/image-promotion policy plus dirty-tree and digest provenance | M |
+| D32 | **`docker-compose.release.yml` still references mutable image tags (default `latest`) rather than immutable digests.** The demo gap is closed: `demo-rebuild` requires a clean checkout, and demo status/backups record the source revision, worktree state, and running image IDs/digests. | Define and enforce the release registry/image-promotion policy (or require digest-pinned references) | M |
 | D33 | **CI parses the demo configuration but does not run its backup/restore lifecycle.** Static guards and `docker compose config` catch topology drift; only a live Postgres smoke would prove dump, drill, and restore together. | Add a required or scheduled Docker gate | M |
 
 ## Open — genuinely large
@@ -238,6 +238,18 @@ Kept so a future reader doesn't rediscover them as bugs.
 ## Closed
 
 Newest first. One line each — the commit carries the detail.
+
+**2026-09-01 — demo rollout provenance.** The durable demo now refuses a
+dirty-checkout rebuild, pulls the current pinned Postgres/base layers, and
+rebuilds application images with `--pull --no-cache`. OCI revision labels plus
+status and backup metadata record the source revision, worktree state, and
+running image IDs/digests. The Postgres bind mount remains intact across the
+rebuild.
+
+**2026-08-31 — Alembic revision naming.** The exhausted single-letter prefix
+scheme is retired for new migrations: `ab1c6e2b8d4f` establishes the two-letter
+prefix convention while all shipped revision IDs remain immutable. The naming
+choice is no longer open debt.
 
 **2026-08-31 — D2 match-state ownership.** The store remains in neutral
 `store/` because Meet, Bracket, and Operations all read it. Operations alone

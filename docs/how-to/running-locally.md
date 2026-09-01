@@ -74,6 +74,37 @@ If Tailscale is installed but its address is not discovered automatically, set
 rejects any address outside the Tailscale IPv4 range rather than falling back
 to a broad bind.
 
+### Rebuild from the latest committed revision
+
+The demo application images are built from the checkout, so a durable demo
+rebuild is a release-like operation. Confirm the revision first:
+
+```bash
+git status --short
+git rev-parse --verify HEAD
+make demo-backup
+make demo-rebuild
+make demo-status
+```
+
+`demo-rebuild` refuses a dirty checkout. It creates and verifies a backup before
+stopping the stack, pulls the current `postgres:16-alpine` and base images,
+rebuilds the backend, entrant, and frontend with `--pull --no-cache`, and
+recreates all four demo containers. The dedicated Postgres bind mount is
+preserved; rebuilding never reseeds or resets the database.
+
+Images built by `demo-rebuild` carry the selected Git revision in the OCI
+revision label. Backup metadata records the revision, worktree state, and
+running image identifiers/digests; `make demo-status` reports the same
+provenance alongside container health. Treat a status report with a revision
+or digest mismatch as an incomplete rollout and rerun the rebuild from the
+intended clean commit.
+
+The demo's "latest" image means the newest pulled image within the pinned
+`postgres:16-alpine` line plus locally rebuilt application images from the
+selected commit. Release deployments remain governed by the self-host image
+promotion policy; they must not infer immutability from a demo rebuild.
+
 The repository includes checked, resumable BWF historical-finals and companion
 timing/format fixtures. Preview validates both files against each other without
 touching the database. To load all audited match rows, keep the third-party

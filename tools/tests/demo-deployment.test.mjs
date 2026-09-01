@@ -53,6 +53,38 @@ test('demo uses the production Postgres major and cannot inherit SQLite', () => 
   assert.doesNotMatch(demo, /\n    build:/)
 })
 
+test('application images carry the source revision used by Compose', () => {
+  const compose = read('infra/compose/docker-compose.yml')
+  for (const [service, dockerfile] of [
+    ['backend', 'apps/api/Dockerfile'],
+    ['entrant', 'apps/entrant/Dockerfile'],
+    ['frontend', 'apps/console/Dockerfile'],
+    ['docs', 'docs/Dockerfile'],
+  ]) {
+    const source = read(dockerfile)
+    assert.match(source, /^ARG SOURCE_REVISION=unknown$/m, dockerfile)
+    assert.match(source, /^LABEL org\.opencontainers\.image\.revision=\$SOURCE_REVISION$/m, dockerfile)
+    const serviceBlock = compose.slice(compose.indexOf(`  ${service}:`), compose.indexOf(`\n  ${service === 'backend' ? 'entrant' : service === 'entrant' ? 'frontend' : service === 'frontend' ? 'docs' : 'volumes'}:`))
+    assert.match(serviceBlock, /SOURCE_REVISION: \$\{SOURCE_REVISION:-unknown\}/, service)
+  }
+})
+
+test('demo rebuild is a clean, pull-based release rebuild with provenance', () => {
+  const launcher = read('tools/demo-compose.sh')
+  assert.match(launcher, /require_clean_worktree\(\)/)
+  assert.match(launcher, /Refusing demo rebuild from a dirty worktree/)
+  assert.match(launcher, /SOURCE_REVISION="\$repo_revision"/)
+  assert.match(launcher, /run_compose pull postgres/)
+  assert.match(launcher, /run_compose build --pull --no-cache backend entrant frontend/)
+  assert.match(launcher, /worktree_dirty=\$worktree_dirty/)
+  assert.match(launcher, /service_\$\{service\}_image_id=/)
+  assert.match(launcher, /service_\$\{service\}_image_digest=/)
+  assert.match(launcher, /service_\$\{service\}_image_revision=/)
+  assert.match(launcher, /capture_running_images "\$tmp"/)
+  assert.match(launcher, /org\.opencontainers\.image\.revision/)
+  assert.match(launcher, /show_image_provenance\(\)/)
+})
+
 test('destructive seed cleanup is preceded by a database backup', () => {
   const makefile = read('Makefile')
   assert.match(makefile, /^demo-seed-reset: demo-backup$/m)

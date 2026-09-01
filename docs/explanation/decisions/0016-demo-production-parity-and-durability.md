@@ -61,6 +61,14 @@ repository cleanup, and operator errors; protection against host or disk loss
 still requires `DEMO_BACKUP_DIR` to point at an encrypted off-host or separately
 backed-up filesystem.
 
+The rebuild path is provenance-checked. `demo-rebuild` requires a clean Git
+checkout, pulls the pinned Postgres image and current base layers, and rebuilds
+the application images with `--pull --no-cache` before recreating the complete
+four-container demo. Application images receive an OCI revision label. Backup
+metadata and `demo-status` retain/report the source revision, worktree state,
+and image IDs/digests, so an operator can verify that the running containers
+come from the intended commit without disturbing the Postgres bind mount.
+
 `infra/compose/docker-compose.selfhost.yml` remains the canonical production
 deployment definition. The demo override is not a second production stack.
 
@@ -72,6 +80,8 @@ deployment definition. The demo override is not a second production stack.
   reset instead of ad-hoc Docker and database commands.
 - Recovery is testable before an incident rather than inferred from a dump's
   existence.
+- A clean revision and image identifiers make a demo rollout auditable; the
+  remaining release-stack image-tag policy is intentionally separate.
 - Local bootstrap auth is acceptable only because the launcher refuses a bind
   outside Tailscale's `100.64.0.0/10` range.
 - The repository cannot honestly promise survival of physical disk loss until

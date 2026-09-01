@@ -14,6 +14,8 @@
 # scheduler_core changes often, backend source changes most. Each gets
 # its own layer so iterating on the engine doesn't reinstall ortools.
 
+ARG SOURCE_REVISION=unknown
+
 FROM python:3.12-slim AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -36,6 +38,9 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 
 
 FROM python:3.12-slim AS runtime
+
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 
 # PYTHONDONTWRITEBYTECODE — keeps a read-only root filesystem actually
 #   read-only by stopping the interpreter from scattering .pyc files

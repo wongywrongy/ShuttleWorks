@@ -23,6 +23,8 @@
 # can't bind to <1024). Compose remaps 80:8080 so users still hit
 # http://localhost.
 
+ARG SOURCE_REVISION=unknown
+
 FROM node:24-alpine AS builder
 
 WORKDIR /app
@@ -62,6 +64,9 @@ RUN npm run -w apps/console build
 
 # Stage 2 — serve with the non-root nginx image.
 FROM nginxinc/nginx-unprivileged:alpine
+
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 
 # The base image ships its own `conf.d/default.conf` with a `server { listen
 # 8080; server_name localhost; }`. Until SP-HOST-1 our config REPLACED that

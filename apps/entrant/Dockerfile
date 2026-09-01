@@ -28,6 +28,8 @@
 # appending a contradicting line is exactly how this protection would be lost.
 # ─────────────────────────────────────────────────────────────────────────
 
+ARG SOURCE_REVISION=unknown
+
 FROM node:24-alpine AS builder
 
 WORKDIR /app
@@ -54,6 +56,9 @@ RUN npm run -w apps/entrant build
 
 
 FROM node:24-alpine
+
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 
 ENV NODE_ENV=production
 

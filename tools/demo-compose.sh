@@ -37,6 +37,13 @@ fi
 command_name=$1
 shift
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+repo_revision=$(git -C "$repo_root" rev-parse --verify HEAD 2>/dev/null || echo unknown)
+if git -C "$repo_root" diff --quiet --ignore-submodules HEAD -- 2>/dev/null &&
+   [[ -z "$(git -C "$repo_root" status --porcelain --untracked-files=all 2>/dev/null)" ]]; then
+  worktree_dirty=false
+else
+  worktree_dirty=true
+fi
 state_home=${XDG_STATE_HOME:-$HOME/.local/state}
 default_state_dir="$state_home/shuttleworks/demo"
 demo_state_dir=$(realpath -m -- "${DEMO_STATE_DIR:-$default_state_dir}")
@@ -70,6 +77,22 @@ fi
 if [[ "$command_name" == backup-dir ]]; then
   echo "$backup_root"
   exit 0
+fi
+
+require_clean_worktree() {
+  if [[ "$repo_revision" == unknown || "$worktree_dirty" == true ]]; then
+    echo "Refusing demo rebuild from a dirty worktree; commit or stash all changes first." >&2
+    if [[ "$repo_revision" == unknown ]]; then
+      echo "A Git HEAD is required to label the rebuilt images." >&2
+    else
+      git -C "$repo_root" status --short >&2 || true
+    fi
+    return 1
+  fi
+}
+
+if [[ "$command_name" == rebuild ]]; then
+  require_clean_worktree
 fi
 
 prepare_state() {
@@ -154,6 +177,7 @@ compose=(
 compose_env=(
   env
   COMPOSE_PROJECT_NAME=shuttleworks-demo
+  SOURCE_REVISION="$repo_revision"
   DEMO_TAILSCALE_IP="$demo_ip"
   DEMO_STATE_DIR="$demo_state_dir"
   DEMO_HOST_GID="$(id -g)"
@@ -222,18 +246,42 @@ new_backup_dir() {
 }
 
 write_common_metadata() {
-  local target=$1 kind=$2
+  local target=$1 kind=$2 image_metadata=${3:-"$target/running-images.tsv"}
   {
     echo "format_version=1"
     echo "kind=$kind"
     echo "created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "app_revision=$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || echo unknown)"
+    echo "app_revision=$repo_revision"
+    echo "worktree_dirty=$worktree_dirty"
     echo "compose_project=shuttleworks-demo"
     echo "postgres_image=postgres:16-alpine"
+    if [[ -s "$image_metadata" ]]; then
+      while IFS=$'\t' read -r service container_id image_id image_ref image_revision; do
+        [[ -n "$service" ]] || continue
+        echo "service_${service}_container_id=$container_id"
+        echo "service_${service}_image_id=$image_id"
+        # Docker's image ID is a content-addressed sha256 digest. Keep a
+        # separate, explicit key so backup consumers do not mistake the
+        # mutable image reference for provenance.
+        echo "service_${service}_image_digest=$image_id"
+        echo "service_${service}_image_ref=$image_ref"
+        echo "service_${service}_image_revision=$image_revision"
+      done < "$image_metadata"
+    fi
   } > "$target/metadata.env"
   if [[ -d "$data_dir/import-runs" ]]; then
     tar -C "$data_dir" -czf "$target/seed-manifests.tar.gz" import-runs
   fi
+}
+
+capture_running_images() {
+  local target=$1 container_id
+  : > "$target/running-images.tsv"
+  while IFS= read -r container_id; do
+    [[ -n "$container_id" ]] || continue
+    docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}\t{{.Id}}\t{{.Image}}\t{{.Config.Image}}\t{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+      "$container_id" >> "$target/running-images.tsv"
+  done < <(docker ps --filter label=com.docker.compose.project=shuttleworks-demo --format '{{.ID}}')
 }
 
 write_checksums() {
@@ -300,6 +348,7 @@ backup_legacy_sqlite() {
   mkdir -m 0700 "$tmp"
 
   local -a running_ids=()
+  capture_running_images "$tmp"
   mapfile -t running_ids < <(docker ps --filter label=com.docker.compose.project=shuttleworks-demo -q)
   if ((${#running_ids[@]})); then
     docker stop "${running_ids[@]}" >/dev/null
@@ -310,7 +359,7 @@ backup_legacy_sqlite() {
     [[ ! -f "$data_dir/local.db-shm" ]] || cp -- "$data_dir/local.db-shm" "$tmp/local.db-shm"
     [[ ! -f "$data_dir/local.db-journal" ]] || cp -- "$data_dir/local.db-journal" "$tmp/local.db-journal"
     python3 -c 'import sqlite3, sys; connection = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True); result = connection.execute("PRAGMA integrity_check").fetchone()[0]; connection.close(); raise SystemExit(0 if result == "ok" else f"SQLite integrity check failed: {result}")' "$tmp/local.db"
-    write_common_metadata "$tmp" legacy-sqlite
+    write_common_metadata "$tmp" legacy-sqlite "$tmp/running-images.tsv"
     write_checksums "$tmp"
     verify_backup_files "$tmp"
   ); then
@@ -355,11 +404,12 @@ create_postgres_backup() {
     return 1
   fi
   if ! (
+    capture_running_images "$tmp"
     run_compose exec -T postgres pg_dump -U scheduler -d scheduler -Fc --no-owner --no-privileges > "$tmp/database.dump"
     run_compose exec -T postgres pg_dumpall -U scheduler --globals-only > "$tmp/globals.sql"
     database_counts scheduler > "$tmp/counts.tsv"
     run_compose exec -T postgres psql -U scheduler -d scheduler -At -c "SELECT version_num FROM alembic_version" > "$tmp/schema_revision.txt"
-    write_common_metadata "$tmp" postgres
+    write_common_metadata "$tmp" postgres "$tmp/running-images.tsv"
     write_checksums "$tmp"
     verify_backup_files "$tmp"
   ); then
@@ -552,10 +602,26 @@ ensure_legacy_preserved() {
 }
 
 start_demo() {
+  local build_flag=()
+  if [[ "${1:-}" == --build ]]; then
+    build_flag=(--build)
+    shift
+  fi
   ensure_legacy_preserved
-  run_compose up -d --build --wait --wait-timeout 180 backend entrant frontend "$@"
+  run_compose up -d "${build_flag[@]}" --wait --wait-timeout 180 backend entrant frontend "$@"
   database_schema_is_current
   : > "$postgres_marker"
+}
+
+show_image_provenance() {
+  local container_id
+  echo "Image provenance (source revision: $repo_revision):"
+  while IFS= read -r container_id; do
+    [[ -n "$container_id" ]] || continue
+    docker inspect --format \
+      '  service={{index .Config.Labels "com.docker.compose.service"}} container={{.Id}} image_id={{.Image}} image_ref={{.Config.Image}} revision={{index .Config.Labels "org.opencontainers.image.revision"}}' \
+      "$container_id"
+  done < <(run_compose ps -aq)
 }
 
 case "$command_name" in
@@ -563,7 +629,7 @@ case "$command_name" in
     echo "$demo_ip"
     ;;
   up)
-    start_demo "$@"
+    start_demo --build "$@"
     cat <<EOF
 
 ShuttleWorks private tech demo is ready.
@@ -579,12 +645,17 @@ EOF
     ;;
   rebuild)
     backup_if_present
+    # Refresh the pinned database major and all base image layers before
+    # rebuilding application images. The application build itself is forced
+    # from a clean checkout so its OCI revision is reproducible.
+    run_compose pull postgres
     run_compose down --remove-orphans
-    run_compose build --no-cache backend entrant frontend
+    run_compose build --pull --no-cache backend entrant frontend
     start_demo
     ;;
   status)
     run_compose ps
+    show_image_provenance
     echo ""
     echo "Demo URLs (Tailscale: $demo_ip):"
     echo "  Operator console: http://$demo_ip:8090"
