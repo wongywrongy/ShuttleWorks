@@ -13,8 +13,20 @@ test('release publication is gated by CI for the exact source revision', () => {
   assert.match(workflow, /--workflow "\$workflow"/)
   assert.match(workflow, /--commit "\$SOURCE_SHA"/)
   assert.match(workflow, /SOURCE_REVISION=\$\{\{ steps\.revision\.outputs\.sha \}\}/)
+  assert.match(workflow, /sort_by\(\.databaseId\) \| last/)
+  assert.match(workflow, /Latest \$workflow run \$run_id concluded \$conclusion/)
+  assert.doesNotMatch(workflow, /select\(\.status == "completed" and \.conclusion == "success"\)/)
   assert.doesNotMatch(workflow, /value=latest/)
   assert.doesNotMatch(workflow, /branches:\s*\[main\]/)
+})
+
+test('release refs and image tags are immutable and exact', () => {
+  assert.match(workflow, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$/)
+  assert.match(workflow, /\^\[0-9a-fA-F\]\{40\}\$/)
+  assert.match(workflow, /type=semver,pattern=\{\{version\}\}/)
+  assert.match(workflow, /type=raw,value=sha-\$\{\{ steps\.revision\.outputs\.sha \}\}/)
+  assert.doesNotMatch(workflow, /pattern=\{\{major\}\}/)
+  assert.doesNotMatch(workflow, /pattern=\{\{major\}\}\.\{\{minor\}\}/)
 })
 
 test('release Compose requires an explicit image tag', () => {
@@ -60,6 +72,17 @@ test('the CI publication gate uses immutable action references', () => {
   const actionRefs = [...ci.matchAll(/uses:\s*[^@\s]+@([^\s]+)/g)].map((match) => match[1])
   assert.ok(actionRefs.length > 8)
   for (const ref of actionRefs) assert.match(ref, /^[0-9a-f]{40}$/)
+})
+
+test('stable aggregate checks cover every CI and security job', () => {
+  assert.match(ci, /required-ci:\s*\n\s*name: Required CI/)
+  for (const job of ['docs', 'frontend', 'entrant', 'backend', 'compose-lint', 'observability-config', 'console-browser-contracts']) {
+    assert.match(ci, new RegExp(`\\n\\s*- ${job}\\n`))
+  }
+  assert.match(security, /required-security:\s*\n\s*name: Required security/)
+  for (const job of ['codeql', 'dependency-review', 'npm-audit', 'python-audit', 'container-scan', 'sbom']) {
+    assert.match(security, new RegExp(`\\n\\s*- ${job}\\n`))
+  }
 })
 
 test('the observability gate runs native rule and Collector validation', () => {

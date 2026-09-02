@@ -412,3 +412,26 @@ jobs:
           name: console-browser-contracts-report
           path: tests/e2e/playwright-report/
           retention-days: 7
+
+  required-ci:
+    name: Required CI
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    needs:
+      - docs
+      - frontend
+      - entrant
+      - backend
+      - compose-lint
+      - observability-config
+      - console-browser-contracts
+    steps:
+      - name: Require every CI gate
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -e 'all(.[]; .result == "success")' <<<"$RESULTS" >/dev/null || {
+            echo "::error::One or more required CI jobs did not succeed"
+            jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+            exit 1
+          }

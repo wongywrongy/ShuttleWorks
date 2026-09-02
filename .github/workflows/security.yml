@@ -118,3 +118,31 @@ jobs:
         with:
           name: shuttleworks-source-sbom
           path: shuttleworks-source.sbom.json
+
+  required-security:
+    name: Required security
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    needs:
+      - codeql
+      - dependency-review
+      - npm-audit
+      - python-audit
+      - container-scan
+      - sbom
+    steps:
+      - name: Require every applicable security gate
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          jq -e --arg event "$EVENT_NAME" '
+            all(to_entries[];
+              .value.result == "success" or
+              (.key == "dependency-review" and $event != "pull_request" and .value.result == "skipped")
+            )
+          ' <<<"$RESULTS" >/dev/null || {
+            echo "::error::One or more required security jobs did not succeed"
+            jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+            exit 1
+          }
