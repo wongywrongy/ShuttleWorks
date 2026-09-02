@@ -110,6 +110,11 @@ class SyncApplication:
     def list_quarantines(self, **kwargs):  # noqa: ANN003, ANN201
         return self._repo.execute_query(self._service().list_quarantines, **kwargs)
 
+    def list_correction_candidates(self, **kwargs):  # noqa: ANN003, ANN201
+        return self._repo.execute_query(
+            self._service().list_correction_candidates, **kwargs
+        )
+
     def resolve_quarantine(self, **kwargs):  # noqa: ANN003, ANN201
         return self._repo.stage(
             self._service()._resolve_quarantine_and_get, **kwargs

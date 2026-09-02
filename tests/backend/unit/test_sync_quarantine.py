@@ -15,6 +15,7 @@ from sync.service import (
     begin_checkout,
     checkpoint_digest,
     ingest_batch,
+    list_correction_candidates,
     list_quarantines,
     mark_ready,
     resolve_quarantine,
@@ -154,6 +155,14 @@ def test_quarantine_listing_and_resolution_only_emit_audited_correction() -> Non
         ),
     )
     assert (highest, accepted) == (1, 1)
+    candidates = list_correction_candidates(
+        session,
+        tournament_id=tournament_id,
+        quarantine_id=row.id,
+    )
+    assert [candidate.operation_id for candidate in candidates] == [
+        correction.operation_id
+    ]
     resolved = resolve_quarantine(
         session,
         tournament_id=tournament_id,

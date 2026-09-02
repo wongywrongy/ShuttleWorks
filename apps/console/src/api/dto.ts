@@ -739,6 +739,19 @@ export interface SyncQuarantineListResponse {
   items: SyncQuarantineRecord[];
 }
 
+export interface SyncCorrectionCandidate {
+  operation_id: string;
+  sequence: number;
+  command_type: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  accepted_at_node: string;
+}
+
+export interface SyncCorrectionCandidateListResponse {
+  items: SyncCorrectionCandidate[];
+}
+
 export interface SyncQuarantineResolutionRequest {
   reason: string;
   correction_operation_id: string;

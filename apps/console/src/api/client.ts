@@ -52,6 +52,8 @@ import type {
   SyncQuarantineListResponse,
   SyncQuarantineRecord,
   SyncQuarantineResolutionRequest,
+  SyncCorrectionCandidate,
+  SyncCorrectionCandidateListResponse,
 } from './dto';
 import { SOLVE_JOB_TERMINAL_STATUSES } from './dto';
 import type {
@@ -1905,6 +1907,16 @@ class ApiClient {
       body,
     );
     return data;
+  }
+
+  async listSyncCorrectionCandidates(
+    tid: string,
+    quarantineId: string,
+  ): Promise<SyncCorrectionCandidate[]> {
+    const { data } = await this.client.get<SyncCorrectionCandidateListResponse>(
+      `/sync/v1/tournaments/${tid}/quarantine/${quarantineId}/corrections`,
+    );
+    return data.items;
   }
 }
 

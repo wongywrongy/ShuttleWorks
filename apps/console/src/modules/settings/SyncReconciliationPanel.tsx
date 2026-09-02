@@ -40,7 +40,7 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
       return;
     }
     if (!correctionOperationId.trim()) {
-      setFormError('Enter the acknowledged correction operation ID.');
+      setFormError('Select an acknowledged correction operation.');
       return;
     }
     setFormError(null);
@@ -123,7 +123,12 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
                     <Button
                       variant="outline"
                       size="xs"
-                      onClick={() => { setOpenId(expanded ? null : record.id); setFormError(null); }}
+                      onClick={() => {
+                        setOpenId(expanded ? null : record.id);
+                        setCorrectionOperationId('');
+                        setFormError(null);
+                        if (!expanded) void sync.loadCandidates(record.id);
+                      }}
                     >
                       {expanded ? 'Close' : 'Prepare correction'}
                     </Button>
@@ -142,14 +147,25 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
                       />
                     </label>
                     <label className="mt-2 block text-2xs uppercase tracking-wide text-muted-foreground">
-                      Acknowledged correction operation ID
-                      <input
-                        aria-label="Acknowledged correction operation ID"
-                        className="mt-1 block w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground"
+                      Acknowledged correction operation
+                      <select
+                        aria-label="Acknowledged correction operation"
+                        className="mt-1 block w-full rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground"
                         value={correctionOperationId}
                         onChange={(event) => setCorrectionOperationId(event.target.value)}
-                        placeholder="UUID from the onsite correction"
-                      />
+                        disabled={sync.candidateLoadingId === record.id}
+                      >
+                        <option value="">
+                          {sync.candidateLoadingId === record.id
+                            ? 'Loading acknowledged operations…'
+                            : 'Select an acknowledged operation'}
+                        </option>
+                        {(sync.candidates[record.id] ?? []).map((candidate) => (
+                          <option key={candidate.operation_id} value={candidate.operation_id}>
+                            #{candidate.sequence} {candidate.command_type} · {candidate.aggregate_type} {candidate.aggregate_id} · {candidate.operation_id.slice(0, 8)}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
                       <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />

@@ -226,6 +226,19 @@ class SyncQuarantineListResponse(BaseModel):
     items: list[SyncQuarantineRecord]
 
 
+class SyncCorrectionCandidate(BaseModel):
+    operation_id: uuid.UUID
+    sequence: int
+    command_type: str
+    aggregate_type: str
+    aggregate_id: str
+    accepted_at_node: datetime
+
+
+class SyncCorrectionCandidateListResponse(BaseModel):
+    items: list[SyncCorrectionCandidate]
+
+
 class SyncQuarantineResolutionRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
     correction_operation_id: uuid.UUID

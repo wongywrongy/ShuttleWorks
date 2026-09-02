@@ -2273,6 +2273,46 @@ def list_quarantines(
     return list(session.scalars(query.order_by(SyncQuarantine.created_at, SyncQuarantine.id)))
 
 
+def list_correction_candidates(
+    session: Session,
+    *,
+    tournament_id: uuid.UUID,
+    quarantine_id: uuid.UUID,
+) -> list[EventOperation]:
+    """Return correction operations that the resolver would accept.
+
+    This is operator assistance, not authorization. ``resolve_quarantine``
+    repeats every scope, receipt, epoch, sequence, and cursor check inside its
+    own transaction because a candidate can become stale between requests.
+    """
+    quarantine = session.get(SyncQuarantine, quarantine_id)
+    if quarantine is None or quarantine.tournament_id != tournament_id:
+        raise ProtocolError(404, "quarantine_not_found", "Quarantine record does not exist")
+    if quarantine.authority_epoch is None:
+        return []
+    checkpoint = session.get(
+        SyncCheckpoint, (tournament_id, quarantine.authority_epoch)
+    )
+    if checkpoint is None:
+        return []
+    return list(
+        session.scalars(
+            select(EventOperation)
+            .join(SyncInbox, SyncInbox.operation_id == EventOperation.operation_id)
+            .where(
+                EventOperation.tournament_id == tournament_id,
+                SyncInbox.tournament_id == tournament_id,
+                EventOperation.authority_epoch == quarantine.authority_epoch,
+                SyncInbox.authority_epoch == quarantine.authority_epoch,
+                EventOperation.sequence == SyncInbox.sequence,
+                EventOperation.sequence <= checkpoint.highest_contiguous_sequence,
+            )
+            .order_by(EventOperation.sequence.desc(), EventOperation.operation_id)
+            .limit(100)
+        )
+    )
+
+
 def resolve_quarantine(
     session: Session,
     *,

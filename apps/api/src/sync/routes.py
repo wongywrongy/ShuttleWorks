@@ -24,6 +24,8 @@ from sync.schemas import (
     ReadyRequest,
     SyncBatchRequest,
     SyncBatchResponse,
+    SyncCorrectionCandidate,
+    SyncCorrectionCandidateListResponse,
     SyncQuarantineListResponse,
     SyncQuarantineRecord,
     SyncQuarantineResolutionRequest,
@@ -589,6 +591,31 @@ def quarantine_list(
         _raise_protocol(exc)
     return SyncQuarantineListResponse(
         items=[SyncQuarantineRecord.model_validate(row, from_attributes=True) for row in rows]
+    )
+
+
+@sync_router.get(
+    "/quarantine/{quarantine_id}/corrections",
+    response_model=SyncCorrectionCandidateListResponse,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def quarantine_correction_candidates(
+    tournament_id: uuid.UUID = Path(...),
+    quarantine_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> SyncCorrectionCandidateListResponse:
+    try:
+        rows = SyncApplication(repo).list_correction_candidates(
+            tournament_id=tournament_id,
+            quarantine_id=quarantine_id,
+        )
+    except ProtocolError as exc:
+        _raise_protocol(exc)
+    return SyncCorrectionCandidateListResponse(
+        items=[
+            SyncCorrectionCandidate.model_validate(row, from_attributes=True)
+            for row in rows
+        ]
     )
 
 

@@ -6,6 +6,7 @@ import { useSyncQuarantine } from '../../../hooks/useSyncQuarantine';
 vi.mock('../../../hooks/useSyncQuarantine', () => ({ useSyncQuarantine: vi.fn() }));
 
 const resolve = vi.fn();
+const loadCandidates = vi.fn();
 const setIncludeResolved = vi.fn();
 const authority = {
   tournament_id: 't1',
@@ -45,7 +46,19 @@ beforeEach(() => {
     loading: false,
     error: null,
     busyId: null,
+    candidateLoadingId: null,
+    candidates: {
+      q1: [{
+        operation_id: '11111111-1111-4111-8111-111111111111',
+        sequence: 8,
+        command_type: 'match.record_result.v3',
+        aggregate_type: 'bracket_match',
+        aggregate_id: 'm8',
+        accepted_at_node: '2026-09-01T10:02:00Z',
+      }],
+    },
     refresh: vi.fn(),
+    loadCandidates,
     resolve,
   });
 });
@@ -69,7 +82,7 @@ describe('SyncReconciliationPanel', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Operator reason' }), {
       target: { value: 'Reviewed the missing sequence and corrected the score.' },
     });
-    fireEvent.change(screen.getByRole('textbox', { name: 'Acknowledged correction operation ID' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Acknowledged correction operation' }), {
       target: { value: '11111111-1111-4111-8111-111111111111' },
     });
     fireEvent.click(screen.getByRole('checkbox', { name: /linked correction was applied onsite/i }));
@@ -89,7 +102,10 @@ describe('SyncReconciliationPanel', () => {
       loading: false,
       error: null,
       busyId: null,
+      candidateLoadingId: null,
+      candidates: {},
       refresh: vi.fn(),
+      loadCandidates,
       resolve,
     });
     render(<SyncReconciliationPanel authority={authority} />);

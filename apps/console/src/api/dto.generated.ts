@@ -1939,6 +1939,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sync/v1/tournaments/{tournament_id}/quarantine/{quarantine_id}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quarantine Correction Candidates */
+        get: operations["quarantine_correction_candidates_sync_v1_tournaments__tournament_id__quarantine__quarantine_id__corrections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sync/v1/tournaments/{tournament_id}/quarantine/{quarantine_id}/resolve": {
         parameters: {
             query?: never;
@@ -7631,6 +7648,32 @@ export interface components {
             /** Next Sequence */
             next_sequence: number;
         };
+        /** SyncCorrectionCandidate */
+        SyncCorrectionCandidate: {
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            /** Sequence */
+            sequence: number;
+            /** Command Type */
+            command_type: string;
+            /** Aggregate Type */
+            aggregate_type: string;
+            /** Aggregate Id */
+            aggregate_id: string;
+            /**
+             * Accepted At Node
+             * Format: date-time
+             */
+            accepted_at_node: string;
+        };
+        /** SyncCorrectionCandidateListResponse */
+        SyncCorrectionCandidateListResponse: {
+            /** Items */
+            items: components["schemas"]["SyncCorrectionCandidate"][];
+        };
         /** SyncQuarantineListResponse */
         SyncQuarantineListResponse: {
             /** Items */
@@ -11464,6 +11507,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncQuarantineListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quarantine_correction_candidates_sync_v1_tournaments__tournament_id__quarantine__quarantine_id__corrections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                quarantine_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncCorrectionCandidateListResponse"];
                 };
             };
             /** @description Validation Error */
