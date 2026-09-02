@@ -14,57 +14,9 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
-class _SettingsProxy:
-    def __getattr__(self, name):
-        from core.config import settings as current
-
-        return getattr(current, name)
-
-    def __setattr__(self, name, value):
-        import sys
-
-        from core.config import settings as current
-
-        setattr(current, name, value)
-        agent_module = sys.modules.get("sync.agent")
-        if agent_module is not None and agent_module.settings is not current:
-            setattr(agent_module.settings, name, value)
-
-
-settings = _SettingsProxy()
-from db.models import (
-    AuthorityTransition,
-    Base,
-    CloudEventProjection,
-    EventOperation,
-    Org,
-    SyncInbox,
-    SyncOutbox,
-    MatchStatus,
-    Tournament,
-    TournamentAuthority,
-)
-from operations.match_state_application import MatchStateApplication
-from repositories import LocalRepository
-from sync import agent
-from sync.schemas import SyncBatchRequest, SyncBatchResponse
-from sync.service import (
-    begin_checkout,
-    cloud_projection_digest,
-    create_ready_proof,
-    enroll_device,
-    import_checkpoint,
-    ingest_batch,
-    mark_ready,
-    operation_to_envelope,
-    rebuild_cloud_projection,
-    return_to_cloud,
-)
-
-
-def _factory() -> sessionmaker:
+def _factory(base) -> sessionmaker:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    base.metadata.create_all(engine)
     return sessionmaker(engine, expire_on_commit=False)
 
 
@@ -88,8 +40,44 @@ def _public_key(private: Ed25519PrivateKey) -> str:
 
 
 def test_checkout_reconnect_drain_rebuild_and_audited_return(monkeypatch, tmp_path):
-    cloud_factory = _factory()
-    node_factory = _factory()
+    # Import the backend graph at test execution time.  Some migration tests
+    # deliberately purge backend modules from sys.modules so Alembic can bind
+    # to a fresh DATABASE_URL.  Collection-time imports here used to retain an
+    # orphaned sync agent and settings singleton after that purge, causing the
+    # reconnect drain to see an empty cloud URL even though two durable outbox
+    # rows existed.
+    from core.config import settings
+    from db.models import (
+        AuthorityTransition,
+        Base,
+        CloudEventProjection,
+        EventOperation,
+        MatchStatus,
+        Org,
+        SyncInbox,
+        SyncOutbox,
+        Tournament,
+        TournamentAuthority,
+    )
+    from operations.match_state_application import MatchStateApplication
+    from repositories import LocalRepository
+    from sync import agent
+    from sync.schemas import SyncBatchRequest, SyncBatchResponse
+    from sync.service import (
+        begin_checkout,
+        cloud_projection_digest,
+        create_ready_proof,
+        enroll_device,
+        import_checkpoint,
+        ingest_batch,
+        mark_ready,
+        operation_to_envelope,
+        rebuild_cloud_projection,
+        return_to_cloud,
+    )
+
+    cloud_factory = _factory(Base)
+    node_factory = _factory(Base)
     tournament_id = uuid.uuid4()
     node_id = uuid.uuid4()
     org_id = uuid.uuid4()
@@ -197,12 +185,20 @@ def test_checkout_reconnect_drain_rebuild_and_audited_return(monkeypatch, tmp_pa
     capability_file = tmp_path / "capability"
     capability_file.write_text(capability)
     monkeypatch.setattr(agent, "SessionLocal", node_factory)
-    monkeypatch.setattr(agent, "_post_batch", lambda tid, cap, operations: _post_to_cloud(
-        cloud_factory,
-        tid,
-        cap,
-        operations,
-    ))
+    monkeypatch.setattr(
+        agent,
+        "_post_batch",
+        lambda tid, cap, operations: _post_to_cloud(
+            cloud_factory,
+            tid,
+            cap,
+            operations,
+            ingest_batch=ingest_batch,
+            operation_to_envelope=operation_to_envelope,
+            request_type=SyncBatchRequest,
+            response_type=SyncBatchResponse,
+        ),
+    )
     monkeypatch.setattr(settings, "sync_cloud_url", "https://cloud.rehearsal.test")
     monkeypatch.setattr(settings, "sync_tournament_id", str(tournament_id))
     monkeypatch.setattr(settings, "node_id", str(node_id))
@@ -211,7 +207,16 @@ def test_checkout_reconnect_drain_rebuild_and_audited_return(monkeypatch, tmp_pa
     assert [operation.sequence for operation in pending] == [1, 2]
     assert agent.drain_once() == 2
     assert agent.drain_once() == 0
-    duplicate = _post_to_cloud(cloud_factory, tournament_id, capability, pending)
+    duplicate = _post_to_cloud(
+        cloud_factory,
+        tournament_id,
+        capability,
+        pending,
+        ingest_batch=ingest_batch,
+        operation_to_envelope=operation_to_envelope,
+        request_type=SyncBatchRequest,
+        response_type=SyncBatchResponse,
+    )
     assert duplicate.accepted == 0
     assert duplicate.duplicates == 2
 
@@ -266,13 +271,23 @@ def test_checkout_reconnect_drain_rebuild_and_audited_return(monkeypatch, tmp_pa
         assert transition.declared_last_sequence == 2
 
 
-def _post_to_cloud(factory, tournament_id, capability, operations):
+def _post_to_cloud(
+    factory,
+    tournament_id,
+    capability,
+    operations,
+    *,
+    ingest_batch,
+    operation_to_envelope,
+    request_type,
+    response_type,
+):
     with factory() as cloud:
         highest, accepted, duplicates = ingest_batch(
             cloud,
             tournament_id=tournament_id,
             capability=capability,
-            batch=SyncBatchRequest(
+            batch=request_type(
                 node_id=operations[0].node_id,
                 authority_epoch=operations[0].authority_epoch,
                 operations=[
@@ -281,7 +296,7 @@ def _post_to_cloud(factory, tournament_id, capability, operations):
                 ],
             ),
         )
-        return SyncBatchResponse(
+        return response_type(
             highest_contiguous_sequence=highest,
             accepted=accepted,
             duplicates=duplicates,
