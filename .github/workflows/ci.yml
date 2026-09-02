@@ -238,6 +238,9 @@ jobs:
           mkdir -p ../../secrets
           touch ../../secrets/postgres_password ../../secrets/database_url ../../secrets/ops_token
           touch ../../secrets/sync_authority_capability ../../secrets/authority_signing_public_key
+          touch ../../secrets/authority_signing_key ../../secrets/node_signing_key
+          touch ../../secrets/otel_gateway_ca.pem ../../secrets/otel_gateway_client_cert.pem
+          touch ../../secrets/otel_gateway_client_key.pem
           status=0
           for f in docker-compose.yml \
                    docker-compose.dev.yml \
@@ -278,6 +281,45 @@ jobs:
             echo "::error::demo Compose retained the base SQLite configuration"
             status=1
           fi
+          exit $status
+
+  observability-config:
+    name: Observability configs (Collector + Prometheus)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Native Prometheus rules
+        run: |
+          docker run --rm +            -v "$PWD/infra/observability:/rules:ro" +            --entrypoint promtool +            prom/prometheus:v3.5.0 +            check rules /rules/prometheus-rules.yaml
+      - name: Production Collector configurations
+        env:
+          OTEL_GATEWAY_ENDPOINT: https://gateway.invalid:4318
+          OTEL_GATEWAY_CA_FILE: /tmp/ca.pem
+          OTEL_GATEWAY_CLIENT_CERT_FILE: /tmp/client.pem
+          OTEL_GATEWAY_CLIENT_KEY_FILE: /tmp/client.key
+          POSTGRES_TELEMETRY_ENDPOINT: postgres.invalid:5432
+          POSTGRES_TELEMETRY_USERNAME: telemetry
+          POSTGRES_TELEMETRY_PASSWORD: validation-only
+          POSTGRES_TELEMETRY_DATABASE: shuttleworks
+          POSTGRES_TELEMETRY_CA_FILE: /tmp/ca.pem
+        run: |
+          status=0
+          for config in collector-event-node.yaml collector-cloud.yaml; do
+            docker run --rm \
+              -e OTEL_GATEWAY_ENDPOINT \
+              -e OTEL_GATEWAY_CA_FILE \
+              -e OTEL_GATEWAY_CLIENT_CERT_FILE \
+              -e OTEL_GATEWAY_CLIENT_KEY_FILE \
+              -e POSTGRES_TELEMETRY_ENDPOINT \
+              -e POSTGRES_TELEMETRY_USERNAME \
+              -e POSTGRES_TELEMETRY_PASSWORD \
+              -e POSTGRES_TELEMETRY_DATABASE \
+              -e POSTGRES_TELEMETRY_CA_FILE \
+              -v /tmp:/hostfs:ro \
+              -v "$PWD/infra/otel:/etc/otel:ro" \
+              otel/opentelemetry-collector-contrib:0.155.0 \
+              validate --config="/etc/otel/$config" || status=1
+          done
           exit $status
 
   console-browser-contracts:

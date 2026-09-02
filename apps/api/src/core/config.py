@@ -512,6 +512,28 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _enforce_authority_key_custody(self) -> "Settings":
+        """Production topology profiles never use deterministic bootstrap keys."""
+        if self.process_role not in {"api", "sync"}:
+            return self
+        missing: list[str] = []
+        if self.deployment_profile == "cloud" and not self.authority_signing_key_file:
+            missing.append("AUTHORITY_SIGNING_KEY_FILE")
+        if self.deployment_profile == "event_node":
+            if self.process_role == "api" and not self.authority_signing_public_key_file:
+                missing.append("AUTHORITY_SIGNING_PUBLIC_KEY_FILE")
+            if self.process_role == "api" and not self.node_signing_key_file:
+                missing.append("NODE_SIGNING_KEY_FILE")
+            if self.process_role == "sync" and not self.sync_authority_capability_file:
+                missing.append("SYNC_AUTHORITY_CAPABILITY_FILE")
+        if missing:
+            raise ValueError(
+                f"{self.deployment_profile} profile requires file-backed authority material: "
+                + ", ".join(missing)
+            )
+        return self
+
+    @model_validator(mode="after")
     def _enforce_cloud_secrets(self) -> "Settings":
         # In cloud mode the bootstrap-identity fallback is unacceptable
         # — every request would silently act as the local operator.

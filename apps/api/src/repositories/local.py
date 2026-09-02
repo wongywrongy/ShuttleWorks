@@ -833,13 +833,16 @@ class _LocalBracketRepo:
         self,
         tournament_id: uuid.UUID,
         event_id: str,
+        *,
+        commit: bool = True,
     ) -> bool:
         row = self.get_event(tournament_id, event_id)
         if row is None:
             return False
         # CASCADE wipes participants + matches + results via FK.
         self.session.delete(row)
-        self.session.commit()
+        if commit:
+            self.session.commit()
         return True
 
     # ---- Participants --------------------------------------------------
@@ -882,6 +885,8 @@ class _LocalBracketRepo:
         tournament_id: uuid.UUID,
         event_id: str,
         participants: list[dict],
+        *,
+        commit: bool = True,
     ) -> int:
         """Insert participants for an event in one transaction.
 
@@ -889,7 +894,9 @@ class _LocalBracketRepo:
         optional ``member_ids``, ``seed``, ``entry_player_id``, ``meta``.
         Returns the number of rows inserted.
         """
-        return self._insert_participants(tournament_id, event_id, participants)
+        return self._insert_participants(
+            tournament_id, event_id, participants, commit=commit
+        )
 
     def add_participants(
         self,
@@ -925,6 +932,8 @@ class _LocalBracketRepo:
         tournament_id: uuid.UUID,
         event_id: str,
         participants: list[dict],
+        *,
+        commit: bool = True,
     ) -> int:
         """Shared row construction for both participant writers.
 
@@ -949,7 +958,9 @@ class _LocalBracketRepo:
             for p in participants
         ]
         self.session.add_all(rows)
-        self.session.commit()
+        self.session.flush()
+        if commit:
+            self.session.commit()
         return len(rows)
 
     # ---- Matches -------------------------------------------------------
@@ -1006,6 +1017,8 @@ class _LocalBracketRepo:
         tournament_id: uuid.UUID,
         event_id: str,
         matches: list[dict],
+        *,
+        commit: bool = True,
     ) -> int:
         """Insert the generated match tree for an event in one transaction.
 
@@ -1039,7 +1052,9 @@ class _LocalBracketRepo:
             for m in matches
         ]
         self.session.add_all(rows)
-        self.session.commit()
+        self.session.flush()
+        if commit:
+            self.session.commit()
         return len(rows)
 
     def update_match(

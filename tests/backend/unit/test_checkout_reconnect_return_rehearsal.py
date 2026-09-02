@@ -134,6 +134,7 @@ def test_checkout_reconnect_drain_rebuild_and_audited_return(monkeypatch, tmp_pa
         )
         assert authority.grant and authority.grant["signature"]
 
+    monkeypatch.setattr(settings, "node_signing_key_file", str(node_private_path))
     with node_factory() as node:
         monkeypatch.setattr(settings, "deployment_profile", "event_node")
         imported = import_checkpoint(
@@ -147,7 +148,6 @@ def test_checkout_reconnect_drain_rebuild_and_audited_return(monkeypatch, tmp_pa
         )
         assert imported.state == "active"
 
-    monkeypatch.setattr(settings, "node_signing_key_file", str(node_private_path))
     ready_proof = create_ready_proof(
         tournament_id=tournament_id,
         node_id=node_id,

@@ -1884,17 +1884,11 @@ class ApiClient {
 
   async listSyncQuarantine(
     tid: string,
-    authorityEpoch: number,
-    capability: string,
     includeResolved = false,
   ): Promise<SyncQuarantineRecord[]> {
     const { data } = await this.client.get<SyncQuarantineListResponse>(
       `/sync/v1/tournaments/${tid}/quarantine`,
       {
-        headers: {
-          Authorization: `Bearer ${capability}`,
-          'X-ShuttleWorks-Authority-Epoch': authorityEpoch,
-        },
         params: { include_resolved: includeResolved },
       },
     );
@@ -1904,13 +1898,11 @@ class ApiClient {
   async resolveSyncQuarantine(
     tid: string,
     quarantineId: string,
-    capability: string,
     body: SyncQuarantineResolutionRequest,
   ): Promise<SyncQuarantineRecord> {
     const { data } = await this.client.post<SyncQuarantineRecord>(
       `/sync/v1/tournaments/${tid}/quarantine/${quarantineId}/resolve`,
       body,
-      { headers: { Authorization: `Bearer ${capability}` } },
     );
     return data;
   }

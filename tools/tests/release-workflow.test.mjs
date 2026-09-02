@@ -9,7 +9,8 @@ const compose = readFileSync('infra/compose/docker-compose.release.yml', 'utf8')
 
 test('release publication is gated by CI for the exact source revision', () => {
   assert.match(workflow, /tags:\s*\['v\*\.\*\.\*'\]/)
-  assert.match(workflow, /--workflow ci\.yml/)
+  assert.match(workflow, /for workflow in ci\.yml security\.yml/)
+  assert.match(workflow, /--workflow "\$workflow"/)
   assert.match(workflow, /--commit "\$SOURCE_SHA"/)
   assert.match(workflow, /SOURCE_REVISION=\$\{\{ steps\.revision\.outputs\.sha \}\}/)
   assert.doesNotMatch(workflow, /value=latest/)
@@ -47,6 +48,10 @@ test('security controls use immutable action references and cover all required s
   assert.match(security, /trivy-action@/)
   assert.match(security, /sbom-action@/)
   assert.match(security, /format: spdx-json/)
+  assert.match(security, /npm-audit:/)
+  assert.match(security, /python-audit:/)
+  assert.match(security, /ignore-unfixed:\s*false/)
+  assert.match(security, /exit-code:\s*"1"/)
 })
 
 test('the CI publication gate uses immutable action references', () => {

@@ -16,7 +16,7 @@
 
 ARG SOURCE_REVISION=unknown
 
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
@@ -37,7 +37,11 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     pip install --prefix=/install --no-deps ./scheduler-core
 
 
-FROM python:3.12-slim AS runtime
+# Ubuntu 24.04 supplies a vendor-supported Python 3.12 runtime without the
+# unresolved high/critical Debian package findings currently present in the
+# python:3.12-slim final image. Keep the digest immutable: Dependabot/release
+# work must deliberately advance and rescan it.
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517 AS runtime
 
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.revision=$SOURCE_REVISION
@@ -48,14 +52,26 @@ LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 # PYTHONUNBUFFERED — flushes stdout/stderr line-by-line so docker logs
 #   shows uvicorn output without a 1-line lag on quiet traffic.
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src:/usr/local/lib/python3.12/site-packages
 
 WORKDIR /app
+
+ARG DEBIAN_FRONTEND=noninteractive
 
 # Create the runtime user BEFORE the source COPYs so we can use
 # `--chown=app:app` and skip a recursive chown walk over /app at the
 # end of the build.
-RUN useradd --create-home --uid 1001 app \
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libgomp1 \
+        passwd \
+        python3.12 \
+    && ln -s /usr/bin/python3.12 /usr/local/bin/python \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1001 app \
     && mkdir -p /app/data \
     && chown app:app /app/data
 
@@ -103,7 +119,6 @@ COPY --chown=app:app apps/api/alembic.ini      ./alembic.ini
 # same image serves as API and worker; compose picks the command.
 COPY --chown=app:app apps/api/src/worker.py    ./src/worker.py
 
-ENV PYTHONPATH=/app/src
 # API/console shared contract data. services/config_lock.py finds this by
 # walking UP from its own file looking for packages/shared-contract, so the
 # image mirrors the repository path rather than inventing a flat /shared.

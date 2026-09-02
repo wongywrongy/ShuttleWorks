@@ -24,7 +24,6 @@ if str(API_SRC) not in sys.path:
 from sqlalchemy import create_engine, func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from core.config import settings  # noqa: E402
 from db.models import (  # noqa: E402
     Base,
     EventOperation,
@@ -45,6 +44,11 @@ def _blocked_connect(*_args, **_kwargs):  # noqa: ANN002, ANN003, ANN202
 
 def run_acceptance(database_path: Path) -> dict[str, object]:
     """Run the bounded durability proof against a new SQLite database."""
+    # Resolve the settings singleton at execution time. Backend tests reload
+    # core modules between deployment profiles; a collection-time reference
+    # can otherwise mutate an orphaned singleton.
+    from core.config import settings
+
     database_path = database_path.resolve()
     if database_path.exists():
         raise ValueError("acceptance database path must not already exist")

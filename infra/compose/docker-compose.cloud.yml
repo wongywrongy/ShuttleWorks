@@ -74,6 +74,7 @@ services:
       - AUTH_MODE=cloud
       - EMAIL_BACKEND=console
       - PUBLIC_APP_ORIGIN=${PUBLIC_APP_ORIGIN:-http://localhost:8600}
+      - AUTHORITY_SIGNING_KEY_FILE=/run/secrets/authority_signing_key
       # Entries (SP-E1-1). Cloudflare's DOCUMENTED DUMMY keypair by default:
       # the sitekey/secret below always pass, which is what makes the smoke
       # stack work with no Cloudflare account and no network call to a third
@@ -86,6 +87,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    secrets:
+      - authority_signing_key
     read_only: true
     tmpfs:
       - /tmp
@@ -133,3 +136,7 @@ services:
 
 volumes:
   pgdata:
+
+secrets:
+  authority_signing_key:
+    file: ${AUTHORITY_SIGNING_KEY_FILE:-../../secrets/authority_signing_key}

@@ -68,3 +68,19 @@ def test_network_failure_schedules_bounded_retry(monkeypatch) -> None:
         assert row.next_attempt_at is not None
         assert row.acknowledged_at is None
         assert row.last_error_code == "network_error"
+
+
+def test_permanent_protocol_failure_is_retained_and_removed_from_retry_queue(
+    monkeypatch,
+) -> None:
+    factory, tournament_id, node_id, operation_id = _database(monkeypatch)
+    operations = agent.pending_batch(tournament_id, node_id)
+    agent._mark_permanently_blocked(operations, "command_class_not_granted")
+
+    with factory() as session:
+        row = session.get(SyncOutbox, operation_id)
+        assert row.acknowledged_at is None
+        assert row.permanently_blocked_at is not None
+        assert row.next_attempt_at is None
+        assert row.last_error_code == "command_class_not_granted"
+    assert agent.pending_batch(tournament_id, node_id) == []

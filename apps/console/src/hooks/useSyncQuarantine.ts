@@ -4,7 +4,7 @@ import type { SyncQuarantineRecord, SyncQuarantineResolutionRequest } from '../a
 import { useTournamentIdOrNull } from './useTournamentId';
 
 /** Polls durable sync dead-letter evidence for the selected workspace. */
-export function useSyncQuarantine(authorityEpoch: number | null, capability: string) {
+export function useSyncQuarantine(authorityEpoch: number | null) {
   const tournamentId = useTournamentIdOrNull();
   const [items, setItems] = useState<SyncQuarantineRecord[]>([]);
   const [includeResolved, setIncludeResolved] = useState(false);
@@ -13,7 +13,7 @@ export function useSyncQuarantine(authorityEpoch: number | null, capability: str
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!tournamentId || !authorityEpoch || !capability.trim()) {
+    if (!tournamentId || !authorityEpoch) {
       setItems([]);
       return;
     }
@@ -21,8 +21,6 @@ export function useSyncQuarantine(authorityEpoch: number | null, capability: str
     try {
       setItems(await apiClient.listSyncQuarantine(
         tournamentId,
-        authorityEpoch,
-        capability.trim(),
         includeResolved,
       ));
       setError(null);
@@ -31,14 +29,14 @@ export function useSyncQuarantine(authorityEpoch: number | null, capability: str
     } finally {
       setLoading(false);
     }
-  }, [authorityEpoch, capability, includeResolved, tournamentId]);
+  }, [authorityEpoch, includeResolved, tournamentId]);
 
   useEffect(() => {
     void refresh();
-    if (!tournamentId || !authorityEpoch || !capability.trim()) return undefined;
+    if (!tournamentId || !authorityEpoch) return undefined;
     const timer = window.setInterval(() => void refresh(), 5_000);
     return () => window.clearInterval(timer);
-  }, [authorityEpoch, capability, refresh, tournamentId]);
+  }, [authorityEpoch, refresh, tournamentId]);
 
   const resolve = useCallback(async (
     quarantineId: string,
@@ -47,7 +45,7 @@ export function useSyncQuarantine(authorityEpoch: number | null, capability: str
     if (!tournamentId) return;
     setBusyId(quarantineId);
     try {
-      await apiClient.resolveSyncQuarantine(tournamentId, quarantineId, capability.trim(), body);
+      await apiClient.resolveSyncQuarantine(tournamentId, quarantineId, body);
       await refresh();
       setError(null);
     } catch (cause) {
@@ -56,7 +54,7 @@ export function useSyncQuarantine(authorityEpoch: number | null, capability: str
     } finally {
       setBusyId(null);
     }
-  }, [capability, refresh, tournamentId]);
+  }, [refresh, tournamentId]);
 
   return {
     items,

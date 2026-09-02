@@ -128,6 +128,18 @@
       "owner": "event-operations",
       "status": "partially-mitigated",
       "residualRisk": "Two-times-scale hostile load and disk-full behavior require supported-hardware tests."
+    },
+    {
+      "id": "TM-011",
+      "surface": "installer-update-channel",
+      "stride": ["tampering", "denial-of-service"],
+      "scenario": "The shipped backend image contains a high or critical operating-system vulnerability for which the base-image vendor has not yet published a fixed package.",
+      "severity": "critical",
+      "controls": ["fail-closed Trivy release gate", "exact-version and digest release deployment", "SBOM and provenance"],
+      "verification": [".github/workflows/security.yml", "tools/tests/release-workflow.test.mjs"],
+      "owner": "release-owner",
+      "status": "mitigated",
+      "residualRisk": "The final backend stage uses an immutable Ubuntu 24.04 digest with vendor-patched Python 3.12. The production image imports the pinned solver, PostgreSQL and SQLite runtimes and passes the fail-closed high/critical scan; future digest updates remain gated by the same scan."
     }
   ]
 }

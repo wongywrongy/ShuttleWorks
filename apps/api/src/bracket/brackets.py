@@ -1098,6 +1098,7 @@ def _persist_event(
     seeded_count: int,
     rr_rounds: Optional[int],
     config: Optional[dict] = None,
+    commit: bool = True,
 ) -> None:
     """Persist one event's full shape (event row + participants + matches).
 
@@ -1117,6 +1118,7 @@ def _persist_event(
         rr_rounds=rr_rounds,
         config=config or {},
         status=meta.status,
+        commit=commit,
     )
     repo.brackets.bulk_create_participants(
         tournament_id,
@@ -1131,6 +1133,7 @@ def _persist_event(
             }
             for p in draw.participants.values()
         ],
+        commit=commit,
     )
     match_dicts: List[dict] = []
     for round_index, round_pu_ids in enumerate(draw.rounds):
@@ -1154,7 +1157,9 @@ def _persist_event(
                     "meta": dict(pu.metadata or {}),
                 }
             )
-    repo.brackets.bulk_create_matches(tournament_id, event_id, match_dicts)
+    repo.brackets.bulk_create_matches(
+        tournament_id, event_id, match_dicts, commit=commit
+    )
 
 
 def _participant_persist_fields(metadata: Optional[dict]) -> dict:
@@ -1485,17 +1490,65 @@ def _ensure_tournament_exists(repo: LocalRepository, tournament_id: uuid.UUID) -
         raise HTTPException(status_code=404, detail="tournament not found")
 
 
-def _clear_bracket(repo: LocalRepository, tournament_id: uuid.UUID) -> None:
+def _clear_bracket(
+    repo: LocalRepository, tournament_id: uuid.UUID, *, commit: bool = True
+) -> None:
     """Delete every bracket event under this tournament — cascade wipes
     participants, matches, results — and clear the session JSON blob."""
     for event in repo.brackets.list_events(tournament_id):
-        repo.brackets.delete_event(tournament_id, event.id)
+        repo.brackets.delete_event(tournament_id, event.id, commit=commit)
     tournament = repo.tournaments.get_by_id(tournament_id)
     if tournament is not None and isinstance(tournament.data, dict):
         if "bracket_session" in tournament.data:
             payload = dict(tournament.data)
             payload.pop("bracket_session", None)
-            repo.tournaments.upsert_data(tournament_id, payload)
+            repo.tournaments.upsert_data(tournament_id, payload, commit=commit)
+
+
+def _append_lifecycle_operation(
+    repo: LocalRepository,
+    *,
+    tournament_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    action: str,
+    snapshot: dict | None,
+) -> None:
+    """Append a replayable create/delete/generate bracket snapshot."""
+    from core.config import settings
+
+    # Local development is not a checked-out node. Creating an implicit
+    # authority epoch there would freeze preparation-only imports after the
+    # first ordinary bracket edit. Only the event-node profile owns an
+    # offline operation log.
+    if settings.deployment_profile != "event_node":
+        return
+    from sync.service import append_local_operation
+
+    configured = getattr(settings, "node_id", "")
+    try:
+        node_id = uuid.UUID(configured) if configured else None
+    except ValueError:
+        node_id = None
+    if node_id is None:
+        node_id = uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            f"shuttleworks:event-node:{settings.database_url}",
+        )
+    repo.stage(
+        append_local_operation,
+        tournament_id=tournament_id,
+        node_id=node_id,
+        actor_id=actor_id,
+        command_type=(
+            "bracket.lifecycle.delete.v1"
+            if action == "delete"
+            else "bracket.lifecycle.replace.v1"
+        ),
+        aggregate_type="bracket_tournament",
+        aggregate_id=str(tournament_id),
+        payload={"action": action, "bracketSnapshot": snapshot},
+        expected_version=None,
+    )
 
 
 def _load_match_versions(repo: LocalRepository, tournament_id: uuid.UUID) -> Dict[str, int]:
@@ -1580,6 +1633,7 @@ def _persist_result_advancement(
 def create_bracket(
     body: CreateTournamentIn,
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> TournamentOut:
     """Create the bracket session + events for this tournament.
@@ -1696,41 +1750,54 @@ def create_bracket(
 
     # Persist everything. Order: events first (FK parents), then
     # participants + matches, then results (auto-walkover BYEs).
-    for ev in body.events:
-        meta = events_meta[ev.id]
-        draw = draws[ev.id]
-        _persist_event(
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise HTTPException(status_code=422, detail="authenticated user id is not a UUID")
+    with repo.transaction() as db:
+        for ev in body.events:
+            meta = events_meta[ev.id]
+            draw = draws[ev.id]
+            _persist_event(
+                repo,
+                tournament_id,
+                event_id=ev.id,
+                meta=meta,
+                draw=draw,
+                state=state,
+                seeded_count=ev.seeded_count or 0,
+                rr_rounds=ev.rr_rounds,
+                config=dict(ev.config or {}),
+                commit=False,
+            )
+        for pu_id, result in state.results.items():
+            event_id = state.play_units[pu_id].event_id
+            repo.brackets.record_result(
+                tournament_id,
+                event_id,
+                pu_id,
+                winner_side=result.winner_side.value,
+                score=result.score,
+                finished_at_slot=result.finished_at_slot,
+                walkover=result.walkover,
+                reason=result.reason,
+                commit=False,
+            )
+        _persist_session_metadata(
             repo,
             tournament_id,
-            event_id=ev.id,
-            meta=meta,
-            draw=draw,
-            state=state,
-            seeded_count=ev.seeded_count or 0,
-            rr_rounds=ev.rr_rounds,
-            config=dict(ev.config or {}),
+            session=session_obj,
+            time_limit_seconds=body.time_limit_seconds,
+            commit=False,
         )
-    # Persist auto-walkover results (R1 BYE byes recorded by register_draw).
-    for pu_id, result in state.results.items():
-        event_id = state.play_units[pu_id].event_id
-        repo.brackets.record_result(
-            tournament_id,
-            event_id,
-            pu_id,
-            winner_side=result.winner_side.value,
-            score=result.score,
-            finished_at_slot=result.finished_at_slot,
-            walkover=result.walkover,
-            reason=result.reason,
+        snapshot = _serialize_session(session_obj).model_dump(mode="json")
+        _append_lifecycle_operation(
+            repo,
+            tournament_id=tournament_id,
+            actor_id=actor_id,
+            action="create",
+            snapshot=snapshot,
         )
-    # Persist session config last so a partial failure earlier leaves
-    # nothing for ``_hydrate_session`` to rehydrate.
-    _persist_session_metadata(
-        repo,
-        tournament_id,
-        session=session_obj,
-        time_limit_seconds=body.time_limit_seconds,
-    )
+        db.flush()
 
     response_cache.invalidate(tournament_id)
     return _serialize_session(session_obj)
@@ -1765,10 +1832,23 @@ def get_bracket(
 @router.delete("", dependencies=[_OPERATOR])
 def delete_bracket(
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> Dict[str, bool]:
     _ensure_tournament_exists(repo, tournament_id)
-    _clear_bracket(repo, tournament_id)
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise HTTPException(status_code=422, detail="authenticated user id is not a UUID")
+    with repo.transaction() as db:
+        _clear_bracket(repo, tournament_id, commit=False)
+        _append_lifecycle_operation(
+            repo,
+            tournament_id=tournament_id,
+            actor_id=actor_id,
+            action="delete",
+            snapshot=None,
+        )
+        db.flush()
     response_cache.invalidate(tournament_id)
     return {"ok": True}
 
@@ -2262,6 +2342,7 @@ def generate_event_route(
     body: GenerateEventIn,
     tournament_id: uuid.UUID = Path(...),
     event_id: str = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> TournamentOut:
     """Generate (or re-generate) one event's draws + schedule.
@@ -2413,7 +2494,7 @@ def generate_event_route(
 
     # Solve succeeded — now persist to DB.
     # 1. Delete the old event row (cascades participants + matches).
-    repo.brackets.delete_event(tournament_id, event_id)
+    repo.brackets.delete_event(tournament_id, event_id, commit=False)
     # 2. Recreate the event row with status='generated'.
     repo.brackets.create_event(
         tournament_id,
@@ -2428,6 +2509,7 @@ def generate_event_route(
         # Swiss rounds defaulted from the participant count).
         config=resolved_config,
         status="generated",
+        commit=False,
     )
     # 3. Re-persist participants.
     repo.brackets.bulk_create_participants(
@@ -2443,6 +2525,7 @@ def generate_event_route(
             }
             for p in draw.participants.values()
         ],
+        commit=False,
     )
     # 4. Persist matches.
     match_dicts: List[dict] = []
@@ -2467,7 +2550,9 @@ def generate_event_route(
                     "meta": dict(pu.metadata or {}),
                 }
             )
-    repo.brackets.bulk_create_matches(tournament_id, event_id, match_dicts)
+    repo.brackets.bulk_create_matches(
+        tournament_id, event_id, match_dicts, commit=False
+    )
     # 5. Persist auto-walkover results for R1 BYE play_units that
     #    register_draw wrote into state.results (e.g. SE with odd participant
     #    count). Filter strictly to this event to avoid re-recording other
@@ -2484,9 +2569,23 @@ def generate_event_route(
             finished_at_slot=result.finished_at_slot,
             walkover=result.walkover,
             reason=result.reason,
+            commit=False,
         )
     # 6. Persist assignments (session.state.assignments updated by solver).
-    _persist_session_metadata(repo, tournament_id, session=session)
+    _persist_session_metadata(repo, tournament_id, session=session, commit=False)
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        repo.discard_transaction()
+        raise HTTPException(status_code=422, detail="authenticated user id is not a UUID")
+    snapshot = _serialize_session(session).model_dump(mode="json")
+    _append_lifecycle_operation(
+        repo,
+        tournament_id=tournament_id,
+        actor_id=actor_id,
+        action="generate_event",
+        snapshot=snapshot,
+    )
+    repo.commit_pending()
     response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
@@ -2499,6 +2598,7 @@ def generate_event_route(
 def generate_next_round_route(
     tournament_id: uuid.UUID = Path(...),
     event_id: str = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> TournamentOut:
     """Append the next round of a progressive (Swiss) draw.
@@ -2639,7 +2739,9 @@ def generate_next_round_route(
                 "meta": dict(pu.metadata or {}),
             }
         )
-    repo.brackets.bulk_create_matches(tournament_id, event_id, match_dicts)
+    repo.brackets.bulk_create_matches(
+        tournament_id, event_id, match_dicts, commit=False
+    )
     if bye_unit_id is not None:
         recorded = session.state.results[bye_unit_id]
         repo.brackets.record_result(
@@ -2651,10 +2753,24 @@ def generate_next_round_route(
             finished_at_slot=recorded.finished_at_slot,
             walkover=recorded.walkover,
             reason=recorded.reason,
+            commit=False,
         )
     # Session blob (assignments etc.) is unchanged in content but kept in
     # the same write rhythm as the other mutating routes.
-    _persist_session_metadata(repo, tournament_id, session=session)
+    _persist_session_metadata(repo, tournament_id, session=session, commit=False)
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        repo.discard_transaction()
+        raise HTTPException(status_code=422, detail="authenticated user id is not a UUID")
+    snapshot = _serialize_session(session).model_dump(mode="json")
+    _append_lifecycle_operation(
+        repo,
+        tournament_id=tournament_id,
+        actor_id=actor_id,
+        action="generate_round",
+        snapshot=snapshot,
+    )
+    repo.commit_pending()
     response_cache.invalidate(tournament_id)
     return _serialize_session(session)
 
@@ -2667,6 +2783,7 @@ def generate_next_round_route(
 def delete_event_route(
     tournament_id: uuid.UUID = Path(...),
     event_id: str = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> Response:
     """Delete a bracket event.
@@ -2684,7 +2801,25 @@ def delete_event_route(
             status_code=409,
             detail=f"event status is {existing.status!r}; only draft can be deleted",
         )
-    repo.brackets.delete_event(tournament_id, event_id)
+    repo.brackets.delete_event(tournament_id, event_id, commit=False)
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        repo.discard_transaction()
+        raise HTTPException(status_code=422, detail="authenticated user id is not a UUID")
+    remaining = _hydrate_session(repo, tournament_id)
+    snapshot = (
+        _serialize_session(remaining).model_dump(mode="json")
+        if remaining is not None
+        else None
+    )
+    _append_lifecycle_operation(
+        repo,
+        tournament_id=tournament_id,
+        actor_id=actor_id,
+        action="delete_event",
+        snapshot=snapshot,
+    )
+    repo.commit_pending()
     response_cache.invalidate(tournament_id)
     return Response(status_code=204)
 

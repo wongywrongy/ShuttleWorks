@@ -284,6 +284,7 @@ OPS_TOKEN_GATED: set[tuple[str, str]] = {
     ("GET", "/health/ready"),
     ("GET", "/health/deep"),
     ("GET", "/health/metrics"),
+    ("GET", "/health/backups"),
 }
 
 _PARAM_FILL = str(uuid.uuid4())

@@ -3780,16 +3780,6 @@ export interface components {
             authority_epoch: number;
             /** Capability */
             capability: string;
-            /**
-             * Actor Id
-             * Format: uuid
-             */
-            actor_id: string;
-            /**
-             * Device Id
-             * Format: uuid
-             */
-            device_id: string;
             /** Reason */
             reason: string;
             /** Declared Last Sequence */
@@ -3832,6 +3822,13 @@ export interface components {
             pending_operations: number;
             /** Oldest Pending At */
             oldest_pending_at?: string | null;
+            /**
+             * Blocked Operations
+             * @default 0
+             */
+            blocked_operations: number;
+            /** Last Blocked Error Code */
+            last_blocked_error_code?: string | null;
         };
         /** AvailabilityWindow */
         AvailabilityWindow: {
@@ -5702,22 +5699,20 @@ export interface components {
              * Format: uuid
              */
             new_node_id: string;
-            /**
-             * Actor Id
-             * Format: uuid
-             */
-            actor_id: string;
-            /**
-             * Device Id
-             * Format: uuid
-             */
-            device_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
             /** Reason */
             reason: string;
+            /** Backup Sequence */
+            backup_sequence: number;
             /** Declared Last Sequence */
             declared_last_sequence: number;
             /** Backup Hash */
             backup_hash: string;
+            /** Recovery Checkpoint */
+            recovery_checkpoint: {
+                [key: string]: unknown;
+            };
             /**
              * Confirmation
              * @default false
@@ -6178,8 +6173,6 @@ export interface components {
              * @default 72
              */
             ttl_hours: number;
-            /** Capability */
-            capability: string;
             /**
              * Operator Id
              * Format: uuid
@@ -6404,16 +6397,6 @@ export interface components {
             authority_epoch: number;
             /** Capability */
             capability: string;
-            /**
-             * Actor Id
-             * Format: uuid
-             */
-            actor_id: string;
-            /**
-             * Device Id
-             * Format: uuid
-             */
-            device_id: string;
             /** Reason */
             reason: string;
             /** Declared Last Sequence */
@@ -7695,24 +7678,13 @@ export interface components {
         };
         /** SyncQuarantineResolutionRequest */
         SyncQuarantineResolutionRequest: {
-            /**
-             * Node Id
-             * Format: uuid
-             */
-            node_id: string;
-            /** Authority Epoch */
-            authority_epoch: number;
-            /**
-             * Actor Id
-             * Format: uuid
-             */
-            actor_id: string;
             /** Reason */
             reason: string;
-            /** Correction */
-            correction: {
-                [key: string]: unknown;
-            };
+            /**
+             * Correction Operation Id
+             * Format: uuid
+             */
+            correction_operation_id: string;
         };
         /** SyncStatusResponse */
         SyncStatusResponse: {
@@ -10956,7 +10928,9 @@ export interface operations {
     bootstrap_offline_session_tournaments__tournament_id__authority_offline_session_bootstrap_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                Authorization?: string | null;
+            };
             path: {
                 tournament_id: string;
             };
@@ -11402,8 +11376,8 @@ export interface operations {
     upload_operations_sync_v1_tournaments__tournament_id__operations_post: {
         parameters: {
             query?: never;
-            header: {
-                Authorization: string;
+            header?: {
+                Authorization?: string | null;
             };
             path: {
                 tournament_id: string;
@@ -11441,7 +11415,7 @@ export interface operations {
             query?: never;
             header: {
                 "X-ShuttleWorks-Authority-Epoch": number;
-                Authorization: string;
+                Authorization?: string | null;
             };
             path: {
                 tournament_id: string;
@@ -11475,10 +11449,7 @@ export interface operations {
             query?: {
                 include_resolved?: boolean;
             };
-            header: {
-                "X-ShuttleWorks-Authority-Epoch": number;
-                Authorization: string;
-            };
+            header?: never;
             path: {
                 tournament_id: string;
             };
@@ -11509,9 +11480,7 @@ export interface operations {
     quarantine_resolve_sync_v1_tournaments__tournament_id__quarantine__quarantine_id__resolve_post: {
         parameters: {
             query?: never;
-            header: {
-                Authorization: string;
-            };
+            header?: never;
             path: {
                 tournament_id: string;
                 quarantine_id: string;

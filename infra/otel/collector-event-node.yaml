@@ -24,6 +24,25 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+  hostmetrics:
+    collection_interval: 30s
+    root_path: /hostfs
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      filesystem:
+        exclude_mount_points:
+          mount_points: ["/dev/.*", "/proc/.*", "/sys/.*"]
+          match_type: regexp
+      disk: {}
+      process:
+        mute_process_name_error: true
+        mute_process_exe_error: true
+  filelog/sqlite:
+    include: ["/app/data/*.log"]
+    start_at: end
+    include_file_path: true
 
 processors:
   memory_limiter:
@@ -57,6 +76,11 @@ processors:
 exporters:
   otlphttp/gateway:
     endpoint: ${env:OTEL_GATEWAY_ENDPOINT}
+    tls:
+      ca_file: ${env:OTEL_GATEWAY_CA_FILE}
+      cert_file: ${env:OTEL_GATEWAY_CLIENT_CERT_FILE}
+      key_file: ${env:OTEL_GATEWAY_CLIENT_KEY_FILE}
+      min_version: "1.2"
     compression: gzip
     timeout: 10s
     retry_on_failure:
@@ -88,10 +112,10 @@ service:
       processors: [memory_limiter, attributes/redact, batch]
       exporters: [otlphttp/gateway]
     metrics:
-      receivers: [otlp]
+      receivers: [otlp, hostmetrics]
       processors: [memory_limiter, attributes/redact, batch]
       exporters: [otlphttp/gateway]
     logs:
-      receivers: [otlp]
+      receivers: [otlp, filelog/sqlite]
       processors: [memory_limiter, attributes/redact, batch]
       exporters: [otlphttp/gateway]

@@ -56,6 +56,7 @@ def pending_batch(tournament_id: uuid.UUID, node_id: uuid.UUID) -> list[EventOpe
                     EventOperation.tournament_id == tournament_id,
                     EventOperation.node_id == node_id,
                     SyncOutbox.acknowledged_at.is_(None),
+                    SyncOutbox.permanently_blocked_at.is_(None),
                     (SyncOutbox.next_attempt_at.is_(None))
                     | (SyncOutbox.next_attempt_at <= now),
                 )
@@ -109,7 +110,9 @@ def _mark_acknowledged(operations: list[EventOperation], highest: int) -> None:
         session.commit()
 
 
-def _mark_retry(operations: list[EventOperation], code: str) -> None:
+def _mark_failure(
+    operations: list[EventOperation], code: str, *, permanent: bool
+) -> None:
     ids = [operation.operation_id for operation in operations]
     with SessionLocal() as session:
         rows = list(
@@ -117,11 +120,24 @@ def _mark_retry(operations: list[EventOperation], code: str) -> None:
         )
         for row in rows:
             row.attempt_count += 1
-            seconds = min(300.0, 2 ** min(row.attempt_count, 8))
-            seconds *= random.uniform(0.75, 1.25)
-            row.next_attempt_at = _utcnow() + timedelta(seconds=seconds)
+            if permanent:
+                row.next_attempt_at = None
+                row.permanently_blocked_at = _utcnow()
+            else:
+                seconds = min(300.0, 2 ** min(row.attempt_count, 8))
+                seconds *= random.uniform(0.75, 1.25)
+                row.next_attempt_at = _utcnow() + timedelta(seconds=seconds)
             row.last_error_code = code[:80]
         session.commit()
+
+
+def _mark_retry(operations: list[EventOperation], code: str) -> None:
+    _mark_failure(operations, code, permanent=False)
+
+
+def _mark_permanently_blocked(operations: list[EventOperation], code: str) -> None:
+    """Retain permanent protocol failures for explicit operator action."""
+    _mark_failure(operations, code, permanent=True)
 
 
 def drain_once() -> int:
@@ -144,10 +160,19 @@ def drain_once() -> int:
             code = str(body.get("error", code))
         except (ValueError, OSError):
             pass
-        _mark_retry(operations, code)
-        record_sync_retry("http_error")
+        retryable = exc.code in {408, 425, 429} or exc.code >= 500
+        if retryable:
+            _mark_retry(operations, code)
+            record_sync_retry("http_error")
+        else:
+            _mark_permanently_blocked(operations, code)
         record_sync_upload("rejected")
-        log.warning("sync_batch_rejected code=%s count=%d", code, len(operations))
+        log.warning(
+            "sync_batch_rejected code=%s retryable=%s count=%d",
+            code,
+            retryable,
+            len(operations),
+        )
         return 0
     except (OSError, urllib.error.URLError) as exc:
         _mark_retry(operations, "network_error")

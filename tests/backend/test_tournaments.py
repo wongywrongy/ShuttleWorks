@@ -99,6 +99,59 @@ def test_create_then_list_returns_row(client):
     assert listing[0]["name"] == "A"
 
 
+def test_event_node_roster_edits_commit_replayable_operation_with_state(
+    client, monkeypatch
+):
+    created = client.post("/tournaments", json={"name": "Offline roster"}).json()
+    tournament_id = uuid.UUID(created["id"])
+    node_id = uuid.uuid4()
+    from core.config import settings
+    from core.dependencies import AuthUser, get_current_user
+    from db.models import EventOperation, TournamentAuthority
+    from repositories import open_repository
+
+    monkeypatch.setattr(settings, "deployment_profile", "event_node")
+    monkeypatch.setattr(settings, "node_id", str(node_id))
+    client.app.dependency_overrides[get_current_user] = lambda: AuthUser(
+        id="00000000-0000-0000-0000-000000000000",
+        email="local@dev",
+    )
+    with open_repository() as repo:
+        repo.session.add(
+            TournamentAuthority(
+                tournament_id=tournament_id,
+                epoch=1,
+                node_id=node_id,
+                state="active",
+                checkpoint_hash="a" * 64,
+                checkpoint_schema_version=3,
+                capability_digest="b" * 64,
+                allowed_command_classes=["roster.replace.v1"],
+            )
+        )
+        repo.session.commit()
+
+    state = _basic_state("Offline roster")
+    state["bracketPlayers"] = [{"id": "alice", "name": "Alice"}]
+    response = client.put(f"/tournaments/{tournament_id}/state", json=state)
+    assert response.status_code == 200, response.text
+
+    with open_repository() as repo:
+        operation = repo.session.query(EventOperation).one()
+        assert operation.command_type == "roster.replace.v1"
+        replayed_player = operation.payload["bracketPlayers"][0]
+        assert replayed_player["id"] == "alice"
+        assert replayed_player["name"] == "Alice"
+        assert replayed_player["availability"] == []
+        assert operation.payload["changes"] == [
+            {"action": "add", "roster": "bracketPlayers", "playerId": "alice"}
+        ]
+        assert repo.tournaments.get_by_id(tournament_id).data["bracketPlayers"][0][
+            "name"
+        ] == "Alice"
+    client.app.dependency_overrides.pop(get_current_user, None)
+
+
 def test_list_newest_first(client):
     client.post("/tournaments", json={"name": "A"})
     client.post("/tournaments", json={"name": "B"})

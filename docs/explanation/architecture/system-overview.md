@@ -1,31 +1,57 @@
 # System overview
 
-ShuttleWorks is built as **five architectural modules** over a shared CP-SAT engine and a
-single SQLite-backed persistence layer. This page is the map: what each module owns, what it
-produces, and what it consumes. The seams *between* modules are documented in
+ShuttleWorks is a modular monolith deployed as a cloud control plane and a
+checked-out event node. This page is the map: what each product area owns,
+what it produces, and what it consumes. The seams *between* modules are documented in
 [Module contracts](/reference/contracts/).
 
-## Two tiers of module
+## Current product and deployment topology
 
+```text
+ Public / entrant surfaces                         Operator console
+ entrant SSR + public display                    Meet · Bracket · Operations
+            │ HTTPS                                     │ HTTPS / venue LAN
+            └──────────────────┬─────────────────────────┘
+                               ▼
+                 ┌────────────────────────────┐
+                 │ Cloud API (modular monolith)│── OTLP ──▶ gateway / OTel backend
+                 │ identity · intake · archive│
+                 └──────────────┬─────────────┘
+                                ▼
+                 PostgreSQL primary ──async WAL──▶ fenced standby
+                                ▲
+             ordered/idempotent │ operation upload + receipts
+             checkpoint/grant   │ (WAN may be absent for 72 hours)
+                                │
+                 ┌──────────────┴─────────────┐
+                 │ Event-node API + worker    │── OTLP/mTLS durable queue
+                 │ authoritative epoch        │
+                 └──────────────┬─────────────┘
+                                ▼
+                     SQLite WAL on event node
+                 checkpoint · authority · inbox/outbox
+                 normalized live state · recovery backups
 ```
-   ┌──────── public ────────┐   ┌─────────────── Workspace ────────────────┐
-   │  the entrant tier /e/  │   │                                          │
-   │  (its own SSR app)     │   │  ┌─────────┐                             │
-   │        submits ────────┼───┼─▶│ Entries │                             │
-   └────────────────────────┘   │  └────┬────┘  entriesCommitted           │
-                                │       │ PlayerDTO                        │
-  Tier 1                        │  ┌────▼───┐   ┌─────────┐   ┌────────┐   │
- (user, enableable)             │  │  Meet  │   │ Bracket │   │Display │   │
-                                │  └───┬────┘   └────┬────┘   └───▲────┘   │
-                                │      │ ScheduleDTO │ BracketTournamentDTO │
-                                │      ▼             ▼            │        │
-  Tier 2                        │  ┌────────────────────┐ MatchStateDTO    │
- (architectural, always-on)     │  │     Operations     │─────────┘        │
-                                │  │ (Plan + live Run)  │                  │
-                                │  └────────────────────┘                  │
-                                └──────────────────────────────────────────┘
-                       all over  scheduler_core (CP-SAT)  +  SQLite
-```
+
+The four product areas are:
+
+1. **Operator console** — the authenticated control surface for Meet,
+   Bracket, Operations, Display configuration, and the Entries desk.
+2. **Public and entrant surfaces** — entrant SSR/self-service and the
+   read-only public display.
+3. **API** — one modular application with explicit cloud and event-node
+   composition profiles, application-service transaction boundaries, workers,
+   authority/checkpoint handling, and asynchronous operation synchronization.
+4. **Databases** — PostgreSQL primary/standby in cloud and SQLite WAL on each
+   event node. They are intentionally different; laptops do not run PostgreSQL
+   or synchronous database replication.
+
+Recovery installs a digest-bound checkpoint on a replacement node and requires
+the exact cloud-receipted operation suffix after the backup. Open or permanently
+blocked operations remain visible; reconciliation links quarantine evidence to
+a normal authoritative correction operation after cloud acknowledgment.
+
+## Two tiers of module
 
 - **Tier 1 — user-facing modules**: `Meet`, `Bracket`, `Display`, `Entries`. These appear in the
   module catalog, have a row in the `workspace_modules` table, and are members of the `ModuleId`
@@ -131,10 +157,12 @@ Everything sits on two shared layers:
 - **`packages/scheduler-core/`** — a pure-Python CP-SAT engine (OR-Tools), no HTTP and no I/O. Both Meet
   schedules and Bracket round scheduling call into it. See
   [ADR 0004](/explanation/decisions/0004-ortools-cpsat-engine) and `packages/scheduler-core/scheduler_core/README.md`.
-- **SQLite via SQLAlchemy 2.0** — the canonical persistence, with Alembic migrations, fronted by
-  `repositories/local.py` (`LocalRepository`); cloud mode runs the same code against Postgres 16.
-  Single-store: there is no replication layer, and identity is self-hosted cookie-session
-  auth (SP-CLOUD-2). See
+- **SQLAlchemy 2.0 persistence** — PostgreSQL is the cloud database and SQLite
+  WAL is the event-node database, both migrated with Alembic and fronted by
+  repositories/application services. Authority epochs and an ordered,
+  idempotent domain-operation outbox/inbox synchronize them asynchronously;
+  this is not synchronous database replication. Identity is self-hosted
+  cookie-session auth (SP-CLOUD-2). See
   [ADR 0003](/explanation/decisions/0003-sqlite-as-primary-persistence) and [Data flow](/explanation/architecture/data-flow).
 
 ## See also

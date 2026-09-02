@@ -712,6 +712,8 @@ export interface AuthorityStatusDTO {
   highest_contiguous_sequence: number;
   pending_operations: number;
   oldest_pending_at: string | null;
+  blocked_operations: number;
+  last_blocked_error_code: string | null;
 }
 
 /** Evidence retained when an event-node operation cannot be safely applied.
@@ -738,11 +740,8 @@ export interface SyncQuarantineListResponse {
 }
 
 export interface SyncQuarantineResolutionRequest {
-  node_id: string;
-  authority_epoch: number;
-  actor_id: string;
   reason: string;
-  correction: Record<string, unknown>;
+  correction_operation_id: string;
 }
 
 export interface BackupCreatedDTO {

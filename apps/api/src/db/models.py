@@ -763,6 +763,13 @@ class TournamentAuthority(Base):
 
     __table_args__ = (
         Index(
+            "uq_tournament_authority_one_live_epoch",
+            "tournament_id",
+            unique=True,
+            sqlite_where=text("state IN ('preparing', 'active')"),
+            postgresql_where=text("state IN ('preparing', 'active')"),
+        ),
+        Index(
             "ix_tournament_authority_node_state",
             "node_id",
             "state",
@@ -893,6 +900,30 @@ class EventOperation(Base):
     )
 
 
+class EventOperationSequence(Base):
+    """Atomic next-sequence counter for one tournament authority epoch."""
+
+    __tablename__ = "event_operation_sequences"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    authority_epoch: Mapped[int] = mapped_column(Integer, primary_key=True)
+    next_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tournament_id", "authority_epoch"],
+            [
+                "tournament_authority_epochs.tournament_id",
+                "tournament_authority_epochs.epoch",
+            ],
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "next_sequence >= 1", name="ck_event_operation_sequence_positive"
+        ),
+    )
+
+
 class SyncOutbox(Base):
     """Node-local delivery state, inserted with its EventOperation."""
 
@@ -906,13 +937,21 @@ class SyncOutbox(Base):
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    permanently_blocked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
     last_error_code: Mapped[Optional[str]] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
 
     __table_args__ = (
-        Index("ix_sync_outbox_pending", "acknowledged_at", "next_attempt_at"),
+        Index(
+            "ix_sync_outbox_pending",
+            "acknowledged_at",
+            "permanently_blocked_at",
+            "next_attempt_at",
+        ),
     )
 
 

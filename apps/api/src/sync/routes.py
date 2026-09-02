@@ -61,7 +61,13 @@ def sync_error_response(_request, exc: SyncHTTPError) -> JSONResponse:  # noqa: 
     return JSONResponse(status_code=error.status_code, content=error.body())
 
 
-def _bearer_capability(authorization: str = Header(..., alias="Authorization")) -> str:
+def _bearer_capability(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> str:
+    if authorization is None:
+        _raise_protocol(
+            ProtocolError(401, "authority_capability_required", "Bearer node capability is required")
+        )
     scheme, _, capability = authorization.partition(" ")
     if scheme.lower() != "bearer" or not capability:
         _raise_protocol(
@@ -216,6 +222,7 @@ def bootstrap_offline_session(
     body: OfflineSessionBootstrapRequest,
     response: Response,
     tournament_id: uuid.UUID = Path(...),
+    capability: str = Depends(_bearer_capability),
     repo: LocalRepository = Depends(get_repository),
 ) -> OfflineSessionResponse:
     """Complete first-run node authentication without a cloud-origin cookie.
@@ -236,7 +243,7 @@ def bootstrap_offline_session(
             tournament_id=tournament_id,
             authority_epoch=body.authority_epoch,
             device_id=body.node_id,
-            capability=body.capability,
+            capability=capability,
             ttl_hours=body.ttl_hours,
         )
     except ValueError as exc:
@@ -258,7 +265,10 @@ def bootstrap_offline_session(
     )
 
 
-@authority_router.delete("/offline-session")
+@authority_router.delete(
+    "/offline-session",
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
 def revoke_offline_session(
     request: Request,
     response: Response,
@@ -350,11 +360,17 @@ def _lifecycle_response(action: str, previous, current, capability=None, highest
 def return_authority(
     body: AuthorityReturnRequest,
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> AuthorityLifecycleResponse:
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        _raise_protocol(ProtocolError(422, "invalid_actor", "Current user id is not a UUID"))
     try:
         previous, cloud = SyncApplication(repo).return_to_cloud(
             tournament_id=tournament_id,
+            actor_id=actor_id,
+            device_id=body.node_id,
             **body.model_dump(),
         )
     except ProtocolError as exc:
@@ -372,11 +388,17 @@ def return_authority(
 def transfer_authority(
     body: PlannedTransferRequest,
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> AuthorityLifecycleResponse:
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        _raise_protocol(ProtocolError(422, "invalid_actor", "Current user id is not a UUID"))
     try:
         previous, replacement, capability = SyncApplication(repo).planned_transfer(
             tournament_id=tournament_id,
+            actor_id=actor_id,
+            device_id=body.node_id,
             **body.model_dump(),
         )
     except ProtocolError as exc:
@@ -395,11 +417,17 @@ def transfer_authority(
 def recover_authority(
     body: LostNodeRecoveryRequest,
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> AuthorityLifecycleResponse:
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        _raise_protocol(ProtocolError(422, "invalid_actor", "Current user id is not a UUID"))
     try:
         previous, replacement, capability = SyncApplication(repo).recover_lost_node(
             tournament_id=tournament_id,
+            actor_id=actor_id,
+            device_id=body.new_node_id,
             **body.model_dump(),
         )
     except ProtocolError as exc:
@@ -445,14 +473,18 @@ def import_checkpoint_route(
     )
 
 
-@authority_router.get("/status", response_model=AuthorityStatus)
+@authority_router.get(
+    "/status",
+    response_model=AuthorityStatus,
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
 def authority_status(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ) -> AuthorityStatus:
     try:
-        authority, highest, pending, oldest = SyncApplication(repo).latest_authority(
-            tournament_id
+        authority, highest, pending, oldest, blocked, blocked_error = (
+            SyncApplication(repo).latest_authority(tournament_id)
         )
     except ProtocolError as exc:
         _raise_protocol(exc)
@@ -465,10 +497,16 @@ def authority_status(
         highest_contiguous_sequence=highest,
         pending_operations=pending,
         oldest_pending_at=oldest,
+        blocked_operations=blocked,
+        last_blocked_error_code=blocked_error,
     )
 
 
-@authority_router.get("/projection", response_model=CloudProjectionResponse)
+@authority_router.get(
+    "/projection",
+    response_model=CloudProjectionResponse,
+    dependencies=[Depends(require_tournament_access("viewer"))],
+)
 def cloud_projection(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -532,19 +570,19 @@ def sync_status(
     )
 
 
-@sync_router.get("/quarantine", response_model=SyncQuarantineListResponse)
+@sync_router.get(
+    "/quarantine",
+    response_model=SyncQuarantineListResponse,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
 def quarantine_list(
     tournament_id: uuid.UUID = Path(...),
-    authority_epoch: int = Header(..., alias="X-ShuttleWorks-Authority-Epoch"),
     include_resolved: bool = False,
-    capability: str = Depends(_bearer_capability),
     repo: LocalRepository = Depends(get_repository),
 ) -> SyncQuarantineListResponse:
     try:
         rows = SyncApplication(repo).list_quarantines(
             tournament_id=tournament_id,
-            authority_epoch=authority_epoch,
-            capability=capability,
             include_resolved=include_resolved,
         )
     except ProtocolError as exc:
@@ -557,19 +595,23 @@ def quarantine_list(
 @sync_router.post(
     "/quarantine/{quarantine_id}/resolve",
     response_model=SyncQuarantineRecord,
+    dependencies=[Depends(require_tournament_access("operator"))],
 )
 def quarantine_resolve(
     body: SyncQuarantineResolutionRequest,
     tournament_id: uuid.UUID = Path(...),
     quarantine_id: uuid.UUID = Path(...),
-    capability: str = Depends(_bearer_capability),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> SyncQuarantineRecord:
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        _raise_protocol(ProtocolError(422, "invalid_actor", "Current user id is not a UUID"))
     try:
         row = SyncApplication(repo).resolve_quarantine(
             tournament_id=tournament_id,
             quarantine_id=quarantine_id,
-            capability=capability,
+            actor_id=actor_id,
             **body.model_dump(),
         )
     except ProtocolError as exc:

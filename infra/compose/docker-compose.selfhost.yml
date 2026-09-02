@@ -194,9 +194,13 @@ services:
       # route list, so without this the operational endpoints are open
       # to the internet. Same file-injection pattern as the DB password.
       - OPS_TOKEN_FILE=/run/secrets/ops_token
+      # Ed25519 authority grants are signed only by the cloud API. The key is
+      # file-backed and never falls back to the deterministic development key.
+      - AUTHORITY_SIGNING_KEY_FILE=/run/secrets/authority_signing_key
     secrets:
       - database_url
       - ops_token
+      - authority_signing_key
     networks:
       default:
         aliases:
@@ -409,3 +413,5 @@ secrets:
     file: ../../secrets/database_url
   ops_token:
     file: ../../secrets/ops_token
+  authority_signing_key:
+    file: ../../secrets/authority_signing_key

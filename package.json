@@ -14,7 +14,9 @@
   ],
   "overrides": {
     "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "nanoid": "^3.3.18",
+    "postcss-selector-parser": "^6.1.3"
   },
   "scripts": {
     "dev:scheduler": "npm run -w apps/console dev --",

@@ -83,7 +83,6 @@ class OfflineSessionRequest(BaseModel):
 class OfflineSessionBootstrapRequest(OfflineSessionRequest):
     """Node-local bootstrap proof used before any offline cookie exists."""
 
-    capability: str = Field(min_length=32, max_length=512)
     operator_id: uuid.UUID
 
 
@@ -110,8 +109,6 @@ class AuthorityReturnRequest(BaseModel):
     node_id: uuid.UUID
     authority_epoch: int = Field(ge=1)
     capability: str = Field(min_length=32, max_length=512)
-    actor_id: uuid.UUID
-    device_id: uuid.UUID
     reason: str = Field(min_length=1, max_length=500)
     declared_last_sequence: int = Field(ge=0)
     snapshot_hash: str = Field(min_length=64, max_length=128)
@@ -125,8 +122,6 @@ class PlannedTransferRequest(BaseModel):
     new_node_id: uuid.UUID
     authority_epoch: int = Field(ge=1)
     capability: str = Field(min_length=32, max_length=512)
-    actor_id: uuid.UUID
-    device_id: uuid.UUID
     reason: str = Field(min_length=1, max_length=500)
     declared_last_sequence: int = Field(ge=0)
     handoff_hash: str = Field(min_length=64, max_length=128)
@@ -137,11 +132,12 @@ class LostNodeRecoveryRequest(BaseModel):
     """Elevated, explicitly confirmed recovery of a missing live node."""
 
     new_node_id: uuid.UUID
-    actor_id: uuid.UUID
-    device_id: uuid.UUID
+    authority_epoch: int = Field(ge=1)
     reason: str = Field(min_length=1, max_length=500)
+    backup_sequence: int = Field(ge=0)
     declared_last_sequence: int = Field(ge=0)
-    backup_hash: str = Field(min_length=64, max_length=128)
+    backup_hash: str = Field(min_length=64, max_length=64)
+    recovery_checkpoint: dict[str, Any]
     confirmation: bool = False
 
 
@@ -166,6 +162,8 @@ class AuthorityStatus(BaseModel):
     highest_contiguous_sequence: int = 0
     pending_operations: int = 0
     oldest_pending_at: datetime | None = None
+    blocked_operations: int = 0
+    last_blocked_error_code: str | None = None
 
 
 class OperationEnvelope(BaseModel):
@@ -229,11 +227,8 @@ class SyncQuarantineListResponse(BaseModel):
 
 
 class SyncQuarantineResolutionRequest(BaseModel):
-    node_id: uuid.UUID
-    authority_epoch: int = Field(ge=1)
-    actor_id: uuid.UUID
     reason: str = Field(min_length=1, max_length=500)
-    correction: dict[str, Any]
+    correction_operation_id: uuid.UUID
 
 
 class CloudProjectionResponse(BaseModel):

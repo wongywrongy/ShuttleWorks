@@ -87,16 +87,22 @@ services:
     image: otel/opentelemetry-collector-contrib:0.136.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     environment:
-      # The default is intentionally a non-existent in-network gateway: the
-      # Collector accepts and persists telemetry until an operator points this
-      # at the real gateway.  It never blocks tournament commands.
-      - OTEL_GATEWAY_ENDPOINT=${OTEL_GATEWAY_ENDPOINT:-http://gateway:4318}
+      - OTEL_GATEWAY_ENDPOINT=${OTEL_GATEWAY_ENDPOINT:-https://gateway:4318}
+      - OTEL_GATEWAY_CA_FILE=/run/secrets/otel_gateway_ca
+      - OTEL_GATEWAY_CLIENT_CERT_FILE=/run/secrets/otel_gateway_client_cert
+      - OTEL_GATEWAY_CLIENT_KEY_FILE=/run/secrets/otel_gateway_client_key
     depends_on:
       otel-storage-init:
         condition: service_completed_successfully
     volumes:
       - ./../otel/collector-event-node.yaml:/etc/otelcol-contrib/config.yaml:ro
       - event_node_otel:/var/lib/otelcol
+      - ../../data:/app/data:ro
+      - /:/hostfs:ro
+    secrets:
+      - otel_gateway_ca
+      - otel_gateway_client_cert
+      - otel_gateway_client_key
     ports:
       # Bind only to loopback: this is a private node signal, not a LAN API.
       - "127.0.0.1:${OTEL_HEALTH_HOST_PORT:-13133}:13133"
@@ -161,3 +167,9 @@ secrets:
     file: ${AUTHORITY_SIGNING_PUBLIC_KEY_FILE:-../../secrets/authority_signing_public_key}
   node_signing_key:
     file: ${NODE_SIGNING_KEY_FILE:-../../secrets/node_signing_key}
+  otel_gateway_ca:
+    file: ${OTEL_GATEWAY_CA_FILE:-../../secrets/otel_gateway_ca.pem}
+  otel_gateway_client_cert:
+    file: ${OTEL_GATEWAY_CLIENT_CERT_FILE:-../../secrets/otel_gateway_client_cert.pem}
+  otel_gateway_client_key:
+    file: ${OTEL_GATEWAY_CLIENT_KEY_FILE:-../../secrets/otel_gateway_client_key.pem}

@@ -415,7 +415,7 @@ describe('the entrant container runs the built output, never a dev server', () =
     // out the 10s kill timeout) and wants a writable $HOME/.npm, which
     // `read_only: true` + `USER node` does not give it.
     expect(lastDirective('CMD ', '.*')).toBe(
-      '["node", "./node_modules/@react-router/serve/bin.js", "./build/server/index.js"]',
+      '["node", "/app/node_modules/@react-router/serve/bin.js", "./build/server/index.js"]',
     );
     // @react-router/serve passes NODE_ENV through as the render mode, so this
     // line is the switch between the built output and dev-mode stack traces.

@@ -1,0 +1,98 @@
+groups:
+  - name: shuttleworks.sync
+    rules:
+      - alert: ShuttleWorksSyncOutboxDepth
+        expr: shuttleworks_sync_outbox_depth > 100
+        for: 10m
+        labels: {severity: warning, owner: event-operations}
+        annotations:
+          summary: Pending event-node operations are accumulating.
+          runbook_url: docs/how-to/observability-runbook.md#sync-backlog-or-oldest-age
+      - alert: ShuttleWorksSyncOutboxOldestAge
+        expr: shuttleworks_sync_outbox_oldest_age_seconds > 300
+        for: 10m
+        labels: {severity: critical, owner: event-operations}
+        annotations:
+          summary: The oldest event-node operation has not reached cloud.
+          runbook_url: docs/how-to/observability-runbook.md#sync-backlog-or-oldest-age
+      - alert: ShuttleWorksSyncPermanentlyBlocked
+        expr: shuttleworks_sync_outbox_blocked > 0
+        for: 1m
+        labels: {severity: critical, owner: event-operations}
+        annotations:
+          summary: Event-node synchronization needs operator intervention.
+          runbook_url: docs/how-to/observability-runbook.md#sync-backlog-or-oldest-age
+  - name: shuttleworks.event-node
+    rules:
+      - alert: ShuttleWorksSQLiteWalLarge
+        expr: shuttleworks_sqlite_wal_bytes > 268435456
+        for: 10m
+        labels: {severity: warning, owner: platform-oncall}
+        annotations:
+          summary: SQLite WAL exceeds the operational budget.
+          runbook_url: docs/how-to/observability-runbook.md#sqlite-wal-or-disk-alerts
+      - alert: ShuttleWorksEventNodeDiskLow
+        expr: shuttleworks_sqlite_disk_free_bytes < 5368709120
+        for: 5m
+        labels: {severity: critical, owner: platform-oncall}
+        annotations:
+          summary: Event-node disk headroom is below the recovery margin.
+          runbook_url: docs/how-to/observability-runbook.md#sqlite-wal-or-disk-alerts
+      - alert: ShuttleWorksBackupStale
+        expr: shuttleworks_backup_last_success_age_seconds > 7200
+        for: 15m
+        labels: {severity: warning, owner: event-operations}
+        annotations:
+          summary: No verified event-node backup completed within two hours.
+          runbook_url: docs/how-to/observability-runbook.md#backup-health
+      - alert: ShuttleWorksBackupRestoreFailed
+        expr: shuttleworks_backup_restore_test{backup_restore_status="failed"} > 0
+        for: 5m
+        labels: {severity: critical, owner: event-operations}
+        annotations:
+          summary: The latest event-node backup failed isolated restore validation.
+          runbook_url: docs/how-to/observability-runbook.md#backup-health
+  - name: shuttleworks.platform
+    rules:
+      - alert: ShuttleWorksDatabaseUnavailable
+        expr: shuttleworks_database_available < 1
+        for: 5m
+        labels: {severity: critical, owner: platform-oncall}
+        annotations:
+          summary: The application database probe is failing.
+          runbook_url: docs/how-to/observability-runbook.md#database-availability-or-pool-pressure
+      - alert: ShuttleWorksPostgresReplicationLag
+        expr: postgresql_replication_lag_size > 268435456
+        for: 10m
+        labels: {severity: critical, owner: platform-oncall}
+        annotations:
+          summary: PostgreSQL standby replication lag exceeds 256 MiB.
+          runbook_url: docs/how-to/postgres-disaster-recovery.md
+      - alert: ShuttleWorksPostgresBackupStale
+        expr: shuttleworks_postgres_backup_last_success_age_seconds > 86400
+        for: 30m
+        labels: {severity: critical, owner: platform-oncall}
+        annotations:
+          summary: No checksummed PostgreSQL backup completed within 24 hours.
+          runbook_url: docs/how-to/postgres-disaster-recovery.md
+      - alert: ShuttleWorksCollectorQueueHigh
+        expr: otelcol_exporter_queue_size / otelcol_exporter_queue_capacity > 0.8
+        for: 10m
+        labels: {severity: warning, owner: platform-oncall}
+        annotations:
+          summary: Collector persistent queue utilization exceeds 80 percent.
+          runbook_url: docs/how-to/observability-runbook.md#collector-queue-or-export-failure
+      - alert: ShuttleWorksCollectorExportFailure
+        expr: sum(rate(otelcol_exporter_send_failed_spans[5m])) > 0
+        for: 10m
+        labels: {severity: warning, owner: platform-oncall}
+        annotations:
+          summary: The Collector is failing to export telemetry.
+          runbook_url: docs/how-to/observability-runbook.md#collector-queue-or-export-failure
+      - alert: ShuttleWorksAuthorityRejections
+        expr: sum(rate(shuttleworks_authority_rejections_total[10m])) > 0.1
+        for: 10m
+        labels: {severity: warning, owner: event-operations}
+        annotations:
+          summary: Authority requests are being rejected.
+          runbook_url: docs/how-to/observability-runbook.md#authority-rejection-alerts

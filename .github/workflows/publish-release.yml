@@ -58,40 +58,45 @@ jobs:
         id: revision
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for successful CI on this exact commit
+      - name: Wait for successful CI and security on this exact commit
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ steps.revision.outputs.sha }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 60); do
-            runs="$(gh run list \
-              --repo "$GITHUB_REPOSITORY" \
-              --workflow ci.yml \
-              --commit "$SOURCE_SHA" \
-              --limit 50 \
-              --json status,conclusion,databaseId)"
+          for workflow in ci.yml security.yml; do
+            passed=0
+            for attempt in $(seq 1 60); do
+              runs="$(gh run list \
+                --repo "$GITHUB_REPOSITORY" \
+                --workflow "$workflow" \
+                --commit "$SOURCE_SHA" \
+                --limit 50 \
+                --json status,conclusion,databaseId)"
 
-            if jq -e '[.[] | select(.status == "completed" and .conclusion == "success")] | length > 0' \
-              <<<"$runs" >/dev/null; then
-              echo "CI passed for $SOURCE_SHA"
-              exit 0
-            fi
+              if jq -e '[.[] | select(.status == "completed" and .conclusion == "success")] | length > 0' \
+                <<<"$runs" >/dev/null; then
+                echo "$workflow passed for $SOURCE_SHA"
+                passed=1
+                break
+              fi
 
-            if jq -e '[.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out"))] | length > 0' \
-              <<<"$runs" >/dev/null; then
-              echo "::error::CI failed for $SOURCE_SHA"
-              gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$SOURCE_SHA"
+              if jq -e '[.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out"))] | length > 0' \
+                <<<"$runs" >/dev/null; then
+                echo "::error::$workflow failed for $SOURCE_SHA"
+                gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow" --commit "$SOURCE_SHA"
+                exit 1
+              fi
+
+              echo "Waiting for $workflow on $SOURCE_SHA (attempt $attempt/60)"
+              sleep 10
+            done
+            if [ "$passed" -ne 1 ]; then
+              echo "::error::Timed out waiting for $workflow for $SOURCE_SHA"
+              gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow" --commit "$SOURCE_SHA"
               exit 1
             fi
-
-            echo "Waiting for CI to finish for $SOURCE_SHA (attempt $attempt/60)"
-            sleep 10
           done
-
-          echo "::error::Timed out waiting for CI for $SOURCE_SHA"
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$SOURCE_SHA"
-          exit 1
 
       - name: Log in to GHCR
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
@@ -112,7 +117,6 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/scheduler-${{ matrix.name }}
           tags: |
             type=semver,pattern={{version}},value=${{ inputs.ref || github.ref_name }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.ref || github.ref_name }}
             type=sha,format=long
 
       - name: Build + push

@@ -265,6 +265,8 @@ def test_gap_rejects_whole_batch_without_partial_application() -> None:
     assert raised.value.code == "sequence_gap"
     assert raised.value.detail["expected_sequence"] == 1
     assert cloud.scalar(select(func.count()).select_from(SyncInbox)) == 0
+    # Rejected batches do not create cursor state. The first valid operation
+    # creates the checkpoint in the same transaction as ingestion.
     assert cloud.get(SyncCheckpoint, (tournament_id, 1)) is None
 
 

@@ -137,39 +137,38 @@ def test_quarantine_listing_and_resolution_only_emit_audited_correction() -> Non
             capability=capability,
             batch=SyncBatchRequest(node_id=node_id, authority_epoch=1, operations=[operation]),
         )
-    row = list_quarantines(
+    row = list_quarantines(session, tournament_id=tournament_id)[0]
+
+    # Corrections are ordinary authoritative domain operations: they are
+    # created onsite, projected, uploaded, and receipted before an operator
+    # can link them to the quarantine evidence.
+    correction = _operation(tournament_id, node_id, sequence=1)
+    highest, accepted, _ = ingest_batch(
         session,
         tournament_id=tournament_id,
-        authority_epoch=1,
         capability=capability,
-    )[0]
-    correction = resolve_quarantine(
+        batch=SyncBatchRequest(
+            node_id=node_id,
+            authority_epoch=1,
+            operations=[correction],
+        ),
+    )
+    assert (highest, accepted) == (1, 1)
+    resolved = resolve_quarantine(
         session,
         tournament_id=tournament_id,
         quarantine_id=row.id,
-        node_id=node_id,
-        authority_epoch=1,
-        capability=capability,
         actor_id=uuid.uuid4(),
         reason="Corrected after operator review",
-        correction={"winnerSide": "B"},
+        correction_operation_id=correction.operation_id,
     )
-    assert correction.command_type == "sync.quarantine.correction.v1"
-    assert correction.payload["quarantineId"] == str(row.id)
     assert session.get(SyncQuarantine, row.id).status == "resolved"
-    assert session.get(SyncQuarantine, row.id).resolution_operation_id == correction.operation_id
+    assert resolved.resolution_operation_id == correction.operation_id
     assert session.scalar(select(EventOperation).where(EventOperation.operation_id == correction.operation_id))
-    assert list_quarantines(
-        session,
-        tournament_id=tournament_id,
-        authority_epoch=1,
-        capability=capability,
-    ) == []
+    assert list_quarantines(session, tournament_id=tournament_id) == []
     assert len(list_quarantines(
         session,
         tournament_id=tournament_id,
-        authority_epoch=1,
-        capability=capability,
         include_resolved=True,
     )) == 1
     # Retrying resolution cannot create a second correction operation.
@@ -177,14 +176,11 @@ def test_quarantine_listing_and_resolution_only_emit_audited_correction() -> Non
         session,
         tournament_id=tournament_id,
         quarantine_id=row.id,
-        node_id=node_id,
-        authority_epoch=1,
-        capability=capability,
         actor_id=uuid.uuid4(),
         reason="retry",
-        correction={"winnerSide": "B"},
+        correction_operation_id=correction.operation_id,
     )
-    assert retry.operation_id == correction.operation_id
+    assert retry.resolution_operation_id == correction.operation_id
     assert session.scalar(
         select(func.count()).select_from(EventOperation).where(
             EventOperation.tournament_id == tournament_id

@@ -734,6 +734,7 @@ def put_tournament_state(
     ),
     response: Response = None,  # type: ignore[assignment]
     if_match: str | None = Header(default=None, alias="If-Match"),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ):
     """Overwrite the tournament data blob.
@@ -955,7 +956,73 @@ def put_tournament_state(
             # the top of the request and the write lands ~150 lines later, so
             # two concurrent requests can both pass it.
             expected_version=seen,
+            commit=False,
         )
+        from core.config import settings
+
+        roster_changed = any(
+            prior.get(key, []) != incoming.get(key, [])
+            for key in ("players", "bracketPlayers")
+        )
+        if settings.deployment_profile != "cloud" and roster_changed:
+            from sync.service import append_local_operation
+
+            actor_id = user.as_uuid()
+            if actor_id is None:
+                raise ValueError("authenticated user id is not a UUID")
+            configured_node = getattr(settings, "node_id", "")
+            try:
+                node_id = uuid.UUID(configured_node) if configured_node else None
+            except ValueError:
+                node_id = None
+            if node_id is None:
+                node_id = uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"shuttleworks:event-node:{settings.database_url}",
+                )
+
+            def identities(items):
+                return {
+                    str(item.get("id")): item
+                    for item in items
+                    if isinstance(item, dict) and item.get("id") is not None
+                }
+
+            changes = []
+            for roster_key in ("players", "bracketPlayers"):
+                before = identities(prior.get(roster_key) or [])
+                after = identities(incoming.get(roster_key) or [])
+                changes.extend(
+                    {"action": "add", "roster": roster_key, "playerId": player_id}
+                    for player_id in sorted(after.keys() - before.keys())
+                )
+                changes.extend(
+                    {"action": "withdraw", "roster": roster_key, "playerId": player_id}
+                    for player_id in sorted(before.keys() - after.keys())
+                )
+                changes.extend(
+                    {"action": "correct", "roster": roster_key, "playerId": player_id}
+                    for player_id in sorted(before.keys() & after.keys())
+                    if before[player_id] != after[player_id]
+                )
+            repo.stage(
+                append_local_operation,
+                tournament_id=tournament_id,
+                node_id=node_id,
+                actor_id=actor_id,
+                command_type="roster.replace.v1",
+                aggregate_type="tournament_roster",
+                aggregate_id=str(tournament_id),
+                payload={
+                    "players": incoming.get("players") or [],
+                    "bracketPlayers": incoming.get("bracketPlayers") or [],
+                    "changes": changes,
+                    "resultingStateVersion": row.state_version,
+                },
+                expected_version=seen,
+            )
+        repo.commit_pending()
+        repo.refresh(row)
         if response is not None:
             # The client's next debounced save needs the version this write
             # produced. Without this it would have to GET first, and a client

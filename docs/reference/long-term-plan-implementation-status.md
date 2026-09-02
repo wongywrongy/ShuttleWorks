@@ -44,28 +44,52 @@ counts; no unsupported normalization or migration is claimed here.
 | Plan phase | Repository status | Evidence delivered | Work still required |
 |---|---|---|---|
 | Phase 0 — decisions and safety net | Substantially implemented | Hybrid/authority/release ADRs, authoritative offline matrix, release gate, pinned actions | Ratify owners, reference hardware/load model, cloud RPO, and failure-domain inventory |
-| Phase 1 — boundaries and normalized persistence | Partial | Explicit composition roots; atomic bracket-result, match-state update/delete/reset/replace/merge, bracket assignment/action/pin, operator-command, schedule-commit, and tournament workspace identity/member slices; normalized bracket checkpoint data; shrinking architecture baseline | Normalize remaining live domains, operationize bracket create/delete and event generation, retire mutable `tournaments.data` authority, and remove raw session/commit access from all routes and domain modules |
+| Phase 1 — boundaries and normalized persistence | Partial | Explicit composition roots; atomic bracket-result, match-state update/delete/reset/replace/merge, bracket assignment/action/pin/lifecycle, onsite roster replacement, operator-command, schedule-commit, and workspace identity/member slices; normalized bracket checkpoint data; shrinking architecture baseline | Normalize remaining live domains, retire mutable `tournaments.data` authority incrementally, move remaining sync implementation internals behind the new boundary modules, and remove raw session/commit access from remaining routes/domain modules |
 | Phase 2 — event-node foundation | Partial | SQLite WAL profile, local worker/sync agent, Collector, encrypted verified backup scheduler, health status, signed transport-neutral package prototype, checked-out operator-policy import and event-scoped offline sessions, opt-in LAN TLS edge/preflight, isolated restore preflight, and deterministic WAN-blocked restart/browser-storage durability gate | Desktop installer/notarization and release signing integration, OS credential storage, production CA distribution/firewall and certificate-renewal rehearsal, full operator-function E2E coverage, reference-hardware clean-machine/RTO proof, abrupt power-loss proof, and 24-hour WAN-blocked soak |
-| Phase 3 — checkout and synchronization | Repository implementation complete; deployment proof pending | Enrolled devices, signed grants and ready proofs, epochs, checkpoint import, ordered idempotent sync, write fencing, return/transfer/recovery, quarantine/reconciliation UI, atomic checkpoint-plus-receipted-operation cloud projection rebuild, current-plus-two archived wire fixtures, competing/stale-authority and chaos gates, digest-bound match-state replacement, deterministic bulk merge, exact-set reset, atomic idempotent bracket lifecycle/direct placement/pin operations, and direct signed checkout→ready→offline→drain→rebuild→digest-confirmed-return rehearsal | Run the same matrix with archived release binaries and deployed PostgreSQL/event nodes, then obtain operational sign-off; remaining normalized-write migration belongs to Phase 1 |
-| Phase 4 — telemetry and operations | Repository assets and isolated deployment rehearsal implemented; production proof pending | Agent/gateway Collector configs, persistent node queue, database, backup, process, and Collector signals, dashboard/alerts/runbooks, deterministic local game day, containerized correlated OTLP outage→restart→drain rehearsal with scheduled evidence, checksummed PostgreSQL backup manifest, and safe PITR/failover/rejoin dry-run contracts | Deploy the backend, provision offsite archives/standby, deliver real alerts, prove production queue drain and correlation, add host/LAN monitoring, prove live PostgreSQL PITR and fenced promotion/rejoin, and measure reference-hardware 24/72-hour budgets |
-| Phase 5 — security and release readiness | Partial | CodeQL/dependency/container scans, SBOM, provenance, keyless image signing, immutable action pins, signed transport-neutral event-node update/rollback metadata, cross-tenant route enumeration, and a machine-readable seven-surface threat/risk register | Desktop signing/staged updater, notarization, OS credential custody, penetration and hostile-LAN tests, administrator rulesets/approvals, production risk acceptance, beta events, and staffed support ownership |
+| Phase 3 — checkout and synchronization | Core repository behavior implemented; complete acceptance pending | Enrolled devices, node-key-bound signed grants/ready proofs, database-enforced live epochs, atomic sequence allocation, serialized/idempotent sync, write fencing, return/transfer, replay-complete recovery, acknowledged correction reconciliation, permanent-blocked surfacing, projection rebuild, archived wire fixtures, competing/stale-authority and chaos gates, and replayable match/bracket/roster/schedule operations | Add the remaining full-stack WAN-blocked operator-function scenarios, run the matrix with archived release binaries and deployed PostgreSQL/event nodes, and obtain operational sign-off; remaining normalized-write migration belongs to Phase 1 |
+| Phase 4 — telemetry and operations | Repository assets and isolated deployment rehearsal implemented; production proof pending | Authenticated mTLS Collector templates, persistent node queue, host/filesystem/PostgreSQL/node-storage signals, directly loadable Prometheus rules and Grafana dashboard, redaction/cardinality/config validation, queue priority and 24/72-hour budgets, local game day and OTLP outage→restart→drain rehearsal, checksummed backup manifest, and safe DR dry-run contracts | Deploy certificates/Collectors/backend, provision offsite archives/standby, prove production queue drain/correlation and alert delivery, prove live PostgreSQL PITR/fenced promotion/rejoin, and measure the budgets on reference hardware |
+| Phase 5 — security and release readiness | Partial | CodeQL and independent dependency audits, fail-closed clean container scans, CI-plus-security release prerequisite, SBOM, provenance, keyless image signing, immutable action/base-image pins, exact release/SHA tags, signed update/rollback metadata, cross-tenant route enumeration, and a machine-readable seven-surface threat/risk register | Desktop signing/staged updater, notarization, OS credential custody, penetration/hostile-LAN tests, administrator rulesets/approvals, production risk acceptance, beta events, and staffed support ownership remain |
 
 The release may claim the implemented vertical slice, not completion of the
 full three-to-five-year plan. The detailed tournament-critical acceptance
 contract is the [offline operator-function matrix](./offline-operator-acceptance-matrix.md).
 
-## Cross-phase recheck — 2026-09-01
+## Current repository gate blockers — 2026-09-02
 
-This is a repository-evidence review, not production acceptance. The focused
-cross-phase suite passed 147 tests; import boundaries, Ruff, bytecode
+ShuttleWorks is **not yet production-accepted**. All three runtime images now
+pass the fail-closed high/critical scan: the backend final stage moved from the
+affected Debian runtime to an immutable Ubuntu 24.04 digest while preserving
+Python 3.12 and the pinned OR-Tools version. No vulnerability exception was
+used.
+
+The tournament-critical functions now have explicit offline domain operations,
+but the authoritative matrix still requires full-stack WAN-blocked browser
+coverage for each function. Unit, route, and deterministic operation-replay
+evidence does not substitute for that end-to-end acceptance proof.
+
+The route-facing sync transaction owner has moved to `sync/application.py`
+and named boundary modules now define the intended authority, checkpoint,
+operation-log, ingestion/projection, recovery and reconciliation seams.
+Compatibility implementations still remain in `sync/service.py`; completing
+that internal move without changing public contracts is maintainability work
+still required by Phase 1, not a production capability claim.
+
+## Cross-phase recheck — 2026-09-02
+
+This is a repository-evidence review, not production acceptance. On 2026-09-02
+the clean-container SQLite backend run passed 2,277 tests with 70
+environment/optional-dialect skips; the focused PostgreSQL migration,
+concurrency, authority, projection, recovery and tenancy checks passed, as did
+the four canonical browser contracts. Import boundaries, Ruff, bytecode
 compilation, release-workflow structure, documentation paths/build, console
-DTO parity/build, and diff hygiene also passed during the implementation run.
+DTO parity/build, Collector validation, Prometheus rule validation and diff
+hygiene also passed. All runtime container vulnerability gates pass.
 
 | Phase | Recheck verdict | Boundary before further work |
 |---|---|---|
 | 0 | Substantially implemented | Product owners still must ratify reference load/hardware, failure domains, and cloud RPO. |
 | 1 | Partial, progressing | Raw `repo.session` access is eliminated; 68 commit calls remain in persistence/service/worker transaction owners, while broader normalization remains the principal code debt. |
 | 2 | Repository foundation implemented, operational proof pending | Installer/notarization, OS credential custody, reference-hardware restore/power-loss, and 24/72-hour WAN-blocked runs remain external. |
-| 3 | Repository implementation complete | External archived-binary/deployed-node chaos and operator sign-off remain release evidence, not missing repository behavior. |
+| 3 | Core repository behavior implemented; acceptance incomplete | Full-stack WAN-blocked coverage for every matrix row plus archived-binary/deployed-node chaos and operator sign-off remain. |
 | 4 | Repository assets and isolated deployment rehearsal implemented; production proof pending | The local game day, expanded signal/alert contract, containerized queue outage/restart/drain and correlation proof, backup manifest, and safe DR dry runs pass. Production alert delivery and queue drain, host/LAN signals, PostgreSQL PITR/promotion/rejoin, and reference-hardware capacity budgets require deployed infrastructure. |
-| 5 | Partial | Desktop signing/updater integration, penetration/hostile-LAN testing, risk acceptance, beta events, and staffed support remain. |
+| 5 | Partial | Runtime images pass the high/critical scan. Desktop signing/updater integration, penetration/hostile-LAN testing, risk acceptance, beta events, and staffed support remain. |

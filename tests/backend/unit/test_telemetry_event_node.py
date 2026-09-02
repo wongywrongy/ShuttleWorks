@@ -109,7 +109,22 @@ def test_versioned_collector_configs_are_structurally_valid():
         assert {"traces", "metrics", "logs"} <= pipelines.keys()
         for signal in ("traces", "metrics", "logs"):
             pipeline = pipelines[signal]
-            assert pipeline["receivers"] == ["otlp"]
+            assert "otlp" in pipeline["receivers"]
             assert pipeline["processors"]
             assert pipeline["exporters"]
         assert config["processors"]["memory_limiter"]["limit_mib"] <= 256
+        exporter = config["exporters"]["otlphttp/gateway"]
+        assert exporter["tls"]["ca_file"]
+        assert exporter["tls"]["cert_file"]
+        assert exporter["tls"]["key_file"]
+
+
+def test_collectors_cover_host_storage_and_postgres_signals():
+    event = yaml.safe_load(
+        (REPO_ROOT / "infra" / "otel" / "collector-event-node.yaml").read_text()
+    )
+    cloud = yaml.safe_load(
+        (REPO_ROOT / "infra" / "otel" / "collector-cloud.yaml").read_text()
+    )
+    assert {"hostmetrics", "filelog/sqlite"} <= event["receivers"].keys()
+    assert {"hostmetrics", "postgresql"} <= cloud["receivers"].keys()

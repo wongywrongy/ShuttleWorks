@@ -16,6 +16,8 @@ const authority = {
   highest_contiguous_sequence: 8,
   pending_operations: 1,
   oldest_pending_at: null,
+  blocked_operations: 0,
+  last_blocked_error_code: null,
 };
 const record = {
   id: 'q1',
@@ -52,7 +54,6 @@ describe('SyncReconciliationPanel', () => {
   it('shows durable failure evidence and requires reason plus confirmation', async () => {
     render(<SyncReconciliationPanel authority={authority} />);
     expect(screen.getByRole('heading', { name: 'Reconciliation evidence' })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Node capability'), { target: { value: 'capability' } });
     expect(screen.getByTestId('quarantine-q1')).toHaveTextContent('sequence_gap');
     expect(screen.getByTestId('quarantine-q1')).toHaveTextContent('seq 3 · expected 2');
 
@@ -64,22 +65,18 @@ describe('SyncReconciliationPanel', () => {
 
   it('submits an audited correction only after explicit confirmation', async () => {
     render(<SyncReconciliationPanel authority={authority} />);
-    fireEvent.change(screen.getByLabelText('Node capability'), { target: { value: 'capability' } });
     fireEvent.click(screen.getByRole('button', { name: /prepare correction/i }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Operator reason' }), {
       target: { value: 'Reviewed the missing sequence and corrected the score.' },
     });
-    fireEvent.change(screen.getByRole('textbox', { name: 'Correction JSON' }), {
-      target: { value: '{"winnerSide":"B"}' },
+    fireEvent.change(screen.getByRole('textbox', { name: 'Acknowledged correction operation ID' }), {
+      target: { value: '11111111-1111-4111-8111-111111111111' },
     });
-    fireEvent.click(screen.getByRole('checkbox', { name: /appends an audited correction/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /linked correction was applied onsite/i }));
     fireEvent.click(screen.getByRole('button', { name: /record correction/i }));
     await waitFor(() => expect(resolve).toHaveBeenCalledWith('q1', {
-      node_id: 'node-1',
-      authority_epoch: 4,
-      actor_id: 'node-1',
       reason: 'Reviewed the missing sequence and corrected the score.',
-      correction: { winnerSide: 'B' },
+      correction_operation_id: '11111111-1111-4111-8111-111111111111',
     }));
   });
 
@@ -96,7 +93,6 @@ describe('SyncReconciliationPanel', () => {
       resolve,
     });
     render(<SyncReconciliationPanel authority={authority} />);
-    fireEvent.change(screen.getByLabelText('Node capability'), { target: { value: 'capability' } });
     expect(screen.getByTestId('quarantine-q1')).toHaveTextContent('resolved');
     expect(screen.getByTestId('quarantine-q1')).toHaveTextContent('Corrected');
     expect(within(screen.getByTestId('quarantine-q1')).queryByRole('button', { name: /prepare correction/i })).toBeNull();

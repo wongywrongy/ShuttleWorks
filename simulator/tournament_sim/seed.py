@@ -2047,6 +2047,88 @@ def apply(
             )
             entry["setupSeeded"] = True
             _write_manifest(path, manifest)
+        # Entry configuration is preparation data and must exist before the
+        # first replayable tournament operation creates an authority epoch.
+        # Keeping this ahead of bracket import exercises the same checkout
+        # fence as production instead of weakening it for fixture seeding.
+        if not entry.get("entryPage"):
+            closed_at = (
+                f"{(demo_start - timedelta(days=14)).isoformat()}T23:59:59+00:00"
+                if demo_seed
+                else f"{tournament.end_date}T23:59:59+00:00"
+            )
+            note = notes.get(tournament.id)
+            details = (
+                f" {note.level_description[:1].upper()}{note.level_description[1:]} "
+                f"Draw listing: {note.draw_description}."
+                if note is not None
+                else ""
+            )
+            coverage = dataset.historical_coverage.get(tournament.id)
+            demo_state = (
+                "Tournament in progress"
+                if tournament.id == _DEMO_LIVE_TOURNAMENT and demo_seed
+                else "Upcoming tournament"
+                if tournament.id == _DEMO_UPCOMING_TOURNAMENT and demo_seed
+                else "Completed tournament"
+            )
+            intro_text = (
+                f"{demo_state}: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the published draws and available results across all five events.{details}"
+                if demo_seed
+                else f"Completed tournament: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the complete published draws and results across all five events.{details}"
+            )
+            regulations_text = (
+                f"Fictional operational demo; entries are closed and match details are populated for visual testing. Source reference: {(coverage.source_url if coverage else tournament.source_url)}."
+                if demo_seed
+                else f"Read-only completed tournament; entries are closed. Source: {(coverage.source_url if coverage else tournament.source_url)}."
+            )
+            client.upsert_entry_page(
+                tid,
+                {
+                    "slug": entry["slug"],
+                    "isOpen": True,
+                    "introText": intro_text,
+                    "regulationsText": regulations_text,
+                    "waiverRequired": False,
+                    "collectPhone": False,
+                    "venueName": tournament.venue,
+                    "venueAddress": f"{tournament.host}; {tournament.date_range}; {tournament.draw_format}",
+                },
+            )
+            for row in rows:
+                client.create_entry_event(
+                    tid,
+                    {
+                        "code": row.event,
+                        "discipline": row.event_label,
+                        "entryType": "doubles" if row.event in {"MD", "WD", "XD"} else "singles",
+                        "bracketEventId": row.event,
+                        "opensAt": f"{tournament.year - 1:04d}-01-01T00:00:00+00:00",
+                        "closesAt": closed_at,
+                    },
+                )
+            client.patch_entry_page_publication(
+                tid,
+                {
+                    "drawsPublished": True,
+                    "resultsPublished": tournament.id != _DEMO_UPCOMING_TOURNAMENT or not demo_seed,
+                },
+            )
+            projection = client.entry_page_projection(entry["slug"])
+            if projection.status_code != 200:
+                raise ValueError(
+                    f"public entry projection for {entry['slug']!r} returned {projection.status_code}"
+                )
+            entry["entryPage"] = True
+            token = client.display_token(tid)
+            entry["displayToken"] = token.get("token")
+            entry["urls"] = {
+                "console": f"/tournaments/{tid}/bracket",
+                "entrant": f"/e/{entry['slug']}",
+                "display": token.get("url", f"/display?token={token.get('token', '')}"),
+            }
+            _write_manifest(path, manifest)
+
         if not entry.get("bracketImported"):
             events = []
             results = []
@@ -2150,83 +2232,6 @@ def apply(
             for play_unit_id in entry.get("liveMatchIds", []):
                 client.bracket_match_action(tid, play_unit_id, "start")
             entry["liveMatchesStarted"] = True
-            _write_manifest(path, manifest)
-        if not entry.get("entryPage"):
-            closed_at = (
-                f"{(demo_start - timedelta(days=14)).isoformat()}T23:59:59+00:00"
-                if demo_seed
-                else f"{tournament.end_date}T23:59:59+00:00"
-            )
-            note = notes.get(tournament.id)
-            details = (
-                f" {note.level_description[:1].upper()}{note.level_description[1:]} "
-                f"Draw listing: {note.draw_description}."
-                if note is not None
-                else ""
-            )
-            coverage = dataset.historical_coverage.get(tournament.id)
-            demo_state = (
-                "Tournament in progress"
-                if tournament.id == _DEMO_LIVE_TOURNAMENT and demo_seed
-                else "Upcoming tournament"
-                if tournament.id == _DEMO_UPCOMING_TOURNAMENT and demo_seed
-                else "Completed tournament"
-            )
-            intro_text = (
-                f"{demo_state}: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the published draws and available results across all five events.{details}"
-                if demo_seed
-                else f"Completed tournament: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the complete published draws and results across all five events.{details}"
-            )
-            regulations_text = (
-                f"Fictional operational demo; entries are closed and match details are populated for visual testing. Source reference: {(coverage.source_url if coverage else tournament.source_url)}."
-                if demo_seed
-                else f"Read-only completed tournament; entries are closed. Source: {(coverage.source_url if coverage else tournament.source_url)}."
-            )
-            client.upsert_entry_page(
-                tid,
-                {
-                    "slug": entry["slug"],
-                    "isOpen": True,
-                    "introText": intro_text,
-                    "regulationsText": regulations_text,
-                    "waiverRequired": False,
-                    "collectPhone": False,
-                    "venueName": tournament.venue,
-                    "venueAddress": f"{tournament.host}; {tournament.date_range}; {tournament.draw_format}",
-                },
-            )
-            for row in rows:
-                client.create_entry_event(
-                    tid,
-                    {
-                        "code": row.event,
-                        "discipline": row.event_label,
-                        "entryType": "doubles" if row.event in {"MD", "WD", "XD"} else "singles",
-                        "bracketEventId": row.event,
-                        "opensAt": f"{tournament.year - 1:04d}-01-01T00:00:00+00:00",
-                        "closesAt": closed_at,
-                    },
-                )
-            client.patch_entry_page_publication(
-                tid,
-                {
-                    "drawsPublished": True,
-                    "resultsPublished": tournament.id != _DEMO_UPCOMING_TOURNAMENT or not demo_seed,
-                },
-            )
-            projection = client.entry_page_projection(entry["slug"])
-            if projection.status_code != 200:
-                raise ValueError(
-                    f"public entry projection for {entry['slug']!r} returned {projection.status_code}"
-                )
-            entry["entryPage"] = True
-            token = client.display_token(tid)
-            entry["displayToken"] = token.get("token")
-            entry["urls"] = {
-                "console": f"/tournaments/{tid}/bracket",
-                "entrant": f"/e/{entry['slug']}",
-                "display": token.get("url", f"/display?token={token.get('token', '')}"),
-            }
             _write_manifest(path, manifest)
         snapshot = client.get_bracket(tid)
         expected_ids = {row.event for row in rows}

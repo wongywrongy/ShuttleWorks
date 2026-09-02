@@ -68,6 +68,10 @@ FROM nginxinc/nginx-unprivileged:alpine
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 
+# The base image defaults to UID 101. Temporarily elevate only for the signed
+# package update and removal of its stock server block, then restore it.
+USER root
+
 # The base image ships its own `conf.d/default.conf` with a `server { listen
 # 8080; server_name localhost; }`. Until SP-HOST-1 our config REPLACED that
 # file; now that the tier configs have their own names it would survive
@@ -75,7 +79,10 @@ LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 # the same server_name — "conflicting server name … ignored", a warning, not
 # an error, so the container starts and serves the stock welcome page from
 # whichever block won. Delete it rather than depend on parse order.
-RUN rm -f /etc/nginx/conf.d/default.conf
+RUN apk upgrade --no-cache \
+    && rm -f /etc/nginx/conf.d/default.conf
+
+USER 101
 
 # One container, TWO tiers, two ports (SP-HOST-1 D-1/D-2).
 #

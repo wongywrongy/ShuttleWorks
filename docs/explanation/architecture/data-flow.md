@@ -113,20 +113,32 @@ queue** rather than direct state writes. This gives optimistic UI with safe conf
 The `commands` table is an **audit + idempotency log** (UUID id as the idempotency key,
 `applied_at` / `rejected_at` / `rejection_reason`).
 
-## Persistence and the read path
+## Persistence, synchronization, and the read path
 
-Persistence is **single-store**: SQLite in local mode, Postgres in cloud mode. There is no
-replication layer and no second copy — a write is durable as soon as its transaction commits.
+Persistence is profile-specific: PostgreSQL remains the cloud store and
+SQLite WAL remains authoritative on a checked-out event node. They are linked
+by asynchronous, ordered domain-operation synchronization—not by synchronous
+database replication and not by copying SQLite files into PostgreSQL.
 
-- **One write path.** `repositories/local.py` owns it, and every method commits its own
-  transaction, so a returned row is always persisted.
+- **Transaction ownership.** Application services own live use-case
+  transactions. On an event node, normalized state, immutable operation, and
+  durable outbox record commit together.
+- **Checkout and upload.** A signed, node-key-bound authority grant installs a
+  digest-bound checkpoint. Operations carry tournament, node, epoch, sequence,
+  schema, actor, and idempotency identity. Cloud stores a receipted inbox and a
+  rebuildable read projection using contiguous compare-and-swap ingestion.
+- **Outages and reconciliation.** WAN failures retry with bounded backoff.
+  Permanent capability/schema/epoch/sequence/projection refusals stay in the
+  outbox and surface as blocked. Quarantined envelopes are immutable; an
+  operator applies a normal correction onsite and links it after cloud receipt.
 - **Read path for operators / TV**: polling. Operator surfaces poll the API; the public display
   polls the Display module's capability-token projection routes (`/display/{token}/*`). There is
   no push channel.
 - **Recovery**: `tournament_backups` (list / create / restore) holds full JSON snapshots of
   workspace state, restorable in-product.
 
-The tournament completes cleanly with no network at all — nothing in the write path reaches out.
+The checked-out tournament completes with no WAN: its write path commits to
+SQLite and never waits synchronously for cloud. Upload resumes later.
 See [ADR 0003](/explanation/decisions/0003-sqlite-as-primary-persistence).
 
 ::: tip Removed in SP-CLOUD-3

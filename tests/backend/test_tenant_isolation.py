@@ -40,6 +40,17 @@ _PARAM_FILLERS = {
     "entry_id": "00000000-0000-0000-0000-0000000000e1",
 }
 
+# Node-to-cloud protocol routes authenticate an enrolled device/capability,
+# not a human tournament member. The operator-facing authority status,
+# projection and quarantine routes deliberately remain in the derived 404
+# sweep below.
+NODE_CAPABILITY_OPERATIONS = {
+    ("POST", "/tournaments/{tournament_id}/authority/offline-session/bootstrap"),
+    ("POST", "/tournaments/{tournament_id}/authority/checkpoint/import"),
+    ("POST", "/sync/v1/tournaments/{tournament_id}/operations"),
+    ("GET", "/sync/v1/tournaments/{tournament_id}/status"),
+}
+
 
 @pytest.fixture
 def harness(tmp_path, monkeypatch):
@@ -68,6 +79,8 @@ def _workspace_operations(app):
         if "{tournament_id}" not in path:
             continue
         for method in methods:
+            if (method.upper(), path) in NODE_CAPABILITY_OPERATIONS:
+                continue
             concrete = path
             for name, filler in _PARAM_FILLERS.items():
                 concrete = concrete.replace("{" + name + "}", filler)

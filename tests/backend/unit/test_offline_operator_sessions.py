@@ -192,12 +192,12 @@ def test_bootstrap_route_sets_cookie_without_auth_user(session, monkeypatch):
         body=OfflineSessionBootstrapRequest(
             node_id=node_id,
             authority_epoch=2,
-            capability=capability,
             operator_id=user_id,
             ttl_hours=24,
         ),
         response=response,
         tournament_id=tournament_id,
+        capability=capability,
         repo=LocalRepository(session),
     )
     assert result.tournament_id == tournament_id

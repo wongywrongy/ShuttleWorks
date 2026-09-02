@@ -52,7 +52,8 @@ COPY packages/design-system ./packages/design-system
 COPY packages/shared-contract ./packages/shared-contract
 COPY apps/entrant ./apps/entrant
 
-RUN npm run -w apps/entrant build
+RUN npm run -w apps/entrant build \
+    && npm prune --omit=dev
 
 
 FROM node:24-alpine
@@ -64,15 +65,16 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-# node_modules comes across whole rather than pruned. `npm prune --omit=dev`
-# on a workspace tree removes packages by a resolution walk that has no test
-# here, and the failure it would produce — a missing runtime dependency —
-# appears as a crash on first request in a deployed stack, which is a poor
-# trade for image size. react, react-dom and react-router hoist to this root
-# tree; `@react-router/node` and `@react-router/serve` do NOT (the lockfile
-# places them under `apps/entrant/node_modules/`), which is why
-# the CMD's path is workspace-local and why the entrant directory below is
-# copied WITH the node_modules `npm ci` created in it.
+# Pull fixed runtime libraries from the signed Alpine repository even when
+# the immutable Node base digest predates a security update.
+RUN apk upgrade --no-cache \
+    && rm -rf /usr/local/lib/node_modules/npm \
+        /usr/local/bin/npm \
+        /usr/local/bin/npx
+
+# The builder prunes development-only packages after compiling. Runtime
+# React and the production React Router server packages are hoisted at this
+# root. The entrant directory below retains the built server/client output.
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/package.json ./package.json
 COPY --from=builder --chown=node:node /app/packages/design-system ./packages/design-system
@@ -102,10 +104,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # Both go away by dropping npm from the runtime: node becomes PID 1 and
 # `dist/cli.js` installs its own SIGTERM/SIGINT handlers (`server.close()`).
 #
-# The path is workspace-local, not hoisted: `package-lock.json` pins
-# `@react-router/serve` at `apps/entrant/node_modules/...` and
-# `npm ci` reproduces the lockfile tree exactly, so it lands there in the image
-# too. `bin.js` (the package's own `react-router-serve` entry, which is what
-# `npm start` ran) rather than `dist/cli.js`: it defaults NODE_ENV=production
-# before requiring it, so the render mode is belt-and-braces with the ENV above.
-CMD ["node", "./node_modules/@react-router/serve/bin.js", "./build/server/index.js"]
+# Production pruning hoists `@react-router/serve` to the root tree. `bin.js`
+# (the package's own entry) defaults NODE_ENV=production before requiring the
+# CLI, so the render mode is belt-and-braces with the ENV above.
+CMD ["node", "/app/node_modules/@react-router/serve/bin.js", "./build/server/index.js"]

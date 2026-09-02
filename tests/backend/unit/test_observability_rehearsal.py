@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import json
+import importlib
 from pathlib import Path
 
 import pytest
 import yaml
-import db.session
 
 from core.telemetry.bootstrap import TelemetryRuntime
 from core.telemetry.privacy import validate_metric_attributes
@@ -78,6 +78,7 @@ def test_backup_provider_failure_and_invalid_values_fail_open():
 
 
 def test_database_observations_cover_available_pool_and_fail_open(monkeypatch):
+    db_session = importlib.import_module("db.session")
     class Connection:
         def __enter__(self):
             return self
@@ -98,7 +99,7 @@ def test_database_observations_cover_available_pool_and_fail_open(monkeypatch):
         overflow = lambda self: 1
 
     engine = type("Engine", (), {"pool": Pool(), "connect": lambda self: Connection()})()
-    monkeypatch.setattr(db.session, "engine", engine)
+    monkeypatch.setattr(db_session, "engine", engine)
     instruments = _runtime()._create_database_observations()
     assert instruments["database_available"](None)[0].value == 1
     assert instruments["database_pool_checked_out"](None)[0].value == 3
@@ -110,7 +111,7 @@ def test_database_observations_cover_available_pool_and_fail_open(monkeypatch):
         (),
         {"pool": object(), "connect": lambda self: (_ for _ in ()).throw(OSError())},
     )()
-    monkeypatch.setattr(db.session, "engine", broken)
+    monkeypatch.setattr(db_session, "engine", broken)
     failed = _runtime()._create_database_observations()
     assert failed["database_available"](None)[0].value == 0
     assert failed["database_pool_checked_out"](None) == []
