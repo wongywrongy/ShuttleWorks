@@ -196,6 +196,36 @@ def test_return_rejects_projection_hash_mismatch_without_closing_authority() -> 
     assert session.scalar(select(AuthorityTransition)) is None
 
 
+@pytest.mark.parametrize("declared_sequence", [0, 2])
+def test_return_rejects_cloud_ahead_or_node_ahead_without_overwrite(
+    declared_sequence: int,
+) -> None:
+    session = _session()
+    tournament_id = _tournament(session)
+    node_id = uuid.uuid4()
+    authority, capability = _ready(session, tournament_id, node_id)
+    _receipt(session, tournament_id, node_id, authority.epoch, 1)
+
+    with pytest.raises(ProtocolError) as raised:
+        return_to_cloud(
+            session,
+            tournament_id=tournament_id,
+            node_id=node_id,
+            authority_epoch=authority.epoch,
+            capability=capability,
+            actor_id=uuid.uuid4(),
+            device_id=node_id,
+            reason="Conflicting return proof",
+            declared_last_sequence=declared_sequence,
+            snapshot_hash="a" * 64,
+            confirmation=True,
+        )
+
+    assert raised.value.code == "operations_not_drained"
+    assert session.get(TournamentAuthority, (tournament_id, authority.epoch)).state == "active"
+    assert session.scalar(select(AuthorityTransition)) is None
+
+
 def test_planned_transfer_relinquishes_old_node_and_prepares_new_epoch() -> None:
     session = _session()
     tournament_id = _tournament(session)
@@ -377,13 +407,9 @@ def test_recovery_rejects_missing_receipts_corruption_and_repeat() -> None:
     tournament_id = _tournament(session)
     old_node = uuid.uuid4()
     authority, _ = _ready(session, tournament_id, old_node)
-    session.add(
-        SyncCheckpoint(
-            tournament_id=tournament_id,
-            authority_epoch=authority.epoch,
-            highest_contiguous_sequence=1,
-        )
-    )
+    session.get(
+        SyncCheckpoint, (tournament_id, authority.epoch)
+    ).highest_contiguous_sequence = 1
     session.commit()
     checkpoint = _recovery_checkpoint(
         session,

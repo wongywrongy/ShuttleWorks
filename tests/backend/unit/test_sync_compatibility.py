@@ -248,7 +248,9 @@ def test_unsupported_operation_version_is_quarantined_before_application() -> No
     assert raised.value.code == "unsupported_operation_schema"
     assert session.scalar(select(SyncQuarantine)) is not None
     assert session.scalar(select(EventOperation)) is None
-    assert session.scalar(select(SyncCheckpoint)) is None
+    checkpoint = session.scalar(select(SyncCheckpoint))
+    assert checkpoint is not None
+    assert checkpoint.highest_contiguous_sequence == 0
 
 
 def test_competing_checkout_is_rejected_and_stale_epoch_cannot_sync() -> None:

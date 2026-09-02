@@ -942,8 +942,19 @@ def begin_checkout(
         allowed_command_classes=grant["allowedCommandClasses"],
     )
     session.add(authority)
-    _ensure_operation_sequence(session, tournament_id, epoch)
     try:
+        # Flush the live-authority row before any query-triggered autoflush so
+        # a simultaneous checkout is translated into the stable protocol
+        # conflict below instead of leaking a database IntegrityError.
+        session.flush()
+        _ensure_operation_sequence(session, tournament_id, epoch)
+        session.add(
+            SyncCheckpoint(
+                tournament_id=tournament_id,
+                authority_epoch=epoch,
+                highest_contiguous_sequence=0,
+            )
+        )
         session.commit()
     except Exception as exc:
         session.rollback()
@@ -1159,6 +1170,13 @@ def _preparing_epoch(
     session.add(authority)
     session.flush()
     _ensure_operation_sequence(session, tournament_id, epoch)
+    session.add(
+        SyncCheckpoint(
+            tournament_id=tournament_id,
+            authority_epoch=epoch,
+            highest_contiguous_sequence=0,
+        )
+    )
     return authority, capability
 
 
@@ -2001,6 +2019,29 @@ def ingest_batch(
         raise ProtocolError(404, "tournament_not_found", "Tournament does not exist")
     _enrolled_device(session, tournament=tournament, node_id=batch.node_id)
 
+    # Every authority epoch owns a cursor from creation (and the migration
+    # backfills legacy epochs).  Updating the row to its current value takes a
+    # PostgreSQL row lock and starts a SQLite write transaction.  This gives
+    # both supported engines one serialization point before either request
+    # validates or applies operations; SELECT FOR UPDATE alone is ignored by
+    # SQLite and cannot lock a row that does not yet exist.
+    locked = session.execute(
+        update(SyncCheckpoint)
+        .where(
+            SyncCheckpoint.tournament_id == tournament_id,
+            SyncCheckpoint.authority_epoch == batch.authority_epoch,
+        )
+        .values(
+            highest_contiguous_sequence=SyncCheckpoint.highest_contiguous_sequence
+        )
+    )
+    if locked.rowcount != 1:
+        session.rollback()
+        raise ProtocolError(
+            503,
+            "ingestion_retry_required",
+            "Authority cursor is unavailable; retry the batch",
+        )
     checkpoint = session.scalar(
         select(SyncCheckpoint)
         .where(
@@ -2080,17 +2121,6 @@ def ingest_batch(
         expected += 1
 
     try:
-        # Do not create durable cursor state until the entire envelope has
-        # passed protocol validation. Quarantined input must not look like a
-        # successfully initialized synchronization stream.
-        if checkpoint is None:
-            checkpoint = SyncCheckpoint(
-                tournament_id=tournament_id,
-                authority_epoch=batch.authority_epoch,
-                highest_contiguous_sequence=0,
-            )
-            session.add(checkpoint)
-            session.flush()
         for operation in new_operations:
             try:
                 (apply_projection or apply_cloud_projection)(session, operation)
@@ -2160,8 +2190,8 @@ def ingest_batch(
         )
         if advanced.rowcount != 1:
             raise ProtocolError(
-                409,
-                "concurrent_ingestion",
+                503,
+                "ingestion_retry_required",
                 "Another request advanced this authority epoch; retry the batch",
             )
         session.commit()
@@ -2178,8 +2208,8 @@ def ingest_batch(
                     _retry_on_race=False,
                 )
             raise ProtocolError(
-                409,
-                "concurrent_ingestion",
+                503,
+                "ingestion_retry_required",
                 "Concurrent ingestion conflicted; retry from the acknowledged cursor",
             ) from exc
         if type(exc).__name__ == "OperationalError" and (

@@ -9,6 +9,7 @@ import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import create_engine, select, text
@@ -19,14 +20,16 @@ from db.models import (
     CloudEventProjection,
     EventOperation,
     EventOperationSequence,
+    SyncCheckpoint,
     Tournament,
+    TournamentAuthority,
     TournamentMember,
     User,
 )
 from core.dependencies import AuthUser, require_tournament_access
 from fastapi import HTTPException
 from repositories import LocalRepository
-from sync.schemas import SyncBatchRequest
+from sync.schemas import OperationEnvelope, SyncBatchRequest
 from sync.service import (
     ProtocolError,
     append_local_operation,
@@ -133,6 +136,49 @@ def test_concurrent_operation_requests_allocate_unique_contiguous_sequences(
         verify.close()
 
 
+def test_concurrent_checkout_creates_exactly_one_live_authority(concurrent_db) -> None:
+    _engine, Session = concurrent_db
+    tournament_id = uuid.uuid4()
+    with Session() as setup:
+        setup.add(Tournament(id=tournament_id, name="Concurrent checkout", data={}))
+        setup.commit()
+
+    barrier = threading.Barrier(2, timeout=20)
+
+    def checkout_one(_index: int) -> str:
+        with Session() as session:
+            barrier.wait()
+            try:
+                begin_checkout(
+                    session,
+                    tournament_id=tournament_id,
+                    node_id=uuid.uuid4(),
+                )
+                return "created"
+            except ProtocolError as exc:
+                assert exc.code == "authority_already_granted"
+                return exc.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(checkout_one, range(2)))
+
+    assert outcomes.count("created") == 1
+    assert outcomes.count("authority_already_granted") == 1
+    with Session() as verify:
+        live = list(
+            verify.scalars(
+                select(TournamentAuthority).where(
+                    TournamentAuthority.tournament_id == tournament_id,
+                    TournamentAuthority.state.in_(("preparing", "active")),
+                )
+            )
+        )
+        assert len(live) == 1
+        checkpoint = verify.get(SyncCheckpoint, (tournament_id, live[0].epoch))
+        assert checkpoint is not None
+        assert checkpoint.highest_contiguous_sequence == 0
+
+
 def test_concurrent_identical_ingestion_is_idempotent(concurrent_db) -> None:
     _engine, Session = concurrent_db
     tournament_id, node_id = uuid.uuid4(), uuid.uuid4()
@@ -203,8 +249,106 @@ def test_concurrent_identical_ingestion_is_idempotent(concurrent_db) -> None:
                 )
             )
         ) == 1
+        checkpoint = verify.get(SyncCheckpoint, (tournament_id, authority_epoch))
+        assert checkpoint is not None
+        assert checkpoint.highest_contiguous_sequence == 1
     finally:
         verify.close()
+
+
+def test_concurrent_overlapping_batches_advance_cursor_contiguously(
+    concurrent_db,
+) -> None:
+    _engine, Session = concurrent_db
+    tournament_id, node_id = uuid.uuid4(), uuid.uuid4()
+    with Session() as setup:
+        setup.add(Tournament(id=tournament_id, name="Overlapping ingestion", data={}))
+        setup.commit()
+        authority, capability, checkpoint = begin_checkout(
+            setup, tournament_id=tournament_id, node_id=node_id
+        )
+        mark_ready(
+            setup,
+            tournament_id=tournament_id,
+            node_id=node_id,
+            authority_epoch=authority.epoch,
+            capability=capability,
+            checkpoint_hash=checkpoint_digest(checkpoint),
+        )
+        authority_epoch = authority.epoch
+
+    now = datetime.now(timezone.utc)
+    operations = [
+        OperationEnvelope(
+            operation_id=uuid.uuid4(),
+            event_id=tournament_id,
+            node_id=node_id,
+            authority_epoch=authority_epoch,
+            sequence=sequence,
+            actor_id=uuid.uuid4(),
+            command_type="match.command.v1",
+            aggregate_type="match",
+            aggregate_id=f"m{sequence}",
+            payload={"sequence": sequence},
+            expected_version=None,
+            occurred_at_local=now,
+            accepted_at_node=now,
+            schema_version=3,
+        )
+        for sequence in (1, 2)
+    ]
+    batches = [
+        SyncBatchRequest(
+            node_id=node_id,
+            authority_epoch=authority_epoch,
+            operations=[operations[0]],
+        ),
+        SyncBatchRequest(
+            node_id=node_id,
+            authority_epoch=authority_epoch,
+            operations=operations,
+        ),
+    ]
+    barrier = threading.Barrier(2, timeout=20)
+
+    def ingest_one(batch: SyncBatchRequest) -> tuple[int, int, int]:
+        with Session() as session:
+            barrier.wait()
+            try:
+                return ingest_batch(
+                    session,
+                    tournament_id=tournament_id,
+                    capability=capability,
+                    batch=batch,
+                )
+            except ProtocolError as exc:
+                assert exc.code == "ingestion_retry_required"
+                # The event-node contract retains this batch and retries it.
+                return ingest_batch(
+                    session,
+                    tournament_id=tournament_id,
+                    capability=capability,
+                    batch=batch,
+                )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(ingest_one, batches))
+
+    assert all(outcome[0] in (1, 2) for outcome in outcomes)
+    with Session() as verify:
+        assert list(
+            verify.scalars(
+                select(EventOperation.sequence)
+                .where(
+                    EventOperation.tournament_id == tournament_id,
+                    EventOperation.authority_epoch == authority_epoch,
+                )
+                .order_by(EventOperation.sequence)
+            )
+        ) == [1, 2]
+        checkpoint = verify.get(SyncCheckpoint, (tournament_id, authority_epoch))
+        assert checkpoint is not None
+        assert checkpoint.highest_contiguous_sequence == 2
 
 
 def test_authority_projection_recovery_and_tenant_isolation_share_dialect_contract(

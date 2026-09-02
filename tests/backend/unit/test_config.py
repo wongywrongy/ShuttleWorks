@@ -86,6 +86,51 @@ def test_host_and_port_env_vars(monkeypatch):
     assert settings.port == 9001
 
 
+@pytest.mark.parametrize(
+    ("process_role", "provided", "missing_names"),
+    [
+        (
+            "api",
+            {},
+            ("AUTHORITY_SIGNING_PUBLIC_KEY_FILE", "NODE_SIGNING_KEY_FILE"),
+        ),
+        ("sync", {}, ("SYNC_AUTHORITY_CAPABILITY_FILE",)),
+    ],
+)
+def test_event_node_profile_fails_closed_without_required_authority_material(
+    process_role, provided, missing_names
+):
+    from core.config import Settings
+
+    with pytest.raises(Exception) as raised:
+        Settings(
+            deployment_profile="event_node",
+            process_role=process_role,
+            **provided,
+        )
+    message = str(raised.value)
+    for missing_name in missing_names:
+        assert missing_name in message
+
+
+def test_event_node_profiles_accept_explicit_file_backed_authority_material():
+    from core.config import Settings
+
+    api = Settings(
+        deployment_profile="event_node",
+        process_role="api",
+        authority_signing_public_key_file="/run/secrets/authority-public.pem",
+        node_signing_key_file="/run/secrets/node-private.pem",
+    )
+    sync = Settings(
+        deployment_profile="event_node",
+        process_role="sync",
+        sync_authority_capability_file="/run/secrets/authority-capability",
+    )
+    assert api.deployment_profile == "event_node"
+    assert sync.deployment_profile == "event_node"
+
+
 def test_cloud_mode_refuses_console_email_backend(monkeypatch):
     """SP-CLOUD-2: the console backend logs raw reset/invite tokens --
     cloud startup must fail closed without SMTP delivery."""

@@ -1,8 +1,12 @@
 """Durable outbox drain state transitions without a live network."""
 from __future__ import annotations
 
+import io
+import json
+import urllib.error
 import uuid
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -84,3 +88,61 @@ def test_permanent_protocol_failure_is_retained_and_removed_from_retry_queue(
         assert row.next_attempt_at is None
         assert row.last_error_code == "command_class_not_granted"
     assert agent.pending_batch(tournament_id, node_id) == []
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 409, 422])
+def test_drain_permanent_http_failure_is_blocked_and_visible(
+    monkeypatch, status: int
+) -> None:
+    factory, tournament_id, node_id, operation_id = _database(monkeypatch)
+    monkeypatch.setattr(agent.settings, "sync_cloud_url", "https://cloud.invalid")
+    monkeypatch.setattr(agent.settings, "sync_tournament_id", str(tournament_id))
+    monkeypatch.setattr(agent.settings, "node_id", str(node_id))
+    monkeypatch.setattr(agent, "_capability", lambda: "capability")
+    body = io.BytesIO(json.dumps({"error": "protocol_rejected"}).encode())
+
+    def reject(*_args, **_kwargs):
+        raise urllib.error.HTTPError(
+            "https://cloud.invalid", status, "rejected", {}, body
+        )
+
+    monkeypatch.setattr(agent, "_post_batch", reject)
+    assert agent.drain_once() == 0
+    with factory() as session:
+        row = session.get(SyncOutbox, operation_id)
+        assert row is not None
+        assert row.permanently_blocked_at is not None
+        assert row.next_attempt_at is None
+        assert row.acknowledged_at is None
+        assert row.last_error_code == "protocol_rejected"
+
+
+@pytest.mark.parametrize("status", [408, 425, 429, 500, 503])
+def test_drain_retryable_http_failure_remains_queued(
+    monkeypatch, status: int
+) -> None:
+    factory, tournament_id, node_id, operation_id = _database(monkeypatch)
+    monkeypatch.setattr(agent.settings, "sync_cloud_url", "https://cloud.invalid")
+    monkeypatch.setattr(agent.settings, "sync_tournament_id", str(tournament_id))
+    monkeypatch.setattr(agent.settings, "node_id", str(node_id))
+    monkeypatch.setattr(agent, "_capability", lambda: "capability")
+
+    def reject(*_args, **_kwargs):
+        raise urllib.error.HTTPError(
+            "https://cloud.invalid",
+            status,
+            "retry",
+            {},
+            io.BytesIO(json.dumps({"error": "ingestion_retry_required"}).encode()),
+        )
+
+    monkeypatch.setattr(agent, "_post_batch", reject)
+    monkeypatch.setattr(agent.random, "uniform", lambda _low, _high: 1.0)
+    assert agent.drain_once() == 0
+    with factory() as session:
+        row = session.get(SyncOutbox, operation_id)
+        assert row is not None
+        assert row.permanently_blocked_at is None
+        assert row.next_attempt_at is not None
+        assert row.acknowledged_at is None
+        assert row.last_error_code == "ingestion_retry_required"

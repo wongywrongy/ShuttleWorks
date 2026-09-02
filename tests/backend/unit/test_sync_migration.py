@@ -14,7 +14,7 @@ from _helpers import purge_backend_modules
 
 
 BACKEND = Path(__file__).resolve().parents[3] / "apps" / "api"
-REVISION = "a2b3c4d5e6f7"
+REVISION = "b3c4d5e6f7a8"
 TABLES = {
     "tournament_authority_epochs",
     "event_operations",

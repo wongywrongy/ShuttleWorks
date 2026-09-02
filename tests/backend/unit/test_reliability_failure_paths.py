@@ -132,7 +132,9 @@ def test_reordered_batch_is_rejected_without_partial_application():
                 batch=SyncBatchRequest(node_id=node_id, authority_epoch=authority.epoch, operations=envelopes),
             )
         assert session.scalar(select(func.count()).select_from(SyncInbox)) == 0
-        assert session.get(SyncCheckpoint, (tournament_id, authority.epoch)) is None
+        checkpoint = session.get(SyncCheckpoint, (tournament_id, authority.epoch))
+        assert checkpoint is not None
+        assert checkpoint.highest_contiguous_sequence == 0
 
 
 def test_telemetry_collector_absence_is_fail_open():

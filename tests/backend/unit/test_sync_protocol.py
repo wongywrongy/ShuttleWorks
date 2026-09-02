@@ -265,9 +265,11 @@ def test_gap_rejects_whole_batch_without_partial_application() -> None:
     assert raised.value.code == "sequence_gap"
     assert raised.value.detail["expected_sequence"] == 1
     assert cloud.scalar(select(func.count()).select_from(SyncInbox)) == 0
-    # Rejected batches do not create cursor state. The first valid operation
-    # creates the checkpoint in the same transaction as ingestion.
-    assert cloud.get(SyncCheckpoint, (tournament_id, 1)) is None
+    # The epoch owns a serialization cursor from checkout, but rejected input
+    # cannot advance it or create inbox state.
+    checkpoint = cloud.get(SyncCheckpoint, (tournament_id, 1))
+    assert checkpoint is not None
+    assert checkpoint.highest_contiguous_sequence == 0
 
 
 def test_incompatible_schema_is_quarantined_without_advancing() -> None:
