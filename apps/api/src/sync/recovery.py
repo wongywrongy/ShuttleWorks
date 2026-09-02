@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.telemetry.instruments import record_authority_rejection
+from sync.errors import ProtocolError
 from sync.service import (
-    ProtocolError,
     _active_authority,
     _append_transition,
     _cloud_cursor,

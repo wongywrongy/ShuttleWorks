@@ -49,6 +49,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from sync.compatibility import supports_checkpoint_schema, supports_operation_schema
+from sync.errors import ProtocolError
 from sync.schemas import (
     CURRENT_CHECKPOINT_SCHEMA_VERSION,
     OperationEnvelope,
@@ -58,18 +59,6 @@ from sync.schemas import (
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-class ProtocolError(Exception):
-    def __init__(self, status_code: int, code: str, message: str, **detail: Any):
-        super().__init__(message)
-        self.status_code = status_code
-        self.code = code
-        self.message = message
-        self.detail = detail
-
-    def body(self) -> dict[str, Any]:
-        return {"error": self.code, "message": self.message, **self.detail}
 
 
 def _canonical_json(value: Any) -> bytes:
