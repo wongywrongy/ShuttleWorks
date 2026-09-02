@@ -50,6 +50,8 @@ test('security controls use immutable action references and cover all required s
   assert.match(security, /format: spdx-json/)
   assert.match(security, /npm-audit:/)
   assert.match(security, /python-audit:/)
+  assert.match(security, /severity:\s*HIGH,CRITICAL/)
+  assert.match(security, /limit-severities-for-sarif:\s*true/)
   assert.match(security, /ignore-unfixed:\s*false/)
   assert.match(security, /exit-code:\s*"1"/)
 })
@@ -58,4 +60,12 @@ test('the CI publication gate uses immutable action references', () => {
   const actionRefs = [...ci.matchAll(/uses:\s*[^@\s]+@([^\s]+)/g)].map((match) => match[1])
   assert.ok(actionRefs.length > 8)
   for (const ref of actionRefs) assert.match(ref, /^[0-9a-f]{40}$/)
+})
+
+test('the observability gate runs native rule and Collector validation', () => {
+  assert.match(ci, /--entrypoint promtool/)
+  assert.match(ci, /check rules \/rules\/prometheus-rules\.yaml/)
+  assert.match(ci, /collector-event-node\.yaml collector-cloud\.yaml/)
+  assert.match(ci, /validate --config="\/etc\/otel\/\$config"/)
+  assert.doesNotMatch(ci, /docker run --rm \+/)
 })

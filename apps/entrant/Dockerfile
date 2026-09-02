@@ -52,8 +52,27 @@ COPY packages/design-system ./packages/design-system
 COPY packages/shared-contract ./packages/shared-contract
 COPY apps/entrant ./apps/entrant
 
-RUN npm run -w apps/entrant build \
-    && npm prune --omit=dev
+RUN npm run -w apps/entrant build
+
+
+# Build a production dependency tree for this workspace only. Copying the
+# builder's monorepo-wide node_modules into the runtime also copied unrelated
+# console dependencies (including spreadsheet export libraries) into the
+# public entrant image. Besides needless image weight, that made an unused
+# console transitive vulnerability part of the entrant release artifact.
+FROM node:24-alpine AS production-deps
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY packages/design-system/package.json ./packages/design-system/package.json
+COPY packages/shared-contract/package.json ./packages/shared-contract/package.json
+COPY apps/console/package.json ./apps/console/package.json
+COPY apps/entrant/package.json ./apps/entrant/package.json
+
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --omit=dev --workspace apps/entrant \
+      --include-workspace-root=false --ignore-scripts --no-audit --no-fund
 
 
 FROM node:24-alpine
@@ -72,13 +91,14 @@ RUN apk upgrade --no-cache \
         /usr/local/bin/npm \
         /usr/local/bin/npx
 
-# The builder prunes development-only packages after compiling. Runtime
-# React and the production React Router server packages are hoisted at this
-# root. The entrant directory below retains the built server/client output.
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+# Runtime React and the production React Router server packages are hoisted
+# at this root from the entrant-scoped production dependency stage. The
+# entrant directory below retains the built server/client output.
+COPY --from=production-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/package.json ./package.json
 COPY --from=builder --chown=node:node /app/packages/design-system ./packages/design-system
-COPY --from=builder --chown=node:node /app/apps/entrant ./apps/entrant
+COPY --from=builder --chown=node:node /app/apps/entrant/package.json ./apps/entrant/package.json
+COPY --from=builder --chown=node:node /app/apps/entrant/build ./apps/entrant/build
 
 USER node
 WORKDIR /app/apps/entrant
