@@ -71,6 +71,46 @@ the last verified backup. When WAN returns, verify that batches acknowledge in
 sequence; duplicate acknowledgements are safe and expected. Do not close the
 authority until the cloud reports the declared final sequence.
 
+## Process restart during play
+
+First create or confirm a current verified bundle and record the authority
+epoch and local outbox count. Restart only the failed service from the Compose
+directory; do not recreate volumes:
+
+```bash
+cd infra/compose
+docker compose -f docker-compose.yml -f docker-compose.event-node.yml \
+  restart backend worker sync-agent
+docker compose -f docker-compose.yml -f docker-compose.event-node.yml ps
+```
+
+Verify `/health`, `/health/ready`, the authority status, a representative
+schedule/result read, and that the pending outbox count is unchanged or
+draining. A process restart is safe because committed SQLite WAL, operations,
+and outbox rows are outside process memory. If readiness fails, stop and use
+the restore procedure; do not delete `local.db`, `-wal`, or `-shm` files.
+
+## Abrupt power loss
+
+Do not repeatedly power-cycle the node. After stable power returns, copy the
+database, WAL, and SHM files as evidence before repair, then start the normal
+Compose profile and inspect logs. Run SQLite integrity and the isolated bundle
+preflight against copies, not the live file:
+
+```bash
+sqlite3 /path/to/evidence/local.db 'PRAGMA quick_check;'
+cd apps/api/src
+../../../.venv/bin/python -m recovery.cli preflight \
+  --bundle /media/recovery/latest.swbackup \
+  --passphrase-file /run/secrets/backup-passphrase
+```
+
+Resume play only after authority, normalized state, last local sequence,
+outbox count, representative result/display, and a fresh verified backup agree.
+The repository has automated crash/reopen and restore checks, but the abrupt
+power-cut rehearsal on reference hardware remains pending and must be witnessed
+before production acceptance.
+
 ## Normal return to cloud
 
 1. Stop accepting new operator commands and record the node's final local
@@ -127,6 +167,12 @@ participant data.
    import the checkpoint/bundle, and run the offline preflight.
 4. Start the replacement at a new authority epoch. Never run two nodes with
    the same active epoch.
+
+The recovery API rejects a stale backup unless every later cloud receipt is
+present in the checkpoint evidence. It also rejects backup-ahead, node-ahead,
+epoch-mismatched, hash-mismatched, missing-receipt, and repeated recovery
+claims. Preserve the rejected bundle and evidence for review; never trim the
+declared sequence to make recovery pass.
 
 ## Checkout/reconnect/return rehearsal
 

@@ -66,6 +66,16 @@ Fencing must be independently verified before promoting Server 2. A failed
 SSH/health check is not evidence that Server 1 is stopped. Attach fencing,
 replication, archive, and application-health evidence to the incident.
 
+Only in an approved incident window, after reviewing the dry-run output, run:
+
+```bash
+PG_PRIMARY_HOST=server-1.internal \
+PG_STANDBY_HOST=server-2.internal \
+FENCE_PRIMARY_COMMAND='/approved/fencing-tool server-1.internal' \
+CONFIRM_FENCED_FAILOVER=I_UNDERSTAND_FENCED_DR \
+DRY_RUN=0 infra/postgres/failover-rejoin.sh failover
+```
+
 ## Rejoin
 
 Keep the old primary fenced and stop application writes on it. Rebuild or
@@ -86,6 +96,18 @@ database. Start with:
 ```bash
 DRY_RUN=1 infra/postgres/restore-drill.sh
 ```
+
+On an explicitly isolated drill host, the executable preflight is:
+
+```bash
+RESTORE_DRILL_TARGET=shuttleworks_restore_drill_202609 \
+PGBACKREST_STANZA=shuttleworks \
+DRY_RUN=0 infra/postgres/restore-drill.sh
+```
+
+The script validates the archive and refuses production-looking target names;
+the deployment-specific pgBackRest restore command remains owned by the
+isolated host runbook because repository code cannot know its storage layout.
 
 The drill records backup/WAL selection, restore duration, migration result,
 `/health/ready`, representative reads/exports, row/hash evidence, and cleanup
