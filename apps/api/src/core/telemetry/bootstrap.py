@@ -342,21 +342,29 @@ class TelemetryRuntime:
                     from db.session import SessionLocal
                     from sqlalchemy import func, select
                     with SessionLocal() as session:
-                        count, oldest, attempts = session.execute(
+                        count, oldest, attempts, blocked = session.execute(
                             select(
                                 func.count(),
                                 func.min(SyncOutbox.created_at),
                                 func.coalesce(func.sum(SyncOutbox.attempt_count), 0),
+                                func.count().filter(
+                                    SyncOutbox.permanently_blocked_at.is_not(None)
+                                ),
                             )
                             .select_from(SyncOutbox)
                             .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
                             .where(SyncOutbox.acknowledged_at.is_(None))
                         ).one()
-                    value = (int(count or 0), oldest, int(attempts or 0))
+                    value = (
+                        int(count or 0),
+                        oldest,
+                        int(attempts or 0),
+                        int(blocked or 0),
+                    )
                     sync_cache.update(at=now, value=value)
                     return value
                 except Exception:
-                    return (0, None, 0)
+                    return (0, None, 0, 0)
 
             def sync_depth(_options):
                 return [Observation(read_sync_snapshot()[0])]
@@ -372,6 +380,9 @@ class TelemetryRuntime:
             def sync_attempts(_options):
                 return [Observation(read_sync_snapshot()[2])]
 
+            def sync_blocked(_options):
+                return [Observation(read_sync_snapshot()[3])]
+
             instruments["sync_depth"] = self.meter.create_observable_gauge(
                 "shuttleworks.sync.outbox.depth", callbacks=[sync_depth], unit="{operation}",
                 description="Unacknowledged synchronization operations",
@@ -383,6 +394,12 @@ class TelemetryRuntime:
             instruments["sync_attempts"] = self.meter.create_observable_gauge(
                 "shuttleworks.sync.outbox.attempts", callbacks=[sync_attempts], unit="{attempt}",
                 description="Accumulated retry attempts for pending operations",
+            )
+            instruments["sync_blocked"] = self.meter.create_observable_gauge(
+                "shuttleworks.sync.outbox.blocked",
+                callbacks=[sync_blocked],
+                unit="{operation}",
+                description="Operations blocked pending operator intervention",
             )
 
             if role == "api":

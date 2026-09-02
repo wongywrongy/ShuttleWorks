@@ -295,12 +295,22 @@ jobs:
             --entrypoint promtool \
             prom/prometheus:v3.5.0 \
             check rules /rules/prometheus-rules.yaml
+      - name: Grafana dashboard contract
+        run: |
+          jq -e '
+            .title == "ShuttleWorks Production Operations" and
+            (.panels | length >= 7) and
+            all(.panels[]; (.title | length > 0) and (.targets | length > 0)) and
+            ([.panels[].targets[].expr] | any(contains("http_server_request_duration_seconds"))) and
+            ([.panels[].targets[].expr] | any(contains("shuttleworks_solve_jobs")))
+          ' infra/observability/shuttleworks-grafana-dashboard.json >/dev/null
       - name: Production Collector configurations
         env:
           OTEL_GATEWAY_ENDPOINT: https://gateway.invalid:4318
           OTEL_GATEWAY_CA_FILE: /tmp/ca.pem
           OTEL_GATEWAY_CLIENT_CERT_FILE: /tmp/client.pem
           OTEL_GATEWAY_CLIENT_KEY_FILE: /tmp/client.key
+          OTEL_GATEWAY_TLS_MIN_VERSION: "1.2"
           POSTGRES_TELEMETRY_ENDPOINT: postgres.invalid:5432
           POSTGRES_TELEMETRY_USERNAME: telemetry
           POSTGRES_TELEMETRY_PASSWORD: validation-only
@@ -314,6 +324,7 @@ jobs:
               -e OTEL_GATEWAY_CA_FILE \
               -e OTEL_GATEWAY_CLIENT_CERT_FILE \
               -e OTEL_GATEWAY_CLIENT_KEY_FILE \
+              -e OTEL_GATEWAY_TLS_MIN_VERSION \
               -e POSTGRES_TELEMETRY_ENDPOINT \
               -e POSTGRES_TELEMETRY_USERNAME \
               -e POSTGRES_TELEMETRY_PASSWORD \
@@ -325,6 +336,27 @@ jobs:
               validate --config="/etc/otel/$config" || status=1
           done
           exit $status
+      - name: Collector TLS minimum fails closed when invalid
+        env:
+          OTEL_GATEWAY_ENDPOINT: https://gateway.invalid:4318
+          OTEL_GATEWAY_CA_FILE: /tmp/ca.pem
+          OTEL_GATEWAY_CLIENT_CERT_FILE: /tmp/client.pem
+          OTEL_GATEWAY_CLIENT_KEY_FILE: /tmp/client.key
+          OTEL_GATEWAY_TLS_MIN_VERSION: SSL3
+        run: |
+          if docker run --rm \
+            -e OTEL_GATEWAY_ENDPOINT \
+            -e OTEL_GATEWAY_CA_FILE \
+            -e OTEL_GATEWAY_CLIENT_CERT_FILE \
+            -e OTEL_GATEWAY_CLIENT_KEY_FILE \
+            -e OTEL_GATEWAY_TLS_MIN_VERSION \
+            -v /tmp:/hostfs:ro \
+            -v "$PWD/infra/otel:/etc/otel:ro" \
+            otel/opentelemetry-collector-contrib:0.155.0 \
+            validate --config=/etc/otel/collector-event-node.yaml; then
+            echo "::error::Collector accepted an invalid TLS minimum"
+            exit 1
+          fi
 
   console-browser-contracts:
     name: Console browser contracts (canonical test database)

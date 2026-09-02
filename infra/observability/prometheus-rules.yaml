@@ -1,4 +1,20 @@
 groups:
+  - name: shuttleworks.api
+    rules:
+      - alert: ShuttleWorksApiErrorRateHigh
+        expr: sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1) > 0.05
+        for: 10m
+        labels: {severity: critical, owner: platform-oncall}
+        annotations:
+          summary: API server errors exceed five percent of requests.
+          runbook_url: docs/how-to/observability-runbook.md#api-errors-or-latency
+      - alert: ShuttleWorksApiLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels: {severity: warning, owner: platform-oncall}
+        annotations:
+          summary: API p95 request latency exceeds one second.
+          runbook_url: docs/how-to/observability-runbook.md#api-errors-or-latency
   - name: shuttleworks.sync
     rules:
       - alert: ShuttleWorksSyncOutboxDepth
@@ -96,3 +112,24 @@ groups:
         annotations:
           summary: Authority requests are being rejected.
           runbook_url: docs/how-to/observability-runbook.md#authority-rejection-alerts
+      - alert: ShuttleWorksCertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry - time() < 1209600
+        for: 30m
+        labels: {severity: warning, owner: platform-oncall}
+        annotations:
+          summary: A monitored TLS certificate expires within fourteen days.
+          runbook_url: docs/how-to/observability-runbook.md#certificate-expiry
+      - alert: ShuttleWorksSolveWorkerStalled
+        expr: shuttleworks_solve_jobs_queue_oldest_age_seconds > 120 and on() sum(shuttleworks_solve_jobs_queue_depth{job_state="running"}) == 0
+        for: 5m
+        labels: {severity: critical, owner: platform-oncall}
+        annotations:
+          summary: Solve work is queued but no worker is running it.
+          runbook_url: docs/how-to/observability-runbook.md#failed-or-stalled-workers
+      - alert: ShuttleWorksSolveWorkerLeaseStale
+        expr: sum(shuttleworks_solve_jobs_leases{lease_state="stale"}) > 0
+        for: 2m
+        labels: {severity: critical, owner: platform-oncall}
+        annotations:
+          summary: A solve worker has stopped heartbeating.
+          runbook_url: docs/how-to/observability-runbook.md#failed-or-stalled-workers

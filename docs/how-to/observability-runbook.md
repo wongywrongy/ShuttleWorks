@@ -14,6 +14,17 @@ repository at `infra/observability/`.
 3. If the node is still serving play, preserve SQLite, backups, and the
    operation log before restarting or deleting telemetry data.
 
+## API errors or latency
+
+Alerts: `ShuttleWorksApiErrorRateHigh` and `ShuttleWorksApiLatencyHigh`.
+Compare the HTTP status and latency panels with database availability, pool
+pressure, and worker signals. Check one affected route locally from the same
+network before restarting anything. On an event node, disconnect or stop the
+Collector if necessary to rule out resource contention; tournament commands
+must continue because OTLP export is asynchronous and fail-open. Preserve
+request IDs and trace IDs, but never copy credentials or request bodies into
+an incident record.
+
 ## Sync backlog or oldest age
 
 Alerts: `sync_outbox_depth` and `sync_outbox_oldest_age`. Both use the
@@ -94,6 +105,34 @@ outage must not interrupt tournament commands. Do not delete the queue volume
 to clear the alert: restore the gateway and allow the queue to drain. If disk
 pressure threatens SQLite or backups, preserve tournament state first and
 accept telemetry loss rather than exhausting the node.
+
+For a telemetry outage, leave the API, worker, and sync agent running. Confirm
+the event-node Collector queue volume is mounted, record queue utilization and
+free disk, then restore gateway DNS/TLS and watch the queue drain. The Compose
+profile intentionally has no application dependency on Collector health. If
+the Collector itself is wedged, restart only that container; do not remove its
+persistent volume. Verify new and queued markers arrive before closing the
+incident.
+
+## Certificate expiry
+
+Alert: `ShuttleWorksCertificateExpiring`. The monitoring backend must probe
+each public endpoint and the OTLP gateway so
+`probe_ssl_earliest_cert_expiry` is present. Obtain a replacement certificate
+and key through the deployment CA, verify their subject/SAN, validity window,
+and matching public key, and update the mounted secret files atomically. Set
+`OTEL_GATEWAY_TLS_MIN_VERSION` to `1.2` or `1.3`; never lower it. Restart the
+Collector, verify its health and one mTLS export, then revoke the old client
+certificate after all nodes have rotated. Do not commit certificates or keys.
+
+## Failed or stalled workers
+
+Alerts: `ShuttleWorksSolveWorkerStalled` and
+`ShuttleWorksSolveWorkerLeaseStale`. Check `/health/metrics` for queued age,
+running jobs, leases, and heartbeat age. A stale lease is recovered by the
+normal reaper; do not edit queue rows. Inspect the worker log and database
+reachability, restart only the failed worker process, and confirm the same job
+is reclaimed without a duplicate terminal result.
 
 ## Repository game-day gate
 

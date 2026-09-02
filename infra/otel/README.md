@@ -11,7 +11,10 @@ low.
 `collector-event-node.yaml` is the offline-capable node agent.  Set
 `OTEL_GATEWAY_ENDPOINT` to the HTTPS cloud OTLP/HTTP gateway and provide
 `OTEL_GATEWAY_CA_FILE`, `OTEL_GATEWAY_CLIENT_CERT_FILE`, and
-`OTEL_GATEWAY_CLIENT_KEY_FILE`. The gateway must validate the client
+`OTEL_GATEWAY_CLIENT_KEY_FILE`. Set `OTEL_GATEWAY_TLS_MIN_VERSION` to `1.2`
+or `1.3`; an absent value retains the secure `1.2` default and an invalid
+value makes Collector validation/startup fail.
+The gateway must validate the client
 certificate against the private deployment CA; mTLS is the authenticated
 transport and the client key remains a mounted OS/Compose secret.
 Run the `event-node` Compose profile only after those files are mounted. The cloud
@@ -43,6 +46,11 @@ Both configurations use a local health endpoint on port 13133 and the three
 OTLP signals.  Application privacy filtering remains the first boundary;
 the Collector deletes common authorization, cookie, request-body, SQL, and
 exception-message attributes as a second defensive boundary.
+
+Application containers do not depend on Collector health. If the Collector or
+gateway is unavailable, application exporters drop or queue telemetry within
+their bounded budgets while tournament persistence and operator workflows
+continue. The event-node Collector alone owns the persistent outbound queue.
 
 ## Operational dashboard and alerts
 

@@ -44,9 +44,6 @@ services:
     secrets:
       - authority_signing_public_key
       - node_signing_key
-    depends_on:
-      otel-collector:
-        condition: service_healthy
 
   # The node keeps solving available even when the WAN and telemetry gateway
   # are unavailable.  Its database is the same durable SQLite bind mount as
@@ -76,8 +73,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-      otel-collector:
-        condition: service_healthy
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -91,6 +86,7 @@ services:
       - OTEL_GATEWAY_CA_FILE=/run/secrets/otel_gateway_ca
       - OTEL_GATEWAY_CLIENT_CERT_FILE=/run/secrets/otel_gateway_client_cert
       - OTEL_GATEWAY_CLIENT_KEY_FILE=/run/secrets/otel_gateway_client_key
+      - OTEL_GATEWAY_TLS_MIN_VERSION=${OTEL_GATEWAY_TLS_MIN_VERSION:-1.2}
     depends_on:
       otel-storage-init:
         condition: service_completed_successfully
@@ -148,8 +144,6 @@ services:
       - sync_authority_capability
     depends_on:
       backend:
-        condition: service_healthy
-      otel-collector:
         condition: service_healthy
     restart: unless-stopped
     read_only: true

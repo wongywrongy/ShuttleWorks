@@ -80,7 +80,7 @@ exporters:
       ca_file: ${env:OTEL_GATEWAY_CA_FILE}
       cert_file: ${env:OTEL_GATEWAY_CLIENT_CERT_FILE}
       key_file: ${env:OTEL_GATEWAY_CLIENT_KEY_FILE}
-      min_version: "1.2"
+      min_version: ${env:OTEL_GATEWAY_TLS_MIN_VERSION:-1.2}
     compression: gzip
     timeout: 10s
     retry_on_failure:
