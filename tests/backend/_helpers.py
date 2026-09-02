@@ -68,6 +68,13 @@ _PURGE_EXEMPT = frozenset({
     # a different class than the one the ORM raises. SQLAlchemy-only, no
     # settings and no DB, so it qualifies on the rule above.
     "db.blob_version",
+    # Transport models are pure Pydantic values.  Keeping their identity
+    # stable is essential when a migration fixture refreshes the application
+    # modules after other tests have already collected references to these
+    # classes.  Otherwise a freshly imported ``SyncBatchRequest`` rejects an
+    # ``OperationEnvelope`` created by the pre-purge class, even though both
+    # have the same schema.
+    "sync.schemas",
 })
 
 

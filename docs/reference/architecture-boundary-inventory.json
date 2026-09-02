@@ -60,6 +60,11 @@
     {"path":"solve_rail/solve_jobs_routes.py","module":"solve_rail","useCase":"job-api","owner":"worker-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":1,"tournamentDataReferences":0},
     {"path":"solve_rail/solve_worker.py","module":"solve_rail","useCase":"worker-loop","owner":"worker-owner","repoSession":0,"commitCalls":8,"sqlalchemyImports":0,"tournamentDataReferences":0},
     {"path":"sync/agent.py","module":"sync","useCase":"outbox-drain","owner":"sync-module-owner","repoSession":0,"commitCalls":2,"sqlalchemyImports":1,"tournamentDataReferences":0},
+    {"path":"sync/authority.py","module":"sync","useCase":"authority-policy","owner":"sync-module-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":1,"tournamentDataReferences":0},
+    {"path":"sync/ingestion_projection.py","module":"sync","useCase":"cloud-projection-application","owner":"sync-module-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":1,"tournamentDataReferences":0},
+    {"path":"sync/operation_log.py","module":"sync","useCase":"operation-log-persistence","owner":"sync-module-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":2,"tournamentDataReferences":0},
+    {"path":"sync/reconciliation.py","module":"sync","useCase":"reconciliation-service","owner":"sync-module-owner","repoSession":0,"commitCalls":1,"sqlalchemyImports":2,"tournamentDataReferences":0},
+    {"path":"sync/recovery.py","module":"sync","useCase":"lost-node-recovery-service","owner":"sync-module-owner","repoSession":0,"commitCalls":1,"sqlalchemyImports":2,"tournamentDataReferences":0},
     {"path":"sync/service.py","module":"sync","useCase":"authority-and-operation-service","owner":"sync-module-owner","repoSession":0,"commitCalls":20,"sqlalchemyImports":2,"tournamentDataReferences":0},
     {"path":"worker.py","module":"worker","useCase":"worker-composition-root","owner":"worker-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":1,"tournamentDataReferences":0},
     {"path":"workspaces/tournaments.py","module":"workspaces","useCase":"tournament-state-api","owner":"workspace-module-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":0,"tournamentDataReferences":0}
