@@ -31,6 +31,9 @@ _BACKEND_PACKAGE_PREFIXES = (
     "entries.",
     "solve_rail.",
     "ops.",
+    "recovery.",
+    "shuttleworks.",
+    "sync.",
 )
 _BACKEND_PACKAGE_NAMES = {
     "core",
@@ -46,6 +49,9 @@ _BACKEND_PACKAGE_NAMES = {
     "entries",
     "solve_rail",
     "ops",
+    "recovery",
+    "shuttleworks",
+    "sync",
 }
 
 
