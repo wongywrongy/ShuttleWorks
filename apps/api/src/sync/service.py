@@ -39,7 +39,6 @@ from db.models import (
     EventOperationSequence,
     SyncCheckpoint,
     SyncInbox,
-    SyncOutbox,
     SyncQuarantine,
     Tournament,
     TournamentAuthority,
@@ -49,11 +48,7 @@ from db.models import (
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from sync.compatibility import (
-    CURRENT_OPERATION_SCHEMA_VERSION,
-    supports_checkpoint_schema,
-    supports_operation_schema,
-)
+from sync.compatibility import supports_checkpoint_schema, supports_operation_schema
 from sync.schemas import (
     CURRENT_CHECKPOINT_SCHEMA_VERSION,
     OperationEnvelope,
@@ -762,24 +757,13 @@ def _ensure_operation_sequence(
 def allocate_operation_sequence(
     session: Session, *, tournament_id: uuid.UUID, authority_epoch: int
 ) -> int:
-    """Atomically reserve one epoch-local sequence on SQLite and PostgreSQL."""
-    _ensure_operation_sequence(session, tournament_id, authority_epoch)
-    next_value = session.scalar(
-        update(EventOperationSequence)
-        .where(
-            EventOperationSequence.tournament_id == tournament_id,
-            EventOperationSequence.authority_epoch == authority_epoch,
-        )
-        .values(next_sequence=EventOperationSequence.next_sequence + 1)
-        .returning(EventOperationSequence.next_sequence)
+    from sync.operation_log import allocate_operation_sequence as implementation
+
+    return implementation(
+        session,
+        tournament_id=tournament_id,
+        authority_epoch=authority_epoch,
     )
-    if next_value is None:
-        raise ProtocolError(
-            409,
-            "sequence_allocator_missing",
-            "Operation sequence allocator is unavailable",
-        )
-    return int(next_value) - 1
 
 
 def _enrolled_device(
@@ -879,7 +863,9 @@ def tournament_is_checked_out(session: Session, tournament_id: uuid.UUID) -> boo
     cloud operations, then the node imports and proves readiness.  Allowing a
     write in that interval would make the checkpoint stale before activation.
     """
-    return _active_authority(session, tournament_id) is not None
+    from sync.authority import tournament_is_checked_out as implementation
+
+    return implementation(session, tournament_id)
 
 
 def begin_checkout(
@@ -1392,6 +1378,25 @@ def recover_lost_node(
     signed over the package digest, so a stale or substituted package cannot
     later pass checkpoint import/ready verification.
     """
+    from sync.recovery import recover_lost_node as implementation
+
+    return implementation(
+        session,
+        tournament_id=tournament_id,
+        new_node_id=new_node_id,
+        authority_epoch=authority_epoch,
+        actor_id=actor_id,
+        device_id=device_id,
+        reason=reason,
+        backup_sequence=backup_sequence,
+        declared_last_sequence=declared_last_sequence,
+        backup_hash=backup_hash,
+        recovery_checkpoint=recovery_checkpoint,
+        confirmation=confirmation,
+    )
+
+    # The implementation lives in sync.recovery. This marker is retained only
+    # as an apply-patch anchor while compatibility imports transition.
     reason = _require_transition_evidence(
         reason=reason, confirmation=confirmation, evidence_hash=backup_hash
     )
@@ -1609,62 +1614,28 @@ def append_local_operation(
     occurred_at_local: datetime | None = None,
     traceparent: str | None = None,
 ) -> EventOperation:
-    """Append an operation and its outbox row without committing.
+    from sync.operation_log import append_local_operation as implementation
 
-    The caller owns the surrounding business transaction.  A session flush is
-    enough to allocate and validate the epoch-local sequence while preserving
-    atomic rollback with the result and advancement rows.
-    """
-    authority = ensure_local_authority(
-        session, tournament_id=tournament_id, node_id=node_id
-    )
-    sequence = allocate_operation_sequence(
+    return implementation(
         session,
         tournament_id=tournament_id,
-        authority_epoch=authority.epoch,
-    )
-    operation = EventOperation(
-        operation_id=operation_id or uuid.uuid4(),
-        tournament_id=tournament_id,
         node_id=node_id,
-        authority_epoch=authority.epoch,
-        sequence=sequence,
         actor_id=actor_id,
         command_type=command_type,
         aggregate_type=aggregate_type,
         aggregate_id=aggregate_id,
-        expected_version=expected_version,
         payload=payload,
-        occurred_at_local=occurred_at_local or utcnow(),
-        accepted_at_node=utcnow(),
+        expected_version=expected_version,
+        operation_id=operation_id,
+        occurred_at_local=occurred_at_local,
         traceparent=traceparent,
-        schema_version=CURRENT_OPERATION_SCHEMA_VERSION,
     )
-    session.add(operation)
-    session.flush()
-    session.add(SyncOutbox(operation_id=operation.operation_id))
-    session.flush()
-    return operation
 
 
 def operation_to_envelope(operation: EventOperation) -> OperationEnvelope:
-    return OperationEnvelope(
-        operation_id=operation.operation_id,
-        event_id=operation.tournament_id,
-        node_id=operation.node_id,
-        authority_epoch=operation.authority_epoch,
-        sequence=operation.sequence,
-        actor_id=operation.actor_id,
-        command_type=operation.command_type,
-        aggregate_type=operation.aggregate_type,
-        aggregate_id=operation.aggregate_id,
-        expected_version=operation.expected_version,
-        payload=operation.payload,
-        occurred_at_local=operation.occurred_at_local,
-        accepted_at_node=operation.accepted_at_node,
-        traceparent=operation.traceparent,
-        schema_version=operation.schema_version,
-    )
+    from sync.operation_log import operation_to_envelope as implementation
+
+    return implementation(operation)
 
 
 ProjectionApplier = Callable[[Session, OperationEnvelope], None]
@@ -1836,20 +1807,9 @@ def apply_cloud_projection(session: Session, operation: OperationEnvelope) -> No
     bracket tables remain node-authoritative; replaying checkpoint + accepted
     operations can reconstruct this row.
     """
-    projection = session.get(CloudEventProjection, operation.event_id)
-    if projection is None or projection.authority_epoch != operation.authority_epoch:
-        projection = CloudEventProjection(
-            tournament_id=operation.event_id,
-            authority_epoch=operation.authority_epoch,
-            last_sequence=0,
-            data={"bracketResults": {}, "matchStates": {}},
-        )
-        session.add(projection)
-    data = dict(projection.data or {})
-    _apply_cloud_projection_data(data, operation)
-    projection.data = data
-    projection.last_sequence = operation.sequence
-    projection.updated_at = utcnow()
+    from sync.ingestion_projection import apply_cloud_projection as implementation
+
+    implementation(session, operation)
 
 
 def rebuild_cloud_projection(
@@ -2267,10 +2227,13 @@ def list_quarantines(
     tournament_id: uuid.UUID,
     include_resolved: bool = False,
 ) -> list[SyncQuarantine]:
-    query = select(SyncQuarantine).where(SyncQuarantine.tournament_id == tournament_id)
-    if not include_resolved:
-        query = query.where(SyncQuarantine.status == "open")
-    return list(session.scalars(query.order_by(SyncQuarantine.created_at, SyncQuarantine.id)))
+    from sync.reconciliation import list_quarantines as implementation
+
+    return implementation(
+        session,
+        tournament_id=tournament_id,
+        include_resolved=include_resolved,
+    )
 
 
 def list_correction_candidates(
@@ -2279,37 +2242,12 @@ def list_correction_candidates(
     tournament_id: uuid.UUID,
     quarantine_id: uuid.UUID,
 ) -> list[EventOperation]:
-    """Return correction operations that the resolver would accept.
+    from sync.reconciliation import list_correction_candidates as implementation
 
-    This is operator assistance, not authorization. ``resolve_quarantine``
-    repeats every scope, receipt, epoch, sequence, and cursor check inside its
-    own transaction because a candidate can become stale between requests.
-    """
-    quarantine = session.get(SyncQuarantine, quarantine_id)
-    if quarantine is None or quarantine.tournament_id != tournament_id:
-        raise ProtocolError(404, "quarantine_not_found", "Quarantine record does not exist")
-    if quarantine.authority_epoch is None:
-        return []
-    checkpoint = session.get(
-        SyncCheckpoint, (tournament_id, quarantine.authority_epoch)
-    )
-    if checkpoint is None:
-        return []
-    return list(
-        session.scalars(
-            select(EventOperation)
-            .join(SyncInbox, SyncInbox.operation_id == EventOperation.operation_id)
-            .where(
-                EventOperation.tournament_id == tournament_id,
-                SyncInbox.tournament_id == tournament_id,
-                EventOperation.authority_epoch == quarantine.authority_epoch,
-                SyncInbox.authority_epoch == quarantine.authority_epoch,
-                EventOperation.sequence == SyncInbox.sequence,
-                EventOperation.sequence <= checkpoint.highest_contiguous_sequence,
-            )
-            .order_by(EventOperation.sequence.desc(), EventOperation.operation_id)
-            .limit(100)
-        )
+    return implementation(
+        session,
+        tournament_id=tournament_id,
+        quarantine_id=quarantine_id,
     )
 
 
@@ -2322,130 +2260,34 @@ def resolve_quarantine(
     reason: str,
     correction_operation_id: uuid.UUID,
 ) -> SyncQuarantine:
-    """Link quarantine evidence to an accepted, replayable domain correction.
+    from sync.reconciliation import resolve_quarantine as implementation
 
-    The correction is created and applied by the authoritative event-node
-    application service, uploaded through the normal outbox, and acknowledged
-    in ``sync_inbox``.  Reconciliation never invents a cloud-only sequence.
-    """
-    quarantine = session.get(SyncQuarantine, quarantine_id)
-    if quarantine is None or quarantine.tournament_id != tournament_id:
-        raise ProtocolError(404, "quarantine_not_found", "Quarantine record does not exist")
-    if quarantine.status == "resolved":
-        if quarantine.resolution_operation_id != correction_operation_id:
-            raise ProtocolError(409, "quarantine_already_resolved", "Quarantine is linked to another correction")
-        return quarantine
-    if not reason.strip():
-        raise ProtocolError(422, "correction_required", "A reconciliation reason is required")
-    operation = session.get(EventOperation, correction_operation_id)
-    receipt = session.get(SyncInbox, correction_operation_id)
-    if (
-        operation is None
-        or receipt is None
-        or operation.tournament_id != tournament_id
-        or receipt.tournament_id != tournament_id
-        or operation.authority_epoch != quarantine.authority_epoch
-        or receipt.authority_epoch != quarantine.authority_epoch
-        or operation.sequence != receipt.sequence
-    ):
-        raise ProtocolError(
-            409,
-            "correction_not_acknowledged",
-            "Correction must be an accepted operation from the quarantined authority epoch",
-        )
-    checkpoint = session.get(
-        SyncCheckpoint, (tournament_id, operation.authority_epoch)
+    return implementation(
+        session,
+        tournament_id=tournament_id,
+        quarantine_id=quarantine_id,
+        actor_id=actor_id,
+        reason=reason,
+        correction_operation_id=correction_operation_id,
     )
-    if checkpoint is None or checkpoint.highest_contiguous_sequence < operation.sequence:
-        raise ProtocolError(409, "correction_not_acknowledged", "Cloud has not acknowledged the correction")
-    quarantine.status = "resolved"
-    quarantine.resolved_at = utcnow()
-    quarantine.resolved_by = actor_id
-    quarantine.resolution_operation_id = operation.operation_id
-    quarantine.resolution_note = reason.strip()
-    try:
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    return quarantine
 
 
 def _latest_authority_status(session, tournament_id: uuid.UUID):
-    authority = session.scalar(
-        select(TournamentAuthority)
-        .where(TournamentAuthority.tournament_id == tournament_id)
-        .order_by(TournamentAuthority.epoch.desc())
-    )
-    if authority is None:
-        raise ProtocolError(404, "authority_not_found", "No authority epoch exists")
-    checkpoint = session.get(SyncCheckpoint, (tournament_id, authority.epoch))
-    pending, oldest = session.execute(
-        select(func.count(), func.min(SyncOutbox.created_at))
-        .select_from(SyncOutbox)
-        .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
-        .where(
-            EventOperation.tournament_id == tournament_id,
-            EventOperation.authority_epoch == authority.epoch,
-            SyncOutbox.acknowledged_at.is_(None),
-            SyncOutbox.permanently_blocked_at.is_(None),
-        )
-    ).one()
-    blocked = session.scalar(
-        select(func.count())
-        .select_from(SyncOutbox)
-        .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
-        .where(
-            EventOperation.tournament_id == tournament_id,
-            EventOperation.authority_epoch == authority.epoch,
-            SyncOutbox.acknowledged_at.is_(None),
-            SyncOutbox.permanently_blocked_at.is_not(None),
-        )
-    )
-    blocked_error = session.scalar(
-        select(SyncOutbox.last_error_code)
-        .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
-        .where(
-            EventOperation.tournament_id == tournament_id,
-            EventOperation.authority_epoch == authority.epoch,
-            SyncOutbox.permanently_blocked_at.is_not(None),
-        )
-        .order_by(SyncOutbox.permanently_blocked_at.desc())
-        .limit(1)
-    )
-    return (
-        authority,
-        checkpoint.highest_contiguous_sequence if checkpoint else 0,
-        int(pending or 0),
-        oldest,
-        int(blocked or 0),
-        blocked_error,
-    )
+    from sync.reconciliation import latest_authority_status
+
+    return latest_authority_status(session, tournament_id)
 
 
 def _projection(session, tournament_id: uuid.UUID):
-    return session.get(CloudEventProjection, tournament_id)
+    from sync.reconciliation import projection
+
+    return projection(session, tournament_id)
 
 
 def _sync_status(session, tournament_id, authority_epoch, capability):
-    authority = session.get(
-        TournamentAuthority, (tournament_id, authority_epoch)
-    )
-    if authority is None or not capability_matches(authority, capability):
-        raise ProtocolError(
-            403, "invalid_authority_capability", "Node capability is invalid"
-        )
-    checkpoint = session.get(SyncCheckpoint, (tournament_id, authority_epoch))
-    quarantines = session.scalar(
-        select(func.count()).select_from(SyncQuarantine).where(
-            SyncQuarantine.tournament_id == tournament_id,
-            SyncQuarantine.authority_epoch == authority_epoch,
-        )
-    )
-    return (
-        checkpoint.highest_contiguous_sequence if checkpoint else 0,
-        int(quarantines or 0),
-    )
+    from sync.reconciliation import sync_status
+
+    return sync_status(session, tournament_id, authority_epoch, capability)
 
 
 def _resolve_quarantine_and_get(session, **kwargs):
