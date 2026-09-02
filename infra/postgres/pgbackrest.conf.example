@@ -1,0 +1,35 @@
+# pgBackRest template for ShuttleWorks cloud PostgreSQL.
+# Secrets (repo1-s3-key/secret, TLS material) belong in the host secret
+# manager. This file intentionally contains no usable credentials.
+
+[global]
+repo1-type=s3
+repo1-path=s3://REPLACE-ME/shuttleworks-postgres
+repo1-s3-endpoint=REPLACE-ME
+repo1-s3-region=REPLACE-ME
+repo1-s3-bucket=REPLACE-ME
+repo1-retention-full=4
+repo1-retention-diff=14
+repo1-retention-archive=30
+repo1-bundle=y
+archive-async=y
+spool-path=/var/spool/pgbackrest
+compress-type=zst
+compress-level=3
+start-fast=y
+log-level-console=info
+
+[shuttleworks]
+pg1-path=/var/lib/postgresql/data
+pg1-port=5432
+pg1-socket-path=/var/run/postgresql
+
+# Primary postgresql.conf requirements (apply through the host's managed
+# configuration, not by editing a running container):
+# wal_level=replica
+# max_wal_senders=5
+# max_replication_slots=5
+# wal_keep_size=1GB
+# archive_mode=on
+# archive_command='pgbackrest --stanza=shuttleworks archive-push %p'
+# hot_standby=on (standby only)

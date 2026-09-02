@@ -34,6 +34,10 @@ check — they're operator escape hatches for restore / re-seed flows
 where per-resource versioning doesn't fit (one header can't carry
 N match versions). The bulk routes still synchronise the
 ``matches`` table so the new state machine surface stays consistent.
+The replacement upload additionally accepts an ``Idempotency-Key``. In the
+event-node profile it is required and binds the complete validated snapshot
+to one immutable operation/outbox record; local/cloud compatibility paths
+retain the legacy response and optional header behavior.
 """
 from __future__ import annotations
 
@@ -42,13 +46,13 @@ import logging
 import uuid
 from typing import Dict, Iterable, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Path, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Header, Path, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import Field, field_validator
 
-from core.dependencies import require_tournament_access
+from core.dependencies import AuthUser, get_current_user, require_tournament_access
 from core.error_codes import ErrorCode, http_error
-from core.exceptions import PreconditionFailedError
+from core.exceptions import ConflictError, PreconditionFailedError
 from core.limits import (
     MAX_COURTS,
     Identifier,
@@ -62,6 +66,7 @@ from core.time_utils import now_iso
 from db.models import MatchState, MatchStatus
 from repositories import LocalRepository, get_repository
 from operations.match_state import assert_valid_transition
+from operations.match_state_application import MatchStateApplication
 
 
 # Map the legacy free-string enum (also used in ``MatchStateDTO``) onto
@@ -222,22 +227,6 @@ def _current_match_status(
         return MatchStatus.SCHEDULED
 
 
-def _sync_canonical_status(
-    repo: LocalRepository,
-    tournament_id: uuid.UUID,
-    match_id: str,
-    target: MatchStatus,
-) -> None:
-    """Mirror the operator's status change into the new ``matches`` row.
-
-    The route-level transition guard and (Step D) If-Match check have
-    already run by this point; the repo write doesn't re-check
-    expected_version because that would double-count the version
-    semantics.
-    """
-    repo.matches.set_status(tournament_id, match_id, target)
-
-
 def _current_match_version(
     repo: LocalRepository,
     tournament_id: uuid.UUID,
@@ -366,6 +355,7 @@ def update_match_state(
     response: Response,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ):
     """Update a match state.
 
@@ -382,7 +372,10 @@ def update_match_state(
     back on the next write.
     """
     tid = _ensure_tournament(repo, tournament_id)
-    _enforce_if_match(request, repo, tid, match_id)
+    seen_version = _enforce_if_match(request, repo, tid, match_id)
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise http_error(422, ErrorCode.INVALID_INPUT, "current user id is not a UUID")
 
     update.matchId = match_id
     update.updatedAt = now_iso()
@@ -398,13 +391,19 @@ def update_match_state(
         assert_valid_transition(match_id, current, target)
 
     try:
-        # Canonical row FIRST. Since SP-DM-3 P4 ``match_states`` has a
-        # composite FK onto ``matches`` (migration y9e4f0a2b7c8), and
-        # ``set_status`` is an upsert — it is what CREATES the parent row for
-        # a match the schedule projection has not touched. Writing the state
-        # row first made that insert reference a match that did not exist yet.
-        _sync_canonical_status(repo, tid, match_id, target)
-        row = repo.match_states.upsert(tid, match_id, _dto_to_fields(update))
+        row, canonical = MatchStateApplication(repo).update(
+            tournament_id=tid,
+            match_id=match_id,
+            fields=_dto_to_fields(update),
+            target_status=target,
+            expected_version=seen_version,
+            actor_id=actor_id,
+        )
+    except ConflictError:
+        # The header check above is intentionally repeated by the repository's
+        # compare-and-swap.  Preserve a conflict detected in that race window
+        # so the global handler returns 409 instead of disguising it as a 500.
+        raise
     except Exception as e:
         log.error("match-state write failed: %s", e)
         raise http_error(
@@ -413,7 +412,7 @@ def update_match_state(
             "could not persist match state",
         )
 
-    new_version = _current_match_version(repo, tid, match_id)
+    new_version = canonical.version
     response.headers["ETag"] = f'"{new_version}"'
     return row_to_dto(row)
 
@@ -425,6 +424,7 @@ def delete_match_state(
     response: Response,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ):
     """Remove a match state (reset to default).
 
@@ -440,14 +440,18 @@ def delete_match_state(
     response's ``ETag`` reflects the post-reset version.
     """
     tid = _ensure_tournament(repo, tournament_id)
-    _enforce_if_match(request, repo, tid, match_id)
+    seen_version = _enforce_if_match(request, repo, tid, match_id)
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise http_error(422, ErrorCode.INVALID_INPUT, "current user id is not a UUID")
+    canonical = MatchStateApplication(repo).delete(
+        tournament_id=tid,
+        match_id=match_id,
+        expected_version=seen_version,
+        actor_id=actor_id,
+    )
 
-    repo.match_states.delete(tid, match_id)
-    # Same-state writes are no-ops in set_status; if matches.status was
-    # already 'scheduled' nothing changes (no version bump).
-    repo.matches.set_status(tid, match_id, MatchStatus.SCHEDULED)
-
-    new_version = _current_match_version(repo, tid, match_id)
+    new_version = canonical.version
     response.headers["ETag"] = f'"{new_version}"'
     return {"message": f"Match state for {match_id} deleted successfully"}
 
@@ -456,6 +460,8 @@ def delete_match_state(
 def reset_all_match_states(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
+    idempotency_key: Optional[uuid.UUID] = Header(None, alias="Idempotency-Key"),
 ):
     """Clear all match states for the tournament.
 
@@ -463,10 +469,14 @@ def reset_all_match_states(
     ``matches.status`` resets to ``scheduled`` (the new arc's default).
     """
     tid = _ensure_tournament(repo, tournament_id)
-    repo.match_states.reset_all(tid)
-    for row in repo.matches.list_for_tournament(tid):
-        if row.status != MatchStatus.SCHEDULED.value:
-            repo.matches.set_status(tid, row.id, MatchStatus.SCHEDULED)
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise http_error(422, ErrorCode.INVALID_INPUT, "current user id is not a UUID")
+    MatchStateApplication(repo).reset_all(
+        tournament_id=tid,
+        actor_id=actor_id,
+        operation_id=idempotency_key or uuid.uuid4(),
+    )
     return {"message": "All match states reset successfully"}
 
 
@@ -495,6 +505,8 @@ async def import_match_states(
     file: UploadFile = File(...),
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", max_length=200),
+    user: AuthUser = Depends(get_current_user),
 ):
     """Upload a match_states.json file and replace the current contents."""
     if not (file.filename or "").endswith(".json"):
@@ -527,19 +539,31 @@ async def import_match_states(
         )
 
     tid = _ensure_tournament(repo, tournament_id)
-    repo.match_states.reset_all(tid)
-    # Canonical rows first — see the note in ``update_match_state``; the FK
-    # added by y9e4f0a2b7c8 means the state rows cannot land before them.
-    _bulk_sync_canonical_statuses(repo, tid, match_states)
-    repo.match_states.bulk_upsert(
-        tid,
-        {mid: _dto_to_fields(dto) for mid, dto in match_states.items()},
-    )
-    return {
-        "message": "Tournament state imported successfully",
-        "matchCount": len(match_states),
-        "lastUpdated": data.get("lastUpdated", now_iso()),
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise http_error(422, ErrorCode.INVALID_INPUT, "current user id is not a UUID")
+    fields_map = {mid: _dto_to_fields(dto) for mid, dto in match_states.items()}
+    statuses = {
+        mid: _LEGACY_TO_CANONICAL.get(dto.status, MatchStatus.SCHEDULED)
+        for mid, dto in match_states.items()
     }
+    snapshot = [
+        {"matchId": mid, **match_states[mid].model_dump(mode="json")}
+        for mid in sorted(match_states)
+    ]
+    try:
+        return MatchStateApplication(repo).replace_import(
+            tournament_id=tid,
+            updates=fields_map,
+            statuses=statuses,
+            snapshot=snapshot,
+            idempotency_key=idempotency_key,
+            last_updated=data.get("lastUpdated", now_iso()),
+            source_schema_version=data.get("version", "1.0"),
+            actor_id=actor_id,
+        )
+    except ValueError as exc:
+        raise http_error(409, ErrorCode.STATE_VERSION_CONFLICT, str(exc)) from exc
 
 
 @router.post("/import-bulk", dependencies=[_OPERATOR])
@@ -547,41 +571,33 @@ def import_match_states_bulk(
     match_states: Dict[str, MatchStateDTO],
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    user: AuthUser = Depends(get_current_user),
 ):
     """Merge a dict of match states into the current set."""
     if not match_states:
         return {"message": "No match states to import", "importedCount": 0}
 
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise http_error(422, ErrorCode.INVALID_INPUT, "current user id is not a UUID")
     tid = _ensure_tournament(repo, tournament_id)
     fields_map: dict[str, dict] = {}
     for match_id, ms in match_states.items():
         ms.matchId = match_id
         ms.updatedAt = now_iso()
         fields_map[match_id] = _dto_to_fields(ms)
-    # Canonical rows first — see the note in ``update_match_state``.
-    _bulk_sync_canonical_statuses(repo, tid, match_states)
-    repo.match_states.bulk_upsert(tid, fields_map)
+    from operations.match_state_application import MatchStateApplication
+    try:
+        MatchStateApplication(repo).bulk_merge(
+            tournament_id=tid, updates=fields_map,
+            idempotency_key=idempotency_key, actor_id=actor_id,
+        )
+    except ValueError as exc:
+        raise http_error(409, ErrorCode.STATE_VERSION_CONFLICT, str(exc)) from exc
     total = len(repo.match_states.list_for_tournament(tid))
     return {
         "message": "Match states imported successfully",
         "importedCount": len(match_states),
         "totalStates": total,
     }
-
-
-def _bulk_sync_canonical_statuses(
-    repo: LocalRepository,
-    tournament_id: uuid.UUID,
-    match_states: Dict[str, "MatchStateDTO"],
-) -> None:
-    """Mirror a bulk match-state import into the canonical ``matches`` table.
-
-    Bypasses the transition guard intentionally — bulk imports are the
-    admin restore path, not a runtime transition. Each row's
-    ``MatchStateDTO.status`` is translated through ``_LEGACY_TO_CANONICAL``
-    and applied via ``set_status`` so the new arc's table stays
-    consistent with what the operator just imported.
-    """
-    for match_id, dto in match_states.items():
-        target = _LEGACY_TO_CANONICAL.get(dto.status, MatchStatus.SCHEDULED)
-        repo.matches.set_status(tournament_id, match_id, target)

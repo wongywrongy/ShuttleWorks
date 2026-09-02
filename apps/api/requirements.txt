@@ -19,6 +19,8 @@ psycopg[binary]>=3.2
 # Argon2id password hashing (RFC 9106 / OWASP-recommended KDF) for the
 # self-hosted account system (SP-CLOUD-2).
 argon2-cffi>=23.1
+# Authenticated encryption for portable event-node recovery bundles.
+cryptography>=44.0
 
 # Optional-at-runtime application telemetry.  These stay on one coordinated
 # OpenTelemetry release because the contrib instrumentations deliberately use

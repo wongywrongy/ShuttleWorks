@@ -1,6 +1,8 @@
 """Tests for /tournaments/{id}/match-states endpoints (SQLite-backed)."""
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -96,6 +98,7 @@ def test_import_upload_rejects_oversize(client, tid):
     r = client.post(
         f"{_base(tid)}/import/upload",
         files={"file": ("big.json", blob, "application/json")},
+        headers={"Idempotency-Key": "upload-oversize"},
     )
     assert r.status_code == 413
 
@@ -105,9 +108,31 @@ def test_import_upload_rejects_invalid_json(client, tid):
     r = client.post(
         f"{_base(tid)}/import/upload",
         files={"file": ("bad.json", blob, "application/json")},
+        headers={"Idempotency-Key": "upload-invalid-json"},
     )
     assert r.status_code == 400
     assert "json" in _detail_msg(r).lower()
+
+
+def test_import_upload_accepts_idempotency_key_and_preserves_response(client, tid):
+    payload = {
+        "matchStates": {
+            "m1": {"matchId": "m1", "status": "called"},
+        },
+        "lastUpdated": "2026-09-01T12:00:00Z",
+        "version": "1.0",
+    }
+    r = client.post(
+        f"{_base(tid)}/import/upload",
+        files={"file": ("match_states.json", json.dumps(payload), "application/json")},
+        headers={"Idempotency-Key": "upload-test-1"},
+    )
+    assert r.status_code == 200
+    assert r.json() == {
+        "message": "Tournament state imported successfully",
+        "matchCount": 1,
+        "lastUpdated": "2026-09-01T12:00:00Z",
+    }
 
 
 def test_reset_empties_all_match_states(client, tid):
@@ -192,7 +217,11 @@ def test_import_bulk_merges(client, tid):
         "m1": {"matchId": "m1", "status": "called"},
         "m2": {"matchId": "m2", "status": "started"},
     }
-    r = client.post(f"{_base(tid)}/import-bulk", json=payload)
+    r = client.post(
+        f"{_base(tid)}/import-bulk",
+        json=payload,
+        headers={"Idempotency-Key": "match-state-import-test-1"},
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["importedCount"] == 2

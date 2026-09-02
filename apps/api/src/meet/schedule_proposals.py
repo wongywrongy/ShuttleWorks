@@ -35,7 +35,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request, Response
 from pydantic import BaseModel, Field
 
-from core.dependencies import require_tournament_access
+from core.dependencies import AuthUser, get_current_user, require_tournament_access
 from core.error_codes import ErrorCode, http_error
 from core.limits import (
     MAX_COURTS,
@@ -66,6 +66,7 @@ from meet.schedule_repair import RepairRequest, _run_repair
 from meet.schedule_warm_restart import WarmRestartRequest, _run_warm_restart
 from repositories import LocalRepository, get_repository
 from operations.match_state import build_locked_assignments
+from meet.schedule_application import ScheduleCommitApplication
 
 
 router = APIRouter(
@@ -621,6 +622,7 @@ async def commit_proposal(
     response: Response = None,  # type: ignore[assignment]
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ) -> CommitResponse:
     """Atomically apply a proposal to the persisted tournament state.
 
@@ -662,14 +664,33 @@ async def commit_proposal(
             summary=proposal.summary,
             schedule=persisted.schedule,
         )
-        updated, new_state_version = await _persist_committed_state(
-            repo,
-            tournament_id,
-            persisted,
-            proposal.proposedSchedule,
-            history_entry,
-            new_config=proposal.proposedConfig,
-        )
+        try:
+            result = ScheduleCommitApplication(
+                repo,
+                actor_id=user.as_uuid(),
+            ).apply(
+                tournament_id,
+                persisted,
+                proposal.proposedSchedule,
+                history_entry,
+                new_config=proposal.proposedConfig,
+                proposal_id=proposal_id,
+                traceparent=http_request.headers.get("traceparent"),
+            )
+        except KeyError:
+            raise http_error(
+                404,
+                ErrorCode.STATE_CORRUPT,
+                f"tournament not found: {tournament_id}",
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error("proposals: write failed: %s", e)
+            raise http_error(
+                500, ErrorCode.STATE_WRITE_FAILED, "could not persist schedule commit"
+            )
+        updated, new_state_version = result.state, result.state_version
 
         # Proposal is consumed — drop from the store so a second commit is
         # not possible without re-creating.

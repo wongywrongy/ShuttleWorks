@@ -38,7 +38,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from entries.entries import roster_id
-from entries.entries_public import _entrants, _not_found, _resolve
+from entries.entries_public import (
+    _all_rows,
+    _entrants,
+    _get_record,
+    _not_found,
+    _resolve,
+    _scalar_rows,
+)
 from db.models import (
     Entry,
     EntryEvent,
@@ -120,12 +127,11 @@ def _meet_divisions(repo: LocalRepository, tournament: Tournament) -> List[str]:
     """
     if tournament.kind != "meet":
         return []
-    return list(
-        repo.session.scalars(
-            select(MeetEvent.id)
-            .where(MeetEvent.tournament_id == tournament.id)
-            .order_by(MeetEvent.id.asc())
-        )
+    return repo.execute_query(
+        _scalar_rows,
+        select(MeetEvent.id)
+        .where(MeetEvent.tournament_id == tournament.id)
+        .order_by(MeetEvent.id.asc()),
     )
 
 
@@ -176,7 +182,8 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
     historical references degrade to a generic dead token instead of
     falling back to a copied bracket name.
     """
-    rows = repo.session.execute(
+    rows = repo.execute_query(
+        _all_rows,
         select(
             EntryPlayer.id,
             EntryPlayer.full_name,
@@ -199,10 +206,8 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
             (EntryEvent.tournament_id == Entry.tournament_id)
             & (EntryEvent.id == Entry.entry_event_id),
         )
-        .where(
-            EntryPlayer.tournament_id == tournament_id,
-        )
-    ).all()
+        .where(EntryPlayer.tournament_id == tournament_id),
+    )
     identities: Dict[str, PublicPersonIdentityDTO] = {}
     hidden: set[str] = set()
     clubs: Dict[str, Optional[str]] = {}
@@ -1739,18 +1744,19 @@ def player_page(
     except (ValueError, AttributeError, TypeError):
         raise _not_found()
 
-    person = repo.session.get(EntryPlayer, (tournament.id, person_id))
+    person = repo.execute_query(
+        _get_record, EntryPlayer, (tournament.id, person_id)
+    )
     if person is None or person.erased_at is not None:
         raise _not_found()
-    entries = list(
-        repo.session.scalars(
-            select(Entry).where(
-                Entry.tournament_id == tournament.id,
-                Entry.entry_player_id == person_id,
-                Entry.state == "confirmed",
-                Entry.list_opt_out.is_(False),
-            )
-        )
+    entries = repo.execute_query(
+        _scalar_rows,
+        select(Entry).where(
+            Entry.tournament_id == tournament.id,
+            Entry.entry_player_id == person_id,
+            Entry.state == "confirmed",
+            Entry.list_opt_out.is_(False),
+        ),
     )
     if not entries:
         raise _not_found()
@@ -1770,8 +1776,11 @@ def player_page(
 
     events_by_id = {
         ev.id: ev
-        for ev in repo.session.scalars(
-            select(EntryEvent).where(EntryEvent.tournament_id == tournament.id)
+        for ev in repo.execute_query(
+            _scalar_rows,
+            select(EntryEvent).where(
+                EntryEvent.tournament_id == tournament.id
+            ),
         )
     }
 
@@ -1787,12 +1796,13 @@ def player_page(
     if partner_ids:
         partner_entries = {
             pe.id: pe
-            for pe in repo.session.scalars(
+            for pe in repo.execute_query(
+                _scalar_rows,
                 select(Entry).where(
                     Entry.tournament_id == tournament.id,
                     Entry.id.in_(partner_ids),
                     Entry.state == "confirmed",
-                )
+                ),
             )
         }
         partner_player_ids = {
@@ -1801,12 +1811,13 @@ def player_page(
         partner_players = (
             {
                 p.id: p
-                for p in repo.session.scalars(
+                for p in repo.execute_query(
+                    _scalar_rows,
                     select(EntryPlayer).where(
                         EntryPlayer.tournament_id == tournament.id,
                         EntryPlayer.id.in_(partner_player_ids),
                         EntryPlayer.erased_at.is_(None),
-                    )
+                    ),
                 )
             }
             if partner_player_ids
@@ -2230,8 +2241,9 @@ def _schedule_runtime_snapshot(
     meet_labels: Dict[str, str] = {}
     meet_event_keys: Dict[str, str] = {}
     if page.draws_published:
-        match_rows = list(
-            repo.session.scalars(select(Match).where(Match.tournament_id == tournament.id))
+        match_rows = repo.execute_query(
+            _scalar_rows,
+            select(Match).where(Match.tournament_id == tournament.id),
         )
         courts = {
             row.id: row.court_id
@@ -2291,8 +2303,11 @@ def _schedule_runtime_snapshot(
         else:
             bracket_revisions = [
                 (row.id, row.version, row.updated_at.isoformat() if row.updated_at else "")
-                for row in repo.session.scalars(
-                    select(BracketMatch).where(BracketMatch.tournament_id == tournament.id)
+                for row in repo.execute_query(
+                    _scalar_rows,
+                    select(BracketMatch).where(
+                        BracketMatch.tournament_id == tournament.id
+                    ),
                 )
             ]
             bracket_results = [
@@ -2305,13 +2320,19 @@ def _schedule_runtime_snapshot(
                     bool(row.walkover),
                     row.reason or "",
                 )
-                for row in repo.session.scalars(
-                    select(BracketResult).where(BracketResult.tournament_id == tournament.id)
+                for row in repo.execute_query(
+                    _scalar_rows,
+                    select(BracketResult).where(
+                        BracketResult.tournament_id == tournament.id
+                    ),
                 )
             ]
         if tournament.kind == "meet":
-            for row in repo.session.scalars(
-                select(MeetEvent).where(MeetEvent.tournament_id == tournament.id)
+            for row in repo.execute_query(
+                _scalar_rows,
+                select(MeetEvent).where(
+                    MeetEvent.tournament_id == tournament.id
+                ),
             ):
                 meet_labels[row.id] = row.label
                 meet_event_keys[row.id] = row.id

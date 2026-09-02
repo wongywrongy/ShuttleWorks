@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from core.config import settings
+from core.telemetry.instruments import record_sqlite_event
 
 
 # Registered on the Engine *class*, not on one engine, and deliberately:
@@ -48,6 +49,20 @@ if not getattr(Engine, "_shuttleworks_sqlite_fk_pragma", False):
     # so this module is imported hundreds of times per run; the flag lives
     # on the (never-purged) SQLAlchemy class so the listener registers once.
     Engine._shuttleworks_sqlite_fk_pragma = True
+
+if not getattr(Engine, "_shuttleworks_sqlite_error_metrics", False):
+
+    @event.listens_for(Engine, "handle_error")
+    def _record_sqlite_operational_error(exception_context):  # noqa: ANN001
+        original = exception_context.original_exception
+        if isinstance(original, sqlite3.OperationalError) and any(
+            token in str(original).lower() for token in ("busy", "locked")
+        ):
+            # The facade is dependency-free and fail-open; recording must
+            # never alter SQLAlchemy's original exception path.
+            record_sqlite_event("busy")
+
+    Engine._shuttleworks_sqlite_error_metrics = True
 
 
 def _enable_sqlite_wal(engine: Engine) -> None:

@@ -21,6 +21,7 @@ from db.models import (
     InviteLink,
     Match,
     MatchState,
+    Tournament,
     TournamentBackup,
     TournamentMember,
     User,
@@ -514,6 +515,74 @@ def test_member_repo_list_for_tournament(repo):
     repo.members.add_member(tid, u2, role="viewer")
     members = repo.members.list_for_tournament(tid)
     assert {m.user_id for m in members} == {u1, u2}
+
+
+def test_member_identity_projection_hides_placeholder_email(repo, session):
+    tid = _seed_tournament(repo, name="A")
+    real = User(
+        id=uuid.uuid4(),
+        email="operator@example.com",
+        display_name="Court Operator",
+    )
+    placeholder = User(
+        id=uuid.uuid4(),
+        email="user-placeholder@unmigrated.local",
+        display_name="Legacy Operator",
+    )
+    session.add_all([real, placeholder])
+    session.commit()
+    repo.members.add_member(tid, real.id, role="owner")
+    repo.members.add_member(tid, placeholder.id, role="viewer")
+
+    members = {row.user_id: row for row in repo.list_member_identities(tid)}
+
+    assert members[real.id].email == "operator@example.com"
+    assert members[real.id].display_name == "Court Operator"
+    assert members[placeholder.id].email is None
+    assert members[placeholder.id].display_name == "Legacy Operator"
+
+
+def test_execute_transaction_keeps_member_invariant_and_rolls_back(repo):
+    from identity import members as members_service
+
+    tid = _seed_tournament(repo, name="A")
+    owner = _seed_user(repo)
+    viewer = _seed_user(repo)
+    repo.members.add_member(tid, owner, role="owner")
+    repo.members.add_member(tid, viewer, role="viewer")
+
+    with pytest.raises(members_service.LastOwnerError):
+        repo.execute_transaction(
+            members_service.set_role, tid, owner, "operator"
+        )
+    assert repo.members.get_role(tid, owner) == "owner"
+
+    repo.execute_transaction(
+        members_service.transfer_ownership, tid, owner, viewer
+    )
+    assert repo.members.get_role(tid, owner) == "operator"
+    assert repo.members.get_role(tid, viewer) == "owner"
+
+
+def test_execute_transaction_materializes_workspace_owner(repo, session):
+    from identity.auth import ensure_user_personal_org_id
+
+    user_id = uuid.uuid4()
+    org_id = repo.execute_transaction(
+        ensure_user_personal_org_id, user_id, "legacy@example.com"
+    )
+
+    assert org_id is not None
+    assert session.get(User, user_id).email == "legacy@example.com"
+
+
+def test_execute_query_keeps_session_behind_repository_boundary(repo):
+    tid = _seed_tournament(repo, name="Readable")
+
+    def read_name(session, tournament_id):
+        return session.get(Tournament, tournament_id).name
+
+    assert repo.execute_query(read_name, tid) == "Readable"
 
 
 def test_member_repo_list_tournament_ids_for_user(repo):

@@ -1,0 +1,163 @@
+# Event-node observability profile.
+#
+# Layer this file over docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml \
+#     -f docker-compose.event-node.yml --profile event-node up -d --build
+#
+# The base stack remains unchanged for ordinary local development.  This
+# profile makes the API/worker send OTLP to a same-network Collector, whose
+# outbound queue is persisted in the `event_node_otel` volume.
+
+services:
+  otel-storage-init:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage && chown -R 10001:10001 /var/lib/otelcol"]
+    volumes:
+      - event_node_otel:/var/lib/otelcol
+    restart: "no"
+    read_only: true
+
+  backend:
+    command: ["uvicorn", "shuttleworks.event_node.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown=5"]
+    environment:
+      - DATABASE_URL=sqlite:////app/data/local.db
+      # Make the event-node composition profile explicit at runtime; this is
+      # also recorded in signed bundles and prevents a node from silently
+      # booting with cloud defaults.
+      - SHUTTLEWORKS_DEPLOYMENT_PROFILE=event_node
+      - EMBEDDED_WORKER=false
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_TIMEOUT=${OTEL_EXPORTER_OTLP_TIMEOUT:-2}
+      # Opt into stable HTTP semantic conventions, including
+      # http.server.request.duration and active request metrics.
+      - OTEL_SEMCONV_STABILITY_OPT_IN=http
+      - OTEL_DEPLOYMENT_PROFILE=event_node
+      - SHUTTLEWORKS_NODE_ID=${SHUTTLEWORKS_NODE_ID:-00000000-0000-0000-0000-000000000001}
+      - OTEL_RELEASE_CHANNEL=${OTEL_RELEASE_CHANNEL:-stable}
+      - AUTHORITY_SIGNING_PUBLIC_KEY_FILE=/run/secrets/authority_signing_public_key
+      - NODE_SIGNING_KEY_FILE=/run/secrets/node_signing_key
+    secrets:
+      - authority_signing_public_key
+      - node_signing_key
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+
+  # The node keeps solving available even when the WAN and telemetry gateway
+  # are unavailable.  Its database is the same durable SQLite bind mount as
+  # the API; only the Collector queue is a separate telemetry volume.
+  worker:
+    profiles: [event-node]
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["python", "-m", "shuttleworks.worker.main"]
+    environment:
+      - ENVIRONMENT=local
+      - PROCESS_ROLE=worker
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_URL=sqlite:////app/data/local.db
+      - DATA_DIR=/app/data
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_TIMEOUT=${OTEL_EXPORTER_OTLP_TIMEOUT:-2}
+      - OTEL_SEMCONV_STABILITY_OPT_IN=http
+      - OTEL_DEPLOYMENT_PROFILE=event_node
+      - SHUTTLEWORKS_NODE_ID=${SHUTTLEWORKS_NODE_ID:-00000000-0000-0000-0000-000000000001}
+      - OTEL_RELEASE_CHANNEL=${OTEL_RELEASE_CHANNEL:-stable}
+      - WORKER_ID=${WORKER_ID:-event-node-worker}
+    volumes:
+      - ../../data:/app/data
+    depends_on:
+      backend:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.136.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      # The default is intentionally a non-existent in-network gateway: the
+      # Collector accepts and persists telemetry until an operator points this
+      # at the real gateway.  It never blocks tournament commands.
+      - OTEL_GATEWAY_ENDPOINT=${OTEL_GATEWAY_ENDPOINT:-http://gateway:4318}
+    depends_on:
+      otel-storage-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./../otel/collector-event-node.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - event_node_otel:/var/lib/otelcol
+    ports:
+      # Bind only to loopback: this is a private node signal, not a LAN API.
+      - "127.0.0.1:${OTEL_HEALTH_HOST_PORT:-13133}:13133"
+      - "127.0.0.1:${OTEL_METRICS_HOST_PORT:-8888}:8888"
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  sync-agent:
+    profiles: [event-node]
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["python", "-m", "sync.agent"]
+    environment:
+      - ENVIRONMENT=local
+      - PROCESS_ROLE=sync
+      - DATABASE_URL=sqlite:////app/data/local.db
+      - DATA_DIR=/app/data
+      - SHUTTLEWORKS_DEPLOYMENT_PROFILE=event_node
+      - SHUTTLEWORKS_NODE_ID=${SHUTTLEWORKS_NODE_ID:-00000000-0000-0000-0000-000000000001}
+      - SYNC_TOURNAMENT_ID=${SYNC_TOURNAMENT_ID:-}
+      - SYNC_CLOUD_URL=${SYNC_CLOUD_URL:-}
+      - SYNC_AUTHORITY_CAPABILITY_FILE=/run/secrets/sync_authority_capability
+      - SYNC_POLL_INTERVAL_SECONDS=${SYNC_POLL_INTERVAL_SECONDS:-2}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+    volumes:
+      - ../../data:/app/data
+    secrets:
+      - sync_authority_capability
+    depends_on:
+      backend:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+
+volumes:
+  event_node_otel:
+    name: ${COMPOSE_PROJECT_NAME:-shuttleworks-local}_event_node_otel
+
+secrets:
+  sync_authority_capability:
+    file: ${SYNC_AUTHORITY_CAPABILITY_FILE:-../../secrets/sync_authority_capability}
+  authority_signing_public_key:
+    file: ${AUTHORITY_SIGNING_PUBLIC_KEY_FILE:-../../secrets/authority_signing_public_key}
+  node_signing_key:
+    file: ${NODE_SIGNING_KEY_FILE:-../../secrets/node_signing_key}

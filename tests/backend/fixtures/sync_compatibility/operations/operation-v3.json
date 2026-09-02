@@ -1,0 +1,16 @@
+{
+  "operation_id": "00000000-0000-4000-8000-000000000103",
+  "event_id": "00000000-0000-4000-8000-000000000001",
+  "node_id": "00000000-0000-4000-8000-000000000002",
+  "authority_epoch": 1,
+  "sequence": 1,
+  "actor_id": "00000000-0000-4000-8000-000000000003",
+  "command_type": "record_bracket_result",
+  "aggregate_type": "bracket_match",
+  "aggregate_id": "m1",
+  "expected_version": 0,
+  "payload": {"winnerSide": "A"},
+  "occurred_at_local": "2026-09-01T12:00:00+00:00",
+  "accepted_at_node": "2026-09-01T12:00:01+00:00",
+  "schema_version": 3
+}

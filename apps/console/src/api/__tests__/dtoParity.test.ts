@@ -90,6 +90,7 @@ export function parseHand(source: string): Record<string, Set<string>> {
  *  lacks, or one it has and the hand type lacks) - all three pair with zero
  *  key divergence, so they are naming drift, not shape drift. */
 const ALIASES: Record<string, string> = {
+  AuthorityStatusDTO: 'AuthorityStatus',
   EntryDTO: 'EntryDeskRowDTO',
   CommandRequestDTO: 'CommandRequest',
   CommandResponseDTO: 'CommandResponse',

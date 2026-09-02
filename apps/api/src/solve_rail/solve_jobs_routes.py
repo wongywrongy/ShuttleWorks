@@ -97,6 +97,15 @@ def _build_params(request: GenerateScheduleRequest) -> dict:
     return params
 
 
+def _cancel_job(session, tournament_id: uuid.UUID, job_id: uuid.UUID):
+    job = solve_jobs.get_job(session, tournament_id, job_id)
+    if job is None:
+        return None, False
+    was_terminal = solve_jobs.is_terminal(job.status)
+    solve_jobs.cancel(session, job)
+    return job, was_terminal
+
+
 @router.post("", response_model=SolveJobDTO, status_code=202, dependencies=[_OPERATOR])
 def submit_solve_job(
     body: GenerateScheduleRequest,
@@ -111,7 +120,6 @@ def submit_solve_job(
     body, still 202 status for uniformity); a different key while a job
     is active is a 409 with the active job's id in the error detail.
     """
-    session = repo.session
     try:
         with enqueue_span(
             {
@@ -123,8 +131,8 @@ def submit_solve_job(
                 "messaging.operation.type": "create",
             }
         ) as trace_context:
-            job, created = solve_jobs.enqueue(
-                session,
+            job, created = repo.execute_transaction(
+                solve_jobs.enqueue,
                 tournament_id=tournament_id,
                 type_=solve_jobs.MEET_SCHEDULE_SOLVE,
                 params=_build_params(body),
@@ -135,11 +143,7 @@ def submit_solve_job(
                 user_id=user.as_uuid(),
                 max_active_per_user=settings.max_active_solve_jobs_per_user,
             )
-            # Keep the database commit inside the producer span: acceptance is
-            # not complete until both the job and its trace carrier are durable.
-            session.commit()
     except UserSolveQuotaExceeded as exc:
-        session.rollback()
         raise http_error(
             429,
             ErrorCode.SOLVE_QUOTA_EXCEEDED,
@@ -147,7 +151,6 @@ def submit_solve_job(
             extra={"activeJobs": exc.held, "limit": exc.limit},
         )
     except ActiveSolveJobConflict as exc:
-        session.rollback()
         raise http_error(
             409,
             ErrorCode.SOLVE_JOB_ACTIVE,
@@ -160,7 +163,6 @@ def submit_solve_job(
     except IntegrityError:
         # Concurrent-submit race lost against the partial unique index —
         # same semantics as the pre-check, without the job handle.
-        session.rollback()
         raise http_error(
             409,
             ErrorCode.SOLVE_JOB_ACTIVE,
@@ -176,7 +178,9 @@ def list_solve_jobs(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ) -> SolveJobListDTO:
-    jobs = solve_jobs.list_recent(repo.session, tournament_id, limit=20)
+    jobs = repo.execute_query(
+        solve_jobs.list_recent, tournament_id, limit=20
+    )
     return SolveJobListDTO(jobs=[_job_to_dto(j) for j in jobs])
 
 
@@ -186,7 +190,7 @@ def get_solve_job(
     job_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
 ) -> SolveJobDTO:
-    job = solve_jobs.get_job(repo.session, tournament_id, job_id)
+    job = repo.execute_query(solve_jobs.get_job, tournament_id, job_id)
     if job is None:
         raise http_error(404, ErrorCode.SOLVE_JOB_NOT_FOUND, "solve job not found")
     return _job_to_dto(job)
@@ -202,13 +206,11 @@ def cancel_solve_job(
     cancelled now, and the worker kills the solve subprocess on its
     next heartbeat poll. Cancelling a terminal job is a no-op replay of
     its final state (idempotent)."""
-    session = repo.session
-    job = solve_jobs.get_job(session, tournament_id, job_id)
+    job, was_terminal = repo.execute_transaction(
+        _cancel_job, tournament_id, job_id
+    )
     if job is None:
         raise http_error(404, ErrorCode.SOLVE_JOB_NOT_FOUND, "solve job not found")
-    was_terminal = solve_jobs.is_terminal(job.status)
-    solve_jobs.cancel(session, job)
-    session.commit()
     if not was_terminal:
         record_job_outcome("cancelled")
     return _job_to_dto(job)

@@ -724,6 +724,294 @@ class BracketResult(Base):
     )
 
 
+# ---- Offline-first authority and operation synchronization -------------
+
+
+class TournamentAuthority(Base):
+    """One immutable authority epoch for a checked-out tournament.
+
+    Rows are retained after close so disaster recovery and rejected stale
+    nodes can be explained from durable evidence.  At most one row is made
+    active by the application service; keeping the history in the primary key
+    avoids a destructive "current lease" overwrite.
+    """
+
+    __tablename__ = "tournament_authority_epochs"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    epoch: Mapped[int] = mapped_column(Integer, primary_key=True)
+    node_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False, default="preparing")
+    checkpoint_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    checkpoint_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    capability_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Signed grant presented to the event node.  Nullable preserves rows
+    # created by the pre-signature compatibility path; new cloud epochs must
+    # always populate these fields.
+    grant: Mapped[Optional[dict]] = mapped_column(JSON)
+    grant_signature: Mapped[Optional[str]] = mapped_column(String(128))
+    grant_key_id: Mapped[Optional[str]] = mapped_column(String(128))
+    allowed_command_classes: Mapped[Optional[list]] = mapped_column(JSON)
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    ready_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    recovery_reason: Mapped[Optional[str]] = mapped_column(String(500))
+
+    __table_args__ = (
+        Index(
+            "ix_tournament_authority_node_state",
+            "node_id",
+            "state",
+        ),
+        CheckConstraint(
+            "state IN ('preparing', 'active', 'closed', 'recovered', 'cloud')",
+            name="ck_tournament_authority_state",
+        ),
+    )
+
+
+class AuthorityTransition(Base):
+    """Append-only evidence for every privileged authority transition.
+
+    Authority epoch rows retain their terminal state, while this table records
+    who authorized the transition, on which device, and what evidence was
+    presented.  It is deliberately not an upsertable "current lease" row.
+    """
+
+    __tablename__ = "tournament_authority_transitions"
+
+    transition_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4
+    )
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
+    )
+    transition_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    from_epoch: Mapped[Optional[int]] = mapped_column(Integer)
+    to_epoch: Mapped[Optional[int]] = mapped_column(Integer)
+    actor_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    declared_last_sequence: Mapped[Optional[int]] = mapped_column(Integer)
+    evidence_hash: Mapped[Optional[str]] = mapped_column(String(128))
+    detail: Mapped[Optional[dict]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_authority_transitions_tournament_created",
+            "tournament_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "transition_type IN ('return_to_cloud', 'planned_transfer', 'lost_node_recovery')",
+            name="ck_authority_transition_type",
+        ),
+    )
+
+
+class EventNodeDevice(Base):
+    """An enrolled event-node identity owned by one organization."""
+
+    __tablename__ = "event_node_devices"
+
+    device_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("orgs.id", ondelete="CASCADE"), nullable=False
+    )
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    public_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    enrolled_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    enrolled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    revocation_reason: Mapped[Optional[str]] = mapped_column(String(500))
+
+    __table_args__ = (
+        UniqueConstraint("public_key", name="uq_event_node_devices_public_key"),
+        Index("ix_event_node_devices_org_revoked", "org_id", "revoked_at"),
+    )
+
+
+class EventOperation(Base):
+    """Immutable, ordered domain operation accepted by an event node."""
+
+    __tablename__ = "event_operations"
+
+    operation_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    authority_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    actor_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    command_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    aggregate_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    aggregate_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    expected_version: Mapped[Optional[int]] = mapped_column(Integer)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    occurred_at_local: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    accepted_at_node: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    traceparent: Mapped[Optional[str]] = mapped_column(String(128))
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tournament_id",
+            "authority_epoch",
+            "sequence",
+            name="uq_event_operations_epoch_sequence",
+        ),
+        ForeignKeyConstraint(
+            ["tournament_id", "authority_epoch"],
+            [
+                "tournament_authority_epochs.tournament_id",
+                "tournament_authority_epochs.epoch",
+            ],
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_event_operations_aggregate",
+            "tournament_id",
+            "aggregate_type",
+            "aggregate_id",
+        ),
+    )
+
+
+class SyncOutbox(Base):
+    """Node-local delivery state, inserted with its EventOperation."""
+
+    __tablename__ = "sync_outbox"
+
+    operation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("event_operations.operation_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[Optional[str]] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_sync_outbox_pending", "acknowledged_at", "next_attempt_at"),
+    )
+
+
+class SyncInbox(Base):
+    """Cloud-side durable receipt for idempotent operation ingestion."""
+
+    __tablename__ = "sync_inbox"
+
+    operation_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
+    )
+    authority_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tournament_id",
+            "authority_epoch",
+            "sequence",
+            name="uq_sync_inbox_epoch_sequence",
+        ),
+    )
+
+
+class SyncCheckpoint(Base):
+    """Highest contiguous cloud-acknowledged sequence for an authority epoch."""
+
+    __tablename__ = "sync_checkpoints"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    authority_epoch: Mapped[int] = mapped_column(Integer, primary_key=True)
+    highest_contiguous_sequence: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
+class CloudEventProjection(Base):
+    """Rebuildable read-only cloud view derived from accepted operations."""
+
+    __tablename__ = "cloud_event_projections"
+
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    authority_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
+class SyncQuarantine(Base):
+    """Visible evidence for batches that cannot be safely applied.
+
+    Resolution is a state transition only: the rejected envelope remains
+    immutable evidence and ``resolution_operation_id`` points to the audited
+    correction command that superseded it.
+    """
+
+    __tablename__ = "sync_quarantine"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    authority_epoch: Mapped[Optional[int]] = mapped_column(Integer)
+    operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    reason_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    detail: Mapped[Optional[dict]] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    resolution_operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    resolution_note: Mapped[Optional[str]] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_sync_quarantine_tournament_created", "tournament_id", "created_at"),
+        Index("ix_sync_quarantine_tournament_status", "tournament_id", "status"),
+        CheckConstraint(
+            "status IN ('open', 'resolved')",
+            name="ck_sync_quarantine_status",
+        ),
+    )
+
+
 # ---- Meet schema (SP-DM-3 P7b) ------------------------------------------
 
 
@@ -1221,6 +1509,43 @@ class AuthSession(Base):
     __table_args__ = (
         Index("uq_auth_sessions_token_hash", "token_hash", unique=True),
         Index("ix_auth_sessions_user", "user_id"),
+    )
+
+
+class OfflineOperatorSession(Base):
+    """Event-scoped operator credential retained on an event node.
+
+    This is deliberately separate from cloud ``AuthSession`` rows: an
+    offline node must never need to resolve a cloud account session, and a
+    node credential must not accidentally become a cloud-wide login.  Only
+    the token digest is persisted; expiry and revocation remain auditable.
+    """
+
+    __tablename__ = "offline_operator_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False)
+    authority_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    revocation_reason: Mapped[Optional[str]] = mapped_column(String(500))
+
+    __table_args__ = (
+        Index("uq_offline_operator_sessions_token_hash", "token_hash", unique=True),
+        Index("ix_offline_operator_sessions_scope", "tournament_id", "user_id"),
+        ForeignKeyConstraint(
+            ["tournament_id", "authority_epoch"],
+            [
+                "tournament_authority_epochs.tournament_id",
+                "tournament_authority_epochs.epoch",
+            ],
+            ondelete="CASCADE",
+        ),
     )
 
 

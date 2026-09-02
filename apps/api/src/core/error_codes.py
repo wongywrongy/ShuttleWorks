@@ -29,6 +29,10 @@ class ErrorCode(str, Enum):
     # If-Match header (412) — a client bug, with nothing to reconcile.
     STATE_VERSION_CONFLICT = "STATE_VERSION_CONFLICT"
     STATE_VERSION_REQUIRED = "STATE_VERSION_REQUIRED"
+    # A live event node owns operational writes for this tournament.  Cloud
+    # clients may continue reading the synchronized projection, but must send
+    # mutations to the authoritative node until authority is returned.
+    EVENT_CHECKED_OUT = "EVENT_CHECKED_OUT"
 
     # Match-state operations
     MATCH_STATE_UNREADABLE = "MATCH_STATE_UNREADABLE"

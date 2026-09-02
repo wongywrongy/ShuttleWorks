@@ -63,6 +63,13 @@ def test_cloud_mode_401_without_session(client, monkeypatch):
     assert r.json()["email"] == "c@example.com"
 
 
+def test_event_node_never_falls_back_to_anonymous_local_bootstrap(client, monkeypatch):
+    import core.dependencies as deps
+
+    monkeypatch.setattr(deps.settings, "deployment_profile", "event_node")
+    assert client.get("/auth/me").status_code == 401
+
+
 def test_cloud_mode_dead_cookie_is_401(client, monkeypatch):
     import core.dependencies as deps
 

@@ -1,8 +1,11 @@
 # Export application telemetry
 
-ShuttleWorks can emit traces, logs and product metrics directly to any
-OpenTelemetry Protocol (OTLP) HTTP receiver. It does not require or deploy a
-collector, storage backend, dashboard or vendor SDK.
+ShuttleWorks emits traces, logs and product metrics using OpenTelemetry
+Protocol (OTLP) HTTP. The application has no telemetry dependency in the
+command success path. Production/cloud deployments may send to a local host
+Collector; the event-node Compose profile includes a Collector with a
+disk-backed, bounded queue so telemetry survives a WAN outage and Collector
+restart.
 
 Telemetry is **off by default**. With `OTEL_EXPORTER_OTLP_ENDPOINT` absent or
 empty, the application does not import the OpenTelemetry SDK, add a log handler,
@@ -10,12 +13,15 @@ start an exporter thread or make a connection attempt.
 
 ## Enable OTLP emission
 
-Set the same generic endpoint on the API and every standalone worker:
+For a direct cloud endpoint, set the same generic endpoint on the API and every
+standalone worker:
 
 ```dotenv
 OTEL_EXPORTER_OTLP_ENDPOINT=https://telemetry.example.net:4318
 OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20REDACTED
 OTEL_EXPORTER_OTLP_TIMEOUT=2
+# Stable HTTP semantic conventions (request duration + active requests).
+OTEL_SEMCONV_STABILITY_OPT_IN=http
 ```
 
 The HTTP/protobuf exporter sends to `/v1/traces`, `/v1/logs` and `/v1/metrics`
@@ -37,12 +43,52 @@ batched, bounded and fail-open; failed telemetry is discarded without an
 application warning. Diagnose the receiver and network independently rather
 than expecting ShuttleWorks to provide backend health.
 
+## Event-node Collector
+
+Run the event-node profile when the director laptop needs offline-capable
+collection:
+
+```bash
+docker compose \
+  -f infra/compose/docker-compose.yml \
+  -f infra/compose/docker-compose.event-node.yml \
+  --profile event-node up -d --build
+```
+
+The API and worker target `http://otel-collector:4318` on the private Compose
+network. The Collector stores its outbound queue in the named
+`event_node_otel` volume and forwards to `OTEL_GATEWAY_ENDPOINT` when a gateway
+is reachable:
+
+```dotenv
+OTEL_GATEWAY_ENDPOINT=https://telemetry.example.net:4318
+OTEL_NODE_ID=node-7f3a9c
+```
+
+The queue is bounded at 2,048 requests and the Collector has a 128 MiB memory
+limit. Keep the volume on a disk with an explicit quota and alert before it is
+full; SQLite, backups, and the operation log always take priority over
+telemetry. Collector health is available on loopback port 13133. Detailed
+Collector self-metrics are available on loopback port 8888 for the queue and
+export alert contract. The version-controlled configuration and defensive redaction processor live in
+[`infra/otel/collector-event-node.yaml`](../../infra/otel/collector-event-node.yaml).
+
+Cloud hosts can use [`infra/otel/collector-cloud.yaml`](../../infra/otel/collector-cloud.yaml)
+as a loopback-bound agent in front of the gateway. It has bounded in-memory
+retry rather than the event-node durable queue.
+
 ## Service identity
 
 | Process | `service.name` | Instance source |
 |---|---|---|
 | API, including its embedded worker | `shuttleworks-api` | `WORKER_ID` when set, otherwise hostname |
 | Standalone solve worker | `shuttleworks-worker` | worker CLI/configured ID |
+
+Every signal also carries controlled `shuttleworks.deployment.profile` (`cloud`
+or `event_node`), `shuttleworks.release.channel`, and, for an enrolled event
+node, a pseudonymous `shuttleworks.node.id`. These are resource attributes,
+not metric dimensions. Participant, event, operation, account, and free-form
+labels are not admitted as metric attributes.
 
 All processes use the same application version source and map `ENVIRONMENT` to
 `deployment.environment.name`. Embedded work intentionally retains the API
@@ -52,7 +98,7 @@ HTTP, SQL and log correlation.
 ## What is emitted
 
 - FastAPI server spans, excluding `/health`, `/health/ready`, `/health/deep`,
-  `/health/metrics` and `/version`.
+  `/health/metrics`, `/health/backups` and `/version`.
 - SQLAlchemy and stdlib urllib child spans. SQL text, headers, bodies, query
   strings and dynamic exception text are removed before export.
 - A `solve_jobs publish` producer span and a `solve_jobs process` consumer span.
@@ -69,6 +115,10 @@ HTTP, SQL and log correlation.
 
 `/health/metrics` remains a backward-compatible JSON endpoint. Its queue and
 lease calculations are also the source of the native OTel gauges.
+
+Event-node deployments additionally expose guarded `/health/backups`, a safe
+status projection for the fail-open backup scheduler (last success, retained
+generations, free disk, and restore-test status).
 
 ## SSE behavior
 
@@ -112,3 +162,13 @@ make check
 
 The telemetry tests include explicit controls for disabled startup, unreachable
 export, PII rejection, cross-process trace continuity and metric cardinality.
+
+The short containerized outage/restart/drain proof is intentionally separate
+from the default test gate:
+
+```bash
+make phase4-observability-rehearsal
+```
+
+It writes versioned evidence under `artifacts/phase4-observability/` and is
+also available through the scheduled/manual Phase 4 workflow.

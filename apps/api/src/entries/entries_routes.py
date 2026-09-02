@@ -62,12 +62,11 @@ from db.models import (
     EntryPage,
     MeetEvent,
     Submission,
-    Tournament,
-    EntrantAccount,
 )
 from repositories import LocalRepository, get_repository
 from entries import lifecycle, money, retention, submissions
 from entries.entries import commit_entries
+from entries.entries_public import _get_record, _scalar_rows
 from entries.entry_fees import normalize_fee_schedule
 from core.limits import MAX_EVENTS, Identifier, Name, Notes, StrictModel
 
@@ -78,6 +77,107 @@ router = APIRouter(prefix="/tournaments", tags=["entries"])
 # ``entries.lifecycle``; the name survives because the desk DTO and its
 # tests read it, and it still says the same true thing.
 _CONFIRMABLE_FROM = lifecycle.PENDING
+
+
+def _set_entry_state(session, row: Entry, state: str) -> None:
+    row.state = state
+
+
+def _persist_import_batch(
+    session,
+    *,
+    tournament_id: uuid.UUID,
+    page,
+    resolved,
+) -> list[EntryImportSubmissionResultDTO]:
+    results: list[EntryImportSubmissionResultDTO] = []
+    for submission, players in resolved:
+        result = submissions.create_submission(
+            session,
+            tournament_id=tournament_id,
+            page=page,
+            account_id=submission.accountId,
+            players=[
+                submissions.PlayerInput(
+                    full_name=player.fullName,
+                    gender=player.gender,
+                    club=player.club,
+                    birth_year=player.birthYear,
+                    remarks=player.remarks,
+                    events=events,
+                    partners=player.partners,
+                )
+                for player, events in players
+            ],
+            fee_total_cents=submission.feeTotalCents,
+            fee_basis=submission.feeBasis,
+            idempotency_key=submission.idempotencyKey.strip(),
+            email_verified=submission.emailVerified,
+            commit=False,
+        )
+        results.append(
+            EntryImportSubmissionResultDTO(
+                sourceKey=submission.sourceKey.strip(),
+                idempotencyKey=submission.idempotencyKey.strip(),
+                submissionId=str(result.submission.id),
+                replayed=result.replayed,
+                playersCreated=0 if result.replayed else len(result.players),
+                entriesCreated=0 if result.replayed else len(result.entries),
+            )
+        )
+    return results
+
+
+def _add_record(session, row):
+    session.add(row)
+    session.flush()
+    return row
+
+
+def _patch_publication(session, row, body) -> None:
+    if body.entrantsPublished is not None:
+        row.entrants_published = body.entrantsPublished
+    if body.drawsPublished is not None:
+        row.draws_published = body.drawsPublished
+    if body.resultsPublished is not None:
+        row.results_published = body.resultsPublished
+
+
+def _first_row(session, statement):
+    return session.execute(statement).first()
+
+
+def _upsert_entry_page_record(
+    session,
+    *,
+    tournament_id: uuid.UUID,
+    body,
+    slug: str,
+    fee_schedule,
+    discipline_caps,
+):
+    row = session.get(EntryPage, tournament_id)
+    if row is None:
+        row = EntryPage(tournament_id=tournament_id, regulations_version=1)
+        session.add(row)
+    elif (row.regulations_text or "") != (body.regulationsText or ""):
+        row.regulations_version = (row.regulations_version or 1) + 1
+        row.regulations_updated_at = datetime.now(timezone.utc)
+
+    row.slug = slug
+    row.is_open = body.isOpen
+    row.intro_text = body.introText
+    row.regulations_text = body.regulationsText
+    row.waiver_required = body.waiverRequired
+    row.fee_schedule = fee_schedule
+    row.payment_instructions = body.paymentInstructions
+    row.max_events_per_person = body.maxEventsPerPerson
+    row.discipline_caps = discipline_caps
+    row.collect_phone = body.collectPhone
+    row.venue_name = body.venueName
+    row.venue_address = body.venueAddress
+    session.flush()
+    return row
 
 # The slug alphabet, deliberately narrower than a URL path segment allows.
 #
@@ -190,8 +290,11 @@ def _event_codes(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
     """
     return {
         row.id: row.code
-        for row in repo.session.scalars(
-            select(EntryEvent).where(EntryEvent.tournament_id == tournament_id)
+        for row in repo.execute_query(
+            _scalar_rows,
+            select(EntryEvent).where(
+                EntryEvent.tournament_id == tournament_id
+            ),
         )
     }
 
@@ -204,7 +307,7 @@ def _get_entry(repo: LocalRepository, tournament_id: uuid.UUID, entry_id: uuid.U
     of this workspace (the route dependency saw to that), so there is no
     existence secret left to keep and the error can be specific.
     """
-    row = repo.session.get(Entry, (tournament_id, entry_id))
+    row = repo.execute_query(_get_record, Entry, (tournament_id, entry_id))
     if row is None:
         raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, f"entry not found: {entry_id}")
     return row
@@ -243,7 +346,10 @@ def list_entries(
     stmt = select(Entry).where(Entry.tournament_id == tournament_id)
     if state:
         stmt = stmt.where(Entry.state == state)
-    rows = repo.session.scalars(stmt.order_by(Entry.submitted_at.desc(), Entry.id.desc()))
+    rows = repo.execute_query(
+        _scalar_rows,
+        stmt.order_by(Entry.submitted_at.desc(), Entry.id.desc()),
+    )
     codes = _event_codes(repo, tournament_id)
     return [EntryDeskRowDTO.from_row(row, event_code=codes.get(row.entry_event_id)) for row in rows]
 
@@ -335,7 +441,7 @@ def import_entries(
         seen_sources.add(source_key)
         seen_idempotency.add(identity)
 
-        account = repo.session.get(EntrantAccount, submission.accountId)
+        account = repo.get_entrant_identity(submission.accountId)
         if account is None:
             raise http_error(
                 400,
@@ -366,7 +472,9 @@ def import_entries(
                         f"duplicate eventId for player {player_source}: {event_id}",
                     )
                 event_ids.add(event_id)
-                event = repo.session.get(EntryEvent, (tournament_id, event_id))
+                event = repo.execute_query(
+                    _get_record, EntryEvent, (tournament_id, event_id)
+                )
                 if event is None:
                     raise http_error(
                         400,
@@ -377,52 +485,15 @@ def import_entries(
             players.append([player, events])
         resolved.append((submission, players))
 
-    results: list[EntryImportSubmissionResultDTO] = []
     # One workspace has at most one entry page. Resolve it once rather than
     # turning a large import into one identical lookup per submission.
-    page = repo.session.get(EntryPage, tournament_id)
-    try:
-        for submission, players in resolved:
-            # ``page`` is optional for an internal import. Existing entry
-            # pages are still used to snapshot regulations when present;
-            # historical/demo workspaces may intentionally have no page.
-            result = submissions.create_submission(
-                repo.session,
-                tournament_id=tournament_id,
-                page=page,
-                account_id=submission.accountId,
-                players=[
-                    submissions.PlayerInput(
-                        full_name=player.fullName,
-                        gender=player.gender,
-                        club=player.club,
-                        birth_year=player.birthYear,
-                        remarks=player.remarks,
-                        events=events,
-                        partners=player.partners,
-                    )
-                    for player, events in players
-                ],
-                fee_total_cents=submission.feeTotalCents,
-                fee_basis=submission.feeBasis,
-                idempotency_key=submission.idempotencyKey.strip(),
-                email_verified=submission.emailVerified,
-                commit=False,
-            )
-            results.append(
-                EntryImportSubmissionResultDTO(
-                    sourceKey=submission.sourceKey.strip(),
-                    idempotencyKey=submission.idempotencyKey.strip(),
-                    submissionId=str(result.submission.id),
-                    replayed=result.replayed,
-                    playersCreated=0 if result.replayed else len(result.players),
-                    entriesCreated=0 if result.replayed else len(result.entries),
-                )
-            )
-        repo.session.commit()
-    except Exception:
-        repo.session.rollback()
-        raise
+    page = repo.execute_query(_get_record, EntryPage, tournament_id)
+    results = repo.execute_transaction(
+        _persist_import_batch,
+        tournament_id=tournament_id,
+        page=page,
+        resolved=resolved,
+    )
 
     return EntryImportBatchResultDTO(
         sourceKey=batch_source,
@@ -453,8 +524,7 @@ def confirm_entry(
         lifecycle.assert_confirmable(row)
     except lifecycle.LifecycleError as exc:
         raise _lifecycle_conflict(exc, row)
-    row.state = lifecycle.CONFIRMED
-    repo.session.commit()
+    repo.execute_transaction(_set_entry_state, row, lifecycle.CONFIRMED)
     return _desk_row(repo, tournament_id, row)
 
 
@@ -507,9 +577,9 @@ def reject_entry(
     row = _get_entry(repo, tournament_id, entry_id)
     try:
         lifecycle.reject(row)
+        repo.commit_pending()
     except lifecycle.LifecycleError as exc:
         raise _lifecycle_conflict(exc, row)
-    repo.session.commit()
     return _desk_row(repo, tournament_id, row)
 
 
@@ -533,9 +603,9 @@ def promote_entry(
     row = _get_entry(repo, tournament_id, entry_id)
     try:
         lifecycle.promote(row)
+        repo.commit_pending()
     except lifecycle.LifecycleError as exc:
         raise _lifecycle_conflict(exc, row)
-    repo.session.commit()
     return _desk_row(repo, tournament_id, row)
 
 
@@ -563,12 +633,15 @@ def withdraw_entry_at_the_desk(
     deletion is where it belongs if it belongs anywhere.
     """
     row = _get_entry(repo, tournament_id, entry_id)
-    event = repo.session.get(EntryEvent, (tournament_id, row.entry_event_id))
+    event = repo.execute_query(
+        _get_record, EntryEvent, (tournament_id, row.entry_event_id)
+    )
     try:
-        lifecycle.withdraw(repo.session, row, event, by_operator=True)
+        repo.execute_transaction(
+            lifecycle.withdraw, row, event, by_operator=True
+        )
     except lifecycle.LifecycleError as exc:
         raise _lifecycle_conflict(exc, row)
-    repo.session.commit()
     return _desk_row(repo, tournament_id, row)
 
 
@@ -607,7 +680,9 @@ class MarkPaidRequest(BaseModel):
 def _get_submission(
     repo: LocalRepository, tournament_id: uuid.UUID, submission_id: uuid.UUID
 ) -> Submission:
-    row = repo.session.get(Submission, (tournament_id, submission_id))
+    row = repo.execute_query(
+        _get_record, Submission, (tournament_id, submission_id)
+    )
     if row is None:
         raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, f"submission not found: {submission_id}")
     return row
@@ -635,8 +710,9 @@ def mark_submission_paid(
     an error. Two operators on a busy desk is a thing that happens.
     """
     submission = _get_submission(repo, tournament_id, submission_id)
-    cleared = money.mark_paid(repo.session, submission, note=body.note)
-    repo.session.commit()
+    cleared = repo.execute_transaction(
+        money.mark_paid, submission, note=body.note
+    )
     return SubmissionPaymentDTO(
         submissionId=str(submission.id),
         paidAt=submission.paid_at.isoformat() if submission.paid_at else None,
@@ -662,8 +738,7 @@ def mark_submission_unpaid(
     to the ordinary desk actions, not to correcting a note.
     """
     submission = _get_submission(repo, tournament_id, submission_id)
-    flagged = money.mark_unpaid(repo.session, submission)
-    repo.session.commit()
+    flagged = repo.execute_transaction(money.mark_unpaid, submission)
     return SubmissionPaymentDTO(
         submissionId=str(submission.id),
         paidAt=None,
@@ -707,7 +782,7 @@ def run_retention_sweep(
     automatic decision invariant I4 rules out, so "no policy" means "not
     swept" and the answer says how many events that covered.
     """
-    tournament = repo.session.get(Tournament, tournament_id)
+    tournament = repo.tournaments.get_by_id(tournament_id)
     if tournament is None:
         raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "workspace not found")
     raw_date = getattr(tournament, "tournament_date", None)
@@ -720,10 +795,11 @@ def run_retention_sweep(
             # guessing one would set a deletion clock nobody chose.
             event_date = None
 
-    result = retention.sweep_workspace(
-        repo.session, tournament_id=tournament_id, event_date=event_date
+    result = repo.execute_transaction(
+        retention.sweep_workspace,
+        tournament_id=tournament_id,
+        event_date=event_date,
     )
-    repo.session.commit()
     return RetentionSweepDTO(
         scanned=result.scanned,
         erased=result.erased,
@@ -917,12 +993,13 @@ def upsert_entry_page(
     # the field; the IntegrityError below is the race's backstop, not the
     # normal path. Neither answer says which workspace holds it: the
     # namespace is public, the workspaces behind it are not.
-    taken = repo.session.execute(
+    taken = repo.execute_query(
+        _first_row,
         select(EntryPage.tournament_id).where(
             EntryPage.slug == slug,
             EntryPage.tournament_id != tournament_id,
-        )
-    ).first()
+        ),
+    )
     if taken is not None:
         raise http_error(
             409,
@@ -930,43 +1007,24 @@ def upsert_entry_page(
             f"the slug {slug!r} is already in use",
         )
 
-    row = repo.session.get(EntryPage, tournament_id)
-    if row is None:
-        row = EntryPage(tournament_id=tournament_id, regulations_version=1)
-        repo.session.add(row)
-    elif (row.regulations_text or "") != (body.regulationsText or ""):
-        row.regulations_version = (row.regulations_version or 1) + 1
-        # The public document row's "updated" date (SP-P7 §3.7) — stamped
-        # under the same actually-changed condition as the version, so the
-        # two can never disagree about whether an edit happened.
-        row.regulations_updated_at = datetime.now(timezone.utc)
-
-    row.slug = slug
-    row.is_open = body.isOpen
-    row.intro_text = body.introText
-    row.regulations_text = body.regulationsText
-    row.waiver_required = body.waiverRequired
-    row.fee_schedule = fee_schedule
-    row.payment_instructions = body.paymentInstructions
-    row.max_events_per_person = body.maxEventsPerPerson
-    row.discipline_caps = discipline_caps
-    row.collect_phone = body.collectPhone
-    row.venue_name = body.venueName
-    row.venue_address = body.venueAddress
-
     try:
-        repo.session.commit()
+        row = repo.execute_transaction(
+            _upsert_entry_page_record,
+            tournament_id=tournament_id,
+            body=body,
+            slug=slug,
+            fee_schedule=fee_schedule,
+            discipline_caps=discipline_caps,
+        )
     except IntegrityError:
         # Two workspaces claiming one slug in the same instant. The unique
         # index is the arbiter; the loser gets the same answer it would
         # have got a millisecond earlier.
-        repo.session.rollback()
         raise http_error(
             409,
             ErrorCode.ENTRY_PAGE_SLUG_TAKEN,
             f"the slug {slug!r} is already in use",
         )
-    repo.session.refresh(row)
     return EntryPageDTO.from_row(row)
 
 
@@ -978,7 +1036,7 @@ def _page_or_404(repo: LocalRepository, tournament_id: uuid.UUID) -> EntryPage:
     never created should be told exactly that, not shown the public tier's
     uniform answer.
     """
-    row = repo.session.get(EntryPage, tournament_id)
+    row = repo.execute_query(_get_record, EntryPage, tournament_id)
     if row is None:
         raise http_error(
             404,
@@ -1028,14 +1086,7 @@ def patch_entry_page_publication(
     off-state behaviour is pinned by its own gate-matrix tests, not here.
     """
     row = _page_or_404(repo, tournament_id)
-    if body.entrantsPublished is not None:
-        row.entrants_published = body.entrantsPublished
-    if body.drawsPublished is not None:
-        row.draws_published = body.drawsPublished
-    if body.resultsPublished is not None:
-        row.results_published = body.resultsPublished
-    repo.session.commit()
-    repo.session.refresh(row)
+    repo.execute_transaction(_patch_publication, row, body)
     return EntryPageDTO.from_row(row)
 
 
@@ -1065,7 +1116,7 @@ def _meet_event_id(repo: LocalRepository, tournament_id: uuid.UUID, code: str) -
     can be written. If a rename route is ever added it must rewrite this
     column with it.
     """
-    found = repo.session.get(MeetEvent, (tournament_id, code))
+    found = repo.execute_query(_get_record, MeetEvent, (tournament_id, code))
     return code if found is not None else None
 
 
@@ -1132,7 +1183,5 @@ def create_entry_event(
         closes_at=_parse_moment(body.closesAt, "closesAt"),
         withdraws_until=_parse_moment(body.withdrawsUntil, "withdrawsUntil"),
     )
-    repo.session.add(row)
-    repo.session.commit()
-    repo.session.refresh(row)
+    repo.execute_transaction(_add_record, row)
     return EntryEventDTO.from_row(row)

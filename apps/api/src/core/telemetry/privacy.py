@@ -87,6 +87,9 @@ SAFE_RESOURCE_ATTRIBUTES = frozenset(
         "telemetry.sdk.language",
         "telemetry.sdk.name",
         "telemetry.sdk.version",
+        "shuttleworks.deployment.profile",
+        "shuttleworks.node.id",
+        "shuttleworks.release.channel",
     }
 )
 
@@ -97,6 +100,14 @@ SAFE_METRIC_ATTRIBUTES = frozenset(
         "job.outcome",
         "lease.state",
         "http.route",
+        "sync.outcome",
+        "sync.retry_reason",
+        "authority.transition",
+        "authority.rejection",
+        "recovery.operation",
+        "recovery.outcome",
+        "sqlite.event",
+        "backup.restore_status",
     }
 )
 
@@ -127,6 +138,41 @@ SAFE_METRIC_ATTRIBUTE_VALUES: dict[str, frozenset[str]] = {
     ),
     "lease.state": frozenset({"healthy", "stale"}),
     "http.route": frozenset({"PUT /tournaments/{id}/state"}),
+    "sync.outcome": frozenset({"accepted", "duplicate", "rejected", "empty"}),
+    "sync.retry_reason": frozenset(
+        {"network_error", "http_error", "invalid_capability", "protocol_error", "unknown"}
+    ),
+    "authority.transition": frozenset(
+        {
+            "checkout",
+            "ready",
+            "checkpoint_import",
+            "return_to_cloud",
+            "planned_transfer",
+            "lost_node_recovery",
+        }
+    ),
+    "authority.rejection": frozenset(
+        {
+            "already_granted",
+            "invalid_capability",
+            "hash_mismatch",
+            "invalid_state",
+            "schema",
+            "not_found",
+            "invalid_evidence",
+            "same_node",
+            "operations_not_drained",
+            "sequence_behind",
+            "no_active_authority",
+            "target_exists",
+            "invalid_checkpoint",
+        }
+    ),
+    "recovery.operation": frozenset({"create", "verify", "restore"}),
+    "recovery.outcome": frozenset({"succeeded", "failed"}),
+    "sqlite.event": frozenset({"busy"}),
+    "backup.restore_status": frozenset({"not_run", "passed", "failed"}),
 }
 
 

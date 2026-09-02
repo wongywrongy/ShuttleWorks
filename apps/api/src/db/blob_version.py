@@ -163,4 +163,13 @@ BLOB_VERSIONS: dict[str, Optional[int]] = {
     "solve_jobs.progress": None,  # live phase/objective
     "entry_pages.fee_schedule": None,  # cumulative price ladder
     "entry_pages.discipline_caps": None,  # entry policy
+    # -- authority/synchronization protocol documents -----------------
+    # These are versioned by their enclosing immutable protocol records;
+    # stamping an ORM-only key would change signatures, hashes, or payloads.
+    "tournament_authority_epochs.grant": None,  # Ed25519-signed canonical document
+    "tournament_authority_epochs.allowed_command_classes": None,  # signed bare list
+    "event_operations.payload": None,  # command schema_version lives beside payload
+    "cloud_event_projections.data": None,  # rebuilt from versioned operations
+    "sync_quarantine.detail": None,  # immutable rejected-protocol evidence
+    "tournament_authority_transitions.detail": None,  # append-only audit evidence
 }

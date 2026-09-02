@@ -99,10 +99,27 @@ def _not_found():
     return http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
 
 
+def _scalar_one_or_none(session, statement):
+    return session.execute(statement).scalar_one_or_none()
+
+
+def _scalar_rows(session, statement):
+    return list(session.scalars(statement))
+
+
+def _all_rows(session, statement):
+    return session.execute(statement).all()
+
+
+def _get_record(session, model, key):
+    return session.get(model, key)
+
+
 def _resolve(repo: LocalRepository, slug: str) -> Tuple[EntryPage, Tournament]:
-    page = repo.session.execute(
-        select(EntryPage).where(EntryPage.slug == slug)
-    ).scalar_one_or_none()
+    page = repo.execute_query(
+        _scalar_one_or_none,
+        select(EntryPage).where(EntryPage.slug == slug),
+    )
     if page is None or not page.is_open:
         raise _not_found()
     tournament = repo.tournaments.get_by_id(page.tournament_id)
@@ -113,12 +130,11 @@ def _resolve(repo: LocalRepository, slug: str) -> Tuple[EntryPage, Tournament]:
 
 def _events(repo: LocalRepository, tournament_id: uuid.UUID) -> List[EntryEvent]:
     """Every event of this workspace, stable order (code, then id)."""
-    return list(
-        repo.session.scalars(
-            select(EntryEvent)
-            .where(EntryEvent.tournament_id == tournament_id)
-            .order_by(EntryEvent.code, EntryEvent.id)
-        )
+    return repo.execute_query(
+        _scalar_rows,
+        select(EntryEvent)
+        .where(EntryEvent.tournament_id == tournament_id)
+        .order_by(EntryEvent.code, EntryEvent.id),
     )
 
 
@@ -229,7 +245,8 @@ def _entrants(
     per-event *numbers* still come from ``_entry_counts``, which counts
     entries rather than people and is deliberately a different query.
     """
-    rows = repo.session.execute(
+    rows = repo.execute_query(
+        _all_rows,
         select(
             EntryPlayer.full_name,
             EntryPlayer.club,
@@ -269,8 +286,8 @@ def _entrants(
         # Alphabetical, with the person id as the tiebreaker the house rule
         # asks for — two entrants share a name often enough at a club — and
         # the code last so a person's codes read in a stable order.
-        .order_by(EntryPlayer.full_name, Entry.entry_player_id, EntryEvent.code)
-    ).all()
+        .order_by(EntryPlayer.full_name, Entry.entry_player_id, EntryEvent.code),
+    )
     grouped: Dict[uuid.UUID, Tuple[uuid.UUID, str, Optional[str], List[str]]] = {}
     for name, club, player_id, code in rows:
         grouped.setdefault(player_id, (player_id, name, club, []))[3].append(code)
@@ -358,7 +375,8 @@ def _reserves(
     moving and publishing it invites an entrant to plan around a number that
     changes under them.
     """
-    rows = repo.session.execute(
+    rows = repo.execute_query(
+        _all_rows,
         select(
             EntryEvent.code,
             EntryPlayer.full_name,
@@ -383,8 +401,8 @@ def _reserves(
             EntryPlayer.erased_at.is_(None),
             Entry.state == "waitlisted",
         )
-        .order_by(EntryEvent.code, Entry.submitted_at, Entry.id)
-    ).all()
+        .order_by(EntryEvent.code, Entry.submitted_at, Entry.id),
+    )
 
     out: List[Tuple[str, int, uuid.UUID, str, Optional[str]]] = []
     position_by_code: dict = {}
@@ -406,15 +424,16 @@ def _entry_counts(repo: LocalRepository, tournament_id: uuid.UUID) -> dict:
     same live states, opt-outs excluded, so the number over the events list
     and the names under it cannot disagree.
     """
-    rows = repo.session.execute(
+    rows = repo.execute_query(
+        _all_rows,
         select(Entry.entry_event_id, func.count(Entry.id))
         .where(
             Entry.tournament_id == tournament_id,
             Entry.list_opt_out.is_(False),
             Entry.state.in_(_LISTED_STATES),
         )
-        .group_by(Entry.entry_event_id)
-    ).all()
+        .group_by(Entry.entry_event_id),
+    )
     return {event_id: count for event_id, count in rows}
 
 
@@ -444,10 +463,9 @@ def _optional_entrant(
     token = request.cookies.get(settings.entrant_session_cookie_name) or ""
     if not token:
         return None, ""
-    account = entrant_service.resolve_session(repo.session, token)
+    account = repo.execute_transaction(entrant_service.resolve_session, token)
     if account is None:
         return None, ""
-    repo.session.commit()  # persist the rolling last_seen touch
     return (
         AuthEntrant(
             id=str(account.id),
@@ -468,4 +486,6 @@ def _lookup_event(
         parsed = uuid.UUID(event_id)
     except (ValueError, AttributeError, TypeError):
         return None
-    return repo.session.get(EntryEvent, (tournament_id, parsed))
+    return repo.execute_query(
+        _get_record, EntryEvent, (tournament_id, parsed)
+    )

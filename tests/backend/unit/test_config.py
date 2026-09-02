@@ -8,20 +8,19 @@ for both schemes.
 """
 from __future__ import annotations
 
-import importlib
-
 import pytest
+from sqlalchemy import create_engine
 
 
 def _reload_with_env(monkeypatch, **env):
-    """Reload config + session modules with a fresh env mapping."""
+    """Build isolated settings + engine from a fresh env mapping."""
     for key, value in env.items():
         monkeypatch.setenv(key, value)
-    import core.config
-    importlib.reload(core.config)
-    import db.session
-    importlib.reload(db.session)
-    return core.config.Settings(), db.session.engine
+    from core.config import Settings
+    from db.session import normalize_database_url
+
+    settings = Settings()
+    return settings, create_engine(normalize_database_url(settings.database_url))
 
 
 def test_settings_defaults_sqlite(monkeypatch):
@@ -85,17 +84,6 @@ def test_host_and_port_env_vars(monkeypatch):
     )
     assert settings.host == "127.0.0.1"
     assert settings.port == 9001
-
-
-@pytest.fixture(autouse=True)
-def _restore_modules():
-    """Reload back to clean defaults after each test so DB-touching tests
-    in the rest of the suite don't see this file's env shim."""
-    yield
-    import core.config
-    importlib.reload(core.config)
-    import db.session
-    importlib.reload(db.session)
 
 
 def test_cloud_mode_refuses_console_email_backend(monkeypatch):

@@ -52,7 +52,6 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import IntegrityError
 
-from db.models import EntrantAccount
 from entries import lifecycle
 from entries.entries_json import require_form_csrf
 from core.client_ip import client_ip
@@ -78,6 +77,59 @@ router = APIRouter(prefix="/e/account", tags=["entrants"])
 _UNIFORM_SIGNUP_MESSAGE = (
     "If that address can be used, the account is ready. Sign in to continue."
 )
+
+
+def _record_failures(session, *keys: str) -> None:
+    for key in keys:
+        auth_service.throttle_record_failure(session, key)
+
+
+def _record_signup_attempt(session, key: str) -> None:
+    auth_service.throttle_record_entrant_signup(session, key)
+
+
+def _create_unverified_account(
+    session,
+    *,
+    email: str,
+    password: str,
+    display_name: Optional[str],
+    phone: Optional[str],
+):
+    account = entrant_service.create_account(
+        session,
+        email=email,
+        password=password,
+        display_name=display_name,
+        phone=phone,
+    )
+    token = entrant_service.issue_verification_token(session, account)
+    return account, token
+
+
+def _complete_entrant_login(session, account, account_key: str):
+    auth_service.throttle_record_success(session, account_key)
+    token, _ = entrant_service.create_session(session, account.id)
+    return token
+
+
+def _verify_and_promote(session, token: str):
+    account = entrant_service.consume_verification_token(session, token)
+    if account is None:
+        return None, 0
+    return account, lifecycle.promote_verified_entries(session, account.id)
+
+
+def _consume_entrant_reset(
+    session,
+    token: str,
+    new_password: str,
+    throttle_key: str,
+):
+    account = entrant_service.consume_reset_token(session, token, new_password)
+    if account is None:
+        auth_service.throttle_record_failure(session, throttle_key)
+    return account
 
 
 # ---- DTOs ------------------------------------------------------------
@@ -539,7 +591,7 @@ def signup(
     ip = client_ip(request)
     throttle_key = auth_service.entrant_signup_key(ip)
 
-    remaining = throttle.throttle_check(repo.session, throttle_key)
+    remaining = repo.execute_query(throttle.throttle_check, throttle_key)
     if remaining is not None:
         raise _throttled(
             remaining, "Too many signups from this connection. Try again later."
@@ -550,8 +602,7 @@ def signup(
         # Charge the attempt. A bot that fails the challenge every time is
         # precisely what the budget exists for, and refusing for free
         # would leave it unbounded.
-        auth_service.throttle_record_entrant_signup(repo.session, throttle_key)
-        repo.session.commit()
+        repo.execute_transaction(_record_signup_attempt, throttle_key)
         log.info("entrants: turnstile refusal (%s)", ",".join(verdict.error_codes))
         raise http_error(
             status.HTTP_403_FORBIDDEN,
@@ -565,14 +616,13 @@ def signup(
         email = auth_service.normalize_email(body.email)
         auth_service.validate_password(body.password)
     except AuthError as exc:
-        auth_service.throttle_record_entrant_signup(repo.session, throttle_key)
-        repo.session.commit()
+        repo.execute_transaction(_record_signup_attempt, throttle_key)
         raise _auth_error(exc)
 
-    if entrant_service.get_account_by_email(repo.session, email) is None:
+    if repo.execute_query(entrant_service.get_account_by_email, email) is None:
         try:
-            account = entrant_service.create_account(
-                repo.session,
+            account, verify_token = repo.execute_transaction(
+                _create_unverified_account,
                 email=email,
                 password=body.password,
                 display_name=body.displayName,
@@ -581,10 +631,6 @@ def signup(
             # E2: the double-opt-in link, minted before the commit so the
             # hash and the row land together — a mailed token whose hash was
             # rolled back is a link that can never work.
-            verify_token = entrant_service.issue_verification_token(
-                repo.session, account
-            )
-            repo.session.commit()
             # Mailed AFTER the commit, deliberately: a link that arrives
             # before the row it names is a race an entrant can lose by being
             # fast, and re-sending is cheap while un-sending is impossible.
@@ -593,15 +639,14 @@ def signup(
             # The case-insensitive unique index winning a race with the
             # check above. Same answer as the found branch — the outcome
             # for the caller is identical and so is what we tell them.
-            repo.session.rollback()
+            pass
     else:
         # Spend the hash anyway. An existence check that skipped Argon2id
         # would make the *timing* of this route the enumeration oracle its
         # body and status code are written to avoid.
         auth_service.hash_password(body.password)
 
-    auth_service.throttle_record_entrant_signup(repo.session, throttle_key)
-    repo.session.commit()
+    repo.execute_transaction(_record_signup_attempt, throttle_key)
     if is_form_post(request):
         # 303 to the login page, not into a session: signup hands out no
         # cookie on either branch, because a cookie set only on the created
@@ -663,17 +708,15 @@ def login(
     account_key = auth_service.entrant_account_key(email)
     ip_key = auth_service.entrant_ip_key(client_ip(request))
     for key in (account_key, ip_key):
-        remaining = throttle.throttle_check(repo.session, key)
+        remaining = repo.execute_query(throttle.throttle_check, key)
         if remaining is not None:
             raise _throttled(remaining, "Too many attempts. Try again later.")
 
-    account = entrant_service.authenticate(
-        repo.session, email=email, password=body.password
+    account = repo.execute_query(
+        entrant_service.authenticate, email=email, password=body.password
     )
     if account is None:
-        auth_service.throttle_record_failure(repo.session, account_key)
-        auth_service.throttle_record_failure(repo.session, ip_key)
-        repo.session.commit()
+        repo.execute_transaction(_record_failures, account_key, ip_key)
         if "text/html" in request.headers.get("accept", ""):
             # ``text/html`` in Accept means a NAVIGATION — browsers send it on
             # a form post and never on ``fetch(..., {headers: {}})`` — and a
@@ -706,9 +749,9 @@ def login(
             "Invalid email or password",
         )
 
-    auth_service.throttle_record_success(repo.session, account_key)
-    token, _ = entrant_service.create_session(repo.session, account.id)
-    repo.session.commit()
+    token = repo.execute_transaction(
+        _complete_entrant_login, account, account_key
+    )
     if is_form_post(request):
         redirect = RedirectResponse(
             url=next_target(next_raw, _SIGNED_IN_PAGE),
@@ -743,8 +786,7 @@ def logout(
     """
     token = request.cookies.get(settings.entrant_session_cookie_name)
     if token:
-        entrant_service.revoke_session(repo.session, token)
-        repo.session.commit()
+        repo.execute_transaction(entrant_service.revoke_session, token)
     _clear_entrant_cookie(response)
     if is_form_post(request):
         redirect = RedirectResponse(
@@ -787,9 +829,10 @@ def verify(
     and the response is uniform, so there is nothing here to guess at
     cheaply; the per-IP body cap and the nginx zone still apply.
     """
-    account = entrant_service.consume_verification_token(repo.session, body.token)
+    account, promoted = repo.execute_transaction(
+        _verify_and_promote, body.token
+    )
     if account is None:
-        repo.session.rollback()
         if is_form_post(request):
             return RedirectResponse(
                 url=_VERIFY_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
@@ -800,8 +843,6 @@ def verify(
             "That confirmation link is not valid. Ask for a new one.",
         )
 
-    promoted = lifecycle.promote_verified_entries(repo.session, account.id)
-    repo.session.commit()
     log.info(
         "entrants: account %s verified, %d entries promoted", account.id, promoted
     )
@@ -837,10 +878,11 @@ def resend_verification(
     own account, and an entrant who clicks twice is not shown an error for
     succeeding.
     """
-    account = repo.session.get(EntrantAccount, uuid.UUID(entrant.id))
+    account = repo.get_entrant_identity(uuid.UUID(entrant.id))
     if account is not None and not account.email_verified:
-        token = entrant_service.issue_verification_token(repo.session, account)
-        repo.session.commit()
+        token = repo.execute_transaction(
+            entrant_service.issue_verification_token, account
+        )
         _send_verification(account, token)
     if is_form_post(request):
         return RedirectResponse(
@@ -875,7 +917,7 @@ def request_entrant_password_reset(
     director out of their own console.
     """
     ip_key = auth_service.entrant_ip_key(client_ip(request))
-    remaining = throttle.throttle_check(repo.session, ip_key)
+    remaining = repo.execute_query(throttle.throttle_check, ip_key)
     if remaining is not None:
         raise _throttled(remaining, "Too many attempts. Try again later.")
 
@@ -888,10 +930,11 @@ def request_entrant_password_reset(
         email = None
 
     if email is not None:
-        account = entrant_service.get_account_by_email(repo.session, email)
+        account = repo.execute_query(entrant_service.get_account_by_email, email)
         if account is not None:
-            token = entrant_service.issue_reset_token(repo.session, account)
-            repo.session.commit()
+            token = repo.execute_transaction(
+                entrant_service.issue_reset_token, account
+            )
             # PUBLIC tier (SP-HOST-1 D-9), same reason as verification.
             origin = settings.play_origin
             return_to = next_target(next_raw, "")
@@ -911,8 +954,7 @@ def request_entrant_password_reset(
                 ),
             )
         else:
-            auth_service.throttle_record_failure(repo.session, ip_key)
-            repo.session.commit()
+            repo.execute_transaction(_record_failures, ip_key)
 
     if is_form_post(request):
         return RedirectResponse(
@@ -949,16 +991,18 @@ def reset_entrant_password(
     a mailed token.
     """
     ip_key = auth_service.entrant_ip_key(client_ip(request))
-    remaining = throttle.throttle_check(repo.session, ip_key)
+    remaining = repo.execute_query(throttle.throttle_check, ip_key)
     if remaining is not None:
         raise _throttled(remaining, "Too many attempts. Try again later.")
 
     try:
-        account = entrant_service.consume_reset_token(
-            repo.session, body.token, body.newPassword
+        account = repo.execute_transaction(
+            _consume_entrant_reset,
+            body.token,
+            body.newPassword,
+            ip_key,
         )
     except AuthError as exc:
-        repo.session.rollback()
         if is_form_post(request):
             retry_query = {"token": body.token}
             return_to = next_target(next_raw, "")
@@ -971,8 +1015,6 @@ def reset_entrant_password(
         raise _auth_error(exc)
 
     if account is None:
-        auth_service.throttle_record_failure(repo.session, ip_key)
-        repo.session.commit()
         if is_form_post(request):
             return_to = next_target(next_raw, "")
             failed_url = (
@@ -989,7 +1031,6 @@ def reset_entrant_password(
             "Invalid or expired reset link",
         )
 
-    repo.session.commit()
     if is_form_post(request):
         return_to = next_target(next_raw, "")
         done_url = (

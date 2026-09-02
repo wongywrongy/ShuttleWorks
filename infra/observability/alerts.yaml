@@ -1,0 +1,136 @@
+# ShuttleWorks operational alert contract v1.
+# Expressions are PromQL-compatible and intentionally avoid IDs as dimensions.
+version: 1
+owner: platform-oncall
+runbook: docs/how-to/observability-runbook.md
+alerts:
+  - name: sync_outbox_depth
+    owner: event-operations
+    severity: warning
+    runbook: "docs/how-to/observability-runbook.md#sync-backlog-or-oldest-age"
+    event_context:
+      applies_to: live_event
+      offline_behavior: suppress
+    deduplication:
+      key: sync-outbox
+      window: 10m
+    expr: shuttleworks_sync_outbox_depth > 100
+    for: 10m
+    summary: Pending event-node operations are accumulating.
+  - name: sync_outbox_oldest_age
+    owner: event-operations
+    severity: critical
+    runbook: "docs/how-to/observability-runbook.md#sync-backlog-or-oldest-age"
+    event_context:
+      applies_to: live_event
+      offline_behavior: suppress
+    deduplication:
+      key: sync-outbox
+      window: 10m
+    expr: shuttleworks_sync_outbox_oldest_age_seconds > 300
+    for: 10m
+    summary: The oldest event-node operation has not reached cloud.
+  - name: sqlite_wal_bytes
+    owner: platform-oncall
+    severity: warning
+    runbook: "docs/how-to/observability-runbook.md#sqlite-wal-or-disk-alerts"
+    event_context:
+      applies_to: live_event
+      offline_behavior: page
+    deduplication:
+      key: sqlite-storage
+      window: 10m
+    expr: shuttleworks_sqlite_wal_bytes > 268435456
+    for: 10m
+    summary: SQLite WAL is larger than the operational budget.
+  - name: sqlite_disk_free
+    owner: platform-oncall
+    severity: critical
+    runbook: "docs/how-to/observability-runbook.md#sqlite-wal-or-disk-alerts"
+    event_context:
+      applies_to: live_event
+      offline_behavior: page
+    deduplication:
+      key: sqlite-storage
+      window: 5m
+    expr: shuttleworks_sqlite_disk_free_bytes < 5368709120
+    for: 5m
+    summary: Event-node disk headroom is below the recovery safety margin.
+  - name: authority_rejections
+    owner: event-operations
+    severity: warning
+    runbook: "docs/how-to/observability-runbook.md#authority-rejection-alerts"
+    event_context:
+      applies_to: live_event
+      offline_behavior: page
+    deduplication:
+      key: authority-rejection
+      window: 10m
+    expr: sum(rate(shuttleworks_authority_rejections_total[10m])) > 0.1
+    for: 10m
+    summary: Authority requests are being rejected.
+  - name: database_unavailable
+    owner: platform-oncall
+    severity: critical
+    runbook: "docs/how-to/observability-runbook.md#database-availability-or-pool-pressure"
+    event_context:
+      applies_to: live_event
+      offline_behavior: page
+    deduplication:
+      key: database-availability
+      window: 5m
+    expr: shuttleworks_database_available < 1
+    for: 5m
+    summary: The application cannot complete its database availability probe.
+  - name: backup_stale
+    owner: event-operations
+    severity: warning
+    runbook: "docs/how-to/observability-runbook.md#backup-health"
+    event_context:
+      applies_to: live_event
+      offline_behavior: page
+    deduplication:
+      key: event-node-backup
+      window: 30m
+    expr: shuttleworks_backup_last_success_age_seconds > 7200
+    for: 15m
+    summary: No verified event-node backup has completed within two hours.
+  - name: backup_restore_test_failed
+    owner: event-operations
+    severity: critical
+    runbook: "docs/how-to/observability-runbook.md#backup-health"
+    event_context:
+      applies_to: live_event
+      offline_behavior: page
+    deduplication:
+      key: event-node-backup
+      window: 30m
+    expr: shuttleworks_backup_restore_test{backup_restore_status="failed"} > 0
+    for: 5m
+    summary: The latest event-node backup failed its isolated restore test.
+  - name: collector_queue_utilization
+    owner: platform-oncall
+    severity: warning
+    runbook: "docs/how-to/observability-runbook.md#collector-queue-or-export-failure"
+    event_context:
+      applies_to: live_event
+      offline_behavior: informational
+    deduplication:
+      key: collector-export
+      window: 15m
+    expr: otelcol_exporter_queue_size / otelcol_exporter_queue_capacity > 0.8
+    for: 10m
+    summary: The event-node Collector durable queue is more than 80 percent full.
+  - name: collector_export_failures
+    owner: platform-oncall
+    severity: warning
+    runbook: "docs/how-to/observability-runbook.md#collector-queue-or-export-failure"
+    event_context:
+      applies_to: live_event
+      offline_behavior: informational
+    deduplication:
+      key: collector-export
+      window: 15m
+    expr: sum(rate(otelcol_exporter_send_failed_spans[5m])) > 0
+    for: 10m
+    summary: The Collector is failing to export telemetry to the gateway.

@@ -256,7 +256,7 @@ def test_the_revision_id_scheme_is_unambiguous_against_every_older_id():
         {p.name[:2] for p in versions.glob("*.py") if not p.name.startswith("__")}
     )
     two_letter = [p for p in prefixes if p.isalpha()]
-    assert two_letter == ["aa", "ab"], prefixes
+    assert two_letter == ["aa", "ab", "ac", "bd", "cf"], prefixes
     assert MEET_EVENTS_REVISION.startswith("aa")
     assert len(MEET_EVENTS_REVISION) == 12
 

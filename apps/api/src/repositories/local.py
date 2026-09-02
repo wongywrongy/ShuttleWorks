@@ -21,7 +21,7 @@ import re
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Iterable, Iterator, Optional
+from typing import Callable, Iterable, Iterator, Optional, TypeVar
 
 import sys as _sys
 
@@ -63,10 +63,12 @@ from db.models import (
     Entry,
     EntryEvent,
     EntryPage,
+    EntrantAccount,
     BracketMatch,
     BracketParticipant,
     BracketResult,
     Command,
+    DisplayToken,
     InviteLink,
     Match,
     MatchState,
@@ -75,6 +77,7 @@ from db.models import (
     Tournament,
     TournamentBackup,
     TournamentMember,
+    User,
     WorkspaceModule,
     derive_modules,
 )
@@ -83,8 +86,15 @@ from db.models import (
 # name from this module and there is no reason to churn that.
 from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION
 from db.session import SessionLocal
+from repositories.base import MemberIdentity
 
 log = logging.getLogger("scheduler.repositories")
+_Result = TypeVar("_Result")
+
+
+def _commit_transaction(session: Session) -> None:
+    """Single adapter-owned commit seam for composed repository operations."""
+    session.commit()
 
 
 def _project_canonical_setup(document: dict) -> dict:
@@ -273,7 +283,7 @@ class _LocalTournamentRepo:
             schema_version=CURRENT_TOURNAMENT_SCHEMA_VERSION,
         )
         self.session.add(row)
-        self.session.commit()
+        _commit_transaction(self.session)
         self.session.refresh(row)
         return row
 
@@ -358,6 +368,7 @@ class _LocalTournamentRepo:
         payload: dict,
         *,
         expected_version: Optional[int] = None,
+        commit: bool = True,
     ) -> Tournament:
         """Replace the ``data`` blob on an explicit tournament.
 
@@ -423,8 +434,10 @@ class _LocalTournamentRepo:
         # the client, or the client's next save spuriously conflicts.
         row.state_version = (row.state_version or 0) + 1
         self._sync_meet_events(tournament_id, stamped)
-        self.session.commit()
-        self.session.refresh(row)
+        self.session.flush()
+        if commit:
+            self.session.commit()
+            self.session.refresh(row)
         return row
 
 
@@ -512,6 +525,7 @@ class _LocalMatchRepo:
         fields: dict,
         *,
         expected_version: Optional[int] = None,
+        commit: bool = True,
     ) -> Match:
         row = self.get(tournament_id, match_id)
         if row is None:
@@ -553,8 +567,10 @@ class _LocalMatchRepo:
         if not new_row:
             row.version = row.version + 1
 
-        self.session.commit()
-        self.session.refresh(row)
+        self.session.flush()
+        if commit:
+            self.session.commit()
+            self.session.refresh(row)
         return row
 
     def set_status(
@@ -564,12 +580,14 @@ class _LocalMatchRepo:
         status: "str | MatchStatus",
         *,
         expected_version: Optional[int] = None,
+        commit: bool = True,
     ) -> Match:
         return self.upsert(
             tournament_id,
             match_id,
             {"status": status},
             expected_version=expected_version,
+            commit=commit,
         )
 
     def bulk_project_from_schedule(
@@ -729,6 +747,7 @@ class _LocalBracketRepo:
         rr_rounds: Optional[int] = None,
         config: Optional[dict] = None,
         status: str = "draft",
+        commit: bool = True,
     ) -> BracketEvent:
         row = BracketEvent(
             tournament_id=tournament_id,
@@ -743,8 +762,10 @@ class _LocalBracketRepo:
             status=status,
         )
         self.session.add(row)
-        self.session.commit()
-        self.session.refresh(row)
+        self.session.flush()
+        if commit:
+            self.session.commit()
+            self.session.refresh(row)
         return row
 
     def update_event_config(
@@ -791,6 +812,8 @@ class _LocalBracketRepo:
         tournament_id: uuid.UUID,
         event_id: str,
         status: str,
+        *,
+        commit: bool = True,
     ) -> Optional[BracketEvent]:
         """Update the status column of a bracket event.
 
@@ -801,8 +824,9 @@ class _LocalBracketRepo:
             return None
         row.status = status
         row.version = row.version + 1
-        self.session.commit()
-        self.session.refresh(row)
+        if commit:
+            self.session.commit()
+            self.session.refresh(row)
         return row
 
     def delete_event(
@@ -1026,6 +1050,7 @@ class _LocalBracketRepo:
         fields: dict,
         *,
         expected_version: Optional[int] = None,
+        commit: bool = True,
     ) -> BracketMatch:
         """Mutate selected fields on a bracket match.
 
@@ -1052,8 +1077,9 @@ class _LocalBracketRepo:
             if key in self._MUTABLE_MATCH_FIELDS:
                 setattr(row, key, value)
         row.version = row.version + 1
-        self.session.commit()
-        self.session.refresh(row)
+        if commit:
+            self.session.commit()
+            self.session.refresh(row)
         return row
 
     # ---- Results -------------------------------------------------------
@@ -1247,6 +1273,7 @@ class _LocalBracketRepo:
         finished_at_slot: Optional[int] = None,
         walkover: bool = False,
         reason: Optional[str] = None,
+        commit: bool = True,
     ) -> BracketResult:
         """Insert (or replace) the result row for a bracket match.
 
@@ -1275,8 +1302,13 @@ class _LocalBracketRepo:
             existing.walkover = walkover
             existing.reason = reason
             row = existing
-        self.session.commit()
-        self.session.refresh(row)
+        # Flush deferred writes so a constraint failure is raised inside the
+        # caller's unit of work, while leaving the transaction owner in
+        # control of the eventual commit/rollback.
+        self.session.flush()
+        if commit:
+            self.session.commit()
+            self.session.refresh(row)
         return row
 
 
@@ -1301,6 +1333,8 @@ class _LocalMatchStateRepo:
         tournament_id: uuid.UUID,
         match_id: str,
         fields: dict,
+        *,
+        commit: bool = True,
     ) -> MatchState:
         row = self.get(tournament_id, match_id)
         if row is None:
@@ -1312,29 +1346,39 @@ class _LocalMatchStateRepo:
         for key, value in fields.items():
             if hasattr(row, key) and key not in ("tournament_id", "match_id"):
                 setattr(row, key, value)
-        self.session.commit()
-        self.session.refresh(row)
+        self.session.flush()
+        if commit:
+            self.session.commit()
+            self.session.refresh(row)
         return row
 
-    def delete(self, tournament_id: uuid.UUID, match_id: str) -> bool:
+    def delete(
+        self, tournament_id: uuid.UUID, match_id: str, *, commit: bool = True
+    ) -> bool:
         row = self.get(tournament_id, match_id)
         if row is None:
             return False
         self.session.delete(row)
-        self.session.commit()
+        self.session.flush()
+        if commit:
+            self.session.commit()
         return True
 
-    def reset_all(self, tournament_id: uuid.UUID) -> int:
+    def reset_all(self, tournament_id: uuid.UUID, *, commit: bool = True) -> int:
         result = self.session.execute(
             delete(MatchState).where(MatchState.tournament_id == tournament_id)
         )
-        self.session.commit()
+        self.session.flush()
+        if commit:
+            self.session.commit()
         return result.rowcount or 0
 
     def bulk_upsert(
         self,
         tournament_id: uuid.UUID,
         updates: dict[str, dict],
+        *,
+        commit: bool = True,
     ) -> int:
         if not updates:
             return 0
@@ -1346,7 +1390,9 @@ class _LocalMatchStateRepo:
             for key, value in fields.items():
                 if hasattr(row, key) and key not in ("tournament_id", "match_id"):
                     setattr(row, key, value)
-        self.session.commit()
+        self.session.flush()
+        if commit:
+            self.session.commit()
         return len(updates)
 
     def count_by_tournament(
@@ -1397,6 +1443,8 @@ class _LocalTournamentBackupRepo:
         snapshot: dict,
         filename: Optional[str] = None,
         origin: str = "auto",
+        *,
+        commit: bool = True,
     ) -> TournamentBackup:
         fname = filename or _backup_filename(snapshot)
         size_bytes = len(json.dumps(snapshot, sort_keys=True).encode("utf-8"))
@@ -1408,8 +1456,10 @@ class _LocalTournamentBackupRepo:
             origin=origin,
         )
         self.session.add(row)
-        self.session.commit()
-        self.session.refresh(row)
+        self.session.flush()
+        if commit:
+            self.session.commit()
+            self.session.refresh(row)
         return row
 
     def delete(self, tournament_id: uuid.UUID, filename: str) -> bool:
@@ -1420,7 +1470,7 @@ class _LocalTournamentBackupRepo:
         self.session.commit()
         return True
 
-    def rotate(self, tournament_id: uuid.UUID, keep: int) -> int:
+    def rotate(self, tournament_id: uuid.UUID, keep: int, *, commit: bool = True) -> int:
         """Trim AUTOMATIC backups, keeping a window that spans the day.
 
         A flat keep-N over every row produced the failure SP-CONSOLE-2 O-5
@@ -1459,7 +1509,7 @@ class _LocalTournamentBackupRepo:
         to_delete = [r for r in rows if r.id not in keep_ids]
         for row in to_delete:
             self.session.delete(row)
-        if to_delete:
+        if to_delete and commit:
             self.session.commit()
         return len(to_delete)
 
@@ -2018,6 +2068,157 @@ class LocalRepository:
 
     # ---- High-level orchestration (id-explicit, Step 2+) ----------------
 
+    @contextmanager
+    def transaction(self) -> Iterator[Session]:
+        """Own a composed application unit of work.
+
+        Application services may stage several ``commit=False`` repository
+        writes and session-aware domain operations inside this boundary. The
+        adapter remains the sole commit/rollback owner.
+        """
+        try:
+            yield self.session
+            _commit_transaction(self.session)
+        except BaseException:
+            self.session.rollback()
+            raise
+
+    def execute_transaction(
+        self,
+        operation: Callable[..., _Result],
+        *args,
+        **kwargs,
+    ) -> _Result:
+        """Execute one session-aware application operation atomically.
+
+        This is the transitional unit-of-work seam for domain services that
+        already accept a SQLAlchemy session but must not expose it to HTTP
+        adapters. The callback keeps policy above persistence; this adapter
+        owns commit and rollback.
+        """
+        with self.transaction() as session:
+            return operation(session, *args, **kwargs)
+
+    def execute_query(
+        self,
+        operation: Callable[..., _Result],
+        *args,
+        **kwargs,
+    ) -> _Result:
+        """Execute a session-aware read without exposing the session."""
+        return operation(self.session, *args, **kwargs)
+
+    def stage(
+        self,
+        operation: Callable[..., _Result],
+        *args,
+        **kwargs,
+    ) -> _Result:
+        """Stage a session-aware operation in the caller's current UoW."""
+        return operation(self.session, *args, **kwargs)
+
+    def commit_pending(self) -> None:
+        """Commit a staged application unit of work through the adapter."""
+        _commit_transaction(self.session)
+
+    def refresh(self, record) -> None:
+        """Refresh one persisted record without exposing the session."""
+        self.session.refresh(record)
+
+    def discard_transaction(self) -> None:
+        """Close an implicit read transaction without retaining changes."""
+        self.session.rollback()
+
+    def list_member_identities(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> list[MemberIdentity]:
+        """Return members joined to their display identity in one boundary."""
+        members = self.members.list_for_tournament(tournament_id)
+        if not members:
+            return []
+        users = {
+            user.id: user
+            for user in self.session.scalars(
+                select(User).where(User.id.in_([member.user_id for member in members]))
+            )
+        }
+        result: list[MemberIdentity] = []
+        for member in members:
+            user = users.get(member.user_id)
+            email = None
+            if user is not None and not user.email.endswith("@unmigrated.local"):
+                email = user.email
+            result.append(
+                MemberIdentity(
+                    user_id=member.user_id,
+                    role=member.role,
+                    joined_at=member.joined_at,
+                    email=email,
+                    display_name=user.display_name if user is not None else None,
+                )
+            )
+        return result
+
+    def get_user_identity(self, user_id: uuid.UUID) -> Optional[User]:
+        """Return an operator account by id for identity application flows."""
+        return self.session.get(User, user_id)
+
+    def get_entrant_identity(
+        self, account_id: uuid.UUID
+    ) -> Optional[EntrantAccount]:
+        """Return an entrant account by id for identity application flows."""
+        return self.session.get(EntrantAccount, account_id)
+
+    def get_or_create_display_token(
+        self,
+        tournament_id: uuid.UUID,
+        token: str,
+    ) -> str:
+        """Return the display capability, creating it atomically if absent."""
+        row = self.session.get(DisplayToken, tournament_id)
+        if row is None:
+            row = DisplayToken(tournament_id=tournament_id, token=token)
+            self.session.add(row)
+            _commit_transaction(self.session)
+        return row.token
+
+    def rotate_display_token(
+        self,
+        tournament_id: uuid.UUID,
+        token: str,
+    ) -> str:
+        """Replace a display capability, creating its row when necessary."""
+        row = self.session.get(DisplayToken, tournament_id)
+        if row is None:
+            row = DisplayToken(tournament_id=tournament_id, token=token)
+            self.session.add(row)
+        else:
+            row.token = token
+        _commit_transaction(self.session)
+        return row.token
+
+    def get_tournament_by_display_token(self, token: str) -> Optional[Tournament]:
+        """Resolve a public display capability to its workspace."""
+        if not token:
+            return None
+        row = self.session.scalar(
+            select(DisplayToken).where(DisplayToken.token == token)
+        )
+        return self.tournaments.get_by_id(row.tournament_id) if row else None
+
+    def get_workspace_module_statuses(
+        self,
+        tournament_id: uuid.UUID,
+    ) -> dict[str, str]:
+        """Read normalized module statuses without write-on-read seeding."""
+        rows = self.session.scalars(
+            select(WorkspaceModule).where(
+                WorkspaceModule.tournament_id == tournament_id
+            )
+        )
+        return {row.module_id: row.status for row in rows}
+
     def commit_tournament_state(
         self,
         tournament_id: uuid.UUID,
@@ -2025,6 +2226,7 @@ class LocalRepository:
         *,
         clear_bracket_assignments: bool = False,
         expected_version: Optional[int] = None,
+        commit: bool = True,
     ) -> Tournament:
         """Snapshot the prior state into a backup, then write the new one.
 
@@ -2050,8 +2252,9 @@ class LocalRepository:
                 tournament_id=tournament_id,
                 snapshot=prior.data,
                 filename=_backup_filename(prior.data),
+                commit=commit,
             )
-            self.backups.rotate(tournament_id, keep=self.BACKUP_KEEP)
+            self.backups.rotate(tournament_id, keep=self.BACKUP_KEEP, commit=commit)
         # Preserve server-managed keys that the meet-side frontend payload
         # never includes. Without this merge, a PUT /state from the meet
         # UI would silently erase bracket scheduling state because
@@ -2067,9 +2270,10 @@ class LocalRepository:
             session.pop("assignments", None)
             merged["bracket_session"] = session
         result = self.tournaments.upsert_data(
-            tournament_id, merged, expected_version=expected_version
+            tournament_id, merged, expected_version=expected_version, commit=commit
         )
         self._project_matches_from_payload(tournament_id, payload)
+        self.session.flush()
         return result
 
     def _project_matches_from_payload(
@@ -2263,11 +2467,75 @@ class LocalRepository:
             submitted_by=submitted_by,
         )
 
+        # Event-node command mutations are part of the durable operation
+        # stream.  Append before the single commit so a failure in the
+        # operation/outbox path rolls back the normalized match mutation and
+        # command row together.  Cloud/local profiles retain the legacy
+        # command persistence behavior and do not emit a node operation.
+        self._append_match_command_operation(
+            tournament_id=tournament_id,
+            match_id=match_id,
+            command_id=command_id,
+            action=action,
+            payload=payload,
+            expected_version=seen_version,
+            submitted_by=submitted_by,
+            resulting_status=match.status,
+            resulting_version=match.version,
+        )
+
         self.session.commit()
         self.session.refresh(match)
         self.session.refresh(command_row)
         return ProcessedCommand(
             match=match, command=command_row, is_replay=False
+        )
+
+    def _append_match_command_operation(
+        self,
+        *,
+        tournament_id: uuid.UUID,
+        match_id: str,
+        command_id: uuid.UUID,
+        action: str,
+        payload: Optional[dict],
+        expected_version: int,
+        submitted_by: uuid.UUID,
+        resulting_status: str,
+        resulting_version: int,
+    ) -> None:
+        """Append the canonical operator command to the event-node WAL."""
+        # Keep this import local: repositories are used by cloud-only startup
+        # paths where sync service initialization is not otherwise needed.
+        from core.config import settings
+
+        if settings.deployment_profile != "event_node":
+            return
+        try:
+            node_id = uuid.UUID(settings.node_id)
+        except (ValueError, AttributeError) as exc:
+            raise ValueError(
+                "event-node match commands require a UUID node identity"
+            ) from exc
+        from sync.service import append_local_operation
+
+        append_local_operation(
+            self.session,
+            tournament_id=tournament_id,
+            node_id=node_id,
+            actor_id=submitted_by,
+            command_type="match.command.v1",
+            aggregate_type="match",
+            aggregate_id=match_id,
+            payload={
+                "action": action,
+                "payload": payload or {},
+                "commandId": str(command_id),
+                "status": resulting_status,
+                "version": resulting_version,
+            },
+            expected_version=expected_version,
+            operation_id=command_id,
         )
 
     def _replay_existing_command(

@@ -153,14 +153,16 @@ def commit_entries(
     if tournament is None:
         raise KeyError(tournament_id)
 
-    candidates = _candidates(repo.session, tournament_id, entry_event_id)
+    candidates = repo.execute_query(
+        _candidates, tournament_id, entry_event_id
+    )
     if not candidates:
         return CommitResult()
 
     events = {
         row.id: row
-        for row in repo.session.scalars(
-            select(EntryEvent).where(EntryEvent.tournament_id == tournament_id)
+        for row in repo.execute_query(
+            _entry_events, tournament_id
         )
     }
 
@@ -207,6 +209,24 @@ def _expire(session: Session) -> None:
     """
     session.rollback()
     session.expire_all()
+
+
+def _entry_events(session: Session, tournament_id: uuid.UUID):
+    return list(
+        session.scalars(
+            select(EntryEvent).where(
+                EntryEvent.tournament_id == tournament_id
+            )
+        )
+    )
+
+
+def _meet_events(session: Session, tournament_id: uuid.UUID):
+    return list(
+        session.scalars(
+            select(MeetEvent).where(MeetEvent.tournament_id == tournament_id)
+        )
+    )
 
 
 def roster_id(person_id) -> str:
@@ -329,7 +349,6 @@ def _write_back_references(
     """
     for entry, player_id in pairs:
         entry.committed_player_id = player_id
-    session.commit()
     if pairs:
         log.info("entries: committed %d entries to the roster", len(pairs))
     return [CommittedEntry(str(e.id), pid) for e, pid in pairs]
@@ -353,12 +372,11 @@ def _commit_meet(
     payload silently erases every section it omits. Pinned by
     ``test_the_merge_list_is_exactly_bracket_session_and_nothing_else``.
     """
-    session = repo.session
     planned: list[tuple[Entry, str]] = []
     skipped: list[SkippedEntry] = []
 
     for _attempt in range(max_attempts):
-        _expire(session)
+        repo.execute_query(_expire)
         row = repo.tournaments.get_by_id(tournament_id)
         if row is None:  # pragma: no cover — resolved by the caller
             raise KeyError(tournament_id)
@@ -373,8 +391,8 @@ def _commit_meet(
         # refetched document against the vocabulary it no longer has.
         divisions = {
             row.id: row
-            for row in session.scalars(
-                select(MeetEvent).where(MeetEvent.tournament_id == tournament_id)
+            for row in repo.execute_query(
+                _meet_events, tournament_id
             )
         }
 
@@ -388,7 +406,7 @@ def _commit_meet(
             # genuine no-op indistinguishable from work.
             break
 
-        _expire(session)  # force the CAS's own re-read to hit the database
+        repo.execute_query(_expire)  # force the CAS read to hit the database
         try:
             repo.commit_tournament_state(
                 tournament_id, document, expected_version=seen
@@ -412,7 +430,8 @@ def _commit_meet(
         )
 
     return CommitResult(
-        committed=_write_back_references(session, planned), skipped=skipped
+        committed=repo.execute_transaction(_write_back_references, planned),
+        skipped=skipped,
     )
 
 
@@ -744,13 +763,12 @@ def _commit_bracket(
     The blob goes first and under the same CAS contract as the Meet path;
     the participant rows follow, additively, through ``add_participants``.
     """
-    session = repo.session
     planned: list[tuple[Entry, str]] = []
     skipped: list[SkippedEntry] = []
     inserts: dict[str, list[dict]] = {}
 
     for _attempt in range(max_attempts):
-        _expire(session)
+        repo.execute_query(_expire)
         row = repo.tournaments.get_by_id(tournament_id)
         if row is None:  # pragma: no cover — resolved by the caller
             raise KeyError(tournament_id)
@@ -772,7 +790,7 @@ def _commit_bracket(
         if not mutated:
             break
 
-        _expire(session)  # force the CAS's own re-read to hit the database
+        repo.execute_query(_expire)  # force the CAS read to hit the database
         try:
             repo.commit_tournament_state(
                 tournament_id, document, expected_version=seen
@@ -797,7 +815,8 @@ def _commit_bracket(
         repo.brackets.add_participants(tournament_id, event_id, participants)
 
     return CommitResult(
-        committed=_write_back_references(session, planned), skipped=skipped
+        committed=repo.execute_transaction(_write_back_references, planned),
+        skipped=skipped,
     )
 
 

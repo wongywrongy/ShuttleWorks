@@ -5,9 +5,11 @@ depends on (SP-CLOUD-2):
 
 - **Session cookie** — an opaque token minted by ``POST /auth/login``
   and resolved against the ``auth_sessions`` table.
-- **Local bootstrap** — ``AUTH_MODE=local`` only: a request with no
-  session resolves to the zero-UUID local operator (Rule 3's
-  zero-friction solo flow). ``AUTH_MODE=cloud`` → 401 instead.
+- **Local bootstrap** — ``AUTH_MODE=local`` only outside the
+  ``event_node`` profile: a request with no session resolves to the
+  zero-UUID local operator (Rule 3's zero-friction solo flow). Event nodes
+  require an imported, tournament-scoped offline credential. ``AUTH_MODE=cloud``
+  → 401 instead.
 
 ``require_tournament_access(min_role)`` is the TENANCY seam: it reads
 the path's ``tournament_id``, looks up the caller's role in
@@ -46,6 +48,8 @@ class AuthUser(BaseModel):
     """The identity fields every route consumes."""
     id: str
     email: Optional[str] = None
+    offline_tournament_id: Optional[str] = None
+    offline_authority_epoch: Optional[int] = None
 
     def as_uuid(self) -> Optional[uuid.UUID]:
         """Parse ``id`` as a UUID; ``None`` when it doesn't (shouldn't
@@ -72,21 +76,55 @@ def get_current_user(
 
     1. **Session cookie**: an opaque token minted by ``POST
        /auth/login`` and backed by the ``auth_sessions`` table.
-    2. **Local bootstrap identity** — ``AUTH_MODE=local`` only: a
-       request with no (or a dead) session resolves to the zero-UUID
-       local operator, preserving the solo zero-friction flow. A dead
+    2. **Local bootstrap identity** — ``AUTH_MODE=local`` only outside the
+       ``event_node`` profile: a request with no (or a dead) session resolves
+       to the zero-UUID local operator, preserving the solo zero-friction flow. A dead
        cookie deliberately falls through here — browsers keep stale
        cookies across local DB resets.
     3. Otherwise → 401.
     """
     cookie_token = request.cookies.get(settings.session_cookie_name)
     if cookie_token:
-        user_row = auth_service.resolve_session(repo.session, cookie_token)
+        user_row = repo.execute_transaction(
+            auth_service.resolve_session, cookie_token
+        )
         if user_row is not None:
-            repo.session.commit()  # persist the rolling last_seen touch
             return AuthUser(id=str(user_row.id), email=user_row.email)
 
-    if settings.auth_mode == "local":
+    offline_token = request.cookies.get(settings.offline_session_cookie_name)
+    if offline_token and settings.deployment_profile == "event_node":
+        from identity import offline_sessions
+
+        raw_tid = request.path_params.get("tournament_id")
+        try:
+            tid = uuid.UUID(str(raw_tid)) if raw_tid else None
+        except ValueError:
+            tid = None
+        # An event-scoped credential must never authenticate a route with no
+        # tournament scope (for example account or organization settings).
+        resolved = (
+            repo.execute_transaction(
+                offline_sessions.resolve,
+                offline_token,
+                tournament_id=tid,
+            )
+            if tid is not None
+            else None
+        )
+        if resolved is not None:
+            user_row, offline = resolved
+            return AuthUser(
+                id=str(user_row.id),
+                email=user_row.email,
+                offline_tournament_id=str(offline.tournament_id),
+                offline_authority_epoch=offline.authority_epoch,
+            )
+
+    # An event node may use ``AUTH_MODE=local`` for its embedded runtime, but
+    # it is still a LAN service.  Once a checkpoint is imported, anonymous
+    # bootstrap would make every reachable browser an operator.  Event nodes
+    # therefore require the checked-out, tournament-scoped credential.
+    if settings.auth_mode == "local" and settings.deployment_profile != "event_node":
         # Zero-friction solo-operator path (Rule 3). The bootstrap
         # users row is ensured at startup; this AuthUser mirrors it.
         return _LOCAL_DEV_USER
@@ -94,6 +132,109 @@ def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not signed in",
     )
+
+
+def require_cloud_tournament_write_authority(
+    request: Request,
+    repo: LocalRepository = Depends(get_repository),
+) -> None:
+    """Fence cloud-side tournament mutations while an event node owns writes.
+
+    Attach this dependency to an entire tournament router: safe HTTP methods
+    remain available as cloud projections, and deployments other than the
+    cloud composition are unaffected.  Authority lifecycle and device sync
+    routers intentionally do not carry this dependency because they are the
+    mechanism that transfers and returns authority.
+    """
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return
+    if settings.deployment_profile != "cloud":
+        return
+    raw_tournament_id = request.path_params.get("tournament_id")
+    if raw_tournament_id is None:
+        return
+    try:
+        tournament_id = uuid.UUID(str(raw_tournament_id))
+    except ValueError:
+        # Path validation owns malformed identifiers.  Do not replace its
+        # stable 422 response with an authority-policy error.
+        return
+
+    if _tournament_checked_out(repo, tournament_id):
+        raise http_error(
+            409,
+            ErrorCode.EVENT_CHECKED_OUT,
+            (
+                "This tournament is checked out to an event node. "
+                "Cloud operations are read-only until authority is returned."
+            ),
+        )
+
+
+def require_pre_checkout_configuration_write(
+    request: Request,
+    repo: LocalRepository = Depends(get_repository),
+) -> None:
+    """Reject preparation-only mutations once tournament checkout begins.
+
+    Unlike the cloud authority fence, this rule applies to every deployment
+    profile.  Setup and destructive import surfaces are checkpoint inputs;
+    allowing the event node to rewrite them after import would silently fork
+    the checkpoint instead of producing a live domain operation.
+    """
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return
+    raw_tournament_id = request.path_params.get("tournament_id")
+    if raw_tournament_id is None:
+        return
+    try:
+        tournament_id = uuid.UUID(str(raw_tournament_id))
+    except ValueError:
+        return
+
+    if _tournament_checked_out(repo, tournament_id):
+        raise http_error(
+            409,
+            ErrorCode.CONFIG_LOCKED,
+            (
+                "Tournament preparation is frozen after checkout. "
+                "Return authority before changing setup or replacing imports."
+            ),
+        )
+
+
+def require_pre_checkout_entry_write(
+    request: Request,
+    repo: LocalRepository = Depends(get_repository),
+) -> None:
+    """Freeze entrant/roster mutations while node authority is checked out."""
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return
+    raw_tournament_id = request.path_params.get("tournament_id")
+    if raw_tournament_id is None:
+        return
+    try:
+        tournament_id = uuid.UUID(str(raw_tournament_id))
+    except ValueError:
+        return
+
+    if _tournament_checked_out(repo, tournament_id):
+        raise http_error(
+            409,
+            ErrorCode.EVENT_CHECKED_OUT,
+            (
+                "Entries and roster changes are frozen while this tournament "
+                "is checked out to an event node."
+            ),
+        )
+
+
+def _tournament_checked_out(
+    repo: LocalRepository, tournament_id: uuid.UUID
+) -> bool:
+    from sync.service import tournament_is_checked_out
+
+    return repo.execute_query(tournament_is_checked_out, tournament_id)
 
 
 # ---- The entrant principal (SP-E1-2, ruling D-A3) --------------------
@@ -142,9 +283,10 @@ def get_current_entrant(
     """
     token = request.cookies.get(settings.entrant_session_cookie_name)
     if token:
-        account = entrant_service.resolve_session(repo.session, token)
+        account = repo.execute_transaction(
+            entrant_service.resolve_session, token
+        )
         if account is not None:
-            repo.session.commit()  # persist the rolling last_seen touch
             return AuthEntrant(
                 id=str(account.id),
                 email=account.email,

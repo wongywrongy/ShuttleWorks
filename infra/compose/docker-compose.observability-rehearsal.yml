@@ -1,0 +1,60 @@
+name: ${COMPOSE_PROJECT_NAME:-shuttleworks-phase4-rehearsal}
+
+services:
+  otel-storage-init:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage /evidence && chown -R 10001:10001 /var/lib/otelcol && chown -R 1001:1001 /evidence"]
+    volumes:
+      - phase4_queue:/var/lib/otelcol
+      - phase4_evidence:/evidence
+    restart: "no"
+    read_only: true
+
+  rehearsal-gateway:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["python", "-m", "core.telemetry.rehearsal_gateway"]
+    environment:
+      - REHEARSAL_CAPTURE_PATH=/evidence/signals.jsonl
+    volumes:
+      - phase4_evidence:/evidence
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4318/health', timeout=2)"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.136.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    depends_on:
+      otel-storage-init:
+        condition: service_completed_successfully
+    volumes:
+      - ../otel/collector-rehearsal.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - phase4_queue:/var/lib/otelcol
+    ports:
+      - "127.0.0.1:${PHASE4_OTLP_PORT:-14318}:4318"
+      - "127.0.0.1:${PHASE4_HEALTH_PORT:-13134}:13133"
+      - "127.0.0.1:${PHASE4_METRICS_PORT:-18888}:8888"
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+
+volumes:
+  phase4_queue:
+  phase4_evidence:

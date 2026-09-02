@@ -12,6 +12,7 @@ generously enough for solver-authored content, because a bound that
 rejects our own output is an outage, not a control.
 """
 import uuid
+from datetime import timezone
 from typing import Annotated, List, Literal, Optional, Dict, Any
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from enum import Enum
@@ -929,7 +930,11 @@ class EntryPageDTO(BaseModel):
             waiverRequired=bool(row.waiver_required),
             regulationsVersion=row.regulations_version,
             regulationsUpdatedAt=(
-                row.regulations_updated_at.isoformat()
+                (
+                    row.regulations_updated_at
+                    if row.regulations_updated_at.tzinfo is not None
+                    else row.regulations_updated_at.replace(tzinfo=timezone.utc)
+                ).astimezone(timezone.utc).isoformat()
                 if row.regulations_updated_at is not None
                 else None
             ),

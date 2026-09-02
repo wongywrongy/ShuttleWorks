@@ -71,6 +71,7 @@ services:
     # the compose network. Publishing a port here would create exactly
     # the public surface the tunnel exists to avoid.
     environment:
+      - SHUTTLEWORKS_DEPLOYMENT_PROFILE=cloud
       - ENVIRONMENT=cloud
       - AUTH_MODE=cloud
       - LOG_LEVEL=${LOG_LEVEL:-info}

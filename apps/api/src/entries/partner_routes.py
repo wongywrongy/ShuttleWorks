@@ -174,6 +174,37 @@ def _dead() -> Exception:
     )
 
 
+def _preview_context(session, token: str):
+    entry = partner_service.resolve(session, token)
+    if entry is None:
+        return None
+    event = session.get(
+        EntryEvent, (entry.tournament_id, entry.entry_event_id)
+    )
+    tournament = session.get(Tournament, entry.tournament_id)
+    page = session.get(EntryPage, entry.tournament_id)
+    events = session.scalars(
+        select(EntryEvent).where(
+            EntryEvent.tournament_id == entry.tournament_id
+        )
+    ).all()
+    return entry, event, tournament, page, events
+
+
+def _accept_context(session, token: str):
+    entry = partner_service.resolve(session, token)
+    if entry is None:
+        return None
+    from sync.service import tournament_is_checked_out
+
+    checked_out = tournament_is_checked_out(session, entry.tournament_id)
+    event = session.get(
+        EntryEvent, (entry.tournament_id, entry.entry_event_id)
+    )
+    page = session.get(EntryPage, entry.tournament_id)
+    return entry, checked_out, event, page
+
+
 @router.get("/{token}", response_model=PartnerInviteDTO)
 def preview_partner_invite(
     token: str = Path(..., max_length=200),
@@ -185,17 +216,10 @@ def preview_partner_invite(
     unauthenticated route and the value reaches a hash function, so an
     unbounded segment would be free work for anyone who wanted to send some.
     """
-    entry = partner_service.resolve(repo.session, token)
-    if entry is None:
+    context = repo.execute_query(_preview_context, token)
+    if context is None:
         raise _dead()
-
-    event = repo.session.get(EntryEvent, (entry.tournament_id, entry.entry_event_id))
-    tournament = repo.session.get(Tournament, entry.tournament_id)
-    page = repo.session.get(EntryPage, entry.tournament_id)
-
-    events = repo.session.scalars(
-        select(EntryEvent).where(EntryEvent.tournament_id == entry.tournament_id)
-    ).all()
+    entry, event, tournament, page, events = context
     # Parity with the entry page (apps/entrant/app/routes/enter.tsx:377),
     # which asks over OPEN events only. The page is the authority: it is
     # the surface that collects the year, and an invite that asks for one
@@ -265,16 +289,28 @@ def accept_partner_invite(
             "Confirm your email address before accepting an invitation.",
         )
 
-    entry = partner_service.resolve(repo.session, token)
-    if entry is None:
+    context = repo.execute_query(_accept_context, token)
+    if context is None:
         if is_form_post(request):
             return RedirectResponse(
                 url=_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
             )
         raise _dead()
 
-    event = repo.session.get(EntryEvent, (entry.tournament_id, entry.entry_event_id))
-    page = repo.session.get(EntryPage, entry.tournament_id)
+    # Accepting an invite creates a new Submission for the partner.  It is
+    # therefore subject to the same checkout freeze as the ordinary entrant
+    # form; otherwise the cloud could acknowledge a partner row that was not
+    # present in the event node's imported checkpoint.
+    # ``_accept_context`` resolves this through ``tournament_is_checked_out``
+    # before any acceptance write is staged.
+    entry, checked_out, event, page = context
+    if checked_out:
+        raise http_error(
+            409,
+            ErrorCode.EVENT_CHECKED_OUT,
+            "Entries are closed while this tournament is checked out to an event node.",
+        )
+
     if event is None or page is None:
         raise _dead()
 
@@ -286,8 +322,8 @@ def accept_partner_invite(
         page, [PlayerSelection(key="partner", events=[event])]
     )
 
-    partner_entry = partner_service.accept(
-        repo.session,
+    partner_entry = repo.execute_transaction(
+        partner_service.accept,
         entry,
         account_id=uuid.UUID(entrant.id),
         full_name=body.fullName,
@@ -298,7 +334,6 @@ def accept_partner_invite(
         fee_total_cents=total,
         fee_basis=basis,
     )
-    repo.session.commit()
     if is_form_post(request):
         return RedirectResponse(
             url=_ACCEPTED_PAGE, status_code=status.HTTP_303_SEE_OTHER

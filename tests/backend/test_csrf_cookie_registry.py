@@ -56,7 +56,7 @@ _SCANNED_DIRS = tuple(
     _BACKEND / name
     for name in (
         "core", "workspaces", "identity", "meet", "bracket",
-        "operations", "display", "entries", "solve_rail", "ops",
+        "operations", "display", "entries", "solve_rail", "ops", "sync",
     )
 )
 
@@ -260,7 +260,7 @@ def _resolve(expr: ast.AST, constants: dict[str, str] | None = None) -> str:
     )
 
 
-def test_every_api_set_cookie_names_a_registered_session_cookie(client):
+def test_every_api_set_cookie_names_a_registered_session_cookie():
     """The structural gate. A new cookie that authenticates a request and is
     not in ``settings.session_cookie_names`` fails here, by file and line."""
     from core.config import settings
@@ -283,7 +283,7 @@ def test_every_api_set_cookie_names_a_registered_session_cookie(client):
     )
 
 
-def test_the_scan_reaches_every_directory_that_sets_a_cookie(client):
+def test_the_scan_reaches_every_directory_that_sets_a_cookie():
     """**The control on the scan's own reach**, which is the part that
     silently rots. A guard that globs one directory answers "no strays" just
     as confidently about a directory it never opened, and Phase 6 put a real
@@ -314,15 +314,20 @@ def test_the_scan_reaches_every_directory_that_sets_a_cookie(client):
 
     assert "identity/auth_routes.py" in seen
     assert "identity/entrants_routes.py" in seen
+    assert "sync/routes.py" in seen
 
 
-def test_the_registry_names_both_principals(client):
+def test_the_registry_names_all_principals():
     from core.config import settings
 
-    assert settings.session_cookie_names == ("sw_session", "sw_play_session")
+    assert settings.session_cookie_names == (
+        "sw_session",
+        "sw_play_session",
+        "sw_offline_operator",
+    )
 
 
-def test_the_pre_session_nonce_is_carved_out_and_not_registered(client):
+def test_the_pre_session_nonce_is_carved_out_and_not_registered():
     """The carve-out, stated as an assertion rather than as a comment.
 
     Three claims, and all three matter: present in ``_NON_SESSION_COOKIES``

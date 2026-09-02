@@ -79,15 +79,22 @@ const stacks = Object.fromEntries(
   stackFiles.map((f) => [f, services(stackSource(f))]),
 ) as Record<string, Record<string, string>>;
 
-const withEntrant = Object.entries(stacks).filter(([, svc]) => 'entrant' in svc);
+// The LAN-TLS file is an overlay, not a runnable stack: its partial entrant
+// block inherits image, API_BASE_URL, and dependencies from docker-compose.yml.
+const overlays = new Set(['docker-compose.lan-tls.yml']);
+const deployableStacks = Object.entries(stacks).filter(([file]) => !overlays.has(file));
+const withEntrant = deployableStacks.filter(([, svc]) => 'entrant' in svc);
 
 describe('the compose files are actually being read', () => {
   it('finds every stack CI lints', () => {
-    // The compose-lint job enumerates six files; if one is added or renamed
+    // The compose-lint job enumerates these files; if one is added or renamed
     // and this list does not move, the checks below stop covering it.
     expect(stackFiles.sort()).toEqual([
       'docker-compose.cloud.yml',
       'docker-compose.dev.yml',
+      'docker-compose.event-node.yml',
+      'docker-compose.lan-tls.yml',
+      'docker-compose.observability-rehearsal.yml',
       'docker-compose.release.yml',
       'docker-compose.selfhost.yml',
       'docker-compose.worker.yml',
@@ -98,7 +105,7 @@ describe('the compose files are actually being read', () => {
   it('slices every stack into services', () => {
     // Non-vacuity for the whole file: a splitter that returned {} would make
     // "the entrant service sets X" pass by having no entrant service.
-    for (const [file, svc] of Object.entries(stacks)) {
+    for (const [file, svc] of deployableStacks) {
       expect(Object.keys(svc).length, file).toBeGreaterThan(0);
     }
     expect(Object.keys(stacks['docker-compose.selfhost.yml']).sort()).toEqual([
@@ -167,6 +174,7 @@ describe('the entrant tier ships exactly where nginx can reach it', () => {
       'docker-compose.selfhost.yml',
       'docker-compose.yml',
     ]);
+    expect(stacks['docker-compose.lan-tls.yml'].entrant).toBeDefined();
   });
 
   it.each(withEntrant)('%s publishes no host port for it', (_file, svc) => {
@@ -280,7 +288,7 @@ describe('the chain from "who is the client" to "which bucket" holds in every st
     // Non-vacuity, and the tripwire for a NEW deployment stack: every stack
     // with an nginx in front of an API is either checked below or is the dev
     // stack the docblock exempts.
-    const fronted = Object.entries(stacks)
+    const fronted = deployableStacks
       .filter(([, svc]) => 'frontend' in svc && ('api' in svc || 'backend' in svc))
       .map(([f]) => f)
       .sort();

@@ -271,7 +271,7 @@ def accept_invite(
         # materialize a users row for bearer-era identities first.
         from identity.auth import ensure_user
 
-        ensure_user(repo.session, user_uuid, user.email)
+        repo.execute_transaction(ensure_user, user_uuid, user.email)
         repo.members.add_member(invite.tournament_id, user_uuid, target_role)
         final_role = target_role
         already_member = False

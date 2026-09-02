@@ -50,10 +50,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from entries.entries_public import (
+    _all_rows,
     _entrants,
     _entry_counts,
     _event_is_open,
     _events,
+    _get_record,
     _is_age_bracketed,
     _lookup_event,
     _moment,
@@ -61,6 +63,7 @@ from entries.entries_public import (
     _moment_iso,
     _optional_entrant,
     _resolve,
+    _scalar_rows,
     page_status,
 )
 from core.client_ip import client_ip
@@ -84,6 +87,25 @@ from entries.entry_policy import check_policy
 from entries.entries_site import PublicPersonIdentityDTO, PersonReferenceDTO
 
 log = logging.getLogger("scheduler.entries.entries_json")
+
+
+def _record_entry_attempt(session, throttle_key: str) -> None:
+    throttle.throttle_record_entry(session, throttle_key)
+
+
+def _create_submission_and_charge(
+    session,
+    *,
+    throttle_key: str,
+    **submission_fields,
+):
+    result = submission_service.create_submission(
+        session,
+        commit=False,
+        **submission_fields,
+    )
+    throttle.throttle_record_entry(session, throttle_key)
+    return result
 
 # An HTML checkbox posts its value only when ticked, so presence is the
 # signal; the values are what browsers and hand-rolled clients actually
@@ -445,7 +467,7 @@ def entry_page_projection(
         now=now,
     )
     org = (
-        repo.session.get(Org, tournament.org_id)
+        repo.execute_query(_get_record, Org, tournament.org_id)
         if tournament.org_id is not None
         else None
     )
@@ -654,17 +676,19 @@ def entry_page_list(
     windows is the ending-soonest rule.
     """
     now = _utcnow()
-    listed = repo.session.execute(
+    listed = repo.execute_query(
+        _all_rows,
         select(EntryPage, Tournament, Org)
         .join(Tournament, Tournament.id == EntryPage.tournament_id)
         .outerjoin(Org, Org.id == Tournament.org_id)
-        .where(EntryPage.is_open.is_(True))
-    ).all()
+        .where(EntryPage.is_open.is_(True)),
+    )
     tids = [t.id for _, t, _ in listed]
     events_by_tid: Dict[uuid.UUID, list] = {}
     if tids:
-        for ev in repo.session.scalars(
-            select(EntryEvent).where(EntryEvent.tournament_id.in_(tids))
+        for ev in repo.execute_query(
+            _scalar_rows,
+            select(EntryEvent).where(EntryEvent.tournament_id.in_(tids)),
         ):
             events_by_tid.setdefault(ev.tournament_id, []).append(ev)
 
@@ -1136,6 +1160,20 @@ async def submit_entry_json(
     # 3 — the form CSRF token, before the body is read for anything else.
     require_form_csrf(request, form)
 
+    # Checkout freezes entrant intake before the checkpoint is imported.
+    # Otherwise an accepted cloud submission could be absent from the node's
+    # live-event state with no safe semantic merge path.  Idempotent retries
+    # from before checkout remain readable through the receipt route; this
+    # endpoint accepts no new writes while an authority is preparing/active.
+    from sync.service import tournament_is_checked_out
+
+    if repo.execute_query(tournament_is_checked_out, tournament.id):
+        raise http_error(
+            409,
+            ErrorCode.INVALID_INPUT,
+            "Entries are closed while this tournament is checked out to an event node.",
+        )
+
     ip = client_ip(request)
     throttle_key = throttle.entries_key(ip)
 
@@ -1143,7 +1181,7 @@ async def submit_entry_json(
     # in front of a route that already requires an account would charge
     # every honest entrant a puzzle to slow down an attacker who has
     # already signed up.
-    remaining = throttle.throttle_check(repo.session, throttle_key)
+    remaining = repo.execute_query(throttle.throttle_check, throttle_key)
     if remaining is not None:
         raise http_error(
             429,
@@ -1153,8 +1191,7 @@ async def submit_entry_json(
         )
 
     def refuse(status: int, message: str):
-        throttle.throttle_record_entry(repo.session, throttle_key)
-        repo.session.commit()
+        repo.execute_transaction(_record_entry_attempt, throttle_key)
         return http_error(status, ErrorCode.INVALID_INPUT, message)
 
     # 5 — the acknowledgment. One given after the fact is not one.
@@ -1207,8 +1244,9 @@ async def submit_entry_json(
         raise refuse(422, "That submission's key is too long (64 characters).")
 
     # 7-9 — replay, flags and the write, all inside the submission service.
-    result = submission_service.create_submission(
-        repo.session,
+    result = repo.execute_transaction(
+        _create_submission_and_charge,
+        throttle_key=throttle_key,
         tournament_id=tournament.id,
         page=page,
         account_id=uuid.UUID(entrant.id),
@@ -1235,9 +1273,6 @@ async def submit_entry_json(
         # entrant dependency already has it.
         email_verified=bool(entrant.email_verified),
     )
-
-    throttle.throttle_record_entry(repo.session, throttle_key)
-    repo.session.commit()
 
     # E3: the partner invites this act minted, mailed AFTER the commit. An
     # invite that arrives before the row it names is a race an entrant can

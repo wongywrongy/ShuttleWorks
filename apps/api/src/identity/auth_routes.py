@@ -23,7 +23,6 @@ from core.config import settings
 from core.dependencies import AuthUser, get_current_user
 from core.error_codes import ErrorCode, http_error
 from core.limits import Email, Name, Password, StrictModel, Token
-from db.models import User
 from repositories import LocalRepository, get_repository
 from core import throttle
 from identity import auth as auth_service
@@ -118,7 +117,7 @@ def _auth_error(exc: AuthError):
 
 def _throttle_guard(repo: LocalRepository, *keys: str) -> None:
     for key in keys:
-        remaining = throttle.throttle_check(repo.session, key)
+        remaining = repo.execute_query(throttle.throttle_check, key)
         if remaining is not None:
             raise http_error(
                 status.HTTP_429_TOO_MANY_REQUESTS,
@@ -137,6 +136,69 @@ def _user_dto(user_row, *, email: str) -> UserDTO:
         isBootstrap=user_row.id == auth_service.BOOTSTRAP_USER_UUID,
         authMode=settings.auth_mode,
     )
+
+
+def _record_failures(session, *keys: str) -> None:
+    for key in keys:
+        auth_service.throttle_record_failure(session, key)
+
+
+def _record_registration_failures(session, ip_key: str, reg_key: str) -> None:
+    auth_service.throttle_record_failure(session, ip_key)
+    auth_service.throttle_record_registration(session, reg_key)
+
+
+def _register_account(
+    session,
+    *,
+    email: str,
+    password: str,
+    display_name: Optional[str],
+    registration_key: str,
+):
+    user = auth_service.create_user(
+        session,
+        email=email,
+        password=password,
+        display_name=display_name,
+    )
+    auth_service.throttle_record_registration(session, registration_key)
+    token, _ = auth_service.create_session(session, user.id)
+    return user, token
+
+
+def _complete_login(session, user, password: str, account_key: str):
+    if auth_service.password_needs_rehash(user.password_hash):
+        user.password_hash = auth_service.hash_password(password)
+    auth_service.throttle_record_success(session, account_key)
+    token, _ = auth_service.create_session(session, user.id)
+    return token
+
+
+def _change_password(
+    session,
+    user,
+    new_password: str,
+    account_key: str,
+    current_token: Optional[str],
+) -> None:
+    user.password_hash = auth_service.hash_password(new_password)
+    auth_service.revoke_all_sessions(
+        session, user.id, except_token=current_token
+    )
+    auth_service.throttle_record_success(session, account_key)
+
+
+def _consume_reset_attempt(
+    session,
+    token: str,
+    new_password: str,
+    ip_key: str,
+):
+    user = auth_service.consume_reset_token(session, token, new_password)
+    if user is None:
+        auth_service.throttle_record_failure(session, ip_key)
+    return user
 
 
 # ---- Endpoints -------------------------------------------------------
@@ -159,24 +221,18 @@ def register(
     try:
         email = auth_service.normalize_email(body.email)
         auth_service.validate_password(body.password)
-        user = auth_service.create_user(
-            repo.session,
+        user, token = repo.execute_transaction(
+            _register_account,
             email=email,
             password=body.password,
             display_name=(body.displayName or "").strip() or None,
+            registration_key=reg_key,
         )
     except AuthError as exc:
         # Failed registrations count against the IP so enumeration via
         # EMAIL_TAKEN probing is bounded by the same backoff as login.
-        auth_service.throttle_record_failure(repo.session, ip_key)
-        auth_service.throttle_record_registration(repo.session, reg_key)
-        repo.session.commit()
+        repo.execute_transaction(_record_registration_failures, ip_key, reg_key)
         raise _auth_error(exc)
-    # Charge the successful path too — it is the expensive one, creating a
-    # users row, a personal org, and an org_members row.
-    auth_service.throttle_record_registration(repo.session, reg_key)
-    token, _ = auth_service.create_session(repo.session, user.id)
-    repo.session.commit()
     _set_session_cookie(response, token)
     return _user_dto(user, email=email)
 
@@ -196,7 +252,7 @@ def login(
     ip_key = f"ip:{_client_ip(request)}"
     _throttle_guard(repo, account_key, ip_key)
 
-    user = auth_service.get_user_by_email(repo.session, email)
+    user = repo.execute_query(auth_service.get_user_by_email, email)
     # Uniform failure: same code/message whether the account is missing,
     # has no password yet, or the password is wrong (OWASP: don't leak
     # which). Verify against a dummy hash when there's nothing to check
@@ -207,9 +263,7 @@ def login(
         else auth_service.verify_password(_DUMMY_HASH, body.password) and False
     )
     if not ok:
-        auth_service.throttle_record_failure(repo.session, account_key)
-        auth_service.throttle_record_failure(repo.session, ip_key)
-        repo.session.commit()
+        repo.execute_transaction(_record_failures, account_key, ip_key)
         raise http_error(
             status.HTTP_401_UNAUTHORIZED,
             ErrorCode.AUTH_INVALID_CREDENTIALS,
@@ -217,11 +271,9 @@ def login(
         )
 
     assert user is not None
-    if auth_service.password_needs_rehash(user.password_hash):
-        user.password_hash = auth_service.hash_password(body.password)
-    auth_service.throttle_record_success(repo.session, account_key)
-    token, _ = auth_service.create_session(repo.session, user.id)
-    repo.session.commit()
+    token = repo.execute_transaction(
+        _complete_login, user, body.password, account_key
+    )
     _set_session_cookie(response, token)
     return _user_dto(user, email=user.email)
 
@@ -234,8 +286,7 @@ def logout(
 ) -> Response:
     token = request.cookies.get(settings.session_cookie_name)
     if token:
-        auth_service.revoke_session(repo.session, token)
-        repo.session.commit()
+        repo.execute_transaction(auth_service.revoke_session, token)
     _clear_session_cookie(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
@@ -247,7 +298,7 @@ def me(
     repo: LocalRepository = Depends(get_repository),
 ) -> UserDTO:
     user_uuid = user.as_uuid()
-    row = repo.session.get(User, user_uuid) if user_uuid else None
+    row = repo.get_user_identity(user_uuid) if user_uuid else None
     if row is None:
         # Bearer-era identities or the pre-bootstrap synthetic user may
         # have no local row yet; synthesize the DTO.
@@ -268,7 +319,7 @@ def change_password(
     repo: LocalRepository = Depends(get_repository),
 ) -> Response:
     user_uuid = user.as_uuid()
-    row = repo.session.get(User, user_uuid) if user_uuid else None
+    row = repo.get_user_identity(user_uuid) if user_uuid else None
     if row is None or not row.password_hash:
         raise http_error(
             status.HTTP_400_BAD_REQUEST,
@@ -278,8 +329,7 @@ def change_password(
     account_key = f"account:{row.email.lower()}"
     _throttle_guard(repo, account_key)
     if not auth_service.verify_password(row.password_hash, body.currentPassword):
-        auth_service.throttle_record_failure(repo.session, account_key)
-        repo.session.commit()
+        repo.execute_transaction(_record_failures, account_key)
         raise http_error(
             status.HTTP_401_UNAUTHORIZED,
             ErrorCode.AUTH_INVALID_CREDENTIALS,
@@ -289,14 +339,15 @@ def change_password(
         auth_service.validate_password(body.newPassword)
     except AuthError as exc:
         raise _auth_error(exc)
-    row.password_hash = auth_service.hash_password(body.newPassword)
     # OWASP: changing the credential invalidates every other session.
     current_token = request.cookies.get(settings.session_cookie_name)
-    auth_service.revoke_all_sessions(
-        repo.session, row.id, except_token=current_token
+    repo.execute_transaction(
+        _change_password,
+        row,
+        body.newPassword,
+        account_key,
+        current_token,
     )
-    auth_service.throttle_record_success(repo.session, account_key)
-    repo.session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -314,10 +365,9 @@ def request_password_reset(
         email = auth_service.normalize_email(body.email)
     except AuthError:
         return {"status": "accepted"}
-    user = auth_service.get_user_by_email(repo.session, email)
+    user = repo.execute_query(auth_service.get_user_by_email, email)
     if user is not None:
-        token = auth_service.issue_reset_token(repo.session, user)
-        repo.session.commit()
+        token = repo.execute_transaction(auth_service.issue_reset_token, user)
         # Delivery rides the email seam: console backend logs the full
         # message locally; SMTP delivers in cloud. The raw token never
         # appears in the HTTP response or the cloud application log.
@@ -347,8 +397,7 @@ def request_password_reset(
             user.reset_token_expires_at,
         )
     else:
-        auth_service.throttle_record_failure(repo.session, ip_key)
-        repo.session.commit()
+        repo.execute_transaction(_record_failures, ip_key)
     return {"status": "accepted"}
 
 
@@ -361,20 +410,20 @@ def reset_password(
     ip_key = f"ip:{_client_ip(request)}"
     _throttle_guard(repo, ip_key)
     try:
-        user = auth_service.consume_reset_token(
-            repo.session, body.token, body.newPassword
+        user = repo.execute_transaction(
+            _consume_reset_attempt,
+            body.token,
+            body.newPassword,
+            ip_key,
         )
     except AuthError as exc:
         raise _auth_error(exc)
     if user is None:
-        auth_service.throttle_record_failure(repo.session, ip_key)
-        repo.session.commit()
         raise http_error(
             status.HTTP_400_BAD_REQUEST,
             ErrorCode.AUTH_RESET_INVALID,
             "Invalid or expired reset token",
         )
-    repo.session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

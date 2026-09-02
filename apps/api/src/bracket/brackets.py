@@ -50,9 +50,11 @@ from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 from shared.sport.badminton import schedule_config_for_bracket
 from core.dependencies import (
+    AuthUser,
+    get_current_user,
+    require_pre_checkout_configuration_write,
     require_tournament_access,
 )
-from core.exceptions import ConflictError
 from core.schemas import BracketCommandRequest, BracketPlayerDTO, TournamentConfig
 from repositories import LocalRepository, get_repository
 from scheduler_core.domain.models import (
@@ -121,6 +123,7 @@ from bracket.state import (
     register_draw,
 )
 from bracket.validation import BracketConflict, validate_bracket_move
+from bracket.application import BracketPinService, BracketResultService
 from shared.scheduling.params import SchedulingParams, build_schedule_config
 
 router = APIRouter(
@@ -453,6 +456,9 @@ class RecordResultIn(StrictModel):
 
 
 class MatchActionIn(StrictModel):
+    # A caller that may retry must retain this UUID across attempts. Legacy
+    # callers may omit it and receive a fresh command identity per request.
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
     play_unit_id: Identifier
     action: Literal["start", "finish", "reset"]
     slot: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
@@ -472,6 +478,9 @@ class BracketPinIn(StrictModel):
     play_unit_id: Identifier
     slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
     court_id: int = Field(..., ge=0, le=MAX_COURTS)
+    # Retained as optional for older API callers; the console always supplies
+    # one so retries are idempotent at the operation boundary.
+    command_id: Optional[uuid.UUID] = None
 
 
 class BracketAssignIn(StrictModel):
@@ -480,12 +489,14 @@ class BracketAssignIn(StrictModel):
     play_unit_id: Identifier
     court_id: int = Field(..., ge=0, le=MAX_COURTS)
     slot_id: int = Field(..., ge=0, le=MAX_SLOT_INDEX)
+    command_id: Optional[uuid.UUID] = None
 
 
 class BracketUnassignIn(StrictModel):
     """Body for POST /bracket/unassign — remove a play unit's court assignment."""
 
     play_unit_id: Identifier
+    command_id: Optional[uuid.UUID] = None
 
 
 class EventUpsertIn(StrictModel):
@@ -1008,6 +1019,7 @@ def _persist_session_metadata(
     session: BracketSession,
     time_limit_seconds: Optional[float] = None,
     roster: Optional[List[BracketPlayerDTO]] = None,
+    commit: bool = True,
 ) -> None:
     """Write the schedule-config + assignments blob into tournaments.data.
 
@@ -1050,7 +1062,7 @@ def _persist_session_metadata(
     }
     if roster is not None:
         existing["bracketPlayers"] = [player.model_dump(mode="json") for player in roster]
-    repo.tournaments.upsert_data(tournament_id, existing)
+    repo.tournaments.upsert_data(tournament_id, existing, commit=commit)
 
 
 def _materialize_operations_assignment(
@@ -1060,6 +1072,7 @@ def _materialize_operations_assignment(
     *,
     court_id: Optional[int],
     slot_id: Optional[int],
+    commit: bool = True,
 ) -> None:
     """Project an Operations court decision onto the shared match spine.
 
@@ -1070,7 +1083,7 @@ def _materialize_operations_assignment(
     repo.matches.upsert(
         tournament_id,
         play_unit_id,
-        {"court_id": court_id, "time_slot": slot_id},
+        {"court_id": court_id, "time_slot": slot_id}, commit=commit,
     )
 
 
@@ -1515,11 +1528,14 @@ def _persist_result_advancement(
         finished_at_slot=recorded.finished_at_slot,
         walkover=recorded.walkover,
         reason=recorded.reason,
+        commit=False,
     )
     # First result on a Generated event flips its status to 'started'.
     ev_row = repo.brackets.get_event(tournament_id, pu.event_id)
     if ev_row is not None and ev_row.status == "generated":
-        repo.brackets.set_event_status(tournament_id, pu.event_id, "started")
+        repo.brackets.set_event_status(
+            tournament_id, pu.event_id, "started", commit=False
+        )
     # Persist the downstream match-row slot updates (and any cascading
     # walkover results triggered by _sweep_walkovers).
     for downstream_id in affected:
@@ -1536,6 +1552,7 @@ def _persist_result_advancement(
                 "side_a": list(downstream_pu.side_a) if downstream_pu.side_a else [],
                 "side_b": list(downstream_pu.side_b) if downstream_pu.side_b else [],
             },
+            commit=False,
         )
         # If the sweep auto-walkovered this downstream PlayUnit too,
         # its result is in state.results now and needs persisting.
@@ -1550,6 +1567,7 @@ def _persist_result_advancement(
                 finished_at_slot=r.finished_at_slot,
                 walkover=r.walkover,
                 reason=r.reason,
+                commit=False,
             )
 
 
@@ -2676,6 +2694,7 @@ def record_match_result(
     body: RecordResultIn,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ) -> TournamentOut:
     """Record a result and advance the bracket.
 
@@ -2683,77 +2702,19 @@ def record_match_result(
     downstream draw slots; we persist the bracket_matches rows that
     changed and the bracket_results row for the recorded match.
     """
-    _ensure_tournament_exists(repo, tournament_id)
-    session = _hydrate_session(repo, tournament_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
-
-    pu = session.state.play_units.get(body.play_unit_id)
-    if pu is None:
-        raise HTTPException(status_code=404, detail=f"play_unit {body.play_unit_id!r} not found")
-    _require_resolved_play_unit(session, body.play_unit_id, action="record this result")
-
-    # Optimistic concurrency (SP-F3): when the client carries the version it
-    # last saw, reject a write whose token is stale — a second operator
-    # already moved this match. Checked BEFORE the already-recorded /
-    # advancement paths so a stale write records nothing and advances
-    # nothing. Omitting ``seen_version`` keeps the legacy behavior.
-    if body.seen_version is not None:
-        current_version = session.match_versions.get(body.play_unit_id, 1)
-        if body.seen_version != current_version:
-            raise ConflictError(
-                match_id=body.play_unit_id,
-                current_version=current_version,
-                seen_version=body.seen_version,
-                message=(
-                    f"Bracket match {body.play_unit_id!r} was updated since "
-                    f"you last loaded it (current version {current_version}, "
-                    f"you sent {body.seen_version})."
-                ),
-            )
-
-    existing = session.state.results.get(body.play_unit_id)
-    if existing is not None:
-        is_exact_replay = (
-            existing.winner_side.value == body.winner_side
-            and existing.finished_at_slot == body.finished_at_slot
-            and existing.walkover == body.walkover
-            and existing.score == body.score
-        )
-        if not is_exact_replay:
-            raise HTTPException(
-                status_code=409,
-                detail="Result already recorded for this match",
-            )
-        session.state.results.pop(body.play_unit_id)
-
-    try:
-        affected = record_result(
-            session.state,
-            session.draws,
-            body.play_unit_id,
-            WinnerSide(body.winner_side),
-            finished_at_slot=body.finished_at_slot,
-            walkover=body.walkover,
-            score=body.score,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    _persist_result_advancement(
+    outcome = BracketResultService(actor_id=user.as_uuid()).apply(
         repo,
         tournament_id,
-        session,
-        body.play_unit_id,
-        affected,
+        play_unit_id=body.play_unit_id,
+        winner_side=body.winner_side,
+        seen_version=body.seen_version,
+        finished_at_slot=body.finished_at_slot,
+        walkover=body.walkover,
+        score=body.score,
     )
 
-    # Advancement bumped downstream match versions in the DB; refresh the
-    # tokens so the returned DTO carries the authoritative versions (SP-F3).
-    session.match_versions = _load_match_versions(repo, tournament_id)
-
     response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
+    return BracketResultService.serialize(outcome)
 
 
 @router.post("/commands", response_model=TournamentOut, dependencies=[_OPERATOR])
@@ -2761,6 +2722,7 @@ def submit_bracket_command(
     body: BracketCommandRequest,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ) -> TournamentOut:
     """Record a bracket result (and advance the bracket) via a command.
 
@@ -2771,75 +2733,24 @@ def submit_bracket_command(
           re-delivered command never produces a 409 stale_version even when
           the match version has advanced since the original send (SP-G1 Seam C).
     """
-    _ensure_tournament_exists(repo, tournament_id)
-    session = _hydrate_session(repo, tournament_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
-
-    # ---- Idempotency guard (MUST precede seen_version check) ---------------
-    # On a genuine replay the downstream version has already advanced, so the
-    # version guard would produce 409 and break at-least-once delivery. The
-    # replay check short-circuits before we even inspect the version.
-    if str(body.id) in session.applied_command_ids:
-        return _serialize_session(session)
-
-    # ---- Play-unit existence -----------------------------------------------
-    pu = session.state.play_units.get(body.play_unit_id)
-    if pu is None:
-        raise HTTPException(status_code=404, detail=f"play_unit {body.play_unit_id!r} not found")
-    _require_resolved_play_unit(session, body.play_unit_id, action="record this result")
-
-    # ---- Optimistic concurrency (mirror record_match_result SP-F3) ---------
-    if body.seen_version is not None:
-        current_version = session.match_versions.get(body.play_unit_id, 1)
-        if body.seen_version != current_version:
-            raise ConflictError(
-                match_id=body.play_unit_id,
-                current_version=current_version,
-                seen_version=body.seen_version,
-                message=(
-                    f"Bracket match {body.play_unit_id!r} was updated since "
-                    f"you last loaded it (current version {current_version}, "
-                    f"you sent {body.seen_version})."
-                ),
-            )
-
-    # ---- Advance -----------------------------------------------------------
-    try:
-        affected = record_result(
-            session.state,
-            session.draws,
-            body.play_unit_id,
-            WinnerSide(body.winner_side),
-            finished_at_slot=body.finished_at_slot,
-            walkover=body.walkover,
-            score=body.score,
-            reason=body.reason,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    # ---- Mark command as applied, then persist both result and command id --
-    session.applied_command_ids.add(str(body.id))
-    _persist_result_advancement(
+    outcome = BracketResultService(actor_id=user.as_uuid()).apply(
         repo,
         tournament_id,
-        session,
-        body.play_unit_id,
-        affected,
+        play_unit_id=body.play_unit_id,
+        winner_side=body.winner_side,
+        seen_version=body.seen_version,
+        finished_at_slot=body.finished_at_slot,
+        walkover=body.walkover,
+        score=body.score,
+        reason=body.reason,
+        operation_id=body.id,
     )
-    # applied_command_ids lives in the JSON data blob, not the bracket_*
-    # tables, so we must flush it via _persist_session_metadata separately.
-    _persist_session_metadata(repo, tournament_id, session=session)
-
-    # Refresh match versions so the returned DTO carries authoritative tokens.
-    session.match_versions = _load_match_versions(repo, tournament_id)
 
     # CRITICAL: this is the one user-visible staleness case — the command
     # queue does POST-then-immediate-GET, so a stale cache hit here would
     # show an unrecorded result. Must invalidate before returning.
     response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
+    return BracketResultService.serialize(outcome)
 
 
 @router.post("/match-action", response_model=TournamentOut, dependencies=[_OPERATOR])
@@ -2847,6 +2758,7 @@ def match_action(
     body: MatchActionIn,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ) -> TournamentOut:
     """Toggle ``actual_start_slot`` / ``actual_end_slot`` on an assignment.
 
@@ -2854,63 +2766,17 @@ def match_action(
     sets ``actual_start_slot`` (from ``body.slot`` or the assigned
     slot); ``finish`` sets ``actual_end_slot``; ``reset`` clears both.
     """
-    _ensure_tournament_exists(repo, tournament_id)
-    session = _hydrate_session(repo, tournament_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
-    assignment = session.state.assignments.get(body.play_unit_id)
-    if assignment is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"no assignment for play_unit {body.play_unit_id!r}",
-        )
-    if body.action in ("start", "finish"):
-        _require_resolved_play_unit(
-            session,
-            body.play_unit_id,
-            action=f"{body.action} this match",
-        )
-
-    # A recorded result locks the physical lifecycle: 'start' would
-    # silently wipe ``actual_end_slot`` (and so move the next round's
-    # scheduling baseline), and 'reset' would clear the clock while
-    # leaving the result + its downstream advancement in place — an
-    # inconsistent state with no un-record path. Block both; redoing a
-    # played match means resetting the bracket.
-    has_result = body.play_unit_id in session.state.results
-    if body.action == "start":
-        if has_result:
-            raise HTTPException(
-                status_code=409,
-                detail="Cannot start a bracket match that already has a result",
-            )
-        assignment.actual_start_slot = body.slot if body.slot is not None else assignment.slot_id
-        assignment.actual_end_slot = None
-    elif body.action == "finish":
-        if assignment.actual_start_slot is None:
-            raise HTTPException(
-                status_code=409,
-                detail="Cannot finish a bracket match before it has started",
-            )
-        assignment.actual_end_slot = (
-            body.slot if body.slot is not None else (assignment.slot_id + assignment.duration_slots)
-        )
-    elif body.action == "reset":
-        if has_result:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Cannot reset a bracket match with a recorded result; "
-                    "reset the bracket to redo a played match"
-                ),
-            )
-        assignment.actual_start_slot = None
-        assignment.actual_end_slot = None
-
-    _persist_session_metadata(repo, tournament_id, session=session)
+    from bracket.application import BracketMatchActionService
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise HTTPException(status_code=422, detail="current user id is not a UUID")
+    outcome = BracketMatchActionService().apply(
+        repo, tournament_id, play_unit_id=body.play_unit_id,
+        action=body.action, slot=body.slot, actor_id=actor_id,
+        operation_id=body.id,
+    )
     response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
-
+    return _serialize_session(outcome.session)
 
 @router.post("/validate", response_model=BracketValidationOut, dependencies=[_VIEWER])
 def validate_bracket_move_route(
@@ -2997,6 +2863,7 @@ def pin_bracket_match(
     body: BracketPinIn,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ) -> TournamentOut:
     """Re-pin one already-scheduled PlayUnit and re-solve the
     already-scheduled set around it via the shared CP-SAT engine.
@@ -3012,80 +2879,18 @@ def pin_bracket_match(
     as ``409 {"error": "infeasible"}`` — surfaced to the operator, not
     a crash.
     """
-    _ensure_tournament_exists(repo, tournament_id)
-    session = _hydrate_session(repo, tournament_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
-    if body.play_unit_id not in session.state.play_units:
-        raise HTTPException(
-            status_code=404,
-            detail=f"play_unit {body.play_unit_id!r} not found",
-        )
-
-    # Reject a locked play_unit BEFORE the partition / feasibility
-    # check so the frontend gets an unambiguous 409 rather than an
-    # `infeasible` response.
-    locked_ids = _bracket_locked_play_unit_ids(session.state, session.config.current_slot)
-    if body.play_unit_id in locked_ids:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "locked",
-                "message": (
-                    f"play_unit {body.play_unit_id!r} is locked "
-                    f"(played / started / past) and cannot be re-pinned"
-                ),
-            },
-        )
-
-    tournament = repo.tournaments.get_by_id(tournament_id)
-    data_blob = (tournament.data or {}) if tournament else {}
-    session_cfg = data_blob.get("bracket_session") or {}
-    time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
-
-    driver = TournamentDriver(
-        state=session.state,
-        config=session.config,
-        solver_options=_bracket_solver_options(time_limit_seconds, data_blob.get("config") or {}),
-        rest_between_rounds=session.rest_between_rounds,
-        player_extras=session.player_extras,
+    actor_id = user.as_uuid()
+    outcome = BracketPinService().apply(
+        repo,
+        tournament_id,
+        play_unit_id=body.play_unit_id,
+        slot_id=body.slot_id,
+        court_id=body.court_id,
+        command_id=body.command_id,
+        actor_id=actor_id,
     )
-    try:
-        result = driver.repin_and_resolve(
-            body.play_unit_id,
-            slot_id=body.slot_id,
-            court_id=body.court_id,
-        )
-    except ValueError as exc:
-        # repin_and_resolve raises ValueError for an unscheduled or
-        # locked play_unit. The locked case is caught above (409 before
-        # this point), so every ValueError here originates from the
-        # unscheduled-play_unit entry guard. build_problem and schedule()
-        # do not raise ValueError in this call path.
-        # An unscheduled real play_unit (e.g. the final, awaiting feeders)
-        # cannot be pinned — surface it as infeasible.
-        raise HTTPException(
-            status_code=409,
-            detail={"error": "infeasible", "reasons": [str(exc)]},
-        )
-
-    if not result.scheduled:
-        reasons = (
-            list(result.schedule_result.infeasible_reasons)
-            if result.schedule_result is not None
-            else []
-        )
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "infeasible",
-                "reasons": reasons or [f"solver returned {result.status.value}"],
-            },
-        )
-
-    _persist_session_metadata(repo, tournament_id, session=session)
     response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
+    return _serialize_session(outcome.session)
 
 
 @router.post("/assign", response_model=TournamentOut, dependencies=[_OPERATOR])
@@ -3093,6 +2898,7 @@ def assign_bracket_court(
     body: BracketAssignIn,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ) -> TournamentOut:
     """Directly place a play unit on a court+slot — NO solver, NO 409 for
     unscheduled units.
@@ -3114,44 +2920,17 @@ def assign_bracket_court(
     404 when the play unit is not found; 404 when no bracket is
     configured for this tournament.
     """
-    _ensure_tournament_exists(repo, tournament_id)
-    session = _hydrate_session(repo, tournament_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
-
-    pu = session.state.play_units.get(body.play_unit_id)
-    if pu is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"play_unit {body.play_unit_id!r} not found",
-        )
-    _require_resolved_play_unit(session, body.play_unit_id, action="send this match to court")
-
-    # Use the play unit's own duration (already normalised during hydration);
-    # fall back to 1 slot if somehow absent (belt-and-suspenders).
-    duration_slots = pu.expected_duration_slots or 1
-
-    session.state.assignments[body.play_unit_id] = TournamentAssignment(
-        play_unit_id=body.play_unit_id,
-        slot_id=body.slot_id,
-        court_id=body.court_id,
-        duration_slots=duration_slots,
-        actual_start_slot=None,
-    )
-
-    _persist_session_metadata(repo, tournament_id, session=session)
-    # `/bracket/assign` is an Operations action.  Materialise the public
-    # court on the shared operational Match row; planning/solver assignments
-    # remain only in `bracket_session` and are therefore not published.
-    _materialize_operations_assignment(
-        repo,
-        tournament_id,
-        body.play_unit_id,
-        court_id=body.court_id,
-        slot_id=body.slot_id,
+    from bracket.application import BracketAssignmentService
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise HTTPException(status_code=422, detail="current user id is not a UUID")
+    outcome = BracketAssignmentService().apply(
+        repo, tournament_id, play_unit_id=body.play_unit_id, action="assign",
+        slot_id=body.slot_id, court_id=body.court_id, actor_id=actor_id,
+        command_id=body.command_id,
     )
     response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
+    return _serialize_session(outcome.session)
 
 
 @router.post("/unassign", response_model=TournamentOut, dependencies=[_OPERATOR])
@@ -3159,6 +2938,7 @@ def unassign_bracket_court(
     body: BracketUnassignIn,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
 ) -> TournamentOut:
     """Return a play unit to the queue by removing its court assignment.
 
@@ -3173,29 +2953,23 @@ def unassign_bracket_court(
     Returns the full serialized tournament snapshot.  Always 200 — even
     when the unit was already unassigned.
     """
-    _ensure_tournament_exists(repo, tournament_id)
-    session = _hydrate_session(repo, tournament_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="no bracket configured for this tournament")
-
-    # pop is a no-op when the key is absent — idempotent by design.
-    session.state.assignments.pop(body.play_unit_id, None)
-
-    _persist_session_metadata(repo, tournament_id, session=session)
-    # Clear the same Operations-owned projection written by `/assign`.
-    # This stays idempotent even when the operational row did not exist.
-    _materialize_operations_assignment(
-        repo,
-        tournament_id,
-        body.play_unit_id,
-        court_id=None,
-        slot_id=None,
+    from bracket.application import BracketAssignmentService
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise HTTPException(status_code=422, detail="current user id is not a UUID")
+    outcome = BracketAssignmentService().apply(
+        repo, tournament_id, play_unit_id=body.play_unit_id, action="unassign",
+        slot_id=None, court_id=None, actor_id=actor_id, command_id=body.command_id,
     )
     response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
+    return _serialize_session(outcome.session)
 
 
-@router.post("/import", response_model=TournamentOut, dependencies=[_OPERATOR])
+@router.post(
+    "/import",
+    response_model=TournamentOut,
+    dependencies=[_OPERATOR, Depends(require_pre_checkout_configuration_write)],
+)
 def import_tournament_json(
     body: ImportTournamentIn,
     tournament_id: uuid.UUID = Path(...),
@@ -3280,7 +3054,11 @@ def import_tournament_json(
     return _serialize_session(session)
 
 
-@router.post("/import.csv", response_model=TournamentOut, dependencies=[_OPERATOR])
+@router.post(
+    "/import.csv",
+    response_model=TournamentOut,
+    dependencies=[_OPERATOR, Depends(require_pre_checkout_configuration_write)],
+)
 async def import_tournament_csv(
     request: Request,
     tournament_id: uuid.UUID = Path(...),

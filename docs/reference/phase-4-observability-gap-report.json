@@ -1,0 +1,25 @@
+{
+  "phase": 4,
+  "scope": "section 8.9 OpenTelemetry definition of done and Phase 4 outcomes",
+  "generatedAt": "2026-09-02",
+  "repositoryEvidence": [
+    {"item": "signal_contract_privacy", "status": "implemented", "evidence": ["apps/api/src/core/telemetry/privacy.py", "tests/backend/unit/test_telemetry.py"]},
+    {"item": "versioned_collector_configs", "status": "implemented_repository_contract", "evidence": ["infra/otel/collector-cloud.yaml", "infra/otel/collector-event-node.yaml", "tests/backend/unit/test_telemetry_event_node.py"]},
+    {"item": "persistent_event_node_queue_config", "status": "implemented_repository_contract", "evidence": ["infra/otel/collector-event-node.yaml", "infra/compose/docker-compose.event-node.yml", "tests/backend/unit/test_telemetry_event_node.py"]},
+    {"item": "dashboards_alerts_runbook_contract", "status": "implemented_repository_contract", "evidence": ["infra/observability/shuttleworks-v1-dashboard.json", "infra/observability/alerts.yaml", "docs/how-to/observability-runbook.md"]},
+    {"item": "privacy_and_cardinality_tests", "status": "implemented", "evidence": ["tests/backend/unit/test_operational_telemetry.py", "tests/backend/unit/test_telemetry.py"]},
+    {"item": "golden_telemetry_alert_game_day", "status": "implemented_repository_proof", "evidence": ["tools/observability_game_day.py", "tests/backend/unit/test_observability_game_day.py", "infra/observability/alerts.yaml", "infra/observability/shuttleworks-v1-dashboard.json", "docs/how-to/observability-runbook.md"], "coverage": "Ten alerts backed by repository-emitted application and Collector signal contracts; above-threshold firing, exact-boundary/non-firing controls, per-alert ownership/severity/runbook/event-mode/deduplication metadata, privacy and cardinality checks", "scope": "synthetic local runtime; no external alert delivery"},
+    {"item": "containerized_telemetry_transport_rehearsal", "status": "implemented_isolated_deployment_proof", "evidence": ["tools/observability_rehearsal.py", "infra/compose/docker-compose.observability-rehearsal.yml", "infra/otel/collector-rehearsal.yaml", "tests/backend/unit/test_observability_rehearsal.py", ".github/workflows/phase4-observability-rehearsal.yml"], "coverage": "Correlated trace/log/metric delivery, Collector redaction, gateway outage acceptance, persistent queue survival across Collector restart, reconnect drain, Collector self-metrics, and a local event-node command latency comparison", "scope": "short isolated Docker rehearsal; no production backend, alert receiver, reference hardware, or long-duration capacity claim"},
+    {"item": "database_backup_process_collector_signal_contract", "status": "implemented_repository_contract", "evidence": ["apps/api/src/core/telemetry/bootstrap.py", "infra/observability/alerts.yaml", "infra/observability/shuttleworks-v1-dashboard.json", "docs/how-to/observability-runbook.md"]},
+    {"item": "postgres_backup_manifest_and_dr_safety", "status": "implemented_repository_contract", "evidence": ["infra/postgres/backup-manifest.sh", "infra/postgres/restore-drill.sh", "infra/postgres/failover-rejoin.sh", "tests/backend/unit/test_postgres_dr_assets.py"], "scope": "safe local checksum and dry-run simulations; no live PostgreSQL operation"}
+  ],
+  "requires_deployed_infrastructure": [
+    {"item": "production_telemetry_survives_wan_and_process_restart", "reason": "The isolated pinned-Collector rehearsal passes; the production queue volume, WAN path, telemetry backend, and alert receiver still require the same outage/restart/drain proof."},
+    {"item": "production_trace_metric_log_correlation_and_alert_delivery", "reason": "The capture gateway proves correlation in isolation; the selected backend and alert receiver must prove ingestion, query correlation, and notification delivery."},
+    {"item": "reference_hardware_collector_outage_command_latency", "reason": "The rehearsal records a relative local comparison; the ratified event-node load and hardware must supply release latency evidence."},
+    {"item": "host_lan_and_deployed_signal_health", "reason": "Application database/backup/process and Collector signals now have repository contracts; host/LAN agents, backend scraping, and runbook execution remain deployment work."},
+    {"item": "postgres_wal_pitr_standby_drills", "reason": "Requires the two-server PostgreSQL topology, independent archive target, and restore/promotion rehearsal."},
+    {"item": "24_hour_cost_cardinality_disk_budget", "reason": "Requires a representative 24-hour tournament simulation and measured telemetry/backend storage."}
+  ],
+  "not_claimed": ["production availability", "WAN-loss drain proof", "restore or PITR proof", "SLO ratification"]
+}

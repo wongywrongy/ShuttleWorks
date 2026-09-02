@@ -32,6 +32,10 @@ references a longer source, it names the file rather than duplicating it.
 | [0018](/explanation/decisions/0018-public-person-universality) | Public person universality and tournament-scoped identity | Accepted (2026-08-31) |
 | [0019](/explanation/decisions/0019-design-system-consolidation-pass) | Design-system consolidation pass and its recorded deferrals | Accepted (2026-08-31) |
 | [0020](/explanation/decisions/0020-design-language-resolutions) | Design-language resolutions: per-tier radius, one status-tone source, EmptyState variants, dialog primaries | Accepted (2026-08-31) |
+| [0021](/explanation/decisions/0021-hybrid-persistence-and-cloud-wal) | PostgreSQL cloud control plane with SQLite event nodes and asynchronous WAL replication | Accepted (2026-09-01) |
+| [0022](/explanation/decisions/0022-authority-epochs-and-domain-operations) | Authority epochs and ordered domain-operation synchronization | Accepted (2026-09-01) |
+| [0023](/explanation/decisions/0023-docker-first-event-node-and-entrant-freeze) | Docker-first event node, 72-hour offline target, and entrant freeze at checkout | Accepted (2026-09-01) |
+| [0024](/explanation/decisions/0024-compatibility-and-release-governance) | Two-release compatibility and tested immutable image publication | Accepted (2026-09-01) |
 
 ## Format
 

@@ -15,7 +15,12 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Header, Path, Response
 from pydantic import Field, TypeAdapter, ValidationError, field_validator
 
-from core.dependencies import AuthUser, get_current_user, require_tournament_access
+from core.dependencies import (
+    AuthUser,
+    get_current_user,
+    require_pre_checkout_configuration_write,
+    require_tournament_access,
+)
 from core.error_codes import ErrorCode, http_error
 from core.exceptions import ConflictError
 from core.limits import (
@@ -503,7 +508,14 @@ def get_activity(
     return ActivityFeed(entries=list(reversed(entries)))
 
 
-@router.patch("/{tournament_id}/setup/{section}", response_model=TournamentSetup, dependencies=[Depends(require_tournament_access("operator"))])
+@router.patch(
+    "/{tournament_id}/setup/{section}",
+    response_model=TournamentSetup,
+    dependencies=[
+        Depends(require_tournament_access("operator")),
+        Depends(require_pre_checkout_configuration_write),
+    ],
+)
 def patch_setup_section(
     body: SetupPatch,
     section: SetupKey,

@@ -421,9 +421,9 @@ def create_submission(
     the total the entrant was shown **is** the total recorded (Seam B), so
     this function deliberately does not recompute anything.
 
-    ``commit`` defaults to ``True`` for the public form path. Trusted
-    batch callers can set it to ``False`` to compose several submissions in
-    one transaction; they own the final commit/rollback boundary.
+    ``commit=False`` lets application boundaries compose the write atomically
+    with throttling, imports, and other work. Direct service callers retain
+    the historical commit-on-success behavior.
 
     A replay of ``idempotency_key`` is answered before any write. The same
     key arriving concurrently is answered after the unique index refuses

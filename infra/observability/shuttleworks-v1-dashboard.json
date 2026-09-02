@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "title": "ShuttleWorks Operations (v1)",
+  "uid": "shuttleworks-operations-v1",
+  "tags": ["shuttleworks", "operations", "event-node"],
+  "description": "Portable panel contract. Import into Grafana, SigNoz, or map the metric names to the local metrics backend.",
+  "runbook": "docs/how-to/observability-runbook.md",
+  "panels": [
+    {"title": "Sync outbox depth", "metric": "shuttleworks.sync.outbox.depth", "unit": "ops", "alert": "sync_outbox_depth", "runbook": "docs/how-to/observability-runbook.md#sync-backlog-or-oldest-age"},
+    {"title": "Oldest pending operation", "metric": "shuttleworks.sync.outbox.oldest_age", "unit": "s", "alert": "sync_outbox_oldest_age", "runbook": "docs/how-to/observability-runbook.md#sync-backlog-or-oldest-age"},
+    {"title": "SQLite WAL size", "metric": "shuttleworks.sqlite.wal.bytes", "unit": "bytes", "alert": "sqlite_wal_bytes", "runbook": "docs/how-to/observability-runbook.md#sqlite-wal-or-disk-alerts"},
+    {"title": "SQLite filesystem free", "metric": "shuttleworks.sqlite.disk.free", "unit": "bytes", "alert": "sqlite_disk_free", "runbook": "docs/how-to/observability-runbook.md#sqlite-wal-or-disk-alerts"},
+    {"title": "Upload outcomes", "metric": "shuttleworks.sync.uploads", "unit": "events", "breakdown": "sync.outcome"},
+    {"title": "Sync retry outcomes", "metric": "shuttleworks.sync.retries", "unit": "events", "breakdown": "sync.retry_reason"},
+    {"title": "Authority rejections", "metric": "shuttleworks.authority.rejections", "unit": "events", "alert": "authority_rejections", "breakdown": "authority.rejection", "runbook": "docs/how-to/observability-runbook.md#authority-rejection-alerts"},
+    {"title": "Recovery outcomes", "metric": "shuttleworks.recovery.outcomes", "unit": "events", "breakdown": "recovery.operation,recovery.outcome"},
+    {"title": "SQLite busy events", "metric": "shuttleworks.sqlite.events", "unit": "events", "breakdown": "sqlite.event"},
+    {"title": "Database availability", "metric": "shuttleworks.database.available", "unit": "state", "alert": "database_unavailable", "runbook": "docs/how-to/observability-runbook.md#database-availability-or-pool-pressure"},
+    {"title": "Database pool pressure", "metric": "shuttleworks.database.pool.checked_out", "unit": "connections"},
+    {"title": "Latest backup age", "metric": "shuttleworks.backup.last_success.age", "unit": "seconds", "alert": "backup_stale", "runbook": "docs/how-to/observability-runbook.md#backup-health"},
+    {"title": "Backup restore test", "metric": "shuttleworks.backup.restore_test", "unit": "state", "breakdown": "backup.restore_status", "alert": "backup_restore_test_failed", "runbook": "docs/how-to/observability-runbook.md#backup-health"},
+    {"title": "Process resident memory", "metric": "shuttleworks.process.memory.resident", "unit": "bytes"},
+    {"title": "Collector queue utilization", "metric": "otelcol_exporter_queue_size", "unit": "items", "alert": "collector_queue_utilization", "runbook": "docs/how-to/observability-runbook.md#collector-queue-or-export-failure"},
+    {"title": "Collector export failures", "metric": "otelcol_exporter_send_failed_spans", "unit": "spans", "alert": "collector_export_failures", "runbook": "docs/how-to/observability-runbook.md#collector-queue-or-export-failure"}
+  ],
+  "cardinalityPolicy": "No tournament, participant, operation, account, node, or free-form labels may be added to metric points. Use resource attributes for service/profile/node identity."
+}

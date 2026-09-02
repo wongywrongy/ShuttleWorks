@@ -37,12 +37,12 @@ from core.schemas import (
 from db.models import (
     CLOUD_ONLY_MODULES,
     Tournament,
-    TournamentMember,
     normalize_module_seed,
     display_dependency_satisfied,
 )
 from repositories import LocalRepository, get_repository
 from identity import members as members_service
+from identity.auth import ensure_user_personal_org_id
 from operations import conflict_metrics
 from bracket import response_cache
 from workspaces.config_lock import changed_scheduling_fields
@@ -424,9 +424,9 @@ def create_tournament(
         )
     # Workspaces belong to orgs: materialize the caller's users row +
     # personal org if this identity predates the account system.
-    from identity.auth import ensure_user, personal_org_id
-
-    ensure_user(repo.session, user_uuid, user.email)
+    org_id = repo.execute_transaction(
+        ensure_user_personal_org_id, user_uuid, user.email
+    )
     row = repo.tournaments.create(
         name=body.name,
         kind=body.kind,
@@ -435,7 +435,7 @@ def create_tournament(
         time_zone=body.timeZone,
         owner_id=user_uuid,
         owner_email=user.email,
-        org_id=personal_org_id(repo.session, user_uuid),
+        org_id=org_id,
     )
     repo.members.add_member(row.id, user_uuid, role="owner")
 
@@ -1299,43 +1299,25 @@ def list_tournament_members(
     Placeholder ``@unmigrated.local`` addresses (pre-account era) are
     withheld so the UI falls back to its short-id rendering.
     """
-    from db.models import User
-
-    members = repo.members.list_for_tournament(tournament_id)
-    users = {
-        u.id: u
-        for u in repo.session.query(User)
-        .filter(User.id.in_([m.user_id for m in members]))
-        .all()
-    } if members else {}
-
-    def _identity(m):
-        u = users.get(m.user_id)
-        if u is None or u.email.endswith("@unmigrated.local"):
-            return None, (u.display_name if u else None)
-        return u.email, u.display_name
-
-    out = []
-    for m in members:
-        email, display = _identity(m)
-        out.append(
-            TournamentMemberDTO(
-                userId=str(m.user_id),
-                role=m.role,
-                joinedAt=m.joined_at.isoformat() if m.joined_at else "",
-                email=email,
-                displayName=display,
-            )
+    return [
+        TournamentMemberDTO(
+            userId=str(member.user_id),
+            role=member.role,
+            joinedAt=member.joined_at.isoformat() if member.joined_at else "",
+            email=member.email,
+            displayName=member.display_name,
         )
-    return out
+        for member in repo.list_member_identities(tournament_id)
+    ]
 
 
 # ---- Member management (SP-CLOUD-3 Phase 1) -----------------------------
 #
 # The invariant lives in ``identity/members.py``, not here: these routes
-# translate its errors to HTTP and own the transaction. Removal takes
-# effect immediately because ``require_tournament_access`` reads
-# membership live per request and nothing caches it.
+# translate its errors to HTTP while the repository façade owns the
+# transaction. Removal takes effect immediately because
+# ``require_tournament_access`` reads membership live per request and nothing
+# caches it.
 #
 # ROUTE ORDER MATTERS: ``/members/me`` must be declared before
 # ``/members/{user_id}``. FastAPI matches in declaration order, and
@@ -1388,10 +1370,10 @@ def leave_tournament(
     if user_uuid is None:
         raise _member_error(members_service.MemberNotFoundError())
     try:
-        members_service.remove_member(repo.session, tournament_id, user_uuid)
-        repo.session.commit()
+        repo.execute_transaction(
+            members_service.remove_member, tournament_id, user_uuid
+        )
     except members_service.MemberError as exc:
-        repo.session.rollback()
         raise _member_error(exc)
     return Response(status_code=204)
 
@@ -1408,10 +1390,10 @@ def remove_tournament_member(
 ):
     """Remove a member. Owner-gated. Effective on their next request."""
     try:
-        members_service.remove_member(repo.session, tournament_id, user_id)
-        repo.session.commit()
+        repo.execute_transaction(
+            members_service.remove_member, tournament_id, user_id
+        )
     except members_service.MemberError as exc:
-        repo.session.rollback()
         raise _member_error(exc)
     return Response(status_code=204)
 
@@ -1432,31 +1414,30 @@ def change_tournament_member_role(
     Demoting the only owner is refused (409) rather than silently
     reordering the workspace into an unreachable state.
     """
-    from db.models import User
-
     try:
-        members_service.set_role(repo.session, tournament_id, user_id, body.role)
-        repo.session.commit()
+        repo.execute_transaction(
+            members_service.set_role, tournament_id, user_id, body.role
+        )
     except ValueError:
-        repo.session.rollback()
         raise http_error(
             status.HTTP_400_BAD_REQUEST,
             ErrorCode.MEMBER_INVALID_ROLE,
             f"Role must be one of: {', '.join(members_service.ROLES)}.",
         )
     except members_service.MemberError as exc:
-        repo.session.rollback()
         raise _member_error(exc)
 
-    row = repo.session.get(TournamentMember, (tournament_id, user_id))
-    u = repo.session.get(User, user_id)
-    email = None if (u is None or u.email.endswith("@unmigrated.local")) else u.email
+    row = next(
+        member
+        for member in repo.list_member_identities(tournament_id)
+        if member.user_id == user_id
+    )
     return TournamentMemberDTO(
         userId=str(user_id),
         role=row.role,
         joinedAt=row.joined_at.isoformat() if row.joined_at else "",
-        email=email,
-        displayName=(u.display_name if u else None),
+        email=row.email,
+        displayName=row.display_name,
     )
 
 
@@ -1484,11 +1465,12 @@ def transfer_tournament_ownership(
     except (ValueError, AttributeError, TypeError):
         raise _member_error(members_service.MemberNotFoundError())
     try:
-        members_service.transfer_ownership(
-            repo.session, tournament_id, caller, target
+        repo.execute_transaction(
+            members_service.transfer_ownership,
+            tournament_id,
+            caller,
+            target,
         )
-        repo.session.commit()
     except members_service.MemberError as exc:
-        repo.session.rollback()
         raise _member_error(exc)
     return Response(status_code=204)

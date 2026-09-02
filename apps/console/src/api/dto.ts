@@ -703,6 +703,48 @@ export interface BackupListDTO {
   backups: BackupEntryDTO[];
 }
 
+export interface AuthorityStatusDTO {
+  tournament_id: string;
+  node_id: string;
+  authority_epoch: number;
+  state: 'preparing' | 'active' | 'closed' | 'recovered';
+  checkpoint_hash: string;
+  highest_contiguous_sequence: number;
+  pending_operations: number;
+  oldest_pending_at: string | null;
+}
+
+/** Evidence retained when an event-node operation cannot be safely applied.
+ * The rejected envelope is immutable; resolving it appends a correction
+ * operation and only changes this record's audit state. */
+export interface SyncQuarantineRecord {
+  id: string;
+  tournament_id: string;
+  node_id?: string | null;
+  authority_epoch?: number | null;
+  operation_id?: string | null;
+  reason_code: string;
+  detail?: Record<string, unknown> | null;
+  status: string;
+  created_at: string;
+  resolved_at?: string | null;
+  resolved_by?: string | null;
+  resolution_operation_id?: string | null;
+  resolution_note?: string | null;
+}
+
+export interface SyncQuarantineListResponse {
+  items: SyncQuarantineRecord[];
+}
+
+export interface SyncQuarantineResolutionRequest {
+  node_id: string;
+  authority_epoch: number;
+  actor_id: string;
+  reason: string;
+  correction: Record<string, unknown>;
+}
+
 export interface BackupCreatedDTO {
   created: boolean;
   filename: string | null;

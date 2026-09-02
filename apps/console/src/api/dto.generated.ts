@@ -1656,6 +1656,306 @@ export interface paths {
         patch: operations["patch_module_tournaments__tournament_id__modules__module_id__patch"];
         trace?: never;
     };
+    "/tournaments/{tournament_id}/authority/offline-session/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bootstrap Offline Session
+         * @description Complete first-run node authentication without a cloud-origin cookie.
+         *
+         *     The signed checkout capability is the ceremony proof.  It is scoped to
+         *     this node/epoch by the authority row and is never persisted; only the
+         *     digest of the newly-issued event credential is stored.
+         */
+        post: operations["bootstrap_offline_session_tournaments__tournament_id__authority_offline_session_bootstrap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checkout */
+        post: operations["checkout_tournaments__tournament_id__authority_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enroll Event Node */
+        post: operations["enroll_event_node_tournaments__tournament_id__authority_devices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/devices/{node_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Event Node */
+        post: operations["revoke_event_node_tournaments__tournament_id__authority_devices__node_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/offline-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Offline Session
+         * @description Mint an event-node-only session for the already authenticated operator.
+         *
+         *     This endpoint is intentionally unavailable outside the event-node profile;
+         *     it cannot create a cloud login or broaden tournament membership.
+         */
+        post: operations["create_offline_session_tournaments__tournament_id__authority_offline_session_post"];
+        /**
+         * Revoke Offline Session
+         * @description Revoke the presented node-local credential and clear its cookie.
+         *
+         *     This endpoint deliberately does not require the credential to still
+         *     resolve: an expired session or a session from a just-closed epoch must
+         *     remain possible to clear and audit. CSRF middleware still applies because
+         *     the offline cookie is part of the central credential-cookie registry.
+         */
+        delete: operations["revoke_offline_session_tournaments__tournament_id__authority_offline_session_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ready */
+        post: operations["ready_tournaments__tournament_id__authority_ready_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return Authority */
+        post: operations["return_authority_tournaments__tournament_id__authority_return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transfer Authority */
+        post: operations["transfer_authority_tournaments__tournament_id__authority_transfer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recover Authority */
+        post: operations["recover_authority_tournaments__tournament_id__authority_recover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/checkpoint/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Checkpoint Route
+         * @description Install a cloud checkpoint into an event-node database.
+         *
+         *     The path tournament id is checked against the signed document; the
+         *     service owns the transaction and makes retries safe.
+         */
+        post: operations["import_checkpoint_route_tournaments__tournament_id__authority_checkpoint_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Authority Status */
+        get: operations["authority_status_tournaments__tournament_id__authority_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/projection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cloud Projection */
+        get: operations["cloud_projection_tournaments__tournament_id__authority_projection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/v1/tournaments/{tournament_id}/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Operations */
+        post: operations["upload_operations_sync_v1_tournaments__tournament_id__operations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/v1/tournaments/{tournament_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sync Status */
+        get: operations["sync_status_sync_v1_tournaments__tournament_id__status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/v1/tournaments/{tournament_id}/quarantine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quarantine List */
+        get: operations["quarantine_list_sync_v1_tournaments__tournament_id__quarantine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/v1/tournaments/{tournament_id}/quarantine/{quarantine_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quarantine Resolve */
+        post: operations["quarantine_resolve_sync_v1_tournaments__tournament_id__quarantine__quarantine_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/entries": {
         parameters: {
             query?: never;
@@ -2499,7 +2799,7 @@ export interface paths {
         };
         /**
          * Player Page
-         * @description One person's tournament: events, matches, record.
+         * @description One person's tournament: events, draw paths, and matches.
          *
          *     Discoverability rides ``entrants_published`` (§4) — with the list
          *     unpublished, a person page answers the uniform 404 like everything
@@ -3260,6 +3560,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Backups
+         * @description Expose the event-node backup scheduler's safe status projection.
+         *
+         *     Cloud and unconfigured local profiles return ``disabled``.  The endpoint
+         *     never reads a passphrase or backup contents and remains useful even when
+         *     the optional scheduler failed to start.
+         */
+        get: operations["health_backups_health_backups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3412,6 +3736,103 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** AuthorityLifecycleResponse */
+        AuthorityLifecycleResponse: {
+            /** Action */
+            action: string;
+            /**
+             * Tournament Id
+             * Format: uuid
+             */
+            tournament_id: string;
+            /** Previous Epoch */
+            previous_epoch: number;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** State */
+            state: string;
+            /** Capability */
+            capability?: string | null;
+            /** Checkpoint Hash */
+            checkpoint_hash: string;
+            /**
+             * Highest Contiguous Sequence
+             * @default 0
+             */
+            highest_contiguous_sequence: number;
+        };
+        /**
+         * AuthorityReturnRequest
+         * @description Evidence supplied when the director node returns control to cloud.
+         */
+        AuthorityReturnRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Capability */
+            capability: string;
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id: string;
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** Reason */
+            reason: string;
+            /** Declared Last Sequence */
+            declared_last_sequence: number;
+            /** Snapshot Hash */
+            snapshot_hash: string;
+            /**
+             * Confirmation
+             * @default false
+             */
+            confirmation: boolean;
+        };
+        /** AuthorityStatus */
+        AuthorityStatus: {
+            /**
+             * Tournament Id
+             * Format: uuid
+             */
+            tournament_id: string;
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** State */
+            state: string;
+            /** Checkpoint Hash */
+            checkpoint_hash: string;
+            /**
+             * Highest Contiguous Sequence
+             * @default 0
+             */
+            highest_contiguous_sequence: number;
+            /**
+             * Pending Operations
+             * @default 0
+             */
+            pending_operations: number;
+            /** Oldest Pending At */
+            oldest_pending_at?: string | null;
+        };
         /** AvailabilityWindow */
         AvailabilityWindow: {
             /** Start */
@@ -3461,6 +3882,8 @@ export interface components {
             court_id: number;
             /** Slot Id */
             slot_id: number;
+            /** Command Id */
+            command_id?: string | null;
         };
         /**
          * BracketAssignmentIn
@@ -3540,6 +3963,8 @@ export interface components {
             slot_id: number;
             /** Court Id */
             court_id: number;
+            /** Command Id */
+            command_id?: string | null;
         };
         /**
          * BracketPlayerDTO
@@ -3618,6 +4043,8 @@ export interface components {
         BracketUnassignIn: {
             /** Play Unit Id */
             play_unit_id: string;
+            /** Command Id */
+            command_id?: string | null;
         };
         /**
          * BracketValidateIn
@@ -3674,6 +4101,98 @@ export interface components {
             currentPassword: string;
             /** Newpassword */
             newPassword: string;
+        };
+        /** CheckoutRequest */
+        CheckoutRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /**
+             * Checkpoint Schema Version
+             * @default 3
+             */
+            checkpoint_schema_version: number;
+        };
+        /** CheckoutResponse */
+        CheckoutResponse: {
+            /**
+             * Tournament Id
+             * Format: uuid
+             */
+            tournament_id: string;
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Capability */
+            capability: string;
+            /** Checkpoint Hash */
+            checkpoint_hash: string;
+            /** Checkpoint Schema Version */
+            checkpoint_schema_version: number;
+            /** Checkpoint */
+            checkpoint: {
+                [key: string]: unknown;
+            };
+            /** Authority Grant */
+            authority_grant: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * CheckpointImportRequest
+         * @description Capability-bound checkpoint sent to an event-node database.
+         *
+         *     The checkpoint is deliberately carried as a JSON document rather than a
+         *     second, subtly different DTO.  Its SHA-256 digest is the value signed by
+         *     the authority epoch and is checked before any row is written.
+         */
+        CheckpointImportRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Capability */
+            capability: string;
+            /** Checkpoint Hash */
+            checkpoint_hash: string;
+            /** Checkpoint */
+            checkpoint: {
+                [key: string]: unknown;
+            };
+            /** Authority Grant */
+            authority_grant?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** CloudProjectionResponse */
+        CloudProjectionResponse: {
+            /**
+             * Tournament Id
+             * Format: uuid
+             */
+            tournament_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Last Sequence */
+            last_sequence: number;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** CollaborationDTO */
         CollaborationDTO: {
@@ -3819,6 +4338,54 @@ export interface components {
             start_time?: string | null;
             /** Events */
             events: components["schemas"]["EventIn"][];
+        };
+        /** DeviceEnrollmentRequest */
+        DeviceEnrollmentRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Label */
+            label: string;
+            /** Public Key */
+            public_key: string;
+        };
+        /** DeviceResponse */
+        DeviceResponse: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /**
+             * Org Id
+             * Format: uuid
+             */
+            org_id: string;
+            /** Label */
+            label: string;
+            /** Public Key */
+            public_key: string;
+            /**
+             * Enrolled At
+             * Format: date-time
+             */
+            enrolled_at: string;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Revocation Reason */
+            revocation_reason?: string | null;
+        };
+        /** DeviceRevocationRequest */
+        DeviceRevocationRequest: {
+            /** Reason */
+            reason: string;
+            /**
+             * Confirmation
+             * @default false
+             */
+            confirmation: boolean;
         };
         /**
          * DirectorAction
@@ -5126,6 +5693,38 @@ export interface components {
             password: string;
         };
         /**
+         * LostNodeRecoveryRequest
+         * @description Elevated, explicitly confirmed recovery of a missing live node.
+         */
+        LostNodeRecoveryRequest: {
+            /**
+             * New Node Id
+             * Format: uuid
+             */
+            new_node_id: string;
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id: string;
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** Reason */
+            reason: string;
+            /** Declared Last Sequence */
+            declared_last_sequence: number;
+            /** Backup Hash */
+            backup_hash: string;
+            /**
+             * Confirmation
+             * @default false
+             */
+            confirmation: boolean;
+        };
+        /**
          * ManualEditRequest
          * @description Drag-pin a single match to a new slot/court and warm-restart with a
          *     high stay-close weight so nothing else moves unless feasibility forces it.
@@ -5180,6 +5779,11 @@ export interface components {
         MatchAction: "call_to_court" | "start_match" | "finish_match" | "retire_match" | "uncall" | "assign_court" | "postpone_match";
         /** MatchActionIn */
         MatchActionIn: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id?: string;
             /** Play Unit Id */
             play_unit_id: string;
             /**
@@ -5557,6 +6161,119 @@ export interface components {
             /** Morecount */
             moreCount: number;
         };
+        /**
+         * OfflineSessionBootstrapRequest
+         * @description Node-local bootstrap proof used before any offline cookie exists.
+         */
+        OfflineSessionBootstrapRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /**
+             * Ttl Hours
+             * @default 72
+             */
+            ttl_hours: number;
+            /** Capability */
+            capability: string;
+            /**
+             * Operator Id
+             * Format: uuid
+             */
+            operator_id: string;
+        };
+        /** OfflineSessionRequest */
+        OfflineSessionRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /**
+             * Ttl Hours
+             * @default 72
+             */
+            ttl_hours: number;
+        };
+        /** OfflineSessionResponse */
+        OfflineSessionResponse: {
+            /**
+             * Tournament Id
+             * Format: uuid
+             */
+            tournament_id: string;
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** OperationEnvelope */
+        OperationEnvelope: {
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            /**
+             * Event Id
+             * Format: uuid
+             */
+            event_id: string;
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Sequence */
+            sequence: number;
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id: string;
+            /** Command Type */
+            command_type: string;
+            /** Aggregate Type */
+            aggregate_type: string;
+            /** Aggregate Id */
+            aggregate_id: string;
+            /** Expected Version */
+            expected_version?: number | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Occurred At Local
+             * Format: date-time
+             */
+            occurred_at_local: string;
+            /**
+             * Accepted At Node
+             * Format: date-time
+             */
+            accepted_at_node: string;
+            /** Traceparent */
+            traceparent?: string | null;
+            /** Schema Version */
+            schema_version: number;
+        };
         /** PageDTO */
         PageDTO: {
             /** Slug */
@@ -5667,6 +6384,47 @@ export interface components {
         PlanFinalizedDTO: {
             /** Finalized */
             finalized: boolean;
+        };
+        /**
+         * PlannedTransferRequest
+         * @description Handoff evidence for an intentional move to another event node.
+         */
+        PlannedTransferRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /**
+             * New Node Id
+             * Format: uuid
+             */
+            new_node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Capability */
+            capability: string;
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id: string;
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** Reason */
+            reason: string;
+            /** Declared Last Sequence */
+            declared_last_sequence: number;
+            /** Handoff Hash */
+            handoff_hash: string;
+            /**
+             * Confirmation
+             * @default false
+             */
+            confirmation: boolean;
         };
         /** PlayUnitOut */
         PlayUnitOut: {
@@ -6002,6 +6760,22 @@ export interface components {
                 [key: string]: unknown;
             };
             refusal?: components["schemas"]["RefusalDTO"] | null;
+        };
+        /** ReadyRequest */
+        ReadyRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Capability */
+            capability: string;
+            /** Checkpoint Hash */
+            checkpoint_hash: string;
+            /** Ready Proof */
+            ready_proof?: string | null;
         };
         /**
          * ReceiptEntryLineDTO
@@ -6850,6 +7624,109 @@ export interface components {
             createdAt?: string;
             /** Expiresat */
             expiresAt: string;
+        };
+        /** SyncBatchRequest */
+        SyncBatchRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Operations */
+            operations: components["schemas"]["OperationEnvelope"][];
+        };
+        /** SyncBatchResponse */
+        SyncBatchResponse: {
+            /** Highest Contiguous Sequence */
+            highest_contiguous_sequence: number;
+            /** Accepted */
+            accepted: number;
+            /** Duplicates */
+            duplicates: number;
+            /** Next Sequence */
+            next_sequence: number;
+        };
+        /** SyncQuarantineListResponse */
+        SyncQuarantineListResponse: {
+            /** Items */
+            items: components["schemas"]["SyncQuarantineRecord"][];
+        };
+        /** SyncQuarantineRecord */
+        SyncQuarantineRecord: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tournament Id
+             * Format: uuid
+             */
+            tournament_id: string;
+            /** Node Id */
+            node_id?: string | null;
+            /** Authority Epoch */
+            authority_epoch?: number | null;
+            /** Operation Id */
+            operation_id?: string | null;
+            /** Reason Code */
+            reason_code: string;
+            /** Detail */
+            detail?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Resolved At */
+            resolved_at?: string | null;
+            /** Resolved By */
+            resolved_by?: string | null;
+            /** Resolution Operation Id */
+            resolution_operation_id?: string | null;
+            /** Resolution Note */
+            resolution_note?: string | null;
+        };
+        /** SyncQuarantineResolutionRequest */
+        SyncQuarantineResolutionRequest: {
+            /**
+             * Node Id
+             * Format: uuid
+             */
+            node_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id: string;
+            /** Reason */
+            reason: string;
+            /** Correction */
+            correction: {
+                [key: string]: unknown;
+            };
+        };
+        /** SyncStatusResponse */
+        SyncStatusResponse: {
+            /**
+             * Tournament Id
+             * Format: uuid
+             */
+            tournament_id: string;
+            /** Authority Epoch */
+            authority_epoch: number;
+            /** Highest Contiguous Sequence */
+            highest_contiguous_sequence: number;
+            /** Quarantine Count */
+            quarantine_count: number;
         };
         /**
          * TeamDTO
@@ -8323,7 +9200,9 @@ export interface operations {
     reset_all_match_states_tournaments__tournament_id__match_states_reset_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 tournament_id: string;
             };
@@ -8385,7 +9264,9 @@ export interface operations {
     import_match_states_tournaments__tournament_id__match_states_import_upload_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 tournament_id: string;
             };
@@ -8420,7 +9301,9 @@ export interface operations {
     import_match_states_bulk_tournaments__tournament_id__match_states_import_bulk_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 tournament_id: string;
             };
@@ -10057,6 +10940,597 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceModuleDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bootstrap_offline_session_tournaments__tournament_id__authority_offline_session_bootstrap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfflineSessionBootstrapRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfflineSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    checkout_tournaments__tournament_id__authority_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enroll_event_node_tournaments__tournament_id__authority_devices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceEnrollmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_event_node_tournaments__tournament_id__authority_devices__node_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceRevocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_offline_session_tournaments__tournament_id__authority_offline_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfflineSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfflineSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_offline_session_tournaments__tournament_id__authority_offline_session_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ready_tournaments__tournament_id__authority_ready_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorityStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    return_authority_tournaments__tournament_id__authority_return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorityReturnRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorityLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transfer_authority_tournaments__tournament_id__authority_transfer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlannedTransferRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorityLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recover_authority_tournaments__tournament_id__authority_recover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LostNodeRecoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorityLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_checkpoint_route_tournaments__tournament_id__authority_checkpoint_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckpointImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorityStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authority_status_tournaments__tournament_id__authority_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorityStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cloud_projection_tournaments__tournament_id__authority_projection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudProjectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_operations_sync_v1_tournaments__tournament_id__operations_post: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string;
+            };
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_status_sync_v1_tournaments__tournament_id__status_get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-ShuttleWorks-Authority-Epoch": number;
+                Authorization: string;
+            };
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quarantine_list_sync_v1_tournaments__tournament_id__quarantine_get: {
+        parameters: {
+            query?: {
+                include_resolved?: boolean;
+            };
+            header: {
+                "X-ShuttleWorks-Authority-Epoch": number;
+                Authorization: string;
+            };
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncQuarantineListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quarantine_resolve_sync_v1_tournaments__tournament_id__quarantine__quarantine_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string;
+            };
+            path: {
+                tournament_id: string;
+                quarantine_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncQuarantineResolutionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncQuarantineRecord"];
                 };
             };
             /** @description Validation Error */
@@ -11830,6 +13304,26 @@ export interface operations {
         };
     };
     health_metrics_health_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    health_backups_health_backups_get: {
         parameters: {
             query?: never;
             header?: never;

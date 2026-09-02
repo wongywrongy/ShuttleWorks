@@ -74,6 +74,13 @@ _VERSION = APP_VERSION
 OPS_TOKEN_HEADER = "X-ShuttleWorks-Ops-Token"
 
 
+def _database_readiness(session) -> Optional[str]:
+    """Probe connectivity and return the deployed Alembic revision."""
+    session.execute(text("SELECT 1"))
+    row = session.execute(text("SELECT version_num FROM alembic_version")).first()
+    return row[0] if row else None
+
+
 def require_ops_token(request: Request) -> None:
     """Gate the operational health endpoints on ``OPS_TOKEN``.
 
@@ -163,11 +170,7 @@ def health_ready(response: Response, repo: LocalRepository = Depends(get_reposit
     db_error: str | None = None
     revision: str | None = None
     try:
-        repo.session.execute(text("SELECT 1"))
-        row = repo.session.execute(
-            text("SELECT version_num FROM alembic_version")
-        ).first()
-        revision = row[0] if row else None
+        revision = repo.execute_query(_database_readiness)
         db_ok = True
     except Exception as exc:
         # Class name only. A connection failure's ``str()`` carries the
@@ -271,8 +274,8 @@ def health_metrics(repo: LocalRepository = Depends(get_repository)):
     up. Per-worker, ``lastHeartbeatAgeSeconds > JOB_LEASE_SECONDS`` means
     that worker is about to have its job reaped.
     """
-    snapshot = queue_snapshot(
-        repo.session, lease_seconds=settings.job_lease_seconds
+    snapshot = repo.execute_query(
+        queue_snapshot, lease_seconds=settings.job_lease_seconds
     )
     counts = snapshot["counts"]
     workers = snapshot["workers"]
@@ -295,3 +298,24 @@ def health_metrics(repo: LocalRepository = Depends(get_repository)):
         # is the question it exists for.
         "conflicts": conflict_metrics.snapshot(),
     }
+
+
+@router.get("/health/backups", dependencies=_OPS_DEP)
+def health_backups(request: Request):
+    """Expose the event-node backup scheduler's safe status projection.
+
+    Cloud and unconfigured local profiles return ``disabled``.  The endpoint
+    never reads a passphrase or backup contents and remains useful even when
+    the optional scheduler failed to start.
+    """
+    scheduler = getattr(request.app.state, "backup_scheduler", None)
+    if scheduler is None:
+        return {
+            "status": "disabled",
+            "lastSuccessAt": None,
+            "lastPath": None,
+            "freeBytes": None,
+            "restoreTestStatus": "not_run",
+            "generationCount": 0,
+        }
+    return scheduler.status_dict()

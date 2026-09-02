@@ -43,6 +43,62 @@ class Settings(BaseSettings):
     otel_exporter_otlp_metrics_endpoint: str = ""
     otel_exporter_otlp_protocol: str = "http/protobuf"
     otel_exporter_otlp_timeout: float = 2.0
+    # Deployment metadata is deliberately separate from ``ENVIRONMENT``:
+    # environment describes lifecycle (development/staging/production),
+    # while profile describes topology.  These values are low-cardinality
+    # resource attributes, never metric dimensions.  The event-node profile
+    # sets a pseudonymous enrolled node id; cloud processes normally leave it
+    # blank.
+    deployment_profile: str = Field(
+        # Shipped cloud and event-node compositions set this explicitly.
+        # A bare developer process stays topology-neutral so its locally
+        # created authority epoch cannot turn later commands read-only.
+        default="local",
+        validation_alias=AliasChoices(
+            "SHUTTLEWORKS_DEPLOYMENT_PROFILE",
+            "OTEL_DEPLOYMENT_PROFILE",
+            "DEPLOYMENT_PROFILE",
+        ),
+    )
+    node_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("SHUTTLEWORKS_NODE_ID", "OTEL_NODE_ID", "NODE_ID"),
+    )
+    otel_release_channel: str = "stable"
+
+    # ---- Event-node synchronization ---------------------------------
+    # The authority capability is intentionally file-only: Docker mounts it
+    # as a secret and it never appears in process listings or Compose output.
+    sync_cloud_url: str = ""
+    sync_authority_capability_file: str = ""
+    sync_tournament_id: str = ""
+    sync_poll_interval_seconds: float = 2.0
+    sync_batch_size: int = 100
+    # Cloud signs authority grants with Ed25519.  The private key is only
+    # read by the cloud API; event nodes configure the matching public key.
+    authority_signing_key_file: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "AUTHORITY_SIGNING_KEY_FILE",
+            "SHUTTLEWORKS_AUTHORITY_SIGNING_KEY_FILE",
+        ),
+    )
+    authority_signing_public_key_file: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "AUTHORITY_SIGNING_PUBLIC_KEY_FILE",
+            "SHUTTLEWORKS_AUTHORITY_SIGNING_PUBLIC_KEY_FILE",
+        ),
+    )
+    # File-only Ed25519 key held by an enrolled event node for ready
+    # proof-of-possession. A node never places this secret in JSON/env.
+    node_signing_key_file: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "NODE_SIGNING_KEY_FILE",
+            "SHUTTLEWORKS_NODE_SIGNING_KEY_FILE",
+        ),
+    )
 
     # Which kind of process this is. `api` serves HTTP (and, in local
     # mode, hosts the embedded solve worker). `worker` is the standalone
@@ -135,6 +191,16 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DATA_DIR", "BACKEND_DATA_DIR"),
     )
 
+    # ---- Event-node recovery ------------------------------------------
+    # The scheduler is opt-in until a deployment supplies a mounted
+    # passphrase secret.  It runs in its own process/thread and is never on
+    # an operator command's commit path.
+    backup_interval_seconds: float = 3600.0
+    backup_directory: str = ""
+    backup_passphrase_file: str = ""
+    backup_keep_generations: int = 2
+    backup_restore_test: bool = True
+
     # ---- Solve jobs & worker runtime (SP-CLOUD-1) ----------------------
     # The embedded worker runs the job loop inside the API process
     # (local mode, zero-config). Cloud mode turns it off and runs
@@ -180,6 +246,7 @@ class Settings(BaseSettings):
     auth_mode: str = "local"  # local | cloud
     session_ttl_days: float = 30.0
     session_cookie_name: str = "sw_session"
+    offline_session_cookie_name: str = "sw_offline_operator"
     # Secure flag on the session cookie. Default off so plain-HTTP local
     # dev works; cloud deployments MUST serve HTTPS and set this true
     # (enforced by the cloud validator below).
@@ -369,6 +436,20 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
+    @field_validator("backup_interval_seconds")
+    @classmethod
+    def _backup_interval_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("BACKUP_INTERVAL_SECONDS must be greater than zero")
+        return value
+
+    @field_validator("backup_keep_generations")
+    @classmethod
+    def _backup_generations_minimum(cls, value: int) -> int:
+        if value < 2:
+            raise ValueError("BACKUP_KEEP_GENERATIONS must be at least 2")
+        return value
+
     @model_validator(mode="after")
     def _enforce_host_only_cookies(self) -> "Settings":
         """Refuse to start with a ``Domain``-scoped session cookie.
@@ -550,7 +631,11 @@ class Settings(BaseSettings):
         one names a cookie this property does not, so the requirement is
         enforced by the tree rather than by memory.
         """
-        return (self.session_cookie_name, self.entrant_session_cookie_name)
+        return (
+            self.session_cookie_name,
+            self.entrant_session_cookie_name,
+            self.offline_session_cookie_name,
+        )
 
     @property
     def csrf_relevant_cookie_names(self) -> tuple[str, ...]:

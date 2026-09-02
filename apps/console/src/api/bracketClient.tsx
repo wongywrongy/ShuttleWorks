@@ -62,6 +62,7 @@ export interface BracketApi {
     score?: BracketScore | null;
   }) => Promise<BracketTournamentDTO>;
   matchAction: (body: {
+    id?: string;
     play_unit_id: string;
     action: 'start' | 'finish' | 'reset';
     slot?: number;
@@ -94,11 +95,11 @@ export interface BracketApi {
   /** SP-G1 Task 9b: directly place a play unit on a court+slot without
    *  re-running the solver.  Creates for unscheduled units (no 409); overwrites
    *  existing.  Bracket analog of the meet's assign-court command. */
-  assignCourt: (body: { play_unit_id: string; court_id: number; slot_id: number }) => Promise<BracketTournamentDTO>;
+  assignCourt: (body: { command_id?: string; play_unit_id: string; court_id: number; slot_id: number }) => Promise<BracketTournamentDTO>;
   /** SP-G1 Task 9b: return a play unit to the queue by removing its
    *  court assignment — no solver, no result change.  No-op when already
    *  unassigned. */
-  unassign: (body: { play_unit_id: string }) => Promise<BracketTournamentDTO>;
+  unassign: (body: { command_id?: string; play_unit_id: string }) => Promise<BracketTournamentDTO>;
 }
 
 const BracketApiContext = createContext<BracketApi | null>(null);

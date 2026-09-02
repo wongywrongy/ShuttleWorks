@@ -252,6 +252,16 @@ def personal_org_id(session: Session, user_id: uuid.UUID) -> Optional[uuid.UUID]
     return row[0] if row else None
 
 
+def ensure_user_personal_org_id(
+    session: Session,
+    user_id: uuid.UUID,
+    email: Optional[str],
+) -> Optional[uuid.UUID]:
+    """Materialize a legacy identity and return its personal organization."""
+    ensure_user(session, user_id, email)
+    return personal_org_id(session, user_id)
+
+
 def ensure_bootstrap_user(session: Session) -> User:
     """Idempotently materialize the local operator identity (zero UUID).
 

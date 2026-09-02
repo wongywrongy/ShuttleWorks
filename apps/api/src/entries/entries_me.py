@@ -36,12 +36,11 @@ from pydantic import BaseModel
 from sqlalchemy import select, tuple_
 
 from entries.entries import roster_id
-from entries.entries_public import _moment_iso
+from entries.entries_public import _get_record, _moment_iso, _scalar_rows
 from entries.entries_site import PublicPersonIdentityDTO, PersonReferenceDTO
 from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
 from db.models import (
-    EntrantAccount,
     Entry,
     EntryEvent,
     EntryPage,
@@ -54,6 +53,10 @@ from entries import lifecycle, retention
 from repositories import LocalRepository, get_repository
 
 router = APIRouter(prefix="/e/api/me", tags=["entries-me"])
+
+
+def _first_scalar(session, statement):
+    return session.scalars(statement).first()
 
 
 # ---- DTOs (explicit allow-lists, SP-P7 §5) --------------------------------
@@ -293,13 +296,11 @@ def my_entries(
     # nothing about it is shareable between users.
     response.headers["Cache-Control"] = "private, no-store"
 
-    session = repo.session
     account_id = uuid.UUID(entrant.id)
 
-    submissions = list(
-        session.scalars(
-            select(Submission).where(Submission.account_id == account_id)
-        )
+    submissions = repo.execute_query(
+        _scalar_rows,
+        select(Submission).where(Submission.account_id == account_id),
     )
     if not submissions:
         # Verified is still reported on the empty answer: an entrant who has
@@ -312,17 +313,17 @@ def my_entries(
     tids = {s.tournament_id for s in submissions}
     sub_ids = {s.id for s in submissions}
 
-    entries = list(
-        session.scalars(
-            select(Entry).where(
-                Entry.tournament_id.in_(tids), Entry.submission_id.in_(sub_ids)
-            )
-        )
+    entries = repo.execute_query(
+        _scalar_rows,
+        select(Entry).where(
+            Entry.tournament_id.in_(tids), Entry.submission_id.in_(sub_ids)
+        ),
     )
     events: Dict[tuple, EntryEvent] = {
         (ev.tournament_id, ev.id): ev
-        for ev in session.scalars(
-            select(EntryEvent).where(EntryEvent.tournament_id.in_(tids))
+        for ev in repo.execute_query(
+            _scalar_rows,
+            select(EntryEvent).where(EntryEvent.tournament_id.in_(tids)),
         )
     }
 
@@ -342,10 +343,11 @@ def my_entries(
     if partner_pairs:
         partner_entries = {
             (pe.tournament_id, pe.id): pe
-            for pe in session.scalars(
+            for pe in repo.execute_query(
+                _scalar_rows,
                 select(Entry).where(
                     tuple_(Entry.tournament_id, Entry.id).in_(partner_pairs)
-                )
+                ),
             )
         }
         player_keys = {
@@ -356,13 +358,14 @@ def my_entries(
         partner_players = (
             {
                 (p.tournament_id, p.id): p
-                for p in session.scalars(
+                for p in repo.execute_query(
+                    _scalar_rows,
                     select(EntryPlayer).where(
                         tuple_(EntryPlayer.tournament_id, EntryPlayer.id).in_(
                             player_keys
                         ),
                         EntryPlayer.erased_at.is_(None),
-                    )
+                    ),
                 )
             }
             if player_keys
@@ -383,19 +386,29 @@ def my_entries(
                 )
     tournaments = {
         t.id: t
-        for t in session.scalars(select(Tournament).where(Tournament.id.in_(tids)))
+        for t in repo.execute_query(
+            _scalar_rows,
+            select(Tournament).where(Tournament.id.in_(tids)),
+        )
     }
     pages = {
         p.tournament_id: p
-        for p in session.scalars(
-            select(EntryPage).where(EntryPage.tournament_id.in_(tids))
+        for p in repo.execute_query(
+            _scalar_rows,
+            select(EntryPage).where(EntryPage.tournament_id.in_(tids)),
         )
     }
     org_ids = {
         t.org_id for t in tournaments.values() if t.org_id is not None
     }
     orgs = (
-        {o.id: o for o in session.scalars(select(Org).where(Org.id.in_(org_ids)))}
+        {
+            o.id: o
+            for o in repo.execute_query(
+                _scalar_rows,
+                select(Org).where(Org.id.in_(org_ids)),
+            )
+        }
         if org_ids
         else {}
     )
@@ -492,12 +505,13 @@ def _own_submission(
     except (ValueError, TypeError):
         raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such submission")
 
-    submission = repo.session.scalars(
+    submission = repo.execute_query(
+        _first_scalar,
         select(Submission).where(
             Submission.id == wanted,
             Submission.account_id == uuid.UUID(entrant.id),
-        )
-    ).first()
+        ),
+    )
     if submission is None:
         raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such submission")
     return submission
@@ -517,31 +531,31 @@ def submission_receipt(
 
     response.headers["Cache-Control"] = "private, no-store"
     submission = _own_submission(repo, entrant, submission_id)
-    session = repo.session
-
-    tournament = session.get(Tournament, submission.tournament_id)
-    page = session.get(EntryPage, submission.tournament_id)
+    tournament = repo.execute_query(
+        _get_record, Tournament, submission.tournament_id
+    )
+    page = repo.execute_query(_get_record, EntryPage, submission.tournament_id)
     org = (
-        session.get(Org, tournament.org_id)
+        repo.execute_query(_get_record, Org, tournament.org_id)
         if tournament is not None and tournament.org_id is not None
         else None
     )
-    entries = list(
-        session.scalars(
-            select(Entry).where(
-                Entry.tournament_id == submission.tournament_id,
-                Entry.submission_id == submission.id,
-            )
-        )
+    entries = repo.execute_query(
+        _scalar_rows,
+        select(Entry).where(
+            Entry.tournament_id == submission.tournament_id,
+            Entry.submission_id == submission.id,
+        ),
     )
     event_ids = {entry.entry_event_id for entry in entries}
     events = {
         event.id: event
-        for event in session.scalars(
+        for event in repo.execute_query(
+            _scalar_rows,
             select(EntryEvent).where(
                 EntryEvent.tournament_id == submission.tournament_id,
                 EntryEvent.id.in_(event_ids),
-            )
+            ),
         )
     } if event_ids else {}
 
@@ -552,11 +566,12 @@ def submission_receipt(
     }
     partner_entries = {
         entry.id: entry
-        for entry in session.scalars(
+        for entry in repo.execute_query(
+            _scalar_rows,
             select(Entry).where(
                 Entry.tournament_id == submission.tournament_id,
                 Entry.id.in_(partner_ids),
-            )
+            ),
         )
     } if partner_ids else {}
     partner_player_ids = {
@@ -566,12 +581,13 @@ def submission_receipt(
     }
     partner_players = {
         player.id: player
-        for player in session.scalars(
+        for player in repo.execute_query(
+            _scalar_rows,
             select(EntryPlayer).where(
                 EntryPlayer.tournament_id == submission.tournament_id,
                 EntryPlayer.id.in_(partner_player_ids),
                 EntryPlayer.erased_at.is_(None),
-            )
+            ),
         )
     } if partner_player_ids else {}
 
@@ -683,17 +699,17 @@ def _own_entry(repo: LocalRepository, entrant: AuthEntrant, entry_id: str) -> En
         raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such entry")
 
     account_id = uuid.UUID(entrant.id)
-    submission_ids = list(
-        repo.session.scalars(
-            select(Submission.id).where(Submission.account_id == account_id)
-        )
+    submission_ids = repo.execute_query(
+        _scalar_rows,
+        select(Submission.id).where(Submission.account_id == account_id),
     )
     entry = (
-        repo.session.scalars(
+        repo.execute_query(
+            _first_scalar,
             select(Entry).where(
                 Entry.id == wanted, Entry.submission_id.in_(submission_ids)
-            )
-        ).first()
+            ),
+        )
         if submission_ids
         else None
     )
@@ -732,13 +748,27 @@ def withdraw_entry(
         )
 
     entry = _own_entry(repo, entrant, entry_id)
-    event = repo.session.get(
-        EntryEvent, (entry.tournament_id, entry.entry_event_id)
+    from sync.service import tournament_is_checked_out
+
+    if repo.execute_query(tournament_is_checked_out, entry.tournament_id):
+        raise http_error(
+            409,
+            ErrorCode.EVENT_CHECKED_OUT,
+            (
+                "Entries and roster changes are frozen while this tournament "
+                "is checked out to an event node."
+            ),
+        )
+    event = repo.execute_query(
+        _get_record,
+        EntryEvent,
+        (entry.tournament_id, entry.entry_event_id),
     )
     try:
-        lifecycle.withdraw(repo.session, entry, event, erase=bool(body.erase))
+        repo.execute_transaction(
+            lifecycle.withdraw, entry, event, erase=bool(body.erase)
+        )
     except lifecycle.LifecycleError as exc:
-        repo.session.rollback()
         raise http_error(
             409,
             ErrorCode.ENTRY_INVALID_STATE,
@@ -746,7 +776,6 @@ def withdraw_entry(
             extra={"reason": exc.code},
         )
 
-    repo.session.commit()
     return WithdrawResultDTO(state=entry.state, erased=bool(body.erase))
 
 
@@ -838,29 +867,25 @@ def export_my_account(
     through which another account could be named.
     """
     response.headers["Cache-Control"] = "private, no-store"
-    session = repo.session
     account_id = uuid.UUID(entrant.id)
 
-    account = session.get(EntrantAccount, account_id)
+    account = repo.get_entrant_identity(account_id)
     if account is None:
         raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such account")
 
-    players = list(
-        session.scalars(
-            select(EntryPlayer).where(EntryPlayer.account_id == account_id)
-        )
+    players = repo.execute_query(
+        _scalar_rows,
+        select(EntryPlayer).where(EntryPlayer.account_id == account_id),
     )
-    submissions = list(
-        session.scalars(
-            select(Submission).where(Submission.account_id == account_id)
-        )
+    submissions = repo.execute_query(
+        _scalar_rows,
+        select(Submission).where(Submission.account_id == account_id),
     )
     sub_ids = {s.id for s in submissions}
     entries = (
-        list(
-            session.scalars(
-                select(Entry).where(Entry.submission_id.in_(sub_ids))
-            )
+        repo.execute_query(
+            _scalar_rows,
+            select(Entry).where(Entry.submission_id.in_(sub_ids)),
         )
         if sub_ids
         else []
@@ -870,7 +895,10 @@ def export_my_account(
     names = (
         {
             t.id: t.name
-            for t in session.scalars(select(Tournament).where(Tournament.id.in_(tids)))
+            for t in repo.execute_query(
+                _scalar_rows,
+                select(Tournament).where(Tournament.id.in_(tids)),
+            )
         }
         if tids
         else {}
@@ -878,8 +906,9 @@ def export_my_account(
     events = (
         {
             (ev.tournament_id, ev.id): ev
-            for ev in session.scalars(
-                select(EntryEvent).where(EntryEvent.tournament_id.in_(tids))
+            for ev in repo.execute_query(
+                _scalar_rows,
+                select(EntryEvent).where(EntryEvent.tournament_id.in_(tids)),
             )
         }
         if tids
@@ -967,10 +996,9 @@ def erase_my_account(
             "Confirm your email address before erasing your account.",
         )
 
-    account = repo.session.get(EntrantAccount, uuid.UUID(entrant.id))
+    account = repo.get_entrant_identity(uuid.UUID(entrant.id))
     if account is None:
         raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such account")
 
-    erased, kept = retention.erase_account_data(repo.session, account)
-    repo.session.commit()
+    erased, kept = repo.execute_transaction(retention.erase_account_data, account)
     return AccountErasedDTO(playersErased=erased, submissionsKept=kept)

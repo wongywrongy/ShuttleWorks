@@ -30,9 +30,7 @@ from core.dependencies import require_tournament_access
 from core.error_codes import ErrorCode, http_error
 from core.schemas import MeetStandingRowDTO
 from db.models import (
-    DisplayToken,
     Tournament,
-    WorkspaceModule,
     derive_modules,
 )
 from repositories import LocalRepository, get_repository
@@ -67,12 +65,8 @@ def get_or_create_display_token(
     repo: LocalRepository = Depends(get_repository),
 ) -> DisplayTokenDTO:
     """The workspace's display link, minted on first ask."""
-    row = repo.session.get(DisplayToken, tournament_id)
-    if row is None:
-        row = DisplayToken(tournament_id=tournament_id, token=_mint_token())
-        repo.session.add(row)
-        repo.session.commit()
-    return _token_dto(row.token)
+    token = repo.get_or_create_display_token(tournament_id, _mint_token())
+    return _token_dto(token)
 
 
 @manage_router.post("/rotate", response_model=DisplayTokenDTO, dependencies=[_OWNER])
@@ -81,28 +75,15 @@ def rotate_display_token(
     repo: LocalRepository = Depends(get_repository),
 ) -> DisplayTokenDTO:
     """Revoke-by-rotation: the old link dies the moment this returns."""
-    row = repo.session.get(DisplayToken, tournament_id)
-    if row is None:
-        row = DisplayToken(tournament_id=tournament_id, token=_mint_token())
-        repo.session.add(row)
-    else:
-        row.token = _mint_token()
-    repo.session.commit()
-    return _token_dto(row.token)
+    token = repo.rotate_display_token(tournament_id, _mint_token())
+    return _token_dto(token)
 
 
 # ---- Public projection routes ----------------------------------------
 
 
 def _resolve(repo: LocalRepository, token: str) -> Tournament:
-    row = (
-        repo.session.query(DisplayToken).filter(DisplayToken.token == token).first()
-        if token
-        else None
-    )
-    tournament = (
-        repo.tournaments.get_by_id(row.tournament_id) if row is not None else None
-    )
+    tournament = repo.get_tournament_by_display_token(token)
     if tournament is None:
         raise http_error(
             404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found"
@@ -133,12 +114,7 @@ def _board_kind(t: Tournament, repo: LocalRepository) -> str:
     workspace whose rows aren't seeded yet falls back to the very derivation
     that seed would have written.
     """
-    rows = (
-        repo.session.query(WorkspaceModule)
-        .filter(WorkspaceModule.tournament_id == t.id)
-        .all()
-    )
-    statuses = {r.module_id: r.status for r in rows} or derive_modules(t.kind)
+    statuses = repo.get_workspace_module_statuses(t.id) or derive_modules(t.kind)
     meet = statuses.get("meet") == "enabled"
     bracket = statuses.get("bracket") == "enabled"
     if meet and bracket:

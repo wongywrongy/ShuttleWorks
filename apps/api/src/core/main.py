@@ -36,12 +36,17 @@ from operations import commands  # Arch-adjustment Step C — idempotent operato
 from operations import match_state_routes as match_state
 from ops import health as health_api  # SP-CLOUD-3 — liveness / readiness / queue metrics
 from solve_rail import solve_jobs_routes as solve_jobs_api  # SP-CLOUD-1 — async solve rail
+from sync import routes as sync_api
 from workspaces import tournaments  # Step 2 — replaces the legacy /tournament/state singleton router
 from workspaces import setup as setup_api  # canonical workflow-first tournament setup facade
 from workspaces import workspace_modules  # Workspace-modules program #1 — per-workspace module state
 from core.body_limit import BodyLimitMiddleware
 from core.config import settings
-from core.dependencies import get_current_user
+from core.dependencies import (
+    get_current_user,
+    require_cloud_tournament_write_authority,
+    require_pre_checkout_entry_write,
+)
 from core.exceptions import ConflictError, PreconditionFailedError
 from core.form_csrf import form_csrf_proves
 from core.paths import ALEMBIC_SCRIPTS
@@ -107,6 +112,7 @@ async def lifespan(app: FastAPI):
     ``meet.schedule_suggestions``).
     """
     global telemetry_runtime
+    backup_scheduler = None
     if telemetry_runtime is None or getattr(telemetry_runtime, "_shutdown", False):
         telemetry_runtime = configure_telemetry(settings, role="api")
         if telemetry_runtime is not None:
@@ -129,13 +135,49 @@ async def lifespan(app: FastAPI):
         try:
             from db.session import SessionLocal
             from identity.auth import ensure_bootstrap_user
+            from repositories import LocalRepository
 
             with SessionLocal() as _boot_session:
-                ensure_bootstrap_user(_boot_session)
-                _boot_session.commit()
+                LocalRepository(_boot_session).execute_transaction(
+                    ensure_bootstrap_user
+                )
             log.info("bootstrap_user_ensured")
         except Exception:
             log.exception("bootstrap_user_ensure_failed — continuing")
+
+    # Event-node backups run on a daemon thread, outside request/UoW paths.
+    # A missing secret or an unsupported database simply disables this
+    # optional service; it must never prevent the API from serving local play.
+    if settings.deployment_profile == "event_node" and settings.backup_passphrase_file:
+        try:
+            from pathlib import Path
+            from db.session import engine
+            from recovery.scheduler import BackupScheduler, passphrase_file_provider
+
+            if engine.dialect.name == "sqlite" and engine.url.database:
+                source = Path(engine.url.database)
+                if not source.is_absolute():
+                    source = Path.cwd() / source
+                backup_root = Path(settings.backup_directory or Path(settings.data_dir) / "backups")
+                backup_scheduler = BackupScheduler(
+                    source_database=source,
+                    backup_directory=backup_root,
+                    passphrase_provider=passphrase_file_provider(
+                        Path(settings.backup_passphrase_file)
+                    ),
+                    interval_seconds=settings.backup_interval_seconds,
+                    keep_generations=settings.backup_keep_generations,
+                    restore_test=settings.backup_restore_test,
+                )
+                app.state.backup_scheduler = backup_scheduler
+                if cycle_telemetry_runtime is not None:
+                    cycle_telemetry_runtime.set_backup_status_provider(
+                        backup_scheduler.status_dict
+                    )
+                backup_scheduler.start()
+                log.info("event-node backup scheduler started")
+        except Exception:
+            log.exception("event-node backup scheduler unavailable — continuing")
 
     from solve_rail.suggestions_worker import SuggestionsWorker
     from meet.schedule_suggestions import build_handler
@@ -171,6 +213,9 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        if backup_scheduler is not None:
+            backup_scheduler.stop()
+            log.info("event-node backup scheduler stopped")
         await worker.stop()
         log.info("suggestions_worker stopped")
         solve_worker.stop()
@@ -218,6 +263,10 @@ app = FastAPI(
     redoc_url=_redoc_url,
     openapi_url=_openapi_url,
 )
+
+# Sync endpoints use a device-bound authority capability rather than an
+# operator cookie.  Register their stable, unwrapped problem response here.
+app.add_exception_handler(sync_api.SyncHTTPError, sync_api.sync_error_response)
 
 # CORS middleware — origins read from ``settings.cors_origins`` so a
 # deployment can extend (or replace) the dev allowlist via the
@@ -441,27 +490,43 @@ app.add_middleware(
 # tunnel would keep them private; the tunnel publishes a hostname, not a
 # route list, so it never did.
 _AUTH_DEP = [Depends(get_current_user)]
+_EVENT_DATA_DEP = [
+    Depends(get_current_user),
+    Depends(require_cloud_tournament_write_authority),
+]
 
-app.include_router(schedule.router, dependencies=_AUTH_DEP)
-app.include_router(lineup.router, dependencies=_AUTH_DEP)
-app.include_router(solve_jobs_api.router)  # carries its own auth + role deps
-app.include_router(schedule_repair.router, dependencies=_AUTH_DEP)
-app.include_router(schedule_warm_restart.router, dependencies=_AUTH_DEP)
-app.include_router(schedule_advisories.router, dependencies=_AUTH_DEP)
-app.include_router(schedule_proposals.router, dependencies=_AUTH_DEP)
-app.include_router(schedule_director.router, dependencies=_AUTH_DEP)
-app.include_router(schedule_suggestions.router, dependencies=_AUTH_DEP)
-app.include_router(match_state.router, dependencies=_AUTH_DEP)
-app.include_router(commands.router, dependencies=_AUTH_DEP)
-app.include_router(brackets.router, dependencies=_AUTH_DEP)
-app.include_router(tournaments.router, dependencies=_AUTH_DEP)
-app.include_router(setup_api.router, dependencies=_AUTH_DEP)
-app.include_router(workspace_modules.router, dependencies=_AUTH_DEP)
+app.include_router(schedule.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(lineup.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(
+    solve_jobs_api.router,
+    dependencies=[Depends(require_cloud_tournament_write_authority)],
+)
+app.include_router(schedule_repair.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(schedule_warm_restart.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(schedule_advisories.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(schedule_proposals.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(schedule_director.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(schedule_suggestions.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(match_state.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(commands.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(brackets.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(tournaments.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(setup_api.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(workspace_modules.router, dependencies=_EVENT_DATA_DEP)
+# Capability-authenticated first-run ceremony. It must be mounted before and
+# separately from the operator-cookie-protected authority surface.
+app.include_router(sync_api.authority_bootstrap_router)
+app.include_router(sync_api.authority_router, dependencies=_AUTH_DEP)
+# Device-authenticated: deliberately not wrapped in the operator auth dependency.
+app.include_router(sync_api.sync_router)
 # Entries: the operator desk only. The public slug page and submit
 # endpoint are a separate surface with their own (allowlisted) auth
 # posture — deliberately not folded into this router, so that widening
 # the public surface can never be a side effect of touching the desk.
-app.include_router(entries_api.router, dependencies=_AUTH_DEP)
+app.include_router(
+    entries_api.router,
+    dependencies=[*_EVENT_DATA_DEP, Depends(require_pre_checkout_entry_write)],
+)
 # **``entries/entries_public/`` no longer registers a router** (SP-PROGRAM-1
 # Phase 6 cut-over). It served ``GET /e/{slug}`` and ``POST
 # /e/{slug}/submit`` as f-string HTML; the page is now the React Router 7
@@ -517,7 +582,10 @@ app.include_router(auth_api.router)
 # unauthenticated data plane (capability token, read-only — Rule 8);
 # the manage router carries its own owner-role dependency.
 app.include_router(display_api.public_router)
-app.include_router(display_api.manage_router)
+app.include_router(
+    display_api.manage_router,
+    dependencies=[Depends(require_cloud_tournament_write_authority)],
+)
 app.include_router(health_api.router)
 
 if telemetry_runtime is not None:

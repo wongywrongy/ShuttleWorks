@@ -47,7 +47,6 @@ ENTRIES_REVISION = "s3d8f2b5c0e1"
 # composite FK, and P7a the schema's first four CHECK constraints — one of
 # them on ``entries.state``. P7b added the ``meet_events`` table and the
 # ``entry_events.meet_event_id`` mapping column.
-HEAD_REVISION = "ab1c6e2b8d4f"
 PREVIOUS_REVISION = "r2c7e1f4a9b3"
 
 # Every table the Entries family owns after the R13 reshape. The account
@@ -119,11 +118,12 @@ def _head_revision(url) -> str | None:
 
 def test_upgrade_head_creates_the_whole_entries_family(alembic_cfg):
     from alembic import command
+    from alembic.script import ScriptDirectory
 
     cfg, url = alembic_cfg
     command.upgrade(cfg, "head")
 
-    assert _head_revision(url) == HEAD_REVISION
+    assert _head_revision(url) == ScriptDirectory.from_config(cfg).get_current_head()
     inspector, _ = _inspector(url)
     tables = set(inspector.get_table_names())
     for table in ENTRIES_TABLES:

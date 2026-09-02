@@ -44,6 +44,7 @@ build/
 .coverage
 htmlcov/
 coverage/
+/artifacts/
 
 # Docker
 .docker/

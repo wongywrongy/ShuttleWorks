@@ -1,18 +1,27 @@
-# Builds and pushes the backend + frontend + entrant container images to GHCR on
-# every version tag (``v1.0.0`` etc.) and on every push to ``main`` as
-# ``:latest``. The launcher scripts + docker-compose.release.yml pull
-# these images so users never have to build locally.
+# Builds and pushes the backend + frontend + entrant container images to GHCR
+# for an explicit release ref. Publication is deliberately a separate step
+# after CI: it first proves that the exact commit being checked out has a
+# successful CI run. There is no mutable ``latest`` release channel. Operators
+# select a semver tag or an immutable commit-SHA tag in the release compose
+# file.
 name: Publish release images
 
 on:
   push:
-    branches: [main]
     tags: ['v*.*.*']
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Release tag or commit SHA to publish"
+        required: true
+        type: string
 
 permissions:
+  actions: read
   contents: read
   packages: write
+  attestations: write
+  id-token: write
 
 jobs:
   publish:
@@ -36,10 +45,56 @@ jobs:
             dockerfile: apps/entrant/Dockerfile
             context: .
     steps:
-      - uses: actions/checkout@v4
+      # A tag push and a manual dispatch both resolve to an exact commit. The
+      # full history lets metadata-action associate a semver tag with that
+      # commit while the SHA tag below remains available as the immutable
+      # deployment handle.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve source revision
+        id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for successful CI on this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.revision.outputs.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            runs="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow ci.yml \
+              --commit "$SOURCE_SHA" \
+              --limit 50 \
+              --json status,conclusion,databaseId)"
+
+            if jq -e '[.[] | select(.status == "completed" and .conclusion == "success")] | length > 0' \
+              <<<"$runs" >/dev/null; then
+              echo "CI passed for $SOURCE_SHA"
+              exit 0
+            fi
+
+            if jq -e '[.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out"))] | length > 0' \
+              <<<"$runs" >/dev/null; then
+              echo "::error::CI failed for $SOURCE_SHA"
+              gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$SOURCE_SHA"
+              exit 1
+            fi
+
+            echo "Waiting for CI to finish for $SOURCE_SHA (attempt $attempt/60)"
+            sleep 10
+          done
+
+          echo "::error::Timed out waiting for CI for $SOURCE_SHA"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$SOURCE_SHA"
+          exit 1
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -48,26 +103,58 @@ jobs:
       # Required for `cache-to: type=gha` below — the default docker
       # driver on ubuntu-latest doesn't support GHA cache export.
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
       - name: Compute image tag
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@369eb591f429131d6889c46b94e711f089e6ca96 # v5.6.1
         with:
           images: ghcr.io/${{ github.repository_owner }}/scheduler-${{ matrix.name }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
+            type=semver,pattern={{version}},value=${{ inputs.ref || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.ref || github.ref_name }}
+            type=sha,format=long
 
       - name: Build + push
-        uses: docker/build-push-action@v5
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SOURCE_REVISION=${{ steps.revision.outputs.sha }}
+          # BuildKit publishes SPDX SBOM and SLSA provenance attestations
+          # alongside the image manifest. They are attached to the digest,
+          # never to a mutable tag.
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Attest the pushed image digest
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/scheduler-${{ matrix.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
+
+      - name: Sign image digest with GitHub OIDC
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/scheduler-${{ matrix.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "$IMAGE@$DIGEST"
+
+      - name: Verify keyless signature and provenance identity
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/scheduler-${{ matrix.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify "$IMAGE@$DIGEST" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp="^https://github.com/${{ github.repository }}/.github/workflows/publish-release.yml@.*$"

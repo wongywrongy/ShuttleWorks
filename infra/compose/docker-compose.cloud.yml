@@ -65,6 +65,7 @@ services:
     ports:
       - "${BACKEND_HOST_PORT:-8600}:8000"
     environment:
+      - SHUTTLEWORKS_DEPLOYMENT_PROFILE=cloud
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DATA_DIR=/app/data
       - DATABASE_URL=postgresql://scheduler:${POSTGRES_PASSWORD:-scheduler}@postgres:5432/scheduler
@@ -109,6 +110,7 @@ services:
       dockerfile: apps/api/Dockerfile
     command: ["python", "-m", "worker"]
     environment:
+      - SHUTTLEWORKS_DEPLOYMENT_PROFILE=cloud
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DATABASE_URL=postgresql://scheduler:${POSTGRES_PASSWORD:-scheduler}@postgres:5432/scheduler
       - WORKER_CONCURRENCY=1

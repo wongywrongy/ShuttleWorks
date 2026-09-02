@@ -82,6 +82,7 @@ COPY --from=builder /install /usr/local
 # One COPY per domain package, so a change inside one only invalidates that
 # layer and the ones below it.
 COPY --chown=app:app apps/api/src/core/        ./src/core/
+COPY --chown=app:app apps/api/src/shuttleworks/ ./src/shuttleworks/
 COPY --chown=app:app apps/api/src/shared/      ./src/shared/
 COPY --chown=app:app apps/api/src/db/          ./src/db/
 COPY --chown=app:app apps/api/src/repositories/ ./src/repositories/
@@ -94,6 +95,8 @@ COPY --chown=app:app apps/api/src/display/     ./src/display/
 COPY --chown=app:app apps/api/src/entries/     ./src/entries/
 COPY --chown=app:app apps/api/src/solve_rail/  ./src/solve_rail/
 COPY --chown=app:app apps/api/src/ops/         ./src/ops/
+COPY --chown=app:app apps/api/src/sync/        ./src/sync/
+COPY --chown=app:app apps/api/src/recovery/    ./src/recovery/
 COPY --chown=app:app apps/api/src/alembic/     ./src/alembic/
 COPY --chown=app:app apps/api/alembic.ini      ./alembic.ini
 # Standalone solve-worker entry (cloud mode: `python -m worker`). The

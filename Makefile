@@ -5,7 +5,7 @@
         demo-seed-preview demo-seed-apply demo-seed-resume demo-seed-status demo-seed-reset \
         surface-books surface-books-status \
         entrant-dev full-dev local-dev \
-        dev-postgres dev-postgres-stop \
+        dev-postgres dev-postgres-stop phase4-observability-rehearsal \
         stop logs ps clean \
         test test-e2e test-e2e-install test-e2e-rebuild test-e2e-dev test-console-contracts check check-full check-fast \
         sim sim-ephemeral sim-all sim-test \
@@ -77,6 +77,7 @@ help:
 	@echo "  make full-dev           Both surfaces at once: operator :5173 + entrant :5174"
 	@echo "                          (local only — see docs/how-to/running-locally)"
 	@echo "  make dev-postgres       Local Postgres + API (exercise the cloud path)"
+	@echo "  make phase4-observability-rehearsal  Collector outage/restart/drain proof"
 	@echo "  make stop               Stop the dev-facing stacks (default, dev, cloud)"
 	@echo "  make logs               Tail container logs"
 	@echo "  make ps                 Show running containers"
@@ -225,6 +226,9 @@ dev-postgres:
 dev-postgres-stop:
 	$(COMPOSE_DEV) down
 
+phase4-observability-rehearsal:
+	.venv/bin/python tools/observability_rehearsal.py
+
 # === Entrant tier (public SSR site) ===
 #
 # Local only — no nginx, no compose, no tunnel. See
@@ -346,7 +350,7 @@ sim-test:
 # NOT touched by this target.
 generate-api:
 	@echo "Dumping OpenAPI schema..."
-	@python tools/generate_openapi.py apps/console/src/api/.openapi.json
+	@.venv/bin/python tools/generate_openapi.py apps/console/src/api/.openapi.json
 	@echo "Generating apps/console/src/api/dto.generated.ts..."
 	@cd apps/console && npx openapi-typescript ./src/api/.openapi.json --output ./src/api/dto.generated.ts
 	@rm apps/console/src/api/.openapi.json

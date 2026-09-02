@@ -8,6 +8,8 @@ the migration tractable.
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Iterable, Optional, Protocol
 
 from db.models import (
@@ -22,6 +24,17 @@ from db.models import (
 # Note: ``List[Tournament]`` rendered as ``list[Tournament]`` below uses
 # PEP 585 generics (Python 3.9+); kept consistent with the rest of the
 # backend code which targets 3.12.
+
+
+@dataclass(frozen=True)
+class MemberIdentity:
+    """Persistence-neutral member projection for workspace access screens."""
+
+    user_id: uuid.UUID
+    role: str
+    joined_at: Optional[datetime]
+    email: Optional[str]
+    display_name: Optional[str]
 
 
 class TournamentRepository(Protocol):

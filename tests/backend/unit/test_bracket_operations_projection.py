@@ -9,7 +9,7 @@ class RecordingMatches:
     def __init__(self):
         self.calls = []
 
-    def upsert(self, tournament_id, match_id, fields):
+    def upsert(self, tournament_id, match_id, fields, **_kwargs):
         self.calls.append((tournament_id, match_id, fields))
 
 

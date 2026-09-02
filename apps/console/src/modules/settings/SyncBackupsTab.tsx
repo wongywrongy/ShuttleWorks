@@ -5,6 +5,8 @@ import { EmptyState, OverflowMenu, PAGE_BODY_WIDTH } from '../../components/cont
 import { useTournamentBackups } from '../../hooks/useTournamentBackups';
 import { TEXT_TITLE } from '../../lib/utils'
 import { DialogFooter } from '../../components/DialogFooter';
+import { useAuthorityStatus } from '../../hooks/useAuthorityStatus';
+import { SyncReconciliationPanel } from './SyncReconciliationPanel';
 
 /** Human-readable file size: B / KB / MB. */
 function fmtBytes(n: number): string {
@@ -55,6 +57,7 @@ function fmtTimestamp(iso: string): string {
  *  hook — the single seam for backup actions — so a restore re-hydrates the live
  *  tournament store (no stale data) exactly like the operator BackupPanel. */
 export function SyncBackupsTab() {
+  const authority = useAuthorityStatus();
   const {
     entries,
     loading,
@@ -147,6 +150,40 @@ export function SyncBackupsTab() {
 
   return (
     <div className="space-y-4">
+      {authority.status ? (
+        <section
+          aria-label="Event authority and synchronization"
+          className="rounded border border-border bg-card p-3"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-foreground">
+                {authority.status.state === 'active'
+                  ? 'Live from this event node'
+                  : `Event authority: ${authority.status.state}`}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Epoch {authority.status.authority_epoch} · Node{' '}
+                {authority.status.node_id.slice(0, 8)}
+              </div>
+            </div>
+            <div className="text-right text-xs">
+              {authority.status.pending_operations === 0 ? (
+                <span className="text-status-success-fg">Cloud copy up to date</span>
+              ) : (
+                <span className="text-status-warning">
+                  {authority.status.pending_operations} committed locally · awaiting cloud
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : authority.error ? (
+        <div className="rounded border border-status-warning/30 bg-status-warning-bg p-3 text-xs text-status-warning">
+          Local operations remain available. Synchronization status could not be refreshed.
+        </div>
+      ) : null}
+      <SyncReconciliationPanel authority={authority.status} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-foreground">Backups</h2>

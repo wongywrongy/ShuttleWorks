@@ -1,7 +1,9 @@
 # Production compose file — pulls pre-built images from GHCR instead of
-# building locally. Users with pre-built images ready (after the first
-# ``docker compose -f docker-compose.release.yml pull``) can start the
-# app in seconds on any machine that has Docker installed.
+# building locally. The release tag is required: a deployment must name the
+# tested semver release or the exact commit-SHA image it intends to run.
+# There is intentionally no mutable ``latest`` fallback. Users with
+# pre-built images ready (after ``docker compose -f docker-compose.release.yml
+# pull``) can start the app in seconds on any machine that has Docker.
 #
 # The ``OWNER`` env var lets a fork publish to a different GHCR namespace
 # without editing this file. Defaults to ``misogyu`` (the upstream repo).
@@ -17,7 +19,7 @@ name: ${COMPOSE_PROJECT_NAME:-shuttleworks-release}
 
 services:
   backend:
-    image: ghcr.io/${OWNER:-misogyu}/scheduler-backend:${TAG:-latest}
+    image: ghcr.io/${OWNER:-misogyu}/scheduler-backend:${TAG:?TAG must be a tested semver release or commit-SHA image tag}
     ports:
       - "8000:8000"
     environment:
@@ -88,7 +90,7 @@ services:
   # other two. An image reference nobody builds is a stack that cannot be
   # pulled, which is the failure this file has hit before.
   entrant:
-    image: ghcr.io/${OWNER:-misogyu}/scheduler-entrant:${TAG:-latest}
+    image: ghcr.io/${OWNER:-misogyu}/scheduler-entrant:${TAG:?TAG must be a tested semver release or commit-SHA image tag}
     # No `ports:` — reachable only through nginx, which strips the operator
     # cookie on the way in.
     environment:
@@ -114,7 +116,7 @@ services:
           memory: 512M
 
   frontend:
-    image: ghcr.io/${OWNER:-misogyu}/scheduler-frontend:${TAG:-latest}
+    image: ghcr.io/${OWNER:-misogyu}/scheduler-frontend:${TAG:?TAG must be a tested semver release or commit-SHA image tag}
     # 8080 = operator tier, 8081 = public entrant tier (SP-HOST-1 D-1). Two
     # ports so an ingress can make them two hostnames and therefore two
     # browser origins; without the second mapping `/e/*` has no route at all.

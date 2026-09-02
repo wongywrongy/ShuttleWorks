@@ -50,6 +50,34 @@ def record_state_conflict(route: str) -> None:
     _record("state_conflict", 1, {"http.route": route})
 
 
+def record_sync_upload(outcome: str) -> None:
+    _record("sync_upload", 1, {"sync.outcome": outcome})
+
+
+def record_sync_retry(reason: str) -> None:
+    _record("sync_retry", 1, {"sync.retry_reason": reason})
+
+
+def record_authority_transition(transition: str) -> None:
+    _record("authority_transition", 1, {"authority.transition": transition})
+
+
+def record_authority_rejection(reason: str) -> None:
+    _record("authority_rejection", 1, {"authority.rejection": reason})
+
+
+def record_recovery_outcome(operation: str, outcome: str) -> None:
+    _record(
+        "recovery_outcome",
+        1,
+        {"recovery.operation": operation, "recovery.outcome": outcome},
+    )
+
+
+def record_sqlite_event(event: str) -> None:
+    _record("sqlite_event", 1, {"sqlite.event": event})
+
+
 def _record(instrument: str, value: int | float, attributes: dict[str, Any]) -> None:
     runtime = get_runtime()
     if runtime is None:

@@ -48,6 +48,10 @@ import type {
   EntryPageDTO,
   EntryPagePublicationPatchDTO,
   LineupDTO,
+  AuthorityStatusDTO,
+  SyncQuarantineListResponse,
+  SyncQuarantineRecord,
+  SyncQuarantineResolutionRequest,
 } from './dto';
 import { SOLVE_JOB_TERMINAL_STATUSES } from './dto';
 import type {
@@ -1378,7 +1382,9 @@ class ApiClient {
 
   /** Reset all match states for the tournament. */
   async resetMatchStates(tid: string): Promise<void> {
-    await this.client.post(`/tournaments/${tid}/match-states/reset`);
+    await this.client.post(`/tournaments/${tid}/match-states/reset`, undefined, {
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+    });
   }
 
   /**
@@ -1476,7 +1482,12 @@ class ApiClient {
     const response = await this.client.post(
       `/tournaments/${tid}/match-states/import/upload`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+      },
     );
     return response.data;
   }
@@ -1489,6 +1500,7 @@ class ApiClient {
     const response = await this.client.post(
       `/tournaments/${tid}/match-states/import-bulk`,
       matchStates,
+      { headers: { 'Idempotency-Key': crypto.randomUUID() } },
     );
     return response.data;
   }
@@ -1648,6 +1660,7 @@ class ApiClient {
   async bracketMatchAction(
     tid: string,
     body: {
+      id?: string;
       play_unit_id: string;
       action: 'start' | 'finish' | 'reset';
       slot?: number;
@@ -1655,7 +1668,7 @@ class ApiClient {
   ): Promise<BracketTournamentDTO> {
     const response = await this.client.post(
       `/tournaments/${tid}/bracket/match-action`,
-      body,
+      { ...body, id: body.id ?? crypto.randomUUID() },
     );
     return response.data;
   }
@@ -1677,7 +1690,7 @@ class ApiClient {
   ): Promise<BracketTournamentDTO> {
     const response = await this.client.post(
       `/tournaments/${tid}/bracket/pin`,
-      body,
+      { ...body, command_id: body.command_id ?? crypto.randomUUID() },
     );
     return response.data;
   }
@@ -1786,11 +1799,11 @@ class ApiClient {
    */
   async assignBracketCourt(
     tid: string,
-    body: { play_unit_id: string; court_id: number; slot_id: number },
+    body: { command_id?: string; play_unit_id: string; court_id: number; slot_id: number },
   ): Promise<BracketTournamentDTO> {
     const { data } = await this.client.post<BracketTournamentDTO>(
       `/tournaments/${tid}/bracket/assign`,
-      body,
+      { ...body, command_id: body.command_id ?? crypto.randomUUID() },
     );
     return data;
   }
@@ -1802,11 +1815,11 @@ class ApiClient {
    */
   async unassignBracketCourt(
     tid: string,
-    body: { play_unit_id: string },
+    body: { command_id?: string; play_unit_id: string },
   ): Promise<BracketTournamentDTO> {
     const { data } = await this.client.post<BracketTournamentDTO>(
       `/tournaments/${tid}/bracket/unassign`,
-      body,
+      { ...body, command_id: body.command_id ?? crypto.randomUUID() },
     );
     return data;
   }
@@ -1859,6 +1872,47 @@ class ApiClient {
 
   bracketExportIcsUrl(tid: string): string {
     return `${API_BASE_URL}/tournaments/${tid}/bracket/export.ics`;
+  }
+
+  async getAuthorityStatus(tid: string): Promise<AuthorityStatusDTO | null> {
+    const response = await this.client.get<AuthorityStatusDTO>(
+      `/tournaments/${tid}/authority/status`,
+      { validateStatus: (status) => status === 200 || status === 404 },
+    );
+    return response.status === 404 ? null : response.data;
+  }
+
+  async listSyncQuarantine(
+    tid: string,
+    authorityEpoch: number,
+    capability: string,
+    includeResolved = false,
+  ): Promise<SyncQuarantineRecord[]> {
+    const { data } = await this.client.get<SyncQuarantineListResponse>(
+      `/sync/v1/tournaments/${tid}/quarantine`,
+      {
+        headers: {
+          Authorization: `Bearer ${capability}`,
+          'X-ShuttleWorks-Authority-Epoch': authorityEpoch,
+        },
+        params: { include_resolved: includeResolved },
+      },
+    );
+    return data.items;
+  }
+
+  async resolveSyncQuarantine(
+    tid: string,
+    quarantineId: string,
+    capability: string,
+    body: SyncQuarantineResolutionRequest,
+  ): Promise<SyncQuarantineRecord> {
+    const { data } = await this.client.post<SyncQuarantineRecord>(
+      `/sync/v1/tournaments/${tid}/quarantine/${quarantineId}/resolve`,
+      body,
+      { headers: { Authorization: `Bearer ${capability}` } },
+    );
+    return data;
   }
 }
 

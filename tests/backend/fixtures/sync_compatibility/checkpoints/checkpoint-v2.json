@@ -1,0 +1,23 @@
+{
+  "checkpointSchemaVersion": 2,
+  "tournamentId": "00000000-0000-4000-8000-000000000001",
+  "stateVersion": 0,
+  "tournamentState": {"version": 2},
+  "tournamentRecord": {
+    "name": "Archived checkpoint v2",
+    "status": "draft",
+    "kind": "bracket",
+    "tournament_date": null,
+    "tournament_end_date": null,
+    "time_zone": "UTC",
+    "schema_version": 2,
+    "state_version": 0
+  },
+  "normalized": {
+    "bracketEvents": [],
+    "bracketParticipants": [],
+    "bracketMatches": [],
+    "bracketResults": []
+  },
+  "operatorPolicy": {"schemaVersion": 1, "members": []}
+}

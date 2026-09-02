@@ -4,6 +4,13 @@ ShuttleWorks runs as a Docker Compose stack: an nginx-served React frontend in f
 FastAPI backend that embeds the CP-SAT solver. In **dev mode** the frontend is served by Vite
 (with HMR) and proxies `/api/*` to the backend container.
 
+For deployment-profile work, the API also exposes named composition-root
+shims: `shuttleworks.cloud.main:app`, `shuttleworks.event_node.main:app`,
+`shuttleworks.worker.main`, and `shuttleworks.sync.main:app`. The API profiles
+delegate to the established `core.main:app`, while the event-node overlay runs
+the durable outbox drain as `python -m sync.agent`. The legacy targets remain
+supported during the transition.
+
 ## Prerequisites
 
 - **Docker** with Compose v2 — for the production-shape stack.
@@ -23,6 +30,43 @@ make stop               # stop the stack
 make help               # full target list
 ```
 
+### Event-node profile
+
+The Docker-first node adds a standalone worker, durable sync agent, and local
+OpenTelemetry Collector with a persistent sending queue:
+
+```bash
+docker compose -f infra/compose/docker-compose.yml \
+  -f infra/compose/docker-compose.event-node.yml \
+  --profile event-node up -d --build
+```
+
+Set `SHUTTLEWORKS_NODE_ID`, `SYNC_TOURNAMENT_ID`, and `SYNC_CLOUD_URL`, then
+write the checkout capability to the file named by
+`SYNC_AUTHORITY_CAPABILITY_FILE` (default
+`secrets/sync_authority_capability`). The capability must never be placed
+directly in an environment variable.
+
+Cloud authority grants are signed with Ed25519. Set
+`AUTHORITY_SIGNING_KEY_FILE` only on the cloud API and mount the matching
+`AUTHORITY_SIGNING_PUBLIC_KEY_FILE` on event nodes. Local development uses an
+explicit fixed bootstrap signer when these are unset; production cloud
+checkout refuses to issue a grant without the configured signing key.
+The event node also keeps its Ed25519 private key in the file named by
+`NODE_SIGNING_KEY_FILE`; it signs the `ready` proof without sending the key
+over the network. Cloud/event-node profiles reject a ready request that lacks
+that proof or presents a signature for another node, epoch, or checkpoint.
+
+Create and verify an encrypted portable database recovery bundle with:
+
+```bash
+python -m recovery.cli create --database data/local.db \
+  --output /media/portable/event.swbackup \
+  --passphrase-file /run/secrets/recovery_passphrase
+python -m recovery.cli verify --bundle /media/portable/event.swbackup \
+  --passphrase-file /run/secrets/recovery_passphrase
+```
+
 After it is up:
 
 | Surface | URL |
@@ -32,6 +76,22 @@ After it is up:
 | Backend (FastAPI) | <http://localhost:8000> |
 | **Interactive API docs (Swagger UI)** | <http://localhost:8000/docs> |
 | Public TV display | `http://localhost/display?token=<display-token>` |
+
+### Running a published release
+
+The release stack is pull-only and requires an explicit `TAG`; it never
+defaults to a mutable `latest` image. Use the semver tag produced by the
+release workflow, or the long commit-SHA tag when exact provenance matters:
+
+```bash
+TAG=1.2.3 docker compose -f infra/compose/docker-compose.release.yml pull
+TAG=1.2.3 docker compose -f infra/compose/docker-compose.release.yml up -d
+```
+
+Set `OWNER` for a fork or another GHCR namespace. Publication is gated on a
+successful CI run for the exact commit and embeds that commit in each image's
+OCI revision label; keep the selected tag in the deployment record for
+rollback and support.
 
 ## Tailscale tech demo on a Linux server
 
