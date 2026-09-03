@@ -69,6 +69,14 @@ test('application images carry the source revision used by Compose', () => {
   }
 })
 
+test('backend console scripts retain their builder interpreter in runtime', () => {
+  const dockerfile = read('apps/api/Dockerfile')
+  assert.match(
+    dockerfile,
+    /ln -s \/usr\/bin\/python3\.12 \/usr\/local\/bin\/python3\.12/,
+  )
+})
+
 test('demo rebuild is a clean, pull-based release rebuild with provenance', () => {
   const launcher = read('tools/demo-compose.sh')
   assert.match(launcher, /require_clean_worktree\(\)/)

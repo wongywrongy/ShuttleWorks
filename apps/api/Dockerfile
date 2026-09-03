@@ -69,6 +69,7 @@ RUN apt-get update \
         libgomp1 \
         passwd \
         python3.12 \
+    && ln -s /usr/bin/python3.12 /usr/local/bin/python3.12 \
     && ln -s /usr/bin/python3.12 /usr/local/bin/python \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 1001 app \
