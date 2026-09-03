@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from sync.compatibility import CURRENT_OPERATION_SCHEMA_VERSION
 from sync.schemas import OperationEnvelope
-from sync.service import ProtocolError, _ensure_operation_sequence, ensure_local_authority, utcnow
+from sync.errors import ProtocolError
+from sync.service import _ensure_operation_sequence, ensure_local_authority, utcnow
 
 
 def allocate_operation_sequence(

@@ -75,6 +75,7 @@ _PURGE_EXEMPT = frozenset({
     # ``OperationEnvelope`` created by the pre-purge class, even though both
     # have the same schema.
     "sync.schemas",
+    "sync.errors",
 })
 
 

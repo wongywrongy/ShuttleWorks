@@ -33,7 +33,7 @@ services:
       - /tmp
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.136.0
+    image: otel/opentelemetry-collector-contrib:0.155.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     depends_on:
       otel-storage-init:

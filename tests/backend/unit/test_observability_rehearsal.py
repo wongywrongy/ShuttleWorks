@@ -161,7 +161,13 @@ def test_rehearsal_compose_and_collector_contract_are_isolated_and_pinned():
     compose_path = ROOT / "infra/compose/docker-compose.observability-rehearsal.yml"
     compose = yaml.safe_load(compose_path.read_text())
     collector = compose["services"]["otel-collector"]
-    assert collector["image"] == "otel/opentelemetry-collector-contrib:0.136.0"
+    expected_image = "otel/opentelemetry-collector-contrib:0.155.0"
+    assert collector["image"] == expected_image
+    event_node = yaml.safe_load(
+        (ROOT / "infra/compose/docker-compose.event-node.yml").read_text()
+    )
+    assert event_node["services"]["otel-collector"]["image"] == expected_image
+    assert expected_image in (ROOT / ".github/workflows/ci.yml").read_text()
     assert "127.0.0.1:${PHASE4_OTLP_PORT:-14318}:4318" in collector["ports"]
     assert "phase4_queue:/var/lib/otelcol" in collector["volumes"]
     assert compose["services"]["rehearsal-gateway"]["read_only"] is True

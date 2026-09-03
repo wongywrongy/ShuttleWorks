@@ -15,7 +15,8 @@ from db.models import (
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from sync.service import ProtocolError, capability_matches, utcnow
+from sync.errors import ProtocolError
+from sync.service import capability_matches, utcnow
 
 
 def list_quarantines(

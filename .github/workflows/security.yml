@@ -46,12 +46,12 @@ jobs:
           fail-on-severity: high
 
   npm-audit:
-    name: npm runtime dependency audit
+    name: npm dependency audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Audit npm production dependencies
-        run: npm audit --omit=dev --audit-level=high
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
 
   python-audit:
     name: Python runtime dependency audit
