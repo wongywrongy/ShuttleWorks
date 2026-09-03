@@ -42,7 +42,7 @@ from tools.event_node_acceptance import run_acceptance  # noqa: E402
 
 
 COMPOSE = ROOT / "infra/compose/docker-compose.observability-rehearsal.yml"
-COLLECTOR_VERSION = "0.136.0"
+COLLECTOR_VERSION = "0.155.0"
 SIGNAL_NAME = "shuttleworks.rehearsal.marker"
 LOG_BODY = "phase4_rehearsal_marker"
 FORBIDDEN_ATTRIBUTE = "http.request.header.authorization"
@@ -83,18 +83,31 @@ def _wait_http(url: str, *, timeout: float = 45.0) -> None:
     raise RuntimeError(f"timed out waiting for {url}: {last_error}")
 
 
-def _collector_self_metrics(url: str) -> list[str]:
+def _collector_self_metrics(url: str, *, timeout: float = 15.0) -> list[str]:
     required = [
         "otelcol_exporter_queue_capacity",
         "otelcol_exporter_queue_size",
-        "otelcol_exporter_send_failed",
+        "otelcol_exporter_in_flight_requests",
     ]
-    with urlopen(url, timeout=5) as response:  # noqa: S310 - loopback probe
-        body = response.read().decode("utf-8", errors="replace")
-    missing = [name for name in required if name not in body]
-    if missing:
-        raise AssertionError(f"Collector self-metrics missing: {missing}")
-    return required
+    deadline = time.monotonic() + timeout
+    while True:
+        with urlopen(url, timeout=5) as response:  # noqa: S310 - loopback probe
+            body = response.read().decode("utf-8", errors="replace")
+        missing = [name for name in required if name not in body]
+        if not missing:
+            return required
+        if time.monotonic() >= deadline:
+            available = sorted(
+                {
+                    line.split("{", 1)[0]
+                    for line in body.splitlines()
+                    if line.startswith("otelcol_exporter_")
+                }
+            )
+            raise AssertionError(
+                f"Collector self-metrics missing: {missing}; available: {available}"
+            )
+        time.sleep(0.5)
 
 
 def _emit_marker(endpoint: str, marker: str) -> None:
