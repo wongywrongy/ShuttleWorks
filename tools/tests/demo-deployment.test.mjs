@@ -69,6 +69,14 @@ test('application images carry the source revision used by Compose', () => {
   }
 })
 
+test('backend console scripts retain their builder interpreter in runtime', () => {
+  const dockerfile = read('apps/api/Dockerfile')
+  assert.match(
+    dockerfile,
+    /ln -s \/usr\/bin\/python3\.12 \/usr\/local\/bin\/python3\.12/,
+  )
+})
+
 test('demo rebuild is a clean, pull-based release rebuild with provenance', () => {
   const launcher = read('tools/demo-compose.sh')
   assert.match(launcher, /require_clean_worktree\(\)/)
@@ -85,6 +93,16 @@ test('demo rebuild is a clean, pull-based release rebuild with provenance', () =
   assert.match(launcher, /or \(index \.Config\.Labels "org\.opencontainers\.image\.revision"\) ""/)
   assert.match(launcher, /org\.opencontainers\.image\.revision/)
   assert.match(launcher, /show_image_provenance\(\)/)
+})
+
+test('surface books resolve live demo identities from the seed manifest', () => {
+  const makefile = read('Makefile')
+  assert.match(makefile, /seed_manifest="\$\(DEMO_SEED_RUN_DIR\)\/\$\(DEMO_SEED_KEY\)\.json"/)
+  assert.match(makefile, /\.tournaments\.T029\.workspaceId/)
+  assert.match(makefile, /\.tournaments\.T029\.displayToken/)
+  assert.match(makefile, /\.tournaments\.T030\.slug/)
+  assert.match(makefile, /WS_ID="\$\$workspace_id" DISPLAY_TOKEN="\$\$display_token"/)
+  assert.match(makefile, /SLUG="\$\$entrant_slug" node tools\/surface-capture\.mjs entrant/)
 })
 
 test('destructive seed cleanup is preceded by a database backup', () => {

@@ -193,10 +193,15 @@ demo-seed-reset: demo-backup
 surface-books:
 	@set -eu; \
 	demo_ip="$${DEMO_TAILSCALE_IP:-$$($(DEMO_COMPOSE) ip)}"; \
+	seed_manifest="$(DEMO_SEED_RUN_DIR)/$(DEMO_SEED_KEY).json"; \
+	workspace_id="$$(jq -er '.tournaments.T029.workspaceId' "$$seed_manifest")"; \
+	display_token="$$(jq -er '.tournaments.T029.displayToken' "$$seed_manifest")"; \
+	entrant_slug="$$(jq -er '.tournaments.T030.slug' "$$seed_manifest")"; \
 	AUTH_ME_URL="http://$$demo_ip:8090/api/auth/me" \
+	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
 		node tools/surface-capture.mjs console "http://$$demo_ip:8090" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
-	node tools/surface-capture.mjs entrant "http://$$demo_ip:8091" \
+	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "http://$$demo_ip:8091" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
 	@$(MAKE) --no-print-directory surface-books-status
 
