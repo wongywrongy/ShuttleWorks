@@ -1,5 +1,9 @@
 # ShuttleWorks — CP-SAT Tournament Scheduling
 
+ShuttleWorks is a Yunavero product. Customer-facing company identity is kept
+in `packages/brand/brand.json`; protocol and storage identifiers retain the
+stable `shuttleworks` namespace for compatibility.
+
 One product for inter-school dual / tri-meet operators *and*
 bracket-draw tournaments. Runs on the tournament director's laptop
 via Docker Compose with SQLite as the source of truth, or
