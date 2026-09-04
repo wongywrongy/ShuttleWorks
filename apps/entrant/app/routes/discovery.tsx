@@ -17,6 +17,7 @@
  * else; no CSRF mint (every form on this page is a GET).
  */
 import { redirect } from 'react-router';
+import { BRAND, brandedTitle } from '@scheduler/brand';
 
 import { EmptyState } from '../components/EmptyState';
 import { NowStrip } from '../components/NowStrip';
@@ -105,13 +106,13 @@ export async function loader({ request }: { request: Request }) {
 }
 
 export const meta: Route.MetaFunction = () => [
-  { title: 'Tournaments · ShuttleWorks' },
+  { title: brandedTitle('Tournaments') },
   {
     name: 'description',
     content:
-      'Badminton tournaments taking entries through ShuttleWorks. Every entry is confirmed by the organizer.',
+      `Badminton tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`,
   },
-  { property: 'og:title', content: 'Tournaments · ShuttleWorks' },
+  { property: 'og:title', content: brandedTitle('Tournaments') },
   { property: 'og:type', content: 'website' },
 ];
 
@@ -130,8 +131,7 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
           Tournaments
         </h1>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          Badminton tournaments taking entries through ShuttleWorks. Every entry is
-          confirmed by the organizer.
+          {`Badminton tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`}
         </p>
 
         <div className="mt-6 grid gap-4">

@@ -1291,6 +1291,7 @@ def create_invite_link(
         expires_at=expires_at,
     )
     if email:
+        from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
         from core.config import settings
         from core.email import send_email
 
@@ -1300,11 +1301,12 @@ def create_invite_link(
         origin = settings.app_origin
         send_email(
             to=email,
-            subject=f"You're invited to {tournament.name or 'a ShuttleWorks workspace'}",
+            subject=f"You're invited to {tournament.name or f'a {PRODUCT_NAME} workspace'}",
             body=(
                 f"You've been invited as {invite.role}.\n\n"
                 f"Accept here: {origin}/invite/{invite.id}\n\n"
                 f"This invite expires {expires_at:%Y-%m-%d}."
+                f"\n\n{BRAND_SIGNATURE}"
             ),
         )
     return InviteCreatedDTO(

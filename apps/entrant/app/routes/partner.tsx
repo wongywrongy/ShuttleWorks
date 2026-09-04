@@ -21,6 +21,7 @@
  * a forwarded link had once been real.
  */
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
+import { brandedTitle } from '@scheduler/brand';
 import { data } from 'react-router';
 
 import { MessagePage } from '../components/MessagePage';
@@ -101,7 +102,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
 }
 
 export const meta: Route.MetaFunction = () => [
-  { title: 'A doubles invitation · ShuttleWorks Tournaments' },
+  { title: brandedTitle('A doubles invitation') },
 ];
 
 const FORM_CARD = `grid gap-4 ${CARD}`;

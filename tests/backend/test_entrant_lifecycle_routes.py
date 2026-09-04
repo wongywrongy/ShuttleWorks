@@ -174,6 +174,8 @@ def _entry(tid, entry_id):
 def test_signup_sends_a_link_that_verifies_the_account(client, mailbox):
     body = _signup(client, mailbox)
     assert "Confirm" in mailbox[-1][1]
+    assert mailbox[-1][1] == "Confirm your email for ShuttleWorks entries"
+    assert body.endswith("ShuttleWorks by Yunavero")
     r = client.post(
         "/e/account/verify", json={"token": _token_in(body, "verify")}, headers=CSRF
     )

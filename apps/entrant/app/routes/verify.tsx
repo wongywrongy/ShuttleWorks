@@ -26,6 +26,7 @@
  * out in a hidden field without ever being interpreted.
  */
 import { Button, Notice } from '@scheduler/design-system/components';
+import { brandedTitle } from '@scheduler/brand';
 import { data } from 'react-router';
 import { useContext } from 'react';
 
@@ -82,7 +83,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
 }
 
 export const meta: Route.MetaFunction = () => [
-  { title: 'Confirm your email · ShuttleWorks Tournaments' },
+  { title: brandedTitle('Confirm your email') },
 ];
 
 export default function VerifyPage({ loaderData }: Route.ComponentProps) {

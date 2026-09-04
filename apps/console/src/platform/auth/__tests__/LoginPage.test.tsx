@@ -50,6 +50,7 @@ describe('LoginPage', () => {
 
   it('sign-in mode asks for a password once and states no policy', async () => {
     renderAt();
+    expect(screen.getByRole('heading', { name: /ShuttleWorks by Yunavero/ })).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.queryByLabelText('Confirm password')).not.toBeInTheDocument();
     expect(screen.queryByText(/At least 8 characters/)).not.toBeInTheDocument();

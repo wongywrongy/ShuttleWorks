@@ -11,7 +11,7 @@
  * Not wired into CI: it needs a running stack and is an authoring tool.
  */
 import { createRequire } from "node:module";
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, extname } from "node:path";
 
 // Playwright is installed in the e2e workspace, not at the repo root, and ESM
@@ -20,6 +20,9 @@ const req = createRequire(
   new URL("../tests/e2e/package.json", import.meta.url),
 );
 const { chromium } = req("playwright");
+const brand = JSON.parse(
+  readFileSync(new URL("../packages/brand/brand.json", import.meta.url), "utf8"),
+);
 
 const [tier, base, outPath] = process.argv.slice(2);
 if (!tier || !base || !outPath) {
@@ -420,8 +423,8 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
 
 const title =
   tier === "console"
-    ? "Operator console — full surface report"
-    : "Public site (ShuttleWorks Tournaments) — full surface report";
+    ? `${brand.productName} operator console — full surface report`
+    : `Public site (${brand.publicProductName}) — full surface report`;
 
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">

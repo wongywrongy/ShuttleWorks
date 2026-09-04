@@ -6,13 +6,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { BRAND } from '@scheduler/brand';
 import { ShuttleWorksMark, SwMonogram } from '../ShuttleWorksMark';
 
 describe('ShuttleWorksMark', () => {
   it('keeps its accessible name and renders the wordmark as text', () => {
     render(<ShuttleWorksMark />);
-    const mark = screen.getByLabelText('ShuttleWorks');
-    expect(mark).toHaveTextContent('ShuttleWorks');
+    const mark = screen.getByLabelText(BRAND.productName);
+    expect(mark).toHaveTextContent(BRAND.productName);
   });
 
   it('no longer draws the bordered-box treatment', () => {
@@ -26,10 +27,10 @@ describe('ShuttleWorksMark', () => {
     // Console direction (2026-08-13): the chevron-clipped accent chip IS the
     // mark, so the monogram tile is opt-in rather than default.
     const { container: bare } = render(<ShuttleWorksMark />);
-    expect(bare.textContent).toBe('ShuttleWorks');
+    expect(bare.textContent).toBe(BRAND.productName);
 
     const { container: withTile } = render(<ShuttleWorksMark tile />);
-    expect(withTile.textContent).toContain('SW');
+    expect(withTile.textContent).toContain(BRAND.productMonogram);
   });
 
   it('hides the tile from the accessibility tree (it is decoration beside the name)', () => {

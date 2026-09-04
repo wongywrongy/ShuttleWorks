@@ -26,6 +26,7 @@ import { apiClient } from '../../api/client';
 import { Button, Card, TextField } from '@scheduler/design-system';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from './passwordPolicy';
 import { SwMonogram } from '../../components/ShuttleWorksMark';
+import { BRAND } from '@scheduler/brand';
 
 interface FromState {
   from?: Pick<Location, 'pathname' | 'search' | 'hash'>;
@@ -140,7 +141,8 @@ export function LoginPage() {
           <div>
             <h1 className="type-display flex items-center gap-2.5 text-2xl">
               <SwMonogram />
-              ShuttleWorks
+              {BRAND.productName}
+              <span className="text-xs font-medium text-muted-foreground">{BRAND.endorsement}</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Choose a new password</p>
           </div>
@@ -238,7 +240,8 @@ export function LoginPage() {
         <div>
           <h1 className="type-display flex items-center gap-2.5 text-2xl">
             <SwMonogram />
-            ShuttleWorks
+            {BRAND.productName}
+            <span className="text-xs font-medium text-muted-foreground">{BRAND.endorsement}</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === 'signin' && 'Sign in to continue'}

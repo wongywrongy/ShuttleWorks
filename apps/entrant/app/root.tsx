@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { brandedTitle } from '@scheduler/brand';
 import { Links, Meta, Outlet, type LinksFunction } from 'react-router';
 
 import { MessagePage } from './components/MessagePage';
@@ -83,7 +84,7 @@ export function loader({ request }: Route.LoaderArgs) {
  */
 export const meta: Route.MetaFunction = ({ error }) => {
   if (!error) return [];
-  return [{ title: 'Page not available · ShuttleWorks Tournaments' }];
+  return [{ title: brandedTitle('Page not available') }];
 };
 
 /**

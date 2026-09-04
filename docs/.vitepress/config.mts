@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { BRAND } from '../../packages/brand/generated'
 import { execFileSync } from 'node:child_process'
 
 // Build-time provenance stamp: which commit this docs build was generated from.
@@ -28,9 +29,9 @@ const STAMP = gitStamp()
 // link should fail `docs:build`, which is our verification gate.
 //
 export default defineConfig({
-  title: 'ShuttleWorks',
+  title: BRAND.productName,
   description:
-    'Architecture, module contracts, and data flow for ShuttleWorks — a CP-SAT tournament scheduling control plane (Entries · Meet · Bracket · Operations · Display) with an SSR-first public entrant tier and bounded same-origin route modules.',
+    `Architecture, module contracts, and data flow for ${BRAND.productName} by ${BRAND.companyName} — a CP-SAT tournament scheduling control plane (Entries · Meet · Bracket · Operations · Display) with an SSR-first public entrant tier and bounded same-origin route modules.`,
   lang: 'en-US',
 
   srcDir: '.',
@@ -118,6 +119,8 @@ export default defineConfig({
           { text: 'Running locally', link: '/how-to/running-locally' },
           { text: 'Code intelligence (Zed)', link: '/how-to/code-intelligence' },
           { text: 'Deploy: start to finish', link: '/how-to/deploy' },
+          { text: 'Configure the Yunavero domain', link: '/how-to/configure-yunavero-domain' },
+          { text: 'Brand configuration', link: '/reference/brand-configuration' },
           { text: 'Install: local (offline)', link: '/how-to/install-local' },
           { text: 'Install: self-hosted', link: '/how-to/install-selfhost' },
           { text: 'Add a worker machine', link: '/how-to/add-a-worker' },
@@ -248,8 +251,8 @@ export default defineConfig({
     footer: {
       message: STAMP
         ? `Built from <code>${STAMP.branch}@${STAMP.sha}</code> · ${STAMP.date} — run <code>npm run docs:freshness</code> to check for drift against the code.`
-        : 'ShuttleWorks documentation',
-      copyright: 'ShuttleWorks',
+        : `${BRAND.productName} documentation`,
+      copyright: `© ${new Date().getUTCFullYear()} ${BRAND.companyName}. ${BRAND.productName} is a ${BRAND.companyName} product.`,
     },
   },
 })

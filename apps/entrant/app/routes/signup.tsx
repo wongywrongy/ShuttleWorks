@@ -56,6 +56,7 @@
  * pass" after filling the whole form in. Everything else here works unhydrated.
  */
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
+import { brandedTitle } from '@scheduler/brand';
 import { data } from 'react-router';
 
 import { MessagePage } from '../components/MessagePage';
@@ -139,7 +140,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
  * of a function that renders into `<head>`.
  */
 export const meta: Route.MetaFunction = () => [
-  { title: 'Create an account · ShuttleWorks Tournaments' },
+  { title: brandedTitle('Create an account') },
 ];
 
 /**

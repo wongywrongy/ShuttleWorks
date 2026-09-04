@@ -1,0 +1,16 @@
+{
+  "name": "@scheduler/brand",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared customer-facing ShuttleWorks and Yunavero brand identity.",
+  "type": "module",
+  "exports": {
+    ".": "./generated.ts",
+    "./brand.json": "./brand.json"
+  },
+  "files": [
+    "README.md",
+    "brand.json",
+    "generated.ts"
+  ]
+}

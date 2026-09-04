@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
+import { BRAND } from '@scheduler/brand';
 import { useUiStore } from '../store/uiStore';
 import { useCreateBackup } from '../hooks/useTournamentBackups';
 import { useDeepHealth } from '../hooks/useDeepHealth';
@@ -224,7 +225,7 @@ export function AppStatusPopover() {
           </div>
 
           <p className="mt-2 text-3xs text-muted-foreground">
-            To quit ShuttleWorks, close its launcher window (or run the Stop
+            To quit {BRAND.productName}, close its launcher window (or run the Stop
             script).
           </p>
         </div>

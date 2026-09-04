@@ -40,6 +40,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/design-system/package.json ./packages/design-system/package.json
 COPY packages/shared-contract/package.json ./packages/shared-contract/package.json
+COPY packages/brand/package.json ./packages/brand/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY apps/entrant/package.json ./apps/entrant/package.json
 
@@ -50,6 +51,7 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 # the SSR bundler transpiles it — it has to be present, not just installed.
 COPY packages/design-system ./packages/design-system
 COPY packages/shared-contract ./packages/shared-contract
+COPY packages/brand ./packages/brand
 COPY apps/entrant ./apps/entrant
 
 RUN npm run -w apps/entrant build
@@ -67,6 +69,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/design-system/package.json ./packages/design-system/package.json
 COPY packages/shared-contract/package.json ./packages/shared-contract/package.json
+COPY packages/brand/package.json ./packages/brand/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY apps/entrant/package.json ./apps/entrant/package.json
 

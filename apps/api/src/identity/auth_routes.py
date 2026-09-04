@@ -18,6 +18,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel
 
+from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
 from core.client_ip import client_ip
 from core.config import settings
 from core.dependencies import AuthUser, get_current_user
@@ -379,12 +380,13 @@ def request_password_reset(
         try:
             send_email(
                 to=email,
-                subject="Reset your ShuttleWorks password",
+                subject=f"Reset your {PRODUCT_NAME} password",
                 body=(
                     "A password reset was requested for this address.\n\n"
                     f"Reset link: {origin}/login?reset={token}\n\n"
                     f"The link expires in {int(settings.reset_token_ttl_minutes)} "
                     "minutes. If you didn't ask for this, ignore this message."
+                    f"\n\n{BRAND_SIGNATURE}"
                 ),
             )
         except Exception:
