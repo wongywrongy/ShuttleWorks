@@ -29,6 +29,7 @@ import { LockRibbon } from '../../components/status/LockRibbon';
 import { EngineConfigForm } from '../../platform/engine-config/EngineConfigForm';
 import { ConfigSurface, LockedFieldset } from '../../platform/engine-config/ConfigSurface';
 import { IconDone } from '@scheduler/design-system';
+import { ACCENT_PRESS } from '../../lib/utils';
 
 const FORM_ID = 'meet-config-form';
 
@@ -67,7 +68,7 @@ export function TournamentSetupPage() {
           form={FORM_ID}
           disabled={busy}
           data-testid="config-save"
-          className="inline-flex h-7 items-center gap-1.5 rounded-sm bg-accent px-3 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:opacity-50"
+          className={`inline-flex h-7 items-center gap-1.5 rounded-sm bg-accent px-3 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
         >
           {justSaved ? (
             <span className="motion-enter-icon inline-flex items-center gap-1.5">

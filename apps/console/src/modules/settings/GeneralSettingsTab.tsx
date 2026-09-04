@@ -102,7 +102,7 @@ export function GeneralSettingsTab({
                 {derived.text === 'Live' ? (
                   <span className={TEXT_MUTED_SM}>Live</span>
                 ) : (
-                  <StatusPill tone={derived.tone} dot>
+                  <StatusPill tone={derived.tone}>
                     {derived.text}
                   </StatusPill>
                 )}

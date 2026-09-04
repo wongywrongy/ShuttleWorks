@@ -94,10 +94,11 @@ describe('StatusChip', () => {
     expect(renderToStaticMarkup(h(StatusChip, { state }))).toContain(copy);
   });
 
-  it('tones open on the live ramp with an aria-hidden dot', () => {
+  it('tones open on the live ramp, colour + text only (ADR 0027)', () => {
     const html = renderToStaticMarkup(h(StatusChip, { state: OPEN_CHIP }));
     expect(html).toContain('text-status-live');
-    expect(html).toMatch(/<span aria-hidden="true"[^>]*bg-status-live/);
+    expect(html).not.toContain('aria-hidden');
+    expect(html).not.toContain('rounded-full');
   });
 
   it('tones closed on the done ramp, dotless', () => {

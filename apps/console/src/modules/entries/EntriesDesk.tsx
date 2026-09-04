@@ -316,7 +316,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
                   {e.eventCode ?? '–'}
                 </span>
                 <span role="cell" className={colClass(COLUMNS[2])}>
-                  <StatusPill tone={ENTRY_STATE_TONE[e.state]} dot>
+                  <StatusPill tone={ENTRY_STATE_TONE[e.state]}>
                     {ENTRY_STATE_LABEL[e.state]}
                   </StatusPill>
                 </span>
@@ -440,7 +440,7 @@ function paymentControl(
   if (isPaid(group)) {
     return (
       <span className="flex items-center gap-2">
-        <StatusPill tone="green" dot>
+        <StatusPill tone="green">
           Paid
         </StatusPill>
         <Button size="xs" variant="ghost" disabled={pending} onClick={onUnpaid}>

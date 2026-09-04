@@ -20,6 +20,8 @@ export {
   CardContent,
   type CardProps,
 } from './Card';
+export { Badge, badgeVariants, type BadgeProps, type BadgeTone, type BadgeSize } from './Badge';
+export { Avatar, type AvatarProps, type AvatarSize, type AvatarVariant } from './Avatar';
 export { Select, type SelectProps, type SelectOption } from './Select';
 export { TextField, type TextFieldProps } from './TextField';
 export { CourtMark, COURT_ASPECT, type CourtMarkProps } from './CourtMark';

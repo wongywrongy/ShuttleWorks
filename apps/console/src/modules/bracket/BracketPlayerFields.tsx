@@ -32,7 +32,7 @@ import {
   type BracketPairingCommand,
 } from './pairingMutation';
 import { disciplineLabel } from './bracketLabels';
-import { EYEBROW_CLASS } from '../../lib/utils';
+import { EYEBROW_CLASS, ACCENT_PRESS } from '../../lib/utils';
 import { isDoublesCode } from '../../lib/doubles';
 import { formatPlayerName } from '../../lib/names';
 
@@ -424,7 +424,7 @@ function EventTypeEditor({
                   disabled={!partnerId || busy}
                   onClick={() => confirmPair(ev)}
                   data-testid={`partner-confirm-${ev.id}`}
-                  className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:opacity-50"
+                  className={`rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
                 >
                   Add
                 </button>

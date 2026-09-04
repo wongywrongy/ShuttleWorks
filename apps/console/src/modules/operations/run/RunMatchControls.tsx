@@ -10,14 +10,14 @@ import type { RunMatch } from '../runtime/runModel';
 import { useConfirmClick } from '../../../hooks/useConfirmClick';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
 
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card ` +
   `px-2 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`;
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
-  `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
+  `text-2xs font-medium text-accent-ink ${ACCENT_PRESS}`;
 const armedBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-destructive px-2 py-1 ` +
   `text-2xs font-medium text-destructive-foreground hover:brightness-110`;

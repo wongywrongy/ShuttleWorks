@@ -5,59 +5,65 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/utils';
 
 /**
- * Button — the canonical button primitive.
+ * Button — the system's only button.
  *
- * "Warmed-B blue-glow" language: THE primary action carries the signature
- * azure glow (`default`/`brand` — accent fill + accent-ink + shadow-glow);
- * secondary actions are quiet (outline / secondary / ghost / toolbar). Glow
- * marks intent, not decoration, so reserve `default`/`brand` for the single
- * primary action on a surface. The shadcn-style API is preserved for swap
- * compatibility — existing `<Button variant="ghost">` call-sites are unchanged.
- * Focus ring is the accent via `--ring`.
+ * Ported from the curated Claude Design library (`components/actions/Button`
+ * + `ButtonIcon`, ADR 0027): one construction across every style — a 1px
+ * border, the `--shadow-hard` (0 3px 0) offset so it reads as pressable,
+ * and a press state that sinks it 3px onto its shadow. Quiet styles
+ * (`ghost`, `link`, `toolbar`) have no offset and do not sink. The
+ * signature glow is gone; intent is carried by fill, not by light.
+ *
+ * Variant vocabulary (the shadcn-style API is preserved so existing call
+ * sites are unchanged):
+ * - `default` / `brand` — the azure accent. Reserve for the ONE primary
+ *   action on a surface. (`default` is the curated `brand`; the code base
+ *   has always spelled its primary action `default`.)
+ * - `ink` — the curated library's `default`: solid ink fill. For an
+ *   emphasised action that is not the accent (e.g. active tab-like states).
+ * - `destructive`, `outline`, `secondary` — offset + sink.
+ * - `toolbar` — sunken chip chrome for page-header tool rows.
+ * - `ghost`, `link` — no chrome.
+ *
+ * Sizes: xs 28 / sm 36 / default 40 / lg 44; icon 36 / icon-sm 28 /
+ * icon-xs 24. Radius follows size: 6px on xs and the small icons, 8px
+ * otherwise, 9px on lg. Compact sizes keep an invisible 44×44 hit area
+ * via `::before` so touch targets meet WCAG 2.5.5.
+ *
+ * Motion: 120ms (`duration-fast`) on transform/shadow with the
+ * over-shoot-resistant `ease-out-quick`, exactly the curated press.
  */
+const HARD = 'shadow active:translate-y-[3px] active:shadow-none';
+const HIT = "relative before:absolute before:-inset-2 before:content-['']";
+
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded text-sm font-medium ' +
-    'ring-offset-background ' +
-    'transition-[background-color,color,box-shadow,transform,opacity,filter] duration-150 ease-brand ' +
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ' +
-    'active:scale-[0.97] ' +
-    'disabled:pointer-events-none disabled:opacity-50 ' +
-    'select-none ' +
+  'inline-flex select-none items-center justify-center whitespace-nowrap border font-semibold leading-none tracking-[0.01em] ' +
+    'transition-[transform,box-shadow,background-color,color] duration-fast ease-out-quick ' +
+    'ring-offset-surface-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 ' +
+    'disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none ' +
     '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        // Primary = the azure glow button (accent fill, dark ink, signature glow).
-        default: 'bg-accent text-accent-ink shadow-glow hover:brightness-110',
-        destructive:
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        outline:
-          'border border-border-control bg-card text-foreground hover:bg-muted/40',
-        secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-        // `link` uses the accent so links stand out from body text.
-        link: 'text-accent underline-offset-4 hover:underline',
-        // `brand` — alias of the primary glow button (explicit intent).
-        brand: 'bg-brand text-brand-ink shadow-glow hover:brightness-110',
-        // Toolbar chip — hairline + bg-card chrome shared across page headers
-        // (Export, Director, Disruption, Re-optimize, Generate).
+        default: `border-action-primary-hover bg-accent text-accent-ink hover:bg-action-primary-hover ${HARD}`,
+        brand: `border-action-primary-hover bg-brand text-brand-ink hover:bg-action-primary-hover ${HARD}`,
+        ink: `border-primary bg-primary text-primary-foreground hover:bg-primary/90 ${HARD}`,
+        destructive: `border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90 ${HARD}`,
+        outline: `border-border-control bg-card text-text-primary hover:bg-surface-hover ${HARD}`,
+        secondary: `border-rule bg-secondary text-secondary-foreground hover:bg-surface-chip ${HARD}`,
         toolbar:
-          'border border-border bg-card text-card-foreground hover:bg-muted/40 hover:text-foreground',
+          'border-rule bg-surface-sunken text-text-secondary hover:bg-surface-chip hover:text-text-primary',
+        ghost: 'border-transparent text-text-primary hover:bg-surface-hover',
+        link: 'border-transparent text-action-primary underline underline-offset-[3px] hover:text-action-primary-hover',
       },
       size: {
-        // xs / icon-xs / icon-sm get an invisible 44x44 hit area via a
-        // ::before pseudo-element so the visual chrome stays compact
-        // while touch / pointer targets meet WCAG 2.5.5 (Level AAA).
-        xs: "relative h-7 rounded-sm px-2 text-xs gap-1 [&_svg]:size-3.5 before:absolute before:-inset-2 before:content-['']",
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 rounded px-3',
-        lg: 'h-11 rounded-md px-8',
-        icon: 'h-10 w-10',
-        'icon-sm':
-          "relative h-8 w-8 [&_svg]:size-4 before:absolute before:-inset-2 before:content-['']",
-        'icon-xs':
-          "relative h-7 w-7 [&_svg]:size-3.5 before:absolute before:-inset-[10px] before:content-['']",
+        xs: `h-7 gap-1.5 rounded-sm px-2.5 text-xs [&_svg]:size-3.5 ${HIT}`,
+        sm: 'h-9 gap-2 rounded px-3 text-sm',
+        default: 'h-10 gap-2 rounded px-3.5 text-sm',
+        lg: 'h-11 gap-2 rounded-md px-[18px] text-sm',
+        icon: 'h-9 w-9 rounded',
+        'icon-sm': `h-7 w-7 rounded-sm [&_svg]:size-3.5 ${HIT}`,
+        'icon-xs': `h-6 w-6 rounded-sm [&_svg]:size-3 ${HIT} before:-inset-[10px]`,
       },
     },
     defaultVariants: {

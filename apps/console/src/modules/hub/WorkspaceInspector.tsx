@@ -159,7 +159,7 @@ export function WorkspaceInspector({
         eyebrow="This workspace"
         right={
           tournament.signals && pill ? (
-            <StatusPill tone={pill.tone} dot className="shrink-0">
+            <StatusPill tone={pill.tone} className="shrink-0">
               {pill.text}
             </StatusPill>
           ) : null

@@ -4,32 +4,33 @@ import { cn } from '../lib/utils';
 import { STATUS_TONE, type StatusToneName } from './statusTone';
 
 /**
- * StatusPill — semantic status badge.
+ * StatusPill — operational match state.
  *
- * Pick a `tone` (semantic state) and optionally show a `dot` and a
- * `pulse` animation. Body text is `children`.
+ * Ported from the curated Claude Design library (`components/data/StatusPill`,
+ * ADR 0027): a 22px, 4px-radius chip (`rounded-xs`, the "tiny mark"
+ * radius) with a tinted ground and text-grade ink, Geist 600 uppercase at
+ * 10px tracked +0.06em. Status is carried by **colour + text only** — the
+ * curated design draws no marks inside the chip, and the border is
+ * transparent (the 1px keeps the box the same size as `Badge`).
  *
- * Tone mapping to the design system's --status-* palette:
- *   green  → status-live    (emerald — match in progress)
- *   blue   → status-started (sky     — operator started clock)
- *   amber  → status-called  (amber   — called to court)
- *   yellow → status-warning (amber   — soft violation)
- *   red    → status-blocked (red     — hard rule conflict)
- *   idle   → status-idle    (slate-muted — scheduled but not yet active)
- *   done   → status-done    (slate   — finished / archived)
+ * Pick a `tone` by MEANING. The legacy colour names are aliases onto the
+ * shared tone source (`statusTone.ts`, ADR 0020) so this register and the
+ * entrant `StatusChip` draw one palette:
+ *   green  → live     (match in progress)
+ *   blue   → started  (operator started the clock)
+ *   amber  → called   (called to court)
+ *   yellow → warning  (soft violation)
+ *   red    → blocked  (hard rule conflict)
+ *   idle   → idle     (scheduled, not yet active)
+ *   done   → done     (finished / archived)
  *
- * Routing through `--status-*` keeps every pill on the same hue ladder
- * as the Gantt blocks, toast borders, and app-status chip.
- *
- * "Warmed-B blue-glow" language: a soft-cornered (`rounded-sm`) badge with a
- * leading swatch dot and an UPPERCASE Geist micro-label (one family — no mono).
- * A live pill breathes via `sw-pulse`.
+ * There is no dot and no pulse: the owner ruled (ADR 0027) that the
+ * dotted, fully-round pill is a telltale of generated UI. Live state on
+ * the Display board is carried by the LIVE text itself (MOTION.md §8.3).
  */
 
 export type PillTone = 'green' | 'yellow' | 'red' | 'blue' | 'amber' | 'idle' | 'done';
 
-/** The legacy pill vocabulary, aliased onto the shared tone source
- *  (`statusTone.ts`, ADR 0020) so both registers draw one palette. */
 const TONE_NAME: Record<PillTone, StatusToneName> = {
   green: 'live',
   yellow: 'warning',
@@ -40,23 +41,16 @@ const TONE_NAME: Record<PillTone, StatusToneName> = {
   done: 'done',
 };
 
-// Composed at module scope in the pill's historical order — the rendered
-// strings are byte-identical to the previous inline tables.
+// Ground + ink only (no tone border — the curated chip has none).
 const TONE_BG = Object.fromEntries(
   (Object.keys(TONE_NAME) as PillTone[]).map((t) => {
     const s = STATUS_TONE[TONE_NAME[t]];
-    return [t, `${s.bg} ${s.text} border ${s.border}`];
+    return [t, `${s.bg} ${s.text}`];
   }),
-) as Record<PillTone, string>;
-
-const TONE_DOT = Object.fromEntries(
-  (Object.keys(TONE_NAME) as PillTone[]).map((t) => [t, STATUS_TONE[TONE_NAME[t]].dot]),
 ) as Record<PillTone, string>;
 
 interface Props {
   tone: PillTone;
-  dot?: boolean;
-  pulse?: boolean;
   className?: string;
   title?: string;
   children: ReactNode;
@@ -64,8 +58,6 @@ interface Props {
 
 export function StatusPill({
   tone,
-  dot,
-  pulse,
   className,
   title,
   children,
@@ -73,21 +65,12 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.04em]',
+        'inline-flex h-badge items-center gap-1.5 whitespace-nowrap rounded-xs border border-transparent px-2 text-3xs font-semibold uppercase leading-none tracking-[0.06em]',
         TONE_BG[tone],
         className
       )}
       title={title}
     >
-      {dot && (
-        <span
-          className={cn(
-            'h-1.5 w-1.5 rounded-full',
-            TONE_DOT[tone],
-            pulse ? 'sw-pulse' : ''
-          )}
-        />
-      )}
       {children}
     </span>
   );

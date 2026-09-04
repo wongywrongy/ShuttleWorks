@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
 import type { MatchDTO, MatchStateDTO, SetScore, TournamentConfig } from '../../../api/dto';
 
 interface ScoreEditorProps {
@@ -172,7 +172,7 @@ function SimpleScoreEditor({
         <button
           type="submit"
           disabled={!canSubmit || isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded bg-accent px-2 py-1 text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:opacity-50`}
+          className={`${INTERACTIVE_BASE} rounded bg-accent px-2 py-1 text-2xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
         >
           {isSubmitting ? 'Saving…' : 'Save'}
         </button>
@@ -421,7 +421,7 @@ function BadmintonInlineEditor({
         <button
           type="submit"
           disabled={!matchWinner || isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded bg-accent px-2 py-1 text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:opacity-50`}
+          className={`${INTERACTIVE_BASE} rounded bg-accent px-2 py-1 text-2xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
         >
           {isSubmitting ? 'Saving…' : 'Save'}
         </button>

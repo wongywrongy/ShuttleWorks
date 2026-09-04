@@ -34,7 +34,7 @@ import { apiClient } from '../../../api/client';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { exportScheduleXlsx } from '../exports/scheduleXlsx';
 import { PickerPopover } from '../../../components/control-plane';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
 import type { WorkspacePhase } from '../../../platform/domain/lifecycle';
 import { opsPlanMode } from '../lifecycleMatrix';
 import type { PlanDialog } from './planDialogs';
@@ -43,7 +43,7 @@ const schedBtnBase =
   `${INTERACTIVE_BASE} inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-sm px-2.5 py-1 text-xs ` +
   `font-medium disabled:cursor-not-allowed disabled:opacity-50`;
 const commitBtn =
-  `${schedBtnBase} bg-accent text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
+  `${schedBtnBase} bg-accent text-accent-ink ${ACCENT_PRESS}`;
 const solveBtn =
   `${schedBtnBase} border border-border-control bg-card text-foreground hover:bg-muted/40`;
 const solveArmedBtn =

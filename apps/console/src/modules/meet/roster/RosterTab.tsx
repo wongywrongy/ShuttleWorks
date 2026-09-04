@@ -48,7 +48,7 @@ import {
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { DetailDrawer } from './PlayerDetailPanel';
-import { EYEBROW_CLASS } from '../../../lib/utils';
+import { EYEBROW_CLASS, ACCENT_PRESS } from '../../../lib/utils';
 import { DetailDock, EmptyState, PickerPopover } from '../../../components/control-plane';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
@@ -584,7 +584,7 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
             aria-haspopup="dialog"
             aria-expanded={open}
             data-testid="school-add-button"
-            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`}
           >
             ＋ Add school
           </button>
@@ -622,7 +622,7 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
             type="button"
             onClick={commit}
             disabled={!draft.trim()}
-            className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow hover:brightness-110 disabled:opacity-50"
+            className={`rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
           >
             Add
           </button>
@@ -724,7 +724,7 @@ function BulkImportMenu({
               onClick={commit}
               disabled={names.length === 0}
               data-testid="bulk-import-commit"
-              className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow hover:brightness-110 disabled:opacity-50"
+              className={`rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
             >
               Add {names.length || ''}
             </button>

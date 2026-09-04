@@ -145,15 +145,15 @@ describe('the sign-out form, unhydrated', () => {
     // primary weight on a control the page cannot know applies is the same
     // over-claim in CSS.
     //
-    // Derived from the design system rather than spelled: `shadow-glow` is
-    // what the `default`/`brand` variants add and nothing else does
+    // Derived from the design system rather than spelled: `bg-accent` is
+    // what the `default` variant adds and nothing else does
     // (`packages/design-system/components/Button.tsx`), so this asks "is it
-    // the glow button" without naming a class the page chose.
+    // the accent button" without naming a class the page chose.
     const html = await fetchEntry();
     const signOut = logoutForm(html);
 
     expect(signOut).toMatch(/<button[^>]*type="submit"/);
-    expect(signOut).not.toContain('shadow-glow');
+    expect(signOut).not.toContain('bg-accent');
     // Non-vacuity, and the positive half: the control is really rendered
     // through the design system and really picked the quiet variant —
     // `border-border-control` is `outline`'s chrome. Without this the

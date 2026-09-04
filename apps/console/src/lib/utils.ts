@@ -15,6 +15,17 @@
  *   clicked" across every surface identically.
  * - select-none prevents accidental text selection on double-click.
  */
+/**
+ * The accent (primary) press chrome for hand-rolled buttons that cannot be
+ * the shared `Button` yet: the curated one-construction treatment (ADR
+ * 0027) — 1px border, the `--shadow-hard` offset, sinks 3px on press. Pair
+ * with `bg-accent text-accent-ink`. Composes with INTERACTIVE_BASE.
+ */
+export const ACCENT_PRESS =
+  "border border-action-primary-hover shadow " +
+  "transition-[transform,box-shadow,background-color,color,opacity] duration-fast ease-out-quick " +
+  "hover:bg-action-primary-hover active:translate-y-[3px] active:shadow-none disabled:shadow-none"
+
 export const INTERACTIVE_BASE =
   "transition-[background-color,color,box-shadow,transform,opacity] duration-fast ease-brand " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +

@@ -31,6 +31,7 @@ import { descriptorFor } from "./formatRegistry";
 import { StandingsTable } from "./StandingsTable";
 import { EYEBROW_CLASS } from "../../lib/utils";
 import { buildPlayUnitLabels } from "./bracketLabels";
+import { ACCENT_PRESS } from '../../lib/utils';
 
 /** How the SE canvas lays out its rounds. One-sided is the classic
  *  printed-bracket cascade (R1 left, Final right) and the default;
@@ -1882,7 +1883,7 @@ function SwissView({
                   ? undefined
                   : "Record every result to pair the next round"
               }
-              className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {`Generate round ${playedRounds + 1} of ${totalRounds}`}
             </button>

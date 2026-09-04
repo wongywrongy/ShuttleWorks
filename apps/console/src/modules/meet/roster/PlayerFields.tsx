@@ -20,6 +20,7 @@ import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { useRankValidation } from './hooks/useRankValidation';
 import { useEventResultsGuard } from './hooks/useEventResultsGuard';
 import { isDoublesRank } from './positionGrid/helpers';
+import { ACCENT_PRESS } from '../../../lib/utils';
 
 export function PlayerAvailabilityField({ player }: { player: PlayerDTO }) {
   const updatePlayer = useTournamentStore((s) => s.updatePlayer);
@@ -133,7 +134,7 @@ export function PlayerEventsField({ player }: { player: PlayerDTO }) {
               assignRank(player.groupId, player.id, pendingReplace.rank);
               setPendingReplace(null);
             }}
-            className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110"
+            className={`rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS}`}
           >
             Replace
           </button>

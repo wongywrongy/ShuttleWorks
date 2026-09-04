@@ -90,7 +90,7 @@ const TEXT_CLASS: Record<MatchListStatus, string> = {
 export function MatchStatus({ status }: { status: MatchListStatus }) {
   if (STATUS_TREATMENT[status] === 'chip') {
     return (
-      <StatusPill tone={STATUS_PILL_TONE[status]} dot>
+      <StatusPill tone={STATUS_PILL_TONE[status]}>
         {STATUS_LABEL[status]}
       </StatusPill>
     );

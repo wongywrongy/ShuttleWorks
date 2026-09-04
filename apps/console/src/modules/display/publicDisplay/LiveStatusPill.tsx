@@ -1,5 +1,5 @@
 /**
- * Small pill showing spectator-calm freshness for the TV boards — how
+ * Small status chip showing spectator-calm freshness for the TV boards — how
  * current the data on screen is, in spectator voice. Driven by
  * `FreshnessState` (see ./freshness.ts), derived in each board's sync
  * hook from the age of the last *successful* poll.
@@ -26,12 +26,6 @@ export function LiveStatusPill({ status }: LiveStatusPillProps) {
       : status === 'delayed'
         ? 'border-status-warning/40 bg-status-warning/10 text-status-warning'
         : 'border-status-idle/40 bg-status-idle/10 text-status-idle';
-  const dot =
-    status === 'live'
-      ? 'bg-status-live sw-pulse'
-      : status === 'delayed'
-        ? 'bg-status-warning sw-pulse'
-        : 'bg-status-idle';
   const label = status === 'live' ? 'Live' : status === 'delayed' ? 'Delayed' : 'Out of date';
   const quietTitle =
     status === 'live'
@@ -41,13 +35,12 @@ export function LiveStatusPill({ status }: LiveStatusPillProps) {
         : 'Results may be out of date';
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${styles}`}
+      className={`inline-flex h-badge items-center whitespace-nowrap rounded-xs border px-2 text-3xs font-semibold uppercase leading-none tracking-[0.06em] ${styles}`}
       title={quietTitle}
       data-testid="tv-live-status"
       role="status"
       aria-live="polite"
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
       {label}
     </span>
   );

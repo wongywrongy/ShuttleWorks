@@ -97,9 +97,11 @@ cross-module import is a build **error**):
 
 | Component | Variants / API |
 | --- | --- |
-| `Button` | cva: `variant` (incl. `brand`, `outline`) × `size` (`xs`…, icon), `asChild` |
-| `Card` (+ Header/Footer/Title/Description/Content) | cva: `variant` (default `frame`); deliberately square-cornered (BRAND.md) |
-| `StatusPill` | `tone: green \| yellow \| red \| blue \| amber \| idle \| done` — backed by `STATUS_TONE` (`statusTone.ts`), the one tone→class source shared with the entrant `StatusChip` (ADR 0020) |
+| `Button` | cva: `variant: default \| brand \| ink \| destructive \| outline \| secondary \| toolbar \| ghost \| link` × `size: xs \| sm \| default \| lg \| icon \| icon-sm \| icon-xs`, `asChild`. One construction: 1px border + `--shadow-hard` offset, sinks 3px on press; no glow (ADR 0027) |
+| `Card` (+ Header/Footer/Title/Description/Content) | cva: `variant: bare \| frame \| elevated` (default `frame`); 8px container radius, 16px inset, `shadow-card`/`shadow-md` elevation (ADR 0027) |
+| `StatusPill` | `tone: green \| yellow \| red \| blue \| amber \| idle \| done` — backed by `STATUS_TONE` (`statusTone.ts`), the one tone→class source shared with the entrant `StatusChip` (ADR 0020). 22px, `rounded-xs`, colour + text only; `dot`/`pulse` retained for existing call sites (ADR 0027) |
+| `Badge` | cva: `tone: default \| info \| success \| warning \| danger \| accent` × `size: default \| sm` — rectangular count/label chip, tabular numerals (ADR 0027) |
+| `Avatar` | `size: xs \| sm \| default \| lg \| xl`; renders `image` (`src`), `initials`, or a sunken `placeholder`; `variant` overrides the inference (ADR 0027) |
 | `EmptyState` | `variant: centered \| card \| editorial` — the three tiers' empty-state registers as explicit variants (ADR 0020) |
 | `Notice` | `tone: info \| warning \| danger \| success \| accent` |
 | `TextField` | `size: sm \| md`; always renders a visible `<label>`; hint/error wired to aria |
@@ -180,12 +182,14 @@ not add wrapper elements.
 
 ## Resolved design-language rulings (ADR 0020)
 
-- **Card radius is per-tier by decision**: DS `Card` square (BRAND.md),
+- **Card radius is per-tier by decision**: DS `Card` is the 8px
+  container radius since ADR 0027 (it was square under BRAND.md);
   console panels `rounded-sm` (`PANEL_RADIUS`), entrant cards
   `rounded-lg` (`CARD`). Two Figma card components.
 - **Status badges**: one tone palette (`STATUS_TONE`), two registers —
-  operator uppercase `rounded-sm` (`StatusPill`), public sentence-case
-  `rounded-full` (entrant `StatusChip`).
+  operator uppercase (`StatusPill`), public sentence-case (entrant
+  `StatusChip`). Both are rectangular `rounded-xs`, colour + text only,
+  no dot (ADR 0027).
 - **EmptyState**: one DS component, three variants
   (`centered | card | editorial`); the old per-tier components are thin
   wrappers.

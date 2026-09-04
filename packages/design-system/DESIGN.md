@@ -52,13 +52,13 @@ Each rule has a **why** and a **what to do instead**.
 - **Why:** the entire palette swap between Phase-1 slate-blue and Phase-6 brutalist relies on changing CSS variables in one file. Hex literals in JSX/CSS bypass the layer and create dead spots.
 - **Instead:** `bg-bg`, `text-ink`, `border-rule`, `text-status-live`, `bg-status-blocked-bg`. Or `hsl(var(--ink) / 0.5)` in plain CSS.
 
-### 1.2 No `shadow-sm`, `shadow-md`, `shadow-lg` anywhere
-- **Why:** BRAND.md §6 — brutalism is opposed to soft shadow; premium-dark uses substrate elevation instead.
-- **Instead:** Use `--bg-elev` (a slightly lighter substrate) + 1px border for cards. For modals/popovers, the design system provides a hard offset shadow via `--shadow-hard` (light mode only).
+### 1.2 Shadows are the elevation tokens, light-mode only
+- **Why:** The curated design library (ADR 0027) carries elevation with real Gaussian shadows in light mode; dark mode resolves the same tokens to luminance-only depth (`--shadow-sm`/`--shadow-hard` become `none` in `tokens.css`).
+- **Instead:** `shadow-card` on a raised `Card`, `shadow-md` on an overlay/elevated surface, `shadow-hard` (0 3px 0) on pressables. Never a raw `box-shadow` value and never a shadow keyframe.
 
-### 1.3 No `rounded-md`, `rounded-lg`, `rounded-xl`, `rounded-2xl`, `rounded-full`
-- **Why:** BRAND.md §3 — 90° corners default. 2px max on interactive form controls only.
-- **Instead:** `rounded-none` everywhere (also the default). `rounded-sm` (2px) on `<input>`, `<button>`, `<select>`, `<textarea>`. **Never** on `Card`, `Badge`, `Pill`, `Modal`, `Dropdown`, dividers, page chrome.
+### 1.3 Two radii in use: 6px pressable, 8px container, 4px tiny marks
+- **Why:** ADR 0027 (from the curated Claude Design library) replaces the 90-degree BRAND.md rule. 6px (`rounded-sm`) on anything pressable (buttons, tabs, inputs, avatars); 8px (`rounded`) on anything that contains (cards, dialogs, notices); 4px (`rounded-xs`) only on tiny nested marks (checkbox, `Badge`, `StatusPill`).
+- **Instead:** `rounded-md`/`rounded-lg`/`rounded-xl` exist as tokens but are not used in new work. Nothing is fully round except dots.
 
 ### 1.4 No emoji in UI strings
 - **Why:** BRAND.md §7 — ASCII syntax is brutalist signature; emoji are AI-slop signal.

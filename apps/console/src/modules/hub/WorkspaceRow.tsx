@@ -198,7 +198,7 @@ export function WorkspaceRow({
         </span>
         {badge ? (
           <span data-testid="row-lifecycle" className="shrink-0">
-            <StatusPill tone={badge.tone} dot={badge.tone === 'green'}>
+            <StatusPill tone={badge.tone}>
               {badge.text}
             </StatusPill>
           </span>

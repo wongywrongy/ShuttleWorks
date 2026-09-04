@@ -10,7 +10,7 @@
 import { useMemo, useState } from 'react';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE, ACCENT_PRESS } from '../../lib/utils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 import { STATE_WORD } from '../../lib/stateWords';
 import { InlineSearch } from '../../components/InlineSearch';
@@ -35,7 +35,7 @@ const actionBtn =
   `disabled:cursor-not-allowed disabled:opacity-50`;
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm bg-accent px-2 py-0.5 ` +
-  `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
+  `text-2xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`;
 
 function RowActions({
   b,

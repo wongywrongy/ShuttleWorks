@@ -16,7 +16,7 @@
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { Download } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../lib/utils';
 import {
   ActionsBar,
   DenseDataTable,
@@ -258,7 +258,7 @@ function BracketRosterTabCore({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS}`}
         >
           ＋ Add player
         </button>

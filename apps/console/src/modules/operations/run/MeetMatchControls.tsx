@@ -18,7 +18,7 @@ import { Check } from '@phosphor-icons/react';
 import { DetailPanel } from '../../../components/control-plane';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { useConfirmClick } from '../../../hooks/useConfirmClick';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
 import { getMatchLabel } from '../../../lib/matchUtils';
 import type { RunMatch } from '../runtime/runModel';
 import type { MeetRunOps } from './useMeetRunOps';
@@ -30,8 +30,8 @@ const actionBtn =
   `disabled:cursor-not-allowed disabled:opacity-50`;
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
-  `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand ` +
-  `hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
+  `text-2xs font-medium text-accent-ink ${ACCENT_PRESS} ` +
+  `disabled:cursor-not-allowed disabled:opacity-50`;
 
 export interface MeetMatchControlsProps {
   match: RunMatch;

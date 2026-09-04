@@ -36,6 +36,7 @@ references a longer source, it names the file rather than duplicating it.
 | [0022](/explanation/decisions/0022-authority-epochs-and-domain-operations) | Authority epochs and ordered domain-operation synchronization | Accepted (2026-09-01) |
 | [0023](/explanation/decisions/0023-docker-first-event-node-and-entrant-freeze) | Docker-first event node, 72-hour offline target, and entrant freeze at checkout | Accepted (2026-09-01) |
 | [0024](/explanation/decisions/0024-compatibility-and-release-governance) | Two-release compatibility and tested immutable image publication | Accepted (2026-09-01) |
+| [0027](/explanation/decisions/0027-curated-data-components) | The curated Claude Design library is the visual source for the shared data components: Card, StatusPill, Badge, Avatar | Accepted (2026-09-04) |
 
 ## Format
 
