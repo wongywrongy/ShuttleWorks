@@ -24,6 +24,7 @@ complete") and `docs/explanation/console-naming.md` cites its rulings by name
 permanently ambiguous. SP-CONSOLE-6 is the next free number after SP-CONSOLE-5.
 
 **R-PATH-0 — repository conventions win over the brief's paths.** The brief named
+<!-- docs-paths-ignore-next-line: the brief's paths, quoted precisely because they do not exist -->
 `products/scheduler/`, `docs/decisions/` and `REFACTOR_PROGRESS.md`. None exist.
 Work uses `apps/console`, `apps/api`, `packages/design-system`; ADRs live in
 `docs/explanation/decisions/`; open work goes to `docs/reference/debt-log.md`,
@@ -32,6 +33,7 @@ which CLAUDE.md requires instead of a parallel progress ledger.
 ### Vocabulary
 
 **R-AUDIT-0 — `docs/explanation/console-naming.md` is the vocabulary oracle.**
+<!-- docs-paths-ignore-next-line: the brief's name for an audit that was never written under that path -->
 The brief named `docs/audits/operator-console-audit-2026-09-03.md` as the source
 of its replace table. That file does not exist in the working tree, in
 `git log --all`, on any branch, in stash, or untracked. `console-naming.md` is its

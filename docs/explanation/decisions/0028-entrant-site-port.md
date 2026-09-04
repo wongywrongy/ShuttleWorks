@@ -46,7 +46,7 @@ console rendered Geist and Archivo.
    `LIST_CARD`/`LIST_CARD_ROW`, `PAGE_TITLE`/`SECTION_TITLE`, `EYEBROW`,
    `CHIP`, `FIELD_INPUT`/`FIELD_LABEL` — plus one component, `SegmentedNav`.
    The page-scoped scripts under `public/assets/` cannot import it, so their
-   copies are pinned equal by `tests/uiTwins.test.ts`.
+   copies are pinned equal by `apps/entrant/tests/uiTwins.test.ts`.
 
 ## Consequences
 

@@ -155,8 +155,8 @@ equivalents are native `<select>`/`<details>` styled by the `ui.ts`
 constants. Its page-weight gate counts HTML (not CSS), so primitives must
 not add wrapper elements. Since ADR 0028 the tier ships Geist, Archivo and
 JetBrains Mono (`@fontsource-variable`, imported in `app.css`); the page-scoped
-scripts under `public/assets/` cannot import `ui.ts`, so `tests/uiTwins.test.ts`
-pins their copied class strings equal to the constants.
+scripts under `public/assets/` cannot import `ui.ts`, so
+`apps/entrant/tests/uiTwins.test.ts` pins their copied class strings equal to the constants.
 
 ## Layout conventions
 

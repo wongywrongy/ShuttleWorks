@@ -174,7 +174,7 @@ nothing: `apps/entrant/.dependency-cruiser.cjs`'s `entrant-no-operator-frontend`
 rule forbids the public app reaching into `apps/console/src`, and
 `apps/entrant/tests/boundaries.test.ts` carries its negative control. §4.2's
 colour guard is added as `apps/entrant/tests/noRawColor.test.ts` — no hex literal
-under the entrant `app/` tree, with a negative control and a URL-fragment control,
+under the `apps/entrant/app/` tree, with a negative control and a URL-fragment control,
 running in the tier's existing vitest job. It is scoped to this tier on purpose:
 the operator console carries genuine hex in the public-display presets and the
 school-accent map, and ruling on those belongs to SP-CONSOLE-6.
