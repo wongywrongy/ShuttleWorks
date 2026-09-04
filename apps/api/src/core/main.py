@@ -41,6 +41,7 @@ from workspaces import tournaments  # Step 2 — replaces the legacy /tournament
 from workspaces import setup as setup_api  # canonical workflow-first tournament setup facade
 from workspaces import workspace_modules  # Workspace-modules program #1 — per-workspace module state
 from core.body_limit import BodyLimitMiddleware
+from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
 from core.config import settings
 from core.dependencies import (
     get_current_user,
@@ -255,8 +256,8 @@ def docs_urls(environment: str) -> tuple[str | None, str | None, str | None]:
 _docs_url, _redoc_url, _openapi_url = docs_urls(settings.environment)
 
 app = FastAPI(
-    title="School Sparring Scheduler API",
-    description="Stateless scheduling API for school sparring matches using CP-SAT solver",
+    title=f"{PRODUCT_NAME} API",
+    description=f"Tournament control-plane API for {BRAND_SIGNATURE}.",
     version=APP_VERSION,
     lifespan=lifespan,
     docs_url=_docs_url,

@@ -3,6 +3,11 @@
 One linear path from a bare Ubuntu machine to a verified, publicly reachable
 ShuttleWorks deployment. Run it top to bottom; every command is here in order.
 
+For the company deployment, follow this page together with
+[Configure the Yunavero production domain](/how-to/configure-yunavero-domain),
+which fixes the operator and entrant hostnames without weakening their origin
+boundary.
+
 This page owns the **sequence**. Where a topic has real depth — the full
 environment-variable reference, day-two operations, adding a second machine —
 it links out rather than restating, so there is one source of truth per fact.

@@ -50,6 +50,7 @@
  * `verify_turnstile` guards signup only — so this page has no no-JS gap at all.
  */
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
+import { brandedTitle } from '@scheduler/brand';
 import { data } from 'react-router';
 import { useContext } from 'react';
 
@@ -199,7 +200,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
  * into `<head>` at all.
  */
 export const meta: Route.MetaFunction = () => [
-  { title: 'Sign in · ShuttleWorks Tournaments' },
+  { title: brandedTitle('Sign in') },
 ];
 
 export default function LoginPage({ loaderData }: Route.ComponentProps) {

@@ -179,6 +179,7 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
     Delivery failure is logged, never raised: a submission that succeeded
     must not 500 because a mail server was slow, and the desk can re-send.
     """
+    from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
     from core.email import send_email
 
     # PUBLIC tier (SP-HOST-1 D-9). This lands in the inbox of someone who
@@ -192,11 +193,12 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
                 f"{inviter} has entered you as their doubles partner at "
                 f"{tournament_name}.\n\n"
                 f"See the invitation: {origin}/e/partner?token={token}\n\n"
-                "You will need a ShuttleWorks entrant account to accept - the "
+                f"You will need a {PRODUCT_NAME} entrant account to accept - the "
                 "page will walk you through it. Nothing is entered in your "
                 "name until you do.\n\n"
                 "If you were not expecting this, ignore this message. The "
                 "invitation expires on its own."
+                f"\n\n{BRAND_SIGNATURE}"
             ),
         )
     except Exception:

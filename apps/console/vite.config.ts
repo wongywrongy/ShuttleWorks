@@ -2,10 +2,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
+import brand from '../../packages/brand/brand.json'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    {
+      name: 'brand-html',
+      transformIndexHtml: (html) => html.replaceAll('__PRODUCT_NAME__', brand.productName),
+    },
     react(),
     // Bundle analysis — opt-in via ANALYZE=1 npm run build (perf diagnosis only).
     process.env.ANALYZE

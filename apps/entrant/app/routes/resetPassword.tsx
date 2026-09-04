@@ -22,6 +22,7 @@
  * derive one from — which on these pages is the point, not a limitation.
  */
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
+import { brandedTitle } from '@scheduler/brand';
 import { data } from 'react-router';
 
 import { PlayShell } from '../components/PlayShell';
@@ -80,7 +81,7 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
 }
 
 export const meta: Route.MetaFunction = () => [
-  { title: 'Reset your password · ShuttleWorks Tournaments' },
+  { title: brandedTitle('Reset your password') },
 ];
 
 const FORM_CARD = `grid gap-4 ${CARD}`;

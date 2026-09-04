@@ -1,6 +1,6 @@
 # Security
 
-ShuttleWorks is tournament-management software for badminton events. It holds
+ShuttleWorks is tournament-management software from Yunavero for badminton events. It holds
 participant names — including minors' — schedules, and operator accounts, and
 it is reachable from the public internet.
 
@@ -9,7 +9,7 @@ report something we missed.
 
 ## Reporting a vulnerability
 
-Email **avlis828@gmail.com** with "ShuttleWorks security" in the subject.
+Email **avlis828@gmail.com** with "Yunavero / ShuttleWorks security" in the subject.
 Include what you found, how to reproduce it, and what you think the impact is.
 
 We will acknowledge within a few days. This is a solo-maintained project, so

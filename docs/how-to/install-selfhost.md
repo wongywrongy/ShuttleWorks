@@ -123,7 +123,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `SESSION_COOKIE_SECURE` | `false` | `false` | **`true`** | not read | `false` lets the session cookie travel over plain HTTP. |
 | `EMAIL_BACKEND` | `console` | `console` | **`smtp`** | not read | `console` prints live invite/reset tokens into the logs. |
 | `SMTP_HOST` | `''` | – | **required** | not read | Startup fails. Invites and resets silently never arrive. |
-| `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | `587` / `''` / `''` / `ShuttleWorks <no-reply@localhost>` | – | as your provider requires | not read | Mail silently fails. |
+| `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | `587` / `''` / `''` / `ShuttleWorks by Yunavero <no-reply@localhost>` | – | as your provider requires | not read | Mail silently fails. |
 | `PUBLIC_APP_ORIGIN` | `''` | – | **required** | not read | The **operator** origin (`https://${APP_HOSTNAME}`). Workspace invites and operator password resets come out relative and unclickable. |
 | `PUBLIC_PLAY_ORIGIN` | `''` | – | **required** | not read | The **public** origin (`https://${PLAY_HOSTNAME}`). Blank falls back to `PUBLIC_APP_ORIGIN`, which mails entrants a verify/reset link pointing at the Access-fronted console — a link they cannot open. |
 | `CORS_ORIGINS` | localhost list | default | **the operator hostname, alone** | not read | The browser blocks API calls. Never `*` — the API refuses to start, because Starlette answers a wildcard under `allow_credentials` by echoing whatever Origin asked. The **play** origin is deliberately absent: the entrant tier's route modules use same-origin calls, so there is nothing to allow. |

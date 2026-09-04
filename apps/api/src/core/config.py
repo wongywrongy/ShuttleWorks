@@ -19,6 +19,7 @@ from typing import Annotated, Any
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from core.brand import BRAND_SIGNATURE
 from core.limits import MAX_REQUEST_BODY_BYTES
 
 
@@ -303,7 +304,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
-    smtp_from: str = "ShuttleWorks <no-reply@localhost>"
+    smtp_from: str = f"{BRAND_SIGNATURE} <no-reply@localhost>"
     smtp_use_tls: bool = True
     # Public origin used to build absolute links in emails (invite /
     # reset URLs). Blank = relative links (local mode).

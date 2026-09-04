@@ -38,6 +38,7 @@ COPY package.json package-lock.json ./
 # invalidate the install layer.
 COPY packages/design-system/package.json ./packages/design-system/package.json
 COPY packages/shared-contract/package.json ./packages/shared-contract/package.json
+COPY packages/brand/package.json ./packages/brand/package.json
 COPY apps/console/package.json ./apps/console/package.json
 
 # Install the workspace graph. Cache mount keeps the npm download cache
@@ -50,6 +51,7 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 # Now copy the full source for the workspaces we actually build.
 COPY packages/design-system ./packages/design-system
 COPY packages/shared-contract ./packages/shared-contract
+COPY packages/brand ./packages/brand
 COPY apps/console ./apps/console
 
 # Build args — baked into the static bundle at build time.

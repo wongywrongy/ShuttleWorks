@@ -40,6 +40,7 @@
  * set would let a stranger tell an entrant their entry was a duplicate.
  */
 import { isRouteErrorResponse, useRouteError } from 'react-router';
+import { brandedTitle } from '@scheduler/brand';
 
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
@@ -126,7 +127,7 @@ export async function loader({
  * either, so neither is read.
  */
 export const meta: Route.MetaFunction = ({ data }) => {
-  if (!data) return [{ title: 'Receipt not available · ShuttleWorks Tournaments' }];
+  if (!data) return [{ title: brandedTitle('Receipt not available') }];
   const { tournamentName } = data.page;
   return [{ title: tournamentName ? `Entry received · ${tournamentName}` : 'Entry received' }];
 };

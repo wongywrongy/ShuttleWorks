@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "productName": "ShuttleWorks",
+  "publicProductName": "ShuttleWorks Tournaments",
+  "productMonogram": "SW",
+  "companyName": "Yunavero",
+  "companyDomain": "yunavero.com",
+  "endorsement": "by Yunavero",
+  "operatorHostname": "app.yunavero.com",
+  "entrantHostname": "play.yunavero.com"
+}

@@ -40,6 +40,7 @@
  * this shell different label text for it.
  */
 import { useContext, type ReactNode } from 'react';
+import { BRAND } from '@scheduler/brand';
 
 import { EntrantSessionContext } from '../lib/sessionContext';
 
@@ -65,10 +66,10 @@ export function PlayShell({
           contrast gate's text-on-accent pair). */}
       <header className="bg-accent">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:py-2.5">
-          <a href={DISCOVERY_HREF} className="inline-flex min-h-8 items-center gap-3" aria-label="ShuttleWorks tournaments home">
+          <a href={DISCOVERY_HREF} className="inline-flex min-h-8 items-center gap-3" aria-label={`${BRAND.publicProductName} home`}>
             <span className="inline-block -skew-x-12 bg-card px-3 py-1.5 shadow-md">
               <span className="inline-block skew-x-12 font-display text-[15px] font-extrabold tracking-tight text-accent">
-                ShuttleWorks
+                {BRAND.productName}
               </span>
             </span>
             <span className="text-xs font-bold uppercase tracking-[0.06em] text-accent-ink">
@@ -91,7 +92,7 @@ export function PlayShell({
       <div id="main-content" className="flex-1">{children}</div>
       <footer className="border-t border-rule-soft">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-baseline justify-between gap-2 px-4 py-6 text-xs text-muted-foreground">
-          <p>ShuttleWorks · tournament entries</p>
+          <p>{BRAND.productName} · tournament entries · {BRAND.endorsement}</p>
           <p>Tournament information is published by the organizer.</p>
         </div>
       </footer>

@@ -28,6 +28,8 @@ jobs:
       # internal site link.
       - name: Documentation checker tests
         run: npm run test:docs
+      - name: Generated brand contract
+        run: npm run brand:check
       - name: Documentation paths
         run: npm run docs:paths
       - name: Documentation build

@@ -12,6 +12,7 @@
  * exist, rather than existing emptily).
  */
 import { isRouteErrorResponse, useRouteError } from 'react-router';
+import { BRAND } from '@scheduler/brand';
 
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
@@ -254,7 +255,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
               ))}
             </div>
             <p className="mt-10 border-t border-rule-soft pt-4 text-sm text-muted-foreground">
-              Source: this document is published by the tournament organizer through ShuttleWorks.
+              Source: this document is published by the tournament organizer through {BRAND.productName}.
               {organizerName ? ` Organizer: ${organizerName}.` : ''}
               {' Contact details are not published on this page.'}
             </p>

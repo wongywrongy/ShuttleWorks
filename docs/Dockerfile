@@ -35,6 +35,7 @@ COPY package.json package-lock.json ./
 # graph declared in the root manifest (same reason the frontend image copies
 # them). The docs build reads none of their source, only the docs/ tree.
 COPY packages/design-system/package.json ./packages/design-system/package.json
+COPY packages/brand/package.json ./packages/brand/package.json
 COPY apps/console/package.json ./apps/console/package.json
 
 # Install the workspace graph. Cache mount keeps the npm download cache across
@@ -42,7 +43,8 @@ COPY apps/console/package.json ./apps/console/package.json
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm ci --no-audit --no-fund
 
-# The docs tree is the only source the VitePress build reads.
+# The docs build imports the shared brand contract for its metadata/footer.
+COPY packages/brand ./packages/brand
 COPY docs ./docs
 
 # vitepress build docs -> docs/.vitepress/dist. The dead-link checker

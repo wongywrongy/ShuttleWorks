@@ -54,6 +54,7 @@ from sqlalchemy.exc import IntegrityError
 
 from entries import lifecycle
 from entries.entries_json import require_form_csrf
+from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
 from core.client_ip import client_ip
 from core.config import settings
 from core.dependencies import AuthEntrant, get_current_entrant
@@ -536,15 +537,16 @@ def _send_verification(account, token: str) -> None:
     origin = settings.play_origin
     _mail(
         account.email,
-        "Confirm your email for ShuttleWorks entries",
+        f"Confirm your email for {PRODUCT_NAME} entries",
         (
-            "Welcome to ShuttleWorks.\n\n"
+            f"Welcome to {PRODUCT_NAME}.\n\n"
             "Confirm this address so tournament organisers can accept your "
             "entries:\n\n"
             f"{origin}/e/verify?token={token}\n\n"
             f"The link is good for {int(settings.verify_token_ttl_days)} days. "
             "If you did not create an account, ignore this message — nothing "
             "will happen without this confirmation."
+            f"\n\n{BRAND_SIGNATURE}"
         ),
     )
 
@@ -943,7 +945,7 @@ def request_entrant_password_reset(
                 reset_query["next"] = return_to
             _mail(
                 account.email,
-                "Reset your ShuttleWorks entry password",
+                f"Reset your {PRODUCT_NAME} entry password",
                 (
                     "A password reset was requested for this address.\n\n"
                     f"{origin}/e/reset?{urlencode(reset_query)}\n\n"
@@ -951,6 +953,7 @@ def request_entrant_password_reset(
                     f"{int(settings.reset_token_ttl_minutes)} minutes. "
                     "If you didn't ask for this, ignore this message — your "
                     "password has not changed."
+                    f"\n\n{BRAND_SIGNATURE}"
                 ),
             )
         else:

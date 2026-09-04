@@ -40,6 +40,8 @@
     "test:docs": "node --test tools/tests/*.test.mjs",
     "docs:paths": "node tools/docs-paths.mjs",
     "docs:freshness": "node tools/docs-freshness.mjs",
+    "brand:generate": "node tools/generate-brand.mjs",
+    "brand:check": "node tools/generate-brand.mjs --check",
     "depcruise": "npm --prefix apps/console run depcruise",
     "depcruise:entrant": "npm --prefix apps/entrant run depcruise",
     "jscpd": "jscpd",

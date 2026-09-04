@@ -951,6 +951,7 @@ describe('PlayShell', () => {
     // 2026-08-13) — assert the home link still wraps it, not adjacency.
     const home = html.match(/<a href="\/e\/"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? '';
     expect(home).toContain('ShuttleWorks');
+    expect(html).toContain('by Yunavero');
     expect(html).toMatch(/<a href="\/e\/login"[^>]*>Sign in<\/a>/);
   });
 
