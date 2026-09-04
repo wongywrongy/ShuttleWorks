@@ -47,6 +47,7 @@ import { PlayShell } from '../components/PlayShell';
 import { SectionCard } from '../components/SectionCard';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
+import { PAGE_TITLE } from '../lib/ui';
 import type { Route } from './+types/receipt';
 
 /**
@@ -155,7 +156,7 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
               motion` guard for it is LOCAL (`app.css`), not the design
               system's: `.motion-enter` isn't yet in globals.css's kill list,
               and that fix belongs to another agent. */}
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground motion-enter">
+          <h1 className={`${PAGE_TITLE} motion-enter`}>
             Entry received
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -164,7 +165,7 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
           </p>
         </header>
 
-        <SectionCard title="Your entry">
+        <SectionCard title="Your entry" variant="eyebrow">
           <p>
             <span className="text-muted-foreground">Tournament</span>{' '}
             {page.tournamentName}
@@ -183,7 +184,7 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
           aria-busy="true"
           className="grid gap-4"
         >
-          <SectionCard title="Loading receipt details">
+          <SectionCard title="Loading receipt details" variant="eyebrow">
             <p className="text-sm text-muted-foreground">
               Checking the signed-in account for this entry
             </p>
@@ -191,7 +192,7 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
         </section>
 
         <noscript>
-          <SectionCard title="Sign in to view the full receipt">
+          <SectionCard title="Sign in to view the full receipt" variant="eyebrow">
             <p>
               The reference above is safe to keep. Enable JavaScript to load the
               account-scoped event, partner, fee, and payment details.

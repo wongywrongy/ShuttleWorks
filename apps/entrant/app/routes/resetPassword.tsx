@@ -29,7 +29,7 @@ import { PlayShell } from '../components/PlayShell';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { safeNext } from '../lib/nextTarget';
-import { CARD } from '../lib/ui';
+import { CARD, PAGE_TITLE } from '../lib/ui';
 import type { Route } from './+types/resetPassword';
 
 const SENT_SUFFIX = '/sent';
@@ -93,7 +93,7 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+          <h1 className={PAGE_TITLE}>
             {view === 'set' || view === 'password-failed'
               ? 'Choose a new password'
               : 'Reset your password'}

@@ -1,15 +1,18 @@
 /** `/e/{slug}/schedule` — public, URL-backed matches document. */
 import { isRouteErrorResponse, useRouteError } from "react-router";
 
+import { Button } from "@scheduler/design-system/components";
+
 import { EmptyState } from "../components/EmptyState";
 import { HeroHeader } from "../components/HeroHeader";
+import { MatchCard, type MatchCardData } from "../components/MatchCard";
 import { MessagePage } from "../components/MessagePage";
-import { PersonRef } from "../components/PersonRef";
 import { PlayShell } from "../components/PlayShell";
+import { SegmentedNav } from "../components/SegmentedNav";
 import { TabBar } from "../components/TabBar";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
 import type { EntryPageDTO } from "../lib/entryPage.types";
-import { eventCodeLabel, eventDisciplineLabel } from "../lib/draws.types";
+import { eventDisciplineLabel } from "../lib/draws.types";
 import { formatDateLong } from "../lib/format";
 import { chipState, tournamentPhase, visibleTabs } from "../lib/phase";
 import {
@@ -20,11 +23,9 @@ import {
   type ScheduleDayFacetDTO,
   type ScheduleMatchesDTO,
   type ScheduleMatchDTO,
-  type ScheduleSideDTO,
   type ScheduleState,
 } from "../lib/schedule.types";
-import { SELECT_CONTROL } from "../lib/ui";
-import type { PersonReferenceDTO } from "../lib/person.types";
+import { EYEBROW, FIELD_INPUT, LIST_CARD, SELECT_CONTROL } from "../lib/ui";
 import type { Route } from "./+types/schedule";
 
 export type ScheduleOrganization = "time" | "court";
@@ -133,60 +134,6 @@ export const meta: Route.MetaFunction = ({ data }) =>
     ? [{ title: "Schedule not found" }]
     : [{ title: `Schedule · ${data.page.tournament.name ?? "Tournament"}` }];
 
-function sideRefs(side: ScheduleSideDTO): PersonReferenceDTO[] {
-  return side.persons;
-}
-function scoreForSide(score: number[][] | null, side: 0 | 1): string {
-  if (!score) return "";
-  return score
-    .map((set) => String(set[side] ?? ""))
-    .filter(Boolean)
-    .join(" ");
-}
-function MatchSide({
-  slug,
-  side,
-  score,
-  sideIndex,
-}: {
-  slug: string;
-  side: ScheduleSideDTO;
-  score: number[][] | null;
-  sideIndex: 0 | 1;
-}) {
-  const refs = sideRefs(side);
-  return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <div className="min-w-0">
-        {refs.length ? (
-          refs.map((ref, index) => (
-            <p
-              key={`${ref.identity?.id ?? ref.label ?? "ref"}-${index}`}
-              className="break-words text-sm text-foreground"
-            >
-              <PersonRef
-                slug={slug}
-                identity={ref.identity}
-                state={ref.resolution === "dead" ? "dead" : "resolved"}
-                label={ref.label ?? side.placeholder}
-              />
-            </p>
-          ))
-        ) : (
-          <p className="text-sm"><PersonRef slug={slug} identity={null} state="dead" label={side.placeholder ?? "TBD"} /></p>
-        )}
-      </div>
-      {score ? (
-        <span
-          className="shrink-0 tabular-nums text-sm font-semibold text-foreground"
-          aria-label={`Score ${scoreForSide(score, sideIndex)}`}
-        >
-          {scoreForSide(score, sideIndex)}
-        </span>
-      ) : null}
-    </div>
-  );
-}
 function matchCourt(match: ScheduleMatchDTO): string {
   return match.court === null ? "Court pending" : `Court ${match.court}`;
 }
@@ -197,77 +144,49 @@ function isCompleted(match: ScheduleMatchDTO): boolean {
     match.status === "retired"
   );
 }
-function MatchCard({
-  match,
-  slug,
-  timeZone,
-}: {
-  match: ScheduleMatchDTO;
-  slug: string;
-  timeZone: string;
-}) {
-  const clock =
-    isCompleted(match) && match.scheduledTime ? match.scheduledTime : null;
-  const context = [
-    eventCodeLabel(match.eventCode),
-    match.discipline || eventDisciplineLabel(match.eventCode),
-    match.roundLabel,
-  ]
-    .filter(Boolean)
-    .filter((v, i, list) => list.indexOf(v) === i)
-    .join(" · ");
-  return (
-    <article
-      className="border-y border-rule-soft py-1"
-      aria-label={`${context} · ${scheduleStateLabel(match.status)}`}
-    >
-      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2">
-        <p className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
-          {context}
-        </p>
-        <p
-          className={
-            match.status === "live"
-              ? "text-xs font-semibold text-status-live"
-              : "text-xs text-muted-foreground"
-          }
-        >
-          {scheduleStateLabel(match.status)}
-        </p>
-      </header>
-      <div className="divide-y divide-rule-soft">
-        <MatchSide
-          slug={slug}
-          side={
-            match.sides[0] ?? {
-              participantKey: null,
-              persons: [],
-              placeholder: "TBD",
-            }
-          }
-          score={match.score}
-          sideIndex={0}
-        />
-        <MatchSide
-          slug={slug}
-          side={
-            match.sides[1] ?? {
-              participantKey: null,
-              persons: [],
-              placeholder: "TBD",
-            }
-          }
-          score={match.score}
-          sideIndex={1}
-        />
-      </div>
-      <footer className="flex flex-wrap gap-x-2 py-2 text-xs text-muted-foreground">
-        {clock ? <span>{clock}</span> : null}
-        <span>{matchCourt(match)}</span>
-        <span>{timeZone}</span>
-      </footer>
-    </article>
-  );
+function gamesWon(score: number[][], side: 0 | 1): number {
+  return score.filter((game) => (game[side] ?? 0) > (game[side === 0 ? 1 : 0] ?? 0)).length;
+}
+/**
+ * One anatomy: a schedule row dressed as the public MatchCard (ADR 0028).
+ * Every name flows through the card's PersonGroup / PersonRef seam; this
+ * adapter only reshapes the wire DTO and never reads an identity.
+ */
+function scheduleToMatch(match: ScheduleMatchDTO): MatchCardData {
+  const decided = isCompleted(match);
+  const winnerIndex =
+    decided && match.score?.length
+      ? gamesWon(match.score, 0) > gamesWon(match.score, 1)
+        ? 0
+        : gamesWon(match.score, 1) > gamesWon(match.score, 0)
+          ? 1
+          : null
+      : null;
+  const sides = [0, 1].map((index) => {
+    const side = match.sides[index];
+    return {
+      persons: side?.persons ?? [],
+      placeholder: side?.placeholder ?? (side ? null : "TBD"),
+      winner: winnerIndex === index,
+      seed: side?.seed ?? null,
+    };
+  });
+  return {
+    eventCode: match.eventCode,
+    roundLabel: match.roundLabel,
+    sides,
+    score: match.score,
+    decided,
+    status: match.status,
+    scheduledTime: match.scheduledTime,
+    court: match.court,
+    updatedAt: match.updatedAt,
+  };
+}
+/** `EYEBROW` recoloured in the live tone (kept literal for the Tailwind scan). */
+const LIVE_EYEBROW = "text-xs font-bold uppercase tracking-[0.06em] text-status-live";
+function ScheduleMatchCard({ match, slug }: { match: ScheduleMatchDTO; slug: string }) {
+  return <MatchCard match={scheduleToMatch(match)} variant="card" slug={slug} />;
 }
 
 function dayDistance(a: string, b: string): number {
@@ -315,26 +234,15 @@ function DayNavigation({
   );
   if (consecutive)
     return (
-      <nav aria-label="Schedule days" className="border-y border-rule-soft">
-        <div className="flex min-w-max divide-x divide-rule-soft overflow-x-auto">
-          {days.map((day) => {
-            const active = Boolean(filters.day) && day.day === filters.day;
-            return (
-              <a
-                key={day.day}
-                href={matchesPath(slug, { ...filters, day: day.day, page: 1 })}
-                aria-current={active ? "page" : undefined}
-                className={`px-4 py-3 text-sm ${active ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                <span className="block">{scheduleDateLabel(day.day)}</span>
-                <span className="mt-0.5 block text-xs tabular-nums text-muted-foreground">
-                  {day.count} {day.count === 1 ? "match" : "matches"}
-                </span>
-              </a>
-            );
-          })}
-        </div>
-      </nav>
+      <SegmentedNav
+        label="Schedule days"
+        segments={days.map((day) => ({
+          label: scheduleDateLabel(day.day),
+          href: matchesPath(slug, { ...filters, day: day.day, page: 1 }),
+          current: Boolean(filters.day) && day.day === filters.day,
+          count: day.count,
+        }))}
+      />
     );
   const months = new Map<string, ScheduleDayFacetDTO[]>();
   days.forEach((day) => {
@@ -396,14 +304,6 @@ function Filters({
     code,
     label: eventMetadata.get(code)?.discipline ?? eventDisciplineLabel(code),
   }));
-  const days = [
-    ...new Set(
-      matches.facets.days
-        .map((day) => day.day)
-        .concat(filters.day)
-        .filter(Boolean),
-    ),
-  ];
   const courts = [
     ...new Set(
       [...matches.facets.courts.map(String), filters.court].filter(Boolean),
@@ -416,82 +316,59 @@ function Filters({
     <form
       method="get"
       action={`/e/${encodeURIComponent(slug)}/schedule`}
-      className="border-y border-rule-soft py-4"
+      className="grid items-center gap-2 border-t border-rule-soft px-4 py-3 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))_auto]"
       aria-label="Filter schedule"
     >
       <input type="hidden" name="organization" value={filters.organization} />
-      <div className="grid gap-4 md:grid-cols-5">
-        <label className="grid gap-1 text-sm font-medium text-foreground">
-          Day
-          <select
-            name="day"
-            defaultValue={filters.day}
-            className={SELECT_CONTROL}
-          >
-            <option value="">All days</option>
-            {days.map((day) => (
-              <option key={day} value={day}>
-                {scheduleDateLabel(day)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm font-medium text-foreground">
-          Event
-          <select
-            name="event"
-            defaultValue={filters.event}
-            className={SELECT_CONTROL}
-          >
-            <option value="">All events</option>
-            {events.map((event) => (
-              <option key={event.code} value={event.code}>
-                {event.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm font-medium text-foreground">
-          Player
-          <input
-            name="player"
-            defaultValue={filters.player}
-            placeholder="Search a player"
-            className={SELECT_CONTROL}
-          />
-        </label>
-        <label className="grid gap-1 text-sm font-medium text-foreground">
-          Court
-          <select
-            name="court"
-            defaultValue={filters.court}
-            className={SELECT_CONTROL}
-          >
-            <option value="">All courts</option>
-            {courts.map((court) => (
-              <option key={court} value={court}>{`Court ${court}`}</option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm font-medium text-foreground">
-          State
-          <select name="state" defaultValue={filters.state}>
-            <option value="">All states</option>
-            {states.map((state) => (
-              <option key={state} value={state}>
-                {scheduleStateLabel(state)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink"
-        >
-          Apply filters
-        </button>
+      <input type="hidden" name="day" value={filters.day} />
+      <input
+        name="player"
+        defaultValue={filters.player}
+        placeholder="Search a player"
+        aria-label="Player"
+        className={FIELD_INPUT}
+      />
+      <select
+        name="event"
+        defaultValue={filters.event}
+        aria-label="Event"
+        className={SELECT_CONTROL}
+      >
+        <option value="">All events</option>
+        {events.map((event) => (
+          <option key={event.code} value={event.code}>
+            {event.label}
+          </option>
+        ))}
+      </select>
+      <select
+        name="court"
+        defaultValue={filters.court}
+        aria-label="Court"
+        className={SELECT_CONTROL}
+      >
+        <option value="">All courts</option>
+        {courts.map((court) => (
+          <option key={court} value={court}>{`Court ${court}`}</option>
+        ))}
+      </select>
+      <select
+        name="state"
+        defaultValue={filters.state}
+        aria-label="State"
+        className={SELECT_CONTROL}
+      >
+        <option value="">All states</option>
+        {states.map((state) => (
+          <option key={state} value={state}>
+            {scheduleStateLabel(state)}
+          </option>
+        ))}
+      </select>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="outline" size="sm">
+          Apply
+        </Button>
         {hasScheduleFilters(filters) ? (
           <a
             href={`/e/${encodeURIComponent(slug)}/schedule?organization=${filters.organization}`}
@@ -514,25 +391,14 @@ function OrganizationSwitch({
   const href = (organization: ScheduleOrganization) =>
     matchesPath(slug, { ...filters, organization, page: 1 });
   return (
-    <nav
-      aria-label="Schedule organization"
-      className="inline-flex border border-rule-control"
-    >
-      <a
-        aria-current={filters.organization === "time" ? "page" : undefined}
-        href={href("time")}
-        className={`px-3 py-2 text-sm ${filters.organization === "time" ? "bg-surface-sunken font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-      >
-        By time
-      </a>
-      <a
-        aria-current={filters.organization === "court" ? "page" : undefined}
-        href={href("court")}
-        className={`border-l border-rule-control px-3 py-2 text-sm ${filters.organization === "court" ? "bg-surface-sunken font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-      >
-        By court
-      </a>
-    </nav>
+    <SegmentedNav
+      label="Schedule organization"
+      currentAttr="true"
+      segments={[
+        { label: "By time", href: href("time"), current: filters.organization === "time" },
+        { label: "By court", href: href("court"), current: filters.organization === "court" },
+      ]}
+    />
   );
 }
 function isToday(day: string, nowMs: number, timeZone: string): boolean {
@@ -554,33 +420,25 @@ function isToday(day: string, nowMs: number, timeZone: string): boolean {
 function LiveBand({
   slug,
   matches,
-  timeZone,
 }: {
   slug: string;
   matches: ScheduleMatchDTO[];
-  timeZone: string;
 }) {
   if (!matches.length) return null;
   return (
-    <section
-      aria-labelledby="now-title"
-      className="border-l-2 border-status-live pl-4"
-    >
+    <section aria-labelledby="now-title">
       <h2
         id="now-title"
-        className="font-display text-lg font-bold text-foreground"
+        className={LIVE_EYEBROW}
       >
-        Now
+        Live now
       </h2>
-      <p className="mb-3 mt-1 text-sm text-muted-foreground">Live on court</p>
-      <div className="grid gap-4 md:grid-cols-2">
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Scores update as the desk records them
+      </p>
+      <div className="mt-3 grid gap-4 md:grid-cols-2">
         {matches.map((match) => (
-          <MatchCard
-            key={match.matchKey}
-            match={match}
-            slug={slug}
-            timeZone={timeZone}
-          />
+          <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} />
         ))}
       </div>
     </section>
@@ -589,11 +447,9 @@ function LiveBand({
 function ByTime({
   slug,
   matches,
-  timeZone,
 }: {
   slug: string;
   matches: ScheduleMatchDTO[];
-  timeZone: string;
 }) {
   const groups = new Map<string, ScheduleMatchDTO[]>();
   matches.forEach((match) => {
@@ -604,20 +460,12 @@ function ByTime({
     <div className="grid gap-6">
       {[...groups.entries()].map(([time, group]) => (
         <section key={time} aria-labelledby={`time-${time}`}>
-          <h2
-            id={`time-${time}`}
-            className="mb-2 border-b border-rule-soft pb-2 text-sm font-bold tabular-nums text-foreground"
-          >
+          <h2 id={`time-${time}`} className={`${EYEBROW} tabular-nums`}>
             {time}
           </h2>
-          <div className="grid gap-x-8 gap-y-4 md:grid-cols-2">
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
             {group.map((match) => (
-              <MatchCard
-                key={match.matchKey}
-                match={match}
-                slug={slug}
-                timeZone={timeZone}
-              />
+              <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} />
             ))}
           </div>
         </section>
@@ -642,11 +490,9 @@ function queueLabel(
 function ByCourt({
   slug,
   matches,
-  timeZone,
 }: {
   slug: string;
   matches: ScheduleMatchDTO[];
-  timeZone: string;
 }) {
   const queues = new Map<string, ScheduleMatchDTO[]>();
   [...matches]
@@ -661,21 +507,18 @@ function ByCourt({
     <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
       {[...queues.entries()].map(([court, queue]) => (
         <section key={court} aria-labelledby={`court-${court}`}>
-          <h2
-            id={`court-${court}`}
-            className="border-b border-rule-soft pb-2 text-sm font-bold text-foreground"
-          >
+          <h2 id={`court-${court}`} className={EYEBROW}>
             {court}
           </h2>
-          <div className="mt-2 grid gap-4">
+          <div className="mt-3 grid gap-4">
             {queue.map((match, index) => (
               <div key={match.matchKey}>
                 {queueLabel(match, queue, index) ? (
-                  <p className="mb-1 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+                  <p className={`mb-1 ${EYEBROW}`}>
                     {queueLabel(match, queue, index)}
                   </p>
                 ) : null}
-                <MatchCard match={match} slug={slug} timeZone={timeZone} />
+                <ScheduleMatchCard match={match} slug={slug} />
               </div>
             ))}
           </div>
@@ -713,7 +556,6 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
           .join(" · ")}
         chip={chipState(page.events, new Date(nowMs))}
         cta={{ kind: "closed" }}
-        phase={phase}
         phaseAction={
           phase === "entries_open"
             ? {
@@ -746,7 +588,7 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
         <div className="grid gap-2">
           <h1
             id="schedule-title"
-            className="font-display text-xl font-bold tracking-tight text-foreground"
+            className="type-display text-2xl tracking-[-0.02em] text-foreground"
           >
             Schedule / Live
           </h1>
@@ -769,22 +611,20 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
           </div>
         ) : (
           <div className="mt-6 grid gap-6">
-            <DayNavigation slug={slug} filters={filters} matches={matches} />
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className={LIST_CARD}>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <DayNavigation slug={slug} filters={filters} matches={matches} />
+                <OrganizationSwitch slug={slug} filters={filters} />
+              </div>
               <Filters
                 slug={slug}
                 filters={filters}
                 matches={matches}
                 page={page}
               />
-              <OrganizationSwitch slug={slug} filters={filters} />
             </div>
             {showNow ? (
-              <LiveBand
-                slug={slug}
-                matches={live}
-                timeZone={matches.timeZone}
-              />
+              <LiveBand slug={slug} matches={live} />
             ) : null}
             {matches.items.length === 0 ? (
               <EmptyState
@@ -808,17 +648,9 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                     : ""}
                 </p>
                 {filters.organization === "court" ? (
-                  <ByCourt
-                    slug={slug}
-                    matches={matches.items}
-                    timeZone={matches.timeZone}
-                  />
+                  <ByCourt slug={slug} matches={matches.items} />
                 ) : (
-                  <ByTime
-                    slug={slug}
-                    matches={matches.items}
-                    timeZone={matches.timeZone}
-                  />
+                  <ByTime slug={slug} matches={matches.items} />
                 )}
                 {previous || next ? (
                   <nav

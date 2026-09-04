@@ -187,7 +187,10 @@ describe('the entry form, unhydrated', () => {
     // — at exactly the WCAG 2.2 AA floor with zero margin.
     const html = await render();
 
-    const label = html.match(/<label[^>]*class="[^"]*"><input type="checkbox" name="events"/)?.[0] ?? '';
+    // The checkbox carries its own class (`h-4 w-4 accent-accent`), which
+    // React emits BEFORE `name`; the match tolerates it, the assertion is
+    // still on the label's padding.
+    const label = html.match(/<label[^>]*class="[^"]*"><input type="checkbox"[^>]*name="events"/)?.[0] ?? '';
     expect(label).not.toMatch(/\bpy-0\.5\b/);
     expect(label).toMatch(/\bpy-1(\.5)?\b/);
   });

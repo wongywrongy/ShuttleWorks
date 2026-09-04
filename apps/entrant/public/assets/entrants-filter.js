@@ -42,7 +42,7 @@ function boot(root) {
   input.placeholder = 'Filter by name or club';
   input.setAttribute('aria-label', 'Filter entrants by name or club');
   input.className =
-    'h-9 w-full min-w-0 rounded border border-rule-soft bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground';
+    'h-9 w-full min-w-0 rounded-sm border border-rule-control bg-surface-raised px-3 text-sm text-foreground';
   input.addEventListener('input', () => {
     apply(doc, input.value);
   });

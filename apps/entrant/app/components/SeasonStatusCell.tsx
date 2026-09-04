@@ -19,7 +19,7 @@ import { chipLabel } from '../lib/phase';
 
 export function SeasonStatusCell({ cell }: { cell: StatusCell }) {
   if (cell.kind === 'chip-open') {
-    return <span className="text-sm font-semibold text-foreground">{chipLabel(cell.chip)}</span>;
+    return <span className="text-xs font-medium text-status-live">{chipLabel(cell.chip)}</span>;
   }
 
   if (cell.kind === 'chip-live') {

@@ -11,6 +11,10 @@
  * classes that appear only here are still emitted. Keep the strings
  * byte-identical when refactoring call sites — several entrant tests
  * assert on the rendered tokens (`border-rule-soft bg-surface-raised`).
+ *
+ * The page-scoped scripts under `public/assets/` cannot import this module
+ * (they are plain browser ES modules); the strings they need are inlined
+ * there and `tests/uiTwins.test.ts` pins the copies equal.
  */
 
 /** The raw card surface pair — border tint + raised background. */
@@ -25,6 +29,36 @@ export const CARD_SKIN = 'border-rule-soft bg-surface-raised';
 export const CARD = `rounded-lg border ${CARD_SKIN} p-6 shadow-sm`;
 
 /**
+ * The same card with NO inset (ADR 0028): its children are padded rows or
+ * bands, so a list, a table-like panel or a header/body/footer card sits
+ * flush to the border. Pair with `LIST_CARD_ROW`.
+ */
+export const LIST_CARD = `rounded-lg border ${CARD_SKIN} shadow-sm`;
+
+/** One label/value row inside a `LIST_CARD`; rows separate with their own top rule. */
+export const LIST_CARD_ROW =
+  'flex items-baseline justify-between gap-4 border-t border-rule-soft px-4 py-3 text-sm';
+
+/**
+ * Page and section display headings (ADR 0028). `type-display` (design-system
+ * globals) sets Archivo, the 84% width axis and weight 650 together; the
+ * tracking here is the public register's. Do NOT add `font-*` or
+ * `tracking-tight` utilities beside it — they override the role.
+ */
+export const PAGE_TITLE = 'type-display text-3xl tracking-[-0.025em] text-foreground';
+export const SECTION_TITLE = 'type-display text-lg tracking-[-0.015em] text-foreground';
+
+/** The small-caps group heading (draw rounds, schedule time groups, player sections). */
+export const EYEBROW = 'text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground';
+
+/**
+ * A rectangular chip (ADR 0027: nothing fully round, no dot). Tone is
+ * composed at the call site from the design system's `STATUS_TONE`.
+ */
+export const CHIP =
+  'inline-flex h-badge items-center rounded-xs border px-2.5 text-xs font-medium leading-none';
+
+/**
  * The text-input / textarea skin (control border + elevated ground).
  * Radius and padding vary by call site today (rounded vs rounded-sm) —
  * a recorded inconsistency, deliberately not normalized in the
@@ -32,9 +66,15 @@ export const CARD = `rounded-lg border ${CARD_SKIN} p-6 shadow-sm`;
  */
 export const INPUT_SKIN = 'border border-rule-control bg-bg-elev text-sm text-foreground';
 
+/** The 36px / 6px-radius form control of the entrant site (input or select). */
+export const FIELD_INPUT =
+  'h-9 w-full min-w-0 rounded-sm border border-rule-control bg-surface-raised px-3 text-sm text-foreground';
+
+/** The label above a `FIELD_INPUT`; equals the design system `TextField` label. */
+export const FIELD_LABEL = 'mb-1 block text-xs font-medium text-foreground';
+
 /** The native-select filter control (schedule filter bar). */
-export const SELECT_CONTROL =
-  'min-h-10 rounded-md border border-rule-control bg-surface-raised px-3 text-sm font-normal';
+export const SELECT_CONTROL = `${FIELD_INPUT} font-normal`;
 
 /** The secondary (outline) button for native-form wizards. */
 export const BUTTON_SECONDARY =

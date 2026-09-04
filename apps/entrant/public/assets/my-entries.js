@@ -127,11 +127,16 @@ export function withdrawAffordance(line, emailVerified) {
 
 // ---- DOM ------------------------------------------------------------------
 
-const CHIP_TONE_CLASS = {
-  live: 'border-status-live/40 bg-status-live-bg text-status-live',
-  done: 'border-status-done/40 bg-status-done-bg text-status-done',
-  plain: 'border-rule-soft bg-surface-raised text-muted-foreground',
+/** Card status reads as a plain weighted word in its tone (ADR 0027: no pill, no dot). */
+const STATUS_TEXT_CLASS = {
+  live: 'text-status-live',
+  done: 'text-status-done',
+  plain: 'text-muted-foreground',
 };
+
+/** JS twin of `app/lib/ui.ts` `CHIP` — pinned equal by `tests/uiTwins.test.ts`. */
+const CHIP =
+  'inline-flex h-badge items-center rounded-xs border px-2.5 text-xs font-medium leading-none';
 
 function el(doc, tag, className, text) {
   const node = doc.createElement(tag);
@@ -140,55 +145,87 @@ function el(doc, tag, className, text) {
   return node;
 }
 
-function chipEl(doc, label, tone) {
+function statusEl(doc, label, tone) {
   return el(
     doc,
     'span',
-    `inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${CHIP_TONE_CLASS[tone] ?? CHIP_TONE_CLASS.plain}`,
+    `shrink-0 text-sm font-medium ${STATUS_TEXT_CLASS[tone] ?? STATUS_TEXT_CLASS.plain}`,
     label,
   );
+}
+
+function resultsLink(doc, href) {
+  const view = el(
+    doc,
+    'a',
+    'text-sm font-medium text-accent underline-offset-4 hover:underline',
+    'View results',
+  );
+  view.href = href;
+  return view;
 }
 
 function cardEl(doc, card, emailVerified) {
   const article = el(
     doc,
     'article',
-    'rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-sm',
+    'rounded-lg border border-rule-soft bg-surface-raised shadow-sm',
   );
 
-  const head = el(doc, 'div', 'flex items-start justify-between gap-3');
+  const head = el(
+    doc,
+    'header',
+    'flex flex-wrap items-baseline justify-between gap-3 border-b border-rule-soft px-6 py-4',
+  );
   const title = el(doc, 'div', 'min-w-0');
   if (card.slug) {
     const link = el(
       doc,
       'a',
-      'font-display text-base font-bold tracking-tight text-foreground underline-offset-4 hover:underline',
+      'text-base font-semibold text-foreground hover:underline',
       card.tournamentName ?? card.slug,
     );
     link.href = `/e/${encodeURIComponent(card.slug)}`;
     title.appendChild(link);
   } else {
     title.appendChild(
-      el(doc, 'p', 'font-display text-base font-bold tracking-tight text-foreground',
+      el(doc, 'p', 'text-base font-semibold text-foreground',
         card.tournamentName ?? 'Tournament'),
     );
   }
   const metaParts = [card.orgName, card.venueName, formatDate(card.date)].filter(Boolean);
   if (metaParts.length > 0) {
     title.appendChild(
-      el(doc, 'p', 'mt-0.5 text-xs text-muted-foreground', metaParts.join(' · ')),
+      el(doc, 'p', 'mt-0.5 text-sm text-muted-foreground', metaParts.join(' · ')),
     );
   }
   head.appendChild(title);
-  const chip = cardChip(card.status);
-  head.appendChild(chipEl(doc, chip.label, chip.tone));
+  const status = cardChip(card.status);
+  head.appendChild(statusEl(doc, status.label, status.tone));
   article.appendChild(head);
 
-  const lines = el(doc, 'ul', 'mt-3 grid gap-1.5');
+  // One card holds every line this account submitted for the tournament,
+  // which can be several people (a parent entering two children). The
+  // footer carries the "View results" link when the card resolves to ONE
+  // player page; with several distinct pages each line keeps its own link,
+  // because a footer with two identical labels would name nobody.
+  const resultHrefs = [
+    ...new Set((card.events ?? []).map((line) => resultsHref(card, line)).filter(Boolean)),
+  ];
+  const footerHref = resultHrefs.length === 1 ? resultHrefs[0] : null;
+
+  const lines = el(doc, 'ul', 'px-6 divide-y divide-rule-soft');
   for (const line of card.events ?? []) {
-    const row = el(doc, 'li', 'flex flex-wrap items-center gap-x-2 gap-y-1 text-sm');
-    row.appendChild(el(doc, 'span', 'text-muted-foreground', `${line.eventCode} · ${line.discipline} · `));
-    row.appendChild(createPersonRef(doc, {
+    const row = el(
+      doc,
+      'li',
+      'flex flex-wrap items-baseline justify-between gap-4 py-2.5 text-sm text-foreground',
+    );
+    const lead = el(doc, 'span', 'min-w-0');
+    lead.appendChild(el(doc, 'span', 'font-medium', line.eventCode));
+    lead.appendChild(el(doc, 'span', 'text-muted-foreground', ` · ${line.discipline} · `));
+    row.appendChild(lead);
+    lead.appendChild(createPersonRef(doc, {
       slug: card.slug ?? '',
       identity: line.player?.identity ?? null,
       state: line.player?.resolution ?? 'dead',
@@ -196,8 +233,8 @@ function cardEl(doc, card, emailVerified) {
       className: 'font-medium',
     }));
     if (line.partner) {
-      row.appendChild(el(doc, 'span', 'text-muted-foreground', ' with '));
-      row.appendChild(createPersonRef(doc, {
+      lead.appendChild(el(doc, 'span', 'text-muted-foreground', ' with '));
+      lead.appendChild(createPersonRef(doc, {
         slug: card.slug ?? '',
         identity: line.partner.identity ?? null,
         state: line.partner.resolution ?? 'dead',
@@ -207,24 +244,17 @@ function cardEl(doc, card, emailVerified) {
     const own = lineChip(card.status, line.state);
     if (own) {
       row.appendChild(
-        el(doc, 'span', 'rounded-full border border-rule-soft px-2 py-0.5 text-xs text-muted-foreground', own),
+        el(doc, 'span', `${CHIP} border-rule-control text-muted-foreground`, own),
       );
     }
     if (line.resultBadge) {
       row.appendChild(
-        el(doc, 'span', 'rounded-full border border-status-done/40 bg-status-done-bg px-2 py-0.5 text-xs font-medium text-status-done', line.resultBadge),
+        el(doc, 'span', `${CHIP} border-status-done text-status-done`, line.resultBadge),
       );
     }
     const href = resultsHref(card, line);
-    if (href) {
-      const view = el(
-        doc,
-        'a',
-        'text-xs font-medium text-accent underline-offset-4 hover:underline',
-        'View results',
-      );
-      view.href = href;
-      row.appendChild(view);
+    if (href && !footerHref) {
+      row.appendChild(resultsLink(doc, href));
     }
     const affordance = withdrawAffordance(line, emailVerified);
     if (affordance?.kind === 'reason') {
@@ -239,8 +269,15 @@ function cardEl(doc, card, emailVerified) {
   article.appendChild(lines);
 
   const price = priceLine(card);
-  if (price) {
-    article.appendChild(el(doc, 'p', 'mt-3 text-sm text-muted-foreground', price));
+  if (price || footerHref) {
+    const footer = el(
+      doc,
+      'footer',
+      'flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft px-6 py-3 text-xs text-muted-foreground',
+    );
+    if (price) footer.appendChild(el(doc, 'span', undefined, price));
+    if (footerHref) footer.appendChild(resultsLink(doc, footerHref));
+    article.appendChild(footer);
   }
   return article;
 }

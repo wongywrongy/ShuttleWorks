@@ -1,7 +1,15 @@
-/** Shared public match anatomy for player, list, round, and bracket views. */
+/**
+ * Shared public match anatomy for player, list, round, schedule and bracket
+ * views (ADR 0028): a header band naming event · round with the state word
+ * on the right — FILLED in the live tone while a match is on court — two
+ * side rows, one 40px score cell per game, and a footer of time · court ·
+ * duration. Winners read by weight and by the `sr-only` word "Winner"; the
+ * old visible tick column is gone.
+ */
 import type { PersonReferenceDTO } from '../lib/person.types';
 import type { PlayerMatchDTO, PlayerMatchSideDTO } from '../lib/player.types';
 import { eventCodeLabel, roundLabel } from '../lib/draws.types';
+import { LIST_CARD } from '../lib/ui';
 import { PersonGroup } from './PersonGroup';
 import { personRefModel } from '../../public/assets/person-ref.js';
 
@@ -31,20 +39,31 @@ function SidePeople({ side, slug, compact = false }: { side: PlayerMatchSideDTO;
   />;
 }
 
-function Side({ side, score, index, slug, compact = false, live = false }: { side: PlayerMatchSideDTO; score: number[][] | null; index: 0 | 1; slug?: string; compact?: boolean; live?: boolean }) {
+function Side({ side, score, index, slug, compact = false, live = false, first = false }: { side: PlayerMatchSideDTO; score: number[][] | null; index: 0 | 1; slug?: string; compact?: boolean; live?: boolean; first?: boolean }) {
   const gameColumns = compact ? GAME_COLUMNS : (score?.length ?? 0);
-  const columns = `1rem minmax(0,1fr) repeat(${gameColumns}, ${compact ? '1.8rem' : '2.25rem'})`;
+  const columns = `minmax(0,1fr) repeat(${gameColumns}, ${compact ? '1.8rem' : '2.5rem'})`;
+  const won = side.winner && !live;
   return (
-    <div className={`grid min-w-0 items-center gap-x-2 ${compact ? 'h-[22px] px-2 text-xs' : 'py-2'}`} style={{ gridTemplateColumns: columns }}>
-      <span className="text-center text-xs font-semibold" aria-label={side.winner && !live ? 'Winner' : undefined}>{side.winner && !live ? '✓' : ''}</span>
-      <div className={`min-w-0 ${side.winner && !live ? 'font-[650] text-foreground' : 'text-foreground'}`}>
-        {compact && !live ? (
-          <span className="sr-only">{side.winner ? 'Winner advancing: ' : 'Opponent beaten: '}</span>
+    <div
+      className={`grid min-w-0 items-stretch ${compact ? 'h-[22px] text-xs' : 'min-h-10 text-sm'} ${first ? '' : 'border-t border-rule-soft'}`}
+      style={{ gridTemplateColumns: columns }}
+    >
+      <div className={`flex min-w-0 items-center ${compact ? 'px-2' : 'px-4 py-2'} ${won ? 'font-[650] text-foreground' : 'text-foreground'}`}>
+        {won ? (
+          <span className="sr-only">{compact ? 'Winner advancing: ' : 'Winner: '}</span>
+        ) : compact && !live ? (
+          <span className="sr-only">Opponent beaten: </span>
         ) : null}
         <SidePeople side={side} slug={slug} compact={compact} />
       </div>
       {Array.from({ length: gameColumns }, (_, set) => (
-        <span key={set} aria-hidden={score?.[set] === undefined ? true : undefined} className={`text-right font-mono tabular-nums ${side.winner ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{score?.[set]?.[index] ?? ''}</span>
+        <span
+          key={set}
+          aria-hidden={score?.[set] === undefined ? true : undefined}
+          className={`grid place-items-center border-s border-rule-soft tabular-nums ${compact ? '' : 'font-semibold'} ${side.winner ? 'text-foreground' : 'text-muted-foreground'}`}
+        >
+          {score?.[set]?.[index] ?? ''}
+        </span>
       ))}
     </div>
   );
@@ -76,23 +95,26 @@ export function MatchCard({ match, variant = 'card', slug }: { match: MatchCardD
 
   if (variant === 'bracket-node') {
     return (
-      <article data-testid="public-bracket-node" data-match-variant="bracket-node" className={`grid h-[44px] w-64 grid-rows-2 overflow-hidden rounded border border-rule-soft bg-surface-raised ${live ? 'border-s-2 border-s-status-live' : ''}`} aria-label={`${title} · ${competitors} · ${scoreLabel} · ${stateLabel}`}>
-        <Side side={match.sides[0]} score={match.score} index={0} slug={slug} compact live={live} />
+      <article data-testid="public-bracket-node" data-match-variant="bracket-node" className={`grid h-[44px] w-64 grid-rows-2 overflow-hidden rounded-sm border border-rule-soft bg-surface-raised ${live ? 'border-s-2 border-s-status-live' : ''}`} aria-label={`${title} · ${competitors} · ${scoreLabel} · ${stateLabel}`}>
+        <Side side={match.sides[0]} score={match.score} index={0} slug={slug} compact live={live} first />
         <Side side={match.sides[1]} score={match.score} index={1} slug={slug} compact live={live} />
       </article>
     );
   }
 
+  const card = variant === 'card';
   return (
-    <article data-match-variant={variant} className={`${variant === 'canvas' ? 'border border-rule-soft bg-surface-raised' : 'rounded-lg border border-rule-soft bg-surface-raised shadow-sm'} ${live ? 'border-s-2 border-s-status-live' : ''}`}>
-      <header className="flex items-center justify-between gap-3 border-b border-rule-soft px-4 py-2">
-        <p className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">{title}</p>
-        {live ? <span className="text-xs font-semibold text-status-live">On court now</span> : null}
+    <article data-match-variant={variant} className={card ? LIST_CARD : 'border border-rule-soft bg-surface-raised'}>
+      <header
+        className={`flex items-center justify-between gap-3 px-4 py-2 ${card ? 'rounded-t-lg' : ''} ${
+          live ? 'bg-status-live text-accent-ink' : 'border-b border-rule-soft text-muted-foreground'
+        }`}
+      >
+        <p className="text-xs font-bold uppercase tracking-[0.06em]">{title}</p>
+        <span className="text-xs font-semibold">{live ? 'Now' : stateLabel}</span>
       </header>
-      <div className="divide-y divide-rule-soft px-4">
-        <Side side={match.sides[0]} score={match.score} index={0} slug={slug} live={live} />
-        <Side side={match.sides[1]} score={match.score} index={1} slug={slug} live={live} />
-      </div>
+      <Side side={match.sides[0]} score={match.score} index={0} slug={slug} live={live} first />
+      <Side side={match.sides[1]} score={match.score} index={1} slug={slug} live={live} />
       {footer.length || showSourceLink ? (
         <footer className="border-t border-rule-soft px-4 py-1.5 text-xs text-muted-foreground">
           {footer.join(' · ')}

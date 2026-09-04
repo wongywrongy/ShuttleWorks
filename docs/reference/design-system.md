@@ -139,6 +139,10 @@ styles* of the system:
 | `INPUT_INLINE_CLASS` | same | The unlabeled inline `<input>` skin (aria-label callers); labelled fields use `TextField` |
 | `CARD` / `CARD_SKIN` | `apps/entrant/app/lib/ui.ts` | The entrant card (`rounded-lg border` + skin + `p-6 shadow-sm`) and its raw surface pair |
 | `INPUT_SKIN`, `SELECT_CONTROL`, `BUTTON_SECONDARY` | same | Entrant form-control skins (native elements only) |
+| `LIST_CARD` / `LIST_CARD_ROW` | same | The entrant card with no inset and its label/value row (ADR 0028) |
+| `PAGE_TITLE` / `SECTION_TITLE` / `EYEBROW` | same | Public display headings (`type-display` + tracking) and the small-caps group heading |
+| `CHIP`, `FIELD_INPUT`, `FIELD_LABEL` | same | Rectangular chip; the 36px / 6px-radius control and its label |
+| `SegmentedNav` | `apps/entrant/app/components/SegmentedNav.tsx` | Bordered segmented link group (season views, tournament sections, schedule days, draw views) |
 
 ### The entrant constraint
 
@@ -149,7 +153,10 @@ usable there only if it renders complete native HTML (`Button` with
 primitives (`Select`, `Modal`, `Toast`) are console-only; the entrant
 equivalents are native `<select>`/`<details>` styled by the `ui.ts`
 constants. Its page-weight gate counts HTML (not CSS), so primitives must
-not add wrapper elements.
+not add wrapper elements. Since ADR 0028 the tier ships Geist, Archivo and
+JetBrains Mono (`@fontsource-variable`, imported in `app.css`); the page-scoped
+scripts under `public/assets/` cannot import `ui.ts`, so `tests/uiTwins.test.ts`
+pins their copied class strings equal to the constants.
 
 ## Layout conventions
 
@@ -200,7 +207,7 @@ not add wrapper elements.
 
 ## Known inconsistencies (recorded, not silently normalized)
 
-- **Entrant input radius** varies `rounded` vs `rounded-sm` between
-  routes (`INPUT_SKIN` call sites).
+- **Entrant input radius**: new and restyled controls use `FIELD_INPUT`
+  (`rounded-sm`); a few `INPUT_SKIN` call sites still compose `rounded`.
 - Console raw `<button>` elements outside the ops dialogs have not been
   swept onto `Button`; many are legitimate row affordances.

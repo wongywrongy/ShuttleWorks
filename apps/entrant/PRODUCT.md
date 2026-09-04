@@ -56,8 +56,8 @@ result. Intake, engine and emit are one product.
 
 ## Capabilities and Constraints
 
-**Built today:** discovery with status/date/text filters · a tournament page (Overview, Events,
-one Players directory, draws, seeds, winners and entrant-backed player pages) · a dedicated entry flow with a
+**Built today:** discovery with status/date/text filters · a tournament page (Overview, Schedule, one Draws panel
+carrying every event with its draw and champion, one Players directory, and entrant-backed player pages) · a dedicated entry flow with a
 server-computed running total · entrant accounts (sign-up/sign-in, verification and reset) ·
 My Entries · receipts · sitemap and robots.
 

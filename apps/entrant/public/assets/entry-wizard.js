@@ -13,6 +13,8 @@ import { createPersonRef } from './person-ref.js';
 
 const DRAFT_PREFIX = 'shuttleworks:entry-draft:';
 const STEP_ORDER = ['eligibility', 'account', 'participant', 'events', 'partner', 'review'];
+const STEP_DONE = 'border-action-selected-bg bg-action-selected-bg text-action-primary'.split(' ');
+const STEP_ACTIVE = 'border-accent bg-accent text-accent-ink'.split(' ');
 const DRAFT_FIELDS = new Set([
   'playerName',
   'gender',
@@ -74,14 +76,20 @@ function showStep(root, step) {
   const submitBar = root.querySelector('[data-entry-submit-bar]');
   if (submitBar) setHidden(submitBar, effective !== 'review');
 
+  let done = true;
   for (const item of root.parentElement?.querySelectorAll('[data-entry-step]') || []) {
-    const itemStep = item.getAttribute('data-entry-step');
     const link = item.querySelector('[data-wizard-step-link]');
-    const current = itemStep === effective;
+    const current = item.getAttribute('data-entry-step') === effective;
+    if (current) done = false;
     item.toggleAttribute('data-current', current);
     if (link) {
       if (current) link.setAttribute('aria-current', 'step');
       else link.removeAttribute('aria-current');
+    }
+    const number = item.querySelector(':scope > a > span, :scope > span > span');
+    if (number) {
+      number.classList.remove(...STEP_DONE, ...STEP_ACTIVE);
+      number.classList.add(...(current ? STEP_ACTIVE : done ? STEP_DONE : []));
     }
   }
   root.dataset.entryStep = effective;
@@ -125,7 +133,7 @@ function makeButton(label, action, value) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = action === 'next'
-    ? 'inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90'
+    ? 'inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover'
     : 'inline-flex min-h-10 items-center justify-center rounded-md border border-rule-control px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-sunken';
   button.dataset[`wizard${action === 'next' ? 'Next' : 'Back'}`] = value;
   button.textContent = label;

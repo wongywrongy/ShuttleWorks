@@ -51,7 +51,7 @@ import {
   visibleBlocks,
 } from '../lib/phase';
 import type { Route } from './+types/enter';
-import { BUTTON_SECONDARY, CARD, INPUT_SKIN } from '../lib/ui';
+import { BUTTON_SECONDARY, CARD, CHIP, INPUT_SKIN, PAGE_TITLE, SECTION_TITLE } from '../lib/ui';
 
 export interface EnterLoaderData {
   page: EntryPageDTO;
@@ -292,9 +292,9 @@ function PlayerBlock({
               // event to enter it — at exactly the WCAG 2.2 AA 24px
               // target-size floor with zero margin. `py-1.5` clears it with
               // real room (~32px) for a mobile-heavy audience.
-              className="flex flex-wrap items-center gap-2 rounded px-1 py-1.5 text-sm text-foreground"
+              className="flex flex-wrap items-center gap-2 rounded-sm px-1 py-1.5 text-sm text-foreground hover:bg-surface-sunken"
             >
-              <input type="checkbox" name="events" value={value} defaultChecked={ticked.has(value)} />
+              <input type="checkbox" name="events" value={value} defaultChecked={ticked.has(value)} className="h-4 w-4 accent-accent" />
               <span>
                 {event.discipline} <span className="text-muted-foreground">({eventCodeLabel(event.code)})</span>
               </span>
@@ -356,7 +356,7 @@ function PlayerBlock({
           maxLength={2000}
           placeholder="e.g. can't play before 6pm Saturday"
           defaultValue={said.remarks}
-          className={`w-full rounded-sm p-2 ${INPUT_SKIN}`}
+          className={`w-full resize-y rounded-sm p-2 ${INPUT_SKIN}`}
         />
       </div>
     </section>
@@ -405,7 +405,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             </a>
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className={PAGE_TITLE}>
               Enter this tournament
             </h1>
             <StatusChip state={chip} />
@@ -453,16 +453,16 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
               <li key={key} data-entry-step={key} className="flex items-center gap-2">
                 {key === 'submitted' ? (
                   <span className="inline-flex min-h-8 items-center gap-2 px-2 py-1.5" aria-disabled="true">
-                    <span className="grid h-6 w-6 place-items-center rounded-full border border-rule-control tabular-nums">{index + 1}</span>
+                    <span className="grid h-6 w-6 place-items-center rounded-xs border border-rule-control tabular-nums">{index + 1}</span>
                     <span>{label}</span>
                   </span>
                 ) : (
                   <a
                     href={`#entry-${key}`}
                     data-wizard-step-link={key}
-                    className="inline-flex min-h-8 items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-sunken hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                    className="inline-flex min-h-8 items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-surface-sunken hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
                   >
-                    <span className="grid h-6 w-6 place-items-center rounded-full border border-rule-control tabular-nums">{index + 1}</span>
+                    <span className="grid h-6 w-6 place-items-center rounded-xs border border-rule-control tabular-nums">{index + 1}</span>
                     <span>{label}</span>
                   </a>
                 )}
@@ -476,9 +476,9 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Before you begin</p>
-              <h2 className="mt-1 font-display text-lg font-semibold tracking-tight text-foreground">Check eligibility and cost</h2>
+              <h2 className={`mt-1 ${SECTION_TITLE}`}>Check eligibility and cost</h2>
             </div>
-            <span className="rounded-full border border-rule-control px-2.5 py-1 text-xs font-medium text-muted-foreground">{openEvents.length} open {openEvents.length === 1 ? 'event' : 'events'}</span>
+            <span className={`${CHIP} border-rule-control text-muted-foreground`}>{openEvents.length} open {openEvents.length === 1 ? 'event' : 'events'}</span>
           </div>
           <dl className="grid gap-3 text-sm sm:grid-cols-3">
             <div>
@@ -598,18 +598,18 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
               ))}
 
               <div hidden data-entry-wizard-controls="participant" className="flex flex-wrap gap-2">
-                <button type="button" data-wizard-next="participant" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">Continue to events</button>
+                <button type="button" data-wizard-next="participant" className="inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Continue to events</button>
               </div>
 
               <div hidden data-entry-wizard-controls="events" className="flex flex-wrap gap-2">
                 <button type="button" data-wizard-back="events" className={BUTTON_SECONDARY}>Back to participant</button>
-                <button type="button" data-wizard-next="events" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">{hasDoubles ? 'Continue to partner' : 'Review entry'}</button>
+                <button type="button" data-wizard-next="events" className="inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">{hasDoubles ? 'Continue to partner' : 'Review entry'}</button>
               </div>
 
               {hasDoubles ? (
                 <div hidden data-entry-wizard-controls="partner" className="flex flex-wrap gap-2">
                   <button type="button" data-wizard-back="partner" className={BUTTON_SECONDARY}>Back to events</button>
-                  <button type="button" data-wizard-next="partner" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">Review entry</button>
+                  <button type="button" data-wizard-next="partner" className="inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Review entry</button>
                 </div>
               ) : null}
 
@@ -637,10 +637,11 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                     name="showAllEvents"
                     value="on"
                     defaultChecked={echo.showAllEvents}
+                    className="mt-0.5 h-4 w-4 accent-accent"
                   />
                   <span>
                     Show every event, including ones not usually open to a player. A
-                    mismatch is accepted &mdash; the organizer sees a flag and decides.
+                    mismatch is accepted, the organizer sees a flag and decides.
                   </span>
                 </label>
               </div>

@@ -127,7 +127,7 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
         <NowStrip row={nowStrip.row} moreCount={nowStrip.moreCount} />
       )}
       <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-10">
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="type-display text-[1.75rem] tracking-[-0.02em] text-foreground">
           Tournaments
         </h1>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">

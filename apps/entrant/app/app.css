@@ -8,6 +8,17 @@
  * If you find yourself adding rules here, ask first: does it belong in
  * the design system instead? See packages/design-system/DESIGN.md.
  */
+/* Webfonts (ADR 0028). The public tier shipped no font files until the
+ * entrant-site port, so every heading fell back to the system stack while the
+ * console rendered Geist and Archivo. The three families are the design
+ * system's own (`--font-sans`, `--font-display`, `--font-mono`); Vite
+ * fingerprints the .woff2 files under `/e/assets/`, same origin, so the
+ * `font-src 'self'` CSP admits them and nothing third-party is fetched. CSS
+ * and fonts are outside the page-weight gate (HTML + JS only). */
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/jetbrains-mono';
+
 @import '@scheduler/design-system/tokens.css';
 @import '@scheduler/design-system/globals.css';
 
@@ -78,4 +89,17 @@
   ::view-transition-new(*) {
     animation: none !important;
   }
+}
+
+/* The NOW strip's live sweep (ADR 0028): a 1px track along the band's bottom
+ * rule with a 20%-wide light travelling across it. Pure decoration, on an
+ * `aria-hidden` element; the design system's universal reduced-motion block
+ * (globals.css) collapses the animation to a single frame. */
+@keyframes sw-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(400%); }
+}
+
+.sw-sweep {
+  animation: sw-sweep 6s linear infinite;
 }

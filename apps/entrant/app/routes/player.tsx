@@ -23,6 +23,7 @@ import type { EntryPageDTO } from '../lib/entryPage.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import { formatDateLong } from '../lib/format';
 import type { PlayerPageDTO } from '../lib/player.types';
+import { PAGE_TITLE } from '../lib/ui';
 import { personRefModel } from '../../public/assets/person-ref.js';
 import type { Route } from './+types/player';
 
@@ -86,27 +87,25 @@ export default function Player({ loaderData }: Route.ComponentProps) {
 
   return (
     <PlayShell>
-      <main className="mx-auto w-full max-w-3xl px-4 py-6 md:py-8">
-        <a
-          href={`/e/${encodeURIComponent(slug)}`}
-          className="text-sm font-medium text-accent underline-offset-4 hover:underline"
-        >
-          ← {tournamentName ?? 'Tournament page'}
-        </a>
+      <section className="border-b border-rule-soft bg-surface-raised">
+        <div className="mx-auto w-full max-w-3xl px-4 py-8">
+          <a
+            href={`/e/${encodeURIComponent(slug)}`}
+            className="text-sm font-medium text-accent underline-offset-4 hover:underline"
+          >
+            ← {tournamentName ?? 'Tournament page'}
+          </a>
 
-        <section className="mt-4 border-b border-rule-soft pb-6">
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
-              <PersonRef
-                slug={slug}
-                identity={player.person.identity}
-                state={player.person.resolution}
-                label={player.person.label}
-                current
-              />
-            </h1>
-            {player.club ? <p className="mt-1 text-sm text-muted-foreground">{player.club}</p> : null}
-          </div>
+          <h1 className={`mt-4 ${PAGE_TITLE}`}>
+            <PersonRef
+              slug={slug}
+              identity={player.person.identity}
+              state={player.person.resolution}
+              label={player.person.label}
+              current
+            />
+          </h1>
+          {player.club ? <p className="mt-1 text-sm text-muted-foreground">{player.club}</p> : null}
           {liveMatch ? (
             <div className="mt-4 border-s-2 border-s-status-live ps-4">
               <p className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">On court now</p>
@@ -116,14 +115,17 @@ export default function Player({ loaderData }: Route.ComponentProps) {
             </div>
           ) : null}
           {player.events.length > 0 ? (
-            <ul className="mt-4 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+            <ul className="mt-4 divide-y divide-rule-soft border-t border-rule-soft text-sm text-foreground">
               {player.events.map((event) => (
-                <li key={`${event.code}-${event.discipline}`}>
-                  <span className="font-medium text-foreground">{eventCodeLabel(event.code)}</span>{` · ${event.discipline}`}
-                  {event.seed !== null && event.seed !== undefined ? <span className="text-muted-foreground"> {`[${event.seed}]`}</span> : null}
-                  {event.partner ? <><span>{' with '}</span><PersonRef slug={slug} identity={event.partner.identity} state={event.partner.resolution === 'dead' ? 'dead' : 'resolved'} label={event.partner.label} /></> : null}
+                <li key={`${event.code}-${event.discipline}`} className="flex flex-wrap items-baseline justify-between gap-4 py-2.5">
+                  <span className="min-w-0">
+                    <span className="font-medium">{eventCodeLabel(event.code)}</span>
+                    <span className="text-muted-foreground">{` · ${event.discipline}`}</span>
+                    {event.seed !== null && event.seed !== undefined ? <span className="text-muted-foreground"> {`[${event.seed}]`}</span> : null}
+                    {event.partner ? <><span className="text-muted-foreground">{' with '}</span><PersonRef slug={slug} identity={event.partner.identity} state={event.partner.resolution === 'dead' ? 'dead' : 'resolved'} label={event.partner.label} /></> : null}
+                  </span>
                   {event.drawPath.length ? (
-                    <span className="mt-1 block text-xs text-muted-foreground">
+                    <span className="basis-full text-xs text-muted-foreground">
                       {event.drawPath.map((step, stepIndex) => (
                         <span key={`${step.roundLabel}-${stepIndex}`}>
                           {stepIndex > 0 ? <span className="mx-1" aria-hidden>→</span> : null}
@@ -142,8 +144,10 @@ export default function Player({ loaderData }: Route.ComponentProps) {
               ))}
             </ul>
           ) : null}
-        </section>
+        </div>
+      </section>
 
+      <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-2">
         {coming.length > 0 ? (
           <section className="mt-6">
             <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
@@ -176,7 +180,7 @@ export default function Player({ loaderData }: Route.ComponentProps) {
         ) : null}
 
         {player.matches.length === 0 ? (
-          <p className="mt-6 text-muted-foreground">
+          <p className="mt-6 text-sm text-muted-foreground">
             No matches to show yet. Draws and schedules appear here when the
             organizer publishes them.
           </p>

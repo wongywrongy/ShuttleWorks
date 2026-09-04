@@ -234,38 +234,38 @@ describe('nearestCloseAt (the deadline reduction toDiscoveryCard used to carry)'
 describe('visibleTabs (a tab exists only when its data does)', () => {
   it.each([
     [0, 0, ['overview']],
-    [2, 0, ['overview', 'events']],
+    [2, 0, ['overview', 'draws']],
     [0, 3, ['overview', 'players']],
-    [2, 3, ['overview', 'events', 'players']],
+    [2, 3, ['overview', 'draws', 'players']],
   ])('%i events, %i entrants → %j (no publication arg: legacy rule)', (events, entrants, expected) => {
     expect(visibleTabs(Array(events).fill({}), Array(entrants).fill({}))).toEqual(expected);
   });
 
-  // SP-P7 §4: with a publication block, each public tab is the TD's flag,
+  // SP-P7 §4: with a publication block, the Players tab is the TD's flag,
   // not the payload length — published-and-empty is a real tab, and
-  // unpublished hides one however much sits behind the gate.
+  // unpublished hides one however much sits behind the gate. ADR 0028: the
+  // Draws panel exists from the first event; draws and results publication
+  // change what its rows carry, never whether the tab exists.
   it.each([
     [
       { entrants: false, draws: false, results: false },
-      ['overview', 'events'],
+      ['overview', 'draws'],
     ],
     [
       { entrants: true, draws: false, results: false },
-      ['overview', 'events', 'players'],
+      ['overview', 'draws', 'players'],
     ],
     [
       { entrants: true, draws: true, results: false },
-      ['overview', 'events', 'players', 'draws', 'seeds'],
+      ['overview', 'draws', 'players'],
     ],
     [
       { entrants: true, draws: true, results: true },
-      ['overview', 'events', 'players', 'draws', 'seeds', 'winners'],
+      ['overview', 'draws', 'players'],
     ],
     [
-      // Independent flags render coherently: winners without draws is a
-      // legal (odd) combination and answers exactly what was published.
       { entrants: false, draws: false, results: true },
-      ['overview', 'events', 'winners'],
+      ['overview', 'draws'],
     ],
   ])('publication %j → %j', (publication, expected) => {
     expect(visibleTabs(Array(2).fill({}), [], publication)).toEqual(expected);
@@ -280,12 +280,12 @@ describe('visibleTabs (a tab exists only when its data does)', () => {
 });
 
 describe('activeTab', () => {
-  const visible = ['overview', 'events'] as const;
+  const visible = ['overview', 'draws'] as const;
 
   it.each([
-    ['a visible tab', 'events', 'events'],
+    ['a visible tab', 'draws', 'draws'],
     ['null', null, 'overview'],
-    ['an unknown string', 'draws', 'overview'],
+    ['an unknown string', 'results', 'overview'],
     ['a data-hidden tab', 'entrants', 'overview'],
   ])('%s → %s', (_label, requested, expected) => {
     expect(activeTab(requested, [...visible])).toBe(expected);
@@ -293,6 +293,13 @@ describe('activeTab', () => {
 
   it('maps a legacy entrants bookmark to the unified Players directory', () => {
     expect(activeTab('entrants', ['overview', 'players'])).toBe('players');
+  });
+
+  // ADR 0028: the Events, Seeded entries and Winners tabs folded into Draws;
+  // a poster or bookmark naming any of them lands on that panel.
+  it.each(['events', 'seeds', 'winners'])('maps the retired %s tab onto Draws', (legacy) => {
+    expect(activeTab(legacy, ['overview', 'draws'])).toBe('draws');
+    expect(activeTab(legacy, ['overview'])).toBe('overview');
   });
 });
 
@@ -467,12 +474,12 @@ describe('statusCell — the §2.4 table, one arm per enum case', () => {
       kind: 'chip-muted', label: 'Entries closed',
     });
   });
-  it('completed links to Draws first, then Winners when draws are unavailable', () => {
+  it('completed links to Results whether draws or winners were published (ADR 0028)', () => {
     expect(statusCell(row({ slug: 'x', status: 'completed', drawsPublished: true }))).toEqual({
-      kind: 'link', label: 'Draws', href: '/e/x?tab=draws',
+      kind: 'link', label: 'Results', href: '/e/x?tab=draws',
     });
     expect(statusCell(row({ slug: 'x', status: 'completed_winners', winnersPublished: true }))).toEqual({
-      kind: 'link', label: 'Winners', href: '/e/x?tab=winners',
+      kind: 'link', label: 'Results', href: '/e/x?tab=draws',
     });
   });
   it('completed without winners is TEXT — never a dead link (§7 trap 3)', () => {

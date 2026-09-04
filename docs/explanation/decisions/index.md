@@ -36,7 +36,10 @@ references a longer source, it names the file rather than duplicating it.
 | [0022](/explanation/decisions/0022-authority-epochs-and-domain-operations) | Authority epochs and ordered domain-operation synchronization | Accepted (2026-09-01) |
 | [0023](/explanation/decisions/0023-docker-first-event-node-and-entrant-freeze) | Docker-first event node, 72-hour offline target, and entrant freeze at checkout | Accepted (2026-09-01) |
 | [0024](/explanation/decisions/0024-compatibility-and-release-governance) | Two-release compatibility and tested immutable image publication | Accepted (2026-09-01) |
+| [0025](/explanation/decisions/0025-sp-console-6-program-rulings) | SP-CONSOLE-6 program rulings: vocabulary oracle, ADR 0014 upheld, Code Connect dropped | Accepted (2026-09-03) |
+| [0026](/explanation/decisions/0026-sp-figma-2-program-rulings) | SP-FIGMA-2 program rulings: three Figma files, no product token mode, public name format, cut list ruled item by item | Proposed (2026-09-03) |
 | [0027](/explanation/decisions/0027-curated-data-components) | The curated Claude Design library is the visual source for the shared data components: Card, StatusPill, Badge, Avatar | Accepted (2026-09-04) |
+| [0028](/explanation/decisions/0028-entrant-site-port) | The public entrant site takes the curated Claude Design mock: four tournament tabs, webfonts on the public tier, key dates as rows | Accepted (2026-09-04) |
 
 ## Format
 

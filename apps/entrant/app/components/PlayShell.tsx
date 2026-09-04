@@ -68,7 +68,7 @@ export function PlayShell({
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:py-2.5">
           <a href={DISCOVERY_HREF} className="inline-flex min-h-8 items-center gap-3" aria-label={`${BRAND.publicProductName} home`}>
             <span className="inline-block -skew-x-12 bg-card px-3 py-1.5 shadow-md">
-              <span className="inline-block skew-x-12 font-display text-[15px] font-extrabold tracking-tight text-accent">
+              <span className="inline-block skew-x-12 type-display text-[15px] tracking-[-0.02em] text-accent">
                 {BRAND.productName}
               </span>
             </span>

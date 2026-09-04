@@ -130,11 +130,14 @@ describe('the match groups', () => {
     expect(html).toContain('Winner of SF 2');
     expect(html).toContain('14:30');
     expect(html).toContain('Court 1');
-    // The played SF: aligned scores and a typographic winner check.
+    // The played SF: aligned scores; the winner reads by weight and by the
+    // `sr-only` word, not by a glyph (ADR 0028 restyle of MatchCard).
     expect(html).toContain('MS · Semifinals');
     expect(html).toContain('21');
     expect(html).toContain('15');
-    expect(html).toContain('✓');
+    expect(html).toContain('Winner: ');
+    expect(html).toContain('font-[650]');
+    expect(html).not.toContain('✓');
   });
 
   it('says plainly when there is nothing to show', async () => {

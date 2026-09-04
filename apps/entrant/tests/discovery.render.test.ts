@@ -126,7 +126,10 @@ describe('the front door', () => {
     const start = html.indexOf(MASTHEAD, html.indexOf('<h1')) + MASTHEAD.length;
     const between = html.slice(start, html.indexOf('name="q"', start));
 
-    expect(between).not.toMatch(/<h2|<section|<ul|<a\s/);
+    // The view segments are the control row's own links (they sit to the
+    // left of the search box since ADR 0028), so `<a` is no longer a tell.
+    expect(between).not.toMatch(/<h2|<section|<ul/);
+    expect(between).toContain('aria-label="Calendar view"');
   });
 
   it('ships zero script tags and mints nothing', async () => {
@@ -208,13 +211,13 @@ describe('the calendar (§2.4)', () => {
     expect(html).toContain('September 2026');
   });
 
-  it('links Winners where they are published and says Completed where they are not (§7 trap 3)', async () => {
+  it('links Results where they are published and says Completed where they are not (§7 trap 3)', async () => {
     const html = await render();
 
-    expect(html).toMatch(/<a href="\/e\/sussex-winners\?tab=winners"/);
-    expect(html).toContain('Winners');
+    expect(html).toMatch(/<a href="\/e\/sussex-winners\?tab=draws"/);
+    expect(html).toContain('Results');
     expect(html).toMatch(/text-muted-foreground">Completed<\/span>/);
-    expect(html).not.toContain('/e/triangle-done?tab=winners');
+    expect(html).not.toContain('/e/triangle-done?tab=');
   });
 });
 

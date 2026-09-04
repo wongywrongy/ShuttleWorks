@@ -12,8 +12,11 @@
  * credential because `hasEntrantSession` returns a boolean and does not read
  * the cookie value. The private data remains browser → nginx → FastAPI.
  */
+import { Button } from '@scheduler/design-system/components';
+
 import { PlayShell } from '../components/PlayShell';
 import { hasEntrantSession } from '../lib/session.server';
+import { CARD, PAGE_TITLE } from '../lib/ui';
 import type { Route } from './+types/myEntries';
 
 export const meta: Route.MetaFunction = () => [{ title: 'My entries' }];
@@ -27,7 +30,7 @@ export default function MyEntries({ loaderData }: Route.ComponentProps) {
   return (
     <PlayShell>
       <main className="mx-auto w-full max-w-3xl px-4 py-6 md:py-8">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+        <h1 className={PAGE_TITLE}>
           My entries
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -47,20 +50,17 @@ export default function MyEntries({ loaderData }: Route.ComponentProps) {
             <script type="module" src="/e/assets/my-entries.js" />
           </>
         ) : (
-          <section className="mt-6 grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5">
-            <h2 className="font-display text-base font-bold tracking-tight text-foreground">
+          <section className={`mt-6 grid gap-3 ${CARD}`}>
+            <h2 className="text-base font-semibold text-foreground">
               Sign in to see your entries
             </h2>
             <p className="text-sm text-muted-foreground">
               Your tournament entries and their current status are available
               after you sign in.
             </p>
-            <a
-              className="inline-flex min-h-10 items-center justify-center justify-self-start rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90"
-              href="/e/login?next=/e/me/entries"
-            >
-              Sign in
-            </a>
+            <Button asChild className="justify-self-start">
+              <a href="/e/login?next=/e/me/entries">Sign in</a>
+            </Button>
           </section>
         )}
       </main>

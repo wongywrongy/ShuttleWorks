@@ -27,14 +27,12 @@ import { SeasonStatusCell } from '../app/components/SeasonStatusCell';
 import { StatusChip } from '../app/components/StatusChip';
 import { StickyTotalBar } from '../app/components/StickyTotalBar';
 import { TabBar } from '../app/components/TabBar';
-import { TimelineCard } from '../app/components/TimelineCard';
-import { formatDateLong, formatMoment } from '../app/lib/format';
+import { SegmentedNav } from '../app/components/SegmentedNav';
+import { formatDateLong } from '../app/lib/format';
 import type { EntryEventDTO } from '../app/lib/entryPage.types';
 import { statusCell } from '../app/lib/phase';
-import type { ChipState, Filters, SeasonRow, TimelineMoment } from '../app/lib/phase';
+import type { ChipState, Filters, SeasonRow } from '../app/lib/phase';
 
-/** 2026-08-11 12:00 UTC — the same fixture clock `phase.test.ts` pins. */
-const NOW = new Date(Date.UTC(2026, 7, 11, 12, 0));
 
 const OPEN_CHIP: ChipState = { kind: 'entriesOpen', closesInDays: 4 };
 const CLOSED_CHIP: ChipState = { kind: 'entriesClosed' };
@@ -146,12 +144,12 @@ describe('DateBadge', () => {
 // than being carried as tests for markup nothing renders.
 
 describe('SeasonStatusCell', () => {
-  it('renders Winners as a link and bare Completed as text (§7 trap 3)', () => {
+  it('renders Results as a link and bare Completed as text (§7 trap 3)', () => {
     const winners = renderToStaticMarkup(
       h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status: 'completed_winners', winnersPublished: true })) }),
     );
-    expect(winners).toContain('href="/e/x?tab=winners"');
-    expect(winners).toContain('Winners');
+    expect(winners).toContain('href="/e/x?tab=draws"');
+    expect(winners).toContain('Results');
 
     const done = renderToStaticMarkup(
       h(SeasonStatusCell, { cell: statusCell(row({ status: 'completed' })) }),
@@ -187,7 +185,7 @@ describe('NowStrip', () => {
 
   it('carries the follow-live deep link and NO player count (degraded field)', () => {
     const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
-    expect(html).toContain('Now playing');
+    expect(html).toContain('Live today');
     expect(html).toContain('Fall Open');
     expect(html).toContain('href="/e/x?tab=draws"');
     expect(html).not.toMatch(/player/i);
@@ -210,10 +208,13 @@ describe('NowStrip', () => {
     expect(renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }))).not.toContain('more');
   });
 
-  it('uses a plain live rule with no tinted status band or dot', () => {
+  it('carries live-ness in text and a sweep on the rule, with no tinted band or dot (ADR 0028)', () => {
     const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
-    expect(html).toContain('border-s-status-live');
+    expect(html).toContain('text-status-live');
+    expect(html).toContain('sw-sweep');
+    expect(html).toContain('bg-surface-raised');
     expect(html).not.toContain('bg-surface-inverse');
+    expect(html).not.toContain('bg-status-live-bg');
     expect(html).not.toContain('rounded-full');
     expect(html).not.toContain('animate-pulse');
     expect(html).not.toMatch(/#[0-9a-f]{3,8}\b/i);
@@ -560,7 +561,7 @@ describe('HeroHeader', () => {
 describe('TabBar', () => {
   const hrefFor = (tab: string) => (tab === 'overview' ? '/e/s' : `/e/s?tab=${tab}`);
 
-  it('renders nothing below two tabs — a one-tab bar is a placeholder', () => {
+  it('renders nothing below two entries — a one-tab bar is a placeholder', () => {
     expect(
       renderToStaticMarkup(h(TabBar, { tabs: ['overview'], active: 'overview', hrefFor })),
     ).toBe('');
@@ -568,72 +569,52 @@ describe('TabBar', () => {
 
   it('is a labelled nav of links with aria-current on the active one', () => {
     const html = renderToStaticMarkup(
-      h(TabBar, { tabs: ['overview', 'events', 'entrants'], active: 'events', hrefFor }),
+      h(TabBar, { tabs: ['overview', 'draws', 'players'], active: 'draws', hrefFor }),
     );
     expect(html).toContain('aria-label="Tournament sections"');
     expect(html.match(/<a /g)).toHaveLength(3);
     const active = html.match(/<a[^>]*aria-current="page"[^>]*>[^<]*/g) ?? [];
     expect(active).toHaveLength(1);
-    expect(active[0]).toContain('Events');
+    expect(active[0]).toContain('Draws');
     // Links, not widgets: no ARIA tablist pretending panels switch in place.
     expect(html).not.toContain('role="tab');
     expect(html).not.toContain('disabled');
   });
+
+  it('seats Schedule second, after Overview (ADR 0028 order)', () => {
+    const html = renderToStaticMarkup(
+      h(TabBar, { tabs: ['overview', 'draws', 'players'], active: 'schedule', hrefFor, scheduleHref: '/e/s/schedule' }),
+    );
+    const labels = [...html.matchAll(/>([^<]+)<\/a>/g)].map((m) => m[1]);
+    expect(labels).toEqual(['Overview', 'Schedule', 'Draws', 'Players']);
+    expect(html).toMatch(/<a href="\/e\/s\/schedule" aria-current="page"/);
+  });
 });
 
-// ---- TimelineCard ----------------------------------------------------------
+// ---- SegmentedNav ----------------------------------------------------------
 
-describe('TimelineCard', () => {
-  const moments: TimelineMoment[] = [
-    { label: 'Entries open', at: '2026-06-01 09:00 UTC', state: 'past' },
-    { label: 'Entries close', at: null, state: 'current', variance: 'per-event' },
-    { label: 'Withdrawal deadline', at: '2026-09-05 18:00 UTC', state: 'future' },
-    { label: 'Tournament', at: '2026-09-19', state: 'future' },
+describe('SegmentedNav', () => {
+  const segments = [
+    { label: 'Season', href: '/e/', current: true },
+    { label: 'Taking entries', href: '/e/?view=open', count: 2 },
   ];
 
-  it('renders an ordered list with the current position marked in text', () => {
-    const html = renderToStaticMarkup(
-      h(TimelineCard, { moments, now: NOW, eventsHref: '/e/s?tab=events' }),
-    );
-    expect(html).toContain('<ol');
-    expect(html).toContain('← you are here');
+  it('is a bordered group of links; the active one is a link too, marked aria-current', () => {
+    const html = renderToStaticMarkup(h(SegmentedNav, { label: 'Calendar view', segments, currentAttr: 'true' }));
+    expect(html).toContain('aria-label="Calendar view"');
+    expect(html.match(/<a /g)).toHaveLength(2);
+    expect(html).toMatch(/<a href="\/e\/" aria-current="true"/);
+    expect(classTokens(html, 'bg-accent')).toContain('text-accent-ink');
+    expect(html).toContain('>2</span>');
   });
 
-  it('renders a per-event variance as a range line linking to Events', () => {
-    const html = renderToStaticMarkup(
-      h(TimelineCard, { moments, now: NOW, eventsHref: '/e/s?tab=events' }),
-    );
-    expect(html).toContain('Varies by event');
-    expect(html).toContain('href="/e/s?tab=events"');
-  });
-
-  it('formats the tournament day long and the moments as UTC instants', () => {
-    const html = renderToStaticMarkup(
-      h(TimelineCard, { moments, now: NOW, eventsHref: '#' }),
-    );
-    expect(html).toContain(formatDateLong('2026-09-19'));
-    expect(html).toContain(formatMoment('2026-09-05 18:00 UTC'));
-  });
-
-  it('inserts the standalone marker before the first future moment when nothing straddles now', () => {
-    const allKnown: TimelineMoment[] = [
-      { label: 'Entries open', at: '2026-06-01 09:00 UTC', state: 'past' },
-      { label: 'Entries close', at: '2026-08-14 23:59 UTC', state: 'future' },
-    ];
-    const html = renderToStaticMarkup(
-      h(TimelineCard, { moments: allKnown, now: NOW, eventsHref: '#' }),
-    );
-    const markerAt = html.indexOf('You are here');
-    expect(markerAt).toBeGreaterThan(html.indexOf('Entries open'));
-    expect(markerAt).toBeLessThan(html.indexOf('Entries close'));
-  });
-
-  it('renders no placeholder for an omitted moment — the model already dropped it', () => {
-    const html = renderToStaticMarkup(
-      h(TimelineCard, { moments: [], now: NOW, eventsHref: '#' }),
-    );
-    expect(html).not.toContain('TBD');
-    expect(html).not.toContain('Entries close');
+  it('rounds its ends per item — the tier bans overflow-hidden and nowrap', () => {
+    const html = renderToStaticMarkup(h(SegmentedNav, { label: 'x', segments }));
+    expect(html).toContain('first:rounded-s-xs');
+    expect(html).toContain('last:rounded-e-xs');
+    expect(html).not.toContain('overflow-hidden');
+    expect(html).not.toContain('whitespace-nowrap');
+    expect(html).not.toContain('rounded-full');
   });
 });
 
@@ -687,12 +668,30 @@ describe('EventRow', () => {
     expect(html).toMatch(/text-status-done[^>]*>Closed</);
   });
 
-  it('links into the entrants anchor when given one and entries exist', () => {
+  it('offers an Entrants button when given a directory link and entries exist', () => {
     const html = renderToStaticMarkup(
-      h(EventRow, { event: event(), entrantsHref: '/e/s?tab=entrants#event-MS' }),
+      h(EventRow, { event: event(), entrantsHref: '/e/s?tab=players' }),
     );
-    expect(html).toContain('href="/e/s?tab=entrants#event-MS"');
-    expect(html).toContain('See entrants');
+    expect(html).toContain('href="/e/s?tab=players"');
+    expect(html).toContain('>Entrants</a>');
+    expect(html).not.toContain('>Draw</a>');
+  });
+
+  it('adds the Draw button and the draw facts once a card is published (ADR 0028)', () => {
+    const card = {
+      drawKey: 'MS', eventCode: 'MS', discipline: "Men's Singles", kind: 'se' as const, size: 16,
+      hasConsolation: true, matchCoverage: { imported: 0, expected: null, missing: null },
+      recordScope: 'full_draw', topologyScope: 'full_draw', historical: false, sourceUrl: null,
+      roundCount: 4, champions: [], finalists: [], remainingMatchCount: 3,
+    };
+    const html = renderToStaticMarkup(
+      h(EventRow, { event: event({ isOpen: false }), entrantsHref: null, draw: card, drawHref: '/e/s/draws/MS', slug: 's' }),
+    );
+    expect(html).toContain('href="/e/s/draws/MS"');
+    expect(html).toContain('>Draw</a>');
+    expect(html).toContain('4 rounds');
+    expect(html).toContain('with consolation');
+    expect(html).toContain('Draw published');
   });
 
   it('offers no link when the entrants tab is hidden or nobody entered', () => {

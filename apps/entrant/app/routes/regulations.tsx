@@ -19,6 +19,7 @@ import { PlayShell } from '../components/PlayShell';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { dateOfIso, formatDateLong } from '../lib/format';
+import { PAGE_TITLE } from '../lib/ui';
 import type { Route } from './+types/regulations';
 
 export interface RegulationsLoaderData {
@@ -188,7 +189,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Organizer-published document
           </p>
-          <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-foreground">
+          <h1 className={`mt-2 ${PAGE_TITLE}`}>
             Tournament regulations
           </h1>
           {tournamentName ? <p className="mt-1 text-base text-foreground">{tournamentName}</p> : null}
@@ -237,7 +238,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
             </nav>
             <div className="mt-4 grid gap-2 text-sm">
               <a href={`/e/${encodeURIComponent(slug)}`} className="text-accent underline-offset-4 hover:underline">Tournament overview</a>
-              <a href={`/e/${encodeURIComponent(slug)}?tab=events`} className="text-accent underline-offset-4 hover:underline">View events</a>
+              <a href={`/e/${encodeURIComponent(slug)}?tab=draws`} className="text-accent underline-offset-4 hover:underline">View events</a>
               <a href={`/e/${encodeURIComponent(slug)}?tab=players`} className="text-accent underline-offset-4 hover:underline">View entrants</a>
             </div>
           </aside>

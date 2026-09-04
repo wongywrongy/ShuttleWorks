@@ -26,15 +26,17 @@
  */
 import type { FormEcho } from './echo';
 
-export type Tab =
-  | 'overview'
-  | 'events'
-  /** Legacy deep-link compatibility; no longer emitted by visibleTabs. */
-  | 'entrants'
-  | 'players'
-  | 'draws'
-  | 'seeds'
-  | 'winners';
+/**
+ * The tournament page's server-rendered panels (ADR 0028): Overview, the
+ * merged Draws panel (every event, with its draw and champion once
+ * published) and the Players directory. Schedule / Live is a separate route
+ * and rides the same bar as a link.
+ */
+export type Tab = 'overview' | 'draws' | 'players';
+
+/** Retired `?tab=` ids that posters and bookmarks still carry; `activeTab`
+ * folds each onto the panel that absorbed it. */
+export type LegacyTab = 'events' | 'entrants' | 'seeds' | 'winners';
 
 export type ChipState =
   | { kind: 'entriesOpen'; closesInDays: number | null }
@@ -324,10 +326,9 @@ export function ctaState(
 }
 
 /**
- * Design §6 visibleTabs table. A declarative `[tab, predicate]` walk so a
- * future Draws/Schedule/Results tab is a data addition (brief rule 4). The
- * function is total: `[overview]` is the minimal answer when no public data exists, but
- * still an answer.
+ * Design §6 visibleTabs table, four-tab form (ADR 0028). A declarative
+ * `[tab, predicate]` walk; the function is total: `[overview]` is the minimal
+ * answer when no public data exists, but still an answer.
  */
 export function visibleTabs(
   events: readonly unknown[],
@@ -336,24 +337,33 @@ export function visibleTabs(
 ): Tab[] {
   const table: readonly [Tab, boolean][] = [
     ['overview', true],
-    ['events', events.length > 0],
+    // The Draws panel lists every event from the day the page exists; draws
+    // and results join the rows as the organizer publishes them.
+    ['draws', events.length > 0],
     // One public roster serves both registered entrants and imported draw
     // players. The API merges those rows; this avoids two competing lists
     // where the draw roster appears to contain only five winners. The
     // parameter is optional for older fixtures and falls back to the legacy
     // entrant-list visibility rule.
     ['players', publication ? publication.entrants || publication.draws : entrants.length > 0],
-    ['draws', publication?.draws ?? false],
-    ['seeds', publication?.draws ?? false],
-    ['winners', publication?.results ?? false],
   ];
   return table.filter(([, visible]) => visible).map(([tab]) => tab);
 }
 
-/** Requested ∈ visible → requested; the retired entrants tab maps to Players. */
+const LEGACY_TABS: Readonly<Record<LegacyTab, Tab>> = Object.freeze({
+  events: 'draws',
+  seeds: 'draws',
+  winners: 'draws',
+  entrants: 'players',
+});
+
+/** Requested ∈ visible → requested; a retired id maps to the panel that absorbed it. */
 export function activeTab(requested: string | null, visible: readonly Tab[]): Tab {
-  if (requested === 'entrants' && visible.includes('players')) return 'players';
-  return visible.includes(requested as Tab) ? (requested as Tab) : 'overview';
+  const wanted =
+    requested !== null && requested in LEGACY_TABS
+      ? LEGACY_TABS[requested as LegacyTab]
+      : (requested as Tab);
+  return visible.includes(wanted) ? wanted : 'overview';
 }
 
 /** A chain, not a module-scoped Map: the mutable-bindings guard
@@ -554,11 +564,10 @@ export function statusCell(row: SeasonRow): StatusCell {
       return { kind: 'chip-muted', label: 'Entries closed' };
     case 'completed_winners':
     case 'completed':
-      if (row.drawsPublished) {
-        return { kind: 'link', label: 'Draws', href: `${page}?tab=draws` };
-      }
-      if (row.winnersPublished) {
-        return { kind: 'link', label: 'Winners', href: `${page}?tab=winners` };
+      // Draws and winners share one public panel (ADR 0028); either
+      // publication makes the row link there.
+      if (row.drawsPublished || row.winnersPublished) {
+        return { kind: 'link', label: 'Results', href: `${page}?tab=draws` };
       }
       return { kind: 'text', label: 'Completed' };
   }

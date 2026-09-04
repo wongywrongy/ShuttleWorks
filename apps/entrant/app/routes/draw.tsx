@@ -22,7 +22,7 @@ import { PersonGroup } from "../components/PersonGroup";
 import { EmptyState } from "../components/EmptyState";
 import { MessagePage } from "../components/MessagePage";
 import { PlayShell } from "../components/PlayShell";
-import { TabBar } from "../components/TabBar";
+import { SegmentedNav } from "../components/SegmentedNav";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
 import type {
   DrawDetailDTO,
@@ -39,8 +39,7 @@ import {
   roundLabel,
 } from "../lib/draws.types";
 import type { EntryPageDTO } from "../lib/entryPage.types";
-import { visibleTabs } from "../lib/phase";
-import { INPUT_SKIN } from "../lib/ui";
+import { FIELD_INPUT, PAGE_TITLE } from "../lib/ui";
 import type { MatchCardData } from "../components/MatchCard";
 import { personRefModel } from "../../public/assets/person-ref.js";
 import type { Route } from "./+types/draw";
@@ -261,22 +260,14 @@ function SegmentNavigation({
     return `${base}?${params}`;
   };
   return (
-    <nav aria-label="Draw segments" className="flex flex-wrap gap-2">
-      {segments.map((segment) => (
-        <a
-          key={segment.id}
-          href={href(segment.id)}
-          aria-current={segment.id === active ? "page" : undefined}
-          className={`border-b-2 px-0.5 py-1.5 text-sm ${
-            segment.id === active
-              ? "border-action-primary font-medium text-foreground"
-              : "border-rule-soft text-muted-foreground hover:border-rule-control"
-          }`}
-        >
-          {segment.label || segment.id}
-        </a>
-      ))}
-    </nav>
+    <SegmentedNav
+      label="Draw segments"
+      segments={segments.map((segment) => ({
+        label: segment.label || segment.id,
+        href: href(segment.id),
+        current: segment.id === active,
+      }))}
+    />
   );
 }
 
@@ -303,29 +294,16 @@ function DrawViewLinks({
     return `${base}?${params}`;
   };
   return (
-    <nav
-      aria-label="Draw view"
-      className="overflow-x-auto border-b border-rule-soft"
-    >
-      <div className="flex min-w-max gap-5">
-        {(
-          [
-            ["bracket", "Bracket"],
-            ["round", "Round"],
-            ["list", "List"],
-          ] as const
-        ).map(([view, label]) => (
-          <a
-            key={view}
-            href={href(view)}
-            aria-current={active === view ? "page" : undefined}
-            className={`shrink-0 border-b-2 px-0.5 pb-2 pt-1 text-sm ${active === view ? "border-action-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:border-rule-control hover:text-foreground"}`}
-          >
-            {label}
-          </a>
-        ))}
-      </div>
-    </nav>
+    <SegmentedNav
+      label="Draw view"
+      segments={(
+        [
+          ["bracket", "Bracket"],
+          ["round", "Round"],
+          ["list", "List"],
+        ] as const
+      ).map(([view, label]) => ({ label, href: href(view), current: active === view }))}
+    />
   );
 }
 
@@ -463,7 +441,6 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
   const {
     slug,
     tournamentName,
-    page,
     draw,
     activeSegment,
     view,
@@ -523,19 +500,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
         >
           ← {tournamentName ? `${tournamentName} · Draws` : "Draws"}
         </a>
-        <div className="mt-5 border-b border-rule-soft">
-          <TabBar
-            tabs={visibleTabs(page.events, page.entrants, page.publication)}
-            active="draws"
-            hrefFor={(tab) =>
-              tab === "overview"
-                ? `/e/${encodeURIComponent(slug)}`
-                : `/e/${encodeURIComponent(slug)}?tab=${tab}`
-            }
-            scheduleHref={`/e/${encodeURIComponent(slug)}/schedule`}
-          />
-        </div>
-        <h1 className="mt-4 font-display text-2xl font-bold tracking-tight text-foreground">
+        <h1 className={`mt-5 ${PAGE_TITLE}`}>
           {eventDisciplineLabel(draw.discipline)}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -570,11 +535,11 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                 name="player"
                 defaultValue={playerQuery}
                 placeholder="Find a player or pair"
-                className={`h-9 min-w-0 flex-1 rounded px-3 ${INPUT_SKIN}`}
+                className={`${FIELD_INPUT} flex-1`}
               />
-                <button
+              <button
                 type="submit"
-                className="h-9 border border-action-primary px-3 text-sm font-semibold text-foreground hover:bg-surface-sunken"
+                className="h-9 rounded-sm border border-action-primary bg-surface-raised px-3 text-sm font-semibold text-foreground hover:bg-surface-sunken"
               >
                 Find
               </button>
@@ -668,7 +633,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                     aria-label={`${eventDisciplineLabel(draw.discipline)} bracket`}
                     className="border-y border-rule-soft bg-surface-raised"
                   >
-                    <div className="overflow-x-auto px-4 py-2 md:px-6">
+                    <div className="overflow-x-auto px-4 pb-4 pt-2 md:px-6">
                       <div
                         className="flex w-max min-w-full items-stretch"
                         data-bracket-grid
