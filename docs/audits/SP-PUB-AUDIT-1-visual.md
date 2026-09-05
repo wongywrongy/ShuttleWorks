@@ -84,17 +84,26 @@ Unexpected or noteworthy items observed during this audit, not fixed here.
   it is not a Playwright-specific artifact. This affects the one screen (2.13 Player page) that
   could not be visually compared to the mock at all in this pass; the backend endpoint behind it
   (`PlayerPageDTO` / `entries_site.py`, per the phase 0 inventory) appears to reject its own
-  request parameters on this data.
+  request parameters on this data. Root cause: the route validates `person_key` with `uuid.UUID()`
+  before its own `_not_found()` gate, so a draw-participant hash from the sibling `/players` list
+  rejects as 422 instead of 404, and the loader only maps 404 to the not-found page; pre-existing
+  on main d478fb84, not introduced by this branch; logged in the debt log.
 - `/e/2025-denmark-open-t001` (Overview): the facts row shows "Players entered: 0" despite the
   tournament having a full 32-pair Men's Doubles draw (and four other events) with dozens of named
   players visible on the Players tab. Likely a data/count mismatch in `EntryPageProjection.page`
   for demo-seeded (non-entry-flow) tournaments rather than a rendering bug, but the number is
-  visibly wrong next to the Players tab's real count.
+  visibly wrong next to the Players tab's real count. Root cause: the overview facts list sums
+  Entries-flow `entryCount` (confirmed `entries` rows), which stays 0 for imported tournaments,
+  while the Players tab merges draw participants from a different directory; pre-existing on main
+  d478fb84, not introduced by this branch; logged in the debt log.
 - `/e/{slug}/enter` (all tournaments in this demo, since none has open entries): the page always
   shows a "Signed in on this device? You can sign out here." block with a "Sign out" button, even
   when the browser has never signed in. This reads as though the visitor is already authenticated
   and may confuse a genuinely signed-out user; worth checking whether this block should be
-  conditional on an actual session.
+  conditional on an actual session. Root cause: the entry page footer posts to
+  `/e/account/logout` unconditionally, pinned by a test on the premise that the page cannot know
+  who is reading it, a premise the header's own session-aware branch already contradicts;
+  pre-existing on main d478fb84, not introduced by this branch; logged in the debt log.
 - No overflow, layout break, missing font, or CSP violation was observed at either 1280x900 or
   390x844 on any of the routes that render successfully.
 
