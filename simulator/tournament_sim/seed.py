@@ -1762,7 +1762,6 @@ def _demo_setup_sections(
         },
         "public-info": {
             "publicSlug": slug,
-            "visibility": "public",
             "description": f"Fictional, badminton-plausible demo of the {tournament.level} {tournament.name} at {tournament.venue}.",
             "regulationsUrl": f"https://example.test/{safe_slug}/regulations.pdf",
             "logoUrl": f"https://example.test/{safe_slug}/logo.svg",
@@ -2110,6 +2109,7 @@ def apply(
             client.patch_entry_page_publication(
                 tid,
                 {
+                    "audience": "public",
                     "drawsPublished": True,
                     "resultsPublished": tournament.id != _DEMO_UPCOMING_TOURNAMENT or not demo_seed,
                 },

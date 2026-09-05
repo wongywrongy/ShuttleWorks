@@ -198,6 +198,11 @@
                                inspector facts (SP-CONSOLE-REFINE G5). Forms,
                                buttons and prose stay on --text-sm.          */
     --text-sm:   0.875rem;  /* 14px body default                             */
+    --text-support: 0.75rem;
+    --text-console: 0.875rem;
+    --text-public: 1rem;
+    --text-section: 1.25rem;
+    --text-page: 1.75rem;
     --text-base: 1rem;      /* 16px                                          */
     --text-lg:   1.125rem;  /* 18px                                          */
     --text-2xl:  1.5rem;    /* 24px card titles                              */
@@ -326,12 +331,12 @@
 
     /* ----- Shadows (raised/overlay carry hairline + shadow in light) ----- */
     --shadow-none: none;
-    --shadow-hard: 0 3px 0 hsl(var(--rule));
+    --shadow-hard: none;
     --shadow-sm: 0 1px 2px hsl(var(--gray-13) / 0.08);
     --shadow-md: 0 2px 8px hsl(var(--gray-13) / 0.10);
     --shadow-lg: 0 10px 28px hsl(var(--gray-13) / 0.12);
     --shadow-frame: 0 24px 60px hsl(var(--gray-13) / 0.14);
-    --shadow-card:  0 1px 2px hsl(var(--gray-13) / 0.08);
+    --shadow-card: none;
 
     /* ----- Glow — primary actions + live signals only -------------------- */
     --glow-accent:    0 0 22px hsl(var(--accent) / 0.22);
@@ -502,8 +507,8 @@
     --shadow-sm:   none;
     --shadow-hard: none;
     --shadow-frame: 0 24px 60px hsl(var(--gray-13) / 0.55);
-    --shadow-card:  0 2px 8px hsl(var(--gray-13) / 0.4);
-    --shadow-md:   var(--shadow-card);
+    --shadow-card: none;
+    --shadow-md: 0 2px 8px hsl(var(--gray-13) / 0.4);
     --shadow-lg:   var(--shadow-frame);
 
     /* Glow reads stronger on the dark substrate */

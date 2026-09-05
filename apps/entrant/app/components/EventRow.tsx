@@ -75,9 +75,10 @@ export function EventRow({
         draw.hasConsolation ? 'with consolation' : null,
       ]
     : [publicFields.format, eligibility];
-  const countLabel = publicFields.capacity !== null && publicFields.capacity !== undefined
-    ? `${event.entryCount} of ${publicFields.capacity} entered`
-    : `${event.entryCount} entered`;
+  const registrationCount = event.registrationCount ?? event.entryCount;
+  const countLabel = draw
+    ? `${registrationCount} confirmed registrations · ${draw.drawParticipantCount ?? draw.size} draw participants`
+    : `${registrationCount} confirmed registrations`;
   const state = event.isOpen
     ? { label: 'Open', tone: 'text-status-live' }
     : publicFields.resultsPublished
@@ -85,7 +86,7 @@ export function EventRow({
       : publicFields.drawPublished || draw
         ? { label: 'Draw published', tone: 'text-muted-foreground' }
         : { label: 'Closed', tone: 'text-status-done' };
-  const entrants = entrantsHref !== null && event.entryCount > 0 ? entrantsHref : null;
+  const entrants = entrantsHref !== null && registrationCount > 0 ? entrantsHref : null;
   return (
     <li className="grid gap-3 px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_7rem_6rem_auto] sm:items-center">
       <div className="min-w-0">

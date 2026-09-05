@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SetupProduct } from '../SetupProduct';
@@ -28,7 +28,7 @@ function setupFixture(): TournamentSetupDTO {
       { key: 'rules', status: 'not_started', summary: 'Not started', data: {}, issues: [], downstreamImpact: ['draw generation'], authority: 'setup' },
       { key: 'entries', status: 'not_started', summary: 'Not started', data: {}, issues: [], downstreamImpact: ['registration'], authority: 'setup' },
       { key: 'people', status: 'not_started', summary: 'Not started', data: {}, issues: [], downstreamImpact: ['operator contacts'], authority: 'setup' },
-      { key: 'public-info', status: 'not_started', summary: 'Not started', data: {}, issues: [], downstreamImpact: ['public site'], authority: 'setup' },
+      { key: 'public-info', status: 'not_started', summary: 'Not started', data: { publicSlug: 'spring-finals', visibility: 'public', description: 'Welcome' }, issues: [], downstreamImpact: ['public site'], authority: 'setup' },
     ],
   };
 }
@@ -87,7 +87,7 @@ describe('SetupProduct', () => {
     // running draws (evidence S09) is structurally impossible.
     expect(screen.queryByRole('button', { name: 'Save section' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add event' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Manage events in Competition/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Edit event' })).toHaveAttribute('href', '/tournaments/t1/competition/draws?event=MS');
   });
 
   it('structured row editors replace the pipe textareas (INP-1)', async () => {
@@ -104,6 +104,16 @@ describe('SetupProduct', () => {
     await user.click(screen.getByRole('button', { name: 'Add court' }));
     expect(screen.getByLabelText('Court name for row 1')).toBeInTheDocument();
     expect(screen.getByLabelText('Available for row 1')).toBeInTheDocument();
+  });
+
+  it('does not send publication audience when saving public information', async () => {
+    const user = userEvent.setup();
+    renderSetup('/tournaments/t1/setup/public-info');
+    await waitFor(() => expect(screen.getByLabelText('Description')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Save section' }));
+    await waitFor(() => expect(patchTournamentSetup).toHaveBeenCalled());
+    expect(patchTournamentSetup.mock.calls[0][2]).not.toHaveProperty('visibility');
+    expect(patchTournamentSetup.mock.calls[0][2]).toMatchObject({ publicSlug: 'spring-finals', description: 'Welcome' });
   });
 
   it('rules render segmented controls, and no Refresh button exists (INP-2/INP-3)', async () => {
@@ -125,4 +135,37 @@ describe('SetupProduct', () => {
       '/tournaments/t1/operations/plan',
     );
   });
+  it('keeps a dirty draft on focus and after a failed save, then discards it', async () => {
+    patchTournamentSetup.mockRejectedValue(new Error('network'));
+    renderSetup('/tournaments/t1/setup/general');
+    const input = await screen.findByLabelText('Tournament name');
+    const original = (input as HTMLInputElement).value;
+    fireEvent.change(input, { target: { value: 'Unsent title' } });
+    fireEvent(window, new Event('focus'));
+    expect(getTournamentSetup).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue('Unsent title');
+    fireEvent.click(screen.getByRole('button', { name: 'Save section' }));
+    await screen.findByText(/Your draft is still here/);
+    expect(input).toHaveValue('Unsent title');
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.getByLabelText('Tournament name')).toHaveValue(original));
+  });
+
+  it('keeps an invalid DST time visible and prevents saving an old value', async () => {
+    const fixture = setupFixture();
+    fixture.sections.find((section) => section.key === 'general')!.data.timezone = 'America/New_York';
+    getTournamentSetup.mockResolvedValue(fixture);
+    renderSetup('/tournaments/t1/setup/dates');
+    const input = await screen.findByLabelText('Tournament starts');
+    fireEvent.change(input, { target: { value: '2026-03-08T02:30' } });
+    expect(input).toHaveValue('2026-03-08T02:30');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('alert')).toHaveTextContent('does not exist');
+    fireEvent.click(screen.getByRole('button', { name: 'Save section' }));
+    expect(patchTournamentSetup).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: '2026-03-08T03:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save section' }));
+    await waitFor(() => expect(patchTournamentSetup).toHaveBeenCalledWith('t1', 'dates', expect.objectContaining({ tournamentStart: '2026-03-08T07:30:00.000Z' })));
+  });
+
 });

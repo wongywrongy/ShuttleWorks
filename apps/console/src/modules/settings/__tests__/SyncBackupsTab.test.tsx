@@ -104,8 +104,7 @@ describe('SyncBackupsTab — WSB-2/3/4', () => {
     render(<SyncBackupsTab />);
     expect(within(screen.getByTestId('backup-a.json')).getByText('Auto')).toBeInTheDocument();
     expect(within(screen.getByTestId('backup-m.json')).getByText('Manual')).toBeInTheDocument();
-    // The filename is no longer a standing second line on every row.
-    expect(within(screen.getByTestId('backup-a.json')).queryByText('a.json')).toBeNull();
+    expect(within(screen.getByTestId('backup-a.json')).getByText('a.json')).toBeInTheDocument();
     expect(screen.getByTestId('backup-eligibility-a.json')).toHaveTextContent(/eligible to restore/i);
     expect(within(screen.getByTestId('backup-a.json')).getByText(/2026/)).toBeInTheDocument();
   });

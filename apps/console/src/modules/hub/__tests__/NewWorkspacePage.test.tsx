@@ -41,7 +41,7 @@ function mount(refObj: { current: string }) {
   );
 }
 
-/** Set a module's tri-state via its radiogroup, the way an operator does. */
+/** Toggle the remaining independently selectable module. */
 function setModule(label: string, state: 'On' | 'Off') {
   const group = screen.getByRole('radiogroup', { name: label });
   fireEvent.click(within(group).getByRole('radio', { name: state }));
@@ -82,9 +82,9 @@ describe('NewWorkspacePage', () => {
   it('starts with type and module choices, with no preset templates', () => {
     mount({ current: '' });
     expect(screen.getByRole('heading', { name: 'New workspace' })).toBeInTheDocument();
-    for (const label of ['Meet', 'Bracket', 'Display']) {
-      expect(screen.getByRole('radiogroup', { name: label })).toBeInTheDocument();
-    }
+    expect(screen.getAllByText('Meet').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bracket').length).toBeGreaterThan(0);
+    expect(screen.getByRole('radiogroup', { name: 'Display' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Tournament type' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Courts')).toBeNull();
     // The presets are gone, not merely relabelled.
@@ -93,17 +93,15 @@ describe('NewWorkspacePage', () => {
     }
   });
 
-  it('defaults to Meet on, so the common case is one click to create', () => {
+  it('defaults to Meet as the single engine choice', () => {
     mount({ current: '' });
-    const meet = screen.getByRole('radiogroup', { name: 'Meet' });
-    expect(within(meet).getByRole('radio', { name: 'On' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(screen.getByRole('radiogroup', { name: 'Tournament type' })).getByRole('radio', { name: 'Meet' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('sends the chosen modules and derives kind=meet', async () => {
     returnCreated('w1', [m('meet', 'enabled'), m('bracket', 'available'), m('display', 'enabled')]);
     const loc = { current: '' };
     mount(loc);
-    setModule('Bracket', 'Off');
     setModule('Display', 'On');
     advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
@@ -123,8 +121,7 @@ describe('NewWorkspacePage', () => {
     returnCreated('w2', [m('bracket', 'enabled'), m('meet', 'disabled'), m('display', 'disabled')]);
     const loc = { current: '' };
     mount(loc);
-    setModule('Meet', 'Off');
-    setModule('Bracket', 'On');
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Tournament type' })).getByRole('radio', { name: 'Bracket' }));
     advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(loc.current).toBe('/tournaments/w2/overview'));
@@ -133,23 +130,16 @@ describe('NewWorkspacePage', () => {
     expect(seedFor(body)).toMatchObject({ bracket: 'enabled', meet: 'available' });
   });
 
-  it('routes to Modules when nothing is enabled, and warns first', async () => {
-    returnCreated('w4', [m('meet', 'available'), m('bracket', 'available'), m('display', 'disabled')]);
-    const loc = { current: '' };
-    mount(loc);
-    setModule('Meet', 'Off');
-    // Warn, never block — the state is recoverable from Modules.
-    expect(screen.getByTestId('modules-hint')).toHaveTextContent(/opens on Modules/i);
-    advanceToReview();
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w4/administration/modules'));
+  it('always includes one engine because tournament type owns engine selection', () => {
+    mount({ current: '' });
+    expect(screen.queryByTestId('modules-hint')).toBeNull();
+    expect(screen.getByText(/Included by tournament type/i)).toBeInTheDocument();
   });
 
-  it('warns when Display has no engine to show', () => {
+  it('allows Display to be turned on independently', () => {
     mount({ current: '' });
-    setModule('Meet', 'Off');
     setModule('Display', 'On');
-    expect(screen.getByTestId('modules-hint')).toHaveTextContent(/Display needs Meet or Bracket/i);
+    expect(within(screen.getByRole('radiogroup', { name: 'Display' })).getByRole('radio', { name: 'On' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('seeds the court count in the atomic create request', async () => {

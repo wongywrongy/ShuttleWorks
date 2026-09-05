@@ -54,6 +54,8 @@ export interface PartnerLoaderData {
   invite: PartnerInvite | null;
   accepted: boolean;
   failed: boolean;
+  failureReason?: 'unverified' | 'unusable' | 'retry' | null;
+  entryId?: string;
 }
 
 export async function loader({
@@ -69,6 +71,10 @@ export async function loader({
   const token = raw.length > MAX_TOKEN ? '' : raw;
   const accepted = url.pathname.endsWith(ACCEPTED_SUFFIX);
   const failed = url.pathname.endsWith(FAILED_SUFFIX);
+  const rawReason = url.searchParams.get('reason');
+  const failureReason = rawReason === 'unverified' || rawReason === 'unusable' || rawReason === 'retry'
+    ? rawReason
+    : null;
 
   let invite: PartnerInvite | null = null;
   if (token && !accepted && !failed) {
@@ -93,6 +99,8 @@ export async function loader({
     invite,
     accepted,
     failed,
+    failureReason,
+    entryId: accepted ? url.searchParams.get('entryId') ?? '' : '',
   };
   return data(payload, csrf.responseInit);
 }
@@ -108,17 +116,18 @@ export const meta: Route.MetaFunction = () => [
 const FORM_CARD = `grid gap-4 ${CARD}`;
 
 export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, token, invite, accepted, failed } = loaderData;
+  const { formCsrf, token, invite, accepted, failed, failureReason } = loaderData;
 
   if (accepted) {
     return (
       <PlayShell>
         <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
           <div className={FORM_CARD}>
-            <Notice tone="success">
-              You are entered as their partner. The organizer confirms entries,
-              so this is not final until they do.
-            </Notice>
+            <h1 id="partner-accepted-title" className={PAGE_TITLE}>Partner invitation update</h1>
+            <div id="partner-accepted-details" data-entry-id={loaderData.entryId ?? ''} aria-live="polite">
+              <p className="text-sm text-muted-foreground">Checking your signed-in entries.</p>
+            </div>
+            <script type="module" src="/e/assets/partner-accepted.js" />
             <Button asChild className="justify-self-start">
               <a href="/e/me/entries">See my entries</a>
             </Button>
@@ -134,12 +143,14 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
         <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
           <div className={FORM_CARD}>
             <Notice tone="warning">
-              That did not go through. Either the invitation is no longer
-              usable, or your email address is not confirmed yet. Sign in to
-              check.
+              {failureReason === 'unverified'
+                ? 'Confirm your email address before accepting this invitation.'
+                : failureReason === 'retry'
+                  ? 'The tournament is temporarily unavailable for changes. Try again shortly.'
+                  : 'This invitation is no longer usable. Ask the person who invited you to send a new one.'}
             </Notice>
             <Button asChild variant="outline" className="justify-self-start">
-              <a href="/e/login">Sign in</a>
+              <a href={failureReason === 'unverified' ? '/e/verify' : '/e/login'}>{failureReason === 'unverified' ? 'Verify your email' : 'Sign in'}</a>
             </Button>
           </div>
         </main>

@@ -138,6 +138,14 @@ export function BracketDrawsTab() {
   }, [searchParams, setSearchParams]);
 
   const events = data?.events ?? [];
+  useEffect(() => {
+    const eventId = searchParams.get("event");
+    if (!eventId || !events.some((event) => event.id === eventId)) return;
+    setConfigFor(eventId);
+    const next = new URLSearchParams(searchParams);
+    next.delete("event");
+    setSearchParams(next, { replace: true });
+  }, [events, searchParams, setSearchParams]);
   const configEvent = configFor
     ? events.find((e) => e.id === configFor)
     : undefined;
@@ -686,7 +694,7 @@ function ActionCell({
         </Button>
       ) : (
         <Button
-          variant="brand"
+          variant="ghost"
           size="xs"
           onClick={onOpenDraw}
           data-testid={`bracket-open-draw-${row.ev.id}`}

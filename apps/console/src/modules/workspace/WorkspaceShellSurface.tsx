@@ -6,8 +6,7 @@
  * and shared across the readiness Overview + the admin tabs that need it.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Button } from '@scheduler/design-system';
+import { Navigate, useLocation } from 'react-router-dom';
 import type { AppTab } from '../../store/uiStore';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
 import type { TournamentSummaryDTO } from '../../api/dto';
@@ -24,7 +23,6 @@ import { SyncBackupsTab } from '../settings/SyncBackupsTab';
 import { ActivityTab } from '../settings/ActivityTab';
 import { GeneralSettingsTab } from '../settings/GeneralSettingsTab';
 import { DangerZoneTab } from '../settings/DangerZoneTab';
-import { TEXT_MUTED_XS, TEXT_TITLE_SM } from '../../lib/utils'
 
 export function WorkspaceShellSurface({
   segment,
@@ -102,14 +100,13 @@ export function WorkspaceShellSurface({
 type PublishPane = 'site' | 'draws-results' | 'displays' | 'links';
 
 const PUBLISH_PANES: readonly { id: PublishPane; label: string; description: string }[] = [
-  { id: 'site', label: 'Public site', description: 'Entrants, draws, and results shown on the public tournament page.' },
-  { id: 'draws-results', label: 'Draws and results', description: 'Review competition output before making it public.' },
-  { id: 'displays', label: 'Venue displays', description: 'Configure the live board used around the venue.' },
-  { id: 'links', label: 'Links and embeds', description: 'Share view-only links and embed destinations safely.' },
+  { id: 'site', label: 'Site', description: 'Choose who can view the tournament and what they see.' },
+  { id: 'displays', label: 'Displays', description: 'Configure and share the venue board.' },
 ];
 
 export function paneFromPath(pathname: string): PublishPane {
   const value = pathname.split('/publish/')[1]?.split('/')[0];
+  if (value === 'draws-results' || value === 'links') return value;
   return PUBLISH_PANES.some((pane) => pane.id === value) ? (value as PublishPane) : 'site';
 }
 
@@ -122,15 +119,17 @@ export function paneFromPath(pathname: string): PublishPane {
 export function PublishProduct({ tid, modules = [] }: { tid: string; modules?: WorkspaceModule[] }) {
   const location = useLocation();
   const pane = paneFromPath(location.pathname);
+  if (pane === 'draws-results' || pane === 'links') {
+    const destination = pane === 'links' ? 'displays' : 'site';
+    return <Navigate replace to={`/tournaments/${encodeURIComponent(tid)}/publish/${destination}`} />;
+  }
   const active = PUBLISH_PANES.find((candidate) => candidate.id === pane)!;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background" data-testid="publish-product">
-      <ActionsBar title="Publish" status={active.description}>
-        <span className={TEXT_MUTED_XS}>Changes take effect for new viewers</span>
-      </ActionsBar>
+      <ActionsBar title={active.label} status={active.description} />
       <div className="min-h-0 flex-1 overflow-auto">
-        <PageBody variant="data" className="space-y-6">
+        <PageBody variant="form" className="space-y-6">
           <PublishPaneContent pane={pane} tid={tid} modules={modules} />
         </PageBody>
       </div>
@@ -140,38 +139,5 @@ export function PublishProduct({ tid, modules = [] }: { tid: string; modules?: W
 
 function PublishPaneContent({ pane, tid, modules }: { pane: PublishPane; tid: string; modules: WorkspaceModule[] }) {
   if (pane === 'site') return <SharingTab tid={tid} scope="site" />;
-  if (pane === 'links') return <SharingTab tid={tid} scope="links" />;
-  if (pane === 'displays') {
-    return <DisplayConfig tid={tid} modules={modules} />;
-  }
-  const bracketEnabled = modules.some((module) => module.id === 'bracket' && module.status === 'enabled');
-  return (
-    <div className="space-y-4" data-testid="publish-draws-results">
-      <div className="rounded border border-border bg-card px-4 py-3">
-        <h2 className={TEXT_TITLE_SM}>Draws and results</h2>
-        <p className="mt-1 text-xs text-muted-foreground">The competition surface owns draw generation and result correction. Use its existing validation and match context before publishing.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {bracketEnabled ? (
-            <Button asChild size="sm" variant="outline">
-              <Link to={`/tournaments/${encodeURIComponent(tid)}/competition/draws`}>Review draw readiness</Link>
-            </Button>
-          ) : null}
-          <Button asChild size="sm" variant="outline">
-            <Link to={`/tournaments/${encodeURIComponent(tid)}/competition/results`}>Review results</Link>
-          </Button>
-        </div>
-      </div>
-      <div className="rounded border border-border bg-card px-4 py-3">
-        <h2 className={TEXT_TITLE_SM}>Publication</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Publication toggles live on Site, the single owner for entrant, draw, and result visibility.
-        </p>
-        <Button asChild size="sm" variant="outline" className="mt-3">
-          <Link to={`/tournaments/${encodeURIComponent(tid)}/publish/site`}>
-            Publication toggles live on Site →
-          </Link>
-        </Button>
-      </div>
-    </div>
-  );
+  return <div className="space-y-6"><DisplayConfig tid={tid} modules={modules} /><SharingTab tid={tid} scope="links" /></div>;
 }

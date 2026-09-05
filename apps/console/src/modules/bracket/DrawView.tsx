@@ -1494,7 +1494,7 @@ function Side({
       onClick={onClick}
       disabled={disabled}
       className={
-        // A posted result recolours this row (winner tint, loser strike-out).
+        // A posted result recolours this row; loser names remain readable.
         // It is an occasional action, so it fades at the 200ms standard band
         // (MOTION.md §4) instead of snapping.
         "w-full flex items-center justify-between gap-1.5 rounded-sm px-2 py-1.5 text-2sm transition-colors duration-standard ease-brand " +
@@ -1508,7 +1508,7 @@ function Side({
               // watches during a live day.
               "bg-status-live-bg border border-status-live-border border-l-[3px] border-l-status-live text-foreground font-semibold"
             : loser
-              ? "bg-muted text-muted-foreground line-through"
+              ? "bg-muted text-muted-foreground"
               : bye
                 ? "bg-muted text-muted-foreground italic"
                 : seeding

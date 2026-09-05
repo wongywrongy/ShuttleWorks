@@ -275,6 +275,107 @@ def test_meet_divisions_read_as_domain_events(client):
     assert [e["code"] for e in sections["events"]["data"]["events"]] == ["MS", "WD"]
 
 
+def test_meet_rules_without_draw_format_does_not_block_readiness(client):
+    """Meet divisions have no bracket draw format, so Rules stays optional."""
+    created = client.post(
+        "/tournaments",
+        json={"name": "Track Meet", "tournamentDate": "2026-09-05", "kind": "meet"},
+    )
+    assert created.status_code == 201
+    tid = created.json()["id"]
+    state = client.get(f"/tournaments/{tid}/state")
+    document = state.json()
+    document.setdefault("config", {})["rankCounts"] = {"MS": 8}
+    assert client.put(
+        f"/tournaments/{tid}/state",
+        headers={"If-Match": state.headers["etag"]},
+        json=document,
+    ).status_code == 200
+
+    payload = client.get(f"/tournaments/{tid}/setup").json()
+    rules = next(section for section in payload["sections"] if section["key"] == "rules")
+    assert rules["status"] == "ready"
+    assert not any(issue["code"] == "SETUP_RULES_FORMAT_MISSING" for issue in rules["issues"])
+    assert payload["blockingIssueCount"] == 0
+
+
+def test_bracket_event_projection_uses_configured_capacity(client):
+    """A draw's capacity is its configured limit, independent of live seeds."""
+    import uuid as _uuid
+    from db.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    tid = _create(client)
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        event = repo.brackets.create_event(
+            _uuid.UUID(tid), "MS", discipline="Men's Singles", format="se",
+            duration_slots=2, bracket_size=32, status="draft",
+        )
+        # A participant count must never replace the configured capacity.
+        assert event.bracket_size == 32
+    finally:
+        session.close()
+
+    payload = client.get(f"/tournaments/{tid}/setup").json()
+    events = next(section for section in payload["sections"] if section["key"] == "events")
+    assert events["data"]["events"] == [{
+        "id": "MS", "code": "MS", "name": "Men's Singles",
+        "discipline": "Men's Singles", "format": "se", "capacity": 32,
+        "status": "draft",
+    }]
+
+
+def test_bracket_without_draw_format_reports_missing_rule(client):
+    import uuid as _uuid
+    from db.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    tid = _create(client)
+    session = SessionLocal()
+    try:
+        LocalRepository(session).brackets.create_event(
+            _uuid.UUID(tid), "MS", discipline="Men's Singles", format="",
+            duration_slots=2, status="draft",
+        )
+    finally:
+        session.close()
+
+    payload = client.get(f"/tournaments/{tid}/setup").json()
+    rules = next(section for section in payload["sections"] if section["key"] == "rules")
+    assert rules["status"] == "blocked"
+    issue = next(issue for issue in rules["issues"] if issue["code"] == "SETUP_RULES_FORMAT_MISSING")
+    assert issue["severity"] == "blocking"
+
+
+def test_explicit_shared_format_is_preserved_when_event_format_differs(client):
+    import uuid as _uuid
+    from db.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    tid = _create(client)
+    setup = client.get(f"/tournaments/{tid}/setup")
+    patched = client.patch(
+        f"/tournaments/{tid}/setup/rules",
+        headers={"If-Match": setup.headers["etag"]},
+        json={"data": {"format": "se"}},
+    )
+    assert patched.status_code == 200
+    session = SessionLocal()
+    try:
+        LocalRepository(session).brackets.create_event(
+            _uuid.UUID(tid), "MS", discipline="Men's Singles", format="rr",
+            duration_slots=2, status="draft",
+        )
+    finally:
+        session.close()
+
+    payload = client.get(f"/tournaments/{tid}/setup").json()
+    rules = next(section for section in payload["sections"] if section["key"] == "rules")
+    assert rules["data"]["format"] == "se"
+
+
 def test_section_payload_rejects_unknown_fields(client):
     tid = _create(client)
     etag = client.get(f"/tournaments/{tid}/setup").headers["etag"]

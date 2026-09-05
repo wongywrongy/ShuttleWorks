@@ -44,11 +44,6 @@ import { TEXT_MUTED_SM, TEXT_MUTED_XS } from '../../lib/utils'
 
 const MODULE_IDS: (keyof CustomState)[] = ['meet', 'bracket', 'display'];
 
-const MODULE_STATES: { value: ModuleState; label: string }[] = [
-  { value: 'enabled', label: 'On' },
-  { value: 'off', label: 'Off' },
-];
-
 /** What each module actually does, in the director's terms — the one thing
  *  the preset cards did carry that a bare module name does not. */
 const MODULE_HINT: Record<keyof CustomState, string> = {
@@ -197,7 +192,11 @@ export function NewWorkspacePage() {
                   key={id}
                   last={i === MODULE_IDS.length - 1}
                   label={<span className="inline-flex items-baseline gap-2">{MODULE_LABELS[id]}<span className="text-xs font-normal text-muted-foreground">{MODULE_HINT[id]}</span></span>}
-                  control={<Seg options={MODULE_STATES} value={modules[id]} onChange={(v) => setModule(id, v)} ariaLabel={MODULE_LABELS[id]} />}
+                  control={id === 'display' ? (
+                    <Seg options={[{ value: 'enabled', label: 'On' }, { value: 'off', label: 'Off' }]} value={modules[id]} onChange={(v) => setModule(id, v)} ariaLabel={MODULE_LABELS[id]} />
+                  ) : (
+                    <span className={TEXT_MUTED_SM}>{modules[id] === 'enabled' ? 'Included by tournament type' : 'Not included'}</span>
+                  )}
                 />
               ))}
             </Section>

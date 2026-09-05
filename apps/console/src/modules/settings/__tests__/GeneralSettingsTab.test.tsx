@@ -8,7 +8,7 @@
  * action is Archive / Unarchive in the danger zone.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { GeneralSettingsTab } from '../GeneralSettingsTab';
 import { apiClient } from '../../../api/client';
 import type { TournamentSummaryDTO } from '../../../api/dto';
@@ -63,12 +63,13 @@ describe('GeneralSettingsTab — lifecycle is display-only', () => {
     expect(screen.getByTestId('general-lifecycle')).toHaveTextContent(/archived/i);
   });
 
-  it('Save sends name and date only — never a lifecycle status', async () => {
+  it('links to canonical Setup editors without a competing save', () => {
     render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    await waitFor(() => expect(vi.mocked(apiClient.updateTournament)).toHaveBeenCalled());
-    const body = vi.mocked(apiClient.updateTournament).mock.calls[0][1];
-    expect(body).toEqual({ name: 'Spring Meet', tournamentDate: '2026-05-15' });
-    expect(body).not.toHaveProperty('status');
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+    expect(screen.queryByLabelText('Workspace name')).toBeNull();
+    expect(screen.getByText('Spring Meet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Edit tournament properties' })).toHaveAttribute('href', '/tournaments/t1/setup/general');
+    expect(screen.getByRole('link', { name: 'Edit dates' })).toHaveAttribute('href', '/tournaments/t1/setup/dates');
+    expect(apiClient.updateTournament).not.toHaveBeenCalled();
   });
 });

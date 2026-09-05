@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { formatPlayerName, formatSideName, sideNameLines, sideSurnameLine } from '../names';
 
-describe('BWF name presentation', () => {
-  it('moves the surname first, uppercased', () => {
-    expect(formatPlayerName('Kei Nakamura')).toBe('NAKAMURA Kei');
-    expect(formatPlayerName('Amir Al Fakhouri')).toBe('FAKHOURI Amir Al');
+describe('canonical name presentation', () => {
+  it('preserves the stored display name verbatim', () => {
+    expect(formatPlayerName('Kei Nakamura')).toBe('Kei Nakamura');
+    expect(formatPlayerName('Amir Al Fakhouri')).toBe('Amir Al Fakhouri');
   });
 
   it('leaves mononyms, TBD and feeder placeholders untouched', () => {
@@ -15,24 +15,24 @@ describe('BWF name presentation', () => {
   });
 
   it('formats every player in a joined side, preserving the joiner', () => {
-    expect(formatSideName('Kei Nakamura / Vincent Tran')).toBe('NAKAMURA Kei / TRAN Vincent');
-    expect(formatSideName('Kei Nakamura & Vincent Tran', ' & ')).toBe('NAKAMURA Kei & TRAN Vincent');
+    expect(formatSideName('Kei Nakamura / Vincent Tran')).toBe('Kei Nakamura / Vincent Tran');
+    expect(formatSideName('Kei Nakamura & Vincent Tran', ' & ')).toBe('Kei Nakamura & Vincent Tran');
   });
 
   it('splits a side into one formatted line per player', () => {
-    expect(sideNameLines('Sakura Ito / Maria Sanchez')).toEqual(['ITO Sakura', 'SANCHEZ Maria']);
-    expect(sideNameLines('Mei Lin')).toEqual(['LIN Mei']);
+    expect(sideNameLines('Sakura Ito / Maria Sanchez')).toEqual(['Sakura Ito', 'Maria Sanchez']);
+    expect(sideNameLines('Mei Lin')).toEqual(['Mei Lin']);
   });
 });
 
-describe('sideSurnameLine — the venue board line (TV-1)', () => {
-  it('reduces a doubles side to one line of surnames', () => {
-    expect(sideSurnameLine('Amir Fakhouri / Bryce Whitmore')).toBe('FAKHOURI / WHITMORE');
+describe('sideSurnameLine — the venue board line', () => {
+  it('reduces a doubles side to one line while preserving names', () => {
+    expect(sideSurnameLine('Amir Fakhouri / Bryce Whitmore')).toBe('Amir Fakhouri / Bryce Whitmore');
   });
 
   it('handles the ampersand joiner the board uses', () => {
     expect(sideSurnameLine('Amir Fakhouri & Bryce Whitmore', ' & ')).toBe(
-      'FAKHOURI / WHITMORE',
+      'Amir Fakhouri / Bryce Whitmore',
     );
   });
 
@@ -42,6 +42,6 @@ describe('sideSurnameLine — the venue board line (TV-1)', () => {
   });
 
   it('keeps a mononym as itself', () => {
-    expect(sideSurnameLine('Ronaldinho')).toBe('RONALDINHO');
+    expect(sideSurnameLine('Ronaldinho')).toBe('Ronaldinho');
   });
 });

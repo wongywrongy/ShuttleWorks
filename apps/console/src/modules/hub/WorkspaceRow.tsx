@@ -17,7 +17,6 @@ import {
   COL_PRIORITY_CLASS_FLEX,
   type OverflowItem,
 } from '../../components/control-plane';
-import { StatusPill } from '../../components/StatusPill';
 import { lifecycleChip } from '../../platform/domain/lifecycle';
 import { attentionReasons, workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
@@ -197,10 +196,8 @@ export function WorkspaceRow({
           {tournament.name || 'Untitled'}
         </span>
         {badge ? (
-          <span data-testid="row-lifecycle" className="shrink-0">
-            <StatusPill tone={badge.tone}>
-              {badge.text}
-            </StatusPill>
+          <span data-testid="row-lifecycle" className="shrink-0 text-xs text-muted-foreground">
+            {badge.text}
           </span>
         ) : null}
       </span>

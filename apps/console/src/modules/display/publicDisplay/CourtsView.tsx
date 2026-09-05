@@ -315,7 +315,9 @@ function CourtCard({
                 next: {getMatchCode(nextMatch)}
                 {nextStartTime ? ` ~${nextStartTime}` : ''}
               </span>
-            ) : null}
+            ) : (
+              <span className="text-2xs text-muted-foreground">No next match assigned</span>
+            )}
           </>
         ) : nextMatch ? (
           <NextUp
@@ -327,8 +329,8 @@ function CourtCard({
             laterSideB={laterMatch ? formatPlayers(laterMatch.sideB, playerNames) : undefined}
             isFullscreen={isFullscreen}
           />
-        ) : (
-          <span className={`${playerSize} text-muted-foreground`}>court free</span>
+            ) : (
+          <span className={`${playerSize} text-muted-foreground`}>Court free</span>
         )}
       </div>
     </div>

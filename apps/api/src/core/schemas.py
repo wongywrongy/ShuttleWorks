@@ -895,12 +895,14 @@ class EntryPagePublicationPatchDTO(StrictModel):
     entrantsPublished: Optional[bool] = None
     drawsPublished: Optional[bool] = None
     resultsPublished: Optional[bool] = None
+    audience: Optional[Literal["private", "unlisted", "public"]] = None
 
 
 class EntryPageDTO(BaseModel):
     """The stored entry page as the operator sees it back."""
     slug: str
     isOpen: bool
+    audience: Literal["private", "unlisted", "public"] = "private"
     introText: Optional[str] = None
     regulationsText: Optional[str] = None
     waiverRequired: bool
@@ -925,6 +927,7 @@ class EntryPageDTO(BaseModel):
         return cls(
             slug=row.slug,
             isOpen=bool(row.is_open),
+            audience=row.audience,
             introText=row.intro_text,
             regulationsText=row.regulations_text,
             waiverRequired=bool(row.waiver_required),

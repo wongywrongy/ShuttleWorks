@@ -20,11 +20,11 @@ describe('ModuleUnavailablePanel', () => {
     expect(onGo).toHaveBeenCalled();
   });
 
-  it('shows Open Settings only when onOpenSettings is provided', () => {
+  it('shows Open Administration · Modules only when onOpenSettings is provided', () => {
     const { rerender } = render(
       <ModuleUnavailablePanel label="Display" primaryLabel="Meet" onGoToPrimary={() => {}} />,
     );
-    expect(screen.queryByRole('button', { name: /Open Settings/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Open Administration · Modules/ })).toBeNull();
     const onSettings = vi.fn();
     rerender(
       <ModuleUnavailablePanel
@@ -34,7 +34,7 @@ describe('ModuleUnavailablePanel', () => {
         onOpenSettings={onSettings}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Open Settings/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Open Administration · Modules/ }));
     expect(onSettings).toHaveBeenCalled();
   });
 

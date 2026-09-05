@@ -35,6 +35,7 @@ from core.limits import (
     Timestamp,
 )
 from repositories import LocalRepository, get_repository
+from db.models import EntryPage
 from workspaces.tournaments import _counts_for, _resolve_tournament, _state_etag
 from workspaces.workspace_signals import RowCounts
 
@@ -340,6 +341,12 @@ def _domain_events(row, repo: LocalRepository) -> Optional[list[dict]]:
                 "code": event.id,
                 "name": (event.config or {}).get("name") or event.discipline or event.id,
                 "discipline": event.discipline,
+                "format": {"single-elimination": "se"}.get(
+                    event.format, event.format
+                ),
+                # Capacity is an event configuration value.  Current seeded
+                # participants are a live count, not a configured limit.
+                "capacity": event.bracket_size,
                 "status": event.status,
             }
             for event in rows
@@ -405,6 +412,24 @@ def _state_for(
         authority = "domain"
     else:
         data = _section_data(row, key)
+    if key == "rules":
+        # A shared format is a projection of actual event owners. Make mixed
+        # and absent values explicit so a blank selector cannot report Ready.
+        formats = {
+            str(event.get("format"))
+            for event in (domain_events or [])
+            if event.get("format")
+        }
+        if data.get("format") == "single-elimination":
+            data["format"] = "se"
+        elif not data.get("format"):
+            # Infer only when the shared Setup value is absent.  An explicit
+            # shared rule is the operator's canonical policy; event rows may
+            # legitimately use a per-event format and must not overwrite it.
+            if len(formats) == 1:
+                data["format"] = next(iter(formats))
+            elif len(formats) > 1:
+                data["format"] = "mixed"
     substantive = [value for field, value in data.items() if field != "section" and value not in (None, "", [], {})]
     started = _competition_started(counts)
     issues: list[SetupIssue] = []
@@ -438,8 +463,22 @@ def _state_for(
             code="SETUP_EVENTS_REQUIRED", severity="blocking",
             message="No events defined — draws and registration can't open until at least one event exists.",
             path="events"))
+    if key == "rules" and row.kind == "bracket" and not data.get("format"):
+        issues.append(SetupIssue(
+            code="SETUP_RULES_FORMAT_MISSING",
+            severity="info" if started else "blocking",
+            message=(
+                "No shared format is recorded; review the event rules before publishing."
+                if started else "Choose a draw format before this tournament can be ready."
+            ),
+            path="format"))
     blocking = [issue for issue in issues if issue.severity == "blocking"]
-    status: SetupStatus = "blocked" if blocking and substantive else "not_started" if not substantive else "ready"
+    status: SetupStatus = (
+        "blocked" if blocking and substantive
+        else "not_started" if not substantive
+        else "in_progress" if key == "rules" and row.kind == "bracket" and not data.get("format")
+        else "ready"
+    )
     setup = row.data.get("setup", {}) if isinstance(row.data, dict) else {}
     stored = setup.get(key, {}) if isinstance(setup, dict) else {}
     updated_at = stored.get("updatedAt") if isinstance(stored, dict) else None
@@ -462,6 +501,14 @@ def _response(row, repo: LocalRepository) -> TournamentSetup:
         _state_for(row, key, counts, domain_events, domain_venue)
         for key in _KEYS
     ]
+    # Audience is owned by EntryPage/publication, but keep the legacy Setup
+    # read useful for old clients and deep links.
+    page = repo.execute_query(lambda session, tid: session.get(EntryPage, tid), row.id)
+    if page is not None:
+        for section in sections:
+            if section.key == "public-info":
+                section.data["visibility"] = page.audience
+                break
     blockers = sum(1 for section in sections for issue in section.issues if issue.severity == "blocking")
     started = any(section.status != "not_started" for section in sections)
     required_ready = all(section.status == "ready" for section in sections if section.key in _REQUIRED)
@@ -526,6 +573,12 @@ def patch_setup_section(
     repo: LocalRepository = Depends(get_repository),
 ):
     row = _resolve_tournament(tournament_id, repo)
+    if section == "public-info" and "visibility" in body.data:
+        raise http_error(
+            409,
+            ErrorCode.SETUP_SECTION_DOMAIN_OWNED,
+            "Public audience is managed from Publish · Site; this Setup value is read-only.",
+        )
     domain_owner = (
         "Competition" if section == "events" and _domain_events(row, repo) is not None
         else "Operations · Plan" if section == "venue" and _domain_venue(row) is not None

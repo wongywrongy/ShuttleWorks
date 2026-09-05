@@ -9,17 +9,11 @@
 /** Slot placeholders that must never be reformatted as if they were names. */
 const PLACEHOLDER = /^(winner|loser) of /i;
 
-/** "Kei Nakamura" → "NAKAMURA Kei". Single tokens, TBD and feeder
- *  placeholders pass through untouched.
- *  ponytail: last-token-is-surname heuristic — particles ("de la Cruz")
- *  come out mid-name; a real surname field on the roster is the upgrade. */
+/** Preserve the canonical operator-entered display name. Names are not safely
+ * parseable from whitespace, so presentation must never silently reorder them. */
 export function formatPlayerName(name: string): string {
   const t = name.trim();
-  if (!t || t === 'TBD' || PLACEHOLDER.test(t)) return t;
-  const parts = t.split(/\s+/);
-  if (parts.length < 2) return t;
-  const surname = parts[parts.length - 1].toLocaleUpperCase();
-  return `${surname} ${parts.slice(0, -1).join(' ')}`;
+  return t;
 }
 
 /** Format every player inside a pre-joined side string, preserving the
@@ -35,10 +29,11 @@ export function sideNameLines(side: string, joiner: ' / ' | ' & ' = ' / '): stri
 }
 
 /**
- * A side as ONE line of surnames — "FAKHOURI / WHITMORE" (SP-CONSOLE-2 TV-1).
+ * A side as ONE line of canonical names for a distance-readable board.
  *
  * For the venue board only. A doubles card printing every player's full
- * "SURNAME Given" spends four lines on two sides, which halves the type size
+ * A doubles card printing every partner on separate lines spends four lines
+ * on two sides, which halves the type size
  * the 1-inch-per-10-feet rule says the hall needs; at that size nobody reads
  * the given names anyway. Given names stay everywhere an operator works — the
  * lists, the panes, the draw — because the desk is at desk distance and two
@@ -53,8 +48,7 @@ export function sideSurnameLine(side: string, joiner: ' / ' | ' & ' = ' / '): st
     .map((raw) => {
       const t = raw.trim();
       if (!t || t === 'TBD' || PLACEHOLDER.test(t)) return t;
-      const parts = t.split(/\s+/);
-      return parts[parts.length - 1].toLocaleUpperCase();
+      return t;
     })
     .filter(Boolean)
     .join(' / ');

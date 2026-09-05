@@ -91,7 +91,7 @@ def world(client, turnstile, mailbox):
     tid = client.post("/tournaments", json={"name": "Pairs Open"}, headers=CSRF).json()["id"]
     session = SessionLocal()
     try:
-        session.add(EntryPage(tournament_id=uuid.UUID(tid), slug="pairs-open", is_open=True))
+        session.add(EntryPage(tournament_id=uuid.UUID(tid), slug="pairs-open", is_open=True, audience="public"))
         event = EntryEvent(
             tournament_id=uuid.UUID(tid),
             code="XD",

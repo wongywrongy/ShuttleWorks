@@ -306,21 +306,11 @@ export function buildWorkflowNavigation(
   );
 
   const publishing: WsNavItem[] = [item("publish/site", "ws-sharing", "Site")];
-  if (enabled.has("bracket")) {
-    publishing.push(
-      item(
-        "publish/draws-results",
-        "bracket-draws",
-        "Draws & results",
-      ),
-    );
-  }
   if (enabled.has("display")) {
     publishing.push(
       item("publish/displays", "display-config", "Displays"),
     );
   }
-  publishing.push(item("publish/links", "ws-sharing", "Links and embeds"));
 
   return {
     overview: item("overview", "overview", "Overview"),

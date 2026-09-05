@@ -121,6 +121,8 @@ function BracketRosterTabCore({
   const setDenseState = denseActions.setState;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
+  const [eventFilter, setEventFilter] = useState('all');
+  const [issueFilter, setIssueFilter] = useState('all');
   const [draft, setDraft] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     typeof window === 'undefined'
@@ -183,10 +185,17 @@ function BracketRosterTabCore({
     },
     { id: 'issue', label: 'Issues', accessor: (row) => row.issue, className: 'w-28', mobile: true, render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null },
   ], [badgesById]);
-  const filteredCount = useMemo(() => {
+  const eventOptions = useMemo(() => [...new Set(rosterRows.flatMap((row) => row.eventLabel.split(' · ').filter(Boolean)))].sort(), [rosterRows]);
+  const filteredRows = useMemo(() => {
     const query = denseState.search.trim().toLocaleLowerCase();
-    return query ? rosterRows.filter((row) => `${row.player.name} ${row.eventLabel} ${row.issue}`.toLocaleLowerCase().includes(query)).length : rosterRows.length;
-  }, [denseState.search, rosterRows]);
+    return rosterRows.filter((row) => {
+      const matchesQuery = !query || `${row.player.name} ${row.eventLabel} ${row.issue}`.toLocaleLowerCase().includes(query);
+      const matchesEvent = eventFilter === 'all' || row.eventLabel.split(' · ').includes(eventFilter);
+      const matchesIssue = issueFilter === 'all' || (issueFilter === 'issues' ? Boolean(row.issue) : !row.issue);
+      return matchesQuery && matchesEvent && matchesIssue;
+    });
+  }, [denseState.search, eventFilter, issueFilter, rosterRows]);
+  const filteredCount = filteredRows.length;
 
   const commitAdd = () => {
     const name = draft.trim();
@@ -275,6 +284,19 @@ function BracketRosterTabCore({
             onStateChange={setDenseState}
             selectedCount={selectedIds.length}
           >
+            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              Event
+              <select aria-label="Filter by event" value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} className="h-8 rounded border border-border-control bg-card px-2 text-xs text-foreground">
+                <option value="all">All events</option>
+                {eventOptions.map((event) => <option key={event} value={event}>{event}</option>)}
+              </select>
+            </label>
+            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              Issues
+              <select aria-label="Filter by issues" value={issueFilter} onChange={(event) => setIssueFilter(event.target.value)} className="h-8 rounded border border-border-control bg-card px-2 text-xs text-foreground">
+                <option value="all">All</option><option value="issues">Needs attention</option><option value="clear">No issues</option>
+              </select>
+            </label>
             <DenseDataColumnVisibility
               columns={rosterColumns}
               state={denseState}
@@ -298,7 +320,7 @@ function BracketRosterTabCore({
           </DenseDataToolbar>
           <DenseDataTable
             columns={rosterColumns}
-            rows={rosterRows}
+            rows={filteredRows}
             state={denseState}
             onStateChange={setDenseState}
             rowId={(row) => row.player.id}

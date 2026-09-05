@@ -4506,6 +4506,11 @@ export interface components {
             kind: string;
             /** Size */
             size: number;
+            /**
+             * Drawparticipantcount
+             * @default 0
+             */
+            drawParticipantCount: number;
             /** Hasconsolation */
             hasConsolation: boolean;
             matchCoverage: components["schemas"]["MatchCoverageDTO"];
@@ -4955,6 +4960,12 @@ export interface components {
             slug: string;
             /** Isopen */
             isOpen: boolean;
+            /**
+             * Audience
+             * @default private
+             * @enum {string}
+             */
+            audience: "private" | "unlisted" | "public";
             /** Introtext */
             introText?: string | null;
             /** Regulationstext */
@@ -5043,6 +5054,8 @@ export interface components {
             drawsPublished?: boolean | null;
             /** Resultspublished */
             resultsPublished?: boolean | null;
+            /** Audience */
+            audience?: ("private" | "unlisted" | "public") | null;
         };
         /**
          * EntryPageUpsertDTO
@@ -5196,6 +5209,11 @@ export interface components {
             ageBracketed: boolean;
             /** Entrycount */
             entryCount: number;
+            /**
+             * Registrationcount
+             * @default 0
+             */
+            registrationCount: number;
         };
         /** EventIn */
         EventIn: {
@@ -6306,8 +6324,17 @@ export interface components {
         PartnerAcceptedDTO: {
             /** Entryid */
             entryId: string;
+            /** Tournamentname */
+            tournamentName?: string | null;
             /** Eventcode */
             eventCode: string;
+            /**
+             * Discipline
+             * @default
+             */
+            discipline: string;
+            /** Entrantname */
+            entrantName: string;
             /** State */
             state: string;
         };

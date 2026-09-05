@@ -161,6 +161,7 @@ function nodeToMatch(
     courtLabel: node.courtLabel,
     sourceUrl: node.sourceUrl,
     sourceRef: node.sourceRef,
+    showAssignmentPlaceholders: true,
   };
 }
 
@@ -539,7 +540,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
               />
               <button
                 type="submit"
-                className="h-9 rounded-sm border border-action-primary bg-surface-raised px-3 text-sm font-semibold text-foreground hover:bg-surface-sunken"
+                className="h-10 rounded-sm border border-action-primary bg-surface-raised px-3 text-sm font-semibold text-foreground hover:bg-surface-sunken"
               >
                 Find
               </button>
@@ -631,9 +632,9 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                   <section
                     data-testid="public-bracket-canvas"
                     aria-label={`${eventDisciplineLabel(draw.discipline)} bracket`}
-                    className="border-y border-rule-soft bg-surface-raised"
+                    className="min-w-0 border-y border-rule-soft bg-surface-raised"
                   >
-                    <div className="overflow-x-auto px-4 pb-4 pt-2 md:px-6">
+                    <div className="overflow-x-auto px-4 pb-2 pt-2 md:px-6">
                       <div
                         className="flex w-max min-w-full items-stretch"
                         data-bracket-grid

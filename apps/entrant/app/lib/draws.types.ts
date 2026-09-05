@@ -23,6 +23,8 @@ export interface DrawCardDTO {
   discipline: string;
   kind: DrawKind;
   size: number;
+  /** Distinct participants placed into the published draw. */
+  drawParticipantCount?: number;
   hasConsolation: boolean;
   matchCoverage: MatchCoverageDTO;
   recordScope: string;

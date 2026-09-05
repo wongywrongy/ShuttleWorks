@@ -152,6 +152,19 @@ function tabHref(slug: string, tab: Tab): string {
   return tab === 'overview' ? base : `${base}?tab=${tab}`;
 }
 
+function tournamentDateLine(
+  date: string | null,
+  endDate: string | null,
+  timeZone: string | null,
+): string {
+  const start = date ? formatDateLong(date) : '';
+  const end = endDate ? formatDateLong(endDate) : '';
+  const range = start && end && start !== end ? `${start} – ${end}` : start || end;
+  return [range, timeZone ? `Tournament time · ${timeZone}` : '']
+    .filter(Boolean)
+    .join(' · ');
+}
+
 // ---- Overview --------------------------------------------------------------
 
 function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
@@ -292,8 +305,8 @@ function DrawsPanel({
       <div className={LIST_CARD}>
         <div aria-hidden className={`hidden gap-4 px-4 pb-2 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:grid ${columns}`}>
           <span>Event</span>
-          <span>Entered</span>
-          <span>Entries</span>
+          <span>Registrations / draw participants</span>
+          <span>State</span>
           <span />
         </div>
         <ul className="divide-y divide-rule-soft border-t border-rule-soft">
@@ -353,7 +366,7 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
               ? { label: 'View tournament information', href: `/e/${encodeURIComponent(slug)}` }
               : null;
   const metaLine = [
-    formatDateLong(page.tournament.date),
+    tournamentDateLine(page.tournament.date, page.tournament.endDate, tournamentView.timeZone),
     [page.venue?.name, page.venue?.address].filter(Boolean).join(', '),
   ]
     .filter((part) => part !== '')

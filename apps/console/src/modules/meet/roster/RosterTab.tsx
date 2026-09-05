@@ -83,6 +83,8 @@ export function RosterTab() {
   const [selectedRank, setSelectedRank] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [eventFilter, setEventFilter] = useState('all');
+  const [issueFilter, setIssueFilter] = useState('all');
   // Name of the player currently being dragged — drives the DragOverlay
   // preview so a chip can leave the grid's overflow-auto without clipping.
   const [activeDragName, setActiveDragName] = useState<string | null>(null);
@@ -221,9 +223,24 @@ export function RosterTab() {
   );
   const filteredPlayers = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return schoolPlayers;
-    return schoolPlayers.filter((p) => p.name.toLowerCase().includes(q));
-  }, [schoolPlayers, query]);
+    return schoolPlayers.filter((p) => {
+      if (q && !p.name.toLowerCase().includes(q)) return false;
+      if (eventFilter !== 'all' && !(p.ranks ?? []).some((rank) =>
+        decomposeMeetEventRank(rank, Object.keys(config?.rankCounts ?? {})).event_code === eventFilter,
+      )) return false;
+      if (issueFilter === 'issues' && (p.ranks ?? []).length > 0) return false;
+      if (issueFilter === 'clear' && (p.ranks ?? []).length === 0) return false;
+      return true;
+    });
+  }, [schoolPlayers, query, eventFilter, issueFilter, config?.rankCounts]);
+  const eventOptions = useMemo(() => {
+    const codes = new Set<string>();
+    for (const rank of Object.keys(config?.rankCounts ?? {})) {
+      const code = decomposeMeetEventRank(rank, Object.keys(config?.rankCounts ?? {})).event_code;
+      if (code) codes.add(code);
+    }
+    return [...codes].sort();
+  }, [config?.rankCounts]);
   const selectedPlayer =
     players.find((p) => p.id === selectedPlayerId) ?? null;
 
@@ -380,6 +397,23 @@ export function RosterTab() {
                     // two different player counts at once (RST-3).
                     placeholder="Filter players…"
                   />
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <label className="text-2xs text-muted-foreground">
+                      Event
+                      <select className="mt-1 h-7 w-full rounded-sm border border-border bg-card px-1.5 text-xs text-foreground" value={eventFilter} onChange={(e) => setEventFilter(e.target.value)} aria-label="Filter roster by event">
+                        <option value="all">All events</option>
+                        {eventOptions.map((code) => <option key={code} value={code}>{code}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-2xs text-muted-foreground">
+                      Issues
+                      <select className="mt-1 h-7 w-full rounded-sm border border-border bg-card px-1.5 text-xs text-foreground" value={issueFilter} onChange={(e) => setIssueFilter(e.target.value)} aria-label="Filter roster by issues">
+                        <option value="all">All</option>
+                        <option value="issues">Needs attention</option>
+                        <option value="clear">No issues</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
               )}
               {/* Column header for the list. The trailing number per row had

@@ -135,6 +135,8 @@ def _add_record(session, row):
 
 
 def _patch_publication(session, row, body) -> None:
+    if body.audience is not None:
+        row.audience = body.audience
     if body.entrantsPublished is not None:
         row.entrants_published = body.entrantsPublished
     if body.drawsPublished is not None:

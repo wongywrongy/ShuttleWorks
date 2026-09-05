@@ -37,7 +37,7 @@ export type PageBodyVariant = 'data' | 'form' | 'prose';
  *  still comes from this table, so there is one definition either way. */
 export const PAGE_BODY_WIDTH: Record<PageBodyVariant, string> = {
   data: 'w-full',
-  form: 'mx-auto w-full max-w-[900px]',
+  form: 'mx-auto w-full max-w-[52rem]',
   prose: 'max-w-[68ch]',
 };
 

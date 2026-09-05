@@ -396,7 +396,7 @@ describe('GET /e/{slug}/receipt/{submissionId}', () => {
     vi.stubGlobal('fetch', stubUpstream());
 
     const html = (await fetchEntrant(RECEIPT).then((r) => r.text()));
-    const h1 = html.match(/<h1[^>]*>Entry received<\/h1>/)?.[0] ?? '';
+    const h1 = html.match(/<h1[^>]*>Entry receipt<\/h1>/)?.[0] ?? '';
 
     expect(h1).toContain('motion-enter');
 

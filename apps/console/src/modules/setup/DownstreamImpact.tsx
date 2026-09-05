@@ -7,8 +7,8 @@
  * per-page prose, so two sections can't describe the same consumer in two
  * vocabularies.
  */
-export function DownstreamImpact({ targets }: { targets: string[] }) {
-  if (!targets.length) return null;
+export function DownstreamImpact({ targets, readOnly = false }: { targets: string[]; readOnly?: boolean }) {
+  if (readOnly || !targets.length) return null;
   return (
     <div className="border-t border-border pt-4">
       <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">

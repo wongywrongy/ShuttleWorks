@@ -124,6 +124,7 @@ def _seed(tmp_path, monkeypatch, *, published: bool):
             tournament_id=tournament.id,
             slug="schedule-open",
             is_open=True,
+            audience="public",
             draws_published=published,
             results_published=published,
         )

@@ -32,6 +32,12 @@ export function apply(scope, query) {
   }
   const empty = scope.querySelector('[data-no-matches]');
   if (empty) empty.hidden = visible > 0;
+  const count = scope.querySelector('[data-search-count]');
+  if (count) {
+    count.textContent = query.trim()
+      ? `${visible} ${visible === 1 ? 'result' : 'results'}`
+      : `${visible} ${visible === 1 ? 'entrant' : 'entrants'}`;
+  }
   return visible;
 }
 
@@ -42,11 +48,19 @@ function boot(root) {
   input.placeholder = 'Filter by name or club';
   input.setAttribute('aria-label', 'Filter entrants by name or club');
   input.className =
-    'h-9 w-full min-w-0 rounded-sm border border-rule-control bg-surface-raised px-3 text-sm text-foreground';
+    'h-10 w-full min-w-0 rounded-sm border border-rule-control bg-surface-raised px-3 text-sm text-foreground';
   input.addEventListener('input', () => {
     apply(doc, input.value);
   });
   root.appendChild(input);
+  const scope = root.closest('section') ?? doc;
+  const rows = scope.querySelectorAll('[data-entrant]').length;
+  const count = doc.createElement('p');
+  count.setAttribute('data-search-count', '');
+  count.setAttribute('aria-live', 'polite');
+  count.className = 'mt-1 text-xs text-muted-foreground';
+  count.textContent = `${rows} ${rows === 1 ? 'entrant' : 'entrants'}`;
+  root.appendChild(count);
 }
 
 if (typeof document !== 'undefined') {

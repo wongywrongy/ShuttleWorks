@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Button } from '@scheduler/design-system';
-import { FieldRow, Row, Section } from '../../platform/engine-config/SettingsControls';
+import { PropertyPanel } from '../../components/control-plane/PropertyPanel';
+import { Row, Section } from '../../platform/engine-config/SettingsControls';
 import { StatusPill } from '../../components/StatusPill';
 import { lifecycleBadge } from '../../platform/domain/lifecycle';
 import { resolvePhase, PHASE_LABEL } from '../../platform/domain/overviewPhase';
-import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { TEXT_MUTED_SM } from '../../lib/utils'
 
-/** General workspace settings: name and date. Persists via `updateTournament`.
+/** Workspace administration. Tournament properties are edited in Setup.
  *
  *  Lifecycle is DISPLAY-ONLY here (SP-CONSOLE-REFINE A6.1): the app derives
  *  it from match state (`lifecycleBadge`), and the stored-status dropdown this
@@ -18,36 +16,11 @@ import { TEXT_MUTED_SM } from '../../lib/utils'
 export function GeneralSettingsTab({
   tid,
   summary,
-  onSaved,
 }: {
   tid: string;
   summary: TournamentSummaryDTO | null;
   onSaved: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [date, setDate] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (summary) {
-      setName(summary.name ?? '');
-      setDate(summary.tournamentDate ?? '');
-    }
-  }, [summary]);
-
-  async function save() {
-    setSaving(true);
-    try {
-      await apiClient.updateTournament(tid, {
-        name: name.trim() || null,
-        tournamentDate: date || null,
-      });
-      onSaved();
-    } finally {
-      setSaving(false);
-    }
-  }
-
   // The SAME derivation the shell header and the Hub run — imported, not
   // re-implemented, so a fourth precedence order can't creep in.
   const derived = summary
@@ -58,7 +31,7 @@ export function GeneralSettingsTab({
     : null;
 
   return (
-    <div>
+    <PropertyPanel>
       {/* H1 echoes the nav label verbatim (G1); the workspace name already
           lives in the header chrome, so it is not repeated here.
 
@@ -68,29 +41,19 @@ export function GeneralSettingsTab({
           section rather than the page (ACC-1). This is also where every other
           primary action on every other surface lives. */}
       <div className="flex items-center justify-between gap-4 pb-4">
-        <h2 className="text-base font-semibold tracking-tight text-foreground">
+        <h2 className="text-page font-semibold tracking-tight text-foreground">
           Workspace settings
         </h2>
-        <Button size="sm" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save changes'}
-        </Button>
       </div>
       <Section title="Workspace details" defaultOpen>
-        {/* Free text takes a FieldRow; a fixed-option control takes a Row.
-            This pane used to hand-roll both as stacked <label> blocks. */}
-        <FieldRow
-          label="Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          aria-label="Workspace name"
-        />
-        <FieldRow
-          label="Date"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          aria-label="Workspace date"
-        />
+        <dl className="space-y-4 py-4 text-sm">
+          <div><dt className="text-muted-foreground">Tournament name</dt><dd className="mt-1">{summary?.name ?? 'Loading…'}</dd></div>
+          <div><dt className="text-muted-foreground">Tournament date</dt><dd className="mt-1">{summary?.tournamentDate ?? 'Not set'}</dd></div>
+        </dl>
+        <div className="flex gap-4 pb-4 text-sm">
+          <a className="text-accent underline" href={`/tournaments/${encodeURIComponent(tid)}/setup/general`}>Edit tournament properties</a>
+          <a className="text-accent underline" href={`/tournaments/${encodeURIComponent(tid)}/setup/dates`}>Edit dates</a>
+        </div>
         <Row
           label="Lifecycle"
           last
@@ -112,8 +75,8 @@ export function GeneralSettingsTab({
         />
       </Section>
       <p className="pt-2 text-xs text-muted-foreground">
-        Lifecycle is derived from match state. To retire the workspace, use Archive below.
+        To retire the workspace, use Archive below.
       </p>
-    </div>
+    </PropertyPanel>
   );
 }

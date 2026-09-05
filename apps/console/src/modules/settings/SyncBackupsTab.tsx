@@ -275,6 +275,8 @@ export function SyncBackupsTab() {
                         <span className="text-muted-foreground"> · {fmtBytes(b.sizeBytes)}</span>
                       </div>
                       <div className="mt-1 text-2xs text-muted-foreground">
+                        <span className="font-mono">{b.filename}</span>
+                        <span aria-hidden="true"> · </span>
                         <span data-testid={`backup-eligibility-${b.filename}`}>Eligible to restore</span>
                         <span aria-hidden="true"> · </span>
                         {b.origin === 'manual' ? 'Retained until deleted' : 'Automatic retention'}

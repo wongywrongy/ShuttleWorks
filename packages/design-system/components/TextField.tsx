@@ -80,7 +80,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       <div className={cn('block', className)}>
         <label
           htmlFor={fieldId}
-          className="mb-1 block text-xs font-medium text-foreground"
+          className="mb-2 block text-xs font-medium text-foreground"
         >
           {label}
         </label>

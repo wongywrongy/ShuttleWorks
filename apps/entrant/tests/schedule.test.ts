@@ -12,7 +12,7 @@ import { createServer } from "vite";
 import { createRequestHandler, type ServerBuild } from "react-router";
 
 import entryPageFixture from "./helpers/entryPage.fixture.json";
-import { loader } from "../app/routes/schedule";
+import { formatScheduleUpdated, loader } from "../app/routes/schedule";
 
 const PAGE = {
   ...entryPageFixture,
@@ -63,6 +63,17 @@ const MATCHES = {
   updatedAt: "2026-09-12T10:35:00+00:00",
   revision: "abc123",
 };
+
+describe("schedule freshness", () => {
+  it("formats the update instant in tournament time", () => {
+    expect(formatScheduleUpdated("2026-09-12T10:35:00+00:00", "Asia/Seoul"))
+      .toContain("Sep 12, 2026, 7:35 PM");
+  });
+
+  it("preserves an unparseable server value instead of inventing a date", () => {
+    expect(formatScheduleUpdated("unknown", "Asia/Seoul")).toBe("unknown");
+  });
+});
 
 const vite = await createServer({
   server: { middlewareMode: true },

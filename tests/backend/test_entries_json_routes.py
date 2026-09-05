@@ -76,6 +76,7 @@ def page(client):
                 tournament_id=uuid.UUID(tid),
                 slug="spring-open",
                 is_open=True,
+                audience="public",
                 intro_text="All welcome.",
                 regulations_text="Play fair. Bring your own shuttles.",
                 waiver_required=True,
@@ -645,7 +646,7 @@ def closed_page(client):
     session = SessionLocal()
     try:
         session.add(
-            EntryPage(tournament_id=uuid.UUID(tid), slug="not-yet-open", is_open=False)
+            EntryPage(tournament_id=uuid.UUID(tid), slug="not-yet-open", is_open=False, audience="public")
         )
         session.commit()
     finally:
@@ -671,7 +672,7 @@ def second_open_page(client):
     try:
         session.get(Tournament, uuid.UUID(tid)).tournament_date = "2026-01-05"
         session.add(
-            EntryPage(tournament_id=uuid.UUID(tid), slug="aaa-open", is_open=True)
+            EntryPage(tournament_id=uuid.UUID(tid), slug="aaa-open", is_open=True, audience="public")
         )
         session.commit()
     finally:

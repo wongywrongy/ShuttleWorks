@@ -121,7 +121,7 @@ describe('the tab bar and its panels (Z6)', () => {
     const draws = await render(PAGE, '/e/spring-open?tab=draws');
 
     // The Draws panel is on the page…
-    expect(draws).toContain('7 entered');
+    expect(draws).toContain('7 confirmed registrations');
     // …and the Overview panel is not.
     expect(draws).not.toContain('Key dates');
     expect(draws).not.toContain('Bank transfer on the day.');
@@ -131,7 +131,7 @@ describe('the tab bar and its panels (Z6)', () => {
     const html = await render(PAGE, '/e/spring-open?tab=events');
     const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
     expect(nav).toMatch(/aria-current="page"[^>]*>Draws<\/a>/);
-    expect(html).toContain('7 entered');
+    expect(html).toContain('7 confirmed registrations');
   });
 
   it('maps a legacy Entrants bookmark to the unified Players panel', async () => {
@@ -269,7 +269,7 @@ describe('the panels', () => {
   it('Draws: one row per event with counts ("N entered", G2 declined) and an Entrants button', async () => {
     const html = await render(PAGE, '/e/spring-open?tab=draws');
 
-    expect(html).toContain('7 entered');
+    expect(html).toContain('7 confirmed registrations');
     expect(html).not.toMatch(/7 of \d/);
     // The by-event anchors died with the by-event grouping (SP-P7 §3.2):
     // the Entrants button links to the alphabetical tab itself.

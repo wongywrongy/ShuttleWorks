@@ -271,6 +271,8 @@ class EventDTO(BaseModel):
     # write agree about which events need a year.
     ageBracketed: bool
     entryCount: int
+    # Registered entry rows, explicitly distinct from draw participants.
+    registrationCount: int = 0
 
 
 class EntrantRowDTO(BaseModel):
@@ -439,11 +441,12 @@ def entry_page_projection(
                 str(bool(page.entrants_published)),
                 str(bool(page.draws_published)),
                 str(bool(page.results_published)),
+                str(page.audience),
             )
         ).encode("utf-8")
     ).hexdigest()[:24]
     response.headers["ETag"] = f'"{page_revision}"'
-    response.headers["Cache-Control"] = "public, max-age=30"
+    response.headers["Cache-Control"] = "public, no-cache"
     if request.headers.get("If-None-Match") in {page_revision, f'"{page_revision}"'}:
         return Response(status_code=304, headers={"ETag": f'"{page_revision}"'})  # type: ignore[return-value]
     entrant, token = _optional_entrant(request, repo)
@@ -553,6 +556,7 @@ def entry_page_projection(
                 isOpen=_event_is_open(ev, now),
                 ageBracketed=_is_age_bracketed(ev),
                 entryCount=counts.get(ev.id, 0),
+                registrationCount=counts.get(ev.id, 0),
             )
             for ev in events
         ],
@@ -683,7 +687,7 @@ def entry_page_list(
         select(EntryPage, Tournament, Org)
         .join(Tournament, Tournament.id == EntryPage.tournament_id)
         .outerjoin(Org, Org.id == Tournament.org_id)
-        .where(EntryPage.is_open.is_(True)),
+        .where(EntryPage.is_open.is_(True), EntryPage.audience == "public"),
     )
     tids = [t.id for _, t, _ in listed]
     events_by_tid: Dict[uuid.UUID, list] = {}
@@ -727,7 +731,7 @@ def entry_page_list(
     rows.sort(key=lambda r: (r.date is None, r.date or "", r.slug))
 
     live = [r for r in rows if r.status == "in_progress_live"]
-    response.headers["Cache-Control"] = "public, max-age=30"
+    response.headers["Cache-Control"] = "public, no-cache"
     return SeasonListDTO(
         tournaments=rows,
         counts=SeasonCountsDTO(

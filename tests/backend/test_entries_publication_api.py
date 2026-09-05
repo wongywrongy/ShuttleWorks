@@ -175,3 +175,58 @@ def test_regulations_timestamp_moves_with_the_version_and_only_then(
     resaved = _put_page(client, workspace, "Play fair. Bring shuttles.")
     assert resaved["regulationsVersion"] == edited["regulationsVersion"]
     assert resaved["regulationsUpdatedAt"] == edited["regulationsUpdatedAt"]
+
+
+@pytest.mark.parametrize("audience,accessible,discoverable", [
+    ("private", False, False), ("unlisted", True, False), ("public", True, True),
+])
+def test_audience_controls_direct_reads_and_discovery(client, workspace, audience, accessible, discoverable):
+    saved = client.patch(
+        f"/tournaments/{workspace}/entry-page/publication",
+        json={"audience": audience, "entrantsPublished": True, "drawsPublished": True, "resultsPublished": True},
+        headers=CSRF,
+    )
+    assert saved.status_code == 200
+    assert saved.json()["audience"] == audience
+    for url in ("/e/api/page/autumn-open", "/e/api/page/autumn-open/draws", "/e/api/page/autumn-open/players", "/e/api/page/autumn-open/matches"):
+        response = client.get(url)
+        assert response.status_code == (200 if accessible else 404), (url, response.text)
+        if accessible:
+            assert "no-cache" in response.headers["cache-control"]
+    listing = client.get("/e/api/pages")
+    assert listing.status_code == 200
+    assert any(row["slug"] == "autumn-open" for row in listing.json()["tournaments"]) is discoverable
+
+
+def test_audience_revocation_is_checked_before_conditional_response(client, workspace):
+    path = f"/tournaments/{workspace}/entry-page/publication"
+    assert client.patch(path, json={"audience": "public"}, headers=CSRF).status_code == 200
+    original = client.get("/e/api/page/autumn-open")
+    assert original.status_code == 200
+    assert "no-cache" in original.headers["cache-control"]
+    etag = original.headers["etag"]
+    assert client.get("/e/api/page/autumn-open", headers={"If-None-Match": etag}).status_code == 304
+    assert client.patch(path, json={"audience": "private"}, headers=CSRF).status_code == 200
+    assert client.get("/e/api/page/autumn-open", headers={"If-None-Match": etag}).status_code == 404
+
+
+def test_content_save_preserves_audience_and_setup_cannot_publish(client, workspace):
+    assert client.get(f"/tournaments/{workspace}/entry-page").json()["audience"] == "private"
+    response = client.patch(f"/tournaments/{workspace}/entry-page/publication", json={"audience": "unlisted"}, headers=CSRF)
+    assert response.status_code == 200
+    updated = _put_page(client, workspace, "New regulations")
+    assert updated["audience"] == "unlisted"
+    setup = client.get(f"/tournaments/{workspace}/setup")
+    public_info = next(section for section in setup.json()["sections"] if section["key"] == "public-info")
+    assert public_info["data"]["visibility"] == "unlisted"
+    refused = client.patch(f"/tournaments/{workspace}/setup/public-info", json={"data": {"visibility": "public"}}, headers={**CSRF, "If-Match": setup.headers["etag"]})
+    assert refused.status_code == 409
+    assert refused.json()["detail"]["code"] == "SETUP_SECTION_DOMAIN_OWNED"
+    assert client.get(f"/tournaments/{workspace}/entry-page").json()["audience"] == "unlisted"
+
+
+def test_invalid_audience_is_rejected_and_content_flags_stay_independent(client, workspace):
+    path = f"/tournaments/{workspace}/entry-page/publication"
+    assert client.patch(path, json={"audience": "everyone"}, headers=CSRF).status_code == 422
+    saved = client.patch(path, json={"audience": "public"}, headers=CSRF).json()
+    assert all(saved[flag] is False for flag in FLAG_FIELDS)

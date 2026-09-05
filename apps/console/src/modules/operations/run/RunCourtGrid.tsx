@@ -148,7 +148,7 @@ export function RunCourtGrid({
   return (
     <div
       data-testid="run-court-grid"
-      className="grid shrink-0 gap-2.5 border-b border-border p-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]"
+      className="grid shrink-0 grid-cols-1 gap-2.5 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-3"
     >
       {lanes.map((lane) => {
         const now = lane.now;

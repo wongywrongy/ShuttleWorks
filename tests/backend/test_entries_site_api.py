@@ -69,6 +69,7 @@ def _make_workspace(client, name="Draws Open", slug="draws-open", kind="meet", *
                 tournament_id=uuid.UUID(tid),
                 slug=slug,
                 is_open=True,
+                audience="public",
                 **flags,
             )
         )
@@ -298,6 +299,7 @@ def test_the_draws_index_lists_the_draw_with_exact_card_keys(client, bracket_pag
         "roundCount",
         "champions",
         "finalists",
+        "drawParticipantCount",
         "remainingMatchCount",
         "historical",
         "sourceUrl",

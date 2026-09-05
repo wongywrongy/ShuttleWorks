@@ -1063,6 +1063,7 @@ export interface DisplayTokenDTO {
 /** The stored entry page as the operator sees it (SP-P7 adds the
  *  publication gates; the Sharing tab's card reads and flips them). */
 export interface EntryPageDTO {
+  audience: 'private' | 'unlisted' | 'public';
   slug: string;
   isOpen: boolean;
   introText: string | null;
@@ -1085,6 +1086,7 @@ export interface EntryPageDTO {
 /** PATCH body for the publication card — patch semantics: only the flags
  *  the operator actually toggled travel. */
 export interface EntryPagePublicationPatchDTO {
+  audience?: 'private' | 'unlisted' | 'public';
   entrantsPublished?: boolean;
   drawsPublished?: boolean;
   resultsPublished?: boolean;

@@ -156,12 +156,12 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
               motion` guard for it is LOCAL (`app.css`), not the design
               system's: `.motion-enter` isn't yet in globals.css's kill list,
               and that fix belongs to another agent. */}
-          <h1 className={`${PAGE_TITLE} motion-enter`}>
-            Entry received
+          <h1 id="receipt-title" className={`${PAGE_TITLE} motion-enter`}>
+            Entry receipt
           </h1>
           <p className="text-sm text-muted-foreground">
-            The organizer has your entry. Keep the reference below if you need to
-            ask about it.
+            We are checking the signed-in account before showing the receipt.
+            Keep the reference below if you need to ask the organizer about it.
           </p>
         </header>
 

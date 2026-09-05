@@ -181,6 +181,7 @@ function scheduleToMatch(match: ScheduleMatchDTO): MatchCardData {
     scheduledTime: match.scheduledTime,
     court: match.court,
     updatedAt: match.updatedAt,
+    showAssignmentPlaceholders: true,
   };
 }
 /** `EYEBROW` recoloured in the live tone (kept literal for the Tailwind scan). */
@@ -196,6 +197,27 @@ function dayDistance(a: string, b: string): number {
     ? Math.round(Math.abs(second - first) / 86400000)
     : 99;
 }
+
+/** Human-readable freshness in the tournament's configured timezone. */
+export function formatScheduleUpdated(value: string | null, timeZone: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  try {
+    return new Intl.DateTimeFormat('en', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone,
+      timeZoneName: 'short',
+    }).format(date);
+  } catch {
+    return value;
+  }
+}
+
 function monthLabel(month: string): string {
   const date = new Date(`${month}-01T00:00:00Z`);
   return Number.isNaN(date.getTime())
@@ -566,7 +588,7 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
         }
         freshness={
           matches.updatedAt
-            ? `Schedule updated ${matches.updatedAt} · ${matches.timeZone}`
+          ? `Schedule updated ${formatScheduleUpdated(matches.updatedAt, matches.timeZone)} · ${matches.timeZone}`
             : `Tournament time · ${matches.timeZone}`
         }
       >
@@ -582,10 +604,10 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
         />
       </HeroHeader>
       <main
-        className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8"
+        className="mx-auto w-full max-w-6xl px-4 py-4 md:py-8"
         aria-labelledby="schedule-title"
       >
-        <div className="grid gap-2">
+        <div className="grid gap-1 md:gap-2">
           <h1
             id="schedule-title"
             className="type-display text-2xl tracking-[-0.02em] text-foreground"
@@ -598,8 +620,8 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
           </p>
         </div>
         {stale ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Schedule last updated {matches.updatedAt}.
+          <p className="mt-1 text-xs text-muted-foreground">
+            Schedule last updated {formatScheduleUpdated(matches.updatedAt, matches.timeZone)}.
           </p>
         ) : null}
         {!matches.published ? (
@@ -610,9 +632,9 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
             />
           </div>
         ) : (
-          <div className="mt-6 grid gap-6">
+          <div className="mt-3 grid gap-4 md:mt-6 md:gap-6">
             <div className={LIST_CARD}>
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 md:gap-3 md:px-4 md:py-3">
                 <DayNavigation slug={slug} filters={filters} matches={matches} />
                 <OrganizationSwitch slug={slug} filters={filters} />
               </div>

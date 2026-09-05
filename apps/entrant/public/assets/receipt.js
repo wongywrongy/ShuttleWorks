@@ -94,7 +94,7 @@ function card(doc, title) {
   const section = el(
     doc,
     "section",
-    "rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm",
+    "rounded-lg border border-rule-soft bg-surface-raised p-4 md:p-6",
   );
   section.appendChild(
     el(
@@ -122,6 +122,8 @@ function actionLink(doc, href, label, primary = false) {
 
 function renderMessage(root, title, body, action) {
   const doc = root.ownerDocument;
+  const pageTitle = doc.getElementById("receipt-title");
+  if (pageTitle) pageTitle.textContent = title;
   const section = card(doc, title);
   section.appendChild(el(doc, "p", "mt-2 text-sm text-muted-foreground", body));
   if (action) {
@@ -135,6 +137,8 @@ function renderMessage(root, title, body, action) {
 
 export function renderReceipt(root, receipt) {
   const doc = root.ownerDocument;
+  const pageTitle = doc.getElementById("receipt-title");
+  if (pageTitle) pageTitle.textContent = "Entry received";
   const summary = card(doc, "Receipt summary");
   const headingRow = el(
     doc,

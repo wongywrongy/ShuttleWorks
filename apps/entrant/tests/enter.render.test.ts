@@ -77,6 +77,21 @@ async function render(body: unknown = PAGE, path = '/e/spring-open/enter'): Prom
 }
 
 describe('the entry form, unhydrated', () => {
+  it('replaces the entire journey when every event is closed', async () => {
+    const closed = {
+      ...PAGE,
+      events: PAGE.events.map((event) => ({ ...event, isOpen: false })),
+    };
+    const html = await render(closed);
+
+    expect(html).toContain('data-entry-closed');
+    expect(html).toContain('View tournament information');
+    expect(html).not.toContain('data-entry-wizard');
+    expect(html).not.toContain('Submit entry');
+    expect(html).not.toContain('Update total');
+    expect(html).not.toContain('I have read and accept the regulations');
+  });
+
   it('is a plain form posting straight to FastAPI', async () => {
     // Not to an RR7 action: node renders and never relays a credential, so the
     // browser posts same-origin to the API tier directly.

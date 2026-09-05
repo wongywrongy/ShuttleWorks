@@ -30,6 +30,7 @@ import { TabBar } from '../app/components/TabBar';
 import { SegmentedNav } from '../app/components/SegmentedNav';
 import { formatDateLong } from '../app/lib/format';
 import type { EntryEventDTO } from '../app/lib/entryPage.types';
+import type { DrawCardDTO } from '../app/lib/draws.types';
 import { statusCell } from '../app/lib/phase';
 import type { ChipState, Filters, SeasonRow } from '../app/lib/phase';
 
@@ -624,6 +625,21 @@ describe('SegmentedNav', () => {
 // ---- EventRow --------------------------------------------------------------
 
 describe('EventRow', () => {
+  it('distinguishes registrations from published draw participants', () => {
+    const draw = {
+      drawKey: 'ms', eventCode: 'MS', discipline: "Men's Singles", kind: 'se',
+      size: 8, drawParticipantCount: 6, hasConsolation: false,
+      matchCoverage: { imported: 0, expected: 7, missing: 7 },
+      recordScope: 'event', topologyScope: 'event', historical: false,
+      sourceUrl: null, roundCount: 3, champions: [], finalists: [],
+      remainingMatchCount: null,
+    } as DrawCardDTO;
+    const html = renderToStaticMarkup(h(EventRow, { event: event({ registrationCount: 7 }), draw, entrantsHref: null }));
+    expect(html).toContain('7 confirmed registrations');
+    expect(html).toContain('6 draw participants');
+    expect(html).not.toContain('8 draw participants');
+  });
+
   it('normalizes legacy underscore event identifiers at the public boundary', () => {
     const html = renderToStaticMarkup(
       h(EventRow, {
@@ -635,9 +651,9 @@ describe('EventRow', () => {
     expect(html).not.toContain('mens_doubles_final');
   });
 
-  it('says "N entered" — never "of M", G2 was declined', () => {
+  it('labels registration rows explicitly — never "of M", G2 was declined', () => {
     const html = renderToStaticMarkup(h(EventRow, { event: event(), entrantsHref: null }));
-    expect(html).toContain('7 entered');
+    expect(html).toContain('7 confirmed registrations');
     expect(html).not.toMatch(/7 of \d/);
   });
 

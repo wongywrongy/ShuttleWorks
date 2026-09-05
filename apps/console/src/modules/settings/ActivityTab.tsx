@@ -20,13 +20,25 @@ function formatTimestamp(iso: string): string {
       });
 }
 
-/**
- * The backend does not currently expose a durable tournament activity
- * endpoint. Be explicit about that boundary instead of presenting the
- * in-memory live-day trail as an audit log. Entries observed in this browser
- * session remain useful for handoff and incident review, but disappear on a
- * refresh or sign-out.
- */
+const ACTIVITY_TARGET_LABELS: Record<string, string> = {
+  general: 'General',
+  dates: 'Dates',
+  rules: 'Rules',
+  venue: 'Venue',
+  events: 'Events',
+  people: 'Staff',
+  entries: 'Entry rules',
+  'public-info': 'Public information',
+  modules: 'Modules',
+  sharing: 'Site',
+  backups: 'Backups',
+};
+
+function activityTargetLabel(target: string): string {
+  return ACTIVITY_TARGET_LABELS[target] ?? target.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Durable activity is read from the service; local live-day activity is separate. */
 export function ActivityTab({ tid }: { tid?: string }) {
   const activity = useAlertStore((state) => state.activity);
   const [durable, setDurable] = useState<TournamentActivityEntryDTO[]>([]);
@@ -80,10 +92,16 @@ export function ActivityTab({ tid }: { tid?: string }) {
             {durable.map((entry) => (
               <li key={entry.id} className="flex items-start justify-between gap-4 p-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">{entry.summary}</p>
+                  <p className="text-sm font-medium text-foreground">{entry.action === 'setup.updated' ? `Updated ${activityTargetLabel(entry.target)}` : entry.summary}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {entry.actorName} · {entry.target}
+                    {entry.actorName} · {activityTargetLabel(entry.target)}
                   </p>
+                  {activityTargetLabel(entry.target) !== entry.target ? (
+                    <details className="mt-1 text-2xs text-muted-foreground">
+                      <summary className="cursor-pointer">Technical details</summary>
+                      <code>{entry.target}</code>
+                    </details>
+                  ) : null}
                 </div>
                 <time dateTime={entry.occurredAt} className="shrink-0 text-xs tabular-nums text-muted-foreground">
                   {formatTimestamp(entry.occurredAt)}

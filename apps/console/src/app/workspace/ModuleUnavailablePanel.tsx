@@ -75,7 +75,7 @@ export function ModuleUnavailablePanel({
             <Button onClick={onGoToPrimary}>Go to {primaryLabel}</Button>
             {onOpenSettings ? (
               <Button variant="ghost" onClick={onOpenSettings}>
-                Open Settings
+                Open Administration · Modules
               </Button>
             ) : null}
           </>

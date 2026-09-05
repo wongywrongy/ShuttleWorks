@@ -2234,6 +2234,9 @@ class EntryPage(Base):
     )
     slug: Mapped[str] = mapped_column(String(100), nullable=False)
     is_open: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Public audience is owned by the entry page, alongside its content gates.
+    # ``private`` is the safe default for newly-created pages.
+    audience: Mapped[str] = mapped_column(String(16), default="private", server_default="private", nullable=False)
     intro_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     regulations_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     waiver_required: Mapped[bool] = mapped_column(
@@ -2266,6 +2269,7 @@ class EntryPage(Base):
     results_published: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+
 
     # ---- money & payment (R14) ----------------------------------------
     # CUMULATIVE totals in cents by event count — {"1":4000,"2":5500} — not
@@ -2313,4 +2317,7 @@ class EntryPage(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
-    __table_args__ = (Index("uq_entry_pages_slug", "slug", unique=True),)
+    __table_args__ = (
+        Index("uq_entry_pages_slug", "slug", unique=True),
+        CheckConstraint("audience IN ('private', 'unlisted', 'public')", name="ck_entry_pages_audience"),
+    )

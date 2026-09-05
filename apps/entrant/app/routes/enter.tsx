@@ -234,7 +234,7 @@ function PlayerBlock({
         <div>
           <label
             htmlFor={`${prefix}gender`}
-            className="mb-1 block text-xs font-medium text-foreground"
+            className="mb-2 block text-xs font-medium text-foreground"
           >
             Gender
           </label>
@@ -245,7 +245,7 @@ function PlayerBlock({
             name="gender"
             required={index === 0}
             defaultValue={said.gender}
-            className={`h-9 w-full rounded-sm px-3 ${INPUT_SKIN}`}
+              className={`h-10 w-full rounded-sm px-3 ${INPUT_SKIN}`}
           >
             {GENDERS.map(([value, label]) => (
               <option key={value} value={value}>
@@ -345,7 +345,7 @@ function PlayerBlock({
       <div data-entry-section="participant">
         <label
           htmlFor={`${prefix}remarks`}
-          className="mb-1 block text-xs font-medium text-foreground"
+          className="mb-2 block text-xs font-medium text-foreground"
         >
           Anything the organizer should know (optional)
         </label>
@@ -439,6 +439,8 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
       </section>
 
       <main className="mx-auto w-full max-w-5xl px-4 py-6 md:py-8">
+        {openEvents.length > 0 ? (
+          <>
         <nav aria-label="Entry progress" className="mb-6 overflow-x-auto rounded-lg border border-rule-soft bg-surface-raised p-4">
           <ol className="flex min-w-max items-center gap-2 text-xs font-medium text-muted-foreground sm:justify-between sm:gap-3">
             {[
@@ -547,6 +549,9 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             </Notice>
           )}
         </section>
+
+          </>
+        ) : null}
 
         {openEvents.length === 0 ? (
           <section className="mt-6 grid justify-items-start gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5" data-entry-closed>

@@ -26,7 +26,6 @@ import {
   deriveCourtLanes,
   deriveQueue,
   nextEligible,
-  onDeck,
   busyPlayers,
   isPlayerBusy,
   restShortKeys,
@@ -136,7 +135,6 @@ export function RunSurface({
   formatSlot,
   slotMinutes,
   restMinutes,
-  onDeckCount,
   meetOps,
   onAdvisoryReview,
 }: RunSurfaceProps) {
@@ -273,10 +271,6 @@ export function RunSurface({
   }, [matches, currentSlot, restMinutes, slotMinutes]);
   // CP5: the desk's lookahead — what auto-pull will actually send next.
   // Count is a workspace setting, clamped 1-5, default 3.
-  const deck = useMemo(
-    () => onDeck(queue, busy, Math.min(5, Math.max(1, onDeckCount ?? 3))),
-    [queue, busy, onDeckCount],
-  );
   // Bracket "called" is Operations-local (no persisted status), overlaid onto
   // `matches` by toRunMatches — but the BOARD renders from raw blocks, so
   // without this overlay a called bracket chip would stay painted 'scheduled'
@@ -613,34 +607,6 @@ export function RunSurface({
               fireAssign(head, court, slotForAssign(court, matches, currentSlot ?? 0));
             }}
           />
-
-          {/* On deck (CP5) — the next callable matches in queue order, so
-              the caller can warm players up ~10 minutes early. Read-only
-              labels; the queue rows below carry the actions. */}
-          {deck.length > 0 && (
-            <div
-              data-testid="run-on-deck"
-              className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/20 px-4 py-1.5"
-            >
-              <span className={`${EYEBROW_CLASS} text-ink-3`}>On deck</span>
-              {/* Deliberately UNNUMBERED: the queue below numbers rows by
-                  queue position, and the deck skips anyone whose player is on
-                  court, so a "#2" here would name a different match than "#2"
-                  there. Order is left-to-right; the strip's label says so. */}
-              {deck.map((m) => (
-                <span
-                  key={m.key}
-                  data-testid={`on-deck-${m.key}`}
-                  className="inline-flex items-baseline gap-1.5 text-xs"
-                >
-                  <span className="font-semibold sw-num text-2xs text-ink-3">{formatMatchIdentity(m.identity, m.id)}</span>
-                  <span className="text-muted-foreground">
-                    {m.sideA} v {m.sideB}
-                  </span>
-                </span>
-              ))}
-            </div>
-          )}
 
           {/* Queue — below the board. No border-t here: the board's own
               border-b IS the board→queue seam (seamed, not gapped — one

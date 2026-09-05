@@ -19,6 +19,8 @@ export type MatchCardData = PlayerMatchDTO & {
   courtLabel?: string | null;
   sourceUrl?: string | null;
   sourceRef?: string | null;
+  /** Schedule/draw views may need to explain an intentionally unassigned slot. */
+  showAssignmentPlaceholders?: boolean;
 };
 
 export type MatchCardVariant = 'card' | 'canvas' | 'bracket-node';
@@ -72,8 +74,8 @@ function Side({ side, score, index, slug, compact = false, live = false, first =
 export function MatchCard({ match, variant = 'card', slug }: { match: MatchCardData; variant?: MatchCardVariant; slug?: string }) {
   const footer = [
     match.playedOn,
-    match.localTime ?? match.scheduledTime,
-    match.courtLabel ?? (match.court !== null ? `Court ${match.court}` : null),
+    match.localTime ?? match.scheduledTime ?? (match.showAssignmentPlaceholders ? 'Time not assigned' : null),
+    match.courtLabel ?? (match.court !== null ? `Court ${match.court}` : (match.showAssignmentPlaceholders ? 'Court not assigned' : null)),
     match.durationMinutes ? `${match.durationMinutes} min` : null,
   ].filter(Boolean);
   const live = match.status === 'live' || Boolean((match as MatchCardData & { live?: boolean }).live);

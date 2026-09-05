@@ -172,10 +172,10 @@ describe('<BracketMatchesTab />', () => {
     expect(msSf1.querySelector('.w-28')).toHaveAttribute('title', 'pu-ms-1');
   });
 
-  it('joins doubles sides with a slash, in BWF presentation (SURNAME Given)', () => {
+  it('joins doubles sides with a slash while preserving canonical names', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    expect(screen.getAllByText('KIM Elle / WU Fay').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('LOPEZ Gia / SATO Hana').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Elle Kim / Fay Wu').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Gia Lopez / Hana Sato').length).toBeGreaterThan(0);
   });
 
   it('renders the status column per the X6 ink budget — only LIVE chips', () => {

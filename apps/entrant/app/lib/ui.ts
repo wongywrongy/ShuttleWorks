@@ -21,19 +21,19 @@
 export const CARD_SKIN = 'border-rule-soft bg-surface-raised';
 
 /**
- * The standard entrant card: raised panel, rounded, padded, soft shadow.
+ * The standard entrant card: raised panel, rounded, padded.
  * `rounded-lg` is the DELIBERATE public-tier radius (ADR 0020): the
  * consumer register is soft, the operator console is sharp
  * (`rounded-sm`), and the shared DS `Card` stays square (BRAND.md §3).
  */
-export const CARD = `rounded-lg border ${CARD_SKIN} p-6 shadow-sm`;
+export const CARD = `rounded-lg border ${CARD_SKIN} p-4 md:p-6`;
 
 /**
  * The same card with NO inset (ADR 0028): its children are padded rows or
  * bands, so a list, a table-like panel or a header/body/footer card sits
  * flush to the border. Pair with `LIST_CARD_ROW`.
  */
-export const LIST_CARD = `rounded-lg border ${CARD_SKIN} shadow-sm`;
+export const LIST_CARD = `rounded-lg border ${CARD_SKIN}`;
 
 /** One label/value row inside a `LIST_CARD`; rows separate with their own top rule. */
 export const LIST_CARD_ROW =
@@ -45,8 +45,8 @@ export const LIST_CARD_ROW =
  * tracking here is the public register's. Do NOT add `font-*` or
  * `tracking-tight` utilities beside it — they override the role.
  */
-export const PAGE_TITLE = 'type-display text-3xl tracking-[-0.025em] text-foreground';
-export const SECTION_TITLE = 'type-display text-lg tracking-[-0.015em] text-foreground';
+export const PAGE_TITLE = 'type-display text-page tracking-[-0.025em] text-foreground';
+export const SECTION_TITLE = 'text-section tracking-[-0.015em] text-foreground';
 
 /** The small-caps group heading (draw rounds, schedule time groups, player sections). */
 export const EYEBROW = 'text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground';
@@ -66,12 +66,12 @@ export const CHIP =
  */
 export const INPUT_SKIN = 'border border-rule-control bg-bg-elev text-sm text-foreground';
 
-/** The 36px / 6px-radius form control of the entrant site (input or select). */
+/** The 40px form control of the entrant site (input or select). */
 export const FIELD_INPUT =
-  'h-9 w-full min-w-0 rounded-sm border border-rule-control bg-surface-raised px-3 text-sm text-foreground';
+  'h-10 w-full min-w-0 rounded-sm border border-rule-control bg-surface-raised px-3 text-sm text-foreground';
 
 /** The label above a `FIELD_INPUT`; equals the design system `TextField` label. */
-export const FIELD_LABEL = 'mb-1 block text-xs font-medium text-foreground';
+export const FIELD_LABEL = 'mb-2 block text-xs font-medium text-foreground';
 
 /** The native-select filter control (schedule filter bar). */
 export const SELECT_CONTROL = `${FIELD_INPUT} font-normal`;

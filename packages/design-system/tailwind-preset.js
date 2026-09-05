@@ -32,6 +32,11 @@ module.exports = {
       },
 
       fontSize: {
+        support: ['var(--text-support)', { lineHeight: '1rem' }],
+        console: ['var(--text-console)', { lineHeight: '1.25rem' }],
+        public: ['var(--text-public)', { lineHeight: '1.5rem' }],
+        section: ['var(--text-section)', { lineHeight: '1.75rem' }],
+        page: ['var(--text-page)', { lineHeight: '2.25rem' }],
         '3xs':  ['var(--text-3xs)',  { lineHeight: '0.875rem', letterSpacing: '0.02em' }],
         '2xs':  ['var(--text-2xs)',  { lineHeight: '1rem',   letterSpacing: '0.02em' }],
         xs:     ['var(--text-xs)',   { lineHeight: '1rem' }],

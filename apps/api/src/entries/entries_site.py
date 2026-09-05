@@ -64,7 +64,9 @@ router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
 # Short public max-age (§5): these answers are identical for every reader
 # (no viewer block, no cookies read), and the SSR tier re-fetches per
 # document anyway — the header exists for intermediaries, not correctness.
-_CACHE = "public, max-age=30"
+# Audience and publication are revocable. Intermediaries may store the
+# projection, but must revalidate before serving it after a visibility change.
+_CACHE = "public, no-cache"
 
 
 # ---- shared plumbing ------------------------------------------------------
@@ -433,6 +435,8 @@ class DrawCardDTO(BaseModel):
     discipline: str
     kind: str  # the format tag: 'se' | 'rr' | 'de' | 'swiss' | 'compass' | 'monrad'
     size: int
+    # Draw participant/team count; it can differ from registered entries.
+    drawParticipantCount: int = 0
     hasConsolation: bool
     matchCoverage: "MatchCoverageDTO"
     recordScope: str
@@ -1163,6 +1167,7 @@ def draws_index(
                     discipline=event.discipline,
                     kind=event.format,
                     size=event.bracket_size or event.participant_count,
+                    drawParticipantCount=event.participant_count,
                     hasConsolation=_has_consolation(event),
                     roundCount=max((len(segment.rounds) for segment in _event_segments(event)), default=len(event.rounds)),
                     champions=champions,
@@ -1319,6 +1324,7 @@ def draw_detail(
         discipline=event.discipline,
         kind=event.format,
         size=event.bracket_size or event.participant_count,
+        drawParticipantCount=event.participant_count,
         resultsPublished=results_on,
         **_event_projection_meta(event),
         identityScope=(event.config or {}).get("identity_scope"),

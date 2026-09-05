@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { SharingTab } from '../SharingTab';
 import { apiClient } from '../../../api/client';
+vi.mock('../../../hooks/useCanEdit', () => ({ useCanEdit: () => true }));
 
 vi.mock('../../../api/client', () => ({
   apiClient: {
@@ -19,6 +20,7 @@ vi.mock('../../../api/client', () => ({
 const entryPage = (over: Record<string, unknown> = {}) =>
   ({
     slug: 'spring-open',
+    audience: 'private',
     isOpen: true,
     entrantsPublished: false,
     drawsPublished: false,
@@ -71,13 +73,13 @@ describe('SharingTab', () => {
     const input = screen.getByLabelText('Public display link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('tok-abc'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke and replace the public display link' }));
 
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
     expect(input.value).toContain('tok-abc');
     // Armed state names the consequence rather than repeating the label.
     expect(
-      screen.getByRole('button', { name: 'Confirm rotating the public display link' }),
+      screen.getByRole('button', { name: 'Confirm revoking and replacing the public display link' }),
     ).toBeInTheDocument();
   });
 
@@ -86,9 +88,9 @@ describe('SharingTab', () => {
     const input = screen.getByLabelText('Public display link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('tok-abc'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke and replace the public display link' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Confirm rotating the public display link' }),
+      screen.getByRole('button', { name: 'Confirm revoking and replacing the public display link' }),
     );
 
     await waitFor(() => expect(input.value).toContain('/display?token=tok-new'));
@@ -103,11 +105,11 @@ describe('SharingTab', () => {
       ).toContain('tok-abc'),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke and replace the public display link' }));
     fireEvent.keyDown(window, { key: 'Escape' });
 
     expect(
-      screen.getByRole('button', { name: 'Rotate the public display link' }),
+      screen.getByRole('button', { name: 'Revoke and replace the public display link' }),
     ).toBeInTheDocument();
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
   });
@@ -153,8 +155,10 @@ describe('SharingTab', () => {
     await waitFor(() => expect(apiClient.getDisplayToken).toHaveBeenCalled());
   });
 
-  it('Create invite calls createInvite then refetches the list', async () => {
+  it('creating an unaddressed invite requires selecting link sharing', async () => {
     render(<SharingTab tid="t1" />);
+    expect(screen.getByRole('button', { name: 'Create invite' })).toBeDisabled();
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
     fireEvent.click(screen.getByRole('button', { name: 'Create invite' }));
     await waitFor(() =>
       expect(apiClient.createInvite).toHaveBeenCalledWith('t1', { role: 'operator' }),
@@ -164,7 +168,7 @@ describe('SharingTab', () => {
 
   it('passes a non-empty email through to createInvite and clears the field', async () => {
     render(<SharingTab tid="t1" />);
-    const emailInput = screen.getByLabelText('Invite email (optional)') as HTMLInputElement;
+    const emailInput = screen.getByLabelText('Invite email') as HTMLInputElement;
     fireEvent.change(emailInput, { target: { value: '  coach@club.org  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create invite' }));
     await waitFor(() =>
@@ -239,6 +243,8 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
     expect(boxes.every((b) => !(b as HTMLInputElement).checked)).toBe(true);
 
     fireEvent.click(within(card).getByLabelText(/Draws & seeded entries/));
+    expect(apiClient.patchEntryPagePublication).not.toHaveBeenCalled();
+    fireEvent.click(within(card).getByRole('button', { name: 'Save publication changes' }));
     await waitFor(() =>
       expect(apiClient.patchEntryPagePublication).toHaveBeenCalledWith('t1', {
         drawsPublished: true,
@@ -265,6 +271,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
 
     const card = await screen.findByTestId('sharing-publication');
     fireEvent.click(within(card).getByLabelText(/Results/));
+    fireEvent.click(within(card).getByRole('button', { name: 'Save publication changes' }));
     await waitFor(() =>
       expect(apiClient.patchEntryPagePublication).toHaveBeenCalledWith('t1', {
         resultsPublished: false,
@@ -298,5 +305,51 @@ describe('SharingTab — a failed read is not an empty invite list', () => {
     render(<SharingTab tid="t1" />);
     expect(await screen.findByText(/no invite links yet/i)).toBeInTheDocument();
     expect(screen.queryByTestId('invites-load-error')).toBeNull();
+  });
+});
+
+describe('publication transaction outcomes', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.patchEntryPagePublication).mockReset();
+    vi.mocked(apiClient.getEntryPage).mockResolvedValue(entryPage());
+  });
+  it('discards staged visibility changes without publishing', async () => {
+    render(<SharingTab tid="t1" scope="site" />);
+    const card = await screen.findByTestId('sharing-publication');
+    fireEvent.click(within(card).getByLabelText(/Entrant list/));
+    expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(within(card).getByLabelText(/Entrant list/)).not.toBeChecked();
+    expect(apiClient.patchEntryPagePublication).not.toHaveBeenCalled();
+  });
+  it('retains the draft and never announces success after a failed save', async () => {
+    vi.mocked(apiClient.patchEntryPagePublication).mockRejectedValue(new Error('offline'));
+    render(<SharingTab tid="t1" scope="site" />);
+    const card = await screen.findByTestId('sharing-publication');
+    fireEvent.click(within(card).getByLabelText(/Entrant list/));
+    fireEvent.click(screen.getByRole('button', { name: 'Save publication changes' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('not confirmed');
+    expect(within(card).getByLabelText(/Entrant list/)).toBeChecked();
+    expect(screen.queryByText('Publication settings saved.')).toBeNull();
+  });
+  it('distinguishes a failed read from an absent page and can retry', async () => {
+    vi.mocked(apiClient.getEntryPage).mockRejectedValueOnce(new Error('network'));
+    render(<SharingTab tid="t1" scope="site" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('current state is unknown');
+    expect(screen.queryByText(/No public page is configured/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByTestId('sharing-publication')).toBeInTheDocument();
+  });
+  it('requires connection and does not queue publication', async () => {
+    render(<SharingTab tid="t1" scope="site" />);
+    const card = await screen.findByTestId('sharing-publication');
+    fireEvent.click(within(card).getByLabelText(/Results/));
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    fireEvent(window, new Event('offline'));
+    expect(screen.getByRole('button', { name: 'Save publication changes' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('not queued');
+    expect(apiClient.patchEntryPagePublication).not.toHaveBeenCalled();
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    fireEvent(window, new Event('online'));
   });
 });

@@ -3,30 +3,12 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
 
-/**
- * Card — the canonical surface primitive.
- *
- * Ported from the curated Claude Design library (`components/data/Card`,
- * ADR 0027). A card is a *container*, so it takes the 8px container
- * radius (`rounded` → `--radius`); 6px is reserved for anything pressable.
- *
- * Variants:
- * - `bare` — a sunken well (`--surface-sunken`) with no hairline or
- *   shadow, for dense in-context grouping (divide-y rows, inline editors).
- *   The transparent border keeps its box the same size as `frame`.
- * - `frame` (default) — raised surface + hairline + `--shadow-card`.
- * - `elevated` — overlay surface + hairline + `--shadow-md`, for
- *   popover-tier emphasis.
- *
- * Light mode carries elevation with real Gaussian shadows; dark mode
- * resolves the same shadow tokens to luminance-only depth (see
- * `tokens.css`), so the classes are identical in both themes.
- */
+/** Neutral grouping surface. Elevation is reserved for overlays. */
 const cardVariants = cva('rounded text-text-primary', {
   variants: {
     variant: {
       bare: 'border border-transparent bg-surface-sunken',
-      frame: 'border border-rule bg-surface-raised shadow-card',
+      frame: 'border border-rule bg-surface-raised',
       elevated: 'border border-rule bg-surface-overlay shadow-md',
     },
   },

@@ -210,7 +210,7 @@ function cardEl(doc, card, emailVerified) {
   const article = el(
     doc,
     'article',
-    'rounded-lg border border-rule-soft bg-surface-raised shadow-sm',
+    'rounded-lg border border-rule-soft bg-surface-raised',
   );
 
   const head = el(
