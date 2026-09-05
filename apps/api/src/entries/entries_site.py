@@ -1,4 +1,4 @@
-"""SP-P7's public-site projections: draws, seeds, winners, player pages.
+"""SP-P7's public-site projections: draws, player pages, schedule.
 
 ``/e/api/page/{slug}/…`` — slug-resolved like everything public (the
 uniform 404 of ``entries_public._resolve``; a raw tournament UUID is never
@@ -604,42 +604,9 @@ class DrawDetailDTO(BaseModel):
     standings: Optional[List[StandingRowDTO]] = None
 
 
-class SeedLineDTO(BaseModel):
-    seed: int
-    persons: List[PersonReferenceDTO] = Field(default_factory=list)
-    club: Optional[str] = None
-
-
-class SeedsEventDTO(BaseModel):
-    eventCode: str
-    discipline: str
-    seeds: List[SeedLineDTO]
-
-
-class SeedsDTO(BaseModel):
-    published: bool
-    events: List[SeedsEventDTO] = []
-
-
 class HonorDTO(BaseModel):
     persons: List[PersonReferenceDTO] = Field(default_factory=list)
     club: Optional[str] = None
-
-
-class WinnersEventDTO(BaseModel):
-    eventCode: str
-    discipline: str
-    decided: bool
-    winner: Optional[HonorDTO] = None
-    runnerUp: Optional[HonorDTO] = None
-    semifinalists: List[HonorDTO] = []
-    finalScore: Optional[List[List[int]]] = None
-    finalists: List[HonorDTO] = []
-
-
-class WinnersDTO(BaseModel):
-    published: bool
-    events: List[WinnersEventDTO] = []
 
 
 class PlayerEventDTO(BaseModel):
@@ -1448,85 +1415,6 @@ def players_index(
     )
 
 
-@router.get("/seeds", response_model=SeedsDTO)
-def seeds(
-    response: Response,
-    slug: str = Path(..., max_length=100),
-    repo: LocalRepository = Depends(get_repository),
-) -> SeedsDTO:
-    """Seeds are draw facts (§3.5) — gated by ``draws_published``."""
-    page, tournament = _page(repo, slug)
-    response.headers["Cache-Control"] = _CACHE
-    if not page.draws_published:
-        return SeedsDTO(published=False)
-    payload = _bracket(repo, tournament.id)
-    if payload is None:
-        return SeedsDTO(published=True)
-
-    roster_names = _bracket_roster_names(tournament)
-    identities = _public_identities(repo, tournament.id)
-    events_out = []
-    for event in payload.events:
-        seeded = sorted(
-            (p for p in event.participants if p.seed is not None),
-            key=lambda p: p.seed,
-        )
-        if not seeded:
-            continue
-        events_out.append(
-            SeedsEventDTO(
-                eventCode=_event_public_code(event),
-                discipline=event.discipline,
-                seeds=[
-                    SeedLineDTO(
-                        seed=p.seed,
-                        persons=_participant_people(
-                            p,
-                            roster_names,
-                            identities,
-                            event.id,
-                        ),
-                        club=_event_public_club(
-                            _participant_person_keys(p)[0],
-                            identities.clubs,
-                            identities,
-                            event.id,
-                            _event_public_code(event),
-                        )
-                        or next(
-                            (
-                                _event_public_club(
-                                    m,
-                                    identities.clubs,
-                                    identities,
-                                    event.id,
-                                    _event_public_code(event),
-                                )
-                                for m in _participant_person_keys(p)[1:]
-                                if _event_public_club(
-                                    m,
-                                    identities.clubs,
-                                    identities,
-                                    event.id,
-                                    _event_public_code(event),
-                                )
-                            ),
-                            None,
-                        ),
-                    )
-                    for p in seeded
-                ],
-            )
-        )
-    return SeedsDTO(published=True, events=events_out)
-
-
-def _honor(payload_team: Optional[TeamDTO]) -> Optional[HonorDTO]:
-    if payload_team is None:
-        return None
-    return HonorDTO(persons=payload_team.persons, club=payload_team.club)
-
-
 def _finalist_honors(final_unit, teams: Dict[str, TeamDTO]) -> List[HonorDTO]:
     """Keep final sides grouped, especially for doubles.
 
@@ -1571,61 +1459,6 @@ def _remaining_match_count(event, units, results) -> int:
             or _BYE in (units[unit_id].side_b or [])
         )
     )
-
-
-@router.get("/winners", response_model=WinnersDTO)
-def winners(
-    response: Response,
-    slug: str = Path(..., max_length=100),
-    repo: LocalRepository = Depends(get_repository),
-) -> WinnersDTO:
-    """Winner and runner-up per event as results complete (§3.6) — result
-    data, so gated by ``results_published``. Partial state is fine: an
-    undecided event reports ``decided: false``."""
-    page, tournament = _page(repo, slug)
-    response.headers["Cache-Control"] = _CACHE
-    if not page.results_published:
-        return WinnersDTO(published=False)
-    payload = _bracket(repo, tournament.id)
-    if payload is None:
-        return WinnersDTO(published=True)
-
-    roster_names = _bracket_roster_names(tournament)
-    identities = _public_identities(repo, tournament.id)
-    units, results, _ = _bracket_indexes(payload)
-    events_out = []
-    for event in payload.events:
-        teams = {
-            t.participantKey: t
-            for t in _teams(
-                event,
-                identities.clubs,
-                roster_names,
-                identities,
-                event.id,
-            )
-        }
-        entry = _event_winner(event, units, results)
-        winner_key, runner_key, semi_keys = entry
-        final_unit = _event_final_unit(event, units)
-        final_result = results.get(final_unit.id) if final_unit is not None else None
-        events_out.append(
-            WinnersEventDTO(
-                eventCode=_event_public_code(event),
-                discipline=event.discipline,
-                decided=winner_key is not None,
-                winner=_honor(teams.get(winner_key)) if winner_key else None,
-                runnerUp=_honor(teams.get(runner_key)) if runner_key else None,
-                semifinalists=[
-                    honor
-                    for honor in (_honor(teams.get(k)) for k in semi_keys)
-                    if honor is not None
-                ],
-                finalScore=_score_rows(final_result.score) if final_result is not None else None,
-                finalists=_finalist_honors(final_unit, teams),
-            )
-        )
-    return WinnersDTO(published=True, events=events_out)
 
 
 def _decided_sides(unit, result) -> Optional[Tuple[str, str]]:

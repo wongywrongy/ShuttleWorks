@@ -11,6 +11,7 @@ export type BrandConfig = Readonly<{
   endorsement: string;
   operatorHostname: string;
   entrantHostname: string;
+  sportName: string;
 }>;
 
 export const BRAND: BrandConfig = Object.freeze({
@@ -23,6 +24,7 @@ export const BRAND: BrandConfig = Object.freeze({
   endorsement: "by Yunavero",
   operatorHostname: "app.yunavero.com",
   entrantHostname: "play.yunavero.com",
+  sportName: "Badminton",
 });
 
 export const BRAND_SIGNATURE = `${BRAND.productName} ${BRAND.endorsement}`;

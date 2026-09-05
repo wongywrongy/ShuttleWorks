@@ -145,42 +145,9 @@ export interface DrawDetailDTO {
   standings: StandingRowDTO[] | null;
 }
 
-export interface SeedLineDTO {
-  seed: number;
-  persons: PersonReferenceDTO[];
-  club: string | null;
-}
-
-export interface SeedsEventDTO {
-  eventCode: string;
-  discipline: string;
-  seeds: SeedLineDTO[];
-}
-
-export interface SeedsDTO {
-  published: boolean;
-  events: SeedsEventDTO[];
-}
-
 export interface HonorDTO {
   persons: PersonReferenceDTO[];
   club: string | null;
-}
-
-export interface WinnersEventDTO {
-  eventCode: string;
-  discipline: string;
-  decided: boolean;
-  winner: HonorDTO | null;
-  runnerUp: HonorDTO | null;
-  semifinalists: HonorDTO[];
-  finalScore: number[][] | null;
-  finalists: HonorDTO[];
-}
-
-export interface WinnersDTO {
-  published: boolean;
-  events: WinnersEventDTO[];
 }
 
 /** The human name of a format tag — shown on draw cards. Keyed by `DrawKind`,

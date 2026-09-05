@@ -14,7 +14,7 @@ and not a guard. Audited 2026-08-25 over ``apps/api/src``:
   repository's five bulk ``setattr`` loops (``repositories/local.py``) reach
   an ``EntryEvent`` — they patch ``Tournament``, ``Match``, ``BracketMatch``
   and ``MatchState``.
-- The draws/seeds/winners projections now separate ``drawKey`` (the internal
+- The draws projections now separate ``drawKey`` (the internal
   bracket-event id used by draw URLs) from ``eventCode`` (the public sporting
   identity). Rebuilding a draw can change its internal key without silently
   renaming the public event — the P7 contract that retired the characterization
@@ -273,11 +273,6 @@ def test_every_public_projection_still_resolves_by_event_code(client):
     detail = client.get("/e/api/page/nc4-open/draws/" + card["drawKey"])
     assert detail.status_code == 200, detail.text
     assert detail.json()["eventCode"] == "MS"
-
-    seeds = client.get("/e/api/page/nc4-open/seeds").json()
-    assert [event["eventCode"] for event in seeds["events"]] == ["MS"]
-    winners = client.get("/e/api/page/nc4-open/winners").json()
-    assert [event["eventCode"] for event in winners["events"]] == ["MS"]
 
     # The player page: keyed by person id, carrying ``entry_events.code``.
     player = client.get("/e/api/page/nc4-open/players/" + ada)

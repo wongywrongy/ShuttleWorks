@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 
@@ -151,6 +152,75 @@ def _seed_submission(page, email, player_name="Robin Seeded", state="pending",
         session.close()
 
 
+def _age_submission(page, submission_id, moment):
+    """Backdate one submission so "newest" is a fact, not a race."""
+    from db.models import Submission
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        # Composite primary key: submissions are keyed (tournament, id).
+        submission = session.get(
+            Submission, (uuid.UUID(page["tid"]), uuid.UUID(submission_id))
+        )
+        submission.submitted_at = moment
+        session.commit()
+    finally:
+        session.close()
+
+
+def _set_withdraws_until(page, moment):
+    """Give the card's one event a self-serve withdrawal deadline (R14 §3)."""
+    from db.models import EntryEvent
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        event = session.get(
+            EntryEvent, (uuid.UUID(page["tid"]), uuid.UUID(page["ms"]))
+        )
+        event.withdraws_until = moment
+        session.commit()
+    finally:
+        session.close()
+
+
+def _make_page(client, name, slug):
+    """A second (third, ninth...) workspace with an entry page and one event.
+
+    Lifted from the ``page`` fixture rather than parameterised into it: the
+    N+1 guard is the only test that needs more than one, and it needs them
+    created BEFORE any entrant signs in (workspace creation is an operator
+    act).
+    """
+    from db.models import EntryEvent, EntryPage
+    from db.session import SessionLocal
+
+    tid = client.post("/tournaments", json={"name": name}, headers=CSRF).json()["id"]
+    session = SessionLocal()
+    try:
+        session.add(
+            EntryPage(
+                tournament_id=uuid.UUID(tid),
+                slug=slug,
+                is_open=True,
+                fee_schedule={"1": 4000},
+                venue_name="North Hall",
+            )
+        )
+        ms = EntryEvent(
+            tournament_id=uuid.UUID(tid),
+            code="MS",
+            discipline="Men's Singles",
+            entry_type="singles",
+        )
+        session.add(ms)
+        session.commit()
+        return {"tid": tid, "slug": slug, "ms": str(ms.id)}
+    finally:
+        session.close()
+
+
 def _set_tournament_date(page, date_iso):
     from db.models import Tournament
     from db.session import SessionLocal
@@ -276,7 +346,7 @@ def test_publication_flags_do_not_gate_the_owners_view(client, page, turnstile):
 
 def test_card_and_line_key_sets_are_exact(client, page, turnstile):
     _sign_in(client, "parent@example.com")
-    _seed_submission(page, "parent@example.com")
+    seeded = _seed_submission(page, "parent@example.com")
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
 
     assert set(card) == {
@@ -291,7 +361,15 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
         "feeTotalCents",
         "submittedAt",
         "events",
+        # SP-PUB-AUDIT-1 Phase 3: the act this card stands for, and the
+        # moment its withdraw affordance stops working. Neither widens what
+        # the projection discloses - both are this account's own facts.
+        "submissionId",
+        "withdrawsUntil",
     }
+    assert card["submissionId"] == seeded["submission"]
+    # No deadline configured on the event, so none is invented.
+    assert card["withdrawsUntil"] is None
     assert all(
         set(line)
         == {
@@ -477,3 +555,106 @@ def test_two_submissions_fold_into_one_card_with_summed_quotes(
     (card,) = body["tournaments"]
     assert card["feeTotalCents"] == 9500
     assert len(card["events"]) == 2
+
+
+# ---- the withdrawal deadline on the card (SP-PUB-AUDIT-1 Phase 3) ---------
+
+
+def test_withdraws_until_is_the_earliest_open_deadline(client, page, turnstile):
+    """The card names the moment its own withdraw buttons stop working.
+
+    The MINIMUM over the withdrawable lines, because the first deadline to
+    pass is the first one that changes what the card can offer — and it must
+    be the SAME instant the route enforces, not a second copy of the rule.
+    """
+    from entries.entries_public import _moment_iso
+
+    deadline = datetime(2099, 3, 1, 17, 0, tzinfo=timezone.utc)
+    _sign_in(client, "parent@example.com")
+    seeded = _seed_submission(page, "parent@example.com", state="pending")
+    _set_withdraws_until(page, deadline)
+
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert card["submissionId"] == seeded["submission"]
+    assert card["events"][0]["canWithdraw"] is True
+    assert card["withdrawsUntil"] == _moment_iso(deadline)
+
+
+def test_withdraws_until_is_none_when_no_line_can_be_withdrawn(
+    client, page, turnstile
+):
+    """A deadline nobody can act on is not a deadline the card states."""
+    _sign_in(client, "parent@example.com")
+    _seed_submission(page, "parent@example.com", state="withdrawn")
+    _set_withdraws_until(page, datetime(2099, 3, 1, 17, 0, tzinfo=timezone.utc))
+
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert card["events"][0]["canWithdraw"] is False
+    assert card["withdrawsUntil"] is None
+
+
+def test_the_newest_submission_names_the_card(client, page, turnstile):
+    """Two acts, one card, one id: the newest act is the one named."""
+    _sign_in(client, "parent@example.com")
+    older = _seed_submission(page, "parent@example.com", player_name="A Child")
+    newer = _seed_submission(page, "parent@example.com", player_name="B Child")
+    _age_submission(page, older["submission"], datetime(2020, 1, 1, tzinfo=timezone.utc))
+
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert len(card["events"]) == 2
+    assert card["submissionId"] == newer["submission"]
+
+
+# ---- the batching claim ---------------------------------------------------
+
+
+def test_public_my_entries_no_n_plus_one(client, turnstile):
+    """The read stays batched as the account's history grows (A6).
+
+    One card and eight cards must cost the same number of statements. A
+    per-tournament lookup — the page, the org, the events, the badges — is
+    exactly the regression this counts, and it is invisible to every other
+    test in this file because they all seed a single workspace.
+    """
+    from sqlalchemy import event as sqlalchemy_event
+
+    from db.session import SessionLocal
+
+    pages = [
+        _make_page(client, f"Cup {index}", f"cup-{index}") for index in range(8)
+    ]
+    _sign_in(client, "parent@example.com")
+
+    session = SessionLocal()
+    bind = session.get_bind()
+    statements: list[str] = []
+
+    def record(_connection, _cursor, statement, *_args):
+        statements.append(statement)
+
+    def measured_call() -> int:
+        statements.clear()
+        sqlalchemy_event.listen(bind, "before_cursor_execute", record)
+        try:
+            body = client.get("/e/api/me/entries").json()
+        finally:
+            sqlalchemy_event.remove(bind, "before_cursor_execute", record)
+        assert body["tournaments"]
+        return len(statements)
+
+    try:
+        _seed_submission(pages[0], "parent@example.com", player_name="Child 0")
+        baseline = measured_call()
+
+        for index, extra in enumerate(pages[1:], start=1):
+            _seed_submission(
+                extra, "parent@example.com", player_name=f"Child {index}"
+            )
+        expanded = measured_call()
+
+        assert len(client.get("/e/api/me/entries").json()["tournaments"]) == 8
+        # Identity-map warmth may remove a lookup; scale must never add one.
+        assert expanded <= baseline
+        assert expanded <= 10
+    finally:
+        session.close()

@@ -2765,48 +2765,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/e/api/page/{slug}/seeds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Seeds
-         * @description Seeds are draw facts (§3.5) — gated by ``draws_published``.
-         */
-        get: operations["seeds_e_api_page__slug__seeds_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/e/api/page/{slug}/winners": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Winners
-         * @description Winner and runner-up per event as results complete (§3.6) — result
-         *     data, so gated by ``results_published``. Partial state is fine: an
-         *     undecided event reports ``decided: false``.
-         */
-        get: operations["winners_e_api_page__slug__winners_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/e/api/page/{slug}/players/{person_key}": {
         parameters: {
             query?: never;
@@ -6119,6 +6077,10 @@ export interface components {
             submittedAt: string;
             /** Events */
             events: components["schemas"]["MyEntryLineDTO"][];
+            /** Submissionid */
+            submissionId: string;
+            /** Withdrawsuntil */
+            withdrawsUntil?: string | null;
         };
         /** NamedDTO */
         NamedDTO: {
@@ -7227,34 +7189,6 @@ export interface components {
             /** Winnerspublished */
             winnersPublished: boolean;
         };
-        /** SeedLineDTO */
-        SeedLineDTO: {
-            /** Seed */
-            seed: number;
-            /** Persons */
-            persons?: components["schemas"]["PersonReferenceDTO"][];
-            /** Club */
-            club?: string | null;
-        };
-        /** SeedsDTO */
-        SeedsDTO: {
-            /** Published */
-            published: boolean;
-            /**
-             * Events
-             * @default []
-             */
-            events: components["schemas"]["SeedsEventDTO"][];
-        };
-        /** SeedsEventDTO */
-        SeedsEventDTO: {
-            /** Eventcode */
-            eventCode: string;
-            /** Discipline */
-            discipline: string;
-            /** Seeds */
-            seeds: components["schemas"]["SeedLineDTO"][];
-        };
         /** SegmentDTO */
         SegmentDTO: {
             /** Id */
@@ -8279,39 +8213,6 @@ export interface components {
             nowIso?: string | null;
             /** Timebudgetsec */
             timeBudgetSec?: number | null;
-        };
-        /** WinnersDTO */
-        WinnersDTO: {
-            /** Published */
-            published: boolean;
-            /**
-             * Events
-             * @default []
-             */
-            events: components["schemas"]["WinnersEventDTO"][];
-        };
-        /** WinnersEventDTO */
-        WinnersEventDTO: {
-            /** Eventcode */
-            eventCode: string;
-            /** Discipline */
-            discipline: string;
-            /** Decided */
-            decided: boolean;
-            winner?: components["schemas"]["HonorDTO"] | null;
-            runnerUp?: components["schemas"]["HonorDTO"] | null;
-            /**
-             * Semifinalists
-             * @default []
-             */
-            semifinalists: components["schemas"]["HonorDTO"][];
-            /** Finalscore */
-            finalScore?: number[][] | null;
-            /**
-             * Finalists
-             * @default []
-             */
-            finalists: components["schemas"]["HonorDTO"][];
         };
         /**
          * WithdrawRequest
@@ -12396,68 +12297,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlayersDTO"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    seeds_e_api_page__slug__seeds_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeedsDTO"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    winners_e_api_page__slug__winners_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WinnersDTO"];
                 };
             };
             /** @description Validation Error */

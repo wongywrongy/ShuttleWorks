@@ -20,6 +20,7 @@ import {
   formatDate,
   lineChip,
   priceLine,
+  receiptHref,
   render,
   resultsHref,
   withdrawAffordance,
@@ -60,6 +61,8 @@ function card(over: Partial<MyTournamentCard> = {}): MyTournamentCard {
     feeTotalCents: 5500,
     submittedAt: '2026-08-01T10:00:00+00:00',
     events: [line()],
+    submissionId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    withdrawsUntil: null,
     ...over,
   };
 }
@@ -123,6 +126,24 @@ describe('the pure decisions', () => {
     expect(formatDate('sometime')).toBe('');
     expect(formatDate(null)).toBe('');
   });
+
+  it('appends the withdrawal deadline to the price line only when one exists (E2)', () => {
+    expect(priceLine(card({ withdrawsUntil: '2026-09-05T18:00:00Z' }))).toContain(
+      'Total 55.00 · withdrawal open until',
+    );
+    expect(priceLine(card({ withdrawsUntil: null }))).toBe('Total 55.00');
+    expect(
+      priceLine(card({ status: 'awaiting', withdrawsUntil: null })),
+    ).toBe('Quoted 55.00 · pay at the desk');
+  });
+
+  it('links to the receipt whenever the card names a slug and a submission', () => {
+    expect(receiptHref(card())).toBe(
+      '/e/spring-open/receipt/ffffffff-ffff-4fff-8fff-ffffffffffff',
+    );
+    expect(receiptHref(card({ slug: null }))).toBeNull();
+    expect(receiptHref(card({ submissionId: '' }))).toBeNull();
+  });
 });
 
 describe('the DOM render', () => {
@@ -181,6 +202,26 @@ describe('the DOM render', () => {
     expect(root.textContent).toContain("MS · Men's Singles · Ada Chen");
     // The un-partnered line carries no stray "with".
     expect(root.textContent).not.toContain('Ada Chen with Sam Ali with');
+  });
+
+  it('footer carries a receipt link and the withdrawal deadline when present (E2)', () => {
+    const root = mount();
+    render(root, {
+      tournaments: [card({ withdrawsUntil: '2026-09-05T18:00:00Z' })],
+    });
+    const receipt = [...root.querySelectorAll('a')].find(
+      (a) => a.textContent === 'View receipt',
+    );
+    expect(receipt?.getAttribute('href')).toBe(
+      '/e/spring-open/receipt/ffffffff-ffff-4fff-8fff-ffffffffffff',
+    );
+    expect(root.textContent).toContain('withdrawal open until');
+  });
+
+  it('omits the withdrawal deadline text when there is no open deadline', () => {
+    const root = mount();
+    render(root, { tournaments: [card({ withdrawsUntil: null })] });
+    expect(root.textContent).not.toContain('withdrawal open until');
   });
 
   it('renders the calm empty state', () => {

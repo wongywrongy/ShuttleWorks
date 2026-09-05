@@ -1,4 +1,4 @@
-"""The SP-P7 public-site projections: draws, seeds, winners, player pages.
+"""The SP-P7 public-site projections: draws, player pages, schedule.
 
 The claims that matter, in the order the spec states them:
 
@@ -775,62 +775,6 @@ def test_rr_standings_ride_the_detail_with_history_pills(client):
     assert all(pill in ("W", "L") for row in detail["standings"] for pill in row["history"])
     (segment,) = detail["segments"]
     assert segment["rounds"][0]["label"] == "Round 1"
-
-
-# ---- seeds (§3.5) ---------------------------------------------------------
-
-
-def test_seeds_are_gated_by_draws_and_ordered(client, bracket_page):
-    body = client.get(f"/e/api/page/{bracket_page['slug']}/seeds").json()
-    assert body["published"] is True
-    (event,) = body["events"]
-    assert [line["seed"] for line in event["seeds"]] == [1, 2]
-    assert [p["identity"]["name"] for p in event["seeds"][0]["persons"]] == ["Ada Chen"]
-    assert event["seeds"][0]["club"] == "Riverside BC"
-
-    _set_flags(bracket_page["tid"], draws_published=False)
-    assert client.get(f"/e/api/page/{bracket_page['slug']}/seeds").json() == {
-        "published": False,
-        "events": [],
-    }
-
-
-# ---- winners (§3.6) -------------------------------------------------------
-
-
-def test_winners_gate_then_populate_as_the_draw_decides(client, bracket_page):
-    tid, slug = bracket_page["tid"], bracket_page["slug"]
-    assert client.get(f"/e/api/page/{slug}/winners").json() == {
-        "published": False,
-        "events": [],
-    }
-
-    _set_flags(tid, results_published=True)
-    (event,) = client.get(f"/e/api/page/{slug}/winners").json()["events"]
-    assert event["decided"] is False and event["winner"] is None
-
-    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
-    rounds = _units_by_round(state)
-    _record(client, tid, rounds[0][0], winner="A")
-    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
-    _record(client, tid, _units_by_round(state)[0][1], winner="B")
-    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
-    _record(client, tid, _units_by_round(state)[1][0], winner="A")
-
-    (event,) = client.get(f"/e/api/page/{slug}/winners").json()["events"]
-    assert event["decided"] is True
-    assert event["winner"] is not None and event["runnerUp"] is not None
-    assert len(event["semifinalists"]) == 2
-    assert set(event["winner"]) == {"persons", "club"}
-    assert set(event) == {
-        "eventCode", "discipline", "decided", "winner", "runnerUp",
-        "semifinalists", "finalScore", "finalists",
-    }
-    assert all(
-        set(person) == {"identity", "resolution", "label"}
-        and set(person["identity"]) == {"id", "name"}
-        for person in event["winner"]["persons"]
-    )
 
 
 # ---- player pages (§3.3) --------------------------------------------------

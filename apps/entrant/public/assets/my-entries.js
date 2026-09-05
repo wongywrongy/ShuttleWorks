@@ -72,15 +72,37 @@ export function cardChip(status) {
   );
 }
 
+/** ISO UTC instant -> "5 Sep 2026, 18:00 UTC" (no JS helper importable from
+ * `app/lib` on this page-script tier, per the tier's own boundary — see the
+ * file banner). */
+export function formatWithdrawDeadline(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  }).format(date);
+}
+
 /** Quoted while awaiting, plain total after; nothing on withdrawn cards or
- * unpriced pages. Register per the mockup review, symbol-less per the tier. */
+ * unpriced pages. Register per the mockup review, symbol-less per the tier.
+ * E2: a still-open withdrawal deadline is appended with the tier's own
+ * middle-dot separator. */
 export function priceLine(card) {
   if (card.feeTotalCents === null || card.feeTotalCents === undefined) return null;
   if (card.status === 'withdrawn') return null;
+  const deadline = formatWithdrawDeadline(card.withdrawsUntil);
+  const suffix = deadline ? ` · withdrawal open until ${deadline}` : '';
   if (card.status === 'awaiting') {
-    return `Quoted ${formatCents(card.feeTotalCents)} · pay at the desk`;
+    return `Quoted ${formatCents(card.feeTotalCents)} · pay at the desk${suffix}`;
   }
-  return `Total ${formatCents(card.feeTotalCents)}`;
+  return `Total ${formatCents(card.feeTotalCents)}${suffix}`;
 }
 
 /** A line wears its own chip only when it disagrees with the card. */
@@ -90,6 +112,14 @@ export function lineChip(cardStatus, state) {
   if (state === 'awaiting' && cardStatus !== 'awaiting') return 'Awaiting confirmation';
   if (state === 'entered' && cardStatus === 'awaiting') return 'Entered';
   return null;
+}
+
+/** "View receipt" exists whenever the card names both a slug and the
+ * submission it represents — every card qualifies once the backend fills
+ * in `submissionId`, so this is really just the null-safety guard. */
+export function receiptHref(card) {
+  if (!card.slug || !card.submissionId) return null;
+  return `/e/${encodeURIComponent(card.slug)}/receipt/${encodeURIComponent(card.submissionId)}`;
 }
 
 /** "View results" exists only where the player page answers (§4): played
@@ -160,6 +190,17 @@ function resultsLink(doc, href) {
     'a',
     'text-sm font-medium text-accent underline-offset-4 hover:underline',
     'View results',
+  );
+  view.href = href;
+  return view;
+}
+
+function receiptLink(doc, href) {
+  const view = el(
+    doc,
+    'a',
+    'text-sm font-medium text-accent underline-offset-4 hover:underline',
+    'View receipt',
   );
   view.href = href;
   return view;
@@ -269,14 +310,18 @@ function cardEl(doc, card, emailVerified) {
   article.appendChild(lines);
 
   const price = priceLine(card);
-  if (price || footerHref) {
+  const receiptHrefValue = receiptHref(card);
+  if (price || footerHref || receiptHrefValue) {
     const footer = el(
       doc,
       'footer',
       'flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft px-6 py-3 text-xs text-muted-foreground',
     );
     if (price) footer.appendChild(el(doc, 'span', undefined, price));
-    if (footerHref) footer.appendChild(resultsLink(doc, footerHref));
+    const links = el(doc, 'span', 'flex items-center gap-3');
+    if (receiptHrefValue) links.appendChild(receiptLink(doc, receiptHrefValue));
+    if (footerHref) links.appendChild(resultsLink(doc, footerHref));
+    if (links.childNodes.length > 0) footer.appendChild(links);
     article.appendChild(footer);
   }
   return article;

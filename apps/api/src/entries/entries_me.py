@@ -111,6 +111,20 @@ class MyTournamentCardDTO(BaseModel):
     # ISO instant of the most recent submission — the card's recency.
     submittedAt: str
     events: List[MyEntryLineDTO]
+    # The submission this card represents. A card folds every act this
+    # account made against the tournament (see the module docstring), so
+    # when there is more than one the NEWEST is the one named here —
+    # ``submitted_at`` descending, then the id, so two acts committed in the
+    # same instant still resolve to one stable answer across dialects.
+    submissionId: str
+    # E2: the latest moment self-serve withdrawal is still open on this
+    # card — the MINIMUM ``withdraws_until`` over the lines that can still
+    # be withdrawn, because the first deadline to pass is the one that
+    # changes what the card can offer. ``None`` when nothing can be
+    # withdrawn, and also when the withdrawable lines carry no deadline at
+    # all: the director set none, and the software does not invent one
+    # (``lifecycle.assert_withdrawable``).
+    withdrawsUntil: Optional[str] = None
 
 
 class MyEntriesDTO(BaseModel):
@@ -427,6 +441,11 @@ def my_entries(
             else {}
         )
         lines = []
+        # The deadlines of the lines that can still be withdrawn — collected
+        # here rather than re-derived, because ``_can_withdraw`` is the only
+        # place that knows the answer and asking twice is how the card and
+        # the button disagree.
+        withdraw_deadlines: List[datetime] = []
         for entry in own_entries:
             event = events.get((tid, entry.entry_event_id))
             event_badges = (
@@ -434,6 +453,9 @@ def my_entries(
                 if event is not None
                 else {}
             )
+            can_withdraw = _can_withdraw(entry, event)
+            if can_withdraw and event is not None and event.withdraws_until is not None:
+                withdraw_deadlines.append(event.withdraws_until)
             lines.append(
                 MyEntryLineDTO(
                     eventCode=event.code if event else "?",
@@ -445,7 +467,7 @@ def my_entries(
                     # re-implemented: ``assert_withdrawable`` holds the live-
                     # state rule AND the ``withdraws_until`` deadline, so a
                     # button that renders here is one the route will accept.
-                    canWithdraw=_can_withdraw(entry, event),
+                    canWithdraw=can_withdraw,
                     resultBadge=event_badges.get(roster_id(entry.entry_player_id)),
                     partner=partner_ref_by_entry.get(entry.id),
                 )
@@ -482,6 +504,14 @@ def my_entries(
                 feeTotalCents=sum(quotes) if quotes else None,
                 submittedAt=_moment_iso(max(s.submitted_at for s in own_subs)),
                 events=lines,
+                submissionId=str(
+                    max(own_subs, key=lambda s: (s.submitted_at, str(s.id))).id
+                ),
+                withdrawsUntil=(
+                    _moment_iso(min(withdraw_deadlines))
+                    if withdraw_deadlines
+                    else None
+                ),
             )
         )
 

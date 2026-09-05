@@ -51,7 +51,7 @@ import {
   visibleBlocks,
 } from '../lib/phase';
 import type { Route } from './+types/enter';
-import { BUTTON_SECONDARY, CARD, CHIP, INPUT_SKIN, PAGE_TITLE, SECTION_TITLE } from '../lib/ui';
+import { BUTTON_SECONDARY, CARD, INPUT_SKIN, PAGE_TITLE, SECTION_TITLE } from '../lib/ui';
 
 export interface EnterLoaderData {
   page: EntryPageDTO;
@@ -478,7 +478,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Before you begin</p>
               <h2 className={`mt-1 ${SECTION_TITLE}`}>Check eligibility and cost</h2>
             </div>
-            <span className={`${CHIP} border-rule-control text-muted-foreground`}>{openEvents.length} open {openEvents.length === 1 ? 'event' : 'events'}</span>
+            <span className="text-sm text-muted-foreground">{openEvents.length} open {openEvents.length === 1 ? 'event' : 'events'}</span>
           </div>
           <dl className="grid gap-3 text-sm sm:grid-cols-3">
             <div>

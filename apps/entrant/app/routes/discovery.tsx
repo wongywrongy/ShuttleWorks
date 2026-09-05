@@ -110,7 +110,7 @@ export const meta: Route.MetaFunction = () => [
   {
     name: 'description',
     content:
-      `Badminton tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`,
+      `${BRAND.sportName} tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`,
   },
   { property: 'og:title', content: brandedTitle('Tournaments') },
   { property: 'og:type', content: 'website' },
@@ -131,7 +131,7 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
           Tournaments
         </h1>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          {`Badminton tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`}
+          {`${BRAND.sportName} tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`}
         </p>
 
         <div className="mt-6 grid gap-4">

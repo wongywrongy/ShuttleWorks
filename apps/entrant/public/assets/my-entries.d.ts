@@ -40,6 +40,13 @@ export interface MyTournamentCard {
   feeTotalCents: number | null;
   submittedAt: string;
   events: MyEntryLine[];
+  /** The submission this card represents (the newest, when a card folds
+   *  more than one act). */
+  submissionId: string;
+  /** E2: the earliest still-open withdrawal deadline across the card's
+   *  withdrawable lines, ISO UTC. Null when nothing can be withdrawn, or
+   *  when the withdrawable lines carry no deadline at all. */
+  withdrawsUntil: string | null;
 }
 
 export interface MyEntries {
@@ -54,6 +61,8 @@ export type WithdrawAffordance =
 
 export function formatCents(cents: number | null | undefined): string;
 export function formatDate(iso: string | null | undefined): string;
+export function formatWithdrawDeadline(iso: string | null | undefined): string;
+export function receiptHref(card: MyTournamentCard): string | null;
 export function yearGroups(
   cards: readonly MyTournamentCard[],
 ): { year: string; cards: MyTournamentCard[] }[];

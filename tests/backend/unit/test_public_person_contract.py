@@ -1,7 +1,11 @@
 """Fast, exact allow-list guards for SP-P9's public projection spine."""
 
 from entries.entries_json import EntrantRowDTO, ReserveRowDTO
-from entries.entries_me import MyEntryLineDTO, ReceiptEntryLineDTO
+from entries.entries_me import (
+    MyEntryLineDTO,
+    MyTournamentCardDTO,
+    ReceiptEntryLineDTO,
+)
 from entries.entries_site import (
     DrawCardDTO,
     DrawPlayerDTO,
@@ -17,9 +21,7 @@ from entries.entries_site import (
     ScheduleFacetsDTO,
     ScheduleMatchDTO,
     ScheduleSideDTO,
-    SeedLineDTO,
     TeamDTO,
-    WinnersEventDTO,
 )
 
 
@@ -31,9 +33,7 @@ EXPECTED = {
     DrawCardDTO: {"drawKey", "eventCode", "discipline", "kind", "size", "hasConsolation", "matchCoverage", "recordScope", "topologyScope", "roundCount", "champions", "finalists", "remainingMatchCount", "historical", "sourceUrl"},
     DrawPlayerDTO: {"playerKey", "person", "club", "eventCodes"},
     TeamDTO: {"participantKey", "persons", "club", "seed"},
-    SeedLineDTO: {"seed", "persons", "club"},
     HonorDTO: {"persons", "club"},
-    WinnersEventDTO: {"eventCode", "discipline", "decided", "winner", "runnerUp", "semifinalists", "finalScore", "finalists"},
     PlayerDrawPathDTO: {"roundLabel", "opponents"},
     PlayerEventDTO: {"code", "discipline", "partner", "seed", "drawPath"},
     PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed"},
@@ -44,6 +44,7 @@ EXPECTED = {
     ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt"},
     ScheduleFacetsDTO: {"days", "events", "courts", "states"},
     MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner"},
+    MyTournamentCardDTO: {"slug", "tournamentName", "orgName", "entrantsPublished", "resultsPublished", "date", "venueName", "status", "feeTotalCents", "submittedAt", "events", "submissionId", "withdrawsUntil"},
     ReceiptEntryLineDTO: {"eventCode", "discipline", "player", "partner", "state"},
 }
 
@@ -66,3 +67,21 @@ def test_the_identity_and_contact_privacy_seams_stay_separate():
     forbidden = {"email", "phone", "feeCents", "submission", "accountId"}
     for model in EXPECTED:
         assert key_set(model).isdisjoint(forbidden), model.__name__
+
+
+def test_public_my_entries_keyset_rejects_extra_field():
+    """The negative control for the card the entrant's own page renders.
+
+    ``MyTournamentCardDTO`` is the one projection on this list that grew a
+    field in SP-PUB-AUDIT-1, so the guard that would have caught a stray one
+    is asserted directly rather than assumed: a subclass with a single extra
+    key must FAIL the exact-set check the suite applies to the real DTO.
+    """
+
+    class LeakyCard(MyTournamentCardDTO):
+        accountEmail: str = ""
+
+    expected = EXPECTED[MyTournamentCardDTO]
+    assert key_set(MyTournamentCardDTO) == expected
+    assert key_set(LeakyCard) != expected
+    assert key_set(LeakyCard) - expected == {"accountEmail"}

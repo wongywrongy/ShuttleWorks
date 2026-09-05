@@ -101,8 +101,8 @@ const MIRRORS: { file: string; pairs: Record<string, string>; unpaired: Record<s
     },
     {
       // Name-identical throughout: every shape here is reached from
-      // DrawsIndexDTO / DrawDetailDTO / SeedsDTO / WinnersDTO by a
-      // `components["schemas"][...]` reference of the same name.
+      // DrawsIndexDTO / DrawDetailDTO by a `components["schemas"][...]`
+      // reference of the same name.
       file: 'apps/entrant/app/lib/draws.types.ts',
       pairs: {
         DrawCardDTO: 'DrawCardDTO',
@@ -118,12 +118,7 @@ const MIRRORS: { file: string; pairs: Record<string, string>; unpaired: Record<s
         SegmentDTO: 'SegmentDTO',
         StandingRowDTO: 'StandingRowDTO',
         DrawDetailDTO: 'DrawDetailDTO',
-        SeedLineDTO: 'SeedLineDTO',
-        SeedsEventDTO: 'SeedsEventDTO',
-        SeedsDTO: 'SeedsDTO',
         HonorDTO: 'HonorDTO',
-        WinnersEventDTO: 'WinnersEventDTO',
-        WinnersDTO: 'WinnersDTO',
       },
       unpaired: {},
     },

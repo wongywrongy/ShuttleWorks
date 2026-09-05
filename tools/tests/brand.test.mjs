@@ -11,6 +11,7 @@ test('Yunavero owns a single generated ShuttleWorks brand contract', () => {
     productName: 'ShuttleWorks',
     publicProductName: 'ShuttleWorks Tournaments',
     productMonogram: 'SW',
+    sportName: 'Badminton',
     companyName: 'Yunavero',
     companyDomain: 'yunavero.com',
     endorsement: 'by Yunavero',
@@ -20,6 +21,8 @@ test('Yunavero owns a single generated ShuttleWorks brand contract', () => {
   assert.notEqual(brand.operatorHostname, brand.entrantHostname)
   assert.match(read('packages/brand/generated.ts'), /companyName: "Yunavero"/)
   assert.match(read('apps/api/src/core/brand.py'), /COMPANY_NAME = "Yunavero"/)
+  assert.match(read('packages/brand/generated.ts'), /sportName: "Badminton"/)
+  assert.match(read('apps/api/src/core/brand.py'), /SPORT_NAME = "Badminton"/)
 })
 
 test('customer surfaces consume the shared brand while protocol names stay stable', () => {

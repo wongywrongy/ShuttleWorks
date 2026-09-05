@@ -78,8 +78,6 @@ gated; the display tier does not infer publication state or create alerts.
 | `GET /e/api/page/{slug}/players/{personId}` | one person's events, partners, draw paths, published matches, and current court state | entrants publication; results independently gated |
 | `GET /e/api/page/{slug}/draws` | draw cards with discipline, format, size, rounds, coverage, and champions/remaining work | draws publication |
 | `GET /e/api/page/{slug}/draws/{drawKey}` | segments, rounds, nodes, person references, published scores, courts, and standings | draws publication; results independently gated |
-| `GET /e/api/page/{slug}/seeds` | ordered seed lines per event | draws publication |
-| `GET /e/api/page/{slug}/winners` | champion, runner-up, semifinalists, final score, or published final still to decide | results publication |
 | `GET /e/api/me/entries` | signed-in entrant's private entries and next actions | entrant session; private/no-store |
 
 Schedule reads are day-first. The UI preserves day, event, player, court, state, and organization
