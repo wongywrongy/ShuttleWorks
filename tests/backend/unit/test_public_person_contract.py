@@ -43,7 +43,7 @@ EXPECTED = {
     ScheduleSideDTO: {"participantKey", "persons", "placeholder"},
     ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt"},
     ScheduleFacetsDTO: {"days", "events", "courts", "states"},
-    MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner"},
+    MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner", "partnerInviteMailFailed"},  # v3 pkg 24: delivery flag, no person data
     MyTournamentCardDTO: {"slug", "tournamentName", "orgName", "entrantsPublished", "resultsPublished", "date", "venueName", "status", "feeTotalCents", "submittedAt", "events", "submissionId", "withdrawsUntil"},
     ReceiptEntryLineDTO: {"eventCode", "discipline", "player", "partner", "state"},
 }
