@@ -714,10 +714,20 @@ def _locality(address: Optional[str]) -> Optional[str]:
     comma-separated segments, which is where locality sits in that
     convention, and returns `None` rather than a guess when the address
     carries no comma (rule 4: omit, never invent).
+
+    A second, unrelated convention shows up in the same free-text field: some
+    callers (the demo simulator's seed data, at least — V3-26-7) pack an
+    itinerary into it as "<place>; <date range>; <draw format>", e.g.
+    "Asan, South Korea; 4-9 August; 32MS/32WS/32MD/32WD/32XD" for the T030
+    fixture. The place always sits before the first ";" in that convention,
+    so a semicolon split narrows the input to the place BEFORE the
+    comma-based extraction runs — a no-op for addresses that never had a
+    semicolon.
     """
     if not address:
         return None
-    parts = [part.strip() for part in address.split(",") if part.strip()]
+    place = address.split(";", 1)[0].strip()
+    parts = [part.strip() for part in place.split(",") if part.strip()]
     if len(parts) < 2:
         return None
     return f"{parts[-2]}, {parts[-1]}"

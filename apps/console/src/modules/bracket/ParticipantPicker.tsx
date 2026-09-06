@@ -19,7 +19,7 @@ import {
 } from "../../components/control-plane";
 import { OverflowMenu } from "../../components/control-plane/OverflowMenu";
 import { EYEBROW_CLASS } from "../../lib/utils";
-import { formatPlayerName, formatSideName } from "../../lib/names";
+import { formatPersonName, formatSideName } from "../../platform/domain/sides";
 import { teamName } from "./bracketLabels";
 import { nextTeamId } from "./rosterEvents";
 
@@ -101,7 +101,7 @@ function playerOptions(
     })
     .map((p) => ({
       id: p.id,
-      name: formatPlayerName(p.name || "(unnamed)"),
+      name: formatPersonName(p.name || "(unnamed)"),
       status: statusById?.get(p.id),
       disabled: disabledIds?.has(p.id),
     }));
@@ -342,7 +342,7 @@ function DoublesPicker({
     }
   });
   const playerNames = new Map(
-    players.map((player) => [player.id, formatPlayerName(player.name)]),
+    players.map((player) => [player.id, formatPersonName(player.name)]),
   );
   // Existing pairs remain visible AND selectable. An operator may be
   // replacing a partner, so legality is guarded by an explicit warning at
@@ -447,7 +447,7 @@ function DoublesPicker({
       <div className={`${EYEBROW_CLASS} text-muted-foreground`}>
         {step === "A"
           ? "Pick player A"
-          : `Pick partner for ${pickedA ? formatPlayerName(pickedA.name) : ""}`}
+          : `Pick partner for ${pickedA ? formatPersonName(pickedA.name) : ""}`}
       </div>
       <div className={LIST_BOX}>
         <PickerRecordTable
@@ -540,7 +540,7 @@ function DoublesPicker({
           className="flex flex-wrap items-center gap-2 rounded-sm border border-status-warning/40 bg-status-warning/10 px-2 py-1.5 text-xs"
         >
           <span className="min-w-0 flex-1">
-            {formatPlayerName(replacementWarning.player.name)} is already paired with{" "}
+            {formatPersonName(replacementWarning.player.name)} is already paired with{" "}
             {playerNames.get(pairedWith.get(replacementWarning.player.id) ?? "") ?? "another player"}.
             Continuing will replace that pair.
           </span>

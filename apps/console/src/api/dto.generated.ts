@@ -7966,6 +7966,8 @@ export interface components {
             pointsPerSet?: number | null;
             /** Deuceenabled */
             deuceEnabled?: boolean | null;
+            /** Pointcap */
+            pointCap?: number | null;
             /** Tvdisplaymode */
             tvDisplayMode?: ("auto" | "strip" | "grid" | "list") | null;
             /** Tvaccent */

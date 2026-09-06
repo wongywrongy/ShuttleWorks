@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { DrawDetailPanel } from "../DrawDetailPanel";
 import type { BracketEventDTO } from "../eventUpsertPayload";
-import { formatPlayerName, formatSideName } from "../../../lib/names";
+import { formatPersonName as formatPlayerName, formatSideName } from "../../../platform/domain/sides";
 
 const onClose = vi.fn();
 const onCommitPicks = vi.fn().mockResolvedValue(undefined);

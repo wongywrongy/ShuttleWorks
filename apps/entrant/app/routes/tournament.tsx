@@ -30,11 +30,12 @@ import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { DrawCardDTO, DrawsIndexDTO, PlayersDTO } from '../lib/draws.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import type { EntryPageDTO, ReserveRowDTO } from '../lib/entryPage.types';
-import { dateOfIso, formatDateLong, formatMomentInZone } from '../lib/format';
+import { capChipCountdown, dateOfIso, formatDateLong, formatMomentInZone } from '../lib/format';
 import {
   activeTab,
   chipState,
   ctaState,
+  nearestCloseAt,
   phaseLabel,
   timelineModel,
   tournamentPhase,
@@ -319,7 +320,7 @@ function DrawsPanel({
     <div className="grid gap-4">
       <h2 className="sr-only">Draws</h2>
       <div className={LIST_CARD}>
-        <div aria-hidden className={`hidden gap-4 px-4 pb-2 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:grid ${columns}`}>
+        <div aria-hidden className={`hidden gap-4 px-4 pb-2 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:grid ${columns}`}>
           <span>Event</span>
           {/* V3-PE04.2: one column, one unit — "N players"/"N pairs" — not a
               combined "registrations / draw participants" header describing
@@ -362,7 +363,13 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
   const tournamentView = page.tournament as EntryPageDTO['tournament'] & { phase?: string | null; status?: string | null; timeZone?: string | null };
   const now = new Date(nowMs);
   const slug = page.page.slug;
-  const chip = chipState(page.events, now);
+  // V3-26-5: cap the relative countdown at an absolute date past the
+  // threshold (the hero's status line).
+  const chip = capChipCountdown(
+    chipState(page.events, now),
+    nearestCloseAt(page.events),
+    tournamentView.timeZone ?? 'UTC',
+  );
   const cta = ctaState(page.events, slug);
   const phase = tournamentPhase({
     phase: tournamentView.phase,

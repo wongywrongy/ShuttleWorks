@@ -62,7 +62,7 @@ export function BracketResultsView({
               <h3 className="text-2xl font-semibold text-foreground">{event.discipline}</h3>
               {champion ? (
                 <p className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                  <span className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                     Champion
                   </span>
                   <span
@@ -76,7 +76,7 @@ export function BracketResultsView({
             </header>
             {rounds.map(([roundIndex, results]) => (
               <div key={roundIndex} className="mb-5 last:mb-0">
-                <h4 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <h4 className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                   {roundLabel(roundIndex, event.rounds.length)}
                 </h4>
                 <ul className="flex flex-col gap-2">

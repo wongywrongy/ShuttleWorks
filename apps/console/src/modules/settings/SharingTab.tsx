@@ -8,7 +8,7 @@ import type { InviteRole, InviteSummaryDTO } from '../../api/dto';
 import { useAuth } from '../../context/AuthContext';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
 import { PublicationSettings } from './PublicationSettings';
-import { TEXT_MUTED_2XS } from '../../lib/utils'
+import { TEXT_MUTED_XS } from '../../lib/utils'
 
 const ROLE_OPTIONS = [
   { value: 'operator', label: 'Operator' },
@@ -304,7 +304,7 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
                 resting-state reassurance. The armed state adds only the
                 cancel affordance, never a second, different claim about what
                 Replace does. */}
-            <p className={TEXT_MUTED_2XS}>
+            <p className={TEXT_MUTED_XS}>
               Replacing the link stops the old link from working.
               {confirmRotate.armed ? ' Every venue display goes blank until you re-share the new one. Press Escape to cancel.' : ''}
             </p>

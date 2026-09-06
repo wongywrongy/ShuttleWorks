@@ -39,7 +39,7 @@ import {
   type MatchInspectorModel,
   type SetPair,
 } from '../../../components/control-plane';
-import { formatPlayerName } from '../../../lib/names';
+import { formatPersonName } from '../../../platform/domain/sides';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO } from '../../../api/dto';
@@ -613,7 +613,7 @@ function PlayerCellSummary({
                 finished match is not (MAT-3). The outcome itself lives in
                 the result cell now. */}
             <span className={winner ? 'font-semibold text-foreground' : 'text-foreground'}>
-              {p.name ? formatPlayerName(p.name) : '–'}
+              {p.name ? formatPersonName(p.name) : '–'}
             </span>
             {i < named.length - 1 ? (
               <span className="px-1 text-muted-foreground">/</span>

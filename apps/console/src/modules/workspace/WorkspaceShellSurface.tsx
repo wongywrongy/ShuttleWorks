@@ -61,8 +61,6 @@ export function WorkspaceShellSurface({
 
   const surface = (() => {
     switch (segment) {
-      case 'display-config':
-        return <DisplayConfig tid={tid} modules={modules} />;
       case 'ws-venue':
         return <VenueScheduleTab />;
       case 'ws-members':

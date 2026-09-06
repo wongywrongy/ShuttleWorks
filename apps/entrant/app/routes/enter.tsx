@@ -44,6 +44,7 @@ import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { hasEntrantSession } from '../lib/session.server';
 import { formatCents } from '../lib/money';
+import { capChipCountdown } from '../lib/format';
 import { eventCodeLabel } from '../lib/draws.types';
 import {
   chipState,
@@ -381,8 +382,10 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
   const blocks = visibleBlocks(echo, actionData?.addPlayer ?? false);
   const bar = totalBarState(echo);
   const now = new Date(nowMs);
-  const chip = chipState(page.events, now);
   const deadline = nearestCloseAt(page.events);
+  // V3-26-5: cap the relative countdown at an absolute date past the
+  // threshold — StatusChip and StickyTotalBar both read this same `chip`.
+  const chip = capChipCountdown(chipState(page.events, now), deadline, page.tournament.timeZone);
   const slug = page.page.slug;
   // Whichever variant is rendering, the add-player round trip lands back on
   // it — a plain `/enter` would drop the outcome the URL states.
@@ -486,7 +489,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
         <section id="entry-eligibility" data-entry-wizard-panel="eligibility" className="mb-6 grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Before you begin</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">Before you begin</p>
               <h2 className={`mt-1 ${SECTION_TITLE}`}>Check eligibility and cost</h2>
             </div>
             <span className="text-sm text-muted-foreground">{openEvents.length} open {openEvents.length === 1 ? 'event' : 'events'}</span>

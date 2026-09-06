@@ -8,7 +8,7 @@ import {
   SELECTABLE_ROW_FOCUS,
   selectableRowProps,
 } from "../../lib/selectableRow";
-import { TEXT_MUTED_2XS, TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils'
+import { TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils'
 
 /** The catalog chip speaks the glossary's tri-state, not the wire's. The chip
  *  used to print `module.status` straight through, so it read "enabled" and
@@ -97,15 +97,15 @@ export function ModuleCatalogRow({
           {meta?.capability ?? module.note}
         </p>
         {meta?.dependency ? (
-          <p className={TEXT_MUTED_2XS}>{meta.dependency}</p>
+          <p className={TEXT_MUTED_XS}>{meta.dependency}</p>
         ) : null}
         {/* Don't repeat the dependency line word-for-word as the reason. */}
         {blockedReason && blockedReason !== meta?.dependency ? (
-          <p className={TEXT_MUTED_2XS}>{blockedReason}</p>
+          <p className={TEXT_MUTED_XS}>{blockedReason}</p>
         ) : null}
         <p
           data-testid={`module-impact-${module.id}`}
-          className={TEXT_MUTED_2XS}
+          className={TEXT_MUTED_XS}
         >
           {ownsData
             ? `${meta?.name ?? module.label} has draws or matches, so it stays on. It can be turned off once they are removed through ${meta?.name ?? module.label}.`
@@ -113,7 +113,7 @@ export function ModuleCatalogRow({
         </p>
         <p
           data-testid={`module-completion-${module.id}`}
-          className={TEXT_MUTED_2XS}
+          className={TEXT_MUTED_XS}
         >
           {module.status === "enabled"
             ? ownsData

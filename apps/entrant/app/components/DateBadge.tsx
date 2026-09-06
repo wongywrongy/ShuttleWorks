@@ -26,7 +26,7 @@ export function DateBadge({ date }: { date: string | null }) {
         <span className="text-xs font-medium text-muted-foreground">TBC</span>
       ) : (
         <span className="grid gap-1">
-          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             {monthShort(parsed.getUTCMonth())}
           </span>
           <span className="text-lg font-semibold tabular-nums text-foreground">

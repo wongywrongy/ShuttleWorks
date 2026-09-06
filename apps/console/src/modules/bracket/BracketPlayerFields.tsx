@@ -34,7 +34,7 @@ import {
 import { disciplineLabel } from './bracketLabels';
 import { EYEBROW_CLASS, ACCENT_PRESS } from '../../lib/utils';
 import { isDoublesCode } from '../../lib/doubles';
-import { formatPlayerName } from '../../lib/names';
+import { formatPersonName } from '../../platform/domain/sides';
 
 /** Writes one event's participant list (config echoed by the caller). */
 export type CommitEventFn = (
@@ -371,7 +371,7 @@ function EventTypeEditor({
               <div className="flex items-center gap-2 pl-11 text-xs text-muted-foreground">
                 <span data-testid={`partner-${ev.id}`}>
                   {currentPartner
-                    ? `Partner: ${formatPlayerName(currentPartner.name)}`
+                    ? `Partner: ${formatPersonName(currentPartner.name)}`
                     : 'Partner missing'}
                 </span>
                 {isDraft && currentTeam ? (

@@ -71,6 +71,10 @@ export interface TournamentConfig {
   setsToWin?: number; // 1 (best of 1), 2 (best of 3), or 3 (best of 5)
   pointsPerSet?: number; // 11, 15, or 21
   deuceEnabled?: boolean; // Win by 2 in deuce (up to 30 for 21-point sets)
+  // Mirrors Setup's `rules.pointCap` (ruling C3, V3-13-2) onto the Engine
+  // Config schema so the two surfaces echo the same operator-set cap.
+  // Not read by the engine — see core/schemas.py's TournamentConfig comment.
+  pointCap?: number | null;
   // ---- Public TV display ------------------------------------------
   // How the public ``/display`` page renders the courts view.
   //

@@ -152,10 +152,10 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
                   {/* De-emphasized PLANNED clock — never the primary label,
                       and never shown at all on the live "Now" court above. */}
                   {nextStartTime && (
-                    <span className="text-2xs text-muted-foreground"> ~{nextStartTime}</span>
+                    <span className="text-xs text-muted-foreground"> ~{nextStartTime}</span>
                   )}
                   {laterMatch && (
-                    <span className="text-2xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {'  ·  Later '}
                       {formatPlayers(laterMatch.sideA, playerNames)} vs{' '}
                       {formatPlayers(laterMatch.sideB, playerNames)}
@@ -359,7 +359,7 @@ function CourtCard({
                 {nextStartTime ? ` ~${nextStartTime}` : ''}
               </span>
             ) : (
-              <span className="text-2xs text-muted-foreground">No next match assigned</span>
+              <span className="text-xs text-muted-foreground">No next match assigned</span>
             )}
           </>
         ) : nextMatch ? (
@@ -490,9 +490,7 @@ function NextUp({
   return (
     <div className="flex flex-col gap-1.5 text-muted-foreground">
       <div className="flex flex-col gap-0.5">
-        <span
-          className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.08em]`}
-        >
+        <span className="text-xs font-semibold uppercase tracking-[0.06em]">
           Next <span className="sw-num normal-case tracking-normal">{nextCode}</span>
           {nextStartTime && (
             <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground">
@@ -508,9 +506,7 @@ function NextUp({
       </div>
       {laterSideA && laterSideB && (
         <div className="flex flex-col gap-0.5">
-          <span
-            className={`${isFullscreen ? 'text-2xs' : 'text-xs'} font-semibold uppercase tracking-[0.08em] text-muted-foreground`}
-          >
+          <span className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             Later {laterCode && <span className="sw-num normal-case tracking-normal">{laterCode}</span>}
             {laterStartTime && (
               <span className="ml-1 font-normal normal-case tracking-normal">

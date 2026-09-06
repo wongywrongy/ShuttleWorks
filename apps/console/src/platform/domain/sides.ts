@@ -21,6 +21,16 @@
  * round-label speller), and a caller with a `labelById` map (
  * `bracketLabels.ts`'s `buildPlayUnitLabels`) turns it into "Winner of QF1"
  * before formatting.
+ *
+ * `formatPersonName`/`formatSideName`/`sideNameLines` (retired from
+ * `lib/names.ts`, V3-10-3) are a narrower compatibility shim for callers that
+ * only ever held a pre-joined side string ("A / B") rather than the
+ * structured wire `sides` this file otherwise expects — `MatchesSpreadsheet`,
+ * `BracketPlayerFields`, `ParticipantPicker` and `RunCourtGrid` were outside
+ * package 10c's scope (BracketMatchesTab, prior art for the full `Side`
+ * conversion) and still work from joined strings. They preserve the operator-
+ * entered name exactly (no reordering — names are not safely parseable from
+ * whitespace) and stay presentation-only, same as their `names.ts` originals.
  */
 
 /** One resolved (or dead) person reference. */
@@ -199,4 +209,25 @@ export function sideSummaryPhrase(sideA: Side, sideB: Side): string {
  *  defensive assertion helper for tests. */
 export function isEmptySide(side: Side): boolean {
   return formatSideLines(side).length === 0;
+}
+
+/** Preserve the canonical operator-entered display name. Names are not
+ *  safely parseable from whitespace, so presentation must never silently
+ *  reorder them. See this file's module docstring — a pre-joined-string
+ *  compatibility shim, not the structured `Side` formatting above. */
+export function formatPersonName(name: string): string {
+  return name.trim();
+}
+
+/** Format every player inside a pre-joined side string, preserving the
+ *  joiner ("A / B" or "A & B"). Compatibility shim — see module docstring. */
+export function formatSideName(side: string, joiner: ' / ' | ' & ' = ' / '): string {
+  return side.split(joiner).map(formatPersonName).join(joiner);
+}
+
+/** The players of a pre-joined side, formatted, one entry per player — for
+ *  callers that render each on its own line. Compatibility shim — see module
+ *  docstring. */
+export function sideNameLines(side: string, joiner: ' / ' | ' & ' = ' / '): string[] {
+  return side.split(joiner).map(formatPersonName);
 }

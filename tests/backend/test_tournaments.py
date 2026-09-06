@@ -334,6 +334,32 @@ def test_state_put_then_get_roundtrip(client):
     assert get_r.json()["config"]["tournamentName"] == "A v1"
 
 
+def test_state_put_roundtrips_point_cap(client):
+    """TournamentConfig.pointCap (V3-13-2) mirrors Setup's `rules.pointCap`
+    onto the Engine Config's own schema — same bounds (1-200), optional,
+    default unset. Round-trips like every other scoring field."""
+    created = client.post("/tournaments", json={"name": "Point cap"}).json()
+    tid = created["id"]
+    payload = _basic_state("Point cap")
+    payload["config"]["pointCap"] = 30
+    put_r = client.put(f"/tournaments/{tid}/state", json=payload)
+    assert put_r.status_code == 200, put_r.text
+    assert put_r.json()["config"]["pointCap"] == 30
+
+    get_r = client.get(f"/tournaments/{tid}/state")
+    assert get_r.status_code == 200
+    assert get_r.json()["config"]["pointCap"] == 30
+
+
+def test_state_put_rejects_point_cap_out_of_bounds(client):
+    created = client.post("/tournaments", json={"name": "Point cap bounds"}).json()
+    tid = created["id"]
+    payload = _basic_state("Point cap bounds")
+    payload["config"]["pointCap"] = 201
+    put_r = client.put(f"/tournaments/{tid}/state", json=payload)
+    assert put_r.status_code == 422
+
+
 def test_state_put_updates_denormalised_name_on_summary(client):
     created = client.post("/tournaments", json={"name": "Old"}).json()
     tid = created["id"]

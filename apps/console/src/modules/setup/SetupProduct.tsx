@@ -312,6 +312,7 @@ function SectionEditor({
           pointsPerSet: numberOf(data, 'pointsPerSet') || 21,
           setsToWin: numberOf(data, 'setsToWin') || 2,
           deuceEnabled: data.deuceEnabled !== false,
+          pointCap: numberOf(data, 'pointCap'),
         };
         const updateScoring = (patch: Partial<ScoringValue>) => {
           for (const [field, value] of Object.entries(patch)) {
@@ -331,24 +332,10 @@ function SectionEditor({
               />
             }
           />
+          {/* Point cap (Ruling C3) now renders inside ScoringFields itself —
+              V3-13-2 moved it there so the Engine Config tab's mirrored
+              field gets the identical control instead of a second copy. */}
           <ScoringFields value={scoring} onChange={updateScoring} />
-          {scoring.deuceEnabled ? (
-            // Ruling C3: the only cap that exists is whatever is configured
-            // here — never a hardcoded "cap 30". 0 means uncapped.
-            <Row
-              label="Point cap"
-              control={
-                <NumberWithSuffix
-                  value={numberOf(data, 'pointCap')}
-                  onChange={(v) => onChange('pointCap', v > 0 ? v : null)}
-                  suffix={numberOf(data, 'pointCap') > 0 ? 'pts' : '(0 = no cap)'}
-                  min={0}
-                  max={200}
-                  ariaLabel="Point cap"
-                />
-              }
-            />
-          ) : null}
           <Row
             label="Minimum rest between matches"
             control={

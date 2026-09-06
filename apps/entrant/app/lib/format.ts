@@ -9,7 +9,13 @@
  * NOTHING for a value that does not parse — a page must not invent a date
  * the director never set.
  */
-import { monthLong, parseIsoDate, parseMoment } from './phase';
+import {
+  CHIP_ABSOLUTE_DATE_THRESHOLD_DAYS,
+  monthLong,
+  parseIsoDate,
+  parseMoment,
+  type ChipState,
+} from './phase';
 
 const MONTHS = Object.freeze([
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -100,4 +106,55 @@ export function formatMomentInZone(wire: string, timeZone: string): string | nul
     // instant. Still never raw ISO.
     return formatMoment(wire);
   }
+}
+
+/**
+ * The date-only twin of `formatMomentInZone` — no time, no zone
+ * abbreviation, for a caller that only needs a calendar day in the
+ * tournament's own zone (V3-26-5's chip cap). Same rules: an unrecognised
+ * `timeZone` degrades to the UTC calendar day rather than omitting a known
+ * instant; an unparseable `wire` is `null`, never raw ISO.
+ */
+export function formatDateInZone(wire: string, timeZone: string): string | null {
+  const moment = parseMoment(wire);
+  if (moment === null) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      day: 'numeric', month: 'short', year: 'numeric', timeZone,
+    }).formatToParts(moment);
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('day')} ${value('month')} ${value('year')}`;
+  } catch {
+    return `${moment.getUTCDate()} ${MONTHS[moment.getUTCMonth()]} ${moment.getUTCFullYear()}`;
+  }
+}
+
+/**
+ * V3-26-5 (owner ruling: cap the day count). "Closes in Nd" stops being a
+ * useful micro-label once N runs past `CHIP_ABSOLUTE_DATE_THRESHOLD_DAYS` —
+ * a fixture's synthetic far-future `closesAt` read "closes in 3039d" and, on
+ * `StatusChip` (`whitespace-nowrap`/`shrink-0` by design), forced a
+ * document-level horizontal scroll at 200% zoom. Past the threshold this
+ * returns the state with `closesAtAbsolute` set to the exact
+ * tournament-timezone date, which `chipLabel` then prefers; below it, or
+ * with nothing to format, the state comes back unchanged. Lives here rather
+ * than in `lib/phase.ts` because it turns an instant into words — that
+ * module only counts days (see its `MONTHS_LONG` note on the one-way
+ * `format → phase` import).
+ */
+export function capChipCountdown(
+  state: ChipState,
+  closesAt: string | null,
+  timeZone: string,
+): ChipState {
+  if (
+    state.kind !== 'entriesOpen' ||
+    state.closesInDays === null ||
+    state.closesInDays <= CHIP_ABSOLUTE_DATE_THRESHOLD_DAYS ||
+    closesAt === null
+  ) {
+    return state;
+  }
+  const exact = formatDateInZone(closesAt, timeZone);
+  return exact === null ? state : { ...state, closesAtAbsolute: exact };
 }

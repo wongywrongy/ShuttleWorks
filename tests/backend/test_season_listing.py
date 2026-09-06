@@ -70,6 +70,14 @@ def season(client):
             venue_address="4 Kingsway, London, United Kingdom",
             time_zone="Europe/London",
         )
+        # V3-26-7: the demo simulator's seed data packs an itinerary into
+        # venue_address as "<place>; <date range>; <draw format>" — the
+        # locality heuristic must still surface the place alone.
+        make(
+            session, "case-itinerary-address", next_month,
+            closes=now + timedelta(days=5),
+            venue_address="Asan, South Korea; 4-9 August; 32MS/32WS/32MD/32WD/32XD",
+        )
         make(session, "case-closed", next_month, closes=now - timedelta(days=1))
         make(session, "case-live", today, draws=True)
         make(session, "case-quiet-live", today)
@@ -99,6 +107,9 @@ def test_every_enum_case_computes_serverside(client, season):
     assert rows["case-open"]["closesAt"] is not None
     assert rows["case-open"]["timeZone"] == "Europe/London"
     assert rows["case-open"]["locality"] == "London, United Kingdom"
+    # V3-26-7: an itinerary-shaped address ("<place>; <dates>; <draw
+    # format>") must still reduce to place-only, not the whole string.
+    assert rows["case-itinerary-address"]["locality"] == "Asan, South Korea"
     # A closed row has no open-event deadline to count down to, so no exact
     # instant either — never a stale or invented one.
     assert rows["case-closed"]["closesAt"] is None
@@ -130,7 +141,7 @@ def test_the_key_set_is_pinned(client, season):
 
 def test_counts_match_the_rows(client, season):
     body = client.get("/e/api/pages").json()
-    assert body["counts"] == {"takingEntries": 1, "completed": 2}
+    assert body["counts"] == {"takingEntries": 2, "completed": 2}
 
 
 def test_the_now_pick_requires_published_draws(client, season):
@@ -178,7 +189,7 @@ def test_rows_order_dated_ascending_then_slug(client, season):
     assert slugs == [
         "case-done", "case-winners",          # yesterday, slug-tied
         "case-live", "case-quiet-live",       # today
-        "case-closed", "case-open",           # next month
+        "case-closed", "case-itinerary-address", "case-open",  # next month
         "case-undated",                       # undated sorts LAST, not first
     ]
 

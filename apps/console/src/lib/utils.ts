@@ -54,15 +54,6 @@ export { EYEBROW_CLASS } from "@scheduler/design-system/components"
  * These are the exact strings that were previously hand-copied; adopt
  * them when touching a file, don't reflow whole surfaces for the swap.
  */
-/**
- * @deprecated The 2xs (11px) rung was retired below the 12px caption floor
- * (v3 consolidated plan, package 07, ruling R1) — this now equals
- * `TEXT_MUTED_XS` so existing imports keep rendering correctly. Prefer
- * `TEXT_MUTED_XS` directly in new and touched code; this alias is kept only
- * so its remaining call sites (outside this package's scope) don't need a
- * mechanical rename in the same change.
- */
-export const TEXT_MUTED_2XS = "text-xs text-muted-foreground"
 export const TEXT_MUTED_XS = "text-xs text-muted-foreground"
 export const TEXT_MUTED_SM = "text-sm text-muted-foreground"
 export const TEXT_TITLE = "text-base font-semibold text-foreground"

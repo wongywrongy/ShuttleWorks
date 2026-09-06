@@ -118,7 +118,7 @@ export function EventBadge({ code, seed }: { code: string; seed?: number | null 
     >
       {code}
       {seed != null ? (
-        <span className="font-normal opacity-80"> [{seed}]</span>
+        <span className="font-normal text-muted-foreground"> [{seed}]</span>
       ) : null}
     </span>
   );

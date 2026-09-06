@@ -42,7 +42,7 @@ function SectionHeader({ label }: { label: string }) {
     // to the corner radius: this tier bans that class outright
     // (`noTruncation.test.ts`), and a header that is only type does not need
     // it. The rows' own top rules are what separate the header from its list.
-    <h2 className="px-4 pb-1 pt-4 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <h2 className="px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
       {label}
     </h2>
   );

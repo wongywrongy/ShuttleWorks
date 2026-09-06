@@ -28,7 +28,7 @@ import { StatusChip } from '../app/components/StatusChip';
 import { StickyTotalBar } from '../app/components/StickyTotalBar';
 import { TabBar } from '../app/components/TabBar';
 import { SegmentedNav } from '../app/components/SegmentedNav';
-import { formatDateLong } from '../app/lib/format';
+import { capChipCountdown, formatDateInZone, formatDateLong } from '../app/lib/format';
 import type { EntryEventDTO } from '../app/lib/entryPage.types';
 import type { DrawCardDTO } from '../app/lib/draws.types';
 import { statusCell } from '../app/lib/phase';
@@ -91,8 +91,20 @@ describe('StatusChip', () => {
     [{ kind: 'entriesOpen', closesInDays: 0 } as ChipState, 'Entries open · closes today'],
     [{ kind: 'entriesOpen', closesInDays: null } as ChipState, 'Entries open'],
     [{ kind: 'entriesClosed' } as ChipState, 'Entries closed'],
+    // V3-26-5: past the cap threshold with an absolute date already
+    // attached (as `capChipCountdown` would set it), StatusChip renders the
+    // date form, not "closes in Nd".
+    [
+      { kind: 'entriesOpen', closesInDays: 3039, closesAtAbsolute: '12 Jan 2035' } as ChipState,
+      'Entries open · closes 12 Jan 2035',
+    ],
   ])('%o renders its exact ruled copy', (state, copy) => {
     expect(renderToStaticMarkup(h(StatusChip, { state }))).toContain(copy);
+  });
+
+  it('never renders the raw "closes in 3039d" fixture value once capped', () => {
+    const capped: ChipState = { kind: 'entriesOpen', closesInDays: 3039, closesAtAbsolute: '12 Jan 2035' };
+    expect(renderToStaticMarkup(h(StatusChip, { state: capped }))).not.toContain('3039d');
   });
 
   it('tones open on the live ramp, colour + text only (ADR 0027)', () => {
@@ -113,6 +125,59 @@ describe('StatusChip', () => {
       const html = renderToStaticMarkup(h(StatusChip, { state }));
       expect(html).not.toMatch(/Live|Finished|In play/);
     }
+  });
+});
+
+// ---- capChipCountdown: V3-26-5's threshold boundary -------------------------
+
+describe('capChipCountdown', () => {
+  const CLOSES_AT = '2035-01-12 09:00 UTC';
+
+  it('at the threshold (99d), leaves the relative count alone', () => {
+    const state: ChipState = { kind: 'entriesOpen', closesInDays: 99 };
+    expect(capChipCountdown(state, CLOSES_AT, 'UTC')).toEqual(state);
+  });
+
+  it('just past the threshold (100d), caps to the absolute date', () => {
+    const state: ChipState = { kind: 'entriesOpen', closesInDays: 100 };
+    expect(capChipCountdown(state, CLOSES_AT, 'UTC')).toEqual({
+      kind: 'entriesOpen',
+      closesInDays: 100,
+      closesAtAbsolute: '12 Jan 2035',
+    });
+  });
+
+  it('the T030-style extreme (3039d) also caps', () => {
+    const state: ChipState = { kind: 'entriesOpen', closesInDays: 3039 };
+    expect(capChipCountdown(state, CLOSES_AT, 'UTC').kind).toBe('entriesOpen');
+    expect((capChipCountdown(state, CLOSES_AT, 'UTC') as { closesAtAbsolute?: string | null }).closesAtAbsolute).toBe(
+      '12 Jan 2035',
+    );
+  });
+
+  it('renders the tournament zone, not UTC, when they differ', () => {
+    // 2035-01-12 09:00 UTC is still 2035-01-12 in Tokyo (+09:00, so 18:00
+    // local) — pick a zone/instant pair where the calendar day actually
+    // shifts to prove the zone is really being applied.
+    const state: ChipState = { kind: 'entriesOpen', closesInDays: 100 };
+    const capped = capChipCountdown(state, '2035-01-12 23:30 UTC', 'Pacific/Auckland');
+    expect((capped as { closesAtAbsolute?: string | null }).closesAtAbsolute).toBe('13 Jan 2035');
+  });
+
+  it('leaves entriesClosed and no-deadline states untouched', () => {
+    expect(capChipCountdown({ kind: 'entriesClosed' }, CLOSES_AT, 'UTC')).toEqual({ kind: 'entriesClosed' });
+    const noDeadline: ChipState = { kind: 'entriesOpen', closesInDays: 100 };
+    expect(capChipCountdown(noDeadline, null, 'UTC')).toEqual(noDeadline);
+  });
+});
+
+describe('formatDateInZone', () => {
+  it('formats a valid moment as a bare calendar date', () => {
+    expect(formatDateInZone('2035-01-12 09:00 UTC', 'UTC')).toBe('12 Jan 2035');
+  });
+
+  it('is null for an unparseable wire value', () => {
+    expect(formatDateInZone('not-a-moment', 'UTC')).toBeNull();
   });
 });
 

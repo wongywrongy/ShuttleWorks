@@ -157,7 +157,6 @@ export function WorkspaceRow({
   const badge = showLifecycleBadge
     ? lifecycleChip(tournament.signals?.phase, tournament.status)
     : null;
-  const receded = group === 'past';
   // "Set date" (and any reason-coded setup step) is the attention-y next
   // action — it warms to amber; Open/View results stay quiet.
   const attention = action.kind === 'set-date';
@@ -193,7 +192,6 @@ export function WorkspaceRow({
         // strangling the name; see the `min-w-[12rem]` floor below.
         'group flex min-h-[40px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-2sm @container/table',
         'transition-colors duration-fast ease-brand',
-        receded ? 'opacity-80 hover:opacity-100' : '',
         selected
           ? 'bg-bg-elev shadow-[inset_2px_0_0_hsl(var(--accent))]'
           : 'hover:bg-muted/40',

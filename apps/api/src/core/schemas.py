@@ -140,6 +140,11 @@ class TournamentConfig(StrictModel):
     setsToWin: Optional[int] = Field(None, ge=1, le=3)
     pointsPerSet: Optional[int] = Field(None, ge=11, le=30)
     deuceEnabled: Optional[bool] = None
+    # UI metadata mirroring Setup's `rules.pointCap` (ruling C3, V3-13-2) so
+    # the Engine Config tab echoes the same operator-set cap — same bounds
+    # as the Setup field. Not read by the engine; see setup.py's RulesSection
+    # docstring for the "no built-in cap" rule this projects.
+    pointCap: Optional[int] = Field(None, ge=1, le=200)
     # Public TV display mode (UI-only metadata; preserved across PUT).
     # "strip" is RETIRED as a choice (SP-CONSOLE-2 DC-1) but stays accepted:
     # it was the default, so every workspace that never touched the setting

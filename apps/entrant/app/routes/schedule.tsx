@@ -13,8 +13,8 @@ import { TabBar } from "../components/TabBar";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
 import type { EntryPageDTO } from "../lib/entryPage.types";
 import { eventDisciplineLabel } from "../lib/draws.types";
-import { formatCalendarMonth, formatDateLong } from "../lib/format";
-import { chipState, tournamentPhase, visibleTabs } from "../lib/phase";
+import { capChipCountdown, formatCalendarMonth, formatDateLong } from "../lib/format";
+import { chipState, nearestCloseAt, tournamentPhase, visibleTabs } from "../lib/phase";
 import {
   SCHEDULE_STATES,
   schedulePublicState,
@@ -611,7 +611,11 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
         metaLine={[formatDateLong(page.tournament.date), page.venue?.name]
           .filter(Boolean)
           .join(" · ")}
-        chip={chipState(page.events, new Date(nowMs))}
+        chip={capChipCountdown(
+          chipState(page.events, new Date(nowMs)),
+          nearestCloseAt(page.events),
+          page.tournament.timeZone,
+        )}
         cta={{ kind: "closed" }}
         phaseAction={
           phase === "entries_open"

@@ -59,7 +59,7 @@ import {
   reasonLabel,
   skipReasonLabel,
 } from './entryDisplay';
-import { TEXT_EMPHASIS, TEXT_MUTED_2XS, TEXT_MUTED_XS } from '../../lib/utils'
+import { TEXT_EMPHASIS, TEXT_MUTED_XS } from '../../lib/utils'
 
 /** Ruling D1: `pending` is the only state a confirm may start from. Mirrors
  *  `_CONFIRMABLE_FROM` in `entries/entries_routes.py`, which answers 409
@@ -325,7 +325,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
                     <span
                       key={code}
                       className={[
-                        'rounded-sm border px-1.5 py-0.5 text-2xs font-medium',
+                        'rounded-sm border px-1.5 py-0.5 text-xs font-medium',
                         hasAttention([code])
                           ? 'border-status-warning/40 bg-status-warning-bg text-status-warning'
                           : 'border-border text-muted-foreground',
@@ -343,7 +343,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
                     it is shown it wraps and the row grows. */}
                 <span
                   role="cell"
-                  className={`${colClass(COLUMNS[4])} min-w-0 break-words text-2xs text-muted-foreground`}
+                  className={`${colClass(COLUMNS[4])} min-w-0 break-words text-xs text-muted-foreground`}
                 >
                   {e.remarks ?? ''}
                 </span>
@@ -512,7 +512,7 @@ function CommitSummary({
       {skipped.length > 0 ? (
         <ul className="mt-1.5 space-y-0.5">
           {skipped.map((s) => (
-            <li key={s.id} className={TEXT_MUTED_2XS}>
+            <li key={s.id} className={TEXT_MUTED_XS}>
               <span className={TEXT_EMPHASIS}>
                 {nameById.get(s.id) ?? s.id}
               </span>{' '}

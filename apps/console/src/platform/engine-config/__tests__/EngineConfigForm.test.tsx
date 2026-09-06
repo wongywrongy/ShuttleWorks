@@ -144,6 +144,30 @@ describe('<EngineConfigForm /> — shared groups', () => {
       expect(screen.getByLabelText('Allow player overlap')).toBeInTheDocument();
     },
   );
+
+  // V3-13-2: pointCap mirrors Setup's rules.pointCap onto the Engine Config
+  // tab (ruling C3) — same ScoringFields control, gated on deuce.
+  it.each(['meet', 'bracket'] as const)(
+    '%s shows the configured point cap when deuce is enabled',
+    (module) => {
+      useTournamentStore.setState({ config: { ...baseConfig, pointCap: 30 } });
+      mount(module);
+      const capField = screen.getByLabelText('Point cap');
+      expect(capField).toHaveValue(30);
+      expect(screen.getByText('pts')).toBeInTheDocument();
+    },
+  );
+
+  it.each(['meet', 'bracket'] as const)(
+    '%s hides the point cap field when deuce is off',
+    (module) => {
+      useTournamentStore.setState({
+        config: { ...baseConfig, deuceEnabled: false, pointCap: 30 },
+      });
+      mount(module);
+      expect(screen.queryByLabelText('Point cap')).not.toBeInTheDocument();
+    },
+  );
 });
 
 describe('<EngineConfigForm /> — module applicability', () => {

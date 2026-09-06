@@ -39,8 +39,30 @@ export type Tab = 'overview' | 'draws' | 'players';
 export type LegacyTab = 'events' | 'entrants' | 'seeds' | 'winners';
 
 export type ChipState =
-  | { kind: 'entriesOpen'; closesInDays: number | null }
+  | {
+      kind: 'entriesOpen';
+      closesInDays: number | null;
+      /**
+       * V3-26-5: set only when `closesInDays` exceeds
+       * `CHIP_ABSOLUTE_DATE_THRESHOLD_DAYS` — a pre-formatted, tournament-
+       * timezone calendar date (`12 Jan 2035`) that `chipLabel` prefers over
+       * the relative count. Computed by `format.ts`'s `capChipCountdown`,
+       * not here: this module only counts days, it does not turn instants
+       * into words (see the `MONTHS_LONG` note below on why `format.ts`
+       * cannot be imported the other way).
+       */
+      closesAtAbsolute?: string | null;
+    }
   | { kind: 'entriesClosed' };
+
+/**
+ * V3-26-5 (owner ruling): beyond this many days, "closes in Nd" stops being
+ * useful — a fixture's synthetic far-future `closesAt` reads "closes in
+ * 3039d" and forces layout overflow at 200% zoom on `StatusChip`
+ * (`whitespace-nowrap`/`shrink-0` by design; see V3-26-7's sibling debt
+ * row). Past the threshold the chip states the exact date instead.
+ */
+export const CHIP_ABSOLUTE_DATE_THRESHOLD_DAYS = 99;
 
 export type CtaState = { kind: 'enter'; href: string } | { kind: 'closed' };
 
@@ -326,6 +348,9 @@ export function nearestCloseAt(
 /** The chip's sentence-case public copy — the ruling's exact two states. */
 export function chipLabel(state: ChipState): string {
   if (state.kind === 'entriesClosed') return 'Entries closed';
+  // V3-26-5: the capped, absolute-date form wins whenever it is present —
+  // `capChipCountdown` only ever sets it beyond the threshold.
+  if (state.closesAtAbsolute) return `Entries open · closes ${state.closesAtAbsolute}`;
   if (state.closesInDays === null) return 'Entries open';
   if (state.closesInDays === 0) return 'Entries open · closes today';
   return `Entries open · closes in ${state.closesInDays}d`;

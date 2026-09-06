@@ -16,7 +16,7 @@
 import { useMemo } from 'react';
 import type { OpsBlock } from '../opsBlock';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
-import { sideNameLines } from '../../../lib/names';
+import { sideNameLines } from '../../../platform/domain/sides';
 import { STATE_WORD } from '../../../lib/stateWords';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';

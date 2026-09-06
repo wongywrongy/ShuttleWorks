@@ -185,6 +185,15 @@ describe('chipLabel', () => {
     [{ kind: 'entriesOpen', closesInDays: null } as const, 'Entries open'],
     [{ kind: 'entriesOpen', closesInDays: 0 } as const, 'Entries open · closes today'],
     [{ kind: 'entriesOpen', closesInDays: 4 } as const, 'Entries open · closes in 4d'],
+    // V3-26-5: a huge relative count with no absolute date attached yet
+    // (e.g. `capChipCountdown` couldn't format one) still falls back to the
+    // relative form — never `undefined`/blank.
+    [{ kind: 'entriesOpen', closesInDays: 3039 } as const, 'Entries open · closes in 3039d'],
+    // `closesAtAbsolute` wins outright once `capChipCountdown` has set it.
+    [
+      { kind: 'entriesOpen', closesInDays: 3039, closesAtAbsolute: '12 Jan 2035' } as const,
+      'Entries open · closes 12 Jan 2035',
+    ],
   ])('%o → %s', (state, label) => {
     expect(chipLabel(state)).toBe(label);
   });

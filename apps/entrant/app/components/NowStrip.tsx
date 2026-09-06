@@ -39,7 +39,7 @@ export function NowStrip({ row, moreCount }: { row: SeasonRow; moreCount: number
       </div>
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-4 px-4 py-5">
         <div className="grid min-w-0 flex-1 basis-80 gap-1">
-          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-status-live">
+          <span className="text-xs font-semibold uppercase tracking-[0.06em] text-status-live">
             Live today
           </span>
           <span className="type-display text-2xl leading-[1.1] tracking-[-0.02em] text-foreground">

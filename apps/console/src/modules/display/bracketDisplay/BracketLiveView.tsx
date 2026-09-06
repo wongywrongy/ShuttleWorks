@@ -42,7 +42,7 @@ export function BracketLiveView({
           className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5"
         >
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <span className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
               Court {court}
             </span>
             {/* "Next" is the calm state, so it stays a plain muted chip —

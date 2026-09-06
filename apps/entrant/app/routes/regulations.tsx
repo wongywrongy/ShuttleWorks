@@ -225,7 +225,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
         </div>
 
         <header className="mt-6 max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             Organizer-published document
           </p>
           <h1 className={`mt-2 ${PAGE_TITLE}`}>
