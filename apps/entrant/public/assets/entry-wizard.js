@@ -133,7 +133,7 @@ function makeButton(label, action, value) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = action === 'next'
-    ? 'inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover'
+    ? 'inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover'
     : 'inline-flex min-h-10 items-center justify-center rounded-md border border-rule-control px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-sunken';
   button.dataset[`wizard${action === 'next' ? 'Next' : 'Back'}`] = value;
   button.textContent = label;

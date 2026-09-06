@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Select } from '@scheduler/design-system';
+import { Button, Checkbox, FormActions, Select } from '@scheduler/design-system';
 import { apiClient } from '../../api/client';
 import type { EntryPageDTO, EntryPagePublicationPatchDTO } from '../../api/dto';
 import { useCanEdit } from '../../hooks/useCanEdit';
@@ -20,7 +20,7 @@ const audienceDescription = {
 };
 const rows = [
   { key: 'entrantsPublished', label: 'Entrant list', detail: 'Confirmed entrant names, clubs, and player pages.', review: 'participants/people', reviewLabel: 'Review entrants' },
-  { key: 'drawsPublished', label: 'Draws & seeded entries', detail: 'Draw structure and seeds. Scores remain hidden unless results are published.', review: 'competition/draws', reviewLabel: 'Review draws' },
+  { key: 'drawsPublished', label: 'Draws & seeded entries', detail: 'Shows draw pairings and player names. Scores appear only when Results is on.', review: 'competition/draws', reviewLabel: 'Review draws' },
   { key: 'resultsPublished', label: 'Results', detail: 'Scores, standings, winners, and win-loss records.', review: 'competition/matches', reviewLabel: 'Review results' },
 ] as const;
 function publicationOf(page: EntryPageDTO): Publication {
@@ -103,10 +103,13 @@ export function PublicationSettings({ tid, bracketEnabled = true }: { tid: strin
         <div className="divide-y divide-border">
           {rows.map(({ key, label, detail, review, reviewLabel }) => (
             <div key={key} className="flex items-start justify-between gap-4 py-4">
-              <label className="flex min-w-0 items-start gap-2 text-sm">
-                <input type="checkbox" className="mt-1" checked={draft[key]} disabled={busy} onChange={(event) => update({ [key]: event.target.checked })} />
-                <span><span className="font-semibold">{label}</span><span className="mt-1 block text-muted-foreground">{detail}</span></span>
-              </label>
+              <Checkbox
+                className="min-w-0"
+                checked={draft[key]}
+                disabled={busy}
+                onChange={(event) => update({ [key]: event.target.checked })}
+                label={<><span className="font-semibold">{label}</span><span className="mt-1 block text-muted-foreground">{detail}</span></>}
+              />
               {(key !== 'drawsPublished' || bracketEnabled) && <a className="shrink-0 text-sm text-accent underline" href={`/tournaments/${encodeURIComponent(tid)}/${review}`}>{reviewLabel}</a>}
             </div>
           ))}
@@ -114,11 +117,18 @@ export function PublicationSettings({ tid, bracketEnabled = true }: { tid: strin
       </Section>
       <div className="space-y-4 border-t border-border pt-6">
         <p className="text-sm text-muted-foreground" role="status">{!online ? 'Offline. Publication requires a connection; these changes are not queued.' : dirty ? 'Unsaved changes. Saving applies the selected audience and content to the public site.' : saved ? 'Publication settings saved.' : `Current audience: ${audienceOptions.find((option) => option.value === page.audience)?.label}.`}</p>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <div className="flex gap-3">
-          <Button type="submit" size="sm" disabled={!dirty || busy || !online}>{busy ? 'Saving…' : 'Save publication changes'}</Button>
-          <Button type="button" variant="ghost" size="sm" disabled={!dirty || busy} onClick={() => { setDraft(current); setError(null); setSaved(false); }}>Discard changes</Button>
-        </div>
+        <FormActions
+          dirty={dirty}
+          saving={busy}
+          error={error ?? undefined}
+          saveBlocked={!online}
+          cleanReason={saved ? 'Publication settings saved' : 'No changes'}
+          onSave={() => void save()}
+          onDiscard={() => { setDraft(current); setError(null); setSaved(false); }}
+          saveLabel="Save publication changes"
+          discardLabel="Discard changes"
+          asFormSubmit
+        />
       </div>
     </form></PropertyPanel>
   );

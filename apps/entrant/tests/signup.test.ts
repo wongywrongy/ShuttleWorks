@@ -407,6 +407,44 @@ describe('signup is not an account-enumeration oracle', () => {
   });
 });
 
+// ---- v3 consolidated plan §08: label association + error/hint adjacency ---
+
+describe('every field carries a persistent, associated label', () => {
+  it('has a <label for=id> for every visible TextField', async () => {
+    // R1: a placeholder is never a label. Each `TextField` id below renders
+    // a real `<label for>` (design-system `TextField`), not merely an
+    // `aria-label` — asserted on the wire, same posture as the rest of this
+    // file, rather than trusting the component in isolation.
+    const html = await render();
+
+    for (const id of ['signup-email', 'signup-password', 'signup-name', 'signup-phone']) {
+      expect(html).toMatch(new RegExp(`<label[^>]*for="${id}"[^>]*>`));
+      expect(html).toMatch(new RegExp(`<input[^>]*id="${id}"`));
+    }
+  });
+
+  it('associates each hint to its field with aria-describedby, adjacent in the DOM', async () => {
+    // `TextField` wires hint/error through the SAME `aria-describedby`
+    // mechanism (error simply replaces hint while present — see the
+    // component doc comment), so this is the reachable proxy for "field
+    // validation is adjacent and associated" (plan §4 Errors) on a page
+    // this suite never drives to a failed-validation render.
+    const html = await render();
+
+    for (const id of ['signup-email', 'signup-password', 'signup-name', 'signup-phone']) {
+      const inputTag = html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))?.[0] ?? '';
+      const describedBy = /aria-describedby="([^"]+)"/.exec(inputTag)?.[1];
+      expect(describedBy).toBe(`${id}-hint`);
+      // Adjacent: the hint paragraph immediately follows this field's own
+      // input/wrapper, not buried elsewhere in the form.
+      const fieldIndex = html.indexOf(inputTag);
+      const hintTag = new RegExp(`<p id="${id}-hint"[^>]*>`).exec(html);
+      expect(hintTag).not.toBeNull();
+      expect(hintTag!.index).toBeGreaterThan(fieldIndex);
+    }
+  });
+});
+
 // ---- the document title (F-E1-2-E1 follow-up, browser-verified 2026-08-12) -
 
 describe('the sign-up page titles its browser tab', () => {

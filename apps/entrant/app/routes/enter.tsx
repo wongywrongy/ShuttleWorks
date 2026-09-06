@@ -603,18 +603,18 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
               ))}
 
               <div hidden data-entry-wizard-controls="participant" className="flex flex-wrap gap-2">
-                <button type="button" data-wizard-next="participant" className="inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Continue to events</button>
+                <button type="button" data-wizard-next="participant" className="inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Continue to events</button>
               </div>
 
               <div hidden data-entry-wizard-controls="events" className="flex flex-wrap gap-2">
                 <button type="button" data-wizard-back="events" className={BUTTON_SECONDARY}>Back to participant</button>
-                <button type="button" data-wizard-next="events" className="inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">{hasDoubles ? 'Continue to partner' : 'Review entry'}</button>
+                <button type="button" data-wizard-next="events" className="inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">{hasDoubles ? 'Continue to partner' : 'Review entry'}</button>
               </div>
 
               {hasDoubles ? (
                 <div hidden data-entry-wizard-controls="partner" className="flex flex-wrap gap-2">
                   <button type="button" data-wizard-back="partner" className={BUTTON_SECONDARY}>Back to events</button>
-                  <button type="button" data-wizard-next="partner" className="inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Review entry</button>
+                  <button type="button" data-wizard-next="partner" className="inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Review entry</button>
                 </div>
               ) : null}
 

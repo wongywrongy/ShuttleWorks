@@ -363,7 +363,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
               revealable={false}
             />
 
-            <Button type="submit" className="justify-self-start">
+            <Button type="submit" size="lg" className="justify-self-start">
               Sign in
             </Button>
             <a
@@ -391,7 +391,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             <p className="text-sm text-muted-foreground">
               Continue with the account currently signed in on this device.
             </p>
-            <Button asChild className="justify-self-start">
+            <Button asChild size="lg" className="justify-self-start">
               <a href={continuation.href}>{continuation.label}</a>
             </Button>
             <a className="text-sm text-accent underline underline-offset-4" href={`/e/login?switch=1&next=${encodeURIComponent(next)}`}>

@@ -75,7 +75,9 @@ export function WorkspaceShellSurface({
         return location.pathname.endsWith('/administration/activity') ? (
           <ActivityTab tid={tid} />
         ) : (
-          <SyncBackupsTab />
+          // Contract §7: backup timestamps render in the tournament
+          // timezone, not the browser's (V3-OC27.2).
+          <SyncBackupsTab timeZone={summary?.timeZone} />
         );
       case 'ws-settings':
         return (

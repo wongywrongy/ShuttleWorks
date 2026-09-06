@@ -100,11 +100,15 @@ function ProfilePage() {
       <PageHead
         title="Profile"
         subtitle="Your name and how you appear across the app."
-        action={
-          <Button size="sm" disabled={locked}>
+        // Locked (no real account to save to): Save is hidden, not merely
+        // grayed out — a disabled button here would offer no visible reason,
+        // and the reason ("Profile editing unlocks once you sign in") is
+        // already stated below the form (v3 consolidated plan §3 X12, R2).
+        action={locked ? undefined : (
+          <Button size="sm">
             Save changes
           </Button>
-        }
+        )}
       />
 
       <div className="flex items-center gap-4">
@@ -114,12 +118,14 @@ function ProfilePage() {
         >
           {initials}
         </span>
-        <div>
-          <Button variant="outline" size="sm" disabled={locked}>
-            Change photo
-          </Button>
-          <p className="mt-1 text-xs text-muted-foreground">JPG or PNG, up to 2&nbsp;MB.</p>
-        </div>
+        {locked ? null : (
+          <div>
+            <Button variant="outline" size="sm">
+              Change photo
+            </Button>
+            <p className="mt-1 text-xs text-muted-foreground">JPG or PNG, up to 2&nbsp;MB.</p>
+          </div>
+        )}
       </div>
 
       <Section title="Your details" defaultOpen>
@@ -185,15 +191,17 @@ function SecurityPage() {
       <PageHead
         title="Security"
         subtitle="Manage your password and account security."
-        action={
+        // Locked: hide the action rather than show a permanently disabled
+        // one with no visible reason; the Note below already states why.
+        action={locked ? undefined : (
           <Button
             size="sm"
-            disabled={locked || busy || !current || !next || !confirm}
+            disabled={busy || !current || !next || !confirm}
             onClick={() => void updatePassword()}
           >
             {busy ? 'Updating…' : 'Update password'}
           </Button>
-        }
+        )}
       />
 
       <Section title="Change password" defaultOpen>

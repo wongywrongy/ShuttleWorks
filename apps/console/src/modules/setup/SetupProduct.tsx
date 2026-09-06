@@ -25,7 +25,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Button, Notice } from '@scheduler/design-system';
+import { FormActions, Notice } from '@scheduler/design-system';
 import { ActionsBar, PageBody } from '../../components/control-plane';
 import {
   FieldRow,
@@ -210,6 +210,7 @@ function SectionEditor({
   onChange: (field: string, value: unknown) => void;
 }) {
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [previewNonce, setPreviewNonce] = useState<Record<string, number>>({});
   switch (section.key) {
     case 'general':
       return (
@@ -423,11 +424,25 @@ function SectionEditor({
     case 'public-info':
       return (
         <div>
-          <FieldRow label="Public slug" value={textOf(data, 'publicSlug')} onChange={(e) => onChange('publicSlug', e.target.value)} />
-          <FieldRow label="Description" value={textOf(data, 'description')} onChange={(e) => onChange('description', e.target.value)} />
-          <FieldRow label="Regulations URL" type="url" value={textOf(data, 'regulationsUrl')} onChange={(e) => onChange('regulationsUrl', e.target.value)} />
-          <FieldRow label="Logo URL" type="url" value={textOf(data, 'logoUrl')} onChange={(e) => onChange('logoUrl', e.target.value)} />
-          <FieldRow label="Banner URL" type="url" value={textOf(data, 'bannerUrl')} onChange={(e) => onChange('bannerUrl', e.target.value)} last />
+          <FieldRow
+            label="Tournament page address"
+            hint="This is the slug in your public page's address — the rest of the address does not change."
+            value={textOf(data, 'publicSlug')}
+            onChange={(e) => onChange('publicSlug', e.target.value)}
+          />
+          <div className="border-b border-border/60 py-3">
+            <label htmlFor="setup-public-description" className="mb-2 block text-xs font-medium text-foreground">Description</label>
+            <textarea
+              id="setup-public-description"
+              value={textOf(data, 'description')}
+              onChange={(e) => onChange('description', e.target.value)}
+              rows={4}
+              className="w-full rounded-sm border border-rule-control bg-bg-elev p-3 text-sm text-foreground transition-colors duration-fast ease-brand placeholder:text-muted-foreground hover:border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <FieldRow label="Regulations link" type="url" value={textOf(data, 'regulationsUrl')} onChange={(e) => onChange('regulationsUrl', e.target.value)} />
+          <FieldRow label="Logo image link" type="url" value={textOf(data, 'logoUrl')} onChange={(e) => onChange('logoUrl', e.target.value)} />
+          <FieldRow label="Banner image link" type="url" value={textOf(data, 'bannerUrl')} onChange={(e) => onChange('bannerUrl', e.target.value)} last />
           {(textOf(data, 'logoUrl') || textOf(data, 'bannerUrl')) ? (
             <div className="grid gap-4 border-t border-border/60 pt-4 sm:grid-cols-2" aria-label="Publication image preview">
               {(['logoUrl', 'bannerUrl'] as const).map((field) => {
@@ -439,7 +454,22 @@ function SectionEditor({
                       {field === 'logoUrl' ? 'Logo preview' : 'Banner preview'}
                     </figcaption>
                     <div className="overflow-hidden rounded-sm border border-border bg-muted">
-                      {imageErrors[field] ? <div className="flex h-24 items-center justify-center px-3 text-xs text-muted-foreground">Preview unavailable. Check the address before saving.</div> : <img
+                      {imageErrors[field] ? (
+                        <div className="flex h-24 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-muted-foreground">
+                          <span>The image could not be loaded from this link.</span>
+                          <button
+                            type="button"
+                            className="font-medium text-accent underline underline-offset-2"
+                            onClick={() => {
+                              setImageErrors((current) => ({ ...current, [field]: false }));
+                              setPreviewNonce((current) => ({ ...current, [field]: (current[field] ?? 0) + 1 }));
+                            }}
+                          >
+                            Retry preview
+                          </button>
+                        </div>
+                      ) : <img
+                        key={`${field}-${previewNonce[field] ?? 0}`}
                         src={url}
                         alt={field === 'logoUrl' ? 'Selected tournament logo' : 'Selected tournament banner'}
                         loading="lazy"
@@ -717,7 +747,11 @@ function SetupEditor({ tid }: { tid: string }) {
       />
       <PageBody variant="form">
         <div className="space-y-4">
-          {error ? <Notice tone="warning" title="Setup needs attention">{error}</Notice> : null}
+          {/* The section-page `error` state is reachable only via a failed
+              save (this branch only renders once `setup`/`selected` have
+              already loaded) — shown once, adjacent to Save via
+              `FormActions` below, rather than duplicated in a page-top
+              banner (plan §4 Errors: adjacent, not repeated). */}
           {setup && selected ? (
             <>
               {selected.status !== 'ready' && selected.status !== 'complete' ? (
@@ -748,13 +782,28 @@ function SetupEditor({ tid }: { tid: string }) {
               <PropertyPanel
                 title={SECTION_LABELS[selected.key]}
                 action={editable ? (
-                  <span className="flex items-center gap-2">
-                    {dirty ? <Button variant="ghost" size="sm" onClick={() => { dirtyRef.current = false; setDirty(false); setSaved(false); setDraft(selected?.data ?? null); setEditorRevision((value) => value + 1); void load(); }} disabled={saving}>Discard</Button> : null}
-                    <Button size="sm" onClick={() => void save()} disabled={!selected || !draft || !dirty || saving}>
-                      {saving ? 'Saving…' : 'Save section'}
-                    </Button>
-                  </span>
-                ) : undefined}
+                  <FormActions
+                    dirty={dirty}
+                    saving={saving}
+                    error={error ?? undefined}
+                    cleanReason={saved ? 'Section saved' : 'No changes'}
+                    onDiscard={() => { dirtyRef.current = false; setDirty(false); setSaved(false); setDraft(selected?.data ?? null); setEditorRevision((value) => value + 1); void load(); }}
+                    onSave={() => void save()}
+                    saveLabel="Save section"
+                  />
+                ) : (
+                  selected?.authority === 'domain' ? (
+                    <FormActions
+                      dirty={false}
+                      saving={false}
+                      locked
+                      lockedReason={selected.key === 'venue'
+                        ? 'Locked — the current schedule uses these courts. Manage them in Operations · Plan below.'
+                        : 'Locked — real draws or divisions already exist. Manage them from the link below.'}
+                      onSave={() => {}}
+                    />
+                  ) : undefined
+                )}
               >
                 <div className="space-y-6" ref={editorRef} key={editorRevision}>
                   {selected.authority === 'domain' ? (

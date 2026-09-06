@@ -80,6 +80,14 @@ Debt and gaps found delivering work package 19 (`docs/audits/v3-consolidated/pla
 | V3-19-1 | **`BackupEntryDTO` carries `matchCount`/`entryCount` but no result count.** Recorded match results (scores) live in `match_states`, a table separate from `tournaments.data`/the stored backup `snapshot`; a past backup never captured that table, so there is no honest way to report "results" for an old snapshot without re-deriving live state it never had. If backups are ever extended to snapshot `match_states` alongside the workspace blob, add a `resultCount` alongside the other two. | S, blocked on a product decision to widen what a backup captures |
 | V3-19-2 | **`apps/console/src/lib/formatDateTime.ts`, the contract §7.3 tournament-timezone-aware formatting authority, does not exist yet** (it is package 07's deliverable, not shipped as of this branch). `SyncBackupsTab.tsx`'s new backup-row timestamp formatters (`fmtTimestamp`/`fmtTime`/`dayLabel`/`minuteKey`) implement the same rules locally — tournament timezone, explicit zone abbreviation, seconds only to break a same-minute tie — with a code comment marking the redirect. Once the authority lands, fold these four functions into it and delete the local copies. | S once the authority exists |
 
+### Work package 15 — publication and entrant privacy
+
+Debt found delivering work package 15 (`docs/audits/v3-consolidated/plan.md` §5/§6, contract §9, V3-OC13.1/13.2/OC20.1). Full account in `docs/audits/v3-consolidated/reports/15-publication-privacy.md` and `docs/audits/v3-consolidated/ledger/15-strings.md`.
+
+| # | What | Size |
+| --- | --- | --- |
+| V3-15-1 | **V3-OC13.2's acceptance also asks for distinct field-validation vs. image-fetch-failure messages** on the Setup → Public information logo/banner preview. This package only wired the fetch-failure half (a "could not be loaded" message plus a "Retry preview" action, replacing the old ambiguous "Preview unavailable. Check the address before saving."); there is no URL-syntax validation on the Regulations/Logo/Banner link fields to produce a genuinely distinct "this address is not a valid link" message. Adding that validation is a small form-behavior change, not a copy fix, and was left out of this package's copy/state-only scope. | S |
+
 ---
 
 ## Open — needs an owner decision

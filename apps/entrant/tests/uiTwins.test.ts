@@ -33,7 +33,7 @@ function uiConstant(name: string): string {
  * eligibility/account panels — and both must be this string.
  */
 const PRIMARY_BUTTON =
-  'inline-flex h-10 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover';
+  'inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover';
 
 /** Each JS twin, the constant it mirrors, and the file it lives in. */
 const TWINS: readonly { name: string; value: () => string; files: string[] }[] = [

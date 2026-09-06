@@ -351,7 +351,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
             />
             <script type="module" src="/e/assets/turnstile.js" defer />
 
-            <Button type="submit" className="justify-self-start">
+            <Button type="submit" size="lg" className="justify-self-start">
               Create account
             </Button>
           </form>

@@ -146,7 +146,7 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
                 maxLength={320}
                 autoComplete="email"
               />
-              <Button type="submit" className="justify-self-start">
+              <Button type="submit" size="lg" className="justify-self-start">
                 Email me a link
               </Button>
             </form>
@@ -207,7 +207,7 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
                 // password-control module. Same call as `login.tsx`.
                 revealable={false}
               />
-              <Button type="submit" className="justify-self-start">
+              <Button type="submit" size="lg" className="justify-self-start">
                 Set new password
               </Button>
             </form>
@@ -220,7 +220,7 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
               Your password is set. You have been signed out everywhere else.
               Sign in again with the new one.
             </Notice>
-            <Button asChild className="justify-self-start">
+            <Button asChild size="lg" className="justify-self-start">
               <a href={next ? `/e/login?next=${encodeURIComponent(next)}` : '/e/login'}>
                 {next ? 'Sign in and continue' : 'Sign in'}
               </a>

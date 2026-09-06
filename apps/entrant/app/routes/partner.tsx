@@ -128,7 +128,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
               <p className="text-sm text-muted-foreground">Checking your signed-in entries.</p>
             </div>
             <script type="module" src="/e/assets/partner-accepted.js" />
-            <Button asChild className="justify-self-start">
+            <Button asChild size="lg" className="justify-self-start">
               <a href="/e/me/entries">See my entries</a>
             </Button>
           </div>
@@ -260,7 +260,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
               />
             ) : null}
 
-            <Button type="submit" className="justify-self-start">
+            <Button type="submit" size="lg" className="justify-self-start">
               Accept and enter
             </Button>
           </form>

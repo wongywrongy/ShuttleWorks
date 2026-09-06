@@ -306,7 +306,10 @@ export function Toggle({
         // MOTION.md §6 Toggle: track at duration-fast, thumb at
         // duration-standard, both explicit ease-brand so the implicit
         // Tailwind 150ms-linear default never ships.
-        'inline-flex h-5 w-9 items-center rounded-full transition-colors duration-fast ease-brand',
+        // h-6 (24px), not h-5 (20px): the button IS the hit area (no
+        // pseudo-element padding trick), so it must clear the 24x24 CSS px
+        // AA minimum target size on its own (v3 consolidated plan §6).
+        'inline-flex h-6 w-9 items-center rounded-full transition-colors duration-fast ease-brand',
         value ? 'bg-accent' : 'bg-muted',
       ].join(' ')}
     >

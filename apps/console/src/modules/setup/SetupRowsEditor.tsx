@@ -133,7 +133,7 @@ export function SetupRowsEditor({
                           checked={Boolean(row[column.field])}
                           onChange={(event) => patchRow(index, column.field, event.target.checked)}
                           aria-label={`${column.label} for row ${index + 1}`}
-                          className="h-4 w-4 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
+                          className="h-6 w-6 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
                         />
                       ) : column.type === 'select' ? (
                         <select
@@ -206,7 +206,7 @@ export function SetupRowsEditor({
                       checked={Boolean(row[column.field])}
                       onChange={(event) => patchRow(index, column.field, event.target.checked)}
                       aria-label={`${column.label} for row ${index + 1}`}
-                      className="h-4 w-4 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
+                      className="h-6 w-6 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   ) : column.type === 'select' ? (
                     <select
