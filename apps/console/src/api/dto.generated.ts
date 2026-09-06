@@ -5999,7 +5999,7 @@ export interface components {
             /** Position */
             position: number;
             /** Sides */
-            sides: components["schemas"]["entries__entries_site__SideDTO"][];
+            sides: components["schemas"]["SideDTO"][];
             result?: components["schemas"]["NodeResultDTO"] | null;
             /** Scheduledtime */
             scheduledTime?: string | null;
@@ -6022,6 +6022,23 @@ export interface components {
             sideA: number;
             /** Sideb */
             sideB: number;
+        };
+        /**
+         * MatchSideDTO
+         * @description One side of a match — the operator-wire twin of the public ``Side``.
+         *
+         *     ``persons`` and ``unresolved`` are NOT mutually exclusive (match-card
+         *     contract §2.1): a partially-known doubles side would carry both, once a
+         *     future package can populate ``pending_member`` (see module docstring).
+         */
+        MatchSideDTO: {
+            /** Persons */
+            persons?: components["schemas"]["PersonRefDTO"][];
+            unresolved?: components["schemas"]["UnresolvedSideDTO"] | null;
+            /** Seed */
+            seed?: number | null;
+            /** Participantkey */
+            participantKey?: string | null;
         };
         /** MatchStateDTO */
         MatchStateDTO: {
@@ -6566,7 +6583,7 @@ export interface components {
             slot_a: components["schemas"]["BracketSlotOut"];
             slot_b: components["schemas"]["BracketSlotOut"];
             /** Sides */
-            sides?: components["schemas"]["shared__sides__SideDTO"][];
+            sides?: components["schemas"]["MatchSideDTO"][];
             /** Segment */
             segment?: string | null;
             /** Played On */
@@ -7315,6 +7332,15 @@ export interface components {
          * @description One calendar row (SP-P8 §3): tournament-level facts ONLY — no entrant
          *     data, no entry counts, no pricing. The key-set test in
          *     ``test_season_listing.py`` reddens on any added field.
+         *
+         *     V3-PE01.2/PE01.3 additions: ``closesAt`` + ``timeZone`` carry the exact
+         *     tournament-timezone instant the tier's "Entries close …" primary copy
+         *     needs (a relative "closes in Nd" alone gives no durable deadline once a
+         *     screenshot outlives the day it was taken) — the tier's own
+         *     ``formatMomentInZone`` (D11) does the rendering, this DTO only supplies
+         *     the wire moment and the zone name. ``locality`` is a best-effort
+         *     city/country line derived from the free-text venue address so a
+         *     discovery row states where a tournament is without opening it.
          */
         SeasonRowDTO: {
             /** Slug */
@@ -7333,6 +7359,15 @@ export interface components {
             status: string;
             /** Closesindays */
             closesInDays?: number | null;
+            /** Closesat */
+            closesAt?: string | null;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timeZone: string;
+            /** Locality */
+            locality?: string | null;
             /** Drawspublished */
             drawsPublished: boolean;
             /** Winnerspublished */
@@ -7419,6 +7454,22 @@ export interface components {
              * @enum {string}
              */
             authority: "setup" | "domain";
+        };
+        /** SideDTO */
+        SideDTO: {
+            /** Participantkey */
+            participantKey?: string | null;
+            /** Placeholder */
+            placeholder?: string | null;
+            /**
+             * Bye
+             * @default false
+             */
+            bye: boolean;
+            /** Feedernodekey */
+            feederNodeKey?: string | null;
+            /** Feedertake */
+            feederTake?: ("winner" | "loser") | null;
         };
         /** SignupResponse */
         SignupResponse: {
@@ -8252,6 +8303,11 @@ export interface components {
              * @default local
              */
             authMode: string;
+            /**
+             * Emailconfigured
+             * @default false
+             */
+            emailConfigured: boolean;
         };
         /**
          * ValidateMoveRequest
@@ -8490,39 +8546,6 @@ export interface components {
              */
             phase: string;
             entries?: components["schemas"]["EntriesMetricsDTO"] | null;
-        };
-        /** SideDTO */
-        entries__entries_site__SideDTO: {
-            /** Participantkey */
-            participantKey?: string | null;
-            /** Placeholder */
-            placeholder?: string | null;
-            /**
-             * Bye
-             * @default false
-             */
-            bye: boolean;
-            /** Feedernodekey */
-            feederNodeKey?: string | null;
-            /** Feedertake */
-            feederTake?: ("winner" | "loser") | null;
-        };
-        /**
-         * SideDTO
-         * @description One side of a match — the operator-wire twin of the public ``Side``.
-         *
-         *     ``persons`` and ``unresolved`` are NOT mutually exclusive (match-card
-         *     contract §2.1): a partially-known doubles side would carry both, once a
-         *     future package can populate ``pending_member`` (see module docstring).
-         */
-        shared__sides__SideDTO: {
-            /** Persons */
-            persons?: components["schemas"]["PersonRefDTO"][];
-            unresolved?: components["schemas"]["UnresolvedSideDTO"] | null;
-            /** Seed */
-            seed?: number | null;
-            /** Participantkey */
-            participantKey?: string | null;
         };
     };
     responses: never;

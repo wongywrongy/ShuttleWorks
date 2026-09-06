@@ -20,13 +20,13 @@ export type WinnerSide = "A" | "B" | "none";
 
 // Package 10a (v3 consolidated plan) — the structured side pair, aliased
 // from the generated OpenAPI types (same rationale as the standings rows
-// above: a generated alias cannot drift). ``shared__sides__SideDTO`` is the
+// above: a generated alias cannot drift). ``MatchSideDTO`` is the
 // qualified name openapi-typescript assigned because ``entries_site.py``
 // already declares an unrelated ``SideDTO`` (the public draw-node's bye /
 // feeder shape) — the two are NOT the same contract; do not conflate them.
 export type PersonRefDTO = components['schemas']['PersonRefDTO'];
 export type UnresolvedSideDTO = components['schemas']['UnresolvedSideDTO'];
-export type SideDTO = components['schemas']['shared__sides__SideDTO'];
+export type SideDTO = components['schemas']['MatchSideDTO'];
 
 export interface Participant {
   id: string;

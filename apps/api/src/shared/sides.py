@@ -7,7 +7,7 @@ but is a SEPARATE module: the operator wire has no publication gate, and
 import-linter contracts. If the two shapes ever need to converge, that is a
 decision for whichever package owns publication next — not an import.
 
-``SideDTO`` is the discriminated model the match-card contract
+``MatchSideDTO`` is the discriminated model the match-card contract
 (docs/reference/contracts/match-card.md §2.1) calls ``Side``: 0..n resolved
 persons plus an optional ``unresolved`` reason, not mutually exclusive with
 ``persons`` (a doubles side with one confirmed member is
@@ -85,7 +85,7 @@ class UnresolvedSideDTO(BaseModel):
     reference: Optional[str] = None
 
 
-class SideDTO(BaseModel):
+class MatchSideDTO(BaseModel):
     """One side of a match — the operator-wire twin of the public ``Side``.
 
     ``persons`` and ``unresolved`` are NOT mutually exclusive (match-card
@@ -99,16 +99,16 @@ class SideDTO(BaseModel):
     participantKey: Optional[str] = None
 
 
-def bye_side() -> SideDTO:
-    return SideDTO(unresolved=UnresolvedSideDTO(kind="bye"))
+def bye_side() -> MatchSideDTO:
+    return MatchSideDTO(unresolved=UnresolvedSideDTO(kind="bye"))
 
 
-def undetermined_side() -> SideDTO:
-    return SideDTO(unresolved=UnresolvedSideDTO(kind="undetermined"))
+def undetermined_side() -> MatchSideDTO:
+    return MatchSideDTO(unresolved=UnresolvedSideDTO(kind="undetermined"))
 
 
-def winner_of_side(play_unit_id: str, *, loser: bool = False) -> SideDTO:
-    return SideDTO(
+def winner_of_side(play_unit_id: str, *, loser: bool = False) -> MatchSideDTO:
+    return MatchSideDTO(
         unresolved=UnresolvedSideDTO(
             kind="loser_of" if loser else "winner_of",
             reference=play_unit_id,
@@ -118,8 +118,8 @@ def winner_of_side(play_unit_id: str, *, loser: bool = False) -> SideDTO:
 
 def resolved_side(
     *, id: Optional[str], name: str, seed: Optional[int] = None
-) -> SideDTO:
-    return SideDTO(
+) -> MatchSideDTO:
+    return MatchSideDTO(
         persons=[PersonRefDTO(id=id, name=name)],
         seed=seed,
         participantKey=id,

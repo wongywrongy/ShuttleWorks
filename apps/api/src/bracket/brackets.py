@@ -49,7 +49,7 @@ from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 from shared.sport.badminton import schedule_config_for_bracket
-from shared.sides import SideDTO, bye_side, resolved_side, undetermined_side, winner_of_side
+from shared.sides import MatchSideDTO, bye_side, resolved_side, undetermined_side, winner_of_side
 from core.dependencies import (
     AuthUser,
     get_current_user,
@@ -299,7 +299,7 @@ class PlayUnitOut(BaseModel):
     slot_b: BracketSlotOut
     # The structured side pair — see ``shared/sides.py``. Always exactly two
     # entries, ``[side_a, side_b]``, once populated by ``_play_unit_out``.
-    sides: List[SideDTO] = Field(default_factory=list)
+    sides: List[MatchSideDTO] = Field(default_factory=list)
     # Segment id for multi-segment formats ('W', 'L', 'GF', 'P5_8', …) —
     # from the unit's metadata; None for single-bracket formats (se/rr).
     segment: Optional[str] = None
@@ -1231,7 +1231,7 @@ def _slot_out(slot: BracketSlot) -> BracketSlotOut:
 def _bracket_side(
     slot: BracketSlot,
     participants: Dict[str, Participant],
-) -> SideDTO:
+) -> MatchSideDTO:
     """One side of a play unit, structured (shared/sides.py, package 10a).
 
     Mirrors the console's ``sideLabel`` (``modules/bracket/bracketLabels.ts``)
