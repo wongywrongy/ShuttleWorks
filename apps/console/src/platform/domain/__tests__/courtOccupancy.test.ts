@@ -73,4 +73,37 @@ describe('courtOccupancy', () => {
     expect(holdsCourtCommitment('retired')).toBe(true);
     expect(holdsCourtCommitment('scheduled')).toBe(false);
   });
+
+  // ---- D19: nowWindow -----------------------------------------------
+  //
+  // Package 04b adds the named `nowWindow` parameter. The desk default
+  // must stay byte-identical to every assertion above (all made with no
+  // second argument) — these pin the explicit-'desk' and 'board' cases.
+
+  it('nowWindow defaults to "desk": called does not occupy', () => {
+    expect(occupiesCourtNow('called')).toBe(false);
+    expect(occupiesCourtNow('called', 'desk')).toBe(false);
+  });
+
+  it('nowWindow "board" widens occupancy to include called, playing/started unaffected', () => {
+    expect(occupiesCourtNow('called', 'board')).toBe(true);
+    expect(occupiesCourtNow('playing', 'board')).toBe(true);
+    expect(occupiesCourtNow('started', 'board')).toBe(true);
+    expect(occupiesCourtNow('done', 'board')).toBe(false);
+    expect(occupiesCourtNow('scheduled', 'board')).toBe(false);
+  });
+
+  it('deriveCourtStates/deriveDisputes default to the desk window: a called-only court is untouched', () => {
+    const matches = [m('a', 'called', 1), m('b', 'called', 1)];
+    expect(deriveCourtStates(matches).has(1)).toBe(false);
+    expect(deriveDisputes(matches)).toEqual([]);
+  });
+
+  it('deriveCourtStates/deriveDisputes widen under nowWindow "board": two called claims on one court dispute it', () => {
+    const matches = [m('a', 'called', 1), m('b', 'called', 1), m('c', 'called', 2)];
+    const states = deriveCourtStates(matches, 'board');
+    expect(states.get(1)).toBe('disputed');
+    expect(states.get(2)).toBe('occupied');
+    expect(deriveDisputes(matches, 'board').map((d) => d.courtId)).toEqual([1]);
+  });
 });

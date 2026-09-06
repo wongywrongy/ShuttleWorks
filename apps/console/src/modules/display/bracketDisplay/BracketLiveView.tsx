@@ -1,5 +1,6 @@
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import { liveMatches } from './bracketDisplayData';
+import { STATE_WORD } from '../../../lib/stateWords';
 
 /** Read-only "what's playing now" view for the bracket TV — the bracket
  *  analog of the meet display's CourtsView. Oversized match cards, one per
@@ -43,15 +44,25 @@ export function BracketLiveView({
             </span>
             {/* "Next" is the calm state, so it stays a plain muted chip —
                 the warning tint belonged to a "Called" that was never a
-                fact about the data (see bracketDisplayData#liveMatches). */}
+                fact about the data (see bracketDisplayData#liveMatches).
+                Disputed court band word: contract §4.1's exact public label
+                (V3-OC24.1) — never an announcement instruction. */}
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {conflict.length > 1 ? 'Conflict' : current ? 'On court' : next ? 'Next' : 'Court free'}
+              {conflict.length > 1
+                ? 'Court assignment unavailable'
+                : current
+                  ? STATE_WORD.onCourt
+                  : next
+                    ? 'Next'
+                    : 'Court free'}
             </span>
           </div>
           {conflict.length > 1 ? (
             <div className="space-y-2 text-sm">
-              <p className="font-semibold text-status-warning">Current match unavailable on display.</p>
-              <p className="text-muted-foreground">The tournament desk is resolving a court assignment.</p>
+              {/* Exactly one sentence, the public label restated (contract
+                  §4.1) — never "the tournament desk is resolving…", never an
+                  instruction to announce anything (V3-OC24.1). */}
+              <p className="font-semibold text-status-warning">Court assignment unavailable.</p>
             </div>
           ) : current || next ? (
             <div className="flex flex-col gap-1.5">

@@ -125,10 +125,10 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
               {isClosed ? (
                 <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
               ) : conflictMatches?.length ? (
-                <span className="text-status-warning">
-                  <span className="font-semibold">Current match unavailable.</span>{' '}
-                  <span className="text-muted-foreground">The tournament desk is resolving this court assignment.</span>
-                </span>
+                // Contract §4.1's exact public label (V3-OC24.1) — never
+                // "the tournament desk is resolving…", never an
+                // announcement instruction.
+                <span className="text-status-warning font-semibold">Court assignment unavailable.</span>
               ) : match ? (
                 <>
                   <span className="font-medium">{sideA}</span>
@@ -259,12 +259,17 @@ function CourtCard({
     : status === 'active'
       ? {
           cls: 'bg-status-live-solid text-status-live-ink',
-          word: elapsed ? `${STATE_WORD.live} · ${elapsed}` : STATE_WORD.live,
+          // `onCourt` — contract §2.1: "On court" is the match-state word for
+          // `playing`; `live` is retired from the match-state role.
+          word: elapsed ? `${STATE_WORD.onCourt} · ${elapsed}` : STATE_WORD.onCourt,
         }
       : status === 'called'
         ? { cls: 'bg-status-called-solid text-status-called-ink', word: STATE_WORD.called }
       : conflictMatches?.length
-        ? { cls: 'bg-status-warning/20 text-status-warning', word: 'Conflict' }
+        // Contract §4.1's exact public label for a disputed court
+        // (V3-OC24.1) — never "Conflict", never an announcement
+        // instruction.
+        ? { cls: 'bg-status-warning/20 text-status-warning', word: 'Court assignment unavailable' }
         : { cls: 'bg-muted text-muted-foreground', word: STATE_WORD.free };
 
   return (
@@ -299,8 +304,11 @@ function CourtCard({
           </span>
         ) : conflictMatches?.length ? (
           <div className="space-y-2 text-sm text-foreground">
-            <p className="font-semibold">Two current matches claim this court.</p>
-            <p className="text-muted-foreground">Ask the tournament desk to resolve the assignment.</p>
+            {/* Exactly the public label, restated as the one sentence
+                (contract §4.1, C2) — never an instruction to announce
+                anything (V3-OC24.1). Both claiming matches stay named
+                below; only the court field itself is withheld. */}
+            <p className="font-semibold">Court assignment unavailable.</p>
             <p className="sw-num text-xs text-muted-foreground">
               {conflictMatches.map((item, index) => `${index ? ' · ' : ''}${getMatchCode(item)}`)}
             </p>

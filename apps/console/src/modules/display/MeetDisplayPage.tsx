@@ -41,6 +41,12 @@ import { StandingsView } from './publicDisplay/StandingsView';
 import { DEFAULT_DWELL_SECONDS, rotationSlides, slideAt } from './publicDisplay/rotation';
 import { CourtsView } from './publicDisplay/CourtsView';
 import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
+import {
+  deriveCourtStates,
+  deriveDisputes,
+  occupiesCourtNow,
+  type OccupancyMatchLike,
+} from '../../platform/domain/courtOccupancy';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
 import { orderCourts, visibleCourts, defaultColumns, autoLayout } from './publicDisplay/courtLayout';
 import { standingsPlacement } from './publicDisplay/standingsLayout';
@@ -147,20 +153,31 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
   // Indexing helpers we'll reuse below. O(1) by-matchId lookups so the
   // courts / standings derivations don't re-scan the full matchesByStatus
   // array on every tick.
+  //
+  // Disputed-court derivation redirects to the one authority (D1) — this
+  // page keeps no conflict detector of its own. Only `started` (playing)
+  // matches feed the desk-window occupancy/dispute answer; `called` never
+  // creates a dispute (§4.1: `called` is outside occupancy-now for
+  // counting/conflict purposes) and only fills a court neither occupied
+  // nor disputed by a playing match.
   const matchesByCourt = useMemo(() => {
+    const playingMatches: OccupancyMatchLike[] = matchesByStatus.started.map((a) => ({
+      id: a.matchId,
+      status: 'playing',
+      court: matchStates[a.matchId]?.actualCourtId ?? a.courtId,
+    }));
+    const states = deriveCourtStates(playingMatches);
     const active = new Map<number, string>();
-    const conflicts = new Map<number, string[]>();
-    const called = new Map<number, string>();
-    for (const a of matchesByStatus.started) {
-      const courtId = matchStates[a.matchId]?.actualCourtId ?? a.courtId;
-      const existing = active.get(courtId);
-      if (existing) {
-        const ids = conflicts.get(courtId) ?? [existing];
-        ids.push(a.matchId);
-        conflicts.set(courtId, ids);
-        active.delete(courtId);
-      } else if (!conflicts.has(courtId)) active.set(courtId, a.matchId);
+    for (const match of playingMatches) {
+      if (match.court != null && states.get(match.court) === 'occupied') {
+        active.set(match.court, match.id);
+      }
     }
+    const conflicts = new Map<number, string[]>();
+    for (const dispute of deriveDisputes(playingMatches)) {
+      conflicts.set(dispute.courtId, dispute.claims.map((claim) => claim.matchKey));
+    }
+    const called = new Map<number, string>();
     for (const a of matchesByStatus.called) {
       const courtId = matchStates[a.matchId]?.actualCourtId ?? a.courtId;
       if (!active.has(courtId) && !conflicts.has(courtId)) called.set(courtId, a.matchId);
@@ -190,10 +207,20 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
       }));
   }, [schedule, matchStates]);
 
-  const nowIds = useMemo(
-    () => new Set<string>([...matchesByCourt.active.values(), ...matchesByCourt.called.values()]),
-    [matchesByCourt],
-  );
+  // D19: the board's "now" window is deliberately WIDER than the desk's —
+  // `called` counts as "now" here too, so a court does not read empty
+  // during the walk-to-court gap — via the named, documented
+  // `nowWindow: 'board'` parameter on the shared occupancy authority,
+  // rather than an undocumented, board-local union.
+  const nowIds = useMemo(() => {
+    const candidates: { id: string; status: 'playing' | 'called' }[] = [
+      ...matchesByStatus.started.map((a) => ({ id: a.matchId, status: 'playing' as const })),
+      ...matchesByStatus.called.map((a) => ({ id: a.matchId, status: 'called' as const })),
+    ];
+    return new Set(
+      candidates.filter((c) => occupiesCourtNow(c.status, 'board')).map((c) => c.id),
+    );
+  }, [matchesByStatus.started, matchesByStatus.called]);
 
   const lanes = useMemo(() => assignLanes(laneItems, nowIds), [laneItems, nowIds]);
 

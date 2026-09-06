@@ -58,6 +58,7 @@ from db.models import (
     Tournament,
 )
 from repositories import LocalRepository, get_repository
+from shared.court_occupancy import CourtState, derive_court_states
 from shared.schedule_slots import add_minutes_wrapping, slot_time_from_start
 
 router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
@@ -2071,17 +2072,37 @@ def _meet_matches(
 # ---- schedule / live projection ------------------------------------------
 
 
+@dataclass(frozen=True)
+class _LiveClaim:
+    """Adapter satisfying ``shared.court_occupancy``'s ``OccupancyMatch``
+    protocol for a currently-running bracket court assignment. A bracket
+    assignment has no ``MatchStatus`` of its own — "currently playing" is
+    expressed here as "started, not yet ended, not finished" — so every
+    claim this module hands to the authority is pre-filtered to that
+    condition and reported as the canonical ``"playing"`` status."""
+
+    id: str
+    status: str
+    court_id: Optional[int]
+
+
 def _merge_live_bracket_courts(courts: Dict[str, int], assignments) -> None:
     """Add only currently running, Operations-owned bracket court claims.
 
     The persisted bracket plan contains future placements too; those are not
     an authoritative live court until Operations starts the assignment. A
-    materialized Match court remains authoritative. If two current claims
-    occupy one physical court, suppress the court for both matches so the
-    public projection cannot choose a winner or hide either match.
+    materialized Match court remains authoritative.
+
+    Court disputes (two or more current claims on one physical court) are
+    derived by the one authority, ``shared.court_occupancy`` — this module
+    keeps no conflict detector of its own (contract §4, D1). Per ruling C2,
+    a dispute withholds only the court field for the claiming units; the
+    match rows themselves are untouched here and stay in the public
+    projection either way (the withheld unit simply has no ``courts`` entry
+    for the match loop above to read).
     """
-    claims: Dict[int, set[str]] = {}
-    unit_courts: Dict[str, set[int]] = {}
+    claims: List[_LiveClaim] = []
+    court_by_unit: Dict[str, int] = {}
     fallback: Dict[str, int] = {}
     for assignment in assignments:
         unit_id = assignment.play_unit_id
@@ -2095,13 +2116,16 @@ def _merge_live_bracket_courts(courts: Dict[str, int], assignments) -> None:
         ):
             continue
         effective = courts.get(unit_id, court_id)
-        claims.setdefault(effective, set()).add(unit_id)
-        unit_courts.setdefault(unit_id, set()).add(effective)
+        claims.append(_LiveClaim(id=unit_id, status="playing", court_id=effective))
+        court_by_unit[unit_id] = effective
         if unit_id not in courts:
             fallback[unit_id] = court_id
 
-    conflicts = {unit_id for units in claims.values() if len(units) > 1 for unit_id in units}
-    conflicts.update(unit_id for unit_id, assigned in unit_courts.items() if len(assigned) > 1)
+    states: Dict[int, CourtState] = derive_court_states(claims)
+    disputed_courts = {court for court, state in states.items() if state == "disputed"}
+    conflicts = {
+        unit_id for unit_id, court in court_by_unit.items() if court in disputed_courts
+    }
     for unit_id, court_id in fallback.items():
         if unit_id not in conflicts:
             courts[unit_id] = court_id

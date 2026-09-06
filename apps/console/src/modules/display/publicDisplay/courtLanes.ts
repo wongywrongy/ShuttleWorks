@@ -26,7 +26,18 @@
  * rule, not merely a coarser vocabulary the way Operations' collapsed
  * `next-later` bucket is — so this stays its own tested pure helper. The
  * live-gating constraint on the board necessitates this separate logic.
+ *
+ * Court OCCUPANCY (free/occupied/disputed) is not reimplemented here,
+ * though (D1): both `currentMatchesByCourt` and `assignLanes` derive their
+ * "is this court disputed" answer from the one authority,
+ * `platform/domain/courtOccupancy.ts`, over a synthetic `'playing'`/
+ * `'scheduled'` status built from the caller-supplied `nowState` set. The
+ * caller (`MeetDisplayPage.tsx`) decides what belongs in `nowState` using
+ * that same authority's `nowWindow: 'board'` (D19) — this module stays
+ * ignorant of the desk/board distinction and only asks "is this id live".
  */
+
+import { deriveCourtStates, deriveDisputes, type OccupancyMatchLike } from '../../../platform/domain/courtOccupancy';
 
 export type CourtLane = 'now' | 'next' | 'later';
 
@@ -39,25 +50,41 @@ export interface LaneItem {
   plannedSlot: number;
 }
 
+/** Build the authority's `OccupancyMatchLike` shape from a lane item, using
+ * `nowState` membership as the (already board-windowed) "is this live"
+ * fact — everything live reports as the canonical `'playing'` status so
+ * `occupiesCourtNow`'s default (`'desk'`) window sees it as occupying,
+ * regardless of whether the caller's `nowState` was built with the desk or
+ * board window. */
+function toOccupancyMatches(
+  items: readonly LaneItem[],
+  nowState: ReadonlySet<string>,
+): OccupancyMatchLike[] {
+  return items
+    .filter((item) => nowState.has(item.id))
+    .map((item) => ({ id: item.id, status: 'playing' as const, court: item.court }));
+}
+
 /** Index live/called records by court without selecting a winner. A duplicate
  * current assignment is an Operations conflict and is returned in full so a
- * projection can explain it honestly. */
+ * projection can explain it honestly. Disputed-court derivation redirects to
+ * the one authority (D1) — this module keeps no conflict detector of its
+ * own. */
 export function currentMatchesByCourt(
   items: readonly LaneItem[],
   nowState: ReadonlySet<string>,
 ): { current: Map<number, string>; conflicts: Map<number, string[]> } {
-  const byCourt = new Map<number, string[]>();
-  for (const item of items) {
-    if (!nowState.has(item.id)) continue;
-    const ids = byCourt.get(item.court);
-    if (ids) ids.push(item.id);
-    else byCourt.set(item.court, [item.id]);
-  }
+  const matches = toOccupancyMatches(items, nowState);
+  const states = deriveCourtStates(matches);
   const current = new Map<number, string>();
+  for (const match of matches) {
+    if (match.court != null && states.get(match.court) === 'occupied') {
+      current.set(match.court, match.id);
+    }
+  }
   const conflicts = new Map<number, string[]>();
-  for (const [court, ids] of byCourt) {
-    if (ids.length === 1) current.set(court, ids[0]);
-    else conflicts.set(court, ids);
+  for (const dispute of deriveDisputes(matches)) {
+    conflicts.set(dispute.courtId, dispute.claims.map((claim) => claim.matchKey));
   }
   return { current, conflicts };
 }
@@ -85,22 +112,25 @@ export function assignLanes(
     else byCourt.set(item.court, [item]);
   }
 
+  // Disputed-court derivation redirects to the one authority (D1): a court
+  // gets a `now` lane only when the authority calls it `occupied` — exactly
+  // one live claim. Two or more live claims on one court is `disputed` and
+  // gets none (D19's "the board never shows a `now` for a disputed court"),
+  // the same outcome the old ad hoc `liveIndexes.length === 1` check gave,
+  // now computed once instead of reimplemented here.
+  const occupancyMatches = toOccupancyMatches(items, nowState);
+  const courtStates = deriveCourtStates(occupancyMatches);
+
   const lanes = new Map<string, CourtLane>();
-  for (const list of byCourt.values()) {
+  for (const [court, list] of byCourt) {
     const sorted = [...list].sort(
       (a, b) => a.plannedSlot - b.plannedSlot || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
-    const liveIndexes = sorted
-      .map((entry, index) => (nowState.has(entry.id) ? index : -1))
-      .filter((index) => index >= 0);
-    // Multiple live records on one court are a source conflict. Do not
-    // promote an arbitrary one to NOW on the public projection; the caller's
-    // conflict index retains the complete set for an honest message.
-    const liveIndex = liveIndexes.length === 1 ? liveIndexes[0] : -1;
-    const conflictingIds = new Set(liveIndexes.map((index) => sorted[index].id));
-    const upcoming = sorted.filter((entry) => !conflictingIds.has(entry.id));
-    if (liveIndexes.length === 1) {
-      lanes.set(sorted[liveIndex].id, 'now');
+    const liveEntries = sorted.filter((entry) => nowState.has(entry.id));
+    const liveIds = new Set(liveEntries.map((entry) => entry.id));
+    const upcoming = sorted.filter((entry) => !liveIds.has(entry.id));
+    if (courtStates.get(court) === 'occupied') {
+      lanes.set(liveEntries[0].id, 'now');
     }
     if (upcoming[0]) lanes.set(upcoming[0].id, 'next');
     if (upcoming[1]) lanes.set(upcoming[1].id, 'later');

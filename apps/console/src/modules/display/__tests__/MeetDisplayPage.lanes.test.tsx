@@ -108,4 +108,26 @@ describe('MeetDisplayPage — Now/Next/Later lanes (task 8)', () => {
     // clocks, i.e. none leaked onto court 2's live card.)
     expect(screen.getAllByText(/^~\d{2}:\d{2}$/)).toHaveLength(2);
   });
+
+  it('a disputed court (two started matches on one court) withholds Now and shows the public dispute label — D1/C2, V3-OC24.1', () => {
+    // Both m4 and m5 claim court 2 as currently playing. `matchesByCourt`
+    // (redirected to `platform/domain/courtOccupancy`, D1) must call this a
+    // dispute, not a coin-flip winner — and the board's Now/Next/Later
+    // lanes (D19) must never manufacture a "now" for it either.
+    useTournamentStore.setState({ config: CONFIG, schedule: SCHEDULE, matches: MATCHES });
+    useMatchStateStore.getState().setMatchStates({
+      m4: { matchId: 'm4', status: 'started', actualStartTime: new Date().toISOString() } as MatchStateDTO,
+      m5: { matchId: 'm5', status: 'started', actualStartTime: new Date().toISOString() } as MatchStateDTO,
+    });
+
+    renderBoard();
+
+    // Exactly the public label (contract §4.1) — never "Conflict", never an
+    // announcement instruction.
+    expect(screen.getByText('Court assignment unavailable.')).toBeInTheDocument();
+    // Neither claiming match's court renders a Now/On-court card, and no
+    // stray "Now" lane label leaks from the dispute.
+    expect(screen.queryByText('C4')).toBeNull();
+    expect(screen.queryByText('C5')).toBeNull();
+  });
 });

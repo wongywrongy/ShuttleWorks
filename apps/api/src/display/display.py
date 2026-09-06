@@ -19,21 +19,22 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Path, Response
 from pydantic import BaseModel, Field
 
-from operations.match_state_routes import MatchStateDTO, row_to_dto
 from bracket.brackets import TournamentOut, _hydrate_session, _serialize_session
 from core.dependencies import require_tournament_access
 from core.error_codes import ErrorCode, http_error
 from core.schemas import MeetStandingRowDTO
 from db.models import (
+    MatchState,
     Tournament,
     derive_modules,
 )
 from repositories import LocalRepository, get_repository
+from shared.match_vocabulary import canonical_to_legacy, legacy_to_canonical
 
 public_router = APIRouter(prefix="/display", tags=["display-public"])
 manage_router = APIRouter(
@@ -225,14 +226,82 @@ def display_state(
     return payload
 
 
-@public_router.get("/{token}/match-states", response_model=Dict[str, MatchStateDTO])
+class DisplayMatchScoreDTO(BaseModel):
+    sideA: int
+    sideB: int
+
+
+class DisplayMatchStateDTO(BaseModel):
+    """The board's own ``/match-states`` wire shape (D4).
+
+    This used to be ``operations.match_state_routes.MatchStateDTO`` verbatim
+    — including that DTO's four-value ``MatchStateStatusLiteral``
+    (``scheduled | called | started | finished``) and its
+    ``coerce_unknown_status`` validator, which silently maps anything else,
+    ``retired`` included, to ``scheduled``. That vocabulary belongs to the
+    PUT route's legacy wire input; it is not total over the canonical match
+    states (``db.models.MatchStatus``) and this public projection must not
+    repeat the drop. This DTO's ``status`` is instead exactly
+    ``shared.match_vocabulary.CANONICAL_TO_LEGACY``'s value set — bidirectional
+    and total, ``retired`` included — so a retired match reads as *Retired*
+    on the board rather than reappearing as *Scheduled*.
+    """
+
+    matchId: str
+    status: Literal["scheduled", "called", "started", "finished", "retired"]
+    calledAt: Optional[str] = None
+    actualStartTime: Optional[str] = None
+    actualEndTime: Optional[str] = None
+    score: Optional[DisplayMatchScoreDTO] = None
+    notes: Optional[str] = None
+    updatedAt: Optional[str] = None
+    originalSlotId: Optional[int] = None
+    originalCourtId: Optional[int] = None
+
+
+def _display_status_word(raw: str) -> str:
+    """Round-trip a stored ``match_states.status`` string through the
+    canonical vocabulary so the wire word is always one this authority
+    recognises — total and bidirectional, unlike the coercion this route
+    used to inherit. A truly unrecognised value falls back to ``scheduled``,
+    the same fallback the previous DTO used for garbage input; that fallback
+    is not the D4 defect — dropping a *known* canonical value (``retired``)
+    was."""
+    try:
+        canonical = legacy_to_canonical(raw)
+    except KeyError:
+        return "scheduled"
+    return canonical_to_legacy(canonical)
+
+
+def _row_to_display_state(row: MatchState) -> DisplayMatchStateDTO:
+    score = None
+    if row.score_side_a is not None and row.score_side_b is not None:
+        score = DisplayMatchScoreDTO(sideA=row.score_side_a, sideB=row.score_side_b)
+    return DisplayMatchStateDTO(
+        matchId=row.match_id,
+        status=_display_status_word(row.status),
+        calledAt=row.called_at,
+        actualStartTime=row.actual_start_time,
+        actualEndTime=row.actual_end_time,
+        score=score,
+        notes=row.notes,
+        updatedAt=row.updated_at.isoformat() if row.updated_at else None,
+        originalSlotId=row.original_slot_id,
+        originalCourtId=row.original_court_id,
+    )
+
+
+@public_router.get(
+    "/{token}/match-states", response_model=Dict[str, DisplayMatchStateDTO]
+)
 def display_match_states(
     token: str,
     repo: LocalRepository = Depends(get_repository),
 ):
     t = _resolve(repo, token)
     rows = repo.match_states.list_for_tournament(t.id)
-    return {row.match_id: row_to_dto(row) for row in rows}
+    return {row.match_id: _row_to_display_state(row) for row in rows}
 
 
 @public_router.get("/{token}/bracket", response_model=TournamentOut)

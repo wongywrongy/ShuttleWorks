@@ -515,3 +515,24 @@ def test_bracket_materialized_operations_court_wins_for_current_assignment():
     courts = {"live": 4}
     _merge_live_bracket_courts(courts, [_bracket_assignment("live", 1, started=3)])
     assert courts == {"live": 4}
+
+
+def test_bracket_court_conflict_withholds_court_field_only_third_court_unaffected():
+    """C2 (state-and-formatting contract §4.2): a disputed court withholds
+    only the court field for the competing claims — it does not remove
+    either match from the projection, which is a decision the caller of
+    ``_merge_live_bracket_courts`` makes (both units simply have no
+    ``courts`` entry to read a court from). A third, undisputed court keeps
+    its assignment untouched. D1: the dispute itself is derived via
+    ``shared.court_occupancy``, not a bespoke detector here."""
+    from entries.entries_site import _merge_live_bracket_courts
+
+    courts = {}
+    _merge_live_bracket_courts(courts, [
+        _bracket_assignment("first", 1, started=3),
+        _bracket_assignment("second", 1, started=4),
+        _bracket_assignment("third", 2, started=5),
+    ])
+    assert "first" not in courts
+    assert "second" not in courts
+    assert courts == {"third": 2}

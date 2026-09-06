@@ -29,6 +29,24 @@ export type OccupancyStatus =
 
 export type CourtState = 'free' | 'occupied' | 'disputed';
 
+/**
+ * Which "now" window a caller means (D19, contract §4.4).
+ *
+ * `'desk'` is the default and matches the backend authority exactly:
+ * only `playing`/`started` occupies a court right now. It feeds counts
+ * (`playing`, `courtsFree`) and conflict detection — the same predicate
+ * `shared/court_occupancy.py`'s `occupies_court_now` names.
+ *
+ * `'board'` is the public display's own, deliberately WIDER window
+ * (`publicDisplay/courtLanes.ts`'s former undocumented divergence): a
+ * `called` match also counts as "now" so a court does not blink empty
+ * during the walk-to-court gap between one match finishing and the next
+ * being called. It is used only to decide what belongs in a board's Now
+ * lane (never for occupancy counts, and never for the write-guard/
+ * conflict-detection predicate, which stays `'desk'`).
+ */
+export type NowWindow = 'desk' | 'board';
+
 export interface OccupancyMatchLike {
   id: string;
   status: OccupancyStatus;
@@ -52,10 +70,18 @@ export interface CourtDispute {
 }
 
 /** True iff a match in `status` is actually occupying a court right now.
- * Only `playing`/`started` — `called` is deliberately excluded, players are
- * still walking to the court. Feeds counts (`playing`, `courtsFree`) and
- * conflict detection. */
-export function occupiesCourtNow(status: OccupancyStatus): boolean {
+ *
+ * Defaults to the `'desk'` window: only `playing`/`started` — `called` is
+ * deliberately excluded, players are still walking to the court. Feeds
+ * counts (`playing`, `courtsFree`) and conflict detection, which must
+ * always use the `'desk'` window (never widen a write-guard or a dispute).
+ *
+ * Pass `nowWindow: 'board'` (D19) only when deciding what belongs in the
+ * PUBLIC BOARD's Now lane: `called` also counts as "now" there, so a court
+ * does not read empty during the walk-to-court gap. See `NowWindow`'s
+ * doc comment. */
+export function occupiesCourtNow(status: OccupancyStatus, nowWindow: NowWindow = 'desk'): boolean {
+  if (nowWindow === 'board' && status === 'called') return true;
   return status === 'playing' || status === 'started';
 }
 
@@ -78,10 +104,11 @@ export function holdsCourtCommitment(status: OccupancyStatus): boolean {
  * nobody claims is free by omission — never present in the returned map. */
 export function deriveCourtStates(
   matches: readonly OccupancyMatchLike[],
+  nowWindow: NowWindow = 'desk',
 ): Map<number, CourtState> {
   const byCourt = new Map<number, OccupancyMatchLike[]>();
   for (const m of matches) {
-    if (m.court == null || !occupiesCourtNow(m.status)) continue;
+    if (m.court == null || !occupiesCourtNow(m.status, nowWindow)) continue;
     const list = byCourt.get(m.court) ?? [];
     list.push(m);
     byCourt.set(m.court, list);
@@ -94,10 +121,13 @@ export function deriveCourtStates(
 }
 
 /** One `CourtDispute` per court with two or more current claimants. */
-export function deriveDisputes(matches: readonly OccupancyMatchLike[]): CourtDispute[] {
+export function deriveDisputes(
+  matches: readonly OccupancyMatchLike[],
+  nowWindow: NowWindow = 'desk',
+): CourtDispute[] {
   const byCourt = new Map<number, OccupancyMatchLike[]>();
   for (const m of matches) {
-    if (m.court == null || !occupiesCourtNow(m.status)) continue;
+    if (m.court == null || !occupiesCourtNow(m.status, nowWindow)) continue;
     const list = byCourt.get(m.court) ?? [];
     list.push(m);
     byCourt.set(m.court, list);
