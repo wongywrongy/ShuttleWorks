@@ -71,6 +71,15 @@ Debt and gaps found delivering work package 07 (`docs/audits/v3-consolidated/pla
 | V3-07-4 | **`TEXT_MUTED_2XS` (`apps/console/src/lib/utils.ts`) is now a deprecated alias equal to `TEXT_MUTED_XS`**, kept only so its three existing importers (`ModuleCatalogRow.tsx`, `SharingTab.tsx`, `DisplayLayoutEditor.tsx`'s sibling `DisplayPreview.tsx`) keep rendering the caption-floor size without a mechanical rename in this change. Swap those three call sites to `TEXT_MUTED_XS` directly and delete the alias. | S |
 | V3-07-5 | **R3's `tone="routine"` plain-text path was added to `StatusPill`/`StatusBar` and switched at the sites this package touched** (`WorkspaceRow`, `WorkspaceInspector`, `GeneralSettingsTab`, `matchStatus.tsx`'s pre-existing `STATUS_TREATMENT`), but was not swept across every `StatusPill` call site. Known un-converted routine-looking pills, left for a later pass to judge (some may be legitimate exceptions, not verified here): `apps/console/src/platform/product-shell/WorkspaceIdentityBar.tsx` (shell header lifecycle/status pill — out of `modules/` scope), `apps/console/src/modules/entries/EntriesDesk.tsx` (`tone="green"` "Paid", `ENTRY_STATE_TONE` — entries module out of scope), `apps/console/src/modules/setup/SetupProduct.tsx` (`tone="red"` — likely a genuine exception, unverified). | S–M |
 
+### Work package 19 — backups, restore, sync
+
+Debt and gaps found delivering work package 19 (`docs/audits/v3-consolidated/plan.md` §3 X16, §4 "Destructive/recovery copy"/"Status"/"Dates and numbers", V3-OC27.1/.2). Full account in `docs/audits/v3-consolidated/reports/19-backups.md`.
+
+| # | What | Size |
+| --- | --- | --- |
+| V3-19-1 | **`BackupEntryDTO` carries `matchCount`/`entryCount` but no result count.** Recorded match results (scores) live in `match_states`, a table separate from `tournaments.data`/the stored backup `snapshot`; a past backup never captured that table, so there is no honest way to report "results" for an old snapshot without re-deriving live state it never had. If backups are ever extended to snapshot `match_states` alongside the workspace blob, add a `resultCount` alongside the other two. | S, blocked on a product decision to widen what a backup captures |
+| V3-19-2 | **`apps/console/src/lib/formatDateTime.ts`, the contract §7.3 tournament-timezone-aware formatting authority, does not exist yet** (it is package 07's deliverable, not shipped as of this branch). `SyncBackupsTab.tsx`'s new backup-row timestamp formatters (`fmtTimestamp`/`fmtTime`/`dayLabel`/`minuteKey`) implement the same rules locally — tournament timezone, explicit zone abbreviation, seconds only to break a same-minute tie — with a code comment marking the redirect. Once the authority lands, fold these four functions into it and delete the local copies. | S once the authority exists |
+
 ---
 
 ## Open — needs an owner decision

@@ -3842,6 +3842,21 @@ export interface components {
              * @default auto
              */
             origin: string;
+            /**
+             * Matchcount
+             * @default 0
+             */
+            matchCount: number;
+            /**
+             * Entrycount
+             * @default 0
+             */
+            entryCount: number;
+            /**
+             * Changesummary
+             * @default First recorded snapshot
+             */
+            changeSummary: string;
         };
         /** BackupListDTO */
         BackupListDTO: {
@@ -4410,6 +4425,53 @@ export interface components {
             matchStates?: {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
+        };
+        /** DisplayMatchScoreDTO */
+        DisplayMatchScoreDTO: {
+            /** Sidea */
+            sideA: number;
+            /** Sideb */
+            sideB: number;
+        };
+        /**
+         * DisplayMatchStateDTO
+         * @description The board's own ``/match-states`` wire shape (D4).
+         *
+         *     This used to be ``operations.match_state_routes.MatchStateDTO`` verbatim
+         *     — including that DTO's four-value ``MatchStateStatusLiteral``
+         *     (``scheduled | called | started | finished``) and its
+         *     ``coerce_unknown_status`` validator, which silently maps anything else,
+         *     ``retired`` included, to ``scheduled``. That vocabulary belongs to the
+         *     PUT route's legacy wire input; it is not total over the canonical match
+         *     states (``db.models.MatchStatus``) and this public projection must not
+         *     repeat the drop. This DTO's ``status`` is instead exactly
+         *     ``shared.match_vocabulary.CANONICAL_TO_LEGACY``'s value set — bidirectional
+         *     and total, ``retired`` included — so a retired match reads as *Retired*
+         *     on the board rather than reappearing as *Scheduled*.
+         */
+        DisplayMatchStateDTO: {
+            /** Matchid */
+            matchId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "scheduled" | "called" | "started" | "finished" | "retired";
+            /** Calledat */
+            calledAt?: string | null;
+            /** Actualstarttime */
+            actualStartTime?: string | null;
+            /** Actualendtime */
+            actualEndTime?: string | null;
+            score?: components["schemas"]["DisplayMatchScoreDTO"] | null;
+            /** Notes */
+            notes?: string | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Originalslotid */
+            originalSlotId?: number | null;
+            /** Originalcourtid */
+            originalCourtId?: number | null;
         };
         /**
          * DisplayStateDTO
@@ -5910,7 +5972,7 @@ export interface components {
             /** Position */
             position: number;
             /** Sides */
-            sides: components["schemas"]["SideDTO"][];
+            sides: components["schemas"]["entries__entries_site__SideDTO"][];
             result?: components["schemas"]["NodeResultDTO"] | null;
             /** Scheduledtime */
             scheduledTime?: string | null;
@@ -6384,6 +6446,21 @@ export interface components {
             askBirthYear: boolean;
         };
         /**
+         * PersonRefDTO
+         * @description One resolved (or dead) person reference on the operator wire.
+         *
+         *     Unlike the public ``PersonReferenceDTO`` there is no publication gate
+         *     here — the operator always sees the stored name. ``id`` is the
+         *     roster/participant key the side's ``participantKey`` also carries;
+         *     it is optional because a legacy or hand-entered name may have none.
+         */
+        PersonRefDTO: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
          * PersonReferenceDTO
          * @description A person or structural token used by public projections.
          *
@@ -6461,6 +6538,8 @@ export interface components {
             dependencies: string[];
             slot_a: components["schemas"]["BracketSlotOut"];
             slot_b: components["schemas"]["BracketSlotOut"];
+            /** Sides */
+            sides?: components["schemas"]["shared__sides__SideDTO"][];
             /** Segment */
             segment?: string | null;
             /** Played On */
@@ -7314,22 +7393,6 @@ export interface components {
              */
             authority: "setup" | "domain";
         };
-        /** SideDTO */
-        SideDTO: {
-            /** Participantkey */
-            participantKey?: string | null;
-            /** Placeholder */
-            placeholder?: string | null;
-            /**
-             * Bye
-             * @default false
-             */
-            bye: boolean;
-            /** Feedernodekey */
-            feederNodeKey?: string | null;
-            /** Feedertake */
-            feederTake?: ("winner" | "loser") | null;
-        };
         /** SignupResponse */
         SignupResponse: {
             /**
@@ -8106,6 +8169,39 @@ export interface components {
             /** Userid */
             userId: string;
         };
+        /**
+         * UnresolvedSideDTO
+         * @description Why a side has no (or an incomplete) resolved person.
+         *
+         *     One flat model rather than six ``kind``-tagged classes: the frontend
+         *     switches on ``kind`` exactly as the match-card contract's
+         *     ``UnresolvedSide`` union describes, and Pydantic serializes the unused
+         *     fields as absent (they carry ``None``/empty defaults), so the wire shape
+         *     for each kind matches the union member the contract names.
+         *
+         *     ``reference`` (for ``winner_of`` / ``loser_of``) is the RAW machine id of
+         *     the feeder play unit, not a formatted human reference — the console's
+         *     ``matchIdentity.ts`` / ``bracketLabels.ts`` stay the one authority for
+         *     that spelling (state-and-formatting §6.3, D16) and resolve this id to
+         *     "Winner of QF1" themselves, exactly as they already do for
+         *     ``slot.feeder_play_unit_id`` today.
+         */
+        UnresolvedSideDTO: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "bye" | "pending_member" | "winner_of" | "loser_of" | "withheld" | "undetermined";
+            /** Known */
+            known?: components["schemas"]["PersonRefDTO"][];
+            /**
+             * Missing
+             * @default 0
+             */
+            missing: number;
+            /** Reference */
+            reference?: string | null;
+        };
         /** UserDTO */
         UserDTO: {
             /** Id */
@@ -8367,6 +8463,39 @@ export interface components {
              */
             phase: string;
             entries?: components["schemas"]["EntriesMetricsDTO"] | null;
+        };
+        /** SideDTO */
+        entries__entries_site__SideDTO: {
+            /** Participantkey */
+            participantKey?: string | null;
+            /** Placeholder */
+            placeholder?: string | null;
+            /**
+             * Bye
+             * @default false
+             */
+            bye: boolean;
+            /** Feedernodekey */
+            feederNodeKey?: string | null;
+            /** Feedertake */
+            feederTake?: ("winner" | "loser") | null;
+        };
+        /**
+         * SideDTO
+         * @description One side of a match — the operator-wire twin of the public ``Side``.
+         *
+         *     ``persons`` and ``unresolved`` are NOT mutually exclusive (match-card
+         *     contract §2.1): a partially-known doubles side would carry both, once a
+         *     future package can populate ``pending_member`` (see module docstring).
+         */
+        shared__sides__SideDTO: {
+            /** Persons */
+            persons?: components["schemas"]["PersonRefDTO"][];
+            unresolved?: components["schemas"]["UnresolvedSideDTO"] | null;
+            /** Seed */
+            seed?: number | null;
+            /** Participantkey */
+            participantKey?: string | null;
         };
     };
     responses: never;
@@ -13061,7 +13190,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: components["schemas"]["MatchStateDTO"];
+                        [key: string]: components["schemas"]["DisplayMatchStateDTO"];
                     };
                 };
             };

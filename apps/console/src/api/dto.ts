@@ -703,6 +703,14 @@ export interface BackupEntryDTO {
    *  director asked for it). Only auto rows rotate (WSB-3), so the list says
    *  which is which. Optional for older payloads. */
   origin?: 'auto' | 'manual';
+  /** Meaningful counts read off the stored snapshot (V3-OC27.2), so two
+   *  backups minted in the same second are distinguishable by content, not
+   *  just byte size. Optional for older payloads/tests. */
+  matchCount?: number;
+  entryCount?: number;
+  /** One-line diff against the next-older backup — never a byte delta or the
+   *  filename. "First recorded snapshot" for the oldest backup on record. */
+  changeSummary?: string;
 }
 
 export interface BackupListDTO {

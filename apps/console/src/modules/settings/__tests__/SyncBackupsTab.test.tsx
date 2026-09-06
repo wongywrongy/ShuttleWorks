@@ -137,31 +137,93 @@ describe('SyncBackupsTab — WSB-2/3/4', () => {
     render(<SyncBackupsTab />);
     expect(within(screen.getByTestId('backup-a.json')).getByText('Auto')).toBeInTheDocument();
     expect(within(screen.getByTestId('backup-m.json')).getByText('Manual')).toBeInTheDocument();
-    expect(within(screen.getByTestId('backup-a.json')).getByText('a.json')).toBeInTheDocument();
+    // The filename is a detail-affordance concern now (V3-OC27.2) — it lives
+    // behind the overflow menu / Inspect, not the default row.
+    expect(within(screen.getByTestId('backup-a.json')).queryByText('a.json')).toBeNull();
     expect(screen.getByTestId('backup-eligibility-a.json')).toHaveTextContent(/eligible to restore/i);
-    expect(within(screen.getByTestId('backup-a.json')).getByText(/2026/)).toBeInTheDocument();
+    // Timezone-qualified per contract §7 (`clock_with_zone`) — never a
+    // silent local-time assumption.
+    expect(within(screen.getByTestId('backup-a.json')).getByText(/UTC/)).toBeInTheDocument();
   });
 
-  it('distinguishes recovery points by snapshot size change before restore', () => {
+  /* V3-OC27.2: two backups minted in the same second (or the same minute)
+   * must be distinguishable by their CONTENT, never by byte size or
+   * filename alone — those move behind Inspect / download. */
+  it('distinguishes same-minute recovery points by change summary and counts, not byte size', () => {
     setHook({
       entries: [
-        { filename: 'new.json', sizeBytes: 2048, modifiedAt: '2026-06-01T02:00:00Z', origin: 'auto' },
-        { filename: 'old.json', sizeBytes: 1024, modifiedAt: '2026-06-01T01:00:00Z', origin: 'auto' },
+        {
+          filename: 'new.json',
+          sizeBytes: 2048,
+          modifiedAt: '2026-06-01T02:00:30Z',
+          origin: 'auto',
+          matchCount: 5,
+          entryCount: 10,
+          changeSummary: '+1 match, +2 entrants since previous snapshot',
+        },
+        {
+          filename: 'old.json',
+          sizeBytes: 1024,
+          modifiedAt: '2026-06-01T02:00:05Z',
+          origin: 'auto',
+          matchCount: 4,
+          entryCount: 8,
+          changeSummary: 'First recorded snapshot',
+        },
       ],
     });
     render(<SyncBackupsTab />);
-    expect(screen.getByText(/1.0 KB larger than the next point/i)).toBeInTheDocument();
+    expect(screen.getByTestId('backup-summary-new.json')).toHaveTextContent(
+      '+1 match, +2 entrants since previous snapshot',
+    );
+    expect(screen.getByTestId('backup-summary-old.json')).toHaveTextContent('First recorded snapshot');
+    expect(within(screen.getByTestId('backup-new.json')).getByText('5 matches, 10 entrants')).toBeInTheDocument();
+    expect(within(screen.getByTestId('backup-old.json')).getByText('4 matches, 8 entrants')).toBeInTheDocument();
+    // Never byte-delta prose or a bare filename in the default row.
+    expect(screen.queryByText(/larger than the next point/i)).toBeNull();
+    expect(screen.queryByText(/smaller than the next point/i)).toBeNull();
+    expect(within(screen.getByTestId('backup-new.json')).queryByText('new.json')).toBeNull();
+    // The two rows collide on the same MINUTE (02:00:30 vs 02:00:05), so the
+    // default timestamp must include seconds to keep them distinguishable
+    // even before reading the summary.
+    expect(within(screen.getByTestId('backup-new.json')).getByText(/:30/)).toBeInTheDocument();
+    expect(within(screen.getByTestId('backup-old.json')).getByText(/:05/)).toBeInTheDocument();
   });
 
-  it('explains the pre-restore recovery point before confirmation', () => {
+  it('does not show seconds when no other backup collides on the minute', () => {
+    setHook({
+      entries: [
+        { filename: 'solo.json', sizeBytes: 1024, modifiedAt: '2026-06-01T02:00:30Z', origin: 'auto' },
+      ],
+    });
+    render(<SyncBackupsTab />);
+    expect(within(screen.getByTestId('backup-solo.json')).queryByText(/:30/)).toBeNull();
+  });
+
+  it('explains the pre-restore recovery point before confirmation, naming it by its summary', () => {
+    setHook({
+      entries: [
+        {
+          filename: 'b1.json',
+          sizeBytes: 2048,
+          modifiedAt: '2026-06-01T00:00:00Z',
+          matchCount: 3,
+          entryCount: 6,
+          changeSummary: '+3 matches since previous snapshot',
+        },
+      ],
+    });
     render(<SyncBackupsTab />);
     fireEvent.click(
       within(screen.getByTestId('backup-b1.json')).getByRole('button', {
         name: 'Restore backup b1.json',
       }),
     );
-    expect(screen.getByText(/recovery point of the current workspace will be created/i)).toBeInTheDocument();
-    expect(screen.getByText(/if that safety snapshot cannot be saved/i)).toBeInTheDocument();
+    expect(screen.getByText('+3 matches since previous snapshot · 3 matches, 6 entrants')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Restoring replaces the current workspace with this snapshot\. A recovery point of the current state is saved first/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/if that safety snapshot cannot be saved, the restore will not run/i)).toBeInTheDocument();
   });
 
   it('the Restore row button is neutral — the red moved into the confirm (WSB-2)', () => {

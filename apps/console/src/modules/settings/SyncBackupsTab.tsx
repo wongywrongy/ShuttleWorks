@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAction } from '../../hooks/useAction';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState, OverflowMenu, PAGE_BODY_WIDTH } from '../../components/control-plane';
@@ -9,55 +9,101 @@ import { useAuthorityStatus } from '../../hooks/useAuthorityStatus';
 import { SyncReconciliationPanel } from './SyncReconciliationPanel';
 import type { BackupSnapshotDTO } from '../../api/dto';
 
-/** Human-readable file size: B / KB / MB. */
+/** Human-readable file size: B / KB / MB. Detail-affordance only (V3-OC27.2)
+ *  — never rendered in the default row. */
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Day header: "Today", else "Aug 12" ("Aug 12, 2025" outside the current year). */
-function dayLabel(iso: string): string {
+// NOTE(package 19 / V3-OC27.2): the contract's tournament-timezone-aware
+// `formatDateTime.ts` authority (state-and-formatting.md §7.3) does not
+// exist yet — it is package 07's deliverable. Every backup timestamp below
+// is therefore formatted locally, with the same rules that authority will
+// enforce (tournament timezone, explicit zone abbreviation, seconds only to
+// break a tie), so this redirects cleanly once it lands.
+
+/** Minute-truncated wall-clock key in `timeZone`, used only to detect two
+ * backups that collide on the minute (V3-OC27.2) — never displayed. */
+function minuteKey(iso: string, timeZone: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(d);
+}
+
+/** Day header in the tournament timezone: "Today", else "Aug 12" ("Aug 12,
+ * 2025" outside the current year). */
+function dayLabel(iso: string, timeZone: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const dayKey = (date: Date) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
   const now = new Date();
-  if (d.toDateString() === now.toDateString()) return 'Today';
-  return d.toLocaleDateString('en-US', {
+  if (dayKey(d) === dayKey(now)) return 'Today';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
     month: 'short',
     day: 'numeric',
     ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
-  });
+  }).format(d);
 }
 
-/** Time-of-day ("3:04 PM") — the day lives in the group header. */
-function fmtTime(iso: string): string {
+/** Time-of-day in the tournament timezone, always zone-qualified (contract
+ * §7 `clock_with_zone`; never a silent local-time assumption) — the day
+ * lives in the group header. Seconds only when another backup in the list
+ * collides on the same minute. */
+function fmtTime(iso: string, timeZone: string, withSeconds: boolean): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(withSeconds ? { second: '2-digit' } : {}),
+    timeZoneName: 'short',
+  }).format(d);
 }
 
 /** The list is grouped by day, but every recovery point still needs its
- * exact moment for incident review and operator confidence. */
-function fmtTimestamp(iso: string): string {
+ * exact, timezone-qualified moment for incident review and operator
+ * confidence (contract §7 `datetime` + `clock_with_zone`). */
+function fmtTimestamp(iso: string, timeZone: string, withSeconds: boolean): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-      });
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(withSeconds ? { second: '2-digit' } : {}),
+    timeZoneName: 'short',
+  }).format(d);
+}
+
+/** "1 match, 2 entrants" — omits a count that is zero AND the other is
+ * zero too (an empty snapshot says so via its change summary instead). */
+function countsText(matchCount: number, entryCount: number): string | null {
+  const parts: string[] = [];
+  if (matchCount > 0) parts.push(`${matchCount} match${matchCount === 1 ? '' : 'es'}`);
+  if (entryCount > 0) parts.push(`${entryCount} entrant${entryCount === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(', ') : null;
 }
 
 /** Sync & Backups: list the workspace's state backups, create a new one, and
  *  restore from one (with confirm). Wired through the shared `useTournamentBackups`
  *  hook — the single seam for backup actions — so a restore re-hydrates the live
  *  tournament store (no stale data) exactly like the operator BackupPanel. */
-export function SyncBackupsTab() {
+export function SyncBackupsTab({ timeZone: timeZoneProp }: { timeZone?: string } = {}) {
+  // Contract §7.2: an unknown timezone falls back to UTC and says so — every
+  // formatter above renders the zone abbreviation explicitly, so "UTC" here
+  // is never a silent local-time assumption.
+  const timeZone = timeZoneProp || 'UTC';
   const authority = useAuthorityStatus();
   const {
     entries,
@@ -146,11 +192,24 @@ export function SyncBackupsTab() {
   // filename. Entries arrive newest-first, so same-day rows are adjacent.
   const groups: { label: string; items: typeof entries }[] = [];
   for (const b of entries) {
-    const label = dayLabel(b.modifiedAt);
+    const label = dayLabel(b.modifiedAt, timeZone);
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.items.push(b);
     else groups.push({ label, items: [b] });
   }
+
+  // V3-OC27.2: two backups that land in the same minute are otherwise
+  // indistinguishable by the default timestamp alone — add seconds only to
+  // the rows that actually collide.
+  const minuteCollisions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const b of entries) {
+      const key = minuteKey(b.modifiedAt, timeZone);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [entries, timeZone]);
+  const collides = (iso: string) => (minuteCollisions.get(minuteKey(iso, timeZone)) ?? 0) > 1;
 
   const target = entries.find((e) => e.filename === restoreTarget);
 
@@ -187,7 +246,9 @@ export function SyncBackupsTab() {
             ) : authority.status.pending_operations > 0 ? (
               <div className="text-right text-xs">
                 <span className="text-status-warning">
-                  Syncing · {authority.status.pending_operations} committed locally · awaiting cloud
+                  {authority.status.pending_operations} change
+                  {authority.status.pending_operations === 1 ? '' : 's'} saved on
+                  this device, waiting to sync
                 </span>
               </div>
             ) : authority.status.acknowledged_operations > 0 ? (
@@ -261,7 +322,7 @@ export function SyncBackupsTab() {
         <div className="space-y-3">
           {groups.map((g) => (
             <div key={g.items[0].filename}>
-              <div className="mb-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {g.label}
               </div>
               <ul className="divide-y divide-border rounded border border-border">
@@ -288,26 +349,33 @@ export function SyncBackupsTab() {
                           {b.origin === 'manual' ? 'Manual' : 'Auto'}
                         </span>
                         <span className="text-muted-foreground"> · </span>
-                        <time dateTime={b.modifiedAt} title={fmtTimestamp(b.modifiedAt)}>
-                          {fmtTimestamp(b.modifiedAt)}
-                        </time>
-                        <span className="text-muted-foreground"> · {fmtBytes(b.sizeBytes)}</span>
-                      </div>
-                      <div className="mt-1 text-2xs text-muted-foreground">
-                        <span>{index === 0 && g === groups[0] ? 'Latest recovery point' : 'Earlier recovery point'}</span>
-                        <span aria-hidden="true"> · </span>
                         {(() => {
-                          const position = entries.findIndex((entry) => entry.filename === b.filename);
-                          const adjacent = position >= 0 ? entries[position + 1] : undefined;
-                          const delta = adjacent ? b.sizeBytes - adjacent.sizeBytes : 0;
-                          return adjacent && delta !== 0 ? (
-                            <span>{delta > 0 ? `${fmtBytes(delta)} larger than the next point` : `${fmtBytes(Math.abs(delta))} smaller than the next point`}</span>
-                          ) : (
-                            <span>Full workspace snapshot; download to inspect contents</span>
+                          const withSeconds = collides(b.modifiedAt);
+                          const label = fmtTimestamp(b.modifiedAt, timeZone, withSeconds);
+                          return (
+                            <time dateTime={b.modifiedAt} title={label}>
+                              {label}
+                            </time>
                           );
                         })()}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <span>{index === 0 && g === groups[0] ? 'Latest recovery point' : 'Earlier recovery point'}</span>
                         <span aria-hidden="true"> · </span>
-                        <span className="font-mono">{b.filename}</span>
+                        {/* Change summary + meaningful counts (V3-OC27.2)
+                            replace byte-delta prose and the filename here —
+                            those move to "Inspect backup" in the overflow
+                            menu, which already shows the full snapshot
+                            breakdown and now the filename + exact size too. */}
+                        <span data-testid={`backup-summary-${b.filename}`}>
+                          {b.changeSummary ?? 'Snapshot details in Inspect backup'}
+                        </span>
+                        {countsText(b.matchCount ?? 0, b.entryCount ?? 0) ? (
+                          <>
+                            <span aria-hidden="true"> · </span>
+                            <span>{countsText(b.matchCount ?? 0, b.entryCount ?? 0)}</span>
+                          </>
+                        ) : null}
                         <span aria-hidden="true"> · </span>
                         <span data-testid={`backup-eligibility-${b.filename}`}>Eligible to restore</span>
                         <span aria-hidden="true"> · </span>
@@ -383,7 +451,9 @@ export function SyncBackupsTab() {
               Delete the backup from{' '}
               {(() => {
                 const d = entries.find((e) => e.filename === deleteTarget);
-                return d ? `${dayLabel(d.modifiedAt)}, ${fmtTime(d.modifiedAt)}` : deleteTarget;
+                return d
+                  ? `${dayLabel(d.modifiedAt, timeZone)}, ${fmtTime(d.modifiedAt, timeZone, collides(d.modifiedAt))}`
+                  : deleteTarget;
               })()}
               ?
             </h2>
@@ -413,14 +483,27 @@ export function SyncBackupsTab() {
           <div className="p-6">
             <h2 id="restore-backup-heading" className={TEXT_TITLE}>
               Restore the backup from{' '}
-              {target ? `${dayLabel(target.modifiedAt)}, ${fmtTime(target.modifiedAt)}` : restoreTarget}?
+              {target
+                ? `${dayLabel(target.modifiedAt, timeZone)}, ${fmtTime(target.modifiedAt, timeZone, collides(target.modifiedAt))}`
+                : restoreTarget}
+              ?
             </h2>
+            {/* Names the chosen snapshot by its content, not its filename
+                (V3-OC27.2) — the same summary/counts shown in the list row. */}
+            {target ? (
+              <p className="mt-1 text-xs font-medium text-foreground">
+                {target.changeSummary ?? 'Snapshot details in Inspect backup'}
+                {countsText(target.matchCount ?? 0, target.entryCount ?? 0)
+                  ? ` · ${countsText(target.matchCount ?? 0, target.entryCount ?? 0)}`
+                  : ''}
+              </p>
+            ) : null}
             <p className="mt-1 text-xs text-muted-foreground">
-              A recovery point of the current workspace will be created before this
-              restore. If that safety snapshot cannot be saved, the restore will not
-              run. Then this replaces the workspace&rsquo;s matches, results, and settings
-              with <span className="font-mono">{restoreTarget}</span>; changes made
-              since it are discarded.
+              Restoring replaces the current workspace with this snapshot. A
+              recovery point of the current state is saved first; if that
+              safety snapshot cannot be saved, the restore will not run.
+              Matches, results, and settings all change to match the
+              snapshot — everything recorded since it is discarded.
             </p>
             <DialogFooter align="between">
               <Button variant="ghost" onClick={() => setRestoreTarget(null)} disabled={restoring}>
@@ -441,7 +524,15 @@ export function SyncBackupsTab() {
         <Modal onClose={() => setInspectTarget(null)} titleId="inspect-backup-heading">
           <div className="p-6">
             <h2 id="inspect-backup-heading" className={TEXT_TITLE}>Inspect recovery point</h2>
+            {/* Exact filename + size — the detail affordance V3-OC27.2 asks
+                for; the default list row shows the change summary instead. */}
             <p className="mt-1 text-xs text-muted-foreground font-mono">{inspectTarget}</p>
+            {(() => {
+              const found = entries.find((e) => e.filename === inspectTarget);
+              return found ? (
+                <p className="mt-0.5 text-xs text-muted-foreground">{fmtBytes(found.sizeBytes)}</p>
+              ) : null;
+            })()}
             {inspectLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading snapshot contents…</p> : inspectError ? <p role="alert" className="mt-4 text-sm text-destructive">{inspectError}</p> : inspectState ? (
               <>
               <p className="mt-4 text-xs text-muted-foreground">
