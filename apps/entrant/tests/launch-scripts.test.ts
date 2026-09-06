@@ -113,7 +113,7 @@ test('keeps the entrant SSR list tied to every createServer test and partitions 
   const unit = all.filter((name) => !ssr.includes(name));
 
   expect(ssr).toEqual(discoveredSsr);
-  expect(ssr).toHaveLength(22);
+  expect(ssr).toHaveLength(23);
   expect(new Set([...unit, ...ssr])).toEqual(new Set(all));
   expect(unit).not.toEqual([]);
   expect(new Set(unit).size + new Set(ssr).size).toBe(all.length);
@@ -237,6 +237,7 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
     '11-public-bracket-geometry.spec.ts',
     'console-a11y.spec.ts',
     'console-browser-contracts.spec.ts',
+    'entrant-a11y.spec.ts',
   ]);
   expect(interaction).toMatch(/E2E_TAIPEI_TID/);
   expect(interaction).toMatch(/E2E_KOREA_TID/);
@@ -264,6 +265,7 @@ test('waits for the entrant origin only for entrant evidence', () => {
   expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:entrant-evidence' })).toBe(true);
   expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:console-contracts' })).toBe(false);
   expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:console-a11y' })).toBe(false);
+  expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:entrant-a11y' })).toBe(true);
   expect(requiresEntrantOrigin({ E2E_REQUIRE_PLAY: '1' })).toBe(true);
   expect(
     requiresEntrantOrigin({

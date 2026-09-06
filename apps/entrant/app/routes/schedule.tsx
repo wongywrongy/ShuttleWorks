@@ -480,7 +480,15 @@ function LiveBand({
       <p className="mt-0.5 text-xs text-muted-foreground">
         Scores update as the desk records them
       </p>
-      <div className="mt-3 grid gap-4 md:grid-cols-2">
+      {/* v3-consolidated work package 26b: `min-w-0`. Same implicit-grid-
+          track mechanism fixed on Discovery and Overview in this package
+          (see `SeasonCalendar.tsx`'s comment): below `md:` this is a
+          single-column grid with no explicit track, and a `MatchCard`
+          article's own content (a long player name pair, at 200% text
+          zoom) was measurably forcing this shared column past the
+          viewport (plan §6 "Responsive/signage"). Both occurrences in
+          this file share the fix. */}
+      <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-2">
         {matches.map((match) => (
           <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} showDate={showDate} />
         ))}
@@ -510,7 +518,7 @@ function ByTime({
           <h2 id={`time-${time}`} className={`${EYEBROW} tabular-nums`}>
             {time}
           </h2>
-          <div className="mt-3 grid gap-4 md:grid-cols-2">
+          <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-2">
             {group.map((match) => (
               <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} showDate={showDate} />
             ))}
@@ -635,12 +643,12 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
         aria-labelledby="schedule-title"
       >
         <div className="grid gap-1 md:gap-2">
-          <h1
+          <h2
             id="schedule-title"
             className="type-display text-2xl tracking-[-0.02em] text-foreground"
           >
             Schedule
-          </h1>
+          </h2>
           <p className="text-sm text-muted-foreground">
             Find matches by day, time, or court in tournament time (
             {matches.timeZone}).

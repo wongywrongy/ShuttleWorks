@@ -143,7 +143,19 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
 
   const card = variant === 'card';
   return (
-    <article data-match-variant={variant} className={card ? LIST_CARD : 'border border-rule-soft bg-surface-raised'}>
+    // v3-consolidated work package 26b: `min-w-0`. `MatchCard` is
+    // frequently a direct CSS Grid item (`schedule.tsx`'s "Live now" and
+    // by-time/by-court groupings, `md:grid-cols-2`) with no explicit
+    // column width below `md:` — same implicit-grid-track mechanism as
+    // `SeasonCalendar.tsx`/`tournament.tsx` in this package: a grid item
+    // defaults to `min-width: auto`, and a long unbroken side name at
+    // 200% text zoom measurably forced the shared column past the
+    // viewport (plan §6 "Responsive/signage"). The grid CONTAINERS
+    // already got `min-w-0` alongside this; this is the item-side half —
+    // both are needed, since a container's `min-w-0` governs how IT
+    // shrinks as a grid item of ITS OWN parent, not how ITS children
+    // contribute to ITS track sizing.
+    <article data-match-variant={variant} className={`min-w-0 ${card ? LIST_CARD : 'border border-rule-soft bg-surface-raised'}`}>
       {compactList ? (
         stateWord || matchNumberLabel ? (
           <div className="flex items-center justify-between gap-2 border-b border-rule-soft px-3 py-1 text-xs font-semibold text-muted-foreground">

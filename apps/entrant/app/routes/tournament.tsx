@@ -180,9 +180,22 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
   );
 
   return (
-    <div className="grid gap-4">
+    // v3-consolidated work package 26b: `min-w-0` on this div and the two
+    // below. Each is a CSS Grid container with NO `grid-template-columns`
+    // below `md:` (it only gets one at `md:` — the intro/dates pair and
+    // the key-dates/venue pair are both a single implicit column below
+    // that breakpoint), and an implicit grid item defaults to
+    // `min-width: auto`, sizing the shared column to its widest child's
+    // min-content. A long organizer-authored intro paragraph, and a long
+    // venue address line, both measurably forced this page past a
+    // 320/390px viewport (plan §6 "Responsive/signage") the same way one
+    // calendar row did on Discovery, fixed alongside this in the same
+    // package (`SeasonCalendar.tsx`/`discovery.tsx`) — see those files'
+    // comments for the full mechanism, verified against a real running
+    // page rather than reasoned about.
+    <div className="grid min-w-0 gap-4">
       <h2 className="sr-only">Overview</h2>
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
+      <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
         {page.page.introText ? (
           <p className="max-w-prose text-pretty text-base leading-7 text-foreground">{page.page.introText}</p>
         ) : <p className="max-w-prose text-pretty text-base leading-7 text-muted-foreground">Tournament information, events, and published results from the organizer.</p>}
@@ -195,7 +208,7 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
         </dl>
       </div>
 
-      <div className="grid items-start gap-4 md:grid-cols-2">
+      <div className="grid min-w-0 items-start gap-4 md:grid-cols-2">
         {/* Key dates as plain rows (ADR 0028): the model arrives pre-computed
             (`timelineModel`) — absent moments are omitted, no "TBD"
             placeholders (rule 4) — and per-event disagreement renders as a
@@ -415,6 +428,12 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
         ) : null}
         {active === 'players' && loaderData.players ? (
           <>
+            {/* v3-consolidated work package 26b: matches the sr-only `h2`
+                the Overview/Draws panels already carry — `EntrantsList`'s
+                A-Z group headers are `h3`, and with no `h2` here they
+                skipped a level under the page's one `<h1>` (plan §6
+                "Accessibility"). */}
+            <h2 className="sr-only">Players</h2>
             <PlayersList
               slug={slug}
               roster={loaderData.players}

@@ -120,7 +120,20 @@ export function SeasonControls({
   ).length;
 
   return (
-    <div className="grid gap-3">
+    // v3-consolidated work package 26b: `min-w-0` added. This is a CSS
+    // Grid item with no explicit `grid-template-columns`, so its implicit
+    // track sizes to `auto` — which, like a flex item, defaults to
+    // `min-width: auto` (its content's min-content size) rather than
+    // shrinking to fit the parent. Verified against a real running page:
+    // this single div was measurably rendering 330px wide inside a 288px
+    // parent at 320px viewport (the search box's own children being
+    // unable to fit inside `flex`'s row was a real, separate contributor,
+    // fixed alongside this in the same package, but THIS is what let that
+    // overflow escape past `<main>` and cause the page itself to scroll
+    // horizontally — plan §6 "Responsive/signage"). `min-w-0` is the
+    // standard fix for an implicit grid/flex track refusing to shrink
+    // below its content.
+    <div className="grid min-w-0 gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* The segments: navigation, not a filter — which is why they carry no
             "clear" and why the counts beside them never move. */}
@@ -140,7 +153,30 @@ export function SeasonControls({
             tier with no search landmark anywhere is an a11y regression, so
             the landmark moves here with the box. The dates popover below
             stays roleless — one search landmark per page. */}
-        <div className="flex h-9 min-w-0 flex-1 basis-80 items-stretch rounded-sm border border-rule-control bg-surface-raised sm:max-w-md">
+        {/* v3-consolidated work package 26b: `basis-80` (320px) is a
+            sensible starting width from `sm:` up (paired with
+            `sm:max-w-md`), but as the UNCONDITIONAL basis it was also the
+            shrink algorithm's starting point below `sm:` — with the
+            "Filters" `<details>` sibling refusing to shrink below its own
+            text's min-content, the pair's combined floor overflowed a
+            320px viewport by ~26px (plan §6 "Responsive/signage": no
+            horizontal document scroll at 320/390).
+            **`basis-80` alone did not fix it** (verified against a real
+            browser, not just reasoned about): `flex-1`'s implicit
+            `flex-basis: 0%` gives the wrap algorithm nothing to measure,
+            so this box is placed on the SAME line as the `nav` beside it
+            regardless of room, and only THEN does flex-shrink run — by
+            which point `<details>` (no `min-width`/shrink override, and
+            never given one, because its content genuinely cannot shrink
+            below "Filters" + its icon) simply overflows this box's edge
+            rather than the box growing or wrapping to contain it. Below
+            `sm:`, `basis-full` gives this box a 100%-of-line hypothetical
+            size, which forces the OUTER `flex-wrap` row to drop it onto
+            its own line — where it has the full 288px content width and
+            neither child needs to shrink at all. `sm:basis-80` keeps the
+            narrower, `sm:max-w-md`-capped box once there is room for it
+            beside the segments on one line. */}
+        <div className="flex h-9 min-w-0 max-w-full flex-1 basis-full sm:basis-80 items-stretch rounded-sm border border-rule-control bg-surface-raised sm:max-w-md">
           <form
             role="search"
             method="get"
@@ -172,7 +208,7 @@ export function SeasonControls({
 
           {/* The panel shares the search box's border: its summary is the
               box's right-hand cell. */}
-          <details className="relative flex">
+          <details className="group relative flex">
             <summary className="inline-flex h-full cursor-pointer list-none items-center gap-2 border-s border-rule-control px-3 text-sm font-medium text-foreground hover:bg-surface-sunken [&::-webkit-details-marker]:hidden">
               <svg aria-hidden width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
                 <path d="M1 3h12M3 7h8M5 11h4" />
@@ -180,8 +216,28 @@ export function SeasonControls({
               {activeDates === 0 ? 'Filters' : `Filters · ${activeDates}`}
             </summary>
             {/* Anchored popover from `sm:` up, bottom sheet below it — the
-                same markup, two layouts, no script (D3). */}
-            <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-md max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:mt-0 max-sm:w-full max-sm:rounded-b-none">
+                same markup, two layouts, no script (D3).
+                v3-consolidated work package 26b: `hidden group-open:block`
+                is EXPLICIT rather than relying solely on the native
+                `details:not([open]) > *:not(summary){display:none}` UA
+                rule. Verified against a real running page (not reasoned
+                about): with `max-sm:fixed` also on this element, the
+                CLOSED panel measurably kept a real, non-zero, off-screen
+                layout box (`display:block`, a `position:fixed` box whose
+                resolved geometry — bounding-rect x≈345 on a 320px
+                viewport — did not match its own `left:0/right:0/width:100%`
+                declarations at all, i.e. some fixed-position/utility
+                interaction this box's inspection could not fully explain
+                inside this package's budget), and that phantom box alone
+                accounted for the entire 320/390px horizontal-scroll defect
+                on Discovery (plan §6 "Responsive/signage"). An explicit
+                `display:none` at rest removes the layout box entirely
+                regardless of that mechanism, which is the property this
+                fix actually needs — not a specific theory of why the old
+                approach failed. `group-open:block` restores it exactly
+                when `<details open>`, so the popover/sheet behaviour is
+                otherwise unchanged. */}
+            <div className="hidden group-open:block absolute right-0 top-full z-20 mt-2 w-72 rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-md max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:mt-0 max-sm:w-full max-sm:rounded-b-none">
               <form method="get" action={ACTION} className="grid gap-3">
                 <Hidden name="q" value={filters.q.trim() === '' ? null : filters.q} />
                 <Hidden name="view" value={filters.view === 'season' ? null : filters.view} />

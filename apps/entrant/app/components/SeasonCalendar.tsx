@@ -42,9 +42,9 @@ function SectionHeader({ label }: { label: string }) {
     // to the corner radius: this tier bans that class outright
     // (`noTruncation.test.ts`), and a header that is only type does not need
     // it. The rows' own top rules are what separate the header from its list.
-    <h3 className="px-4 pb-1 pt-4 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <h2 className="px-4 pb-1 pt-4 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
       {label}
-    </h3>
+    </h2>
   );
 }
 
@@ -89,7 +89,19 @@ function CalendarRow({ row }: { row: SeasonRow }) {
         <span className="hidden text-sm tabular-nums text-muted-foreground sm:block">
           {`${row.eventCount} ${row.eventCount === 1 ? 'event' : 'events'}`}
         </span>
-        <div className="flex sm:min-w-[8rem] sm:shrink-0 sm:justify-end">
+        {/* v3-consolidated work package 26b: `min-w-0` below `sm:`. This
+            flex item had no width constraint below `sm:` at all (the
+            `sm:`-prefixed utilities are inert here), so its one child — a
+            plain `<span>`, promoted to a flex item's block layout by
+            becoming a flex child — took its unwrapped preferred width
+            instead of wrapping at its own spaces. An exact-instant status
+            line ("Closes 1 Jan 2035, 09:00 GMT+9 · 3076d") is long enough
+            that this alone accounted for the LAST few pixels of the
+            Discovery 320px horizontal-scroll defect (plan §6
+            "Responsive/signage") once the grid-track and search-box causes
+            above it were fixed. `min-w-0` lets it shrink to the column's
+            width and wrap like the sibling `<p>` already does. */}
+        <div className="flex min-w-0 sm:min-w-[8rem] sm:shrink-0 sm:justify-end">
           <SeasonStatusCell cell={statusCell(row)} />
         </div>
       </div>
@@ -130,7 +142,19 @@ export function SeasonCalendar({ rows, view }: { rows: SeasonRow[]; view: View }
     <section
       id="calendar"
       aria-label="Season calendar"
-      className="rounded-lg border border-rule-soft bg-surface-raised pb-2 shadow-sm"
+      // v3-consolidated work package 26b: `min-w-0`. This section is a
+      // CSS Grid item of `discovery.tsx`'s implicit-track wrapper
+      // (`<div className="mt-6 grid ...">`) alongside `SeasonControls`.
+      // `min-w-0` on THAT wrapper (also added in this package) fixes how
+      // far it can shrink as a grid item of `<main>`, but it does nothing
+      // for the track-sizing contribution of ITS OWN children — a grid
+      // item's default `min-width: auto` is what was measured, directly,
+      // forcing the shared column (and this card) to ~330px wide at a
+      // 320px viewport, driven by one calendar row's longest unbroken
+      // text run. `min-w-0` here is the one that actually caps this
+      // card — and with it, the shared column — at the grid's real
+      // available width.
+      className="min-w-0 rounded-lg border border-rule-soft bg-surface-raised pb-2 shadow-sm"
     >
       {sections === null ? (
         view === 'completed' ? (

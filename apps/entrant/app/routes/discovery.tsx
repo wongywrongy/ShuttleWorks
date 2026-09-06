@@ -136,7 +136,23 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
             : `Find ${BRAND.sportName.toLowerCase()} tournaments, schedules, and results.`}
         </p>
 
-        <div className="mt-6 grid gap-4">
+        {/* v3-consolidated work package 26b: `min-w-0`. An implicit CSS
+            Grid track (no `grid-template-columns` here) sizes to the
+            widest ITEM's min-content, and a grid item defaults to
+            `min-width: auto` just like a flex item — so one long,
+            barely-breakable calendar row (an organizer's venue/locality
+            string with no good wrap point) was setting this whole
+            column's width, and `SeasonControls` right above it inherited
+            that same inflated width even though its own content had
+            nothing to do with it. Verified against a real running page:
+            this single class is what let a 320/390px document scroll
+            horizontally (plan §6 "Responsive/signage") — every other fix
+            attempted in this package for the same symptom (the search
+            box's own internal layout, the "Filters" popover's closed-state
+            display) was real but not sufficient on its own, because the
+            grid track itself, not any one child, was the thing refusing
+            to shrink. */}
+        <div className="mt-6 grid min-w-0 gap-4">
           <SeasonControls filters={filters} counts={counts} />
           {/* The empty states render INSTEAD of the calendar, and the
               filtered arm is NOT gated on `anyFilterActive`: §2.4 says a

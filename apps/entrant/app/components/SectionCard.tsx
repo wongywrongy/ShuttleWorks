@@ -28,15 +28,29 @@ export function SectionCard({
     // scale — the public pages are "setup" surfaces, which breathe.
     return (
       <section className={CARD}>
-        <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+        {/* v3-consolidated work package 26b: `h2`, matching the `titled`
+            variant below — `eyebrow` is used only by `receipt.tsx`,
+            directly under the page's one `<h1>`, so an `h3` here skipped a
+            level (plan §6 "Accessibility"). The uppercase eyebrow STYLE is
+            unchanged; only the semantic level moved. */}
+        <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           {title}
-        </h3>
+        </h2>
         <div className="mt-3 grid gap-2 text-sm text-foreground">{children}</div>
       </section>
     );
   }
   return (
-    <section className={`${LIST_CARD} pb-1`} aria-labelledby={labelledBy}>
+    // v3-consolidated work package 26b: `min-w-0`. The Overview grid
+    // (`tournament.tsx`) lays these cards out as CSS Grid items with no
+    // explicit column width below `md:` — an implicit grid item defaults
+    // to `min-width: auto`, so a long value (an address line, an
+    // unbroken document-version string) inside ONE card was measurably
+    // forcing the whole shared row wider than the viewport (plan §6
+    // "Responsive/signage"; same mechanism as the Discovery calendar
+    // card and the intro/key-dates grids above it in this same package —
+    // see `SeasonCalendar.tsx`'s comment for the full mechanism).
+    <section className={`min-w-0 ${LIST_CARD} pb-1`} aria-labelledby={labelledBy}>
       <h2 id={labelledBy} className="px-4 pb-3 pt-4 text-base font-semibold tracking-tight text-foreground">
         {title}
       </h2>

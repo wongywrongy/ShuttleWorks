@@ -19,7 +19,11 @@ const FORCE_REBUILD = process.env.E2E_REBUILD === '1';
 export function requiresEntrantOrigin(
   env: { E2E_REQUIRE_PLAY?: string; npm_lifecycle_event?: string } = process.env,
 ): boolean {
-  return env.E2E_REQUIRE_PLAY === '1' || env.npm_lifecycle_event === 'test:entrant-evidence';
+  return (
+    env.E2E_REQUIRE_PLAY === '1' ||
+    env.npm_lifecycle_event === 'test:entrant-evidence' ||
+    env.npm_lifecycle_event === 'test:entrant-a11y'
+  );
 }
 
 async function waitForHealth(): Promise<void> {

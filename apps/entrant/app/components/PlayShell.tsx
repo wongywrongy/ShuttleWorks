@@ -88,7 +88,14 @@ export function PlayShell({
           </a>
         </div>
       </header>
-      <div id="main-content" className="flex-1">{children}</div>
+      {/* `tabIndex={-1}`: WCAG 2.4.1 "Bypass Blocks" needs the skip link's
+          target to actually RECEIVE keyboard focus, not just scroll into
+          view. A fragment link to a plain, non-tabindexed element moves the
+          viewport but leaves `document.activeElement` on the link itself,
+          so the very next Tab returns to the header instead of entering the
+          content — silently defeating the skip link for a keyboard user
+          (work package 26b). */}
+      <div id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">{children}</div>
       <footer className="border-t border-rule-soft">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-baseline justify-between gap-2 px-4 py-6 text-xs text-muted-foreground">
           {/* V3-PE02.1: one brand line, identical on every public page —

@@ -21,7 +21,16 @@ export interface Segment {
   extra?: ReactNode;
 }
 
-const GROUP = 'inline-flex gap-4 border-b border-rule-soft';
+// v3-consolidated work package 26b: `flex-wrap` added. The doc comment
+// above already claimed "labels are short enough to wrap harmlessly at
+// 390px", but `inline-flex` alone is `flex-wrap: nowrap` by default — there
+// was no wrap utility anywhere on this group, so the three Discovery
+// segments ("Season" / "Taking entries · N" / "Completed · N") forced this
+// nav wider than a 320/390px viewport instead of wrapping (plan §6
+// "Responsive/signage": no horizontal document scroll). Verified against a
+// real running page: this alone (with the `SeasonControls.tsx` popover fix
+// alongside it) closes Discovery's 320/390px horizontal-scroll defect.
+const GROUP = 'inline-flex flex-wrap gap-4 border-b border-rule-soft';
 const ITEM = 'inline-flex min-h-9 items-center px-0.5 text-sm';
 const DIVIDER = '';
 export const SEGMENT_ACTIVE = 'border-b-2 border-accent font-semibold text-accent';
