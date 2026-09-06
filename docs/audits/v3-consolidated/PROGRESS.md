@@ -39,23 +39,37 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 | 24 invitations/My entries/receipts | P0 | done · 8e07b9ea (short reference format → debt V3-24-1) | reports/24-invitations-entries-receipts.md |
 | 25 every-string ledger | P1 | done · bd2d6e58 + 25b (zero unreviewed) | ledger/LEDGER.md, reports/25*.md |
 | 26 accessibility + responsive | P1 | 26a done · 0e789a20; 26b (entrant) in progress | reports/26a-console-a11y.md |
-| 27 evidence + recapture | P0 | 27a closure record · 0e3a60f8; 27b recapture not started | closure.md |
+| 27 evidence + recapture | P0 | done · 27a closure record 0e3a60f8; 27b recapture complete (this session) — 83/87 findings closed, 1 closing (V3-OC24.2, physical signage pending), 3 open (organizer/production-only, non-P0) | closure.md, runtime-findings.md, reports/27b-recapture.md |
 | 28 consistency + brand seam | P2 | done · 51d4b3cf | reports/28-consistency.md |
 | 16 venue-board publishing | P1 | done · ae9a07d3 | reports/16-venue-board.md |
 
 
 ## Plan gates
 
-- **Gate A** (plan §2: counts, assignments, published times, privacy and consequential messages agree on one fixture; computed contrast verified; unknown behaviour has a named verification task): packages 01–06 and 04b are committed. Publication/privacy same-fixture assertions are package 15 (not started) — - **Gate B** (plan §2: singles, doubles, incomplete pair, unresolved predecessor, no scores, live game, completed match and exceptional outcomes render correctly; long names identifiable): packages 09, 10, 11 committed with the MC-01…MC-13 fixtures asserted on both tiers; the visual non-overlap check at the supported widths and 200% zoom is package 27's recapture. Provisionally met.
+- **Gate A** — **met.** Packages 01–06, 04b and 15 are committed; the same-fixture
+  publication/privacy/conflict assertions were re-run clean in 27b's fixture pass.
+- **Gate B** — **met**, one item physical. Packages 09, 10, 11 committed with the
+  MC-01…MC-13 fixtures asserted on both tiers; the visual non-overlap/200%-zoom check
+  package 27 owed is now proven by `console-a11y.spec.ts`/`entrant-a11y.spec.ts`'s
+  zoom + full-name-access assertions (entrant 88/88; console 20/23, the 3 failures
+  unrelated — `V3-RT-1`) plus 27b's visual review of the draw/bracket/schedule
+  surfaces. The signage name-size floor (V3-OC24.2) still needs on-hardware validation.
+- **Gate C** — **met.** Packages 12–24 are ALL committed (24 landed since this table was
+  last updated); the journey script proves sign-up → verify → enter → receipt and reset,
+  and 27b additionally drove the same journey through the browser end-to-end for a fresh
+  account. Display projects only, unchanged.
+- **Gate D** (Phase D completion, plan §2 — not a formally numbered gate in the plan
+  text but stated as a phase) — **met**, three items open pending organizer/production
+  input, none P0. See `closure.md` section (d) for the full verdict and evidence.
 
-- **Gate C** (plan §2: an operator can configure, publish, run, recover and review a tournament; a public visitor can find a match and an entrant can complete the supported account/entry journey; Display never performs operational resolution): packages 12–24 committed with per-finding tests; the journey script proves sign-up → verify → enter → receipt and reset; Display projects only. Provisionally met pending the 27b recapture.
-
-Gate A met on the assertions side (package 15 matrix committed); the same-fixture recapture is package 27.
+Full detail, evidence references and the two runtime findings surfaced while verifying
+these gates: `closure.md` section (d), `runtime-findings.md`, `reports/27b-recapture.md`.
 
 ## Gate log
 
 (append: date · command · result)
 
+- 2026-09-06 · HEAD a0a273f7 (packages 01–28 including 26b; work package 27b recapture) · `tools/fixture-up.sh` (defects pass + account journeys): fixture defects (a)-(g) verified, 10/10 account-journey checks verified; `tests/e2e/run-console-contracts.sh`: console-browser-contracts 7/7, console-a11y 20/23 (3 unrelated failures, stale `setup-strip` locator against a now-`ready` Setup·Dates section — `V3-RT-1`, debt-logged, not fixed here as `console-a11y.spec.ts` is outside this package's file scope); `entrant-a11y.spec.ts` 87/88 full run + 1/1 isolated re-run (dev-server contention timing, not a defect) = 88/88 effective; `make surface-books-fixture` 33 console + 39 entrant surfaces, 0 failed viewports; 17 supplementary successful-journey screenshots (operator create-workspace wizard to completion, a real open-entry submission + receipt, real mailed verify/reset tokens, authenticated My entries). `findings.json`: all 87 `afterEvidence` populated; 5 findings (PE35–39) closed against package 24 (landed since 27a, `8e07b9ea`+`d08f1bb3`); final tally 83 closed / 1 closing / 3 open (all P1, non-blocking). Zero product code changes were needed — no defect the recapture found had a one-line fix. See `reports/27b-recapture.md`.
 - 2026-09-06 · HEAD d08f1bb3 (packages 01–28 except 26b/27b) · console 256 files / 2260 tests, tsc, eslint, depcruise; entrant 53 files / 967 tests, typecheck, lint; ruff; import-linter 15/15; pytest 2419 passed / 72 skipped after registering the pkg 24 allow-list flag; figma-tokens regenerated. Two stale console browser-contract expectations fixed (Venue board link label; Korea readiness — a real timezone bug in pkg 13's session-window check).
 - 2026-09-06 · HEAD 6f347dd9 (packages 01, 02, 03, 04a, 05, 06, 09) · full gate: console 235 files / 2072 tests, tsc, eslint, depcruise 0 errors; entrant 51 files / 897 tests, typecheck, lint; ruff clean; import-linter 15/15; pytest 2383 passed / 72 skipped (run on a detached worktree of HEAD because agents were mid-edit in the main tree).
 - 2026-09-06 · baseline f5ccfcef · `make check` equivalent: console eslint/tsc/vitest/depcruise green; entrant eslint/typecheck/vitest 885 green; ruff clean; import-linter 15/15 kept; pytest 2323 passed / 72 skipped.

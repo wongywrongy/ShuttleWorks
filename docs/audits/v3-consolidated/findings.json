@@ -32,7 +32,7 @@
         "apps/console/src/modules/hub/__tests__/WorkspaceRow.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.5",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S02) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440); v3-recapture/journeys/OC01-signin-form@1440.png (note: AUTH_MODE=local has no reachable sign-in form — see runtime finding V3-RT-2)",
       "acceptance": "met",
       "limitation": null,
       "note": "Fixed by package 07: HEALTH_LEGEND rewritten to the one dot that still renders (\"Dot: needs attention\"); routine rows (no issues/not started/archived) no longer render a dot or reassurance text; the duplicate 'complete'→'Completed' branch was dropped. Re-verified with no regression in package 12."
@@ -75,7 +75,7 @@
         "apps/console/src/modules/hub/__tests__/WorkspaceInspector.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.5",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S02) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440); v3-recapture/journeys/OC01-signin-form@1440.png (note: AUTH_MODE=local has no reachable sign-in form — see runtime finding V3-RT-2)",
       "acceptance": "met",
       "limitation": null,
       "note": "Row CTA now reads \"Review entries\" and opens the entries desk whenever the leading attention reason concerns entries; \"+1\" reworded to \"N more issue(s)\"; a new Hub inspector Attention section lists extra reasons by name."
@@ -115,7 +115,7 @@
         "apps/console/src/modules/hub/__tests__/NewWorkspacePage.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.7",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S03) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440); v3-recapture/journeys/OC03-new-workspace-step2@1440.png; v3-recapture/journeys/OC03-new-workspace-step3@1440.png; v3-recapture/journeys/OC03-new-workspace-step4@1440.png; v3-recapture/journeys/OC03-new-workspace-step5@1440.png (created workspace, lands on its Overview)",
       "acceptance": "met",
       "limitation": null,
       "note": "\"Meet\"/\"Bracket\"/\"Hybrid\" renamed to \"Team meet\"/\"Draw tournament\"/\"Both\"; \"Modules\" section retitled \"Included tools\"; review-step type-label lookup bug fixed."
@@ -153,7 +153,7 @@
         "apps/console/src/modules/settings/__tests__/GlobalSettingsPage.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.9",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S04) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "No separate live-capture browser evidence obtained beyond the automated test.",
       "note": "Local-profile locked state reordered so the sign-in prompt/link renders above the read-only avatar/fields instead of below."
@@ -198,7 +198,7 @@
         "tests/backend/unit/test_workspace_signals.py"
       ],
       "beforeEvidence": "operator-all.md p.11",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S05) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "\"Up next\" split into an upcoming-only bucket plus a new \"On court\" bucket; the same exclusion rule was then extended to the bracket signal path (closes package 03's own follow-up note)."
@@ -240,7 +240,7 @@
         "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.13",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S06) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "\"General identity\"→\"Tournament details\"; \"Public name\"→\"Name shown to players\"; uppercase \"DOWNSTREAM IMPACT\" heading removed."
@@ -281,7 +281,7 @@
         "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.15",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S07) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Blanket clock-change sentence replaced with a per-row hint gated on isAmbiguousLocalTime, verified with a genuine 2026 DST-fallback instant."
@@ -321,7 +321,7 @@
         "tests/backend/test_tournament_setup.py"
       ],
       "beforeEvidence": "operator-all.md p.15",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S07) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "Renders as a page-level Notice, not literally inline per-row (debt V3-13-3); acceptance still met per report.",
       "note": "New backend session-window validation (_session_window_issues, SETUP_DATES_SESSION_OUT_OF_WINDOW) blocks readiness with a precise conflict message instead of silently allowing an out-of-window session."
@@ -361,7 +361,7 @@
         "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.15",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S07) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Comma-separated free-text courts input (with repeated caption) replaced with a compact checkbox per named court, shown once."
@@ -401,7 +401,7 @@
         "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.17",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S08) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Venue-lock copy corrected to name what is actually protected (the whole venue section, not courts alone — the backend does not support locking courts alone)."
@@ -441,7 +441,7 @@
         "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.19",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S09) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "capacityUnit() derives \"{n} pairs\"/\"{n} players\" from the bracket event's own discipline field instead of a fixed \"Capacity 32\" label."
@@ -485,7 +485,7 @@
         "tests/backend/test_tournament_setup.py"
       ],
       "beforeEvidence": "operator-all.md p.21",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S10) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "pointCap lives only in Setup's rules section, not yet mirrored onto Meet/Bracket Engine Config's separate TournamentConfig (debt V3-13-2).",
       "note": "\"Simple\"/\"Badminton games\" renamed to \"Match result only\"/\"Game scores\"; a real, bounded \"Point cap\" field added, shown only when deuce is enabled and never claiming an uncofigured cap."
@@ -525,7 +525,7 @@
         "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.23",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S11) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "Logged as debt V3-13-1 (partnerRules still has no reader/consumer anywhere).",
       "note": "\"Partner rules\" relabeled \"Partner instructions\" with a hint disclosing it is an internal note — not shown to entrants, and not enforced."
@@ -572,7 +572,7 @@
       },
       "tests": [],
       "beforeEvidence": "operator-all.md p.25",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S12) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "The Contact.public DB column and public:bool wire field were deliberately kept, not migrated away (ruling R1, \"no migration\") — logged as debt.",
       "note": "Removed the Public column and the \"future public projection\" paragraph from Staff contacts; replaced with one factual sentence. Backend impact copy no longer lists \"public contact details\"."
@@ -617,7 +617,7 @@
         "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.27",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S13) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "No design-system export added for the textarea (styled inline to TextField); out of package's file scope.",
       "note": "\"Public slug\"→\"Tournament page address\"; \"Regulations URL\"→\"Regulations link\"; single-line Description input became a 4-row textarea."
@@ -662,7 +662,7 @@
         "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.27",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S13) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "Distinct copy for field-invalid vs fetch-failed states not implemented — needs URL-syntax validation this component doesn't have (debt V3-15-1).",
       "note": "Identical \"Preview unavailable...\" message on both logo/banner boxes replaced with a fetch-specific message plus an in-box \"Retry preview\" action."
@@ -701,7 +701,7 @@
         "apps/console/src/modules/bracket/__tests__/BracketRosterTab.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.29",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S14) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Roster now opens sorted by Player ascending with visible aria-sort/caret via useDenseDataState's default sort, using an existing control rather than adding a new toolbar."
@@ -739,7 +739,7 @@
         "apps/console/src/modules/bracket/__tests__/BracketDrawsTab.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.31",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S15) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "The finding's literal observation (\"STATUS\" header over \"Open draw\") no longer reproduced as-is against current main — already partly fixed by prior work.",
       "note": "The trailing draw-index column (already separating status from verb-only actions by prior work) was missing an accessible header name; given the label \"Action\"."
@@ -777,7 +777,7 @@
       },
       "tests": [],
       "beforeEvidence": "operator-all.md p.33",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S16) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "The four differing vocabularies (draw summary done/live/ready/pending; Matches \"Done\"; Live day \"PLAYING MATCHES\"; public displays) remain different by design, not one shared word set.",
       "note": "Plan §3 (X5, Adapt) rejects one five-word status vocabulary; the differing per-surface vocabularies are intentional domain-specific formatters sourced from one stateWords.ts authority, documented rather than unified."
@@ -817,7 +817,7 @@
         "apps/console/src/modules/bracket/__tests__/DrawView.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.33",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S16) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "Only the draw-canvas caption was fixed here; the operator table-row renderer's slot text was addressed separately (package 10c).",
       "note": "Draw card caption no longer renders raw \"slot N · court N\"; now shows real time+court via formatBracketSlot, court alone if no time, or \"Not scheduled\" if unassigned."
@@ -858,7 +858,7 @@
         "apps/console/src/modules/bracket/__tests__/BracketMatchesTab.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.35",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S17) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "True one-participant-per-DOM-line stacking (§3.1) not implemented — blocked by DenseDataTable.tsx's fixed 28px row height (debt V3-10-5); meet's MatchesSpreadsheet.tsx winner still derives from counting sets, not a persisted outcome (debt V3-10-6).",
       "note": "Deferred in package 10, implemented in package 10c: per-game emphasis is now independent of the match winner, a real winner text-mark was added, and both sides render through the one sides.ts authority with wrap instead of a slash-joined line."
@@ -902,7 +902,7 @@
         "apps/console/src/modules/operations/plan/__tests__/PlanToolbar.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.37",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S18) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Button label rewritten to match what the count measures (\"Schedule N unscheduled matches\"); a fallback line now names the blocking prerequisite when nothing is schedulable."
@@ -946,7 +946,7 @@
         "apps/console/src/modules/operations/__tests__/unifiedOpsList.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.37",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S18) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Package 03 made a minimal fix (drag-hover slot text); package 12 completed the sweep, cutting the engine-sharing rationale line and relabeling the \"Engine\" filter chip, closing debt V3-03-2."
@@ -992,7 +992,7 @@
         "apps/console/src/modules/workspace/overview/__tests__/PhasePanels.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.39",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S19) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "disputedCourts split out from playing in RunSummaryBand/MatchMetricsDTO and wired into Overview's PhasePanels, closing debt V3-03-3 — a dispute is never masked by idle courts."
@@ -1039,7 +1039,7 @@
         "apps/console/src/modules/workspace/overview/__tests__/PhasePanels.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.39",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S19) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Run day conflict tile reworded to \"Needs resolution\" with a working \"Open ›\" per claim; Overview (previously no route to a conflict) gained a \"Review court assignments\" button."
@@ -1078,7 +1078,7 @@
         "apps/console/src/modules/settings/__tests__/SharingTab.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.41",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S20) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Draws-row description changed to: \"Shows draw pairings and player names. Scores appear only when Results is on.\" — clarifying a confirmed, non-opted-out name stays resolved in the draw regardless of the entrant-list toggle."
@@ -1117,7 +1117,7 @@
         "apps/console/src/modules/workspace/__tests__/DisplayConfig.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.45",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S22) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Plan explicitly overrides the finding's own \"widen the preview\" proposal: the narrow inline board preview was removed entirely and replaced with a \"Preview fullscreen\" link to the real published board."
@@ -1155,7 +1155,7 @@
         "apps/console/src/modules/settings/__tests__/SharingTab.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.45",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S22) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Removed the internal-sounding admonition sentence/heading; access sentence is now \"Anyone with this link can view the board.\"; button renamed \"Revoke and replace link\" → \"Replace link\"."
@@ -1197,7 +1197,7 @@
         "apps/console/src/modules/display/publicDisplay/__tests__/freshness.test.ts"
       ],
       "beforeEvidence": "operator-all.md p.49",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S24) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met pending visual",
       "limitation": "Real venue timezone still doesn't reach the board's wire data — BOARD_TIME_ZONE='UTC' is a labeled fallback, not the actual venue zone (backend change out of scope, logged as debt). Signage size floors (>=48px names/28px courts/40px clock) are implemented as initial targets; physical on-hardware validation at real viewing distance is pending package 27's recapture per reports/17-signage.md 'Physical validation procedure'.",
       "note": "Header clock now states the timezone (clock_with_zone) and \"Updated\" now states date+time (datetime), both in <time dateTime>; stale caption now states actual data age."
@@ -1237,7 +1237,7 @@
         "apps/console/src/modules/display/__tests__/MeetDisplayPage.signage.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.49",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S24) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Already fixed in package 04b: renders exactly \"Court assignment unavailable.\" from one shared COURT_ASSIGNMENT_UNAVAILABLE constant; package 17 re-confirmed no \"resolving\"/\"announcement\"/\"wait for\" language renders."
@@ -1278,7 +1278,7 @@
         "tests/backend/test_auth_endpoints.py"
       ],
       "beforeEvidence": "operator-all.md p.53",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S25) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Section eyebrow renamed \"INVITATIONS\"; empty-state text now follows the selected mode; the email/link delivery-mode radio is now gated on a real backend capability (UserDTO.emailConfigured) instead of always shown."
@@ -1322,7 +1322,7 @@
         "apps/console/src/modules/settings/__tests__/ModuleCatalogRow.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.55",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S26) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Removed the blockedReason instructing operators to \"Clear its data before disabling it\"; module catalog row/impact modal now states one truthful, state-dependent consequence with no \"ownership\" jargon. Re-verified in package 18 with no regression."
@@ -1361,7 +1361,7 @@
         "apps/console/src/modules/settings/__tests__/SyncReconciliationPanel.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.57",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S27) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "\"Reconciliation evidence\"/\"immutable\"/\"cloud acknowledgement\" no longer appear in the default view — replaced by three ordinary-language states, with the technical terms moved into a collapsed <details> disclosure; \"quarantined\" removed from the empty-state string."
@@ -1402,7 +1402,7 @@
         "tests/backend/test_tournaments.py"
       ],
       "beforeEvidence": "operator-all.md p.57",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S27) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "Recorded match/game results excluded from the change summary because match_states isn't captured in the snapshot (debt V3-19-1).",
       "note": "Byte-delta/filename differentiation replaced with timezone-qualified timestamps (seconds shown only on same-minute collision) plus a real change summary and match/entrant counts on the default row; filename/exact size moved to the \"Inspect backup\" detail view."
@@ -1443,7 +1443,7 @@
         "tests/backend/test_tournament_setup.py"
       ],
       "beforeEvidence": "operator-all.md p.59",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S28) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "Field-level diffs only recorded for setup.updated (debt V3-20-1); _field_label is a generic humanizer, not curated (debt V3-20-2); array/object fields diff as whole-JSON (debt V3-20-3).",
       "note": "Activity rows now show actor + plain-language change summary naming the section/fields (\"Changed Public information: Venue address\") as the primary line, tournament-timezone timestamps, and an expandable old→new diff; the repeated actor·section line is gone."
@@ -1483,7 +1483,7 @@
         "apps/console/src/modules/settings/__tests__/DangerZoneTab.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.61",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S29) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Status row relabeled \"Lifecycle\"→\"Tournament status\"; archive footnote reworded to describe the actual reversible, list-only effect (\"Archive this workspace to remove it from the active list.\"); date renders through the shared formatDateTime formatter."
@@ -1527,7 +1527,7 @@
         "apps/console/src/app/__tests__/AppShell.guard.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.63",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S30) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Button label and reason copy unified to point at the same destination (\"View available tools\" → Administration · Modules) — package 18's fix, package 14 explicitly deferred it there."
@@ -1568,7 +1568,7 @@
         "tests/backend/test_tournament_setup.py"
       ],
       "beforeEvidence": "operator-all.md p.65",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S31 (Setup landing/checklist)) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": "The separate Overview/Hub checklist's \"completed items unreachable\" gap (X16) is routed elsewhere, out of this package's scope.",
       "note": "V3-OC07.1's session-window validation makes \"Overall: Ready\" honest by flipping the dates section (and rollup) to \"Blocked\" for an out-of-window session; broken image previews confirmed never a blocking readiness fact."
@@ -1606,7 +1606,7 @@
         "apps/console/src/modules/meet/roster/__tests__/RosterTab.v3.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.67",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S14 (Roster, empty-state variant)) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Empty-state copy replaced: \"Add a school from the actions bar to start.\" → \"Add a school, then add its players and positions.\""
@@ -1645,7 +1645,7 @@
         "apps/console/src/modules/meet/matches/__tests__/MatchesTab.emptyState.test.tsx"
       ],
       "beforeEvidence": "operator-all.md p.69",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S17 (Matches, empty-state variant)) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Empty match-inventory state now branches on roster readiness with one valid next step (\"Matches can be generated once players are on the roster.\"); \"Regenerate\" language withheld until after first generation; disabled Add match withheld when no matches exist."
@@ -1683,7 +1683,7 @@
         "apps/entrant/tests/discovery.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.3",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S01) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Season-view intro replaced with one short, plain sentence, no platform branding: \"Find badminton tournaments, schedules, and results.\""
@@ -1726,7 +1726,7 @@
         "tests/backend/test_season_listing.py"
       ],
       "beforeEvidence": "public-all.md p.3",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S01) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": "Falls back to the old relative-only chip when no exact instant parses (never omits the countdown outright).",
       "note": "Deadline now shows the exact tournament-timezone instant as primary text (\"Closes 30 Aug 2026, 13:00 GMT+1\") with the relative countdown secondary, never a bare \"15d\" alone."
@@ -1766,7 +1766,7 @@
         "tests/backend/test_season_listing.py"
       ],
       "beforeEvidence": "public-all.md p.3",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S01) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Row meta line adds locality parsed from venue address (\"Kingsway Centre · London, United Kingdom\"); omits locality (never guesses) when the address has no comma to parse."
@@ -1804,7 +1804,7 @@
         "apps/entrant/tests/components.test.ts"
       ],
       "beforeEvidence": "public-all.md p.15",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S02) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Identical \"ShuttleWorks by Yunavero\" brand line on every public page via one shared BRAND_SIGNATURE constant (previously the repeated footer sentence flagged by the finding)."
@@ -1843,7 +1843,7 @@
         "apps/entrant/tests/tournament.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.21",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S03) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Hero subtitle now leads with the real lifecycle phase (e.g. \"Live now\") instead of the binary entries chip; entry closure stays in Key dates, unchanged."
@@ -1875,7 +1875,7 @@
       },
       "tests": [],
       "beforeEvidence": "public-all.md p.21",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S03) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "partial: the repetitive paragraph is organizer-authored demo content generated by the seed script, not a rendering defect; regenerating the seed script is unactioned",
       "limitation": "Demo seed script (and the already-seeded demo DB) not regenerated; logged as debt rather than fixed.",
       "note": "Root cause traced to simulator/tournament_sim/seed.py's demo-data seeding (line ~2074), outside this package's backend-DTO/entrant-route scope; the entrant render already displays the organizer field verbatim. Not fixed in product code."
@@ -1913,7 +1913,7 @@
         "apps/entrant/tests/tournament.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.21",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S03) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "\"Event registrations 0\" row removed; now omitted once it no longer answers an entry question, else reads \"Entered so far N\"."
@@ -1960,7 +1960,7 @@
         "apps/entrant/tests/tournament.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.24",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S04/S06 (Events tab / Draws)) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Operator side already showed one \"{n} pairs\"/\"{n} players\" unit; public side (package 21) now shows exactly one count/unit, column header renamed \"Entered\", never a combined confirmed/participants line."
@@ -2004,7 +2004,7 @@
         "apps/console/src/platform/domain/__tests__/eventLabels.test.ts"
       ],
       "beforeEvidence": "public-all.md p.24",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S04/S06 (Events tab / Draws)) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": "draw.tsx's own heading still uses eventDisciplineLabel (Title Case), a second inconsistent copy of the vocabulary — left for package 11.",
       "note": "Console gained a mirror of the entrant tier's sentence-case EVENT_LABEL_MAP ('Men's singles', not 'Mens Singles') with a parity test; package 21 wired the entrant-side canonical map into draw heading + aria-labels."
@@ -2048,7 +2048,7 @@
         "apps/entrant/tests/draw.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.24",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S04/S06 (Events tab / Draws)) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": "Distinct \"Draw published · rounds to be scheduled\" fact-line for an unscheduled draw left untouched (not a duplicate).",
       "note": "Public-tier (package 21) draw action reads \"View draw\"; duplicated \"Draw published\" state label beside the action removed."
@@ -2088,7 +2088,7 @@
         "apps/entrant/tests/entrantsFilter.script.test.ts"
       ],
       "beforeEvidence": "public-all.md p.27",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S05) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "One SSR-rendered result count ([data-search-count]); persistent visible \"Find a player\" label plus a short \"Name or club\" placeholder (not placeholder-only)."
@@ -2126,7 +2126,7 @@
         "apps/entrant/tests/components.test.ts"
       ],
       "beforeEvidence": "public-all.md p.27",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S05) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Added a plain-anchor A-Z jump nav (<nav aria-label=\"Jump to letter\">) linking every letter with a section, works with no JS and on mobile; removed the old \"Events:\" legend."
@@ -2171,7 +2171,7 @@
         "apps/entrant/tests/components.test.ts"
       ],
       "beforeEvidence": "public-all.md p.57",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S09) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Day-heading count now always carries a noun via dayMatchCountLabel instead of a bare number glued to a date; raw ISO date no longer prints on cards."
@@ -2215,7 +2215,7 @@
         "apps/entrant/tests/matchCard.contract.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.57",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S09) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Deleted the saturated bg-status-live header fill ternary from every MatchCard variant; only the state word itself takes the live color now (fixed under package 11, out of package 04a's scope)."
@@ -2261,7 +2261,7 @@
         "tests/backend/test_entries_site_api.py"
       ],
       "beforeEvidence": "public-all.md p.57",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S09) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Root cause was the entrant frontend's showAssignmentPlaceholders flag forcing \"Court information unavailable\" regardless of cause; flag deleted. Backend verified correct via two new tests covering both ways a court reaches a live bracket match."
@@ -2307,7 +2307,7 @@
         "tests/backend/test_entries_site_api.py"
       ],
       "beforeEvidence": "public-all.md p.58",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S09) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Deleted the frontend's 3-way \"Scheduled\" literal ternary independent of slot presence; entrant now uses an honest schedule-state word/label, with the backend confirmed already slot-driven."
@@ -2347,7 +2347,7 @@
         "apps/entrant/tests/publicUniversality.test.ts"
       ],
       "beforeEvidence": "public-all.md p.67",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S10) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": "Not a byte-for-byte match to the backend's own short-round spelling (\"Winner of R32 1\") — logged as debt V3-11-2, backend round-label unification deferred.",
       "note": "MatchCardData gained matchNumber; every bracket node (and compact list/card header) now shows \"Match {n}\" from the wire's own node.position."
@@ -2385,7 +2385,7 @@
         "apps/entrant/tests/draw.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.69",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S10) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "With no explicit ?view=, the page now CSS-toggles both Round (mobile) and Bracket canvas (desktop) at the 768px breakpoint instead of defaulting to bracket-only with a scroll hint; the hint paragraph was deleted."
@@ -2431,7 +2431,7 @@
         "apps/entrant/tests/scheduleState.test.ts"
       ],
       "beforeEvidence": "public-all.md p.71",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S11) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Fixed at the shared MatchCard root used by both schedule.tsx and draw.tsx's round view: \"Time to be confirmed\" only appears when time is genuinely missing; the state chip no longer reads \"Scheduled\" merely for lacking data."
@@ -2470,7 +2470,7 @@
         "apps/entrant/tests/draw.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.76",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S12) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": "The bracket canvas is not literally filtered (still highlights the path rather than hiding other names) — deliberate, to describe actual behavior honestly.",
       "note": "Banner text changed to one plural-aware sentence \"{n} match(es) found for '<name>'\"; bracket canvas gained scroll-into-view on the first matching node in addition to path highlighting."
@@ -2508,7 +2508,7 @@
         "apps/entrant/tests/draw.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.80",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S13) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Added \"All times in {timeZone}.\" under the draw's meta row on every view (List/Round/Bracket), sourced from EntryPageDTO.tournament.timeZone."
@@ -2548,7 +2548,7 @@
         "apps/entrant/tests/publicUniversality.test.ts"
       ],
       "beforeEvidence": "public-all.md p.91",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S14) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "PersonGroup now stacks each partner on its own line (block element); the slash separator is deleted outright. Verified against MC-03's long, unequal-length, diacritic-bearing pairs."
@@ -2586,7 +2586,7 @@
         "apps/entrant/tests/regulations.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.95",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S15) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": "Organizer's own words/simulator seed.py text left untouched by design; only the rendering changed.",
       "note": "Sidebar link labels aligned to TabBar's own vocabulary (\"Overview\"/\"Draws\"/\"Players\"); duplicate footer paragraph removed; the raw Wikipedia URL is now linkified."
@@ -2618,7 +2618,7 @@
       },
       "tests": [],
       "beforeEvidence": "public-all.md p.95",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S15) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "partial: organizer policy content itself needs organizer confirmation, not an engineering fix",
       "limitation": "Logged as debt V3-22-1 routing a structured reporting-reference field to package 13, pending organizer confirmation; marked \"conditional: organizer confirmation\" in ledger/22-strings.md.",
       "note": "Organizer text rendered verbatim as-is per ruling R2; no system-chrome line was added because no reporting-time field exists on the tournament to cite truthfully — adding one would invent organizer policy."
@@ -2660,7 +2660,7 @@
         "apps/entrant/tests/enter.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.98",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S16) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE16-entry-form-open@1440.png; v3-recapture/journeys/PE16-entry-form-open@390.png; v3-recapture/journeys/PE16-entry-form-filled@1440.png; v3-recapture/journeys/PE16-entry-form-filled@390.png; v3-recapture/journeys/PE16-entry-receipt-real@1440.png; v3-recapture/journeys/PE16-entry-receipt-real@390.png (real, non-placeholder reference)",
       "acceptance": "met",
       "limitation": "Package 24 (in progress at closure-record time) may extend the same surface for the invitation/entry-form journey but does not reopen this defect.",
       "note": "Closed-entries paragraph rewritten to name the tournament and drop the duplicated heading and any reopening promise: \"Entries are closed for {tournament name}. View the tournament page for schedules and results.\""
@@ -2703,7 +2703,7 @@
         "apps/entrant/tests/logout.test.ts"
       ],
       "beforeEvidence": "public-all.md p.98",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S16) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE16-entry-form-open@1440.png; v3-recapture/journeys/PE16-entry-form-open@390.png; v3-recapture/journeys/PE16-entry-form-filled@1440.png; v3-recapture/journeys/PE16-entry-form-filled@390.png; v3-recapture/journeys/PE16-entry-receipt-real@1440.png; v3-recapture/journeys/PE16-entry-receipt-real@390.png (real, non-placeholder reference)",
       "acceptance": "met",
       "limitation": "Displaying the actual signed-in account's name/email was not built (would need a new credentialed browser call); package 24 (in progress) covers adjacent signed-in account journeys but does not change this finding's resolved scope.",
       "note": "Footer sign-in/sign-out control now derives from real session-cookie presence instead of always showing both; signed-out renders \"Sign in\" only, signed-in renders \"Sign out\" plus one device-scope sentence stated once."
@@ -2741,7 +2741,7 @@
         "apps/entrant/tests/login.test.ts"
       ],
       "beforeEvidence": "public-all.md p.104",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S19) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Replaced the defensive/imprecise intro with one short task-specific sentence (\"Sign in to manage your tournament entries.\"); the outcome clarification stays at the entry handoff, unchanged/out of scope."
@@ -2779,7 +2779,7 @@
         "apps/entrant/tests/login.test.ts"
       ],
       "beforeEvidence": "public-all.md p.106",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S20) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Success message shortened and precision-tightened (\"Account created. Sign in to continue.\"), shown only on the verified redirect target."
@@ -2817,7 +2817,7 @@
         "apps/entrant/tests/login.test.ts"
       ],
       "beforeEvidence": "public-all.md p.108",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S21) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Sign-in error trimmed to two clauses, dropping the account-state speculation (\"Nothing about your account has changed\")."
@@ -2856,7 +2856,7 @@
         "tests/e2e/check-account-journeys.py"
       ],
       "beforeEvidence": "public-all.md p.110",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S22) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "The one real behavioral defect: the \"just signed in\" banner now only renders with a real session cookie present (justSignedIn && !showLoginForm), not for any visitor to the URL."
@@ -2894,7 +2894,7 @@
         "apps/entrant/tests/signup.test.ts"
       ],
       "beforeEvidence": "public-all.md p.112",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S23) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Ordinary-language field hints/labels applied; privacy statement kept specific to organizer access (\"Name shown to the organizer\")."
@@ -2926,7 +2926,7 @@
       },
       "tests": [],
       "beforeEvidence": "public-all.md p.112",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S23) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "partial: production-mode widget copy not yet captured",
       "limitation": "Logged as debt V3-23-1; needs a release-environment capture to verify production Turnstile copy, outside this package's boundary.",
       "note": "Turnstile widget copy (\"For testing only\", \"HUMAN CHECK\") is provider-rendered test-mode text; left unchanged."
@@ -2964,7 +2964,7 @@
         "apps/entrant/tests/signup.test.ts"
       ],
       "beforeEvidence": "public-all.md p.116",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S24) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": "Fails closed to the old generic wording if the tournament lookup is unavailable.",
       "note": "Signup heading now visibly names the tournament via a new best-effort EntryPageDTO read; return destination (next) unchanged, already preserved."
@@ -3002,7 +3002,7 @@
         "apps/entrant/tests/recovery.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.120",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S25) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Signed-in visitor with no token now gets an inline resend form instead of a no-op \"sign in\" instruction."
@@ -3041,7 +3041,7 @@
         "tests/e2e/check-account-journeys.py"
       ],
       "beforeEvidence": "public-all.md p.122",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S26) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE26-email-confirmed-real@1440.png (real mailed verify token)",
       "acceptance": "met",
       "limitation": null,
       "note": "Success notice no longer infers entry delivery/organizer receipt from email verification: \"Your email is confirmed. View My entries to check each entry's status.\""
@@ -3079,7 +3079,7 @@
         "apps/entrant/tests/recovery.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.124",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S27) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Copy now distinguishes a failed link from an unrequested replacement action, instead of asserting a fresh link will replace it before one has been requested."
@@ -3117,7 +3117,7 @@
         "apps/entrant/tests/recovery.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.126",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S28) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "\"Confirmation email sent. Open the latest email...\" leads, claimed only when the resend itself did not fail; saved-entries-unchanged reassurance kept."
@@ -3155,7 +3155,7 @@
         "apps/entrant/tests/recovery.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.128",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S29) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE30-reset-valid-token@1440.png; v3-recapture/journeys/PE30-reset-valid-token@768.png; v3-recapture/journeys/PE30-reset-valid-token@390.png; v3-recapture/journeys/PE30-reset-valid-token@320.png (real mailed reset token, valid-token form)",
       "acceptance": "met",
       "limitation": null,
       "note": "Button/footer copy tightened to name the outcome without filler (\"Send reset link\" / \"Back to sign in\")."
@@ -3194,7 +3194,7 @@
         "tests/e2e/check-account-journeys.py"
       ],
       "beforeEvidence": "public-all.md p.132",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S31) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Enumeration-safe wording kept; displayed TTL now matches the backend's actual reset_token_ttl_minutes (60 min) instead of an invented figure."
@@ -3233,7 +3233,7 @@
         "tests/e2e/check-account-journeys.py"
       ],
       "beforeEvidence": "public-all.md p.134",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S32) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE32-password-updated-real@1440.png (real completion of a valid reset)",
       "acceptance": "met",
       "limitation": null,
       "note": "Success screen reduced to one statement (heading), one session consequence (subheading), one action (button) — was tripled."
@@ -3272,7 +3272,7 @@
         "tests/e2e/check-account-journeys.py"
       ],
       "beforeEvidence": "public-all.md p.136",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S33) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Invalid-link notice tightened to a truthful failure category + unchanged-password reassurance + one call to action (\"Request a new reset link\")."
@@ -3310,7 +3310,7 @@
         "apps/entrant/tests/recovery.render.test.ts"
       ],
       "beforeEvidence": "public-all.md p.138",
-      "afterEvidence": null,
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S34) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
       "acceptance": "met",
       "limitation": null,
       "note": "Persistent password-requirements hint added (\"At least 8 characters. Avoid common passwords.\") that swaps for a field-adjacent error on failure via aria-describedby; banner reduced to the token-still-valid reassurance only."
@@ -3332,20 +3332,38 @@
       "24"
     ],
     "planDecision": null,
-    "status": "open",
+    "status": "closed",
     "closure": {
       "package": "24",
-      "treatment": "pending package 24",
+      "treatment": "adopted",
       "implementation": {
-        "commits": [],
-        "files": []
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
       },
-      "tests": [],
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
       "beforeEvidence": "public-all.md p.140",
-      "afterEvidence": null,
-      "acceptance": "open",
-      "limitation": "Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred to slice 27b once 24 lands.",
-      "note": "Package 24 is in progress (uncommitted working-tree changes at closure-record time: apps/api/src/entries/entries_json.py, entries_me.py, apps/api/src/db/models.py, apps/entrant/app/routes/myEntries.tsx, partner.tsx, apps/entrant/app/components/MessagePage.tsx, receipt/my-entries/partner-accepted browser assets, tests/backend/test_partner_invites.py, test_entries_me_api.py, test_season_listing.py, apps/entrant/tests/myEntries.*, partner.render.test.ts, receipt.script.test.ts) — not yet committed, so no commit hash or verified gate exists to cite. Acceptance cannot be recorded until the package lands."
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S35) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. Recapture confirms: entrant-pages/S35 shows “This invitation is unavailable. Ask your partner to send a new one.” with both “Browse tournaments” and “Check My entries” actions — exactly the ruled copy, no invented expiry or acceptance claim."
     }
   },
   {
@@ -3364,20 +3382,38 @@
       "24"
     ],
     "planDecision": null,
-    "status": "open",
+    "status": "closed",
     "closure": {
       "package": "24",
-      "treatment": "pending package 24",
+      "treatment": "adopted",
       "implementation": {
-        "commits": [],
-        "files": []
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
       },
-      "tests": [],
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
       "beforeEvidence": "public-all.md p.142",
-      "afterEvidence": null,
-      "acceptance": "open",
-      "limitation": "Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred to slice 27b once 24 lands.",
-      "note": "Package 24 is in progress (uncommitted working-tree changes at closure-record time: apps/api/src/entries/entries_json.py, entries_me.py, apps/api/src/db/models.py, apps/entrant/app/routes/myEntries.tsx, partner.tsx, apps/entrant/app/components/MessagePage.tsx, receipt/my-entries/partner-accepted browser assets, tests/backend/test_partner_invites.py, test_entries_me_api.py, test_season_listing.py, apps/entrant/tests/myEntries.*, partner.render.test.ts, receipt.script.test.ts) — not yet committed, so no commit hash or verified gate exists to cite. Acceptance cannot be recorded until the package lands."
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S36) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. Recapture confirms: entrant-pages/S36 shows “We couldn't confirm whether your invitation was accepted. Check My entries for its status.” — no success term for an unverified outcome; “See my entries” is the one action."
     }
   },
   {
@@ -3396,20 +3432,38 @@
       "24"
     ],
     "planDecision": null,
-    "status": "open",
+    "status": "closed",
     "closure": {
       "package": "24",
-      "treatment": "pending package 24",
+      "treatment": "adopted",
       "implementation": {
-        "commits": [],
-        "files": []
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
       },
-      "tests": [],
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
       "beforeEvidence": "public-all.md p.144",
-      "afterEvidence": null,
-      "acceptance": "open",
-      "limitation": "Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred to slice 27b once 24 lands.",
-      "note": "Package 24 is in progress (uncommitted working-tree changes at closure-record time: apps/api/src/entries/entries_json.py, entries_me.py, apps/api/src/db/models.py, apps/entrant/app/routes/myEntries.tsx, partner.tsx, apps/entrant/app/components/MessagePage.tsx, receipt/my-entries/partner-accepted browser assets, tests/backend/test_partner_invites.py, test_entries_me_api.py, test_season_listing.py, apps/entrant/tests/myEntries.*, partner.render.test.ts, receipt.script.test.ts) — not yet committed, so no commit hash or verified gate exists to cite. Acceptance cannot be recorded until the package lands."
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S37) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. Recapture confirms: entrant-pages/S37 shows an expired-invitation message (“This invitation is no longer usable. Ask the person who invited you to send a new one.”) with “Browse tournaments”/“Check My entries” actions — no bare, unexplained “Sign in” button. The mail-outcome half (Entry.partner_invite_mail_sent surfaced on the nominating entrant's own My Entries line) is proven by tests/backend/test_partner_invites.py, not independently re-captured as a screenshot (it renders as a line-item flag on an existing entrant's My Entries, not a distinct page)."
     }
   },
   {
@@ -3428,20 +3482,38 @@
       "24"
     ],
     "planDecision": null,
-    "status": "open",
+    "status": "closed",
     "closure": {
       "package": "24",
-      "treatment": "pending package 24",
+      "treatment": "adopted",
       "implementation": {
-        "commits": [],
-        "files": []
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
       },
-      "tests": [],
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
       "beforeEvidence": "public-all.md p.146",
-      "afterEvidence": null,
-      "acceptance": "open",
-      "limitation": "Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred to slice 27b once 24 lands.",
-      "note": "Package 24 is in progress (uncommitted working-tree changes at closure-record time: apps/api/src/entries/entries_json.py, entries_me.py, apps/api/src/db/models.py, apps/entrant/app/routes/myEntries.tsx, partner.tsx, apps/entrant/app/components/MessagePage.tsx, receipt/my-entries/partner-accepted browser assets, tests/backend/test_partner_invites.py, test_entries_me_api.py, test_season_listing.py, apps/entrant/tests/myEntries.*, partner.render.test.ts, receipt.script.test.ts) — not yet committed, so no commit hash or verified gate exists to cite. Acceptance cannot be recorded until the package lands."
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S38) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE38-my-entries-authenticated@1440.png; v3-recapture/journeys/PE38-my-entries-authenticated@390.png (authenticated, with a real entry)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. Recapture confirms both halves: entrant-pages/S38 (signed-out gate, one sentence + one Sign in action) and journeys/PE38-my-entries-authenticated@1440/390.png (the AUTHENTICATED companion state plan §7 flagged as never captured — a real account with one real entry, “Awaiting confirmation” status, “View receipt” link)."
     }
   },
   {
@@ -3460,20 +3532,38 @@
       "24"
     ],
     "planDecision": "\"Short entry reference\" | Adopt conditionally | \"Design generation, uniqueness, lookup and authorization together. Copy the same user-visible reference; an identifier is never access permission.\"",
-    "status": "open",
+    "status": "closed",
     "closure": {
       "package": "24",
-      "treatment": "pending package 24",
+      "treatment": "adopted",
       "implementation": {
-        "commits": [],
-        "files": []
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
       },
-      "tests": [],
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
       "beforeEvidence": "public-all.md p.148",
-      "afterEvidence": null,
-      "acceptance": "open",
-      "limitation": "Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred to slice 27b once 24 lands.",
-      "note": "Package 24 is in progress (uncommitted working-tree changes at closure-record time: apps/api/src/entries/entries_json.py, entries_me.py, apps/api/src/db/models.py, apps/entrant/app/routes/myEntries.tsx, partner.tsx, apps/entrant/app/components/MessagePage.tsx, receipt/my-entries/partner-accepted browser assets, tests/backend/test_partner_invites.py, test_entries_me_api.py, test_season_listing.py, apps/entrant/tests/myEntries.*, partner.render.test.ts, receipt.script.test.ts) — not yet committed, so no commit hash or verified gate exists to cite. Acceptance cannot be recorded until the package lands."
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S39) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE16-entry-receipt-real@1440.png (the real counterpart to the signed-out placeholder gate)",
+      "acceptance": "met",
+      "limitation": "The reference-FORMAT half (an 8-character human-copyable code replacing the UUID) is still not implemented — logged as debt V3-24-1 with the full design. The copy half IS verified: entrant-pages/S39 (signed-out, placeholder submission id) makes no “The reference is safe” claim, and journeys/PE16-entry-receipt-real@1440/390.png shows the real, non-placeholder equivalent (a genuine UUID reference from an actual submission, with Copy reference and no safety claim).",
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. The copy fix (dropping the unverifiable \"The reference is safe\" claim) is verified by recapture; the reference-format redesign (V3-24-1) remains unimplemented debt, unaffected by this recapture."
     }
   }
 ]

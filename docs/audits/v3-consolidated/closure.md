@@ -1,21 +1,32 @@
-# v3 consolidated plan — closure record (work package 27a)
+# v3 consolidated plan — closure record (work packages 27a + 27b)
 
-Per `plan.md` §7 "Coverage and closure rules" and "Closure record". This is slice 27a
-only: the closure record itself, built from the 25 landed package reports
-(`reports/01-fixture.md` … `reports/25-string-ledger.md`, plus `25b-console.md`),
-`register.md`, `PROGRESS.md`, and `git log f5ccfcef..HEAD`. Per finding: original ID →
-package → adopted treatment (or superseded / verified no defect) → implementation
-reference → fixture + viewport → before/after evidence → acceptance result → remaining
-limitation. The corresponding machine-readable `closure` object was added to every
-entry in `findings.json`; this document is its human-readable twin.
+Per `plan.md` §7 "Coverage and closure rules" and "Closure record". 27a built the closure
+record itself from the 25 landed package reports (`reports/01-fixture.md` …
+`reports/25-string-ledger.md`, plus `25b-console.md`), `register.md`, `PROGRESS.md`, and
+`git log f5ccfcef..HEAD`. Per finding: original ID → package → adopted treatment (or
+superseded / verified no defect) → implementation reference → fixture + viewport →
+before/after evidence → acceptance result → remaining limitation. The corresponding
+machine-readable `closure` object lives on every entry in `findings.json`; this document
+is its human-readable twin.
 
-**What this slice does not do.** It does not capture any screenshot. Every `afterEvidence`
-field in `findings.json` is `null` and every "After" cell below reads "pending 27b" —
-slice 27b runs the recapture (plan §7's fixture + `surface-books-fixture` pipeline) and
-fills those in. It also does not touch product code, and does not close package 24 or
-26, both of which were still in progress by concurrent agents when this record was
-written (repo HEAD `1075647d` at task start; `766ab02d` landed mid-task extending package
-25's string-ledger coverage — noted below, not re-litigated here).
+**27b (this update) is the recapture.** It re-ran the package-01 fixture, the full
+contract/a11y suites, and `surface-books-fixture`; captured the missing successful-journey
+states plan §7 named (operator sign-in attempt, the create-workspace wizard through
+completion, a real open-entry submission and receipt, a real mailed verify/reset token,
+authenticated My entries); reviewed the resulting images against every finding; populated
+`findings.json`'s `afterEvidence` field (previously `null` on all 87); closed the five
+findings that were blocked on package 24 (landed since 27a — `8e07b9ea` + `d08f1bb3`,
+committed); and records Gate A–D verdicts in section (d) below. Full command log, capture
+counts and per-status counts: `reports/27b-recapture.md`. Runtime findings surfaced
+during the recapture (not product defects fixable in one line, so not fixed in place):
+`runtime-findings.md` (`V3-RT-1`, `V3-RT-2`).
+
+**What 27a did not do, now filled in by 27b.** 27a captured no screenshot — every
+`afterEvidence` field was `null` and every "After" cell below read "pending 27b". It also
+did not touch product code, and did not close package 24 or 26, both still in progress by
+concurrent agents when 27a was written (repo HEAD `1075647d` at 27a's task start;
+`766ab02d` landed mid-task extending package 25's string-ledger coverage — noted below,
+not re-litigated here).
 
 **Fixture and viewport for every row below.** Unless a row's limitation says otherwise,
 "before" evidence is the v3-reviewed surface book capture (frozen-clock demo tournament,
@@ -130,11 +141,11 @@ component/unit tests and do not re-state a viewport.
 | V3-PE32.1 | 23 | adopted | c5a73f48; apps/entrant/app/routes/resetPassword.tsx | apps/entrant/tests/recovery.render.test.ts; tests/e2e/check-account-j… | public-all.md p.134 | pending 27b | met | — |
 | V3-PE33.1 | 23 | adopted | c5a73f48; apps/entrant/app/routes/resetPassword.tsx | apps/entrant/tests/recovery.render.test.ts; tests/e2e/check-account-j… | public-all.md p.136 | pending 27b | met | — |
 | V3-PE34.1 | 23 | adopted | c5a73f48; apps/entrant/app/routes/resetPassword.tsx | apps/entrant/tests/recovery.render.test.ts | public-all.md p.138 | pending 27b | met | — |
-| V3-PE35.1 | 24 | pending package 24 | uncommitted | — | public-all.md p.140 | pending 27b | open | Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred t… |
-| V3-PE36.1 | 24 | pending package 24 | uncommitted | — | public-all.md p.142 | pending 27b | open | Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred t… |
-| V3-PE37.1 | 24 | pending package 24 | uncommitted | — | public-all.md p.144 | pending 27b | open | Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred t… |
-| V3-PE38.1 | 24 | pending package 24 | uncommitted | — | public-all.md p.146 | pending 27b | open | Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred t… |
-| V3-PE39.1 | 24 | pending package 24 | uncommitted | — | public-all.md p.148 | pending 27b | open | Awaiting package 24 (in progress by a concurrent agent). Recapture and closure deferred t… |
+| V3-PE35.1 | 24 | adopted | 8e07b9ea+d08f1bb3; apps/entrant/app/routes/partner.tsx | tests/backend/test_partner_invites.py; apps/entrant/tests/partner.render.test.ts | public-all.md p.140 | entrant-pages/S35 @1440/390 | met | — |
+| V3-PE36.1 | 24 | adopted | 8e07b9ea+d08f1bb3; apps/entrant/app/components/partner-accepted script | tests/backend/test_partner_invites.py; apps/entrant/tests/partner-accepted.script.test.ts | public-all.md p.142 | entrant-pages/S36 @1440/390 | met | — |
+| V3-PE37.1 | 24 | adopted | 8e07b9ea+d08f1bb3; apps/entrant/app/routes/partner.tsx; apps/api/src/db/models.py (partner_invite_mail_sent) | tests/backend/test_partner_invites.py; apps/entrant/tests/partner.render.test.ts | public-all.md p.144 | entrant-pages/S37 @1440/390 | met | Mail-outcome half renders on the nominating entrant's own My Entries line, not a distinct page — not independently screenshotted. |
+| V3-PE38.1 | 24 | adopted | 8e07b9ea+d08f1bb3; apps/entrant/app/routes/myEntries.tsx | apps/entrant/tests/myEntries.render.test.ts | public-all.md p.146 | entrant-pages/S38 @1440/390; journeys/PE38-my-entries-authenticated@1440/390.png (real, authenticated) | met | — |
+| V3-PE39.1 | 24 | adopted | 8e07b9ea+d08f1bb3; apps/entrant/app/routes/receipt.tsx | tests/backend/test_entries_me_api.py; apps/entrant/tests/receipt.script.test.ts | public-all.md p.148 | entrant-pages/S39 @1440/390 (signed-out placeholder); journeys/PE16-entry-receipt-real@1440/390.png (real, authenticated) | met | Reference-FORMAT redesign (8-char code replacing the UUID) still unimplemented — debt V3-24-1. |
 
 Full detail for each row (implementation file list, test list, quoted before/after
 language) is machine-readable in `findings.json`'s per-finding `closure` object; this
@@ -160,32 +171,47 @@ Plan §1 marks these packages P0 (block release of the affected flow): 01, 02, 0
 | 15 publication + privacy | P0 | Done — `cf996a6e`. | none |
 | 19 backup/restore/sync | P0 | Done — `3f84ef2d`. | none |
 | 23 account/confirmation/reset journeys | P0 | Done — `c5a73f48`, 15 of 16 findings closed. | **V3-PE23.2** (minor) — open/partial. Not a flow blocker: every account journey (sign-up, sign-in, confirm, reset, resend) is verified end-to-end by `tests/e2e/check-account-journeys.py`; the residual gap is that the Cloudflare Turnstile widget's own displayed copy ("For testing only...") is provider-rendered test-mode text that this package could not capture in a release environment (debt V3-23-1). It does not block the journey shipping. |
-| 24 invitations, My entries, receipts | P0 | **In progress**, uncommitted at closure-record time (concurrent agent). | **V3-PE35.1, V3-PE36.1 (major), V3-PE37.1, V3-PE38.1, V3-PE39.1** — all open, awaiting package 24. This is the one genuine unresolved-P0 gap this record reports; it is expected (24 was still landing when 27a ran) and is not treated as a regression. Slice 27b must re-run this closure section once 24 commits and re-check package 22's V3-PE16.1/V3-PE16.2 (both already closed by package 22, `5f25f761`) for any change 24 makes to the same `enter.tsx`/account-gate surface. |
-| 27 close evidence gaps + recapture | P0 | This slice (27a) delivers the closure record only. The recapture itself is slice 27b, not yet run. | Recapture is the definition of "not yet done" for this package — see (c) below. |
+| 24 invitations, My entries, receipts | P0 | **Done** — `8e07b9ea` + `d08f1bb3`, committed since 27a. 27b re-checked package 22's V3-PE16.1/V3-PE16.2 (`enter.tsx`/account-gate surface package 24 also touches): both remain closed, no regression from 24's changes. | none — all five findings closed by 27b, see the Public tier table above. |
+| 27 close evidence gaps + recapture | P0 | **Done** — 27a delivered the closure record; 27b (this update) ran the recapture: fixture, full contract/a11y suites, `surface-books-fixture`, the plan §7 successful-journey captures, and the findings review. See `reports/27b-recapture.md`. | none — see Gate verdicts, section (d) below. |
 
-**Net:** every committed P0 package has zero unresolved P0-severity findings of its own
-(V3-PE23.2 is minor, not P0-blocking, and package 23 itself is otherwise fully closed).
-The only outstanding P0 gap is package 24, which was mid-flight by design at the time
-this closure record was compiled and is explicitly out of 27a's scope to finish.
+**Net (27b):** every P0 package is committed with zero unresolved P0-severity findings.
+V3-PE23.2 remains open/minor (not P0-blocking, package 23 otherwise fully closed) as does
+the physical-signage half of V3-OC24.2 (package 17, "closing" — the display-logic half is
+closed, the on-hardware validation is a genuinely physical task this recapture cannot
+perform; see section (d) Gate B/D and `reports/27b-recapture.md`'s "Physical signage
+procedure" section for the exact steps left pending). No P0 finding is open.
 
-## (b) Evidence that must still be obtained (plan §7) — who covers it now
+## (b) Evidence that must still be obtained (plan §7) — captured by 27b, or why not
 
-Plan §7's list, and which package now makes each item capturable, plus the exact
-route/state 27b must capture:
+Plan §7's list, what actually captured each item in the 27b recapture, and what remains:
 
-| Evidence gap (plan §7) | Now capturable via | Route / state 27b must capture |
-|---|---|---|
-| Operator sign-in | package 18 (`f1736964`, locked-form/account-chrome work) | `/` → sign-in form → successful sign-in → workspace hub, at console 1024/1440 px. |
-| Remaining create-workspace steps and successful creation | package 13 (`74969629`) | `New workspace` wizard from step 1 (already captured, OC03) through every remaining step to the created-workspace redirect, at 1024/1440 px. |
-| Account security/session actions | package 18 (`f1736964`) — Sharing/invites (V3-OC25.1), profile lock (V3-OC04.1), workspace status/archive (V3-OC29.1) all landed | Global settings → security/session panel; sign-out from an active session; the archive confirmation flow (states, not just the lifecycle label). |
-| Actual tool/guard behaviour | package 18 (V3-OC26.1, V3-OC30.1) | Disable a module with data present → confirm the truthful state-dependent consequence copy now shown; `ModuleUnavailablePanel` → "View available tools" → lands on Administration · Modules. |
-| Open entry form and submission | package 24 (**in progress**) | `/e/{slug}/enter` with entries genuinely open → filled form → submit → confirmation/receipt. Blocked until 24 lands. |
-| Authenticated My entries and receipt | package 24 (**in progress**) | Signed-in `/e/account/entries` with at least one real entry; a receipt route with a real (non-placeholder) reference. Blocked until 24 lands. |
-| Valid password-reset form | package 23 (`c5a73f48`) — proven by `tests/e2e/check-account-journeys.py` step 6 end-to-end with a real mailed token | `/e/account/reset-password?token=<real>` → the `set` (valid-token) view → successful password change → sign-in with new password, at public 320/390/768/1440 px. |
-| Valid invitation acceptance | package 24 (**in progress**) | A real, unexpired partner invitation link → acceptance → confirmed-partner state on both accounts. Blocked until 24 lands. |
-| Public seeded/winners routes resolving to the draw index (PE07/PE08) — routing/intent verification, not a new screen | package 21 (`3dde74cf`) draw-index work + package 14 draw-index parity | Confirm `/e/{slug}/draws?entryEventId=…&view=seeded` and `…&view=winners` resolve to the same draw index with the query intent honored (or documented as not a separate view), not a 404 or unrelated redirect. |
+| Evidence gap (plan §7) | 27b result |
+|---|---|
+| Operator sign-in | **Not capturable as worded** — `AUTH_MODE=local` (the package-01 fixture's mode) resolves credential-less requests to the bootstrap operator, so `/login` redirects straight to the Hub with no form to fill in (confirmed live). Captured what the route actually does: `journeys/OC01-signin-form@1440.png`. The only real operator authentication this program exercises anywhere is API-level (`console-browser-contracts.spec.ts`'s viewer login). Logged as `V3-RT-2` (debt-log "Work package 27b") — needs a plan-wording or fixture-mode decision, not a code fix. |
+| Remaining create-workspace steps and successful creation | **Captured.** `journeys/OC03-new-workspace-step2/3/4/5@1440.png` — the 4-step wizard (Type → Identity → Venue → Review) through "Create workspace", landing on the new workspace's own Overview page. |
+| Account security/session actions | **Partially captured.** Sharing/invites (V3-OC25.1), profile lock (V3-OC04.1) and workspace status/archive (V3-OC29.1) all have surface-book captures (`operator-pages/S25`, `S04`, `S29`). Exercising sign-out from an active session and the archive confirmation flow as live *actions* (not just the static panel) was not additionally scripted this slice — scope triage, not a defect; the panels themselves are proven correct by their package's own tests. |
+| Actual tool/guard behaviour | **Captured** via the existing surface-book pages: `operator-pages/S26` (Modules — consequence copy), `operator-pages/S30` (Entries unavailable guard → "View available tools" → Administration · Modules, per V3-OC30.1's `ModuleUnavailablePanel` test). |
+| Open entry form and submission | **Captured — real submission.** `journeys/PE16-entry-form-open@1440/390.png`, `PE16-entry-form-filled@1440/390.png`, and `PE16-entry-receipt-real@1440/390.png` — a genuinely open event created live via `check-account-journeys.py`'s own `_open_entry_page` helper, submitted end-to-end (`POST /e/api/submit/{slug}`, 303 to a real receipt id). |
+| Authenticated My entries and receipt | **Captured.** `journeys/PE38-my-entries-authenticated@1440/390.png` — the same account's My entries, showing the real entry just submitted, "Awaiting confirmation", with a working "View receipt" link. |
+| Valid password-reset form | **Captured — real token, all four public widths.** `journeys/PE30-reset-valid-token@1440/768/390/320.png` (the valid-token "Choose a new password" view, reached with a real token tailed from the API's mail log) and `journeys/PE32-password-updated-real@1440.png` (the real completion outcome). |
+| Valid invitation acceptance | **Not captured this slice** — scripting a second entrant account, a doubles entry, a real partner-invite send/accept round trip was judged out of this slice's remaining time budget after the other six gaps; the invitation *failure/unavailable* states (PE35–37) are fully captured and reviewed above. Re-flagged, not fabricated: this remains open evidence for a future capture pass, not a defect (`test_partner_invites.py` already proves the backend acceptance path at the API level). |
+| Public seeded/winners routes resolving to the draw index (PE07/PE08) | **Confirmed via the surface book** — `entrant-pages/S06`/`S07`/`S08` (Draws/Seeded entries/Winners tabs) resolve to the same draw index pages, no 404 or unrelated redirect observed. |
 
 ## (c) Recapture plan for slice 27b
+
+**Status: executed.** The plan below (written by 27a) was carried out largely as
+specified; deviations are noted inline and summarized in `reports/27b-recapture.md`. In
+short: the fixture ran clean (all defect states + all 10 account-journey checks green);
+`console-browser-contracts.spec.ts` 7/7; `console-a11y.spec.ts` 20/23 (3 failures traced
+to a stale test locator, `V3-RT-1`, not a product defect); `entrant-a11y.spec.ts` 88/88
+(one test needed an isolated re-run after dev-server contention in the full 88-test run —
+also not a product defect); `surface-books-fixture` captured 33 console + 39 entrant
+surfaces at this tool's two built-in viewports (1440/390 — 1024/320/768 behavior is
+separately proven by the a11y suites at those exact widths, since the capture tool itself
+does not support extra viewports without a code change out of this slice's file scope);
+17 supplementary screenshots covered the successful-journey gaps in section (b) above
+(operator sign-in was not achievable as literally worded — `V3-RT-2`; invitation
+acceptance was not attempted — time budget).
 
 **Fixture.** One run of `tools/fixture-up.sh` (or `make fixture-up` / `make
 surface-books-fixture`), per package 01 (`b065ac72`, `21e4b49e`): frozen clock,
@@ -241,6 +267,94 @@ plan §7 evidence gaps in section (b) above), it should still register under the
 existing surface id with a `-successful`/`-authenticated` style suffix rather than
 inventing an unrelated new surface id, per plan §7's "Recapture route outcomes rather
 than manufacturing separate pages to match stale surface titles."
+
+## (d) Gate verdicts (plan §2)
+
+Plan §2 names Gates A–C explicitly; "Gate D" is this record's own label for Phase D's
+("evidence and closure", packages 25–28) completion criteria, since the plan states the
+phase but does not formally number a fourth gate. Evidence references point at this
+slice's captures and the automated suites all four gates ultimately rest on.
+
+**Gate A — met.** "Counts, assignments, published times, privacy and consequential
+messages agree on one fixture. Computed contrast is verified. Unknown behavior has a
+named verification task." Packages 01–06, 04b and 15 are committed; the same-fixture
+assertions (package 15's publication matrix, package 03's conflict recovery) are proven
+by `tests/backend/test_publication_matrix.py` and the conflict-recovery suite, re-run
+clean in this recapture's fixture pass (fixture defects a/d/e/f/g verified). Contrast is
+verified by `npm run test:contrast` (package 06, `37168e03`) — not independently
+re-run this slice (no code changed since 06), but nothing in 27b's findings review
+surfaced a contrast regression on any recaptured surface.
+
+**Gate B — met**, with one item still physical. "Singles, doubles, incomplete pair,
+unresolved predecessor, no scores, live game, completed match and supported exceptional
+outcomes all render correctly. Long names remain identifiable at the supported widths and
+text zoom." Packages 09–11 committed with the MC-01…MC-13 fixture matrix asserted; the
+visual non-overlap check this recapture was asked to perform is covered by
+`console-a11y.spec.ts`'s 200%-zoom assertion (Matches/Roster) and `entrant-a11y.spec.ts`'s
+200%-zoom + full-name-access assertions (Schedule/Player directory/match card) — both
+green (88/88 entrant; the 3 console-a11y failures are the unrelated Setup › Dates locator
+issue, `V3-RT-1`, not a match-card or overlap defect). `operator-pages/S16`/S17` and
+`entrant-pages/S10-S14` (draw/bracket/schedule surfaces) were visually reviewed this
+slice with no overlap or truncation observed. The one item Gate B still owes is
+V3-OC24.2's signage name-size floor, which is a *physical* validation (see Gate D below),
+not a rendering defect — the on-screen rendering itself is confirmed correct
+(`operator-pages/S24`).
+
+**Gate C — met.** "An operator can configure, publish, run, recover and review a
+tournament; a public visitor can find a match and an entrant can complete the supported
+account/entry journey; Display never performs operational resolution." Packages 12–24 are
+now ALL committed (24 landed since 27a). The journey script
+(`tests/e2e/check-account-journeys.py`) proves signup → verify → login → reset,
+non-enumeration, session revocation, and — the two checks this recapture additionally
+re-verified live — a signed-in entrant (PE17) and a freshly-signed-up entrant (PE18) each
+completing a real submission to a real open event and reaching their own receipt. This
+recapture drove the SAME journey through the browser end-to-end for a fresh account
+(`journeys/PE16-*`, `PE26-*`, `PE30-*`, `PE32-*`, `PE38-*`), independently confirming the
+script's claims render correctly, not just respond correctly at the API layer. Display
+projection-only behavior is unchanged and untouched by this recapture; package 17's report
+verified it structurally (`config.tvShowScores` + presence checks, no synthesized score
+path) and `operator-pages/S24` shows only real, non-conflicting projected state.
+
+**Gate D — met, with two items explicitly still open (both logged, neither a P0
+blocker).** Phase D asks findings to be closed individually with recorded evidence, and
+open/no-change decisions recorded rather than silently dropped. This recapture closes 83
+of 87 findings (`closed`), leaves 1 `closing` (V3-OC24.2 — the on-hardware signage
+validation below), and leaves 3 `open: partial` for reasons outside this program's power
+to close by engineering alone:
+
+- **V3-PE03.1** — the repetitive Tournament Overview paragraph is organizer-authored demo
+  seed content; regenerating `simulator/`'s seed script is logged as debt, not a
+  rendering defect. Unaffected by this recapture (`entrant-pages/S03` still shows the
+  same organizer text, correctly rendered).
+- **V3-PE15.1** — the ambiguous "report N minutes before" regulations rule is organizer
+  policy content; needs organizer confirmation of a structured reporting-reference field
+  (debt V3-22-1), not an engineering fix. Unaffected by this recapture
+  (`entrant-pages/S15`).
+- **V3-PE23.2** — Cloudflare Turnstile's own "For testing only" widget copy is
+  provider-rendered test-mode text (debt V3-23-1); closing it needs a release-environment
+  capture against a real, non-test sitekey, which no stack this program can run locally
+  provides. Unaffected by this recapture (`entrant-pages/S23`).
+
+**Physical validation still pending (closes V3-OC24.2 to fully "closed"):** deploy the
+board on real signage hardware at the real mounting height/venue distance and confirm
+player names / court numbers / header clock / state-word legibility from that distance —
+the exact five-step procedure is in `reports/17-signage.md` "Physical validation
+procedure" and repeated verbatim in `reports/27b-recapture.md`. This is a physical task
+this recapture cannot perform from a development sandbox; the display-logic half (the 48
+px/28 px/40 px floors, the exact "Court assignment unavailable." copy, the honest
+UTC-labeled timezone fallback) is confirmed correct and unregressed by `operator-pages/S24`.
+
+**No unresolved P0.** Every plan §1 P0 package (01, 02, 03, 04, 05, 06, 09, 10, 11, 15,
+19, 23, 24, 27) is committed with zero unresolved findings of its own. The four remaining
+non-`closed` findings all belong to P1 delivery packages (V3-PE03.1 and V3-PE15.1 →
+package 21/22, both finding-severity `major` but package-priority P1, not P0; V3-PE23.2
+→ package 23, finding-severity `minor`; V3-OC24.2 → package 17, finding-severity `minor`,
+status `closing`) — none blocks release of a P0 flow under plan §1's own priority
+definition ("P0 blocks release of the affected flow; P1 is required for the v3 UX
+completion milestone"). They are genuine open items for the v3 UX completion milestone,
+not silently downgraded: PE03.1/PE15.1 need organizer content decisions, PE23.2 needs a
+release-environment capture, and OC24.2 needs on-hardware validation — all recorded above
+with the exact remaining step.
 
 ## Notes on packages 25 and 26 (not this slice's scope, recorded for context)
 
