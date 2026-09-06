@@ -22,19 +22,27 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 | 09 MatchCard spec | P0 | done · ce78d426 | docs/reference/contracts/match-card.md, reports/09-matchcard-spec.md |
 | 07 typography/spacing/states | P1 | done · 26f8e3f2 | reports/07-typography.md |
 | 08 controls + form states | P1 | done · see git log | reports/08-controls.md, ledger/08-strings.md |
-| 10 operator match rows + bracket | P0 | 10a + part of 10b done · 97449c07; 10c (result inventory, V3-OC17.1) in progress | reports/10-operator-match-rows.md |
+| 10 operator match rows + bracket | P0 | done · 97449c07 + 10c | reports/10-operator-match-rows.md, reports/10c-result-inventory.md |
 | 11 public match/round/bracket | P0 | done · e729500a | reports/11-public-match-views.md, ledger/11-strings.md |
 | 19 backup/restore/sync | P0 | done · see git log | reports/19-backups.md, ledger/19-strings.md |
 | 04b display consolidation | P0 | done · see git log | reports/04b-display.md |
 | 15 publication + privacy | P0 | done · see git log | reports/15-publication-privacy.md |
-| 12, 13, 14, 18, 20, 22, 23 | — | in progress | — |
-| 16 venue-board publishing | P1 | in progress | — |
-| 21 public discovery/overview/directory | P1 | in progress | — |
-| 17, 24–28 | — | not started (17 waits on 16; 24 on 23; 25–28 are Phase D) | — |
+| 12 hub/overview/Plan/Live | P1 | done · 854a885d | reports/12-hub-overview-plan-live.md |
+| 13 setup | P1 | done · 74969629 | reports/13-setup.md |
+| 14 roster/draw index/empty | P1 | done · 91d4acfc | reports/14-roster-draws-empty.md |
+| 20 activity history | P1 | done · 74969629 | reports/20-activity.md |
+| 22 regulations/closed entries | P1 | done · 5f25f761 | reports/22-regulations-closed.md |
+| 18, 21, 23 | — | in progress | — |
+| 17 signage | P1 | in progress | — |
+| 16 venue-board publishing | P1 | done · ae9a07d3 | reports/16-venue-board.md |
+
+| 24–28 | — | not started (24 waits on 23; 25–28 are Phase D) | — |
 
 ## Plan gates
 
-- **Gate A** (plan §2: counts, assignments, published times, privacy and consequential messages agree on one fixture; computed contrast verified; unknown behaviour has a named verification task): packages 01–06 and 04b are committed. Publication/privacy same-fixture assertions are package 15 (not started) — Gate A met on the assertions side (package 15 matrix committed); the same-fixture recapture is package 27.
+- **Gate A** (plan §2: counts, assignments, published times, privacy and consequential messages agree on one fixture; computed contrast verified; unknown behaviour has a named verification task): packages 01–06 and 04b are committed. Publication/privacy same-fixture assertions are package 15 (not started) — - **Gate B** (plan §2: singles, doubles, incomplete pair, unresolved predecessor, no scores, live game, completed match and exceptional outcomes render correctly; long names identifiable): packages 09, 10, 11 committed with the MC-01…MC-13 fixtures asserted on both tiers; the visual non-overlap check at the supported widths and 200% zoom is package 27's recapture. Provisionally met.
+
+Gate A met on the assertions side (package 15 matrix committed); the same-fixture recapture is package 27.
 
 ## Gate log
 
