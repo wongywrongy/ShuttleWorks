@@ -153,7 +153,7 @@ test.describe("canonical console browser contracts", () => {
     await expect(publication.getByRole('combobox', { name: 'Public audience' })).toContainText('Unlisted');
     await page.goto(`/tournaments/${TAIPEI_TID}/publish/links`);
     await expect(page).toHaveURL(new RegExp(`/publish/displays$`));
-    await expect(page.getByLabel('Public display link', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Venue board link', { exact: true })).toBeVisible();
     expect(await fatalHarnessEvents(page)).toEqual([]);
   });
 

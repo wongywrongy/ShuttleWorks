@@ -474,16 +474,24 @@ def _domain_venue(row) -> Optional[dict]:
     return _section_data(row, "venue")
 
 
-def _parse_instant(value: Optional[str]) -> Optional[datetime]:
-    """Parse a stored timestamp (UTC ISO, ``Z``-suffixed or offset-bearing)
-    into an aware instant. ``None`` on absence or a value that fails to
-    parse — the caller then simply skips the comparison it was for."""
+def _parse_instant(value: Optional[str], zone_name: Optional[str] = None) -> Optional[datetime]:
+    """Parse a stored timestamp into an aware instant. ``Z``-suffixed or
+    offset-bearing values are taken as written; a NAIVE value is a wall-clock
+    time in the tournament timezone (the same reading ``_session_instant``
+    gives a session's date + time), never UTC — otherwise a 09:00 session in
+    Seoul compares against a 09:00 UTC window and every day "starts before
+    the tournament" (state-and-formatting contract §7; plan §5 midnight
+    boundaries). ``None`` on absence or a value that fails to parse — the
+    caller then simply skips the comparison it was for."""
     if not value:
         return None
     try:
         text = value[:-1] + "+00:00" if value.endswith("Z") else value
         parsed = datetime.fromisoformat(text)
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        if parsed.tzinfo:
+            return parsed
+        zone = ZoneInfo(zone_name) if zone_name else timezone.utc
+        return parsed.replace(tzinfo=zone).astimezone(timezone.utc)
     except (ValueError, TypeError):
         return None
 
@@ -507,8 +515,8 @@ def _session_window_issues(data: dict, tz_name: Optional[str]) -> list["SetupIss
     window (e.g. a competition day starting before the tournament itself
     has started) must produce a precise, per-session field message — never
     a silent, unvalidated date."""
-    window_start = _parse_instant(data.get("tournamentStart"))
-    window_end = _parse_instant(data.get("tournamentEnd"))
+    window_start = _parse_instant(data.get("tournamentStart"), tz_name)
+    window_end = _parse_instant(data.get("tournamentEnd"), tz_name)
     if window_start is None and window_end is None:
         return []
     issues: list[SetupIssue] = []

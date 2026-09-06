@@ -535,3 +535,33 @@ def test_activity_feed_reports_its_own_retention_limit(client):
     tid = _create(client)
     feed = client.get(f"/tournaments/{tid}/activity").json()
     assert feed["retentionLimit"] == ACTIVITY_MAX_ENTRIES
+
+
+def test_naive_window_bounds_are_read_in_the_tournament_timezone(client):
+    """A naive tournamentStart is a wall-clock time in the tournament zone —
+    the same reading a session's date + time gets — never UTC. Otherwise a
+    09:00 Seoul session compares against 09:00 UTC and every competition day
+    "starts before the tournament" (the Korea fixture regression)."""
+    tid = _create(client)
+    setup = client.get(f"/tournaments/{tid}/setup")
+    general = client.patch(
+        f"/tournaments/{tid}/setup/general",
+        headers={"If-Match": setup.headers["etag"]},
+        json={"data": {"timezone": "Asia/Seoul"}},
+    )
+    assert general.status_code == 200
+    dates_patch = client.patch(
+        f"/tournaments/{tid}/setup/dates",
+        headers={"If-Match": general.headers["etag"]},
+        json={"data": {
+            "tournamentStart": "2026-08-04T09:00:00",
+            "tournamentEnd": "2026-08-09T19:00:00",
+            "dailySessions": [
+                {"id": "day-1", "date": "2026-08-04", "name": "Competition day 1", "startTime": "09:00", "endTime": "19:00"},
+                {"id": "day-6", "date": "2026-08-09", "name": "Finals", "startTime": "09:00", "endTime": "17:00"},
+            ],
+        }},
+    )
+    assert dates_patch.status_code == 200
+    dates = next(s for s in dates_patch.json()["sections"] if s["key"] == "dates")
+    assert not any(i["code"] == "SETUP_DATES_SESSION_OUT_OF_WINDOW" for i in dates["issues"])
