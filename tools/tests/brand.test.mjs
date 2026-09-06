@@ -27,7 +27,9 @@ test('Yunavero owns a single generated ShuttleWorks brand contract', () => {
 
 test('customer surfaces consume the shared brand while protocol names stay stable', () => {
   assert.match(read('apps/console/src/components/ShuttleWorksMark.tsx'), /BRAND\.productName/)
-  assert.match(read('apps/entrant/app/components/PlayShell.tsx'), /BRAND\.endorsement/)
+  // v3 pkg 21 (V3-PE02.1): the public footer renders the shared BRAND_SIGNATURE
+  // (productName + endorsement) rather than assembling the endorsement itself.
+  assert.match(read('apps/entrant/app/components/PlayShell.tsx'), /BRAND_SIGNATURE/)
   assert.match(read('apps/api/src/core/main.py'), /PRODUCT_NAME/)
   assert.match(read('apps/api/src/core/main.py'), /BRAND_SIGNATURE/)
 
