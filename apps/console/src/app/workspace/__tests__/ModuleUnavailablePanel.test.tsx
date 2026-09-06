@@ -59,6 +59,28 @@ describe('ModuleUnavailablePanel', () => {
     expect(screen.getByRole('button', { name: 'Enable display' })).toBeInTheDocument();
   });
 
+  it('V3-OC30.1: names the same destination in the body and the button when unavailable', () => {
+    const onGo = vi.fn();
+    render(
+      <ModuleUnavailablePanel
+        label="Entries"
+        primaryLabel="Setup · General"
+        onGoToPrimary={onGo}
+        reason="unavailable"
+      />,
+    );
+    expect(screen.getByText(/Entries isn.t available for this tournament type/)).toBeInTheDocument();
+    expect(screen.getByTestId('module-unavailable-reason')).toHaveTextContent(
+      'This workspace type does not include this module.',
+    );
+    // The button must not promise "Setup · General" — that is not where
+    // onGoToPrimary sends the operator in this state (AppShell routes it to
+    // Administration · Modules instead).
+    expect(screen.queryByRole('button', { name: /Setup · General/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'View available tools' }));
+    expect(onGo).toHaveBeenCalledOnce();
+  });
+
   it('makes Administration · Modules the enablement owner', () => {
     const onSettings = vi.fn();
     render(

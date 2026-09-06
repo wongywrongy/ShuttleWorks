@@ -240,6 +240,19 @@ def test_local_bootstrap_flow_unchanged_without_cookies(client):
     assert me.json()["authMode"] == "local"
 
 
+def test_email_configured_reflects_the_real_delivery_backend(client, monkeypatch):
+    """V3-OC25.1 / package 18: the console must not offer "send by email"
+    invitations where nothing can actually deliver them. The console
+    (log-only) backend is the local default and every test fixture's
+    starting point, so it answers False; only the ``smtp`` backend answers
+    True."""
+    from core.config import settings
+
+    assert client.get("/auth/me").json()["emailConfigured"] is False
+    monkeypatch.setattr(settings, "email_backend", "smtp")
+    assert client.get("/auth/me").json()["emailConfigured"] is True
+
+
 def test_session_identity_scopes_the_hub(client):
     """A cookie-authenticated account sees its own workspaces, not the
     bootstrap operator's — the first taste of real tenancy."""

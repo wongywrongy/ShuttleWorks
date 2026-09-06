@@ -25,7 +25,11 @@ const REASON_COPY: Record<NonNullable<ModuleUnavailablePanelProps['reason']>, st
   'not-enabled': 'Enable this module to add it to the tournament workflow.',
   dependency: 'Complete the required setup before using this module.',
   permission: 'Your role does not include access to this module.',
-  unavailable: 'This workspace type does not include this module. Open Administration · Modules to see the enabled workflow and continue there.',
+  // No navigation instruction here (V3-OC30.1): the button below is the one
+  // place that names the destination. Stating it twice risked exactly the
+  // defect this fixes — the body naming one destination while the button
+  // pointed at, and was labeled for, another.
+  unavailable: 'This workspace type does not include this module.',
 };
 
 /** Shown in place of the module pane when the active module isn't enterable
@@ -48,7 +52,9 @@ export function ModuleUnavailablePanel({
       className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center"
     >
       <p className="text-base font-semibold text-foreground">
-        {label} isn&rsquo;t available in this workspace
+        {reason === 'unavailable'
+          ? `${label} isn’t available for this tournament type`
+          : `${label} isn’t available in this workspace`}
       </p>
       {note ? <p className="max-w-sm text-sm text-muted-foreground">{note}</p> : null}
       {reason ? (
@@ -72,7 +78,14 @@ export function ModuleUnavailablePanel({
           </>
         ) : (
           <>
-            <Button onClick={onGoToPrimary}>Go to {primaryLabel}</Button>
+            {/* V3-OC30.1: when this module is absent from the workspace's
+                type entirely, `onGoToPrimary` routes to Administration ·
+                Modules (see AppShell), not to `primaryLabel`'s own workflow —
+                so the button must say so, not repeat a label whose
+                destination it no longer shares. */}
+            <Button onClick={onGoToPrimary}>
+              {reason === 'unavailable' ? 'View available tools' : `Go to ${primaryLabel}`}
+            </Button>
             {onOpenSettings ? (
               <Button variant="ghost" onClick={onOpenSettings}>
                 Open Administration · Modules

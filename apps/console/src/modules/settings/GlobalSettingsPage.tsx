@@ -101,15 +101,31 @@ function ProfilePage() {
         title="Profile"
         subtitle="Your name and how you appear across the app."
         // Locked (no real account to save to): Save is hidden, not merely
-        // grayed out — a disabled button here would offer no visible reason,
-        // and the reason ("Profile editing unlocks once you sign in") is
-        // already stated below the form (v3 consolidated plan §3 X12, R2).
+        // grayed out — a disabled button here would offer no visible reason
+        // (v3 consolidated plan §3 X12, R2). The reason itself, and the one
+        // action that resolves it, now leads the page below (V3-OC04.1) —
+        // it used to trail the read-only fields, so the apparent first task
+        // was editing a form nothing here can save.
         action={locked ? undefined : (
           <Button size="sm">
             Save changes
           </Button>
         )}
       />
+
+      {locked ? (
+        <div className="rounded-md border border-border bg-muted/30 p-4">
+          <p className="text-sm text-foreground">
+            Sign in with an account to edit your profile.
+          </p>
+          <Link
+            to="/login"
+            className="mt-2 inline-block text-sm font-medium text-accent underline underline-offset-2"
+          >
+            Sign in
+          </Link>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-4">
         <span
@@ -137,13 +153,6 @@ function ProfilePage() {
         />
         <FieldRow label="Email" type="email" defaultValue={email} disabled={locked} last />
       </Section>
-
-      {locked ? (
-        <div className="space-y-2">
-          <Note>Profile editing unlocks once you sign in with an account.</Note>
-          <Link to="/login" className="text-sm font-medium text-accent underline underline-offset-2">Sign in to edit your profile</Link>
-        </div>
-      ) : null}
     </PageBody>
   );
 }

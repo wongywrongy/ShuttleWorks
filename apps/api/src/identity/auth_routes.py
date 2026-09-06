@@ -75,6 +75,13 @@ class UserDTO(BaseModel):
     # ceremony) from a signed-in account without a second endpoint.
     isBootstrap: bool = False
     authMode: str = "local"
+    # Whether the server's email seam can actually deliver off-host
+    # (`core/email.py`'s `smtp` backend, vs. the local `console` backend
+    # that only logs). Lets the console offer "send by email" invitations
+    # only where they can actually be sent (v3 consolidated plan, package
+    # 18, V3-OC25.1) instead of always presenting a choice the local
+    # deployment never delivers on.
+    emailConfigured: bool = False
 
 
 # ---- Helpers ---------------------------------------------------------
@@ -136,6 +143,7 @@ def _user_dto(user_row, *, email: str) -> UserDTO:
         emailVerified=user_row.email_verified,
         isBootstrap=user_row.id == auth_service.BOOTSTRAP_USER_UUID,
         authMode=settings.auth_mode,
+        emailConfigured=settings.email_backend == "smtp",
     )
 
 
@@ -308,6 +316,7 @@ def me(
             email=user.email or "",
             isBootstrap=user.id == str(auth_service.BOOTSTRAP_USER_UUID),
             authMode=settings.auth_mode,
+            emailConfigured=settings.email_backend == "smtp",
         )
     return _user_dto(row, email=row.email)
 

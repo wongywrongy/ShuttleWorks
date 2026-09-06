@@ -73,3 +73,23 @@ describe('GeneralSettingsTab — lifecycle is display-only', () => {
     expect(apiClient.updateTournament).not.toHaveBeenCalled();
   });
 });
+
+describe('V3-OC29.1: same conventions as Overview', () => {
+  it('labels the status row "Tournament status", not "Lifecycle"', () => {
+    render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
+    expect(screen.getByText('Tournament status')).toBeInTheDocument();
+    expect(screen.queryByText('Lifecycle')).toBeNull();
+  });
+
+  it('formats the tournament date with the shared human-readable formatter, not raw ISO', () => {
+    render(<GeneralSettingsTab tid="t1" summary={summaryWith({ tournamentDate: '2026-05-15' })} onSaved={noop} />);
+    expect(screen.queryByText('2026-05-15')).toBeNull();
+    expect(screen.getByText('Fri, May 15, 2026')).toBeInTheDocument();
+  });
+
+  it('points to Archive, not "use Archive below" retirement jargon', () => {
+    render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
+    expect(screen.getByText('Archive this workspace to remove it from the active list.')).toBeInTheDocument();
+    expect(screen.queryByText(/To retire the workspace/)).toBeNull();
+  });
+});

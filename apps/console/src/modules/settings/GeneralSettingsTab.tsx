@@ -5,6 +5,7 @@ import { lifecycleBadge } from '../../platform/domain/lifecycle';
 import { resolvePhase, PHASE_LABEL } from '../../platform/domain/overviewPhase';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { TEXT_MUTED_SM } from '../../lib/utils'
+import { formatDateTime } from '../../lib/formatDateTime'
 
 /** Workspace administration. Tournament properties are edited in Setup.
  *
@@ -53,14 +54,16 @@ export function GeneralSettingsTab({
       <Section title="Workspace details" defaultOpen>
         <dl className="space-y-4 py-4 text-sm">
           <div><dt className="text-muted-foreground">Tournament name</dt><dd className="mt-1">{summary?.name ?? 'Loading…'}</dd></div>
-          <div><dt className="text-muted-foreground">Tournament date</dt><dd className="mt-1">{summary?.tournamentDate ?? 'Not set'}</dd></div>
+          {/* Same date grammar as everywhere else on the workspace (V3-OC29.1,
+              X6): the raw ISO string used to render here directly. */}
+          <div><dt className="text-muted-foreground">Tournament date</dt><dd className="mt-1">{summary?.tournamentDate ? (formatDateTime(summary.tournamentDate, 'date_with_year') ?? 'Not set') : 'Not set'}</dd></div>
         </dl>
         <div className="flex gap-4 pb-4 text-sm">
           <a className="text-accent underline" href={`/tournaments/${encodeURIComponent(tid)}/setup/general`}>Edit tournament properties</a>
           <a className="text-accent underline" href={`/tournaments/${encodeURIComponent(tid)}/setup/dates`}>Edit dates</a>
         </div>
         <Row
-          label="Lifecycle"
+          label="Tournament status"
           last
           control={
             derived ? (
@@ -80,7 +83,7 @@ export function GeneralSettingsTab({
         />
       </Section>
       <p className="pt-2 text-xs text-muted-foreground">
-        To retire the workspace, use Archive below.
+        Archive this workspace to remove it from the active list.
       </p>
     </PropertyPanel>
   );

@@ -152,6 +152,17 @@ Debt found delivering work package 22 (`docs/audits/v3-consolidated/plan.md` §4
 
 ---
 
+### Work package 23 — account, confirmation and reset journeys
+
+Debt found delivering work package 23 (`docs/audits/v3-consolidated/plan.md` §4 "Errors"/"Success"/"Hidden-interactive copy", §6 "Account journeys", V3-PE23.2). Full account in `docs/audits/v3-consolidated/reports/23-account-journeys.md` and `docs/audits/v3-consolidated/ledger/23-strings.md`.
+
+| # | What | Size |
+| --- | --- | --- |
+| V3-23-1 | **V3-PE23.2 (Turnstile's "For testing only" widget copy) cannot be retired from this package.** The dummy sitekey/secret pair (`core/config.py` defaults) is Cloudflare's own always-passes test pair and its widget text is provider-rendered, not this codebase's copy — verified live against `https://challenges.cloudflare.com/turnstile/v0/siteverify`, never stubbed. Closing the finding needs a capture against a real, non-test sitekey in a release environment, which is outside every stack this package can run locally. | S once a release-environment capture is scheduled |
+| V3-23-2 | **`tests/e2e/check-account-journeys.py` deliberately does NOT re-verify "the old password is refused after a reset" over live HTTP**, to stay under the shared per-IP entrant throttle bucket (`identity/auth.entrant_ip_key`, `auth_throttle_max_failures` = 5 by default) that its other five forced-failure checks (wrong password, unknown address, unknown reset address, weak password does not apply — invalid token) already spend. A sixth forced failure in the same script run would lock that bucket and turn the next legitimate call into a false-positive 429. The old-password-rejected property is instead pinned at the unit/integration level (`tests/backend/test_entrant_lifecycle_routes.py::test_a_reset_link_sets_the_password_and_kills_live_sessions`), which is real coverage, just not from this particular script. If a future package wants every property proven from one E2E run, it needs either a per-check throttle reset (e.g. a fixture-only endpoint) or a raised budget for the fixture's own `AUTH_THROTTLE_MAX_FAILURES`, which is a product-security-relevant setting and not something to bump casually. | S, needs a deliberate call on whether to special-case fixture throttle budgets |
+
+---
+
 ## Open — needs an owner decision
 
 These are decisions to make, then execute. Nothing here is blocked on effort.
