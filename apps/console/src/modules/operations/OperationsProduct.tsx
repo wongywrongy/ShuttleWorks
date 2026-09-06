@@ -139,6 +139,24 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
         pu.dependencies.every((d) => done.has(d)),
     ).length;
   }, [data]);
+  // The complement: unscheduled play units NOT yet eligible — waiting on a
+  // side or a predecessor's result. V3-OC18.2: names the prerequisite when
+  // `schedulableCount` is 0 so the toolbar action doesn't just vanish.
+  const blockedCount = useMemo(() => {
+    if (!data) return 0;
+    const assigned = new Set(data.assignments.map((a) => a.play_unit_id));
+    const done = new Set(data.results.map((r) => r.play_unit_id));
+    return data.play_units.filter(
+      (pu) =>
+        !assigned.has(pu.id) &&
+        !done.has(pu.id) &&
+        !(
+          (pu.side_a?.length ?? 0) > 0 &&
+          (pu.side_b?.length ?? 0) > 0 &&
+          pu.dependencies.every((d) => done.has(d))
+        ),
+    ).length;
+  }, [data]);
 
   // Wall-clock label for a slot — operators think in time ("9:15"), not slot
   // indices ("S8"). Shared by BOTH boards so the time axis reads identically.
@@ -224,6 +242,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
             bracketEnabled={engines.bracket}
             bracketWindows={bracketWindows}
             schedulableCount={schedulableCount}
+            blockedCount={blockedCount}
             onOpenScheduleNext={() => setScheduling(true)}
             planFinalized={!!planFinalized}
             planFinalizePending={planFinalizeAction.pending}

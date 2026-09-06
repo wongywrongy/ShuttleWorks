@@ -62,6 +62,11 @@ export interface PlanToolbarProps {
    *  loaded — undefined makes the solve hook fetch its own (D1). */
   bracketWindows: number[][] | undefined;
   schedulableCount: number;
+  /** Bracket play units still unscheduled but NOT eligible — an unresolved
+   *  feeder round or a missing side. V3-OC18.2: when the schedule action's
+   *  prerequisite is unmet the toolbar names it instead of the button
+   *  simply vanishing with no explanation. Zero when unknown/not applicable. */
+  blockedCount?: number;
   onOpenScheduleNext: () => void;
   planFinalized: boolean;
   planFinalizePending: boolean;
@@ -75,6 +80,7 @@ export function PlanToolbar({
   bracketEnabled,
   bracketWindows,
   schedulableCount,
+  blockedCount = 0,
   onOpenScheduleNext,
   planFinalized,
   planFinalizePending,
@@ -192,6 +198,17 @@ export function PlanToolbar({
             >
               Schedule {schedulableCount} unscheduled match{schedulableCount === 1 ? '' : 'es'}
             </button>
+          ) : bracketEnabled && blockedCount > 0 ? (
+            // V3-OC18.2: nothing is eligible yet, but matches ARE waiting —
+            // name the prerequisite instead of the action disappearing with
+            // no explanation of why there is nothing to schedule.
+            <span
+              data-testid="ops-schedule-next-blocked"
+              className="text-xs text-muted-foreground"
+              title="These matches are missing a side or waiting on a predecessor's result"
+            >
+              {blockedCount} match{blockedCount === 1 ? '' : 'es'} waiting on a result before they can be scheduled
+            </span>
           ) : null}
 
           {meetEnabled && schedule ? (

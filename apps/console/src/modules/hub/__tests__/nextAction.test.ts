@@ -54,3 +54,40 @@ describe('rowActionFor', () => {
     });
   });
 });
+
+// V3-OC02.2: an unresolved entries reason must route to the entries desk,
+// not to "View draws"/"View results" — those open nothing that helps.
+describe('rowActionFor — entries attention (V3-OC02.2)', () => {
+  const complete = (reason: string): TournamentSummaryDTO => ({
+    id: 'x', name: 'X', status: 'active', kind: 'bracket', tournamentDate: '2026-01-01',
+    createdAt: '', updatedAt: '', role: 'owner', ownerName: null,
+    signals: {
+      health: 'attention',
+      attention: [{ code: reason, label: 'l' }],
+      phase: 'complete',
+      modules: { enabled: 1, available: 0, disabled: 0, comingSoon: 0 },
+      setup: {},
+      collaboration: { memberCount: 0, activeInviteCount: 0 },
+    },
+  });
+
+  it('overrides "View draws" with "Review entries" for a completed bracket with an entries reason', () => {
+    expect(rowActionFor(complete('ENTRIES_NOT_COMMITTED'), 'upcoming')).toEqual({
+      label: 'Review entries',
+      kind: 'open',
+      segment: 'participants/entries',
+    });
+  });
+
+  it('overrides the "past" fallback the same way', () => {
+    expect(rowActionFor(complete('UNPAID_ENTRIES'), 'past')).toEqual({
+      label: 'Review entries',
+      kind: 'open',
+      segment: 'participants/entries',
+    });
+  });
+
+  it('leaves non-entries reasons alone (View draws still applies)', () => {
+    expect(rowActionFor(complete('NO_ROSTER'), 'past').label).toBe('View draws');
+  });
+});

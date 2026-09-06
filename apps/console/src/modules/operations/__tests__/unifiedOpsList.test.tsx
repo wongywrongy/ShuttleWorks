@@ -89,4 +89,23 @@ describe('UnifiedOpsList', () => {
     );
     expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(2);
   });
+
+  // V3-OC18.1: a filter over a category that never varies is a control with
+  // nothing to control (X16) — it only earns its place once both engines
+  // are actually present in the list.
+  it('shows the match-type filter only when both engines are present', () => {
+    const { unmount } = render(
+      <UnifiedOpsList blocks={BLOCKS} searchable />,
+    );
+    expect(screen.getByText('Match type')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <UnifiedOpsList
+        blocks={[blk({ source: 'meet', id: 'm1', court: 1, slot: 0, status: 'scheduled' })]}
+        searchable
+      />,
+    );
+    expect(screen.queryByText('Match type')).not.toBeInTheDocument();
+  });
 });

@@ -52,8 +52,15 @@ function AttentionCell({ tournament }: { tournament: TournamentSummaryDTO }) {
           title={reasons.map((r) => r.label).join(' · ')}
         >
           {first.label}
+          {/* V3-OC02.2: "+1" required decoding what the count meant. Naming
+              it ("1 more issue") is readable without opening anything; the
+              row itself already opens the inspector's full list (below) on
+              click, so no separate control is needed here. */}
           {reasons.length > 1 ? (
-            <span className="text-muted-foreground"> +{reasons.length - 1}</span>
+            <span className="text-muted-foreground">
+              {' '}
+              · {reasons.length - 1} more issue{reasons.length - 1 === 1 ? '' : 's'}
+            </span>
           ) : null}
         </span>
       ) : null}

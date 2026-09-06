@@ -101,6 +101,13 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
   const [query, setQuery] = useState('');
   const [sources, setSources] = useState<Set<string>>(() => new Set());
 
+  // V3-OC18.1: a filter chip for a category the list never varies on is
+  // internal bookkeeping dressed as a control (X16) — a single-engine
+  // workspace has nothing for "Match type" to narrow. The chip renders only
+  // once both engines are actually present in the list.
+  const sourcesPresent = useMemo(() => new Set(blocks.map((b) => b.source)), [blocks]);
+  const showMatchTypeFilter = sourcesPresent.size > 1;
+
   // Search matches the row's code AND its player names — finding "where is
   // Aiden playing next" is the desk's real lookup. Source chips narrow to
   // one engine; no active chip means both.
@@ -226,23 +233,31 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
               setQuery('');
               setSources(new Set());
             }}
-            filters={[
-              {
-                label: 'Engine',
-                options: [
-                  { id: 'meet', label: MODULE_LABELS.meet },
-                  { id: 'bracket', label: MODULE_LABELS.bracket },
-                ],
-                active: sources,
-                onToggle: (id) =>
-                  setSources((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  }),
-              },
-            ]}
+            filters={
+              showMatchTypeFilter
+                ? [
+                    {
+                      // V3-OC18.1: "Engine" named the internal category
+                      // (meet/bracket are engines to the codebase, not to
+                      // an operator); "Match type" names what the chip
+                      // actually narrows.
+                      label: 'Match type',
+                      options: [
+                        { id: 'meet', label: MODULE_LABELS.meet },
+                        { id: 'bracket', label: MODULE_LABELS.bracket },
+                      ],
+                      active: sources,
+                      onToggle: (id) =>
+                        setSources((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(id)) next.delete(id);
+                          else next.add(id);
+                          return next;
+                        }),
+                    },
+                  ]
+                : []
+            }
           />
         </div>
       ) : null}

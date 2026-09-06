@@ -128,9 +128,10 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
   );
 }
 
-function LivePanel({ summary }: PanelProps) {
+function LivePanel({ summary, onNavigate }: PanelProps) {
   const m = summary.signals?.matches;
   const nextUp = summary.signals?.nextUp ?? [];
+  const seg = segments(summary.kind);
   // Play-through progress (played = terminally-resolved, the same state the
   // phase reads). Optional on older payloads — the bar simply doesn't render.
   const played = m?.played;
@@ -178,22 +179,54 @@ function LivePanel({ summary }: PanelProps) {
         ) : null}
         {/* The live line (OV-4, the inspector's mirror): the triplet is
             planning information; what LIVE is asked is "is anything
-            happening, and is a court free". Only while something is. */}
-        {m?.playing != null && m.playing > 0 ? (
+            happening, and is a court free". Only while something is.
+            V3-OC19.2/V3-03-3: a disputed court is its own bucket, never
+            folded into "playing" — shown whenever either count is nonzero,
+            so a dispute is never masked just because nothing else is
+            currently on court (contract §4.1: "a tally that cannot show
+            [disputedCourts] must show none of them" — here it always can). */}
+        {(m?.playing ?? 0) > 0 || (m?.disputedCourts ?? 0) > 0 ? (
           <p
             data-testid="overview-live-line"
             className="mt-2 text-xs text-muted-foreground"
           >
             <span className="font-medium text-status-live">
-              {m.playing} playing matches
+              {m?.playing ?? 0} playing matches
             </span>
-            {m.courtsFree != null
+            {m?.courtsFree != null
               ? ` · ${m.courtsFree} court${m.courtsFree === 1 ? '' : 's'} free`
               : ''}
+            {m?.disputedCourts ? (
+              <span
+                data-testid="overview-disputed-courts"
+                className="font-medium text-status-warning"
+              >
+                {` · ${m.disputedCourts} court conflict${m.disputedCourts === 1 ? '' : 's'}`}
+              </span>
+            ) : null}
           </p>
         ) : null}
+        {/* V3-OC19.1: a count alone leaves the operator to guess which
+            control fixes it — same route as the Run surface's conflict
+            cards ("Needs resolution" → Live day), named as a direct action
+            rather than "resolve this" with no destination. */}
+        {m?.disputedCourts ? (
+          <div className="mt-2">
+            <Button
+              variant="outline"
+              data-testid="overview-review-court-assignments"
+              onClick={() => onNavigate(seg.run)}
+            >
+              Review court assignments
+            </Button>
+          </div>
+        ) : null}
       </div>
-      {/* "Open live day" lives in the page header (G3.1). */}
+      {/* "Open live day" lives in the page header (G3.1). V3-OC05.1: this
+          list is upcoming-only (the backend excludes anything on court from
+          `nextUp`, mirroring the meet path) — a match already under way
+          belongs in the live line above, never restated here as if it were
+          next. */}
       {nextUp.length > 0 ? (
         <div>
           <SectionLabel>Up next</SectionLabel>

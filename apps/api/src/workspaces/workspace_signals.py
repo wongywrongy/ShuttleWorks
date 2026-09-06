@@ -536,17 +536,25 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         v = a.get("slot_id") if isinstance(a, dict) else None
         return v if isinstance(v, int) else 0
 
-    # Next-up = active or upcoming. A unit is done when it has a RECORDED RESULT
-    # (``resolved_ids`` — the draw-board record-winner/walkover flow) or a
-    # finished match-action clock (``actual_end_slot``). Filtering on the
-    # clock alone kept board-recorded winners listed as upcoming (review
-    # finding). ``scheduled`` above still counts every assignment.
+    # Next-up = UPCOMING ONLY (V3-OC05.1). A unit is done when it has a
+    # RECORDED RESULT (``resolved_ids`` — the draw-board record-winner/
+    # walkover flow) or a finished match-action clock (``actual_end_slot``).
+    # Filtering on the clock alone kept board-recorded winners listed as
+    # upcoming (review finding). ``scheduled`` above still counts every
+    # assignment. A unit already ON COURT (``actual_start_slot`` set, no end
+    # yet) is excluded too — it is current, not next, and belongs in the
+    # metrics' ``playing`` count instead; otherwise a live match shows up
+    # under "Up next" with no state word to say it is already under way,
+    # which is exactly the surface-book defect (an operator mistaking a
+    # current assignment for an upcoming one). This mirrors the meet path
+    # above, which already excludes any assignment with a canonical status.
     ordered = sorted(
         (
             a
             for a in assignments
             if isinstance(a, dict)
             and a.get("actual_end_slot") is None
+            and a.get("actual_start_slot") is None
             and a.get("play_unit_id") not in resolved_ids
         ),
         key=slot_of,
@@ -572,11 +580,9 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
             code=code,
             timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
             courtLabel=_court_label(a.get("court_id")),
-            status=(
-                "playing"
-                if a.get("actual_start_slot") is not None
-                else "scheduled"
-            ),
+            # Always "scheduled": every on-court unit is filtered out of
+            # `ordered` above (V3-OC05.1), so this list is upcoming-only.
+            status="scheduled",
             matchId=raw_id or None,
             source="bracket",
             identity=identity,

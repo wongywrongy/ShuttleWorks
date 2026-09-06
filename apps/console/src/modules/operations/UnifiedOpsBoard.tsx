@@ -407,7 +407,11 @@ export function UnifiedOpsBoard({
             )
           ) : (
             <span className="text-muted-foreground">
-              Drag a match to any cell to reschedule: meet and bracket share one court plan.
+              {/* V3-OC18.1: "meet and bracket share one court plan" is
+               * why the board is unified, not something the operator needs
+               * to act on — the instruction now states only the available
+               * action. */}
+              Drag a match to any cell to reschedule.
             </span>
           )}
         </div>

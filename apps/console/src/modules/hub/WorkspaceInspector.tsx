@@ -35,7 +35,7 @@ import { eventDate, temporalGroupOf } from './hubGrouping';
 import { DetailPanel } from '../../components/control-plane/DetailPanel';
 import { NextUpList } from '../../components/control-plane/NextUpList';
 import { SetupChecklist } from '../../components/control-plane/SetupChecklist';
-import { buildChecklist } from '../../platform/domain/setupChecklist';
+import { buildChecklist, STEP_REASON_CODE } from '../../platform/domain/setupChecklist';
 
 /** One metric tile in the "This workspace" triplet. */
 function MetricTile({
@@ -223,6 +223,28 @@ export function WorkspaceInspector({
           </p>
         ) : null}
       </DetailPanel.Section>
+
+      {/* V3-OC02.2: the row's Attention cell only shows the first reason plus
+          a "N more issues" count — this is where "more" resolves to actual
+          names, not a guess. SP-UI-1's merge still holds: a reason already
+          stated as a checklist step's subline (below) is not repeated here —
+          only reasons the checklist has no step for (e.g. entries reasons)
+          get a line of their own. */}
+      {(() => {
+        const checklistCodes = new Set(Object.values(STEP_REASON_CODE));
+        const unlisted = todos.filter((r) => !checklistCodes.has(r.code));
+        return unlisted.length > 0 ? (
+          <DetailPanel.Section eyebrow="Attention" testId="inspector-attention">
+            <ul className="space-y-1" data-testid="inspector-attention-list">
+              {unlisted.map((r) => (
+                <li key={r.code} className="text-xs text-status-warning-fg">
+                  {r.label}
+                </li>
+              ))}
+            </ul>
+          </DetailPanel.Section>
+        ) : null;
+      })()}
 
       {steps.length > 0 ? (
         <DetailPanel.Section

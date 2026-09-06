@@ -190,4 +190,53 @@ describe('WorkspaceRow', () => {
     fireEvent.click(screen.getByTestId('overflow-delete'));
     expect(onDelete).toHaveBeenCalled();
   });
+
+  // V3-OC02.2: "+1" required decoding; the count now names what it is.
+  it('names an additional issue instead of a bare "+1"', () => {
+    render(
+      <MemoryRouter>
+        <WorkspaceRow
+          tournament={{
+            ...t,
+            signals: {
+              ...t.signals!,
+              attention: [
+                { code: 'NO_ROSTER', label: 'No players added yet' },
+                { code: 'ENTRIES_NOT_COMMITTED', label: 'Confirmed entries not on the roster' },
+              ],
+            },
+          }}
+          group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+        />
+      </MemoryRouter>,
+    );
+    const cell = screen.getByTestId('row-attention');
+    expect(cell).toHaveTextContent('1 more issue');
+    expect(cell).not.toHaveTextContent('+1');
+  });
+
+  // V3-OC02.2: a completed bracket workspace with an unresolved entries
+  // reason used to offer "View draws", which opens nothing that fixes the
+  // problem the row is flagging.
+  it('offers "Review entries" instead of "View draws" when the leading reason concerns entries', () => {
+    const onOpen = vi.fn();
+    render(
+      <MemoryRouter>
+        <WorkspaceRow
+          tournament={{
+            ...t,
+            kind: 'bracket',
+            signals: {
+              ...t.signals!,
+              attention: [{ code: 'ENTRIES_NOT_COMMITTED', label: 'Confirmed entries not on the roster' }],
+              phase: 'complete',
+            },
+          }}
+          group="past" selected={false} onSelect={noop} onOpen={onOpen} onSetDate={noop} onSettings={noop}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Review entries' }));
+    expect(onOpen).toHaveBeenCalledWith('participants/entries');
+  });
 });

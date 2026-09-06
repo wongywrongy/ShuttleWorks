@@ -202,6 +202,13 @@ def test_bracket_live_assignments_report_court_population_and_status():
 
     Negative controls: an ended assignment and an unstarted assignment are
     present but must not inflate ``playing`` or consume a court.
+
+    V3-OC05.1 (v3 consolidated, package 12): the on-court assignment ("live")
+    used to leak into ``nextUp`` labelled ``status="playing"`` — the console
+    never rendered that status word, so an operator reading "Up next" saw a
+    match already under way with nothing to say so (the reproduced surface-
+    book defect). ``nextUp`` is upcoming-only now, mirroring the meet path;
+    "live" is excluded, leaving only "later".
     """
     data = {"bracket_session": {
         "start_time": "2026-07-28T09:00:00", "interval_minutes": 30,
@@ -222,9 +229,8 @@ def test_bracket_live_assignments_report_court_population_and_status():
     )
     assert sig.matches.playing == 1
     assert sig.matches.courtsFree == 3
-    assert sig.nextUp[0].status == "playing"
-    assert sig.nextUp[0].timeLabel == "09:00"  # day five, not clamped to 23:59
-    assert sig.nextUp[1].status == "scheduled"
+    assert [n.code for n in sig.nextUp] == ["later"]
+    assert sig.nextUp[0].status == "scheduled"
 
 
 def test_bracket_next_up_excludes_finished_units():
