@@ -28,6 +28,8 @@
 #   FIXTURE_APPLY_DEFECTS      default 1 — run tools/fixture-defects.py + its check
 #   FIXTURE_SKIP_CONSOLE_BUILD default 0 — skip `npm run build` (reuse a prior build)
 #   FIXTURE_SKIP_ENTRANT       default 0 — skip starting the entrant SSR server entirely
+#   FIXTURE_CHECK_ACCOUNT_JOURNEYS default 1 — run tests/e2e/check-account-journeys.py
+#                              (work package 23: signup/confirm/login/reset over real HTTP)
 #   FIXTURE_KEEP               default 0 — keep the temp dir on exit (debugging)
 #   PYTHON_BIN                 default .venv/bin/python, else python3
 set -euo pipefail
@@ -54,6 +56,7 @@ SEED_KEY="${FIXTURE_SEED_KEY:-shared-fixture}"
 APPLY_DEFECTS="${FIXTURE_APPLY_DEFECTS:-1}"
 SKIP_CONSOLE_BUILD="${FIXTURE_SKIP_CONSOLE_BUILD:-0}"
 SKIP_ENTRANT="${FIXTURE_SKIP_ENTRANT:-0}"
+CHECK_ACCOUNT_JOURNEYS="${FIXTURE_CHECK_ACCOUNT_JOURNEYS:-1}"
 
 API_URL="http://127.0.0.1:${API_PORT}"
 CONSOLE_URL="http://127.0.0.1:${CONSOLE_PORT}"
@@ -159,6 +162,22 @@ if [[ "${SKIP_ENTRANT}" != "1" ]]; then
     sed -n '1,240p' "${FIXTURE_ROOT}/entrant.log" >&2
     exit 1
   fi
+fi
+
+if [[ "${CHECK_ACCOUNT_JOURNEYS}" == "1" ]]; then
+  # v3 consolidated plan work package 23: API-level proof that signup,
+  # confirmation, login and password-reset actually work against a real
+  # running server with real mailed tokens (`console` email backend logged
+  # into api.log above). Independent of ${SKIP_ENTRANT} — it drives
+  # `/e/account/*` on the API directly, never the SSR pages — and of
+  # ${APPLY_DEFECTS} — it only ever touches its own throwaway accounts, never
+  # the seeded tournament rows the row-count gate and the defects pass care
+  # about. Cheap: a handful of HTTP calls plus polling one log file, well
+  # under a second in practice.
+  echo "Checking account, confirmation and reset journeys against ${API_URL}"
+  PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
+    "${REPO_ROOT}/tests/e2e/check-account-journeys.py" \
+    --base-url "${API_URL}" --api-log "${FIXTURE_ROOT}/api.log"
 fi
 
 if [[ "${APPLY_DEFECTS}" == "1" ]]; then

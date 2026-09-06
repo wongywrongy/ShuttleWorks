@@ -276,14 +276,14 @@ describe('signing up says so on the page the browser lands on', () => {
     const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(await fetchSignup())?.[1];
 
     expect(next).toBeTruthy();
-    expect(await render(next as string)).toContain('entrant account is ready');
+    expect(await render(next as string)).toContain('Account created.');
   });
 
   it('says nothing of the kind on the plain sign-in page', async () => {
     // Non-vacuity, and the property that makes the line above mean anything:
     // someone who navigated to `/e/login` did not just create an account, and
     // must not be told they did.
-    expect(await render('/e/login')).not.toContain('entrant account is ready');
+    expect(await render('/e/login')).not.toContain('Account created.');
   });
 });
 
@@ -335,8 +335,12 @@ describe('next is a same-origin entrant path or it is discarded', () => {
     // nothing, and the form still renders for whoever typed the URL.
     const html = await render(DEFAULT_NEXT);
 
-    expect(html).toContain('Sign in to continue');
+    // V3-PE22.1: a direct visit to this outcome URL with no session cookie
+    // is not proof anyone authenticated, so the page shows the ordinary
+    // sign-in state rather than a generic "ready" banner it cannot verify.
+    expect(html).toMatch(/<h1[^>]*>Sign in<\/h1>/);
     expect(html).toContain('action="/e/account/login"');
+    expect(html).not.toContain('The form below is ready for your account');
     // Non-vacuity in the other direction: the plain page must not say it.
     expect(await render('/e/login')).not.toContain('You are signed in on this device');
   });
@@ -455,7 +459,7 @@ describe('a refused sign-in', () => {
     // instead of a 401 whose JSON body a browser paints as the whole document.
     const html = await render('/e/login/failed');
 
-    expect(html).toContain('We could not sign you in');
+    expect(html).toContain("We couldn&#x27;t sign you in");
     // The form is still on the page: a refusal the entrant cannot retry from
     // is a dead end.
     expect(html).toContain('action="/e/account/login"');
@@ -493,7 +497,7 @@ describe('a refused sign-in', () => {
   });
 
   it('says nothing of the kind on the plain sign-in page', async () => {
-    expect(await render('/e/login')).not.toContain('We could not sign you in');
+    expect(await render('/e/login')).not.toContain('We couldn&#x27;t sign you in');
   });
 });
 

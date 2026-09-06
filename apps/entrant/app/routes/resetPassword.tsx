@@ -121,7 +121,7 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
           </h1>
           <p className="text-sm text-muted-foreground">
             {view === 'done'
-              ? 'Your password has been changed. You can now sign in with the new password.'
+              ? "You've been signed out everywhere else, on every device."
               : view === 'set' || view === 'password-failed'
               ? 'This signs you out everywhere else, on every device.'
               : 'We will email you a link that lets you set a new one.'}
@@ -147,15 +147,13 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
                 autoComplete="email"
               />
               <Button type="submit" size="lg" className="justify-self-start">
-                Email me a link
+                Send reset link
               </Button>
             </form>
             <p className="border-t border-rule-soft pt-4 text-sm text-muted-foreground">
-              Remembered it?{' '}
               <a className="text-accent underline underline-offset-4" href="/e/login">
-                Sign in
+                Back to sign in
               </a>
-              .
             </p>
           </div>
         ) : null}
@@ -164,9 +162,9 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
           <div className={FORM_CARD}>
             {/* The conditional is the point — see the module note. */}
             <Notice tone="info">
-              If that address has an account, a reset link is on its way.
-              {ttlMinutes ? ` It is good for ${formatTtl(ttlMinutes)}.` : ''} Check
-              the spam folder before asking again.
+              If an account uses this email, we&apos;ve sent a password reset
+              link.{ttlMinutes ? ` It expires in ${formatTtl(ttlMinutes)}.` : ''}{' '}
+              Check your spam folder if it doesn&apos;t arrive.
             </Notice>
             <Button asChild variant="outline" className="justify-self-start">
               <a href={next ? `/e/login?next=${encodeURIComponent(next)}` : '/e/login'}>
@@ -178,12 +176,12 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
 
         {view === 'set' || view === 'password-failed' ? (
           <div className={FORM_CARD}>
+            {/* V3-PE34.1: the reset link is still valid regardless of which
+                field failed, so that reassurance stays at the top; the
+                specific rejection moves onto the field itself (below) rather
+                than repeating the general requirements a second time. */}
             {view === 'password-failed' ? (
-              <Notice tone="warning">
-                That password does not meet the requirements. Choose at least
-                eight characters and avoid very common passwords. Your reset
-                link is still valid.
-              </Notice>
+              <Notice tone="warning">Your reset link is still valid. Fix the password below and try again.</Notice>
             ) : null}
             <form method="post" action="/e/account/reset-password" className="grid gap-4">
               <input type="hidden" name={FORM_FIELD} value={formCsrf} />
@@ -203,6 +201,21 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
                 minLength={8}
                 maxLength={128}
                 autoComplete="new-password"
+                // Persistent requirements helper (V3-PE34.1): visible before
+                // any submission, not only discoverable by triggering the
+                // error. `TextField` swaps this for `error` below while one
+                // is present, and restores it once the field is corrected —
+                // the same requirements are visible on both sides of a
+                // failed submission.
+                hint="At least 8 characters. Avoid common passwords."
+                // The specific rejection, beside the field it belongs to
+                // (`aria-describedby`, wired by `TextField`) rather than only
+                // in a banner above the whole form.
+                error={
+                  view === 'password-failed'
+                    ? 'That password is too common or too short.'
+                    : undefined
+                }
                 // No reveal toggle: this SSR-first route does not load a
                 // password-control module. Same call as `login.tsx`.
                 revealable={false}
@@ -214,12 +227,12 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
           </div>
         ) : null}
 
+        {/* V3-PE32.1: one success statement (the heading), one session
+            consequence (the subheading above), one next action. The prior
+            copy repeated "signed out" and the sign-in instruction across the
+            heading, the subheading and a second success notice. */}
         {view === 'done' ? (
           <div className={FORM_CARD}>
-            <Notice tone="success">
-              Your password is set. You have been signed out everywhere else.
-              Sign in again with the new one.
-            </Notice>
             <Button asChild size="lg" className="justify-self-start">
               <a href={next ? `/e/login?next=${encodeURIComponent(next)}` : '/e/login'}>
                 {next ? 'Sign in and continue' : 'Sign in'}
@@ -233,12 +246,12 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
             {/* Expired, used and never-valid are one message, for the reason
                 `verify.tsx` gives. Asking again is the fix in all three. */}
             <Notice tone="warning">
-              That reset link is no longer usable. Ask for a fresh link and try
-              again; no password was changed.
+              This reset link is invalid or has expired. Your password
+              hasn&apos;t changed.
             </Notice>
             <Button asChild variant="outline" className="justify-self-start">
               <a href={next ? `/e/forgot?next=${encodeURIComponent(next)}` : '/e/forgot'}>
-                Email me a new link
+                Request a new reset link
               </a>
             </Button>
           </div>

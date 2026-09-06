@@ -458,3 +458,45 @@ describe('the sign-up page titles its browser tab', () => {
     expect(html).toMatch(/<title>[^<]+<\/title>/);
   });
 });
+
+// ---- V3-PE24.1: name the tournament on a tournament-scoped signup ---------
+
+describe('a tournament-scoped signup names the tournament', () => {
+  function stubConfigAndPage(tournamentName: string | null) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const body = url.includes('/e/api/page/')
+          ? { tournament: { name: tournamentName } }
+          : CONFIG;
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+  }
+
+  it('shows the human tournament name in the heading, not "this tournament"', async () => {
+    stubConfigAndPage('Yunavero Club Open');
+    const html = await (await fetchSignup('/e/signup/spring-open')).text();
+
+    expect(html).toMatch(/<h1[^>]*>Create your account to enter Yunavero Club Open<\/h1>/);
+    expect(html).not.toContain('this tournament');
+  });
+
+  it('falls back to generic wording rather than failing when the lookup cannot name it', async () => {
+    stubConfigAndPage(null);
+    const html = await (await fetchSignup('/e/signup/spring-open')).text();
+
+    expect(html).toMatch(/<h1[^>]*>Create your account to enter this tournament<\/h1>/);
+  });
+
+  it('still generic on the bare, tournament-less signup page', async () => {
+    stubConfigAndPage('Yunavero Club Open');
+    const html = await (await fetchSignup('/e/signup')).text();
+
+    expect(html).toMatch(/<h1[^>]*>Create an account<\/h1>/);
+  });
+});

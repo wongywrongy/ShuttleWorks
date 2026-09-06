@@ -252,8 +252,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             {heading}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Use the entrant account you signed up with. Your account manages
-            tournament entries; signing in does not submit an entry.
+            Sign in to manage your tournament entries.
           </p>
         </header>
 
@@ -269,8 +268,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             byte-identical. */}
         {justSignedUp ? (
           <Notice tone="success">
-            Your entrant account is ready. Sign in below with the address and
-            password you just gave.
+            Account created. Sign in to continue.
           </Notice>
         ) : null}
 
@@ -289,21 +287,20 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             diagnosis. */}
         {signInFailed ? (
           <Notice tone="warning">
-            We could not sign you in. Check the email address and password, then
-            try again. Nothing about your account has changed.
+            We couldn&apos;t sign you in. Check your email and password, then
+            try again.
           </Notice>
         ) : null}
 
         {/* A sign-in that worked but had nowhere to go (`DEFAULT_NEXT`). A
             browser that followed the redirect carries the entrant cookie, so
             the session-aware branch below offers the next task and no second
-            credential form. A direct visit without a cookie keeps the retry
-            form available, but is not treated as proof of authentication. */}
-        {justSignedIn ? (
-          <Notice tone={showLoginForm ? 'info' : 'success'}>
-            {showLoginForm
-              ? 'Sign in to continue. The form below is ready for your account.'
-              : 'Continue with your account. Open My entries below to review your tournament entries.'}
+            credential form. A direct visit without a cookie is the ordinary
+            sign-in state — no generic readiness banner, because a direct
+            visit to this outcome URL is not proof anyone authenticated. */}
+        {justSignedIn && !showLoginForm ? (
+          <Notice tone="success">
+            Continue with your account. Open My entries below to review your tournament entries.
           </Notice>
         ) : null}
 

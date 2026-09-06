@@ -111,9 +111,13 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
 
         {verified ? (
           <div className={`grid gap-4 ${CARD}`}>
+            {/* V3-PE26.1: a confirmed address is not a delivered entry.
+                Confirmation and entry status are separate, verified
+                outcomes — this page proves only the first, so it never
+                claims the second. */}
             <Notice tone="success">
-              Your email address is confirmed. Any entries you already sent are
-              now with the organizer.
+              Your email is confirmed. View My entries to check each entry&apos;s
+              status.
             </Notice>
             <Button asChild className="justify-self-start">
               <a href="/e/me/entries">See my entries</a>
@@ -127,8 +131,8 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
              every one of those cases, which is why no diagnosis is owed. */
           <div className={`grid gap-4 ${CARD}`}>
             <Notice tone="warning">
-              That confirmation link is no longer usable. Your saved entries
-              are unchanged, and a fresh link will replace this one.
+              This confirmation link is invalid or has expired. Your saved
+              entries are unchanged.
             </Notice>
             {signedIn ? (
               <form method="post" action="/e/account/resend-verification">
@@ -165,8 +169,8 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
             ) : (
               <>
                 <Notice tone="success">
-                  A fresh confirmation link has been sent to your account email.
-                  Open the newest message; your saved entries are unchanged.
+                  Confirmation email sent. Open the latest email to confirm your
+                  address.
                 </Notice>
                 <p className="text-sm text-muted-foreground">
                   Delivery can take a few minutes. Check spam or junk mail before
@@ -193,6 +197,21 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
                   Confirm my email
                 </Button>
               </form>
+            ) : signedIn ? (
+              /* V3-PE25.1: a signed-in visitor who lost the link's query
+                 (typed the bare URL, or a mail client rewrote it) can resend
+                 right here instead of being sent through sign-in again to
+                 reach a control this page can show directly. */
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Open the confirmation link from the email we sent you, or
+                  request a new one below.
+                </p>
+                <form method="post" action="/e/account/resend-verification">
+                  <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                  <Button type="submit">Send a new confirmation email</Button>
+                </form>
+              </>
             ) : (
               /* Reached by typing the URL, or by a link that lost its query
                  in a mail client's rewriting. Not an error state — nothing

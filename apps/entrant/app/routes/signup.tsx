@@ -62,6 +62,7 @@ import { data } from 'react-router';
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { apiGet } from '../lib/apiFetch.server';
+import type { EntryPageDTO } from '../lib/entryPage.types';
 import { FORM_FIELD } from '../lib/formField';
 import { safeNext } from '../lib/nextTarget';
 import { mintFormCsrf } from '../lib/formCsrf.server';
@@ -84,6 +85,15 @@ export interface SignupLoaderData {
   formCsrf: string;
   /** Validated same-tier continuation, used when signup came from a receipt. */
   next: string;
+  /**
+   * The human tournament name (V3-PE24.1), when this signup was reached
+   * from a tournament's entry page (`/e/signup/{slug}`). `null` on the
+   * bare `/e/signup` route — there is no slug to name — and also `null` on
+   * a lookup failure, in which case the heading falls back to generic
+   * wording rather than block the page on a read the entry page itself
+   * would already have failed on.
+   */
+  tournamentName: string | null;
 }
 
 /**
@@ -96,7 +106,13 @@ export interface SignupLoaderData {
  * reviewable act rather than a quiet one. `mintFormCsrf` is pinned the same
  * way, for the same reason.
  */
-export async function loader({ request }: { request: Request }) {
+export async function loader({
+  request,
+  params,
+}: {
+  request: Request;
+  params: { slug?: string };
+}) {
   // The sitekey is fetched rather than duplicated into a node env var: its
   // pair, the secret, is validated only in the backend, and a sitekey that
   // drifts from its secret fails the challenge for every honest entrant while
@@ -105,12 +121,34 @@ export async function loader({ request }: { request: Request }) {
   // signup the backend will refuse anyway.
   const config = await apiGet<EntrantConfig>('/e/api/config');
 
+  // V3-PE24.1: name the tournament on the page, not just "this tournament".
+  // Best-effort — the same anonymous read `enter.tsx` already performs for
+  // this slug — and never blocks the page: a lookup failure (closed
+  // tournament, race with deletion) falls back to the generic heading
+  // rather than turning a signup page into a 404 the entry page itself
+  // has not raised.
+  let tournamentName: string | null = null;
+  if (params.slug) {
+    try {
+      const page = await apiGet<EntryPageDTO>(
+        `/e/api/page/${encodeURIComponent(params.slug)}`,
+      );
+      tournamentName = page?.tournament?.name ?? null;
+    } catch {
+      // Best-effort only (see the field's doc comment above): any failure —
+      // a 404, a network error, or a shape this page did not expect — falls
+      // back to the generic heading rather than surfacing here at all.
+      tournamentName = null;
+    }
+  }
+
   const csrf = mintFormCsrf();
   const url = new URL(request.url);
   const payload: SignupLoaderData = {
     turnstileSiteKey: config.turnstileSiteKey,
     formCsrf: csrf.token,
     next: safeNext(url.searchParams.get('next'), ACCOUNT_READY_PAGE),
+    tournamentName,
   };
   return data(payload, csrf.responseInit);
 }
@@ -180,7 +218,7 @@ function invitationPathFor(token: string | undefined): string {
 }
 
 export default function SignupPage({ loaderData, params }: Route.ComponentProps) {
-  const { turnstileSiteKey, formCsrf } = loaderData;
+  const { turnstileSiteKey, formCsrf, tournamentName } = loaderData;
   const contextParams = params as { slug?: string; token?: string };
   // Both suffixes are literals from this file, appended to an already
   // validated path, so composing them cannot invalidate it.
@@ -202,7 +240,9 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
           <h1 className={PAGE_TITLE}>
-            {entryPath ? 'Create your account to enter this tournament' : 'Create an entrant account'}
+            {entryPath
+              ? `Create your account to enter ${tournamentName ?? 'this tournament'}`
+              : 'Create an account'}
           </h1>
           <p className="text-sm text-muted-foreground">
             Use one account to manage your tournament entries. Creating an
@@ -264,7 +304,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               required
               maxLength={320}
               autoComplete="email"
-              hint="Sign-in address, and where the organizer replies."
+              hint="Use the email where you want entry updates."
             />
 
             <TextField
@@ -282,7 +322,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               minLength={8}
               maxLength={128}
               autoComplete="new-password"
-              hint="At least 8 characters. Very common passwords are refused."
+              hint="Use at least 8 characters and avoid common passwords."
               // Deleted for the reason spelled out in `login.tsx`: `TextField`'s
               // default "Show password" toggle is a `<button type="button">`
               // with an `onClick`; this form's only module is reserved for the
@@ -296,7 +336,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               name="displayName"
               maxLength={200}
               autoComplete="name"
-              hint="How the organizer sees you on an entry."
+              hint="Name shown to the organizer."
             />
 
             <TextField
