@@ -6,7 +6,7 @@ needed this slice) and are not already covered by an existing `V3-` finding. Rec
 here with `V3-RT-n` ids and mirrored as short entries in `docs/reference/debt-log.md`
 ("Work package 27b").
 
-## V3-RT-1 — stale `console-a11y.spec.ts` locator on Setup › Dates
+## V3-RT-1 (Resolved 2026-09-06: the a11y spec now gates on the section header, which renders in every readiness state; console-a11y 23/23) — stale `console-a11y.spec.ts` locator on Setup › Dates
 
 **Observed:** running `tests/e2e/run-console-contracts.sh` against a fresh package-01
 fixture, `console-browser-contracts.spec.ts` passed 7/7, but `console-a11y.spec.ts`

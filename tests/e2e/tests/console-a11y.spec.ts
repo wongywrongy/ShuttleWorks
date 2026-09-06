@@ -58,7 +58,9 @@ const SURFACES: Surface[] = [
   {
     name: 'Setup › Dates',
     path: `/tournaments/${TAIPEI_TID}/setup/dates`,
-    ready: (p) => p.getByTestId('setup-strip'),
+    // V3-RT-1: `setup-strip` renders only while the section is NOT ready, so it
+    // is not a readiness signal for a fixture whose Dates section is ready.
+    ready: (p) => p.getByText('Setup · Dates and sessions'),
   },
   {
     name: 'Roster',
@@ -340,7 +342,7 @@ test.describe('console accessibility (work package 26a)', () => {
     // (FormActions itself only wires `role="alert"` for its error state).
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/tournaments/${TAIPEI_TID}/setup/dates`);
-    await expect(page.getByTestId('setup-strip')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Setup · Dates and sessions')).toBeVisible({ timeout: 15_000 });
 
     const liveRegions = page.locator('[role="status"], [aria-live]');
     expect(await liveRegions.count(), 'Setup › Dates has no role=status/aria-live region at all').toBeGreaterThan(0);
