@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import { RunSummaryBand } from '../run/RunSummaryBand';
 import type { RunSummary } from '../runtime/runModel';
 
-const FIXTURE: RunSummary = { done: 2, total: 5, playing: 1, courtsFree: 3, late: 1 };
+const FIXTURE: RunSummary = { done: 2, total: 5, playing: 1, courtsFree: 3, late: 1, disputedCourts: 0 };
 
 describe('RunSummaryBand', () => {
   it('renders all four stat slots from props', () => {
@@ -27,13 +27,31 @@ describe('RunSummaryBand', () => {
   });
 
   it('does not internally count — renders exactly what is passed', () => {
-    const zero: RunSummary = { done: 0, total: 0, playing: 0, courtsFree: 0, late: 0 };
+    const zero: RunSummary = { done: 0, total: 0, playing: 0, courtsFree: 0, late: 0, disputedCourts: 0 };
     render(<RunSummaryBand summary={zero} />);
 
     expect(screen.getByTestId('run-band-done')).toHaveTextContent('0 / 0');
     expect(screen.getByTestId('run-band-playing')).toHaveTextContent('0');
     expect(screen.getByTestId('run-band-courts-free')).toHaveTextContent('0');
     expect(screen.getByTestId('run-band-late')).toHaveTextContent('0');
+  });
+
+  it('never renders a disputed court as free or as extra playing matches (V3-OC19.2)', () => {
+    // 6 courts, 2 disputed: the total must never read "8 playing" over 6
+    // courts, and the 2 disputed courts must not appear in courtsFree either.
+    const disputed: RunSummary = { done: 0, total: 8, playing: 4, courtsFree: 0, late: 0, disputedCourts: 2 };
+    render(<RunSummaryBand summary={disputed} />);
+
+    expect(screen.getByTestId('run-band-playing')).toHaveTextContent('4');
+    expect(screen.getByTestId('run-band-courts-free')).toHaveTextContent('0');
+    const disputedBand = screen.getByTestId('run-band-disputed');
+    expect(within(disputedBand).getByText('2')).toBeInTheDocument();
+    expect(within(disputedBand).getByText(/conflict/i)).toBeInTheDocument();
+  });
+
+  it('omits the conflicts tile entirely when there are no disputed courts', () => {
+    render(<RunSummaryBand summary={FIXTURE} />);
+    expect(screen.queryByTestId('run-band-disputed')).not.toBeInTheDocument();
   });
 
   it('applies a warning tint to the late stat when late > 0', () => {

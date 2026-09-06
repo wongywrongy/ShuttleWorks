@@ -13,12 +13,12 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 
 | Pkg | Priority | Status | Evidence |
 |---|---|---|---|
-| 01 fixture | P0 | wave 1 in progress | maps/01-fixture.md |
-| 02 contracts | P0 | wave 1 in progress (docs only) | maps/02-04-contracts.md |
-| 03 conflict recovery + counts | P0 | mapped; waits on 02 | maps/02-04-contracts.md |
-| 04 public projection | P0 | mapped; waits on 02–03 | maps/02-04-contracts.md |
-| 05 false claims | P0 | wave 1 in progress | maps/05-06-copy-contrast.md |
-| 06 contrast + hierarchy | P0 | wave 1 in progress | maps/05-06-copy-contrast.md |
+| 01 fixture | P0 | done for 3/7 defect states; 01b (DB-direct conflicts) in progress | reports/01-fixture.md |
+| 02 contracts | P0 | done · 871ee621 | docs/reference/contracts/state-and-formatting.md, ADR 0029, reports/02-contracts.md |
+| 03 conflict recovery + counts | P0 | done (focused gates + full backend suite) · see git log | reports/03-conflicts.md |
+| 04 public projection | P0 | 04a done · see git log; 04b (display consolidation) after 03 | reports/04a-public-projection.md, ledger/04-strings.md |
+| 05 false claims | P0 | done (focused gates) · see git log | reports/05-false-claims.md, ledger/05-strings.md |
+| 06 contrast + hierarchy | P0 | done (focused gates) · see git log | reports/06-contrast.md |
 | 09 MatchCard spec | P0 | not started | — |
 | 07–08, 10–28 | — | not started | — |
 
@@ -27,6 +27,7 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 (append: date · command · result)
 
 - 2026-09-06 · baseline f5ccfcef · `make check` equivalent: console eslint/tsc/vitest/depcruise green; entrant eslint/typecheck/vitest 885 green; ruff clean; import-linter 15/15 kept; pytest 2323 passed / 72 skipped.
+- 2026-09-06 · package 03 (conflict recovery + counts) · `.venv/bin/pytest tests/backend -n auto` 2380 passed/72 skipped; `.venv/bin/ruff check apps/api/src tests/backend` clean; `lint-imports` 15/15 kept; `npm --prefix apps/console run test:run` 235 files / 2072 tests passed; `npx tsc -b apps/console` clean; `npm run lint:scheduler` 0 errors/134 pre-existing warnings; `npm run depcruise` 0 errors/16 pre-existing warnings; `make generate-api` diffed and accepted. See reports/03-conflicts.md.
 
 ## Decisions taken by the orchestrator (Kyle to confirm or overrule)
 

@@ -230,6 +230,25 @@ describe('runModel', () => {
       expect(s.courtsFree + inPlay, `${name}: band disagrees with the floor`).toBe(courts);
     }
   });
+
+  it('a disputed court is excluded from BOTH playing and courtsFree, and counted once in disputedCourts (D2/D3)', () => {
+    const blocks: OpsBlock[] = [
+      blk({ id: 'a', court: 1, slot: 0, status: 'started' }),
+      blk({ id: 'b', court: 1, slot: 0, status: 'started' }),
+      blk({ id: 'c', court: 2, slot: 0, status: 'started' }),
+    ];
+    const ms = toRunMatches(blocks, {});
+    const lanes = deriveCourtLanes(ms, 4);
+    const s = deriveSummary(ms, lanes, buildLiveChips(blocks, 9, true));
+    // Court 1 is disputed (two playing records); court 2 is cleanly occupied;
+    // courts 3-4 are free. The old rule counted the disputed court as TWO
+    // playing matches (D3) while also excluding it from free (D2) — an
+    // internally-contradictory total. The new rule agrees with the backend's
+    // `workspace_signals.py` fixture for the identical arrangement.
+    expect(s.playing).toBe(1);
+    expect(s.disputedCourts).toBe(1);
+    expect(s.courtsFree).toBe(2);
+  });
 });
 
 describe('player-busy (D20)', () => {

@@ -60,7 +60,7 @@ function bandFor(now: RunMatch | undefined): {
   if (now.timeliness === 'late')
     return { cls: 'bg-status-late-solid text-status-late-ink', word: STATE_WORD.late };
   if (now.status === 'playing')
-    return { cls: 'bg-surface-band text-foreground', word: STATE_WORD.live };
+    return { cls: 'bg-surface-band text-foreground', word: STATE_WORD.onCourt };
   if (now.status === 'called')
     return { cls: 'bg-status-called-solid text-status-called-ink', word: STATE_WORD.called };
   if (now.timeliness === 'due')
@@ -182,11 +182,13 @@ export function RunCourtGrid({
             >
               <div className="flex items-center justify-between gap-2 bg-status-overdue-solid px-2.5 py-1.5 text-2xs font-extrabold uppercase tracking-[0.06em] text-status-overdue-ink">
                 <span>Court {lane.court}</span>
-                <span>Conflict</span>
+                {/* V3-OC19.1: never "Resolve this in Operations" while
+                 * Operations IS the current surface. */}
+                <span>Needs resolution</span>
               </div>
               <div className="space-y-2 px-2.5 py-3">
                 <p className="text-xs font-semibold text-foreground">
-                  Two matches are marked current. Resolve this in Operations.
+                  Two matches are assigned to this court.
                 </p>
                 <div className="space-y-1">
                   {conflict.map((match) => (
@@ -195,9 +197,15 @@ export function RunCourtGrid({
                       type="button"
                       data-testid={`run-conflict-match-${match.key}`}
                       onClick={() => onSelect(match.key)}
-                      className="block w-full rounded border border-border bg-card px-2 py-1 text-left text-xs font-semibold text-foreground hover:border-accent"
+                      // V3-OC19.1: a direct, equally-named route to EACH
+                      // affected assignment — the same "Open ›" affordance an
+                      // ordinary occupied card offers, not a bare row.
+                      className="flex w-full items-center justify-between gap-2 rounded border border-border bg-card px-2 py-1 text-left text-xs font-semibold text-foreground hover:border-accent"
                     >
-                      {formatMatchIdentity(match.identity, match.id)} · {match.sideA} vs {match.sideB}
+                      <span className="min-w-0 break-words">
+                        {formatMatchIdentity(match.identity, match.id)} · {match.sideA} vs {match.sideB}
+                      </span>
+                      <span className="shrink-0 text-accent">Open ›</span>
                     </button>
                   ))}
                 </div>

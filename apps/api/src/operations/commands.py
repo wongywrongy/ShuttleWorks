@@ -22,7 +22,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Path
 
-from core.constants import ACTION_TO_TARGET_STATUS
+from core.constants import ACTION_TO_TARGET_STATUS, MatchAction
 from core.dependencies import AuthUser, get_current_user, require_tournament_access
 from core.error_codes import ErrorCode, http_error
 from core.schemas import CommandRequest, CommandResponse
@@ -54,9 +54,6 @@ def submit_command(
     ``ConflictError`` (mapped to 409 by ``core.main``); applies and
     idempotent replays return 200 with the current match state.
     """
-    # Pydantic validated body.action against the MatchAction enum at
-    # parse time; if we got here, the value is legal.
-    target_status = ACTION_TO_TARGET_STATUS[body.action]
     submitted_by = user.as_uuid()
     if submitted_by is None:
         raise http_error(
@@ -65,16 +62,43 @@ def submit_command(
             "current user id is not a UUID; cannot stamp command audit row",
         )
 
-    result = repo.process_command(
-        tournament_id=tournament_id,
-        command_id=body.id,
-        match_id=body.match_id,
-        action=body.action.value,
-        target_status=target_status,
-        payload=body.payload,
-        seen_version=body.seen_version,
-        submitted_by=submitted_by,
-    )
+    if body.action == MatchAction.RESOLVE_COURT:
+        # Court-dispute resolution (§4.2) doesn't fit the generic
+        # single-match / single-target-status pipeline: it mutates the
+        # *displaced* matches named in the payload, each per its own
+        # resolution action, and leaves the chosen match (``body.match_id``)
+        # untouched. It still goes through the same idempotency-key /
+        # seen_version / 409 machinery via a dedicated repository method.
+        payload = body.payload or {}
+        if not payload.get("displacedMatchKeys") or not payload.get("action"):
+            raise http_error(
+                422,
+                ErrorCode.INVALID_INPUT,
+                "resolve_court requires payload.displacedMatchKeys (non-empty "
+                "list) and payload.action",
+            )
+        result = repo.process_resolve_court_command(
+            tournament_id=tournament_id,
+            command_id=body.id,
+            chosen_match_id=body.match_id,
+            payload=payload,
+            seen_version=body.seen_version,
+            submitted_by=submitted_by,
+        )
+    else:
+        # Pydantic validated body.action against the MatchAction enum at
+        # parse time; if we got here, the value is legal.
+        target_status = ACTION_TO_TARGET_STATUS[body.action]
+        result = repo.process_command(
+            tournament_id=tournament_id,
+            command_id=body.id,
+            match_id=body.match_id,
+            action=body.action.value,
+            target_status=target_status,
+            payload=body.payload,
+            seen_version=body.seen_version,
+            submitted_by=submitted_by,
+        )
 
     applied_at = result.command.applied_at
     return CommandResponse(

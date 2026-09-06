@@ -388,6 +388,55 @@ def test_courts_free_is_none_rather_than_zero_when_no_court_count_is_set():
     assert sig.matches.courtsFree is None
 
 
+def test_disputed_court_excluded_from_both_free_and_playing_counts():
+    """Contract §4.1: a disputed court contributes to neither ``playing``
+    nor ``courtsFree`` — only to ``disputedCourts``. Two matches (m1, m2)
+    both claim court 1; m3 alone occupies court 2 cleanly."""
+    data = _live_data()
+    data["schedule"]["assignments"] = [
+        {"matchId": "m1", "slotId": 0, "courtId": 1},
+        {"matchId": "m2", "slotId": 0, "courtId": 1},
+        {"matchId": "m3", "slotId": 1, "courtId": 2},
+        {"matchId": "m4", "slotId": 2, "courtId": 4},
+    ]
+    sig = build_signals(
+        _row(status="active", data=data),
+        [_mod("meet", "enabled")],
+        RowCounts(
+            match_states=3,
+            match_status_by_id={"m1": "playing", "m2": "playing", "m3": "playing"},
+        ),
+    )
+    # 4 courts total: court 1 disputed, court 2 occupied, courts 3/4 free
+    # (court 4 has an assignment but no live match on it).
+    assert sig.matches.playing == 1
+    assert sig.matches.disputedCourts == 1
+    assert sig.matches.courtsFree == 2
+
+
+def test_bracket_disputed_court_excluded_from_both_free_and_playing_counts():
+    data = {"bracket_session": {
+        "start_time": "2026-07-28T09:00:00", "interval_minutes": 30,
+        "courts": 4,
+        "assignments": [
+            {"play_unit_id": "a", "slot_id": 192, "court_id": 0,
+             "actual_start_slot": 192, "actual_end_slot": None},
+            {"play_unit_id": "b", "slot_id": 192, "court_id": 0,
+             "actual_start_slot": 192, "actual_end_slot": None},
+            {"play_unit_id": "c", "slot_id": 192, "court_id": 1,
+             "actual_start_slot": 192, "actual_end_slot": None},
+        ],
+    }}
+    sig = build_signals(
+        _row(kind="bracket", data=data),
+        _bracket_mods(),
+        RowCounts(bracket_matches=3),
+    )
+    assert sig.matches.playing == 1
+    assert sig.matches.disputedCourts == 1
+    assert sig.matches.courtsFree == 2
+
+
 def test_next_up_rows_carry_identity_so_they_can_be_opened():
     """OV-1: the Overview and the Hub inspector both list these and neither
     could open one. `source` matters as much as the id — Operations keys its

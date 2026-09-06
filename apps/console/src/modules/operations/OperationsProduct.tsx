@@ -405,7 +405,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                       status: selectedBlock.done
                         ? STATE_WORD.done
                         : selectedBlock.started
-                          ? STATE_WORD.live
+                          ? STATE_WORD.onCourt
                           : selectedBlock.court != null
                             ? STATE_WORD.scheduled
                             : 'Awaiting court',

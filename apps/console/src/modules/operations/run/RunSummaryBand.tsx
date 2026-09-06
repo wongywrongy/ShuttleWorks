@@ -59,7 +59,7 @@ function StatItem({
 }
 
 export function RunSummaryBand({ summary, scope }: Props) {
-  const { done, total, playing, courtsFree, late } = summary;
+  const { done, total, playing, courtsFree, late, disputedCourts } = summary;
 
   return (
     <div
@@ -86,6 +86,19 @@ export function RunSummaryBand({ summary, scope }: Props) {
         value={String(courtsFree)}
         tone={courtsFree > 0 ? 'text-foreground' : 'text-muted-foreground'}
       />
+      {/* V3-OC19.2: a disputed court is its OWN bucket — never folded into
+       * "playing" (which would read as a confident total the court cards
+       * contradict) and never counted as free. Only rendered when non-zero
+       * so an ordinary quiet day does not carry a permanent zero tile. */}
+      {disputedCourts > 0 ? (
+        <StatItem
+          testId="run-band-disputed"
+          label="court conflicts"
+          value={String(disputedCourts)}
+          tone="text-status-overdue-ink"
+          topBar="border-t-status-overdue-solid/60"
+        />
+      ) : null}
       <StatItem
         testId="run-band-late"
         label="late"

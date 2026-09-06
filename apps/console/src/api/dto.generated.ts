@@ -3030,6 +3030,11 @@ export interface paths {
          *     way — the caller learns nothing they did not already know about their
          *     own account, and an entrant who clicks twice is not shown an error for
          *     succeeding.
+         *
+         *     This route is session-gated, not enumeration-sensitive (R10 only binds
+         *     signup and reset-request): unlike those, it is safe to tell the caller
+         *     the truth about whether the mail actually sent, via a query flag on the
+         *     redirect the "sent" page reads (``verify.tsx``).
          */
         post: operations["resend_verification_e_account_resend_verification_post"];
         delete?: never;
@@ -5769,7 +5774,7 @@ export interface components {
          *     ``_SELF_NOOP_ACTIONS`` in ``repositories/local.py``).
          * @enum {string}
          */
-        MatchAction: "call_to_court" | "start_match" | "finish_match" | "retire_match" | "uncall" | "assign_court" | "postpone_match";
+        MatchAction: "call_to_court" | "start_match" | "finish_match" | "retire_match" | "uncall" | "assign_court" | "postpone_match" | "resolve_court";
         /** MatchActionIn */
         MatchActionIn: {
             /**
@@ -5872,6 +5877,11 @@ export interface components {
             playing: number;
             /** Courtsfree */
             courtsFree?: number | null;
+            /**
+             * Disputedcourts
+             * @default 0
+             */
+            disputedCourts: number;
         };
         /**
          * MatchMove
@@ -6557,11 +6567,8 @@ export interface components {
             localTime?: string | null;
             /** Courtlabel */
             courtLabel?: string | null;
-            /**
-             * Status
-             * @default scheduled
-             */
-            status: string;
+            /** Status */
+            status?: string | null;
             /** Durationminutes */
             durationMinutes?: number | null;
             /** Updatedat */
@@ -7080,12 +7087,8 @@ export interface components {
             discipline?: string | null;
             /** Roundlabel */
             roundLabel?: string | null;
-            /**
-             * Status
-             * @default scheduled
-             * @enum {string}
-             */
-            status: "scheduled" | "called" | "live" | "delayed" | "completed" | "walkover" | "retired" | "cancelled";
+            /** Status */
+            status?: ("scheduled" | "called" | "live" | "delayed" | "completed" | "walkover" | "retired" | "cancelled") | null;
             /** Scheduleddate */
             scheduledDate?: string | null;
             /** Scheduledtime */

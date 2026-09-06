@@ -946,6 +946,10 @@ interface MatchMetricsDTO {
   /** Courts with nothing playing on them. `null` when the workspace has no
    *  court count to subtract from — an unknown is not zero. */
   courtsFree?: number | null;
+  /** Courts with two or more matches claiming them as currently in play
+   *  (contract §4.1) — a disputed court contributes here and to neither
+   *  `playing` nor `courtsFree`. Defaults to 0 for older payloads. */
+  disputedCourts?: number;
 }
 
 /** One upcoming match for the inspector's "Next up" list. `status` is
@@ -1177,7 +1181,11 @@ type MatchAction =
   | 'retire_match'
   | 'uncall'
   | 'assign_court'
-  | 'postpone_match';
+  | 'postpone_match'
+  // Court-dispute resolution (contract §4.2). Payload carries
+  // chosenMatchKey/displacedMatchKeys/action/note; `match_id` on the
+  // envelope IS chosenMatchKey.
+  | 'resolve_court';
 
 /**
  * Body of ``POST /tournaments/{tid}/commands``. The ``id`` is the

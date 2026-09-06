@@ -41,7 +41,9 @@ describe('PlanCallList', () => {
       'plan-call-row-meet:late',
     ]);
     expect(rows[0]).toHaveTextContent('Scheduled');
-    expect(rows[2]).toHaveTextContent('Playing');
+    // Shared match-state vocabulary (contract §2): a `started` match reads
+    // "On court", never the deleted screen-local "Playing".
+    expect(rows[2]).toHaveTextContent('On court');
     // feasibility band: count, courts, and the honest end estimate
     expect(screen.getByTestId('plan-feasibility-band').textContent).toMatch(
       /3 matches across 3 courts.*ends ~T5/,

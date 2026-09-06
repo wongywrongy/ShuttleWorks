@@ -437,3 +437,95 @@ def test_postpone_clears_live_timing_in_match_states(client, tid):
     assert st["status"] == "scheduled"
     assert st["calledAt"] is None
     assert st["actualStartTime"] is None
+
+
+# ---- resolve_court (contract §4.2, ruling C1) --------------------------
+
+
+def _seed_dispute(tid: str, chosen: str = "chosen", displaced: str = "displaced", court_id: int = 1):
+    """Insert two matches PLAYING on the same court directly, bypassing the
+    write guard — the pre-existing-desk-error scenario the resolve_court
+    command exists to recover from, not the write path it prevents."""
+    from db.models import Match, MatchStatus
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        tournament_id = uuid.UUID(tid)
+        session.add(Match(tournament_id=tournament_id, id=chosen, court_id=court_id,
+                           status=MatchStatus.PLAYING.value, version=1))
+        session.add(Match(tournament_id=tournament_id, id=displaced, court_id=court_id,
+                           status=MatchStatus.PLAYING.value, version=1))
+        session.commit()
+    finally:
+        session.close()
+
+
+def _resolve_court_body(*, chosen="chosen", displaced=("displaced",), action="keep_and_move",
+                         seen_version=1, cmd_id=None, note=None):
+    return {
+        "id": str(cmd_id or uuid.uuid4()),
+        "match_id": chosen,
+        "action": "resolve_court",
+        "payload": {
+            "chosenMatchKey": chosen,
+            "displacedMatchKeys": list(displaced),
+            "action": action,
+            "note": note,
+        },
+        "seen_version": seen_version,
+    }
+
+
+def test_resolve_court_clears_the_dispute(client, tid):
+    _seed_dispute(tid)
+    body = _resolve_court_body(action="keep_and_move")
+    r = client.post(_commands_url(tid), json=body)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["match_id"] == "chosen"
+    assert out["status"] == "playing"  # chosen untouched
+    assert out["replay"] is False
+
+    from db.models import Match, MatchStatus
+    from db.session import SessionLocal
+    from shared.court_occupancy import derive_disputes
+
+    session = SessionLocal()
+    try:
+        rows = session.query(Match).filter(Match.tournament_id == uuid.UUID(tid)).all()
+        assert derive_disputes(rows) == []
+        displaced = session.get(Match, (uuid.UUID(tid), "displaced"))
+        assert displaced.court_id is None
+        assert displaced.status == MatchStatus.CALLED.value
+    finally:
+        session.close()
+
+
+def test_resolve_court_replay_is_idempotent(client, tid):
+    _seed_dispute(tid)
+    body = _resolve_court_body(action="keep_and_unassign")
+    first = client.post(_commands_url(tid), json=body)
+    assert first.status_code == 200, first.text
+
+    replay = client.post(_commands_url(tid), json=body)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["replay"] is True
+
+    from db.models import Match
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        displaced = session.get(Match, (uuid.UUID(tid), "displaced"))
+        assert displaced.version == 2  # not bumped a second time by the replay
+    finally:
+        session.close()
+
+
+def test_resolve_court_rejects_malformed_payload(client, tid):
+    _seed_dispute(tid)
+    body = _resolve_court_body()
+    body["payload"]["displacedMatchKeys"] = []
+    r = client.post(_commands_url(tid), json=body)
+    assert r.status_code == 422, r.text

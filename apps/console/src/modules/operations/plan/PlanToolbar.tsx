@@ -7,7 +7,7 @@
  *   solve group   — Generate meet / Re-plan day (armed re-solve; hardened
  *                   copy once the day is live) · Re-optimize remaining
  *                   (frozen-horizon, live day's verb — pins started/finished,
- *                   solves around bracket windows) · Schedule next round
+ *                   solves around bracket windows) · Schedule N unscheduled matches
  *   proposals     — Report a problem (repair) · Director tools ·
  *                   Re-plan, stay close (warm restart)
  *   exports       — meet XLSX + bracket JSON/CSV/ICS behind one Export menu
@@ -183,8 +183,14 @@ export function PlanToolbar({
               className={solveBtn}
               onClick={onOpenScheduleNext}
               data-testid="ops-schedule-next"
+              // V3-OC18.2 (minimal fix — full treatment package 12):
+              // `schedulableCount` is every eligible unscheduled play unit
+              // (both sides known, no court yet, feeders resolved) across
+              // the whole bracket, not specifically "the next round" — the
+              // old label implied a narrower scope than the number measures.
+              title="Every match whose players are known and whose feeders are resolved, but which has no court or time yet"
             >
-              Schedule next round ({schedulableCount})
+              Schedule {schedulableCount} unscheduled match{schedulableCount === 1 ? '' : 'es'}
             </button>
           ) : null}
 

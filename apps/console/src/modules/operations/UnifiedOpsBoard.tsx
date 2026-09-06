@@ -336,7 +336,7 @@ export function UnifiedOpsBoard({
   );
 
   const LEGEND = [
-    { label: STATE_WORD.live, dot: 'bg-status-live-solid' },
+    { label: STATE_WORD.onCourt, dot: 'bg-status-live-solid' },
     { label: STATE_WORD.called, dot: 'bg-status-called-solid' },
   ];
 
@@ -392,7 +392,13 @@ export function UnifiedOpsBoard({
           {hoverCell && validation ? (
             validation.feasible ? (
               <span className="inline-flex items-center gap-1 text-status-done">
-                <Check className="h-3.5 w-3.5" /> Feasible: drop to pin at C{hoverCell.courtId} · S{hoverCell.slotId}
+                {/* V3-OC18.1 (minimal fix): the raw slot index ("S152") is
+                 * internal-engine jargon the operator cannot read as a time.
+                 * `formatSlot` renders the same wall-clock the timeline
+                 * ruler above already shows; falls back to the slot index
+                 * only when no formatter was supplied (never in production). */}
+                <Check className="h-3.5 w-3.5" /> Feasible: drop to pin at Court {hoverCell.courtId} ·{' '}
+                {formatSlot ? formatSlot(hoverCell.slotId) : `S${hoverCell.slotId}`}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-destructive">

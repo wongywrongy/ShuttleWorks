@@ -18,12 +18,16 @@ import type { OpsBlock } from '../opsBlock';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
+import { STATE_WORD } from '../../../lib/stateWords';
 
+// Shared match-state vocabulary (contract §2) — `started` reads as
+// "On court" everywhere in the console; the literal 'Playing' this used to
+// carry (D5) is deleted, not redirected to a second constant.
 const PLAN_STATE_LABEL: Record<OpsBlock['status'], string> = {
-  scheduled: 'Scheduled',
-  called: 'Called',
-  started: 'Playing',
-  finished: 'Finished',
+  scheduled: STATE_WORD.scheduled,
+  called: STATE_WORD.called,
+  started: STATE_WORD.onCourt,
+  finished: STATE_WORD.done,
 };
 
 export interface PlanCallListProps {

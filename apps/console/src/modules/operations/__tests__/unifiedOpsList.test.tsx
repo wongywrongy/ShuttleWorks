@@ -27,9 +27,12 @@ const BLOCKS: OpsBlock[] = [
 ];
 
 describe('UnifiedOpsList', () => {
-  it('sections rows into Up next / Pending / Finished and tags each by source', () => {
+  it('sections rows into On court / Up next / Pending / Finished and tags each by source', () => {
+    // V3-OC05.1: a started-and-court-assigned match (pu1) is "On court", not
+    // "Up next" — the two headings must never overlap.
     render(<UnifiedOpsList blocks={BLOCKS} onAction={() => {}} />);
-    expect(screen.getByText(/Up next · 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/On court · 1/i)).toBeInTheDocument();
+    expect(screen.getByText(/Up next · 1/i)).toBeInTheDocument();
     expect(screen.getByText(/Pending · 1/i)).toBeInTheDocument();
     expect(screen.getByText(/Finished · 1/i)).toBeInTheDocument();
     expect(screen.getAllByTestId('ops-row')).toHaveLength(4);

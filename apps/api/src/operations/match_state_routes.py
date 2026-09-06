@@ -67,19 +67,19 @@ from db.models import MatchState, MatchStatus
 from repositories import LocalRepository, get_repository
 from operations.match_state import assert_court_available, assert_valid_transition
 from operations.match_state_application import MatchStateApplication
+from shared.match_vocabulary import LEGACY_TO_CANONICAL as _CANONICAL_LEGACY_MAP
 
 
-# Map the legacy free-string enum (also used in ``MatchStateDTO``) onto
-# the typed ``MatchStatus`` the state machine speaks. ``started`` is
-# the historical wire-format spelling for what the new model calls
-# ``playing``; the table is single-direction (legacy → new) because the
-# legacy DTO can't accept the new ``retired`` value.
-_LEGACY_TO_CANONICAL = {
-    "scheduled": MatchStatus.SCHEDULED,
-    "called": MatchStatus.CALLED,
-    "started": MatchStatus.PLAYING,
-    "finished": MatchStatus.FINISHED,
-}
+# Map the legacy free-string enum (also used in ``MatchStateDTO``) onto the
+# typed ``MatchStatus`` the state machine speaks. ``started`` is the
+# historical wire-format spelling for what the new model calls ``playing``.
+#
+# This redirects to ``shared.match_vocabulary.LEGACY_TO_CANONICAL``, the
+# bidirectional, total authority (it also carries ``retired``, which this
+# dict used to drop — D4). The legacy ``MatchStateStatusLiteral`` this route
+# accepts on input still only spells four values (it never accepted
+# ``retired``), so the extra key is simply unused here, not wrong.
+_LEGACY_TO_CANONICAL = dict(_CANONICAL_LEGACY_MAP)
 
 router = APIRouter(
     prefix="/tournaments/{tournament_id}/match-states",

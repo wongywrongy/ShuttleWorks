@@ -18,6 +18,13 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from db.models import display_dependency_satisfied
+from shared.court_occupancy import (
+    courts_free as _courts_free,
+    derive_court_states,
+    disputed_court_count,
+    occupied_court_count,
+)
+from shared.match_vocabulary import occupies_court_now
 from workspaces.entries_facts import EntriesFacts
 
 
@@ -96,11 +103,17 @@ class MatchMetricsDTO(BaseModel):
     scheduled: int = 0
     toDo: int = 0
     played: int = 0
+    #: Courts in state ``occupied`` — a court count, not a match count
+    #: (contract §4.1). A disputed court contributes to ``disputedCourts``
+    #: instead of here or to ``courtsFree``; see ``shared.court_occupancy``.
     playing: int = 0
     #: ``None`` when the workspace has no court count to subtract from —
     #: an unknown is not zero, and "0 courts free" would be a lie about a
     #: workspace that simply has not said how many courts it has.
     courtsFree: Optional[int] = None
+    #: Courts where two or more matches currently claim the same court.
+    #: Neither free nor occupied; excluded from both of those counts.
+    disputedCourts: int = 0
 
 
 class NextMatchDTO(BaseModel):
@@ -344,18 +357,24 @@ def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
     interval = config.get("intervalMinutes") or 30
 
     # Same blob-membership guard as ``played``: an orphaned match_states row
-    # must not inflate either figure.
+    # must not inflate either figure. ``occupies_court_now`` (shared
+    # authority, §4.1) replaces the old ``s in _IN_PLAY`` set-membership
+    # check — same meaning, one place.
     playing_ids = {
-        mid for mid, s in status_by_id.items() if s in _IN_PLAY and mid in by_id
+        mid for mid, s in status_by_id.items() if occupies_court_now(s) and mid in by_id
     }
     court_of = {
         _first(a, "matchId", "match_id"): _first(a, "courtId", "court", "court_id")
         for a in assignments
         if isinstance(a, dict)
     }
-    busy_courts = {
-        court_of.get(mid) for mid in playing_ids if court_of.get(mid) is not None
-    }
+    # Two matches occupying the same court is a dispute, not two occupied
+    # courts (D2/D3): derive the three-value court state once and read
+    # counts off it, rather than a conflict-blind ``len(set(courts))``.
+    court_states = derive_court_states(
+        {"id": mid, "status": status_by_id[mid], "court_id": court_of.get(mid)}
+        for mid in playing_ids
+    )
     court_count = (data.get("config") or {}).get("courtCount")
     metrics = MatchMetricsDTO(
         total=len(matches),
@@ -366,9 +385,10 @@ def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
             for mid, s in status_by_id.items()
             if s in _TERMINAL and mid in by_id
         ),
-        playing=len(playing_ids),
+        playing=occupied_court_count(court_states),
+        disputedCourts=disputed_court_count(court_states),
         courtsFree=(
-            max(0, int(court_count) - len(busy_courts))
+            _courts_free(int(court_count), court_states)
             if isinstance(court_count, int) and court_count > 0
             else None
         ),
@@ -485,11 +505,17 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         and assignment.get("actual_end_slot") is None
         and assignment.get("play_unit_id") not in resolved_ids
     ]
-    busy_courts = {
-        assignment.get("court_id")
+    # Same three-value derivation as the meet path: two assignments
+    # currently playing on the same court is a dispute, not two occupied
+    # courts (D2/D3).
+    court_states = derive_court_states(
+        {
+            "id": str(assignment.get("play_unit_id")),
+            "status": "playing",
+            "court_id": assignment.get("court_id"),
+        }
         for assignment in playing_assignments
-        if assignment.get("court_id") is not None
-    }
+    )
     court_count = session.get("courts")
 
     metrics = MatchMetricsDTO(
@@ -497,9 +523,10 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         scheduled=len(assignments),
         toDo=to_do,
         played=len(counts.bracket_resolved_ids),
-        playing=len(playing_assignments),
+        playing=occupied_court_count(court_states),
+        disputedCourts=disputed_court_count(court_states),
         courtsFree=(
-            max(0, int(court_count) - len(busy_courts))
+            _courts_free(int(court_count), court_states)
             if isinstance(court_count, int) and court_count > 0
             else None
         ),
@@ -561,10 +588,10 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
 
 #: canonical match statuses that mean "this match is over"
 _TERMINAL = frozenset({"finished", "retired"})
-#: On a court right now. ``called`` is deliberately NOT here: a called match
-#: has been sent to a court but is not occupying it yet, so counting it would
-#: report a court busy while the players are still walking to it.
-_IN_PLAY = frozenset({"started", "playing"})
+# The "on a court right now" predicate (``called`` deliberately excluded)
+# used to be a second, ad-hoc set here (D20). It is now
+# ``shared.match_vocabulary.occupies_court_now`` — the one authority also
+# used by ``operations/match_state.py``.
 
 
 # ---- E4 (Phase 9): the entries half of the vocabulary (spec Q9) ---------

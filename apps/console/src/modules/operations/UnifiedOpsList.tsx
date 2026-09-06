@@ -114,17 +114,31 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
     });
   }, [blocks, searchable, query, sources]);
 
-  const { upNext, waiting, finished } = useMemo(() => {
-    const up = visible
-      .filter((b) => b.court != null && !b.done)
+  // V3-OC05.1: a match already on court is not "up next" — the two headings
+  // must not overlap. `onCourt` is the assigned-and-started subset; `upNext`
+  // is everything assigned but NOT yet started (the genuinely upcoming set).
+  const { onCourt, upNext, waiting, finished } = useMemo(() => {
+    const assigned = visible.filter((b) => b.court != null && !b.done);
+    const current = assigned
+      .filter((b) => b.started)
+      .sort((x, y) => (x.slot ?? 0) - (y.slot ?? 0) || (x.court ?? 0) - (y.court ?? 0));
+    const up = assigned
+      .filter((b) => !b.started)
       .sort((x, y) => (x.slot ?? 0) - (y.slot ?? 0) || (x.court ?? 0) - (y.court ?? 0));
     const wait = visible.filter((b) => b.court == null && !b.done);
     const fin = visible.filter((b) => b.done);
-    return { upNext: up, waiting: wait, finished: fin };
+    return { onCourt: current, upNext: up, waiting: wait, finished: fin };
   }, [visible]);
 
   const row = (b: OpsBlock, showLocation: boolean, showStatusMarker: boolean) => {
-    const statusLabel = b.done ? 'Finished' : b.started ? 'Live' : b.court != null ? 'Called' : 'Waiting';
+    // Shared match-state vocabulary (contract §2) — no screen-local synonym.
+    const statusLabel = b.done
+      ? STATE_WORD.done
+      : b.started
+        ? STATE_WORD.onCourt
+        : b.court != null
+          ? STATE_WORD.called
+          : STATE_WORD.pending;
     const isSelected = selectedKey === b.key;
     return (
       <li
@@ -236,6 +250,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
           (`border-y`) whose top border IS the board→list seam — one hairline per
           seam (seamed, not gapped). */}
       <ul className="divide-y divide-border/60">
+        {section(STATE_WORD.onCourt, onCourt)}
         {section('Up next', upNext)}
         {section(STATE_WORD.pending, waiting)}
         {section('Finished', finished)}

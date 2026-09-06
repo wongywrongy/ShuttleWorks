@@ -41,6 +41,7 @@ class MatchAction(str, Enum):
     UNCALL = "uncall"                   # called → scheduled
     ASSIGN_COURT = "assign_court"       # set court+slot, no solve; status stays/→ scheduled
     POSTPONE_MATCH = "postpone_match"   # clear court+slot; status → scheduled
+    RESOLVE_COURT = "resolve_court"     # persist a court-dispute resolution (see below)
 
 
 ACTION_TO_TARGET_STATUS: dict[MatchAction, MatchStatus] = {
@@ -51,4 +52,12 @@ ACTION_TO_TARGET_STATUS: dict[MatchAction, MatchStatus] = {
     MatchAction.UNCALL: MatchStatus.SCHEDULED,
     MatchAction.ASSIGN_COURT: MatchStatus.SCHEDULED,
     MatchAction.POSTPONE_MATCH: MatchStatus.SCHEDULED,
+    # RESOLVE_COURT has no single target status — it mutates the *displaced*
+    # matches named in its payload, each per its own ``action`` field, and
+    # leaves the chosen match's status untouched. It is handled by a
+    # dedicated repository method (``process_resolve_court_command``)
+    # rather than the generic single-match pipeline; this entry exists only
+    # so the map stays total over ``MatchAction`` for callers that iterate
+    # it, and is never read for this action.
+    MatchAction.RESOLVE_COURT: MatchStatus.PLAYING,
 }

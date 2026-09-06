@@ -31,7 +31,15 @@ export type MatchAction =
   | 'retire_match'
   | 'uncall'
   | 'assign_court'
-  | 'postpone_match';
+  | 'postpone_match'
+  // Court-dispute resolution (contract §4.2, ruling C1). `matchId` on the
+  // queued command is the CHOSEN match; `payload` carries
+  // `displacedMatchKeys` / `action` / `note`. Goes through the exact same
+  // idempotency-key / seen_version / offline-replay machinery as every other
+  // command — that is the point: a resolution must survive a reload and
+  // replay correctly on reconnect (plan §1 package 03, "recovery works
+  // offline").
+  | 'resolve_court';
 
 export type CommandStatus = 'pending' | 'applied' | 'rejected' | 'conflict';
 

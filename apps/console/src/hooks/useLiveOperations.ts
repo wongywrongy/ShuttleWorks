@@ -295,6 +295,8 @@ export function useLiveOperations() {
     reoptimizeError,
     getCurrentSlot,
     timeToSlot: (time: string) => config ? timeToSlot(time, config) : 0,
-    slotToTime: (slot: number) => config ? slotToTime(slot, config) : '00:00',
+    // D9: never a placeholder time. Without a config there is no wall-clock
+    // to derive from — say so ("Not scheduled"), not a fake midnight.
+    slotToTime: (slot: number) => config ? slotToTime(slot, config) : 'Not scheduled',
   };
 }

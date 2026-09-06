@@ -33,10 +33,13 @@ export function fromEngineStatus(s: MatchStatus): RunStatus {
   return s; // scheduled | called
 }
 
+// Redirects to the one authority (contract §2.3/§2.4 D5): `playing` is
+// "On court", never "Live" — "Live" survives only as the *lifecycle* word
+// (a whole tournament section may read "Live now"; a match never does).
 export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   scheduled: STATE_WORD.scheduled,
   called: STATE_WORD.called,
-  playing: STATE_WORD.live,
+  playing: STATE_WORD.onCourt,
   done: STATE_WORD.done,
 };
 
