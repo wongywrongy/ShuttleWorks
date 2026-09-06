@@ -6,12 +6,10 @@ export function PlayersList({
   slug,
   roster,
   drawsPublished,
-  eventLabels = {},
 }: {
   slug: string;
   roster: PlayersDTO;
   drawsPublished: boolean;
-  eventLabels?: Record<string, string>;
 }) {
   if (roster.players.length === 0) {
     return <p className="text-muted-foreground">No players published yet.</p>;
@@ -22,7 +20,6 @@ export function PlayersList({
       entrants={roster.players}
       noun="player"
       linkEventsToDraws={drawsPublished}
-      eventLabels={eventLabels}
     />
   );
 }

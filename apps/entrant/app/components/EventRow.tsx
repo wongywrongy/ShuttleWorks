@@ -1,18 +1,24 @@
 /**
  * One row of the Draws panel (ADR 0028, formerly the Events tab): discipline
- * · code · facts · "N entered" · state as text+tone · up to two outline
- * buttons — **Entrants** into the Players directory and **Draw** into the
+ * · code · facts · one count in one unit ("N players"/"N pairs" — G2 caps
+ * declined, so no "of M") · state as text+tone · up to two outline buttons —
+ * **Entrants** into the Players directory and **View draw** into the
  * event's draw page once one is published. The facts line prefers the draw
  * card's own description (format · size · rounds) and falls back to the
  * entry-page constraints before a draw exists. A decided draw adds a
- * "Champion" line from the card. "N entered" only — G2 (caps) was declined,
- * so no "of M".
+ * "Champion" line from the card.
+ *
+ * V3-PE04.2: the count column shows exactly ONE source — the draw's own
+ * participant count once a draw exists, the registration count otherwise —
+ * never both side by side. V3-PE04.3: once the View draw button already
+ * states availability, the state column does not also say "Draw published".
  */
 import { Button } from '@scheduler/design-system/components';
 
 import type { DrawCardDTO } from '../lib/draws.types';
 import { entryCountLabel, eventCodeLabel, kindLabel } from '../lib/draws.types';
 import type { EntryEventDTO } from '../lib/entryPage.types';
+import { eventLabel, isStandardEventCode } from '../lib/eventLabels';
 import { PersonGroup } from './PersonGroup';
 
 function genderLabel(constraint: string | null): string {
@@ -40,6 +46,10 @@ function displayEventCode(code: string): string {
 }
 
 function displayEventName(name: string, code: string): string {
+  // V3-PE04.1: one of the five standard disciplines always reads from the
+  // canonical map — "Men's singles", never a freeform "Mens Singles" the
+  // organizer's `discipline` text happened to carry.
+  if (isStandardEventCode(code)) return eventLabel(code);
   const source = name.trim() || code;
   const normalized = source.replace(/(?:\s+|_)final$/i, '').trim();
   if (!normalized.includes('_')) return normalized;
@@ -79,15 +89,23 @@ export function EventRow({
       ]
     : [publicFields.format, eligibility];
   const registrationCount = event.registrationCount ?? event.entryCount;
+  // V3-PE04.2: exactly ONE count, in ONE unit. A published draw's own
+  // participant count supersedes the registration count for this row — the
+  // two can legitimately differ (imported rosters, opt-outs) and showing
+  // both ("0 confirmed registrations · 32 draw participants") read as a
+  // contradiction rather than two distinct, gated sources.
   const countLabel = draw
-    ? `${registrationCount} confirmed registrations · ${draw.drawParticipantCount ?? draw.size} draw participants`
-    : `${registrationCount} confirmed registrations`;
+    ? entryCountLabel(draw.eventCode, draw.drawParticipantCount ?? draw.size)
+    : entryCountLabel(event.code, registrationCount);
+  // V3-PE04.3: once a Draw button already states availability, the state
+  // column repeating "Draw published" is a duplicated publication message —
+  // leave it blank rather than say the same thing twice.
   const state = event.isOpen
     ? { label: 'Open', tone: 'text-status-live' }
     : publicFields.resultsPublished
       ? { label: 'Results published', tone: 'text-muted-foreground' }
       : publicFields.drawPublished || draw
-        ? { label: 'Draw published', tone: 'text-muted-foreground' }
+        ? null
         : { label: 'Closed', tone: 'text-status-done' };
   const entrants = entrantsHref !== null && registrationCount > 0 ? entrantsHref : null;
   return (
@@ -112,7 +130,7 @@ export function EventRow({
           stream separates those with comment nodes, breaking text-level
           assertions and, worse, screen-reader continuity of the phrase. */}
       <p className="text-sm tabular-nums text-muted-foreground">{countLabel}</p>
-      <p className={`text-sm font-medium ${state.tone}`}>{state.label}</p>
+      {state ? <p className={`text-sm font-medium ${state.tone}`}>{state.label}</p> : <p />}
       {entrants !== null || drawHref !== null ? (
         <div className="flex gap-2">
           {entrants !== null ? (
@@ -122,7 +140,7 @@ export function EventRow({
           ) : null}
           {drawHref !== null ? (
             <Button asChild variant="outline" size="sm">
-              <a href={drawHref} aria-label={`${displayEventName(event.discipline, event.code)} draw`}>Draw</a>
+              <a href={drawHref} aria-label={`${displayEventName(event.discipline, event.code)} draw`}>View draw</a>
             </Button>
           ) : null}
         </div>

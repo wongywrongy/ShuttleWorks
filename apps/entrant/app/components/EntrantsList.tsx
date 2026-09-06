@@ -17,13 +17,7 @@
  * because the box does not exist.
  */
 import { eventCodeLabel } from '../lib/draws.types';
-
-function readableEventLabel(label: string): string {
-  return label
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+final$/i, '')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
+import { eventLabel } from '../lib/eventLabels';
 import type { PersonReferenceDTO } from '../lib/person.types';
 import { personRefModel } from '../../public/assets/person-ref.js';
 import { PersonRef } from './PersonRef';
@@ -44,18 +38,23 @@ function letterOf(row: DirectoryRow): string {
   return first >= 'A' && first <= 'Z' ? first : '#';
 }
 
+/** A fragment-safe id for a letter-group section — `#` is a heading GLYPH,
+ * not a legal URL fragment character, so the "other" group anchors on a
+ * word instead of a bare hash. */
+function anchorId(letter: string): string {
+  return letter === '#' ? 'dir-other' : `dir-${letter}`;
+}
+
 export function EntrantsList({
   slug,
   entrants,
   noun = 'entrant',
   linkEventsToDraws = false,
-  eventLabels = {},
 }: {
   slug: string;
   entrants: DirectoryRow[];
   noun?: 'entrant' | 'player';
   linkEventsToDraws?: boolean;
-  eventLabels?: Record<string, string>;
 }) {
   const sorted = [...entrants].sort((a, b) => searchableName(a).localeCompare(searchableName(b)));
   const groups: { letter: string; rows: DirectoryRow[] }[] = [];
@@ -69,25 +68,40 @@ export function EntrantsList({
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        {/* V3-PE05.2: ONE count, updated in place by the filter script
+            (`data-search-count`) — no second count appearing once the
+            script boots beside the search input. */}
+        <p data-search-count aria-live="polite" className="text-sm text-muted-foreground">
           {`${entrants.length} ${entrants.length === 1 ? noun : `${noun}s`}`}
         </p>
         <div id="entrants-filter-root" data-filter-noun={noun} className="w-full sm:w-72" />
       </div>
-      {Object.keys(eventLabels).length > 0 ? (
-        <p className="text-xs text-muted-foreground" aria-label="Event key">
-          Events: {Object.entries(eventLabels).map(([code, label], index) => (
-            <span key={code}>{index > 0 ? ' · ' : ''}<strong className="font-semibold text-foreground">{eventCodeLabel(code)}</strong> {readableEventLabel(label)}</span>
+
+      {/* V3-PE05.1: a compact A–Z jump control tied to the letter sections
+          already below — plain anchors, so it works with no JS and on
+          mobile without a JS-only sticky index. Only letters that actually
+          have a section get a link (never a dead jump to an empty letter). */}
+      {groups.length > 1 ? (
+        <nav aria-label="Jump to letter" className="flex flex-wrap gap-1">
+          {groups.map((group) => (
+            <a
+              key={group.letter}
+              href={`#${anchorId(group.letter)}`}
+              className="rounded-xs px-1.5 py-1 text-xs font-semibold uppercase text-muted-foreground hover:bg-surface-sunken hover:text-foreground"
+            >
+              {group.letter}
+            </a>
           ))}
-        </p>
+        </nav>
       ) : null}
 
       <div className="grid items-start gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((group) => (
           <section
             key={group.letter}
+            id={anchorId(group.letter)}
             data-letter-group
-            className="min-w-0"
+            className="min-w-0 scroll-mt-4"
           >
             <h3 className="border-b border-rule-soft pb-1 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
               {group.letter}
@@ -111,7 +125,7 @@ export function EntrantsList({
                   {row.eventCodes.length > 0 ? (
                     <span
                       className="ml-2 text-xs text-muted-foreground"
-                      aria-label={row.eventCodes.map(eventCodeLabel).join(' · ')}
+                      aria-label={row.eventCodes.map(eventLabel).join(' · ')}
                     >
                       {linkEventsToDraws ? row.eventCodes.map((code, index) => (
                         <span key={code}>

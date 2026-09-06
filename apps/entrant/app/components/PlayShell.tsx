@@ -40,7 +40,7 @@
  * this shell different label text for it.
  */
 import { useContext, type ReactNode } from 'react';
-import { BRAND } from '@scheduler/brand';
+import { BRAND, BRAND_SIGNATURE } from '@scheduler/brand';
 
 import { EntrantSessionContext } from '../lib/sessionContext';
 
@@ -91,7 +91,13 @@ export function PlayShell({
       <div id="main-content" className="flex-1">{children}</div>
       <footer className="border-t border-rule-soft">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-baseline justify-between gap-2 px-4 py-6 text-xs text-muted-foreground">
-          <p>{BRAND.productName} · tournament entries · {BRAND.endorsement}</p>
+          {/* V3-PE02.1: one brand line, identical on every public page —
+              "ShuttleWorks · tournament entries · by Yunavero" read like
+              assembled metadata and mislabeled results/draw pages as entry
+              management. `BRAND_SIGNATURE` is the shared canonical string
+              (`packages/brand/generated.ts`), so this can never drift from
+              what the console's own footer says. */}
+          <p>{BRAND_SIGNATURE}</p>
           <p>Tournament information is published by the organizer.</p>
         </div>
       </footer>

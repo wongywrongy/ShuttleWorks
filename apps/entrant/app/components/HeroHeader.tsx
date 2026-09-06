@@ -21,6 +21,7 @@ export function HeroHeader({
   chip,
   cta,
   phaseAction,
+  statusOverride,
   freshness,
   children,
 }: {
@@ -32,9 +33,21 @@ export function HeroHeader({
   /** Optional newer lifecycle action; old page payloads keep the original
    * two-state hero unchanged. */
   phaseAction?: { label: string; href: string } | null;
+  /**
+   * V3-PE03.3: when the server ships an explicit lifecycle phase, the
+   * subtitle leads with the tournament's REAL state (e.g. "Live now")
+   * instead of the binary entries chip — a live tournament's header used to
+   * say "Entries closed" while its own CTA said "Follow live matches".
+   * Entry closure stays reachable in the Key dates section; it just stops
+   * being the FIRST thing a spectator reads. Absent on older payloads,
+   * which keep the original two-state chip unchanged.
+   */
+  statusOverride?: { label: string; live: boolean } | null;
   freshness?: string | null;
   children?: ReactNode;
 }) {
+  const statusLabel = statusOverride ? statusOverride.label : chipLabel(chip);
+  const statusIsLive = statusOverride ? statusOverride.live : chip.kind === 'entriesOpen';
   return (
     <section className="border-b border-rule-soft bg-surface-raised" aria-labelledby="tournament-title">
       <div className="mx-auto w-full max-w-6xl px-4 pt-8 md:pt-10">
@@ -53,8 +66,8 @@ export function HeroHeader({
             {metaLine ? (
               <p className="text-sm text-muted-foreground">{metaLine}</p>
             ) : null}
-            <p className={`mt-1.5 text-sm font-medium ${chip.kind === 'entriesOpen' ? 'text-status-live' : 'text-muted-foreground'}`}>
-              {chipLabel(chip)}
+            <p className={`mt-1.5 text-sm font-medium ${statusIsLive ? 'text-status-live' : 'text-muted-foreground'}`}>
+              {statusLabel}
             </p>
             {freshness ? <p className="text-xs text-muted-foreground">{freshness}</p> : null}
           </div>

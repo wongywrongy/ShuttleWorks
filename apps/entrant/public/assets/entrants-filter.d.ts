@@ -7,3 +7,4 @@ export function matches(
 ): boolean;
 export function filterNoun(root: Element | null | undefined): 'player' | 'entrant';
 export function apply(scope: ParentNode, query: string): number;
+export function findLabel(noun: 'player' | 'entrant'): string;

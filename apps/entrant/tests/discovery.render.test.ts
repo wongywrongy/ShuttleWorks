@@ -20,6 +20,13 @@ import type { PageStatus, SeasonList, SeasonRow } from '../app/lib/phase';
 const MASTHEAD =
   'Badminton tournaments taking entries through ShuttleWorks. Every entry is confirmed by the organizer.';
 
+/** V3-PE01.1: the Season view's body sentence — a plain browsing cue, not a
+ * platform description ("Explore Badminton tournaments … through
+ * ShuttleWorks" read like assembled metadata and over-capitalized the
+ * sport). Distinct from `MASTHEAD`, which only the `<meta name="description">`
+ * carries now. */
+const SEASON_INTRO = 'Find badminton tournaments, schedules, and results.';
+
 function row(slug: string, name: string, status: PageStatus, overrides: Partial<SeasonRow> = {}): SeasonRow {
   return {
     slug,
@@ -30,6 +37,9 @@ function row(slug: string, name: string, status: PageStatus, overrides: Partial<
     eventCount: 3,
     status,
     closesInDays: null,
+    closesAt: null,
+    timeZone: 'UTC',
+    locality: null,
     drawsPublished: false,
     winnersPublished: false,
     ...overrides,
@@ -39,7 +49,12 @@ function row(slug: string, name: string, status: PageStatus, overrides: Partial<
 /** One row per `PageStatus`, plus the NOW pick. */
 const SEASON: SeasonList = {
   tournaments: [
-    row('wessex-open', 'Wessex Autumn Gold', 'entries_open', { closesInDays: 5 }),
+    row('wessex-open', 'Wessex Autumn Gold', 'entries_open', {
+      closesInDays: 5,
+      closesAt: '2026-08-30 12:00 UTC',
+      timeZone: 'Europe/London',
+      locality: 'Winchester, United Kingdom',
+    }),
     row('meadowbank-closed', 'Meadowbank Masters', 'entries_closed', { date: '2026-09-26' }),
     row('harbour-live', 'Harbour Invitational', 'in_progress_live', {
       date: '2026-10-03',
@@ -110,6 +125,7 @@ describe('the front door', () => {
     // Not `toContain('Tournaments')`: the shell's wordmark carries that word.
     expect(html).toMatch(/<h1[^>]*>\s*Tournaments\s*<\/h1>/);
     expect(html).toContain(MASTHEAD);
+    expect(html).toContain(SEASON_INTRO);
     expect(html).toContain('Wessex Autumn Gold');
   });
 
@@ -121,9 +137,9 @@ describe('the front door', () => {
 
   it('puts nothing between the masthead and the control row', async () => {
     const html = await render();
-    // From the masthead in the BODY, not the `<meta name="description">` that
-    // carries the same sentence in the head.
-    const start = html.indexOf(MASTHEAD, html.indexOf('<h1')) + MASTHEAD.length;
+    // From the intro sentence in the BODY, not the `<meta name="description">`
+    // that carries a longer platform sentence in the head.
+    const start = html.indexOf(SEASON_INTRO, html.indexOf('<h1')) + SEASON_INTRO.length;
     const between = html.slice(start, html.indexOf('name="q"', start));
 
     // The view segments are the control row's own links (they sit to the
@@ -225,6 +241,21 @@ describe('the calendar (§2.4)', () => {
     expect(html).toContain('Results');
     expect(html).toMatch(/text-muted-foreground">Completed<\/span>/);
     expect(html).not.toContain('/e/triangle-done?tab=');
+  });
+
+  it('states the exact tournament-timezone deadline, with the relative countdown secondary (V3-PE01.2)', async () => {
+    const html = await render();
+
+    expect(html).toContain('Closes 30 Aug 2026, 13:00 GMT+1 · 5d');
+    // No unexplained bare "d" suffix standing alone as the deadline.
+    expect(html).not.toContain('closes in 5d');
+  });
+
+  it('states a row locality beside the venue (V3-PE01.3)', async () => {
+    const html = await render();
+
+    expect(html).toContain('Some Hall');
+    expect(html).toContain('Winchester, United Kingdom');
   });
 });
 

@@ -133,7 +133,7 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           {filters.view === 'completed'
             ? 'Browse completed badminton tournaments and their published results.'
-            : `Explore ${BRAND.sportName} tournaments, schedules, and published results through ${BRAND.productName}.`}
+            : `Find ${BRAND.sportName.toLowerCase()} tournaments, schedules, and results.`}
         </p>
 
         <div className="mt-6 grid gap-4">

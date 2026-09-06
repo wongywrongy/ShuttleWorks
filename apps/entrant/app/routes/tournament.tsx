@@ -35,6 +35,7 @@ import {
   activeTab,
   chipState,
   ctaState,
+  phaseLabel,
   timelineModel,
   tournamentPhase,
   visibleTabs,
@@ -166,6 +167,17 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
   const updated = dateOfIso(page.page.regulationsUpdatedAt);
   const entriesOpen = page.events.some((event) => event.isOpen);
   const drawsHref = tabHref(slug, 'draws');
+  // V3-PE03.2: the internal registration aggregate answered no entry
+  // question once entries closed — a 253-player tournament with five
+  // 32-entry draws still read "Event registrations 0" here, because that
+  // count and the published draw rosters are two different, unrelated
+  // sources. Show it only while it IS an entry question ("how many have
+  // entered so far"); omit the row entirely otherwise rather than print an
+  // unexplained zero.
+  const registeredSoFar = page.events.reduce(
+    (total, event) => total + (event.registrationCount ?? event.entryCount),
+    0,
+  );
 
   return (
     <div className="grid gap-4">
@@ -176,7 +188,9 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
         ) : <p className="max-w-prose text-pretty text-base leading-7 text-muted-foreground">Tournament information, events, and published results from the organizer.</p>}
         <dl className={`grid grid-cols-2 gap-x-4 gap-y-3 ${LIST_CARD} p-4 text-sm`}>
           <div><dt className="text-xs text-muted-foreground">Events</dt><dd className="mt-0.5 font-semibold tabular-nums">{page.events.length}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">Event registrations</dt><dd className="mt-0.5 font-semibold tabular-nums">{page.events.reduce((total, event) => total + (event.registrationCount ?? event.entryCount), 0)}</dd></div>
+          {entriesOpen && registeredSoFar > 0 ? (
+            <div><dt className="text-xs text-muted-foreground">Entered so far</dt><dd className="mt-0.5 font-semibold tabular-nums">{registeredSoFar}</dd></div>
+          ) : null}
           {tournamentView.timeZone ? <div className="col-span-2"><dt className="text-xs text-muted-foreground">Tournament time</dt><dd className="mt-0.5 font-medium">{tournamentView.timeZone}</dd></div> : null}
         </dl>
       </div>
@@ -294,7 +308,10 @@ function DrawsPanel({
       <div className={LIST_CARD}>
         <div aria-hidden className={`hidden gap-4 px-4 pb-2 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:grid ${columns}`}>
           <span>Event</span>
-          <span>Registrations / draw participants</span>
+          {/* V3-PE04.2: one column, one unit — "N players"/"N pairs" — not a
+              combined "registrations / draw participants" header describing
+              two sources at once. */}
+          <span>Entered</span>
           <span>State</span>
           <span />
         </div>
@@ -358,6 +375,14 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
   // Keeping them out of the hero prevents the same facts being repeated in
   // two competing reading sequences (PE03.3).
   const metaLine = '';
+  // V3-PE03.3: once the server states an explicit phase, the subtitle leads
+  // with it — "Live now", not "Entries closed" under a "Follow live
+  // matches" button. Entry closure is still available; it moved to the Key
+  // dates section (`timelineModel`'s "Entries close" row) rather than being
+  // the first line a spectator reads.
+  const statusOverride = hasExplicitPhase
+    ? { label: phaseLabel(phase), live: phase === 'entries_open' || phase === 'live' }
+    : null;
   // The by-event anchors died with the by-event grouping (SP-P7 §3.2): the
   // list is alphabetical now, so an event's "N entered" links to the tab.
   const entrantsHref = tabs.includes('players')
@@ -373,6 +398,7 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
         chip={chip}
         cta={cta}
         phaseAction={hasExplicitPhase ? phaseAction : null}
+        statusOverride={statusOverride}
       >
         <TabBar
           tabs={tabs}
@@ -393,7 +419,6 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
               slug={slug}
               roster={loaderData.players}
               drawsPublished={page.publication.draws}
-              eventLabels={Object.fromEntries(page.events.map((event) => [event.code, event.discipline]))}
             />
             <ReserveList reserves={page.reserves ?? []} slug={page.page.slug} />
           </>

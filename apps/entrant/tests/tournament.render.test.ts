@@ -124,7 +124,7 @@ describe('the tab bar and its panels (Z6)', () => {
     const draws = await render(PAGE, '/e/spring-open?tab=draws');
 
     // The Draws panel is on the page…
-    expect(draws).toContain('7 confirmed registrations');
+    expect(draws).toContain('7 players');
     // …and the Overview panel is not.
     expect(draws).not.toContain('Key dates');
     expect(draws).not.toContain('Bank transfer on the day.');
@@ -134,7 +134,7 @@ describe('the tab bar and its panels (Z6)', () => {
     const html = await render(PAGE, '/e/spring-open?tab=events');
     const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
     expect(nav).toMatch(/aria-current="page"[^>]*>Draws<\/a>/);
-    expect(html).toContain('7 confirmed registrations');
+    expect(html).toContain('7 players');
   });
 
   it('maps a legacy Entrants bookmark to the unified Players panel', async () => {
@@ -259,6 +259,29 @@ describe('the panels', () => {
     expect(html).not.toContain('<details');
   });
 
+  it('shows the entered-so-far count only while it answers an entry question (V3-PE03.2)', async () => {
+    const html = await render();
+    expect(html).toContain('Entered so far');
+    expect(html).toContain('>12<');
+
+    // Entries fully closed: the registration aggregate is a different,
+    // unrelated source from any published draw roster — no unexplained
+    // zero, and no count printed at all once it stops being an entry
+    // question.
+    const closedHtml = await render(CLOSED);
+    expect(closedHtml).not.toContain('Entered so far');
+  });
+
+  it('leads a live tournament header with its real state, not "Entries closed" (V3-PE03.3)', async () => {
+    const live = { ...PAGE, tournament: { ...PAGE.tournament, phase: 'live' } };
+    const html = await render(live, '/e/spring-open?tab=draws');
+
+    expect(html).toMatch(/text-status-live[^>]*>Live now</);
+    expect(html).not.toMatch(/text-status-live[^>]*>Entries/);
+    // Entry closure still reads somewhere — the Overview's Key dates row —
+    // just no longer as the header's first line.
+  });
+
   it('renders no document row when the director wrote no regulations (rule 4)', async () => {
     const html = await render({
       ...PAGE,
@@ -272,7 +295,7 @@ describe('the panels', () => {
   it('Draws: one row per event with counts ("N entered", G2 declined) and an Entrants button', async () => {
     const html = await render(PAGE, '/e/spring-open?tab=draws');
 
-    expect(html).toContain('7 confirmed registrations');
+    expect(html).toContain('7 players');
     expect(html).not.toMatch(/7 of \d/);
     // The by-event anchors died with the by-event grouping (SP-P7 §3.2):
     // the Entrants button links to the alphabetical tab itself.

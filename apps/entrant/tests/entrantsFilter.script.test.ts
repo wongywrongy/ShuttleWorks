@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { apply, filterNoun, matches } from '../public/assets/entrants-filter.js';
+import { apply, filterNoun, findLabel, matches } from '../public/assets/entrants-filter.js';
 
 describe('matches', () => {
   it('is a case-blind substring over name and club, empty query keeps all', () => {
@@ -17,6 +17,13 @@ describe('matches', () => {
     expect(matches('bark', 'tom barker', '')).toBe(true);
     expect(matches('riverside', 'tom barker', 'riverside bc')).toBe(true);
     expect(matches('ghost', 'tom barker', 'riverside bc')).toBe(false);
+  });
+});
+
+describe('findLabel (V3-PE05.2)', () => {
+  it('is the persistent visible label — never disappears once a query is typed', () => {
+    expect(findLabel('player')).toBe('Find a player');
+    expect(findLabel('entrant')).toBe('Find an entrant');
   });
 });
 

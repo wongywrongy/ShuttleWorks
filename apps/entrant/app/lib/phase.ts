@@ -125,6 +125,20 @@ export interface SeasonRow {
   status: PageStatus;
   /** Whole days until entries close; server-computed, never 0 (ceil ≥ 1). */
   closesInDays: number | null;
+  /**
+   * V3-PE01.2: the exact instant `closesInDays` counts down to, as the
+   * pinned wire moment (`"%Y-%m-%d %H:%M UTC"`) — present exactly when
+   * `closesInDays` is, never on its own. This module cannot format it
+   * (a `phase → format` edge would close an import cycle, see the
+   * `MONTHS_LONG` note above) — the rendering component pairs this with
+   * `timeZone` through `formatMomentInZone`.
+   */
+  closesAt: string | null;
+  /** The tournament's own IANA zone, for rendering `closesAt` in it. */
+  timeZone: string;
+  /** V3-PE01.3: a best-effort "City, Country" line out of the organizer's
+   * free-text venue address; `null` when there is nothing to parse. */
+  locality: string | null;
   drawsPublished: boolean;
   winnersPublished: boolean;
 }
@@ -167,7 +181,10 @@ export interface MonthGroup {
  */
 export type StatusCell =
   | { kind: 'chip-live'; label: string; href: string }
-  | { kind: 'chip-open'; chip: ChipState }
+  // `closesAt`/`timeZone` ride beside the binary chip so the renderer can
+  // state the exact tournament-timezone deadline (V3-PE01.2) without this
+  // module importing the formatter (see `SeasonRow.closesAt`).
+  | { kind: 'chip-open'; chip: ChipState; closesAt: string | null; timeZone: string }
   | { kind: 'chip-muted'; label: string }
   | { kind: 'link'; label: string; href: string }
   | { kind: 'text'; label: string };
@@ -559,7 +576,12 @@ export function statusCell(row: SeasonRow): StatusCell {
     case 'in_progress':
       return { kind: 'chip-muted', label: 'In progress' };
     case 'entries_open':
-      return { kind: 'chip-open', chip: { kind: 'entriesOpen', closesInDays: row.closesInDays } };
+      return {
+        kind: 'chip-open',
+        chip: { kind: 'entriesOpen', closesInDays: row.closesInDays },
+        closesAt: row.closesAt,
+        timeZone: row.timeZone,
+      };
     case 'entries_closed':
       return { kind: 'chip-muted', label: 'Entries closed' };
     case 'completed_winners':

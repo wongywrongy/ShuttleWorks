@@ -364,12 +364,12 @@ describe("the Players tab", () => {
 });
 
 describe("the Draws panel (§3.4, ADR 0028)", () => {
-  it("lists every event with its draw facts and a Draw button into each draw", async () => {
+  it("lists every event with its draw facts and a View draw button into each draw", async () => {
     stubApi({ "/draws": DRAWS_INDEX });
     const html = await render("/e/spring-open?tab=draws");
 
     expect(html).toContain('href="/e/spring-open/draws/MS"');
-    expect(html).toContain(">Draw</a>");
+    expect(html).toContain(">View draw</a>");
     expect(html).toContain("Elimination");
     expect(html).toContain("4 players");
     expect(html).toContain("2 rounds");
@@ -396,7 +396,7 @@ describe("the Draws panel (§3.4, ADR 0028)", () => {
 
     expect(html).toContain("Champion");
     expect(html).toContain('/players/11111111-1111-4111-8111-111111111111');
-    expect(html).toContain('aria-label="Men&#x27;s Singles draw"');
+    expect(html).toContain('aria-label="Men&#x27;s singles draw"');
   });
 
   it("says plainly when a published tier has no draws", async () => {

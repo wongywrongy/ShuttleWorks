@@ -33,6 +33,7 @@ import type { EntryEventDTO } from '../app/lib/entryPage.types';
 import type { DrawCardDTO } from '../app/lib/draws.types';
 import { statusCell } from '../app/lib/phase';
 import type { ChipState, Filters, SeasonRow } from '../app/lib/phase';
+import { EntrantSessionContext } from '../app/lib/sessionContext';
 
 
 const OPEN_CHIP: ChipState = { kind: 'entriesOpen', closesInDays: 4 };
@@ -43,6 +44,7 @@ const CLOSED_CHIP: ChipState = { kind: 'entriesClosed' };
 const row = (over: Partial<SeasonRow> = {}): SeasonRow => ({
   slug: 's', name: 'T', organizer: null, venueName: null, date: null,
   eventCount: 0, status: 'entries_closed', closesInDays: null,
+  closesAt: null, timeZone: 'UTC', locality: null,
   drawsPublished: false, winnersPublished: false, ...over,
 });
 
@@ -168,11 +170,24 @@ describe('SeasonStatusCell', () => {
     }
   });
 
-  it('takes the chip vocabulary that already exists for an open row', () => {
+  it('falls back to the relative-only chip when no exact deadline parses', () => {
     const html = renderToStaticMarkup(
       h(SeasonStatusCell, { cell: statusCell(row({ status: 'entries_open', closesInDays: 4 })) }),
     );
     expect(html).toContain('Entries open · closes in 4d');
+  });
+
+  it('states the exact tournament-timezone deadline as primary, the countdown secondary (V3-PE01.2)', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonStatusCell, {
+        cell: statusCell(row({
+          status: 'entries_open', closesInDays: 4,
+          closesAt: '2026-08-14 09:00 UTC', timeZone: 'UTC',
+        })),
+      }),
+    );
+    expect(html).toContain('Closes 14 Aug 2026, 09:00 UTC · 4d');
+    expect(html).not.toContain('closes in 4d');
   });
 });
 
@@ -624,7 +639,7 @@ describe('SegmentedNav', () => {
 // ---- EventRow --------------------------------------------------------------
 
 describe('EventRow', () => {
-  it('distinguishes registrations from published draw participants', () => {
+  it('shows exactly one count, in one unit, once a draw is published (V3-PE04.2)', () => {
     const draw = {
       drawKey: 'ms', eventCode: 'MS', discipline: "Men's Singles", kind: 'se',
       size: 8, drawParticipantCount: 6, hasConsolation: false,
@@ -634,9 +649,11 @@ describe('EventRow', () => {
       remainingMatchCount: null,
     } as DrawCardDTO;
     const html = renderToStaticMarkup(h(EventRow, { event: event({ registrationCount: 7 }), draw, entrantsHref: null }));
-    expect(html).toContain('7 confirmed registrations');
-    expect(html).toContain('6 draw participants');
-    expect(html).not.toContain('8 draw participants');
+    // The draw's own participant count wins over the registration count —
+    // never both, and never a zero-looking mismatch between them.
+    const countCell = html.match(/<p class="text-sm tabular-nums[^>]*>([^<]*)<\/p>/)?.[1];
+    expect(countCell).toBe('6 players');
+    expect(html).not.toContain('confirmed registrations');
   });
 
   it('normalizes legacy underscore event identifiers at the public boundary', () => {
@@ -650,9 +667,9 @@ describe('EventRow', () => {
     expect(html).not.toContain('mens_doubles_final');
   });
 
-  it('labels registration rows explicitly — never "of M", G2 was declined', () => {
+  it('labels registration rows with one unit, never "of M" (G2 declined)', () => {
     const html = renderToStaticMarkup(h(EventRow, { event: event(), entrantsHref: null }));
-    expect(html).toContain('7 confirmed registrations');
+    expect(html).toContain('7 players');
     expect(html).not.toMatch(/7 of \d/);
   });
 
@@ -703,10 +720,12 @@ describe('EventRow', () => {
       h(EventRow, { event: event({ isOpen: false }), entrantsHref: null, draw: card, drawHref: '/e/s/draws/MS', slug: 's' }),
     );
     expect(html).toContain('href="/e/s/draws/MS"');
-    expect(html).toContain('>Draw</a>');
+    expect(html).toContain('>View draw</a>');
     expect(html).toContain('4 rounds');
     expect(html).toContain('with consolation');
-    expect(html).toContain('Draw published');
+    // V3-PE04.3: the action already says the draw exists — the state column
+    // does not repeat "Draw published" beside it.
+    expect(html).not.toContain('Draw published');
   });
 
   it('explains a published draw that has no rounds yet', () => {
@@ -762,8 +781,9 @@ describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
     expect(html.match(/Tom Barker/g)).toHaveLength(1);
     // P before T; Ngo before Barker? No — sorted by NAME: Priya, Tessa, Tom.
     expect(html).toMatch(/>P<[\s\S]*Priya[\s\S]*>T<[\s\S]*Tessa Ngo[\s\S]*Tom Barker/);
-    // One T header covers both T names.
-    expect(html.match(/>T</g)).toHaveLength(1);
+    // One T section HEADING covers both T names (the A-Z jump nav also
+    // links a "T", so this counts `<h3>` headings specifically).
+    expect(html.match(/<h3[^>]*>T<\/h3>/g)).toHaveLength(1);
   });
 
   it('links each name to their player page by person key, never by name', () => {
@@ -796,6 +816,35 @@ describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
   it('still carries no contact data — the strict projection, rendered', () => {
     const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
     expect(html).not.toContain('@');
+  });
+
+  it('offers a compact A-Z jump index tied to every present letter section, with no JS (V3-PE05.1)', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    const nav = html.match(/<nav aria-label="Jump to letter"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(nav).not.toBe('');
+    // Priya (P), Tessa/Tom (T) — exactly the letters actually present.
+    expect(nav).toContain('href="#dir-P"');
+    expect(nav).toContain('href="#dir-T"');
+    expect(nav).not.toContain('href="#dir-A"');
+    // The target section exists with that same id — a plain in-page anchor,
+    // functional without any script.
+    expect(html).toContain('id="dir-P"');
+    expect(html).toContain('id="dir-T"');
+    // The long event-code explanation this replaced is gone.
+    expect(html).not.toContain('Events:');
+  });
+
+  it('renders exactly one result count, ready for the filter script to update in place (V3-PE05.2)', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    expect(html.match(/data-search-count/g)).toHaveLength(1);
+    expect(html).toContain('3 entrants');
+  });
+
+  it('renders no A-Z index for a single-letter roster (nothing useful to jump between)', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, { slug: 'spring-open', entrants: [entrants[0]] }),
+    );
+    expect(html).not.toContain('aria-label="Jump to letter"');
   });
 });
 
@@ -1052,5 +1101,17 @@ describe('PlayShell', () => {
     expect(links.filter((l) => l.startsWith('/e/account/') || l.startsWith('/e/api/'))).toEqual(
       [],
     );
+  });
+
+  it('states the exact brand line, identical on every page (V3-PE02.1)', () => {
+    // "ShuttleWorks · tournament entries · by Yunavero" mislabeled results
+    // and draw pages as entry management and read like assembled metadata.
+    // `BRAND_SIGNATURE` is the one shared string every page renders.
+    expect(html).toContain('ShuttleWorks by Yunavero');
+    expect(html).not.toContain('tournament entries');
+    const signedIn = renderToStaticMarkup(
+      h(EntrantSessionContext.Provider, { value: true }, h(PlayShell, { children: h('main', null, 'X') })),
+    );
+    expect(signedIn).toContain('ShuttleWorks by Yunavero');
   });
 });

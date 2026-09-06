@@ -53,7 +53,10 @@ function CalendarRow({ row }: { row: SeasonRow }) {
   // for assistive tech — and only when there is one to spell (an empty
   // `sr-only` element is an announcement of nothing).
   const dateText = formatDateLong(row.date);
-  const meta = [row.venueName, row.organizer === 'Local Workspace' ? null : row.organizer]
+  // V3-PE01.3: locality leads the venue so a reader deciding whether to
+  // enter can place the tournament without opening it — a venue name alone
+  // ("Kingsway Centre") names no place a stranger to the club recognizes.
+  const meta = [row.venueName, row.locality, row.organizer === 'Local Workspace' ? null : row.organizer]
     .filter((part) => part !== null && part !== '');
   return (
     <li className="relative flex items-center gap-4 border-t border-rule-soft px-4 py-3 transition-colors duration-fast ease-brand hover:bg-surface-sunken">

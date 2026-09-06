@@ -56,6 +56,7 @@ function event(overrides: Partial<PhaseEvent> = {}): PhaseEvent {
 const row = (over: Partial<SeasonRow>): SeasonRow => ({
   slug: 's', name: 'T', organizer: null, venueName: null, date: null,
   eventCount: 0, status: 'entries_closed', closesInDays: null,
+  closesAt: null, timeZone: 'UTC', locality: null,
   drawsPublished: false, winnersPublished: false, ...over,
 });
 
@@ -464,9 +465,13 @@ describe('statusCell — the §2.4 table, one arm per enum case', () => {
       kind: 'chip-muted', label: 'In progress',
     });
   });
-  it('entries_open carries the countdown chip', () => {
-    expect(statusCell(row({ status: 'entries_open', closesInDays: 3 }))).toEqual({
+  it('entries_open carries the countdown chip and the exact deadline (V3-PE01.2)', () => {
+    expect(statusCell(row({
+      status: 'entries_open', closesInDays: 3,
+      closesAt: '2026-08-14 23:59 UTC', timeZone: 'Europe/London',
+    }))).toEqual({
       kind: 'chip-open', chip: { kind: 'entriesOpen', closesInDays: 3 },
+      closesAt: '2026-08-14 23:59 UTC', timeZone: 'Europe/London',
     });
   });
   it('entries_closed is the gray chip', () => {
