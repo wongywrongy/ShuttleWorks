@@ -5,6 +5,9 @@
   "description": "Shared design language for ShuttleWorks — tokens, Tailwind preset, base CSS, components, icons. Specified by DESIGN_COLOR.md + tokens.css.",
   "type": "module",
   "main": "./index.ts",
+  "scripts": {
+    "test:contrast:unit": "vitest run scripts/__tests__/contrast.test.mjs"
+  },
   "exports": {
     ".": "./index.ts",
     "./tokens.css": "./tokens.css",

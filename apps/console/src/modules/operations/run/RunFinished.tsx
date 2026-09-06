@@ -88,7 +88,7 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
         <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">C{match.court}</span>
       )}
       <span className="min-w-0 flex-1 break-words text-muted-foreground">
-        {match.sideA} <span className="text-muted-foreground/70">vs</span> {match.sideB}
+        {match.sideA} <span className="text-muted-foreground">vs</span> {match.sideB}
       </span>
       {scoreLine ? (
         <span className="sw-num shrink-0 text-xs font-semibold tabular-nums text-status-started">

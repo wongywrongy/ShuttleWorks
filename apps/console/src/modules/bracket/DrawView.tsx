@@ -556,7 +556,7 @@ function MobileRoundFocus({
                       className={
                         result?.winner_side === "A"
                           ? "font-semibold text-foreground"
-                          : "text-muted-foreground"
+                          : "text-foreground"
                       }
                     >
                       {formatMobileSide(unit.side_a, nameById)}
@@ -567,7 +567,7 @@ function MobileRoundFocus({
                       {mobileScore(result, "B")}
                     </span>
                     <span
-                      className={`text-right ${result?.winner_side === "B" ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+                      className={`text-right ${result?.winner_side === "B" ? "font-semibold text-foreground" : "text-foreground"}`}
                     >
                       {formatMobileSide(unit.side_b, nameById)}
                     </span>
@@ -1398,7 +1398,7 @@ function BracketCell({
       {/* One step darker than the muted tier: this caption is the ONLY
           schedule information in the whole tree, and at muted-on-white it
           was very nearly invisible (DRAW-3). */}
-      <div className="flex justify-between text-3xs text-foreground/70 sw-num">
+      <div className="flex justify-between text-3xs text-text-secondary sw-num">
         <span>{identityLabel}</span>
         <span>
           {assignment
@@ -1517,7 +1517,7 @@ function Side({
               // watches during a live day.
               "bg-bg-elev border border-border border-l-[3px] border-l-status-live text-foreground font-semibold"
             : loser
-              ? "bg-bg-elev border border-border text-muted-foreground"
+              ? "bg-bg-elev border border-border text-foreground"
               : bye
                 ? "bg-muted text-muted-foreground italic"
                 : seeding
@@ -1556,7 +1556,7 @@ function Side({
               className={`w-6 text-right text-2xs sw-num ${
                 (side === "A" ? s.sideA > s.sideB : s.sideB > s.sideA)
                   ? "font-semibold"
-                  : "opacity-70"
+                  : "text-muted-foreground"
               }`}
             >
               {side === "A" ? s.sideA : s.sideB}

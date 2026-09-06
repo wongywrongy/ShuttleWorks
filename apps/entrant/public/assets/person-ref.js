@@ -36,7 +36,7 @@ export function personRefModel({ slug, identity, state = 'resolved', label, clas
     personId: href ? identity.id : null,
     className: [
       'person-ref',
-      href ? 'text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent' : 'text-muted-foreground',
+      href ? 'text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent' : 'text-foreground',
       state === 'winner' && href ? 'font-[650]' : '',
       className,
     ].filter(Boolean).join(' '),

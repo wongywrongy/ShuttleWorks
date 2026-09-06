@@ -588,7 +588,9 @@ function SchoolTabs({
                 school name widens its pill and the bar scrolls — the pill
                 is the only place that name is written. */}
             <span>{g.name}</span>
-            <span className="tabular-nums text-2xs opacity-75">
+            <span
+              className={`tabular-nums text-2xs ${isActive ? 'text-text-on-accent' : 'text-muted-foreground'}`}
+            >
               {counts.get(g.id) ?? 0}
             </span>
           </ActiveChoice>

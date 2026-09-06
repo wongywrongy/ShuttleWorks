@@ -86,7 +86,7 @@ function FilterChip({
           strips claimed to share a grammar and did not: this one ran the
           count straight on after a space. */}
       {label} <span className="text-ink-faint">·</span>{' '}
-      <span className={`sw-num ${active ? 'text-current opacity-75' : countTone}`}>{count}</span>
+      <span className={`sw-num ${active ? 'text-text-on-accent' : countTone}`}>{count}</span>
     </ActiveChoice>
   );
 }

@@ -80,7 +80,7 @@ export function PositionCell({
       data-testid={`pos-cell-${schoolId}-${rank}`}
       className={[
         'group/cell relative align-top border-b border-r border-border last:border-r-0 transition-colors',
-        disabled ? 'bg-muted/60 text-muted-foreground/70' : '',
+        disabled ? 'bg-muted/60 text-muted-foreground' : '',
         selected && !disabled ? 'bg-accent/5 ring-2 ring-inset ring-accent/50' : '',
         isDragging && !disabled ? 'ring-1 ring-inset ring-border' : '',
         dragHover
@@ -92,7 +92,7 @@ export function PositionCell({
       ].join(' ')}
     >
       {disabled ? (
-        <span className="block px-1.5 py-1 text-3xs italic opacity-50">–</span>
+        <span className="block px-1.5 py-1 text-3xs italic text-muted-foreground">–</span>
       ) : occupants.length > 0 ? (
         // Filled cell: names open the pane; the pencil button reassigns.
         <div className="px-1.5 py-1">

@@ -134,7 +134,7 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
             {SOURCE_INITIAL[source]}
           </span>
         ) : null}
-        <span className={`min-w-0 break-words text-2xs font-semibold sw-num${doneLabel ? ' text-muted-foreground' : ''}`}>{label}</span>
+        <span className="min-w-0 break-words text-2xs font-semibold sw-num">{label}</span>
         {doneLabel ? (
           <span aria-hidden className="text-3xs text-muted-foreground">
             ✓
@@ -143,7 +143,7 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
       </span>
       {showSides && sideA != null && sideB != null && (
         <span className="mt-0.5 break-words text-2xs leading-tight">
-          {sideA} <span className="opacity-60">v</span> {sideB}
+          {sideA} <span className="text-muted-foreground">v</span> {sideB}
         </span>
       )}
       {children}

@@ -94,7 +94,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0 flex-1 text-xs leading-snug">
         {toast.code && (
-          <div className="font-mono text-[10px] uppercase tracking-wide opacity-90 mb-0.5">
+          <div className="font-mono text-[10px] uppercase tracking-wide mb-0.5">
             {toast.code}
           </div>
         )}

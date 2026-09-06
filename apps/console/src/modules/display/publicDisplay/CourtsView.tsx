@@ -111,9 +111,7 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
             // `min-h`, not `h`: the players cell wraps rather than
             // ellipsising, so a long doubles pairing makes the row taller
             // instead of hiding a surname from the far side of the hall.
-            className={`grid min-h-[3.5rem] items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass} ${
-              isClosed ? 'opacity-50' : ''
-            }`}
+            className={`grid min-h-[3.5rem] items-center gap-3 px-4 text-base text-foreground grid-cols-[3rem_3.5rem_1fr_5rem_5.5rem] ${rowTintClass}`}
           >
             <span
               className={`tabular-nums text-2xl font-bold ${isClosed ? 'line-through text-muted-foreground' : ''}`}
@@ -139,7 +137,7 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
                 </>
               ) : nextMatch ? (
                 <span className="text-muted-foreground">
-                  <span className="font-semibold uppercase tracking-wide text-foreground/80">
+                  <span className="font-semibold uppercase tracking-wide text-foreground">
                     Next
                   </span>{' '}
                   {formatPlayers(nextMatch.sideA, playerNames)} vs{' '}
@@ -272,8 +270,8 @@ function CourtCard({
   return (
     <div
       className={`flex flex-col overflow-hidden rounded border border-border bg-card sw-float-in ${
-        isClosed ? 'opacity-60' : ''
-      } ${status === 'empty' && !isClosed ? 'border-dashed' : ''}`}
+        status === 'empty' && !isClosed ? 'border-dashed' : ''
+      }`}
       style={{
         minHeight: cardHeightPx,
         // Staggered entry — each tile arrives 60 ms after the previous
@@ -289,7 +287,7 @@ function CourtCard({
       >
         <span className="flex min-w-0 items-baseline gap-2">
           <span>Court {courtId}</span>
-          {code ? <span className="sw-num opacity-90">{code}</span> : null}
+          {code ? <span className="sw-num">{code}</span> : null}
         </span>
         <span className="sw-num">{band.word}</span>
       </div>
@@ -453,9 +451,9 @@ function NextUp({
         </span>
       </div>
       {laterSideA && laterSideB && (
-        <div className="flex flex-col gap-0.5 opacity-70">
+        <div className="flex flex-col gap-0.5">
           <span
-            className={`${isFullscreen ? 'text-2xs' : 'text-3xs'} font-semibold uppercase tracking-[0.08em]`}
+            className={`${isFullscreen ? 'text-2xs' : 'text-3xs'} font-semibold uppercase tracking-[0.08em] text-muted-foreground`}
           >
             Later
             {laterStartTime && (
