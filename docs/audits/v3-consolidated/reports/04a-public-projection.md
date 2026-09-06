@@ -163,7 +163,7 @@ reader does not go looking for a second backend bug.
   "Time to be confirmed", used in the MatchCard footer). New backend test
   `test_approved_slot_with_unresolved_predecessor_still_reads_scheduled`
   pins the companion rule (contract §3.1): an approved slot with an
-  unresolved side is legitimately public "Scheduled · <time>", not a
+  unresolved side is legitimately public "Scheduled · `<time>`", not a
   defect to reverse.
 - **V3-PE09.3** ("Friday, July 31 124" / raw ISO on cards) — Fixed: the
   day-heading count now always carries a noun (`dayMatchCountLabel`,

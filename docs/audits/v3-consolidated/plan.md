@@ -255,7 +255,7 @@ The inventory below maps all 72 declared original surfaces to work packages, inc
 
 ### Evidence that must still be obtained
 
-Operator sign-in; remaining create-workspace steps and successful creation; account security/session actions; actual tool/guard behavior; open entry form and submission; authenticated My entries and receipt; valid password-reset form; valid invitation acceptance. Recapture route outcomes rather than manufacturing separate pages to match stale surface titles. Public seeded/winners routes that resolve to the draw index need routing/intent verification, not an assumed new-screen build.
+Operator sign-in [decision by Kyle, 2026-09-06: under `AUTH_MODE=local` (the canonical fixture's mode) there is no sign-in boundary by design — credential-less requests resolve straight to the zero-UUID bootstrap operator (CLAUDE.md) — so a UI-form capture cannot exist here; cloud-mode credential auth is already evidenced at the API level by `console-browser-contracts.spec.ts`'s viewer login, and a UI-form capture is owed only if a cloud-mode fixture is ever built]; remaining create-workspace steps and successful creation; account security/session actions; actual tool/guard behavior; open entry form and submission; authenticated My entries and receipt; valid password-reset form; valid invitation acceptance. Recapture route outcomes rather than manufacturing separate pages to match stale surface titles. Public seeded/winners routes that resolve to the draw index need routing/intent verification, not an assumed new-screen build.
 
 ### Closure record
 

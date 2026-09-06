@@ -51,7 +51,7 @@ present on the Setup › Dates page regardless of section status (e.g.
 `setup`/`selected` have loaded), or seed a fixture variant that keeps `dates` genuinely
 blocked for this one spec. Logged as `V3-RT-1` / debt-log "Work package 27b".
 
-## V3-RT-2 — "Operator sign-in" evidence gap cannot be captured in `AUTH_MODE=local`
+## V3-RT-2 (Resolved 2026-09-06, decision by Kyle: treated as a plan-wording issue — plan §7's "Operator sign-in" evidence-gap item is amended in place rather than building an `AUTH_MODE=cloud` fixture) — "Operator sign-in" evidence gap cannot be captured in `AUTH_MODE=local`
 
 **Observed:** plan §7 / closure.md section (b) names "Operator sign-in" as evidence still
 to obtain: "`/` → sign-in form → successful sign-in → workspace hub". Driving this
