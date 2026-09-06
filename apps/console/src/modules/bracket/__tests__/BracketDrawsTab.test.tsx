@@ -144,6 +144,18 @@ beforeEach(() => {
   });
 });
 
+describe("BracketDrawsTab — action column header (V3-OC15.1)", () => {
+  it("names the trailing action column 'Action', separate from Status", () => {
+    renderDraws();
+    expect(
+      screen.getByRole("columnheader", { name: "Action" }),
+    ).toBeInTheDocument();
+    // Status stays its own column and never carries a verb like "Open draw".
+    const statusHeader = screen.getByRole("columnheader", { name: "Status" });
+    expect(statusHeader).toBeInTheDocument();
+  });
+});
+
 describe("BracketDrawsTab — draw rows", () => {
   it("renders a row per draw with format, size, and entered meta", () => {
     mockBracketData = makeBracketData({ participantCount: 3, bracketSize: 8 });

@@ -172,6 +172,13 @@ export function RegenerateMenu() {
     !previewError &&
     generatedCount > 0;
 
+  // V3-OC33.1: "Regenerate" implies a prior generation. Before any match
+  // exists this is the FIRST build, not a rebuild — the toolbar control's
+  // own label (and the popover it opens) must say so.
+  const hasMatches = matches.length > 0;
+  const toggleLabel = hasMatches ? 'Regenerate from roster' : 'Generate matches';
+  const dialogLabel = hasMatches ? 'Regenerate from roster' : 'Generate matches from roster';
+
   const regenerate = () => {
     if (!canEditWorkspace || resultsLocked || !canGenerate || !preview) return;
     importMatches(preview.matches);
@@ -219,16 +226,16 @@ export function RegenerateMenu() {
         className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border-control bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50`}
       >
         <ArrowsClockwise aria-hidden="true" className="h-3.5 w-3.5" />
-        Regenerate from roster
+        {toggleLabel}
       </button>
       {open ? (
         <div
           role="dialog"
-          aria-label="Regenerate matches from roster"
+          aria-label={dialogLabel}
           className="motion-enter absolute right-0 top-full z-overlay mt-1 w-72 rounded-sm border border-border bg-popover p-3 text-popover-foreground shadow-lg"
         >
           <div className={`mb-1 ${EYEBROW_CLASS} text-muted-foreground`}>
-            Regenerate from roster
+            {toggleLabel}
           </div>
           <p className="text-xs text-muted-foreground">{infoLine}</p>
           {previewError ? (

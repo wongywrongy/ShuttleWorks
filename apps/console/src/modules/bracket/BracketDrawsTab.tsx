@@ -104,8 +104,11 @@ const DRAW_COLUMNS: BandedListColumn[] = [
   { label: "Progress", className: "w-20 shrink-0" },
   { label: "Status", className: "w-20 shrink-0 text-right" },
   // `ml-auto` keeps the action cluster on the right edge in the narrow case
-  // where Format has yielded and no column is growing.
-  { label: "", className: "ml-auto w-36 shrink-0" },
+  // where Format has yielded and no column is growing. Named "Action"
+  // (V3-OC15.1) — an unlabeled trailing column had no accessible name, and
+  // "Status" must stay reserved for actual states (Draft/Generated), never
+  // an action verb like "Open draw".
+  { label: "Action", className: "ml-auto w-36 shrink-0 text-right" },
 ];
 
 /** Content floor for the draws dock, derived from DRAW_COLUMNS. The old

@@ -117,7 +117,15 @@ function BracketRosterTabCore({
     [badgesById],
   );
 
-  const [denseState, denseActions] = useDenseDataState({}, 'bracket-roster');
+  // V3-OC14.1: a large roster with no default order (insertion order) reads
+  // as unsorted noise with no way to tell whether that IS the current sort.
+  // Opening sorted by Player gives the table an explicit, visible sort state
+  // from the start — DenseDataTable already exposes it via aria-sort + the
+  // header's sort icon, and its own header button already changes it.
+  const [denseState, denseActions] = useDenseDataState(
+    { sort: { id: 'player', direction: 'asc' } },
+    'bracket-roster',
+  );
   const setDenseState = denseActions.setState;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
@@ -334,6 +342,7 @@ function BracketRosterTabCore({
             rowTestId={(row) => `roster-row-${row.player.id}`}
              renderActions={(row) => <OverflowMenu label={`Actions for ${row.player.name}`} items={rowOverflowItems(row.player)} />}
             strictRows
+            strictRowHeight="roster"
             elasticColumnId="player"
             emptyState={players.length === 0 ? 'No players yet. Add the first one.' : 'No players match the current view.'}
           />

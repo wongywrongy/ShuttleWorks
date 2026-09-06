@@ -55,6 +55,10 @@ export interface DenseDataTableProps<T> {
    * deliberately migrated (R-PAIR-8).
    */
   strictRows?: boolean;
+  /** Strict row density token — `"compact"` (28px, the default) or
+   * `"roster"` (36px, the X8/V3-OC14.1 roster floor). Ignored unless
+   * `strictRows` is set. */
+  strictRowHeight?: StrictRowHeight;
   /** The one elastic column in strict mode. Defaults to the first visible
    * column, so callers cannot accidentally create a table with zero elastic
    * identity columns. */
@@ -87,17 +91,43 @@ function cellClass<T>(column: DenseDataColumn<T>): string {
     .join(" ");
 }
 
-/** Strict rows use a fixed density token: `h-7` is the 28px operator row.
- * Numeric columns opt into the shared lining-figure utility, while all cell
- * content is kept on one line. The identity column's elastic width is marked
- * by the caller so a future table cannot silently make two columns flexible.
+/** Strict rows use a fixed density token. The default `h-7` is the 28px
+ * operator row; `strictRowHeight="roster"` opts into the 36px floor a roster
+ * listing needs (X8/V3-OC14.1) without disturbing the shorter contexts
+ * (e.g. `ParticipantPicker`) that never asked for it. Numeric columns opt
+ * into the shared lining-figure utility, while all cell content is kept on
+ * one line. The identity column's elastic width is marked by the caller so
+ * a future table cannot silently make two columns flexible.
  */
+export type StrictRowHeight = "compact" | "roster";
+
+const STRICT_ROW_HEIGHT_CLASS: Record<StrictRowHeight, string> = {
+  compact: "h-7 min-h-7 max-h-7",
+  roster: "h-9 min-h-9 max-h-9",
+};
+
+/** The trailing selection/leading/action lane cell — square, fixed to the
+ * row height. */
+const STRICT_LANE_CLASS: Record<StrictRowHeight, string> = {
+  compact: "h-7 w-7",
+  roster: "h-9 w-9",
+};
+
+/** The control INSIDE a lane cell. Smaller than the row so the hairline and
+ * a little breathing room survive; F-PAIR-01's 24px WCAG-minimum target at
+ * `compact`, 32px at `roster`. */
+const STRICT_LANE_INNER_CLASS: Record<StrictRowHeight, string> = {
+  compact: "h-6",
+  roster: "h-8",
+};
+
 function strictCellClass<T>(
   column: DenseDataColumn<T>,
   elastic: boolean,
+  rowHeight: StrictRowHeight,
 ): string {
   return [
-    "h-7 min-h-7 max-h-7 overflow-hidden whitespace-nowrap text-ellipsis px-2 py-0 align-middle text-xs",
+    `${STRICT_ROW_HEIGHT_CLASS[rowHeight]} overflow-hidden whitespace-nowrap text-ellipsis px-2 py-0 align-middle text-xs`,
     elastic ? "min-w-0" : (column.strictWidth ?? "w-max") + " shrink-0",
     column.align === "right"
       ? "text-right sw-num"
@@ -113,9 +143,10 @@ function strictCellClass<T>(
 function strictHeaderClass<T>(
   column: DenseDataColumn<T>,
   elastic: boolean,
+  rowHeight: StrictRowHeight,
 ): string {
   return [
-    strictCellClass(column, elastic),
+    strictCellClass(column, elastic, rowHeight),
     "font-semibold uppercase tracking-[0.06em] text-xs text-ink-faint",
   ]
     .filter(Boolean)
@@ -185,6 +216,7 @@ export function DenseDataTable<T>({
   emptyState = "No records match this view.",
   renderMobileRow,
   strictRows = false,
+  strictRowHeight = "compact",
   elasticColumnId: requestedElasticColumnId,
   showPagination = true,
   className,
@@ -356,7 +388,7 @@ export function DenseDataTable<T>({
           onKeyDown: click.onKeyDown,
         })}
         className={[
-          "h-7 min-h-7 max-h-7 border-b border-border last:border-b-0",
+          `${STRICT_ROW_HEIGHT_CLASS[strictRowHeight]} border-b border-border last:border-b-0`,
           onRowClick
             ? `cursor-pointer hover:bg-muted/30 focus-visible:bg-muted/40 ${SELECTABLE_ROW_FOCUS}`
             : "",
@@ -367,7 +399,7 @@ export function DenseDataTable<T>({
       >
         {selectable ? (
           <td
-            className="h-7 w-7 overflow-hidden px-1 py-0 align-middle"
+            className={`${STRICT_LANE_CLASS[strictRowHeight]} overflow-hidden px-1 py-0 align-middle`}
             onClick={(event) => event.stopPropagation()}
           >
             <input
@@ -382,10 +414,12 @@ export function DenseDataTable<T>({
         {renderLeading ? (
           <td
             data-strict-leading="true"
-            className="h-7 w-7 overflow-hidden px-1 py-0 align-middle"
+            className={`${STRICT_LANE_CLASS[strictRowHeight]} overflow-hidden px-1 py-0 align-middle`}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex h-6 items-center justify-center overflow-hidden [&>*]:!h-6 [&>*]:!min-h-0">
+            <div
+              className={`flex ${STRICT_LANE_INNER_CLASS[strictRowHeight]} items-center justify-center overflow-hidden [&>*]:!h-full [&>*]:!min-h-0`}
+            >
               {renderLeading(row)}
             </div>
           </td>
@@ -401,7 +435,7 @@ export function DenseDataTable<T>({
                 column.cellTitle?.(row) ??
                 String(column.accessor(row) ?? "—")
               }
-              className={strictCellClass(column, elastic)}
+              className={strictCellClass(column, elastic, strictRowHeight)}
             >
               <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
                 {strictDisplayValue(column, row)}
@@ -412,13 +446,17 @@ export function DenseDataTable<T>({
         {renderActions ? (
           <td
             data-strict-action="true"
-            className="h-7 w-7 overflow-hidden px-1 py-0 align-middle"
+            className={`${STRICT_LANE_CLASS[strictRowHeight]} overflow-hidden px-1 py-0 align-middle`}
             onClick={(event) => event.stopPropagation()}
           >
             {/* F-PAIR-01: an action supplied by a consumer cannot make the
-                fixed record row taller. Twenty-four pixels preserves WCAG's
-                minimum target while leaving room for the row hairline. */}
-            <div className="flex h-6 items-center justify-center overflow-hidden [&>*]:!h-6 [&>*]:!min-h-0">
+                fixed record row taller. The inner lane stays a bit smaller
+                than the row so the hairline and a little breathing room
+                survive — 24px at `compact`, 32px at `roster` — while still
+                clearing WCAG's minimum target. */}
+            <div
+              className={`flex ${STRICT_LANE_INNER_CLASS[strictRowHeight]} items-center justify-center overflow-hidden [&>*]:!h-full [&>*]:!min-h-0`}
+            >
               {renderActions(row)}
             </div>
           </td>
@@ -464,7 +502,7 @@ export function DenseDataTable<T>({
                   scope="col"
                   className={
                     strictRows
-                      ? "h-7 w-7 px-1 py-0 text-left"
+                      ? `${STRICT_LANE_CLASS[strictRowHeight]} px-1 py-0 text-left`
                       : "w-11 px-3 py-2 text-left"
                   }
                 >
@@ -485,7 +523,7 @@ export function DenseDataTable<T>({
                   aria-label="Select"
                   className={
                     strictRows
-                      ? "h-7 w-7 px-1 py-0"
+                      ? `${STRICT_LANE_CLASS[strictRowHeight]} px-1 py-0`
                       : "w-11 px-3 py-2"
                   }
                 />
@@ -514,6 +552,7 @@ export function DenseDataTable<T>({
                         ? strictHeaderClass(
                             column,
                             column.id === elasticColumnId,
+                            strictRowHeight,
                           )
                         : "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint",
                       !strictRows
@@ -545,7 +584,9 @@ export function DenseDataTable<T>({
                   scope="col"
                   aria-label="Actions"
                   className={
-                    strictRows ? "h-7 w-7 px-1 py-0" : "w-11 px-3 py-2"
+                    strictRows
+                      ? `${STRICT_LANE_CLASS[strictRowHeight]} px-1 py-0`
+                      : "w-11 px-3 py-2"
                   }
                 />
               ) : null}

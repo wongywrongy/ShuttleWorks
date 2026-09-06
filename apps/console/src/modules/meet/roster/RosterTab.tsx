@@ -60,6 +60,7 @@ import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 import { decomposeMeetEventRank } from '../../../platform/domain/matchIdentity';
 import { ActiveChoice } from '../../../components/ActiveChoice';
+import { SELECTABLE_ROW_FOCUS } from '../../../lib/selectableRow';
 
 export function RosterTab() {
   const tid = useTournamentId();
@@ -360,7 +361,11 @@ export function RosterTab() {
         {groups.length === 0 ? (
           <EmptyState
             title="No schools yet"
-            body="A school is a roster of players; their positions are what matches get built from. Add a school from the actions bar to start."
+            // V3-OC32.1: pointed at "the actions bar" even though the Add
+            // school action sits right below this text. Describe the next
+            // domain step instead of redirecting away from the adjacent
+            // button.
+            body="Add a school, then add its players and positions."
             action={
               <button
                 type="button"
@@ -835,11 +840,19 @@ function PlayerListSection({
             key={p.id}
             data-testid={`player-row-${p.id}`}
             data-selected={isSelected ? 'true' : 'false'}
+            role="button"
+            tabIndex={0}
+            aria-pressed={isSelected}
+            aria-label={`Select ${p.name || '(unnamed)'}`}
             className={[
               // Same row family as the school list: border-l accent bar,
               // py-1 / pl-2 / pr-2, text-sm, hover wash. Keeps both lists at
               // one density.
               'group flex cursor-pointer items-center gap-2 rounded-sm border-l-2 py-1 pl-2 pr-2 text-sm transition-colors duration-fast ease-brand',
+              // V3 row-navigation ruling: a row you can click must also be a
+              // row you can reach and operate from the keyboard — Tab lands
+              // here, a visible focus ring shows it, Enter/Space toggle it.
+              SELECTABLE_ROW_FOCUS,
               isSelected
                 ? 'border-accent bg-accent/10 font-medium text-foreground'
                 : 'border-transparent text-foreground hover:bg-muted/40',
@@ -847,6 +860,15 @@ function PlayerListSection({
             onClick={(e) => {
               // Don't toggle when clicking the row's own buttons (× delete).
               if ((e.target as HTMLElement).closest('[data-no-select]')) return;
+              onTogglePlayer(p.id);
+            }}
+            onKeyDown={(e) => {
+              // A nested control (the drag-handle chip, the delete button)
+              // owns its own keys; only Enter/Space landing on the row
+              // itself toggles selection.
+              if (e.target !== e.currentTarget) return;
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
               onTogglePlayer(p.id);
             }}
           >

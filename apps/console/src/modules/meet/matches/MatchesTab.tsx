@@ -21,6 +21,7 @@ import { INTERACTIVE_BASE } from '../../../lib/utils';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { useTournamentId } from '../../../hooks/useTournamentId';
 import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
+import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 
 export function MatchesTab() {
   const tid = useTournamentId();
@@ -115,17 +116,22 @@ export function MatchesTab() {
           />
         </div>
         {/* Manual add is a de-emphasized override — the primary path is
-            regenerating from the roster. */}
-        <button
-          type="button"
-          onClick={addEmptyRow}
-          disabled={!canAddRow}
-          data-testid="add-match-row"
-          title={canAddRow ? 'Add a custom match by hand' : 'Need at least 2 players'}
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-2.5 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          Add match
-        </button>
+            regenerating from the roster. V3-OC33.1: before any match
+            exists, this control is not a valid next step (there is nothing
+            yet to override), so it is withheld from the empty inventory
+            rather than shown disabled. */}
+        {matches.length > 0 && (
+          <button
+            type="button"
+            onClick={addEmptyRow}
+            disabled={!canAddRow}
+            data-testid="add-match-row"
+            title={canAddRow ? 'Add a custom match by hand' : 'Need at least 2 players'}
+            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-2.5 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            Add match
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void exportMatchesXlsx(matches, players, groups)}
@@ -148,28 +154,49 @@ export function MatchesTab() {
           <div className="min-h-0 flex-1 overflow-auto">
             <EmptyState
               title="No matches yet"
-              // COPY-1: was four sentences, and the third named
-              // "Operations → Courts" — a destination that has never existed
-              // in this nav. Operations has exactly two: Plan and Live day.
-              // One why-line, then the one action below.
-              body="Matches come from the position grid on Roster. Use Regenerate from roster above to build them, then lay them out in Operations → Plan."
+              // V3-OC33.1: one valid next step, chosen by roster readiness —
+              // not a muted alternative competing with the toolbar's own
+              // Generate/Regenerate control. Below 2 players there is
+              // nothing to generate from yet, so the step is building the
+              // roster; at 2+ the step is the first generation itself,
+              // triggered here through the same control the toolbar uses
+              // (Operations → Plan is where the result gets laid out, one
+              // step past this page's own job).
+              body={
+                players.length < 2
+                  ? 'Matches can be generated once players are on the roster.'
+                  : 'Matches come from the position grid on Roster.'
+              }
               action={
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (players.length < 2) {
-                      navigate(`/tournaments/${encodeURIComponent(tid)}/participants/people`);
-                    } else {
-                      addEmptyRow();
+                players.length < 2 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(`/tournaments/${encodeURIComponent(tid)}/participants/people`)
                     }
-                  }}
-                  disabled={players.length >= 2 ? !canAddRow : !canEditWorkspace}
-                  data-testid="empty-add-match"
-                  title={players.length < 2 ? 'Add players in Roster before generating matches' : canAddRow ? 'Add match row' : 'Need at least 2 players'}
-                  className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-3 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
-                >
-                  {players.length < 2 ? 'Add players in Roster' : 'Add match by hand'}
-                </button>
+                    disabled={!canEditWorkspace}
+                    data-testid="empty-add-players"
+                    title={!canEditWorkspace ? READ_ONLY_MESSAGE : 'Add players in Roster'}
+                    className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm bg-accent px-3 text-xs font-medium text-accent-ink disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    Add players
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      document
+                        .querySelector<HTMLButtonElement>('[data-testid="regenerate-toggle"]')
+                        ?.click()
+                    }
+                    disabled={!canEditWorkspace}
+                    data-testid="empty-generate-matches"
+                    title={!canEditWorkspace ? READ_ONLY_MESSAGE : 'Generate matches from the roster'}
+                    className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm bg-accent px-3 text-xs font-medium text-accent-ink disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    Generate matches
+                  </button>
+                )
               }
             />
           </div>
