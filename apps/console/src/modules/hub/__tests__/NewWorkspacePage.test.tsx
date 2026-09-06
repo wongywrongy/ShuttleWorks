@@ -93,9 +93,9 @@ describe('NewWorkspacePage', () => {
     }
   });
 
-  it('defaults to Meet as the single engine choice', () => {
+  it('defaults to Team meet as the single engine choice', () => {
     mount({ current: '' });
-    expect(within(screen.getByRole('radiogroup', { name: 'Tournament type' })).getByRole('radio', { name: 'Meet' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(screen.getByRole('radiogroup', { name: 'Tournament type' })).getByRole('radio', { name: 'Team meet' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('sends the chosen modules and derives kind=meet', async () => {
@@ -121,7 +121,7 @@ describe('NewWorkspacePage', () => {
     returnCreated('w2', [m('bracket', 'enabled'), m('meet', 'disabled'), m('display', 'disabled')]);
     const loc = { current: '' };
     mount(loc);
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Tournament type' })).getByRole('radio', { name: 'Bracket' }));
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Tournament type' })).getByRole('radio', { name: 'Draw tournament' }));
     advanceToReview();
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(loc.current).toBe('/tournaments/w2/overview'));
@@ -133,7 +133,8 @@ describe('NewWorkspacePage', () => {
   it('always includes one engine because tournament type owns engine selection', () => {
     mount({ current: '' });
     expect(screen.queryByTestId('modules-hint')).toBeNull();
-    expect(screen.getByText(/Included by tournament type/i)).toBeInTheDocument();
+    // V3-OC03.1: the fact is stated once (not repeated per module row).
+    expect(screen.getByText(/Meet and Bracket follow the tournament type above/i)).toBeInTheDocument();
   });
 
   it('allows Display to be turned on independently', () => {

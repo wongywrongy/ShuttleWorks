@@ -39,3 +39,25 @@ export function localInputToUtc(value: string, timezone: string): string | null 
     .sort((a, b) => a - b);
   return candidates.length ? new Date(candidates[0]).toISOString() : null;
 }
+
+/** True only when this exact local wall-clock value occurs twice in this
+ * timezone (a clock-change fold) — the one case `localInputToUtc` resolves
+ * silently by picking the earlier instant. Used to show contextual help
+ * only when it is actually relevant to the timezone and time entered
+ * (V3-OC07.3), rather than a blanket sentence shown on every date field. */
+export function isAmbiguousLocalTime(value: string, timezone: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return false;
+  const [, year, month, day, hour, minute] = match;
+  const wallTime = Date.UTC(+year, +month - 1, +day, +hour, +minute);
+  const offsets = new Set<number>();
+  for (let hours = -48; hours <= 48; hours += 6) {
+    const sample = wallTime + hours * 3_600_000;
+    const local = zonedLocalInput(new Date(sample).toISOString(), timezone);
+    offsets.add(Date.parse(`${local}:00Z`) - sample);
+  }
+  const matches = [...offsets].filter(
+    (offset) => zonedLocalInput(new Date(wallTime - offset).toISOString(), timezone) === value,
+  );
+  return matches.length > 1;
+}

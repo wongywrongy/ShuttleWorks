@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useAlertStore } from '../../store/alertStore';
 import { apiClient } from '../../api/client';
-import type { TournamentActivityEntryDTO } from '../../api/dto';
+import type { TournamentActivityEntryDTO, TournamentActivityFieldChangeDTO } from '../../api/dto';
 import { EmptyState } from '../../components/control-plane';
 import { PAGE_BODY_WIDTH } from '../../components/control-plane/PageBody';
 import { TEXT_MUTED_XS, TEXT_TITLE_SM } from '../../lib/utils'
+import { formatDateTime } from '../../lib/formatDateTime';
 
-function formatTimestamp(iso: string): string {
+/** Session-activity timestamps (`useAlertStore`'s live-day events) have no
+ * tournament timezone of their own — they are always this browser, right
+ * now — so they keep the workstation's local clock rather than the
+ * tournament-timezone `datetime` context used for durable history below. */
+function formatSessionTimestamp(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? iso
@@ -20,28 +25,65 @@ function formatTimestamp(iso: string): string {
       });
 }
 
-const ACTIVITY_TARGET_LABELS: Record<string, string> = {
-  general: 'General',
-  dates: 'Dates',
-  rules: 'Rules',
-  venue: 'Venue',
-  events: 'Events',
-  people: 'Staff',
-  entries: 'Entry rules',
-  'public-info': 'Public information',
-  modules: 'Modules',
-  sharing: 'Site',
-  backups: 'Backups',
-};
+/** A row's plain-language change description already names the section
+ * (ruling R1) — this is only for the rare row missing a description. */
+function rowDescription(entry: TournamentActivityEntryDTO): string {
+  return entry.summary || 'Changed';
+}
 
-function activityTargetLabel(target: string): string {
-  return ACTIVITY_TARGET_LABELS[target] ?? target.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+function fieldValueText(value: unknown): string {
+  if (value === null || value === undefined) return 'Not set';
+  if (typeof value === 'string') return value || 'Not set';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  return JSON.stringify(value);
+}
+
+function FieldDiffRow({ field }: { field: TournamentActivityFieldChangeDTO }) {
+  return (
+    <li className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+      <span className="font-medium text-foreground">{field.label}:</span>
+      <span className="text-muted-foreground">{fieldValueText(field.old)}</span>
+      <span aria-hidden="true" className="text-muted-foreground">→</span>
+      <span className="text-foreground">{fieldValueText(field.new)}</span>
+    </li>
+  );
+}
+
+/** Row expansion: old → new values when the record has a field diff
+ * (ruling R2), plus diagnostics that never appear in the default row
+ * (ruling R3) — raw operation id, ISO timestamp, payload hash. */
+function ActivityRowDetails({ entry }: { entry: TournamentActivityEntryDTO }) {
+  return (
+    <details className="mt-1.5 text-xs text-muted-foreground">
+      <summary className="cursor-pointer select-none">Details</summary>
+      <div className="mt-1.5 space-y-2 border-l border-border pl-2.5">
+        {entry.fields.length > 0 ? (
+          <ul className="space-y-1">
+            {entry.fields.map((field) => (
+              <FieldDiffRow key={field.key} field={field} />
+            ))}
+          </ul>
+        ) : (
+          <p>Details not recorded for this change.</p>
+        )}
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-0.5">
+          <dt>Operation ID</dt>
+          <dd className="font-mono">{entry.id}</dd>
+          <dt>Recorded at</dt>
+          <dd className="font-mono">{formatDateTime(entry.occurredAt, 'diagnostic') ?? entry.occurredAt}</dd>
+          <dt>Payload hash</dt>
+          <dd className="font-mono">{entry.payloadHash || 'not recorded'}</dd>
+        </dl>
+      </div>
+    </details>
+  );
 }
 
 /** Durable activity is read from the service; local live-day activity is separate. */
-export function ActivityTab({ tid }: { tid?: string }) {
+export function ActivityTab({ tid, timeZone }: { tid?: string; timeZone?: string }) {
   const activity = useAlertStore((state) => state.activity);
   const [durable, setDurable] = useState<TournamentActivityEntryDTO[]>([]);
+  const [retentionLimit, setRetentionLimit] = useState<number | null>(null);
   const [loading, setLoading] = useState(Boolean(tid));
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -52,7 +94,10 @@ export function ActivityTab({ tid }: { tid?: string }) {
     setLoadFailed(false);
     apiClient.getTournamentActivity(tid).then(
       (feed) => {
-        if (active) setDurable(feed.entries);
+        if (active) {
+          setDurable(feed.entries);
+          setRetentionLimit(feed.retentionLimit);
+        }
       },
       () => {
         if (active) setLoadFailed(true);
@@ -76,9 +121,16 @@ export function ActivityTab({ tid }: { tid?: string }) {
       </div>
 
       <section aria-labelledby="durable-activity-heading" className="space-y-2">
-        <h3 id="durable-activity-heading" className={TEXT_TITLE_SM}>
-          Tournament history
-        </h3>
+        <div>
+          <h3 id="durable-activity-heading" className={TEXT_TITLE_SM}>
+            Tournament history
+          </h3>
+          {retentionLimit != null ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Kept for the most recent {retentionLimit} changes.
+            </p>
+          ) : null}
+        </div>
         {loading ? (
           <p className={TEXT_MUTED_XS}>Loading tournament history…</p>
         ) : loadFailed ? (
@@ -92,19 +144,15 @@ export function ActivityTab({ tid }: { tid?: string }) {
             {durable.map((entry) => (
               <li key={entry.id} className="flex items-start justify-between gap-4 p-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">{entry.action === 'setup.updated' ? `Updated ${activityTargetLabel(entry.target)}` : entry.summary}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {entry.actorName} · {activityTargetLabel(entry.target)}
-                  </p>
-                  {activityTargetLabel(entry.target) !== entry.target ? (
-                    <details className="mt-1 text-xs text-muted-foreground">
-                      <summary className="cursor-pointer">Technical details</summary>
-                      <code>{entry.target}</code>
-                    </details>
-                  ) : null}
+                  <p className="text-sm font-medium text-foreground">{rowDescription(entry)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{entry.actorName}</p>
+                  <ActivityRowDetails entry={entry} />
                 </div>
-                <time dateTime={entry.occurredAt} className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                  {formatTimestamp(entry.occurredAt)}
+                <time
+                  dateTime={entry.occurredAt}
+                  className="shrink-0 text-xs tabular-nums text-muted-foreground"
+                >
+                  {formatDateTime(entry.occurredAt, 'datetime', timeZone) ?? entry.occurredAt}
                 </time>
               </li>
             ))}
@@ -131,10 +179,10 @@ export function ActivityTab({ tid }: { tid?: string }) {
               <time
                 data-testid="activity-timestamp"
                 dateTime={entry.ts}
-                title={formatTimestamp(entry.ts)}
+                title={formatSessionTimestamp(entry.ts)}
                 className="shrink-0 text-xs tabular-nums text-muted-foreground"
               >
-                {formatTimestamp(entry.ts)}
+                {formatSessionTimestamp(entry.ts)}
               </time>
             </li>
           ))}

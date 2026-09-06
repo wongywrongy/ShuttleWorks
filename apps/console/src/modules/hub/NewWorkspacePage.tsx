@@ -54,10 +54,13 @@ const MODULE_HINT: Record<keyof CustomState, string> = {
 
 type TournamentType = 'meet' | 'bracket' | 'hybrid';
 
+// V3-OC03.1: name the outcome, not the architecture — a director choosing
+// among these should not need to already know what "Bracket" means as a
+// ShuttleWorks module.
 const TOURNAMENT_TYPES: { value: TournamentType; label: string }[] = [
-  { value: 'meet', label: MODULE_LABELS.meet },
-  { value: 'bracket', label: MODULE_LABELS.bracket },
-  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'meet', label: 'Team meet' },
+  { value: 'bracket', label: 'Draw tournament' },
+  { value: 'hybrid', label: 'Both' },
 ];
 
 const TYPE_HINT: Record<TournamentType, string> = {
@@ -186,7 +189,7 @@ export function NewWorkspacePage() {
                 control={<Seg options={TOURNAMENT_TYPES} value={tournamentType} onChange={setType} ariaLabel="Tournament type" />}
               />
             </Section>
-            <Section title="Modules">
+            <Section title="Included tools">
               {MODULE_IDS.map((id, i) => (
                 <Row
                   key={id}
@@ -195,14 +198,17 @@ export function NewWorkspacePage() {
                   control={id === 'display' ? (
                     <Seg options={[{ value: 'enabled', label: 'On' }, { value: 'off', label: 'Off' }]} value={modules[id]} onChange={(v) => setModule(id, v)} ariaLabel={MODULE_LABELS[id]} />
                   ) : (
-                    <span className={TEXT_MUTED_SM}>{modules[id] === 'enabled' ? 'Included by tournament type' : 'Not included'}</span>
+                    <span className={TEXT_MUTED_SM}>{modules[id] === 'enabled' ? 'On' : 'Off'}</span>
                   )}
                 />
               ))}
             </Section>
+            {/* One sentence, stated once, rather than repeated per row
+                (V3-OC03.1: remove duplicated inclusion statements). */}
+            <p className={TEXT_MUTED_XS}>Meet and Bracket follow the tournament type above; Display can be turned on independently.</p>
             {displayOrphaned || nothingOn ? (
               <p data-testid="modules-hint" className="pt-1 text-xs text-status-warning">
-                {nothingOn ? 'Nothing is on yet, so this workspace opens on Modules.' : 'Display needs Meet or Bracket on to show anything.'}
+                {nothingOn ? 'Nothing is on yet, so this workspace opens on Included tools.' : 'Display needs Meet or Bracket on to show anything.'}
               </p>
             ) : null}
           </div>
@@ -227,8 +233,8 @@ export function NewWorkspacePage() {
         {step === 4 ? (
           <div className="space-y-4">
             <Section title="Review">
-              <Row label="Tournament type" control={<span className={TEXT_MUTED_SM}>{tournamentType[0].toUpperCase() + tournamentType.slice(1)}</span>} />
-              <Row label="Modules" control={<span className={TEXT_MUTED_SM}>{MODULE_IDS.filter((id) => modules[id] === 'enabled').map((id) => MODULE_LABELS[id]).join(', ') || 'None yet'}</span>} />
+              <Row label="Tournament type" control={<span className={TEXT_MUTED_SM}>{TOURNAMENT_TYPES.find((item) => item.value === tournamentType)?.label ?? tournamentType}</span>} />
+              <Row label="Included tools" control={<span className={TEXT_MUTED_SM}>{MODULE_IDS.filter((id) => modules[id] === 'enabled').map((id) => MODULE_LABELS[id]).join(', ') || 'None yet'}</span>} />
               <Row label="Name" control={<span className={TEXT_MUTED_SM}>{name.trim() || 'Untitled'}</span>} />
               <Row label="Date" control={<span className={TEXT_MUTED_SM}>{date || 'Not set'}</span>} />
               <Row last label="Venue scale" control={<span className={TEXT_MUTED_SM}>{courts} courts</span>} />

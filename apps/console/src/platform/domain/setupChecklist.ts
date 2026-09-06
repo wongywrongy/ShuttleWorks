@@ -46,7 +46,7 @@ const STEP_ORDER: Record<'meet' | 'bracket', readonly string[]> = {
 
 /** Step key → the attention code that explains why it is incomplete. Steps
  *  with no coded reason (e.g. `results`) simply render without a subline. */
-const STEP_REASON_CODE: Record<string, string> = {
+export const STEP_REASON_CODE: Record<string, string> = {
   roster: 'NO_ROSTER',
   scheduled: 'NOT_SCHEDULED',
   bracketBuilt: 'NO_BRACKET',

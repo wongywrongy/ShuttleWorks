@@ -172,22 +172,39 @@ export function SetupRowsEditor({
                       <span className="mb-1 block text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
                         {listColumn.label}
                       </span>
-                      <input
-                        type="text"
-                        value={listDrafts[`${rowKey}-${listColumn.field}`] ?? cellValue(row, listColumn)}
-                        placeholder={listColumn.placeholder}
-                        onFocus={() => setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${listColumn.field}`]: cellValue(row, listColumn) }))}
-                        onChange={(event) => { setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${listColumn.field}`]: event.target.value })); patchRow(index, listColumn.field, listDraftValue(event.target.value)); }}
-                        onBlur={(event) => {
-                          patchRow(index, listColumn.field, parsedValue(event.target.value, listColumn));
-                          setListDrafts((drafts) => { const next = { ...drafts }; delete next[`${rowKey}-${listColumn.field}`]; return next; });
-                        }}
-                        aria-label={`${listColumn.label} for row ${index + 1}`}
-                        className={INPUT_CLASS}
-                      />
-                      <p className="mt-1 whitespace-normal text-xs leading-4 text-muted-foreground">
-                        {cellValue(row, listColumn) || 'No courts assigned'}
-                      </p>
+                      {listColumn.options && listColumn.options.length > 0 ? (
+                        // V3-OC07.2: only existing courts can be selected — a
+                        // compact checkbox list, not a free-text string that
+                        // must be typed consistently. Selection is shown once
+                        // (the checked boxes themselves), not repeated below.
+                        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                          {listColumn.options.map((option) => {
+                            const selected = (Array.isArray(row[listColumn.field]) ? row[listColumn.field] as unknown[] : []).map(String);
+                            const checked = selected.includes(option.value);
+                            return (
+                              <label key={option.value} className="inline-flex min-h-6 items-center gap-1.5 text-sm text-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) => {
+                                    const next = event.target.checked
+                                      ? [...selected, option.value]
+                                      : selected.filter((value) => value !== option.value);
+                                    patchRow(index, listColumn.field, next);
+                                  }}
+                                  aria-label={`${option.label} — ${listColumn.label} for row ${index + 1}`}
+                                  className="h-4 w-4 rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                                {option.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="whitespace-normal text-xs leading-4 text-muted-foreground">
+                          Add named courts in Venue and courts to assign them here.
+                        </p>
+                      )}
                     </div>
                   </Fragment>
                 );

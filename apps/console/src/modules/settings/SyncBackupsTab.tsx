@@ -8,6 +8,10 @@ import { DialogFooter } from '../../components/DialogFooter';
 import { useAuthorityStatus } from '../../hooks/useAuthorityStatus';
 import { SyncReconciliationPanel } from './SyncReconciliationPanel';
 import type { BackupSnapshotDTO } from '../../api/dto';
+// Package 19 / V3-OC27.2: timestamps redirect to the contract §7.3 console
+// authority (V3-19-2 — the authority did not exist yet when this tab's
+// timestamp handling was written; it now lives in `lib/formatDateTime.ts`).
+import { minuteKey, dayLabel, fmtTime, fmtTimestamp } from '../../lib/formatDateTime';
 
 /** Human-readable file size: B / KB / MB. Detail-affordance only (V3-OC27.2)
  *  — never rendered in the default row. */
@@ -15,75 +19,6 @@ function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// NOTE(package 19 / V3-OC27.2): the contract's tournament-timezone-aware
-// `formatDateTime.ts` authority (state-and-formatting.md §7.3) does not
-// exist yet — it is package 07's deliverable. Every backup timestamp below
-// is therefore formatted locally, with the same rules that authority will
-// enforce (tournament timezone, explicit zone abbreviation, seconds only to
-// break a tie), so this redirects cleanly once it lands.
-
-/** Minute-truncated wall-clock key in `timeZone`, used only to detect two
- * backups that collide on the minute (V3-OC27.2) — never displayed. */
-function minuteKey(iso: string, timeZone: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).format(d);
-}
-
-/** Day header in the tournament timezone: "Today", else "Aug 12" ("Aug 12,
- * 2025" outside the current year). */
-function dayLabel(iso: string, timeZone: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const dayKey = (date: Date) =>
-    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
-  const now = new Date();
-  if (dayKey(d) === dayKey(now)) return 'Today';
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    month: 'short',
-    day: 'numeric',
-    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
-  }).format(d);
-}
-
-/** Time-of-day in the tournament timezone, always zone-qualified (contract
- * §7 `clock_with_zone`; never a silent local-time assumption) — the day
- * lives in the group header. Seconds only when another backup in the list
- * collides on the same minute. */
-function fmtTime(iso: string, timeZone: string, withSeconds: boolean): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour: 'numeric',
-    minute: '2-digit',
-    ...(withSeconds ? { second: '2-digit' } : {}),
-    timeZoneName: 'short',
-  }).format(d);
-}
-
-/** The list is grouped by day, but every recovery point still needs its
- * exact, timezone-qualified moment for incident review and operator
- * confidence (contract §7 `datetime` + `clock_with_zone`). */
-function fmtTimestamp(iso: string, timeZone: string, withSeconds: boolean): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    ...(withSeconds ? { second: '2-digit' } : {}),
-    timeZoneName: 'short',
-  }).format(d);
 }
 
 /** "1 match, 2 entrants" — omits a count that is zero AND the other is
@@ -503,7 +438,7 @@ export function SyncBackupsTab({ timeZone: timeZoneProp }: { timeZone?: string }
               recovery point of the current state is saved first; if that
               safety snapshot cannot be saved, the restore will not run.
               Matches, results, and settings all change to match the
-              snapshot — everything recorded since it is discarded.
+              snapshot. Everything recorded since it is discarded.
             </p>
             <DialogFooter align="between">
               <Button variant="ghost" onClick={() => setRestoreTarget(null)} disabled={restoring}>

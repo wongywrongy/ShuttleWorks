@@ -73,7 +73,7 @@ export function WorkspaceShellSurface({
         return <ModulesSettingsTab tid={tid} />;
       case 'ws-sync':
         return location.pathname.endsWith('/administration/activity') ? (
-          <ActivityTab tid={tid} />
+          <ActivityTab tid={tid} timeZone={summary?.timeZone} />
         ) : (
           // Contract §7: backup timestamps render in the tournament
           // timezone, not the browser's (V3-OC27.2).
@@ -142,6 +142,8 @@ export function PublishProduct({ tid, modules = [] }: { tid: string; modules?: W
 function PublishPaneContent({ pane, tid, modules }: { pane: PublishPane; tid: string; modules: WorkspaceModule[] }) {
   if (pane === 'site') return <SharingTab tid={tid} scope="site" />;
   // SharingTab owns the capability URL and its rotate/revoke confirmation.
-  // DisplayConfig supplies layout controls and a preview only.
-  return <div className="space-y-6"><DisplayConfig tid={tid} modules={modules} showLinkControls={false} /><SharingTab tid={tid} scope="links" /></div>;
+  // DisplayConfig supplies board sources, layout controls and the fullscreen
+  // preview action; SharingTab (scope="links") owns the capability URL and
+  // its copy/replace controls. One "Venue board" name, two components.
+  return <div className="space-y-6"><DisplayConfig tid={tid} modules={modules} /><SharingTab tid={tid} scope="links" /></div>;
 }

@@ -387,3 +387,151 @@ def test_section_payload_rejects_unknown_fields(client):
     )
 
     assert response.status_code == 422
+
+
+def test_setup_patch_records_actor_section_and_field_diff(client):
+    """V3-OC28.1 / ruling R2: a setup PATCH must record enough for the
+    console to show an old -> new field diff without inventing one."""
+    tid = _create(client)
+    etag = client.get(f"/tournaments/{tid}/setup").headers["etag"]
+
+    changed = client.patch(
+        f"/tournaments/{tid}/setup/general",
+        headers={"If-Match": etag},
+        json={"data": {"name": "Canonical tournament name"}},
+    )
+    assert changed.status_code == 200
+
+    entries = client.get(f"/tournaments/{tid}/activity").json()["entries"]
+    entry = entries[0]
+    assert entry["target"] == "general"
+    assert entry["actorName"] == "Local operator"  # never the bootstrap "local@dev" address
+    assert "General" in entry["summary"]
+    assert "name" in entry["summary"] or any(f["key"] == "name" for f in entry["fields"])
+    field = next(f for f in entry["fields"] if f["key"] == "name")
+    assert field["old"] is None  # the setup document had no prior stored value for this section
+    assert field["new"] == "Canonical tournament name"
+    assert entry["payloadHash"]  # diagnostic, available behind expansion
+
+    # A second edit to the same section now has a real old value to diff against.
+    second = client.patch(
+        f"/tournaments/{tid}/setup/general",
+        headers={"If-Match": changed.headers["etag"]},
+        json={"data": {"name": "Renamed again"}},
+    )
+    assert second.status_code == 200
+    latest = client.get(f"/tournaments/{tid}/activity").json()["entries"][0]
+    latest_field = next(f for f in latest["fields"] if f["key"] == "name")
+    assert latest_field["old"] == "Canonical tournament name"
+    assert latest_field["new"] == "Renamed again"
+
+
+def test_downstream_impact_declarations_avoid_internal_jargon(client):
+    """V3-OC06.1: the impact sentence the console renders next to Save must
+    never say "public identity" — a plain destination name instead."""
+    tid = _create(client)
+    payload = client.get(f"/tournaments/{tid}/setup").json()
+    general = next(s for s in payload["sections"] if s["key"] == "general")
+    assert general["downstreamImpact"] == ["Overview", "the public site", "exports"]
+    assert "public identity" not in general["downstreamImpact"]
+
+
+def test_rules_point_cap_round_trips_and_is_never_invented(client):
+    """Ruling C3: the only cap that exists is whatever the operator sets
+    here — absent by default, and dropped again once a PATCH omits it."""
+    tid = _create(client)
+    etag = client.get(f"/tournaments/{tid}/setup").headers["etag"]
+    baseline = client.get(f"/tournaments/{tid}/setup").json()
+    rules = next(s for s in baseline["sections"] if s["key"] == "rules")
+    assert "pointCap" not in rules["data"]
+
+    patched = client.patch(
+        f"/tournaments/{tid}/setup/rules",
+        headers={"If-Match": etag},
+        json={"data": {"scoring": "badminton", "deuceEnabled": True, "pointCap": 30}},
+    )
+    assert patched.status_code == 200
+    rules = next(s for s in patched.json()["sections"] if s["key"] == "rules")
+    assert rules["data"]["pointCap"] == 30
+
+    cleared = client.patch(
+        f"/tournaments/{tid}/setup/rules",
+        headers={"If-Match": patched.headers["etag"]},
+        json={"data": {"scoring": "badminton", "deuceEnabled": True}},
+    )
+    assert cleared.status_code == 200
+    rules = next(s for s in cleared.json()["sections"] if s["key"] == "rules")
+    assert "pointCap" not in rules["data"]
+
+
+def test_rules_point_cap_is_bounded(client):
+    tid = _create(client)
+    etag = client.get(f"/tournaments/{tid}/setup").headers["etag"]
+    response = client.patch(
+        f"/tournaments/{tid}/setup/rules",
+        headers={"If-Match": etag},
+        json={"data": {"pointCap": 0}},
+    )
+    assert response.status_code == 422
+
+
+def test_out_of_window_daily_session_blocks_readiness_with_a_precise_message(client):
+    """V3-OC07.1: a competition session starting before the tournament's own
+    start (or ending after its end) must be a precise, per-session blocking
+    issue — never a silently accepted conflicting date."""
+    tid = _create(client)
+    setup = client.get(f"/tournaments/{tid}/setup")
+    general_patch = client.patch(
+        f"/tournaments/{tid}/setup/general",
+        headers={"If-Match": setup.headers["etag"]},
+        json={"data": {"name": "Summer Open", "timezone": "UTC"}},
+    )
+    assert general_patch.status_code == 200
+    dates_patch = client.patch(
+        f"/tournaments/{tid}/setup/dates",
+        headers={"If-Match": general_patch.headers["etag"]},
+        json={"data": {
+            "tournamentStart": "2026-07-28T17:00:00Z",
+            "tournamentEnd": "2026-07-29T20:00:00Z",
+            "dailySessions": [
+                {"id": "day-1", "date": "2026-07-28", "name": "Competition day 1", "startTime": "09:00", "endTime": "18:00"},
+            ],
+        }},
+    )
+    assert dates_patch.status_code == 200
+    payload = dates_patch.json()
+    dates = next(s for s in payload["sections"] if s["key"] == "dates")
+    assert dates["status"] == "blocked"
+    issue = next(i for i in dates["issues"] if i["code"] == "SETUP_DATES_SESSION_OUT_OF_WINDOW")
+    assert issue["severity"] == "blocking"
+    assert "Competition day 1" in issue["message"]
+    assert issue["path"] == "dailySessions.day-1"
+    assert payload["status"] == "blocked"
+
+
+def test_session_inside_the_tournament_window_has_no_conflict(client):
+    tid = _create(client)
+    setup = client.get(f"/tournaments/{tid}/setup")
+    dates_patch = client.patch(
+        f"/tournaments/{tid}/setup/dates",
+        headers={"If-Match": setup.headers["etag"]},
+        json={"data": {
+            "tournamentStart": "2026-07-28T09:00:00Z",
+            "tournamentEnd": "2026-07-29T20:00:00Z",
+            "dailySessions": [
+                {"id": "day-1", "date": "2026-07-28", "name": "Competition day 1", "startTime": "09:00", "endTime": "18:00"},
+            ],
+        }},
+    )
+    assert dates_patch.status_code == 200
+    dates = next(s for s in dates_patch.json()["sections"] if s["key"] == "dates")
+    assert not any(i["code"] == "SETUP_DATES_SESSION_OUT_OF_WINDOW" for i in dates["issues"])
+    assert dates["status"] == "ready"
+
+
+def test_activity_feed_reports_its_own_retention_limit(client):
+    from workspaces.setup import ACTIVITY_MAX_ENTRIES
+
+    tid = _create(client)
+    feed = client.get(f"/tournaments/{tid}/activity").json()
+    assert feed["retentionLimit"] == ACTIVITY_MAX_ENTRIES

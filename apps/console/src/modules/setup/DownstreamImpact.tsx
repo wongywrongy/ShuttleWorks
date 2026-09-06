@@ -9,12 +9,11 @@
  */
 export function DownstreamImpact({ targets, readOnly = false }: { targets: string[]; readOnly?: boolean }) {
   if (readOnly || !targets.length) return null;
+  // V3-OC06.1: one plain sentence next to Save, not an uppercase
+  // "DOWNSTREAM IMPACT" heading that reads as internal documentation.
   return (
     <div className="border-t border-border pt-4">
-      <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-        Downstream impact
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Saving this updates: {targets.join(', ')}.
       </p>
     </div>

@@ -7,9 +7,11 @@ additive and rollback-safe for older clients.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, Path, Response
@@ -36,6 +38,7 @@ from core.limits import (
 )
 from repositories import LocalRepository, get_repository
 from db.models import EntryPage
+from identity.auth import BOOTSTRAP_EMAIL
 from workspaces.tournaments import _counts_for, _resolve_tournament, _state_etag
 from workspaces.workspace_signals import RowCounts
 
@@ -140,6 +143,10 @@ class RulesSection(StrictModel):
     setsToWin: Optional[int] = Field(default=None, ge=1, le=5)
     pointsPerSet: Optional[int] = Field(default=None, ge=1, le=99)
     deuceEnabled: Optional[bool] = None
+    # Ruling C3 (state-and-formatting §5.1): the only cap the product actually
+    # enforces is whatever an operator configures here. There is no built-in
+    # "cap 30" — a formatter must never print a cap this field doesn't carry.
+    pointCap: Optional[int] = Field(default=None, ge=1, le=200)
     defaultRestMinutes: Optional[int] = Field(default=None, ge=0, le=240)
     drawSize: Optional[int] = Field(default=None, ge=2, le=4096)
     seedCount: Optional[int] = Field(default=None, ge=0, le=1024)
@@ -233,6 +240,20 @@ class TournamentSetup(StrictModel):
     sections: list[SetupSectionState]
 
 
+class ActivityFieldChange(StrictModel):
+    """One changed field, named and valued for an operator (ruling R2).
+
+    ``old``/``new`` are whatever JSON-safe value the section payload
+    carries for that key (``model_dump(mode="json")``) — never redacted,
+    since everything here was already operator-visible before the change.
+    """
+
+    key: str = Field(max_length=100)
+    label: str = Field(max_length=120)
+    old: Optional[Any] = None
+    new: Optional[Any] = None
+
+
 class ActivityEntry(StrictModel):
     id: str
     occurredAt: Timestamp
@@ -241,17 +262,81 @@ class ActivityEntry(StrictModel):
     action: Code
     target: str = Field(max_length=200)
     summary: str = Field(max_length=500)
+    # Ruling R2: field-level diff recorded at write time for setup section
+    # PATCHes. Empty on rows written before this existed, and on any action
+    # that never carried a diff — the console renders "Details not recorded
+    # for this change" rather than inventing one.
+    fields: list[ActivityFieldChange] = Field(default_factory=list, max_length=50)
+    # Ruling R3: diagnostics available behind the row's expansion, never in
+    # the default row. ``payloadHash`` is None for rows written before this
+    # existed.
+    payloadHash: Optional[str] = Field(default=None, max_length=64)
+
+
+# Ruling R4: activity is capped by count, not pruned on a schedule — the
+# retention copy must say exactly that, sourced from this constant rather
+# than a duplicated literal in the console.
+ACTIVITY_MAX_ENTRIES = 200
 
 
 class ActivityFeed(StrictModel):
     entries: list[ActivityEntry]
+    retentionLimit: int = ACTIVITY_MAX_ENTRIES
+
+
+# Plain-language section names for activity descriptions (ruling R1) — the
+# same words the console previously showed as a separate, repeated label
+# beside the actor; now folded into the change description itself.
+_SECTION_LABELS: dict[str, str] = {
+    "general": "General",
+    "dates": "Dates",
+    "rules": "Rules",
+    "venue": "Venue",
+    "events": "Events",
+    "people": "Staff",
+    "entries": "Entry rules",
+    "public-info": "Public information",
+}
+
+
+def _section_label(section: str) -> str:
+    return _SECTION_LABELS.get(section, section.replace("-", " ").replace("_", " ").title())
+
+
+def _field_label(key: str) -> str:
+    """Humanize a field key (``courtCount`` / ``entry_fee`` -> ``Court count``)."""
+    spaced = "".join(f" {c.lower()}" if c.isupper() else c for c in key.replace("_", " "))
+    spaced = " ".join(spaced.split())
+    return spaced[:1].upper() + spaced[1:] if spaced else key
+
+
+def _actor_display_name(actor_name: str) -> str:
+    """Never render the bootstrap operator's synthetic address as if it
+    were a real email (ruling R1) — applied at read time too, so older
+    stored rows display correctly without a migration."""
+    return "Local operator" if actor_name == BOOTSTRAP_EMAIL else actor_name
+
+
+def _diff_fields(old_data: dict, new_data: dict) -> list[ActivityFieldChange]:
+    changed: list[ActivityFieldChange] = []
+    for key in sorted(set(old_data) | set(new_data)):
+        old_value = old_data.get(key)
+        new_value = new_data.get(key)
+        if old_value != new_value:
+            changed.append(ActivityFieldChange(key=key, label=_field_label(key), old=old_value, new=new_value))
+    return changed
+
+
+def _payload_hash(payload: dict) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:16]
 
 
 _KEYS: tuple[SetupKey, ...] = (
     "general", "dates", "venue", "events", "rules", "entries", "people", "public-info"
 )
 _IMPACT: dict[SetupKey, list[str]] = {
-    "general": ["Overview", "public identity", "exports"],
+    "general": ["Overview", "the public site", "exports"],
     "dates": ["registration", "draw publication", "scheduling"],
     "venue": ["court availability", "Plan", "Live Day"],
     "events": ["Participants", "Competition", "publishing"],
@@ -389,6 +474,68 @@ def _domain_venue(row) -> Optional[dict]:
     return _section_data(row, "venue")
 
 
+def _parse_instant(value: Optional[str]) -> Optional[datetime]:
+    """Parse a stored timestamp (UTC ISO, ``Z``-suffixed or offset-bearing)
+    into an aware instant. ``None`` on absence or a value that fails to
+    parse — the caller then simply skips the comparison it was for."""
+    if not value:
+        return None
+    try:
+        text = value[:-1] + "+00:00" if value.endswith("Z") else value
+        parsed = datetime.fromisoformat(text)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
+def _session_instant(date_str: Optional[str], time_str: Optional[str], zone_name: Optional[str]) -> Optional[datetime]:
+    """A daily session's date + wall-clock time, interpreted in the
+    tournament timezone (UTC as a labelled fallback — §7.2 of the
+    state-and-formatting contract) and converted to an aware UTC instant."""
+    if not date_str or not time_str:
+        return None
+    try:
+        zone = ZoneInfo(zone_name) if zone_name else timezone.utc
+        naive = datetime.fromisoformat(f"{str(date_str)[:10]}T{time_str}:00")
+        return naive.replace(tzinfo=zone).astimezone(timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
+def _session_window_issues(data: dict, tz_name: Optional[str]) -> list["SetupIssue"]:
+    """V3-OC07.1: a daily session outside the tournament's own start/end
+    window (e.g. a competition day starting before the tournament itself
+    has started) must produce a precise, per-session field message — never
+    a silent, unvalidated date."""
+    window_start = _parse_instant(data.get("tournamentStart"))
+    window_end = _parse_instant(data.get("tournamentEnd"))
+    if window_start is None and window_end is None:
+        return []
+    issues: list[SetupIssue] = []
+    for session in data.get("dailySessions") or []:
+        if not isinstance(session, dict):
+            continue
+        name = session.get("name") or "This session"
+        session_start = _session_instant(session.get("date"), session.get("startTime"), tz_name)
+        session_end = _session_instant(session.get("date"), session.get("endTime"), tz_name)
+        path = f"dailySessions.{session.get('id')}"
+        if window_start is not None and session_start is not None and session_start < window_start:
+            issues.append(SetupIssue(
+                code="SETUP_DATES_SESSION_OUT_OF_WINDOW",
+                severity="blocking",
+                message=f"“{name}” starts before the tournament start. Move the tournament start earlier, or change this session's date or time.",
+                path=path,
+            ))
+        elif window_end is not None and session_end is not None and session_end > window_end:
+            issues.append(SetupIssue(
+                code="SETUP_DATES_SESSION_OUT_OF_WINDOW",
+                severity="blocking",
+                message=f"“{name}” ends after the tournament end. Move the tournament end later, or change this session's date or time.",
+                path=path,
+            ))
+    return issues
+
+
 def _competition_started(counts: RowCounts) -> bool:
     """True once anything has actually been played or recorded — the point
     past which a missing setup prerequisite is a bookkeeping gap, not a
@@ -448,6 +595,8 @@ def _state_for(
                 "Set the tournament start date — registration, scheduling, and the public calendar all key on it."
             ),
             path="tournamentStart"))
+    if key == "dates":
+        issues.extend(_session_window_issues(data, _section_data(row, "general").get("timezone")))
     if key == "venue" and not data.get("courts"):
         issues.append(SetupIssue(
             code="SETUP_VENUE_COURTS_REQUIRED",
@@ -552,6 +701,8 @@ def get_activity(
     row = _resolve_tournament(tournament_id, repo)
     raw = row.data.get("activity", []) if isinstance(row.data, dict) else []
     entries = [ActivityEntry.model_validate(entry) for entry in raw if isinstance(entry, dict)]
+    for entry in entries:
+        entry.actorName = _actor_display_name(entry.actorName)
     return ActivityFeed(entries=list(reversed(entries)))
 
 
@@ -612,21 +763,32 @@ def patch_setup_section(
     document = dict(row.data or {})
     setup = dict(document.get("setup") or {})
     now = datetime.now(timezone.utc).isoformat()
-    setup[section] = {"data": validated.model_dump(mode="json", exclude={"section"}, exclude_none=True), "updatedAt": now}
+    old_data = dict((setup.get(section) or {}).get("data") or {})
+    new_data = validated.model_dump(mode="json", exclude={"section"}, exclude_none=True)
+    setup[section] = {"data": new_data, "updatedAt": now}
     document["setup"] = setup
+    field_changes = _diff_fields(old_data, new_data)
+    section_label = _section_label(section)
+    description = (
+        f"Changed {section_label}: {', '.join(c.label for c in field_changes)}"
+        if field_changes
+        else f"Changed {section_label}"
+    )
     activity = list(document.get("activity") or [])
     activity.append(
         ActivityEntry(
             id=str(uuid.uuid4()),
             occurredAt=now,
             actorId=user.id,
-            actorName=user.email or "Local operator",
+            actorName=_actor_display_name(user.email or "Local operator"),
             action="setup.updated",
             target=section,
-            summary=f"Updated {section.replace('-', ' ')} setup",
+            summary=description,
+            fields=field_changes,
+            payloadHash=_payload_hash(new_data),
         ).model_dump(mode="json")
     )
-    document["activity"] = activity[-200:]
+    document["activity"] = activity[-ACTIVITY_MAX_ENTRIES:]
     config = dict(document.get("config") or {})
     dumped = validated.model_dump(mode="json", exclude_none=True)
     if section == "general":
@@ -637,7 +799,7 @@ def patch_setup_section(
     elif section == "venue" and dumped.get("courts"):
         config["courtCount"] = len(dumped["courts"])
     elif section == "rules":
-        for source, target in (("scoring", "scoringFormat"), ("setsToWin", "setsToWin"), ("pointsPerSet", "pointsPerSet"), ("deuceEnabled", "deuceEnabled"), ("defaultRestMinutes", "defaultRestMinutes")):
+        for source, target in (("scoring", "scoringFormat"), ("setsToWin", "setsToWin"), ("pointsPerSet", "pointsPerSet"), ("deuceEnabled", "deuceEnabled"), ("pointCap", "pointCap"), ("defaultRestMinutes", "defaultRestMinutes")):
             if dumped.get(source) is not None:
                 config[target] = dumped[source]
     if config:

@@ -19,8 +19,8 @@ export interface ScoringValue {
 }
 
 const SCORE_TYPE_OPTIONS = [
-  { value: 'simple' as const, label: 'Simple' },
-  { value: 'badminton' as const, label: 'Badminton games' },
+  { value: 'simple' as const, label: 'Match result only' },
+  { value: 'badminton' as const, label: 'Game scores' },
 ];
 
 const MATCH_FORMAT_OPTIONS = [

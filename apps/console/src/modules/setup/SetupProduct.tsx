@@ -47,13 +47,14 @@ import { STATE_WORD } from '../../lib/stateWords';
 import { useUiStore } from '../../store/uiStore';
 import { DownstreamImpact } from './DownstreamImpact';
 import { PropertyPanel } from '../../components/control-plane/PropertyPanel';
-import { localInputToUtc, zonedLocalInput } from '../../lib/timezoneLocal';
+import { isAmbiguousLocalTime, localInputToUtc, zonedLocalInput } from '../../lib/timezoneLocal';
 import { SetupRowsEditor, type SetupRow } from './SetupRowsEditor';
 import { StatusPill } from '../../components/StatusPill';
+import { DISCIPLINE_NAMES } from '../../lib/disciplineNames';
 import { TEXT_EMPHASIS, TEXT_MUTED_SM, TEXT_MUTED_XS, TEXT_TITLE_SM } from '../../lib/utils'
 
 const SECTION_LABELS: Record<SetupKey, string> = {
-  general: 'General identity',
+  general: 'Tournament details',
   dates: 'Dates and sessions',
   venue: 'Venue and courts',
   events: 'Events and eligibility',
@@ -173,12 +174,17 @@ function DateTimeRow({
     setLocalValue(value ? zonedLocalInput(value, timezone) : '');
     setError(undefined);
   }, [value, timezone]);
+  // V3-OC07.3: the clock-change note only appears when the entered time is
+  // actually ambiguous in this timezone — not as a blanket sentence shown
+  // above every date field regardless of relevance.
+  const ambiguous = !error && localValue !== '' && isAmbiguousLocalTime(localValue, timezone);
   return (
     <FieldRow
       label={label}
       type="datetime-local"
       value={localValue}
       error={error}
+      hint={ambiguous ? 'This local time occurs twice here due to a clock change. The earlier occurrence is used.' : undefined}
       onChange={(event) => {
         const local = event.target.value;
         setLocalValue(local);
@@ -215,8 +221,8 @@ function SectionEditor({
     case 'general':
       return (
         <div>
-          <FieldRow label="Tournament name" value={textOf(data, 'name')} onChange={(e) => onChange('name', e.target.value)} />
-          <FieldRow label="Public name" value={textOf(data, 'publicName')} onChange={(e) => onChange('publicName', e.target.value)} />
+          <FieldRow label="Tournament name" hint="Used internally: exports, the operator console, activity." value={textOf(data, 'name')} onChange={(e) => onChange('name', e.target.value)} />
+          <FieldRow label="Name shown to players" hint="Appears on the public site and entry forms. Defaults to the tournament name if left blank." value={textOf(data, 'publicName')} onChange={(e) => onChange('publicName', e.target.value)} />
           <FieldRow label="Organizer" value={textOf(data, 'organizer')} onChange={(e) => onChange('organizer', e.target.value)} />
           <Row
             label="Timezone"
@@ -239,7 +245,7 @@ function SectionEditor({
         <div className="space-y-6">
           <div>
             <p className="mb-2 text-xs font-medium text-muted-foreground">
-              Times in {timezone || textOf(data, 'timezone') || 'the tournament timezone'}. Repeated clock-change times use the earlier occurrence.
+              All times are in {timezone || textOf(data, 'timezone') || 'the tournament timezone'}.
             </p>
             <DateTimeRow label="Tournament starts" value={textOf(data, 'tournamentStart')} timezone={timezone || 'UTC'} onChange={(iso) => onChange('tournamentStart', iso)} />
             <DateTimeRow label="Tournament ends" value={textOf(data, 'tournamentEnd')} timezone={timezone || 'UTC'} onChange={(iso) => onChange('tournamentEnd', iso)} />
@@ -254,7 +260,7 @@ function SectionEditor({
               { field: 'date', label: 'Date', type: 'date' },
               { field: 'startTime', label: 'Starts', type: 'time' },
               { field: 'endTime', label: 'Ends', type: 'time' },
-              { field: 'courtIds', label: 'Courts', type: 'list', options: courtOptions, placeholder: 'Court 1, Court 2' },
+              { field: 'courtIds', label: 'Courts', type: 'list', options: courtOptions },
             ]}
             rows={rowsOf(data, 'dailySessions')}
             onChange={(rows) => onChange('dailySessions', rows)}
@@ -326,8 +332,25 @@ function SectionEditor({
             }
           />
           <ScoringFields value={scoring} onChange={updateScoring} />
+          {scoring.deuceEnabled ? (
+            // Ruling C3: the only cap that exists is whatever is configured
+            // here — never a hardcoded "cap 30". 0 means uncapped.
+            <Row
+              label="Point cap"
+              control={
+                <NumberWithSuffix
+                  value={numberOf(data, 'pointCap')}
+                  onChange={(v) => onChange('pointCap', v > 0 ? v : null)}
+                  suffix={numberOf(data, 'pointCap') > 0 ? 'pts' : '(0 = no cap)'}
+                  min={0}
+                  max={200}
+                  ariaLabel="Point cap"
+                />
+              }
+            />
+          ) : null}
           <Row
-            label="Default rest"
+            label="Minimum rest between matches"
             control={
               <NumberWithSuffix
                 value={numberOf(data, 'defaultRestMinutes')}
@@ -335,20 +358,20 @@ function SectionEditor({
                 suffix="min"
                 min={0}
                 max={240}
-                ariaLabel="Default rest minutes"
+                ariaLabel="Minimum rest between matches"
               />
             }
           />
           <Row
-            label="Draw size"
+            label="Default draw size"
             control={
               <NumberWithSuffix
                 value={numberOf(data, 'drawSize')}
                 onChange={(v) => onChange('drawSize', v > 0 ? v : null)}
-                suffix="players"
+                suffix="entrants"
                 min={2}
                 max={4096}
-                ariaLabel="Draw size"
+                ariaLabel="Default draw size"
               />
             }
             last
@@ -375,7 +398,13 @@ function SectionEditor({
               />
             }
           />
-          <FieldRow label="Partner rules" value={textOf(data, 'partnerRules')} onChange={(e) => onChange('partnerRules', e.target.value)} last />
+          <FieldRow
+            label="Partner instructions"
+            hint="An internal note — not shown to entrants yet, and not enforced. Payment and approval requirements are the switches below."
+            value={textOf(data, 'partnerRules')}
+            onChange={(e) => onChange('partnerRules', e.target.value)}
+            last
+          />
           <Row
             label="Payment required"
             control={<Toggle value={Boolean(data.paymentRequired)} onChange={(v) => onChange('paymentRequired', v)} ariaLabel="Payment required" />}
@@ -426,7 +455,7 @@ function SectionEditor({
         <div>
           <FieldRow
             label="Tournament page address"
-            hint="This is the slug in your public page's address — the rest of the address does not change."
+            hint="This is the slug in your public page's address. The rest of the address does not change."
             value={textOf(data, 'publicSlug')}
             onChange={(e) => onChange('publicSlug', e.target.value)}
           />
@@ -497,6 +526,13 @@ function SectionEditor({
   }
 }
 
+/** V3-OC09.1: doubles disciplines draw on pairs, singles on players — the
+ *  same number means a different count of people depending on which. */
+function capacityUnit(discipline: unknown): string {
+  const code = typeof discipline === 'string' ? discipline.toUpperCase() : '';
+  return code.endsWith('D') ? 'pairs' : 'players';
+}
+
 /** Ruling R-N (A): real events exist, so Setup shows them and points at the
  *  owning surface instead of mounting an editor over a shadow copy. */
 function DomainEventsSummary({
@@ -517,16 +553,31 @@ function DomainEventsSummary({
   return (
     <div>
       <div>
-        {events.map((event, index) => (
+        {events.map((event, index) => {
+          const discipline = typeof event.discipline === 'string' ? event.discipline : null;
+          const rawName = String(event.name ?? event.code ?? '');
+          // No custom name was configured (name fell back to the raw
+          // discipline code) — show the full discipline name instead of
+          // the bare code, with the code itself demoted to secondary text.
+          const primaryName = discipline && rawName === discipline && DISCIPLINE_NAMES[discipline]
+            ? DISCIPLINE_NAMES[discipline]
+            : rawName;
+          const secondaryCode = discipline && discipline !== primaryName ? discipline : null;
+          return (
           <Row
             key={String(event.id ?? index)}
-            label={String(event.name ?? event.code ?? '')}
+            label={
+              <span className="inline-flex items-baseline gap-2">
+                {primaryName}
+                {secondaryCode ? <span className={TEXT_MUTED_XS}>{secondaryCode}</span> : null}
+              </span>
+            }
             pane
             control={
               <span className="inline-flex whitespace-nowrap items-center gap-3">
                 <span className={TEXT_MUTED_SM}>
                   {kind === 'bracket' ? (FORMAT_OPTIONS.find((option) => option.value === event.format)?.label ?? 'Format not configured') : String(event.code ?? '')}
-                  {typeof event.capacity === 'number' && event.capacity > 0 ? ` · Capacity ${event.capacity}` : ''}
+                  {typeof event.capacity === 'number' && event.capacity > 0 ? ` · ${event.capacity} ${capacityUnit(event.discipline)}` : ''}
                 </span>
                 {kind === 'bracket' ? (
                   <Link
@@ -541,7 +592,8 @@ function DomainEventsSummary({
             readOnly
             last={index === events.length - 1}
           />
-        ))}
+          );
+        })}
       </div>
       <p className="mt-4 text-sm text-muted-foreground">
         <Link to={owner.href} className="text-accent underline underline-offset-2">
@@ -574,7 +626,7 @@ function DomainVenueSummary({ tid, data }: { tid: string; data: SetupSectionData
         ))}
       </div>
       <p className="mt-4 text-sm text-muted-foreground">
-        The current plan uses these courts, so Setup is read-only.{' '}
+        Venue details and courts are locked here because the current schedule uses them.{' '}
         <Link
           to={`/tournaments/${encodeURIComponent(tid)}/operations/plan`}
           className="text-accent underline underline-offset-2"
@@ -798,8 +850,8 @@ function SetupEditor({ tid }: { tid: string }) {
                       saving={false}
                       locked
                       lockedReason={selected.key === 'venue'
-                        ? 'Locked — the current schedule uses these courts. Manage them in Operations · Plan below.'
-                        : 'Locked — real draws or divisions already exist. Manage them from the link below.'}
+                        ? 'Locked: venue details and courts are used by the current schedule. Manage them in Operations · Plan below.'
+                        : 'Locked: real draws or divisions already exist. Manage them from the link below.'}
                       onSave={() => {}}
                     />
                   ) : undefined

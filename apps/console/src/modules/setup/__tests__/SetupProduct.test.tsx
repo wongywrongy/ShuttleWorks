@@ -51,7 +51,7 @@ describe('SetupProduct', () => {
   it('renders the full checklist ONCE, on the landing (RDY-3)', async () => {
     renderSetup('/tournaments/t1/setup');
     await waitFor(() => expect(screen.getByText('Readiness checklist')).toBeInTheDocument());
-    expect(screen.getByText('General identity')).toBeInTheDocument();
+    expect(screen.getByText('Tournament details')).toBeInTheDocument();
     expect(screen.getByText('Public information')).toBeInTheDocument();
     expect(screen.getAllByText(/2 blocking/).length).toBeGreaterThan(0);
     // The landing has no section editor.
@@ -91,12 +91,30 @@ describe('SetupProduct', () => {
 
   it('renders a domain-owned events section read-only with a link to the owner (R-N A)', async () => {
     renderSetup('/tournaments/t1/setup/events');
-    await waitFor(() => expect(screen.getByText("Men's Singles")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Men's Singles/)).toBeInTheDocument());
     // No editor, no save: the state that showed an empty textarea over five
     // running draws (evidence S09) is structurally impossible.
     expect(screen.queryByRole('button', { name: 'Save section' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add event' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Edit event' })).toHaveAttribute('href', '/tournaments/t1/competition/draws?event=MS');
+  });
+
+  it('V3-OC09.1: event capacity carries a pairs/players unit, and the discipline code is secondary text', async () => {
+    const fixture = setupFixture();
+    fixture.sections = fixture.sections.map((section) => section.key === 'events'
+      ? { ...section, data: { events: [
+          { id: 'MS', code: 'MS', name: "Men's Singles", discipline: 'MS', capacity: 32, status: 'started' },
+          { id: 'MD', code: 'MD', name: 'MD', discipline: 'MD', capacity: 16, status: 'started' },
+        ] } }
+      : section);
+    getTournamentSetup.mockResolvedValueOnce(fixture);
+    renderSetup('/tournaments/t1/setup/events');
+    await waitFor(() => expect(screen.getByText(/32 players/)).toBeInTheDocument());
+    expect(screen.getByText(/16 pairs/)).toBeInTheDocument();
+    // No custom name was configured for MD (name === discipline code), so
+    // the full discipline name renders with the code demoted to secondary
+    // text — never the bare code as the primary label.
+    expect(screen.getByText(/Men's Doubles/)).toBeInTheDocument();
   });
 
   it('structured row editors replace the pipe textareas (INP-1)', async () => {
@@ -115,7 +133,7 @@ describe('SetupProduct', () => {
     expect(screen.getByLabelText('Available for row 1')).toBeInTheDocument();
   });
 
-  it('round-trips labelled session courts through their opaque IDs', async () => {
+  it('V3-OC07.2: only existing named courts can be selected, as a checkbox list', async () => {
     const user = userEvent.setup();
     const fixture = setupFixture();
     fixture.sections = fixture.sections.map((section) => {
@@ -136,11 +154,20 @@ describe('SetupProduct', () => {
     getTournamentSetup.mockResolvedValueOnce(fixture);
     patchTournamentSetup.mockResolvedValueOnce(fixture);
     renderSetup('/tournaments/t1/setup/dates');
-    const firstCourts = await screen.findByLabelText('Courts for row 1');
-    expect(firstCourts).toHaveValue('Main court, Court 2');
-    expect(screen.getByLabelText('Courts for row 2')).toHaveValue('legacy-court-id');
-    await user.clear(firstCourts);
-    await user.type(firstCourts, 'Main court, Court 2');
+    // Both named courts render as checkboxes, checked for the session that
+    // uses them — no comma-separated free text, no repeated helper string.
+    const mainCourtRow1 = await screen.findByLabelText('Main court — Courts for row 1');
+    const court2Row1 = screen.getByLabelText('Court 2 — Courts for row 1');
+    expect(mainCourtRow1).toBeChecked();
+    expect(court2Row1).toBeChecked();
+    // A session referencing a court that no longer exists in Venue shows no
+    // checkbox checked for it (it cannot be selected), but is left alone —
+    // untouched checkboxes never clobber a value they cannot represent.
+    expect(screen.getByLabelText('Main court — Courts for row 2')).not.toBeChecked();
+    expect(screen.getByLabelText('Court 2 — Courts for row 2')).not.toBeChecked();
+    // Touch an unrelated field to make the draft dirty (Save starts disabled
+    // with "No changes") without altering either session's court selection.
+    fireEvent.change(screen.getByLabelText('Name for row 1'), { target: { value: 'Day 1 (final)' } });
     await user.click(screen.getByRole('button', { name: 'Save section' }));
     await waitFor(() => expect(patchTournamentSetup).toHaveBeenCalledWith(
       't1',
@@ -174,11 +201,73 @@ describe('SetupProduct', () => {
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
   });
 
+  it('V3-OC10.1: exposes the configured point cap only when deuce is enabled', async () => {
+    const fixture = setupFixture();
+    fixture.sections = fixture.sections.map((section) => section.key === 'rules'
+      ? { ...section, data: { deuceEnabled: true, pointCap: 30 } }
+      : section);
+    getTournamentSetup.mockResolvedValueOnce(fixture);
+    renderSetup('/tournaments/t1/setup/rules');
+    const capField = await screen.findByLabelText('Point cap');
+    expect(capField).toHaveValue(30);
+    expect(screen.getByText('pts')).toBeInTheDocument();
+  });
+
+  it('V3-OC10.1: hides the point cap field when deuce is off, and never invents a cap', async () => {
+    const fixture = setupFixture();
+    fixture.sections = fixture.sections.map((section) => section.key === 'rules'
+      ? { ...section, data: { deuceEnabled: false } }
+      : section);
+    getTournamentSetup.mockResolvedValueOnce(fixture);
+    renderSetup('/tournaments/t1/setup/rules');
+    await waitFor(() => expect(screen.getByRole('radiogroup', { name: 'Score type' })).toBeInTheDocument());
+    expect(screen.queryByLabelText('Point cap')).not.toBeInTheDocument();
+  });
+
+  it('V3-OC11.1: labels the partner field as instructions, distinct from the enforced switches below', async () => {
+    renderSetup('/tournaments/t1/setup/entries');
+    await waitFor(() => expect(screen.getByLabelText('Partner instructions')).toBeInTheDocument());
+    expect(screen.queryByLabelText('Partner rules')).not.toBeInTheDocument();
+    expect(screen.getByText(/not enforced/i)).toBeInTheDocument();
+  });
+
+  it('V3-OC07.1: an out-of-window session renders a precise, session-named conflict', async () => {
+    const fixture = setupFixture();
+    fixture.sections = fixture.sections.map((section) => section.key === 'dates'
+      ? { ...section, status: 'blocked' as const, issues: [{
+          code: 'SETUP_DATES_SESSION_OUT_OF_WINDOW',
+          severity: 'blocking' as const,
+          message: '"Competition day 1" starts before the tournament start. Move the tournament start earlier, or change this session’s date or time.',
+          path: 'dailySessions.day-1',
+        }] }
+      : section);
+    getTournamentSetup.mockResolvedValueOnce(fixture);
+    renderSetup('/tournaments/t1/setup/dates');
+    await waitFor(() => expect(screen.getByText(/Competition day 1/)).toBeInTheDocument());
+    expect(screen.getByText(/starts before the tournament start/)).toBeInTheDocument();
+  });
+
+  it('V3-OC07.3: the clock-change note is contextual, not a blanket sentence', async () => {
+    const fixture = setupFixture();
+    fixture.sections = fixture.sections.map((section) => section.key === 'general'
+      ? { ...section, data: { ...section.data, timezone: 'America/New_York' } }
+      : section);
+    getTournamentSetup.mockResolvedValueOnce(fixture);
+    renderSetup('/tournaments/t1/setup/dates');
+    await waitFor(() => expect(screen.getByText(/All times are in America/)).toBeInTheDocument());
+    expect(screen.queryByText(/occurs twice/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Repeated clock-change/)).not.toBeInTheDocument();
+    const input = screen.getByLabelText('Tournament starts');
+    fireEvent.change(input, { target: { value: '2026-11-01T01:30' } });
+    await waitFor(() => expect(screen.getByText(/occurs twice here due to a clock change/)).toBeInTheDocument());
+  });
+
   it('scheduled venue is read-only and links to Operations · Plan (R-N A)', async () => {
     renderSetup('/tournaments/t1/setup/venue');
     await waitFor(() => expect(screen.getByText('Court 1')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Save section' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add court' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Venue details and courts are locked here/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Manage the schedule in Operations · Plan/ })).toHaveAttribute(
       'href',
       '/tournaments/t1/operations/plan',

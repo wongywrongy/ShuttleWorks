@@ -1088,6 +1088,10 @@ export interface UserDTO {
   emailVerified: boolean;
   isBootstrap: boolean;
   authMode: 'local' | 'cloud';
+  /** Whether the server's email seam can actually deliver off-host (the
+   *  ``smtp`` backend, vs. the local ``console`` backend that only logs).
+   *  Gates whether the console offers "send by email" invitations. */
+  emailConfigured: boolean;
 }
 
 /** The workspace's public display capability link (owner-gated mint/rotate).

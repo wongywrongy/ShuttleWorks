@@ -99,6 +99,7 @@ const ALIASES: Record<string, string> = {
   SetupSectionStateDTO: 'SetupSectionState',
   TournamentActivityEntryDTO: 'ActivityEntry',
   TournamentActivityFeedDTO: 'ActivityFeed',
+  TournamentActivityFieldChangeDTO: 'ActivityFieldChange',
   TournamentSetupDTO: 'TournamentSetup',
 };
 
