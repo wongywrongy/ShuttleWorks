@@ -445,7 +445,14 @@ describe("the Draws panel (§3.4, ADR 0028)", () => {
 });
 
 describe("the elimination draw page", () => {
-  it("renders rounds as columns with seeds, byes, placeholders and results", async () => {
+  // Rewritten for V3-PE10.2 / contract §4.3 P5: with no explicit `?view=`,
+  // the response now renders BOTH the Round block (the mobile default,
+  // `md:hidden`) and the Bracket canvas (`hidden md:block`) — CSS decides
+  // which one a given viewport shows, so a first mobile visit gets Round
+  // without any client redirect or JavaScript. The old assertion that the
+  // default response was bracket-only, with no match detail, no longer
+  // holds; this test now covers both blocks in one response.
+  it("renders both the Round default and the Bracket canvas, CSS-toggled by width", async () => {
     stubApi({ "/draws/MS": SE_DRAW });
     const html = await render("/e/spring-open/draws/MS");
 
@@ -456,9 +463,13 @@ describe("the elimination draw page", () => {
     expect(html).toContain("Bye");
     expect(html).toContain("Winner of SF 2");
     expect(html).toContain("21");
-    expect(html).not.toContain("10:30 · Court 1");
+    // D12: the raw ISO date is never in prose — humanized instead.
     expect(html).not.toContain("2026-08-01");
+    expect(html).toContain("Saturday, August 1");
     expect(html).not.toContain("demo-generated:");
+    // The two adaptive containers are both present in the one response.
+    expect(html).toContain('<div class="md:hidden">');
+    expect(html).toContain('<div class="hidden md:block">');
     // Wide content scrolls in its own container (R11).
     expect(html).toContain("overflow-x-auto");
     expect(html).toContain('data-testid="public-bracket-canvas"');
@@ -467,10 +478,22 @@ describe("the elimination draw page", () => {
     expect(html).toContain('data-bracket-links="true"');
     expect(html).toContain('src="/e/assets/bracket-path.js"');
     expect(html).not.toContain("/e/assets/bracket-connectors.js");
-    expect((html.match(/<article/g) ?? []).length).toBe(3);
+    // 2 Round-block cards (the default round, Semifinals) + 3 Bracket nodes.
+    expect((html.match(/<article/g) ?? []).length).toBe(5);
+    // V3-PE10.1: every bracket node carries a visible human match number.
+    expect(html).toContain("Match 1");
+    expect(html).toContain("Match 2");
+
+    const bracketOnly = await render("/e/spring-open/draws/MS?view=bracket");
+    expect(bracketOnly).not.toContain('<div class="md:hidden">');
+    expect((bracketOnly.match(/<article/g) ?? []).length).toBe(3);
+
+    const roundOnly = await render("/e/spring-open/draws/MS?view=round");
+    expect(roundOnly).not.toContain('data-testid="public-bracket-canvas"');
+    expect(roundOnly).toMatch(/Round[\s\S]{0,20}1[\s\S]{0,20}of[\s\S]{0,20}2/);
 
     const list = await render("/e/spring-open/draws/MS?view=list");
-    expect(list).toContain("2026-08-01");
+    expect(list).toContain("Saturday, August 1");
     expect(list).toContain("10:30 · Court 1");
   });
 
@@ -487,11 +510,19 @@ describe("the elimination draw page", () => {
     expect(consolation).toContain("?segment=MAIN");
   });
 
+  // V3-PE12.1: the banner names the actual behaviour — a plural-aware count
+  // of what was found for the query — rather than the old "Showing matches
+  // for X." wording, which did not say whether that was filtering,
+  // highlighting, or the whole draw. "Clear player filter" is renamed
+  // "Clear search" for the same reason (plan §3's ruled recommendation).
   it('makes a player-path search visibly identifiable and preserves its view context', async () => {
     stubApi({ "/draws/MS": SE_DRAW });
     const html = await render('/e/spring-open/draws/MS?view=list&segment=MAIN&player=Ada');
-    expect(html).toContain('Showing matches for');
-    expect(html).toContain('Clear player filter');
+    expect(html).toMatch(/matches[\s\S]{0,20}found for/);
+    expect(html).toContain('Ada Lovelace');
+    expect(html).not.toContain('Showing matches for');
+    expect(html).toContain('Clear search');
+    expect(html).not.toContain('Clear player filter');
     expect(html).toContain('view=list');
     expect(html).toMatch(/font-semibold underline decoration-2/);
     expect(html).toContain('Find a player or pair');

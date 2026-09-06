@@ -13,7 +13,7 @@ import { TabBar } from "../components/TabBar";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
 import type { EntryPageDTO } from "../lib/entryPage.types";
 import { eventDisciplineLabel } from "../lib/draws.types";
-import { formatDateLong } from "../lib/format";
+import { formatCalendarMonth, formatDateLong } from "../lib/format";
 import { chipState, tournamentPhase, visibleTabs } from "../lib/phase";
 import {
   SCHEDULE_STATES,
@@ -182,7 +182,7 @@ function scheduleToMatch(
     const side = match.sides[index];
     return {
       persons: side?.persons ?? [],
-      placeholder: side?.placeholder ?? (side ? null : "TBD"),
+      placeholder: side?.placeholder ?? (side ? null : "To be decided"),
       winner: winnerIndex === index,
       seed: side?.seed ?? null,
     };
@@ -252,16 +252,9 @@ export function formatScheduleUpdated(value: string | null, timeZone: string): s
   }
 }
 
-function monthLabel(month: string): string {
-  const date = new Date(`${month}-01T00:00:00Z`);
-  return Number.isNaN(date.getTime())
-    ? month
-    : new Intl.DateTimeFormat("en", {
-        month: "long",
-        year: "numeric",
-        timeZone: "UTC",
-      }).format(date);
-}
+// D11: redirects to the entrant time authority (`lib/format.ts`) — see
+// `scheduleDateLabel`'s note; the same second-formatter defect applied here.
+const monthLabel = formatCalendarMonth;
 function DayNavigation({
   slug,
   filters,

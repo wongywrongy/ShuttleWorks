@@ -1,5 +1,6 @@
 /** Public Schedule / Live projection, mirrored from entries_site.py. */
 import type { PersonReferenceDTO } from "./person.types";
+import { formatCalendarDay } from "./format";
 export type ScheduleState =
   | "scheduled"
   | "called"
@@ -136,13 +137,12 @@ export function scheduleIsStale(
   return Number.isFinite(parsed) && now - parsed > 30 * 60 * 1000;
 }
 
+/**
+ * D11: redirects to the entrant time authority (`lib/format.ts`) instead of
+ * a second, `Intl`-backed formatter — `day` is a bare calendar date (the
+ * schedule day facet), never an instant, so there is no timezone to apply
+ * beyond the day the wire already names.
+ */
 export function scheduleDateLabel(day: string): string {
-  const parsed = new Date(`${day}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return day;
-  return new Intl.DateTimeFormat("en", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(parsed);
+  return formatCalendarDay(day);
 }

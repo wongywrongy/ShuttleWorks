@@ -39,6 +39,29 @@ export function formatDateLong(iso: string | null): string {
   return `${WEEKDAYS[date.getUTCDay()]} ${date.getUTCDate()} ${monthLong(date.getUTCMonth())} ${date.getUTCFullYear()}`;
 }
 
+/**
+ * Contract §7.1 `date` context, for a bare `YYYY-MM-DD` calendar day (the
+ * schedule/draw day facet — never an instant, so there is no timezone to
+ * apply beyond the day the wire already names). `Saturday, 8 August`;
+ * unparseable → the input verbatim (the day facet key itself, not invented
+ * prose). D11: the entrant time authority, not `Intl.DateTimeFormat` — this
+ * module's whole reason to exist is a fixed table that renders identically
+ * on every node the SSR process runs on, and `Intl`'s locale data is a
+ * runtime variable this authority is not allowed to reintroduce.
+ */
+export function formatCalendarDay(day: string): string {
+  const date = parseIsoDate(day);
+  if (date === null) return day;
+  return `${WEEKDAYS[date.getUTCDay()]}, ${monthLong(date.getUTCMonth())} ${date.getUTCDate()}`;
+}
+
+/** `2026-08` → `August 2026`; unparseable → the input verbatim. */
+export function formatCalendarMonth(month: string): string {
+  const date = parseIsoDate(`${month}-01`);
+  if (date === null) return month;
+  return `${monthLong(date.getUTCMonth())} ${date.getUTCFullYear()}`;
+}
+
 /** A UTC instant → `14 Aug 2026, 23:59 UTC`. */
 export function formatUtcInstant(moment: Date): string {
   const hh = String(moment.getUTCHours()).padStart(2, '0');
@@ -54,10 +77,16 @@ export function formatMoment(wire: string): string {
   return moment === null ? wire : formatUtcInstant(moment);
 }
 
-/** Format the server's UTC moment in the tournament's declared timezone. */
-export function formatMomentInZone(wire: string, timeZone: string): string {
+/**
+ * Format the server's UTC moment in the tournament's declared timezone — the
+ * entrant tier's time authority (D11). Contract §7.2: a timestamp that fails
+ * to parse is OMITTED, never printed as raw ISO/wire prose (D12) — so a
+ * caller composing this into a sentence must itself omit the whole clause
+ * when this returns `null`, exactly as a missing value would.
+ */
+export function formatMomentInZone(wire: string, timeZone: string): string | null {
   const moment = parseMoment(wire);
-  if (moment === null) return wire;
+  if (moment === null) return null;
   try {
     const parts = new Intl.DateTimeFormat('en', {
       day: 'numeric', month: 'short', year: 'numeric',
@@ -66,6 +95,9 @@ export function formatMomentInZone(wire: string, timeZone: string): string {
     const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
     return `${value('day')} ${value('month')} ${value('year')}, ${value('hour')}:${value('minute')} ${value('timeZoneName')}`;
   } catch {
+    // An unrecognised `timeZone` string, not a parse failure — the moment IS
+    // real, so fall back to the UTC rendering rather than omitting a known
+    // instant. Still never raw ISO.
     return formatMoment(wire);
   }
 }

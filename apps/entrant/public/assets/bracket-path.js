@@ -12,9 +12,32 @@ export function applyPersonPath(root, personId) {
   }
 }
 
+/**
+ * V3-PE12.1: the found match gets scrolled into view, not just highlighted —
+ * a spectator who just searched should not have to hunt across a wide
+ * canvas for the one node that changed. Finds the first node on the pinned
+ * person's path and centers it; a no-op where `scrollIntoView` is absent
+ * (jsdom in tests) or nothing matched.
+ */
+export function scrollPinnedPersonIntoView(root, personId) {
+  if (!personId) return;
+  // `[data-node-key]` narrows to actual match slots — the connector braces
+  // between rounds carry `data-person-ids` too, and scrolling to one of
+  // those would land beside a match rather than on it.
+  for (const node of root.querySelectorAll('[data-node-key][data-person-ids]')) {
+    if (includesPerson(node, personId)) {
+      if (typeof node.scrollIntoView === 'function') {
+        node.scrollIntoView({ block: 'center', inline: 'center' });
+      }
+      return;
+    }
+  }
+}
+
 export function mountBracketPath(root) {
   const pinned = root.dataset.pinnedPerson ?? '';
   applyPersonPath(root, pinned);
+  scrollPinnedPersonIntoView(root, pinned);
 
   const personFrom = (target) => target?.closest?.('[data-person-id]')?.dataset?.personId ?? '';
   root.addEventListener('pointerover', (event) => {
