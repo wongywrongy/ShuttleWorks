@@ -153,6 +153,7 @@ export default defineConfig({
           { text: 'Bracket to Operations (Seam B)', link: '/reference/contracts/bracket-operations' },
           { text: 'Operations to Display (Seam D)', link: '/reference/contracts/operations-display' },
           { text: 'State, identity, time and formatting', link: '/reference/contracts/state-and-formatting' },
+          { text: 'The match card family', link: '/reference/contracts/match-card' },
           { text: 'API: overview and route ownership', link: '/reference/api/' },
           { text: 'API: signals', link: '/reference/api/signals' },
           { text: 'API: setup', link: '/reference/api/setup' },
