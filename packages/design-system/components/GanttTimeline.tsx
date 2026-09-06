@@ -220,7 +220,7 @@ function defaultRenderCell(cell: GanttCell): ReactNode {
     <div
       className={cn(
         'h-full w-full',
-        cell.slotIndex % 2 === 0 ? 'border-l border-border/30' : '',
+        cell.slotIndex % 2 === 0 ? 'border-l border-rule-soft' : '',
       )}
     />
   );
@@ -329,7 +329,7 @@ export function GanttTimeline({
       <div ref={scrollerRef} onScroll={syncEdges} className="overflow-x-auto">
       <div style={{ width: gridWidth }}>
         {/* Time-header row */}
-        <div className="flex border-b border-border/60 bg-muted/40">
+        <div className="flex border-b border-rule-soft bg-muted/40">
           {/* Sticky corner + sticky court column below (LAY-3): scrolling to a
               later time used to carry the court labels off the left edge, so
               the operator was reading a wall of chips with no way to tell
@@ -373,7 +373,7 @@ export function GanttTimeline({
           {courts.map((courtId) => (
             <div
               key={courtId}
-              className="relative flex border-b border-border/60"
+              className="relative flex border-b border-rule-soft"
               style={{ height: tier.row }}
             >
               {/* Left court-label column */}

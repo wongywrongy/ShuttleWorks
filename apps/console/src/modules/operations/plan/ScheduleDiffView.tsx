@@ -32,6 +32,7 @@ import {
   formatMatchIdentity,
   meetMatchIdentityFromStored,
 } from '../../../platform/domain/matchIdentity';
+import { INLINE_METADATA_SEPARATOR } from '../../../lib/utils';
 
 interface ScheduleDiffViewProps {
   impact: Impact;
@@ -275,7 +276,7 @@ export function ScheduleDiffView({
       {/* One-line headline + metric pills inline */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span className="font-medium text-foreground">
-          {summaryParts.join(' • ') || 'No changes'}
+          {summaryParts.join(INLINE_METADATA_SEPARATOR) || 'No changes'}
         </span>
         {hasMetricPills && (
           <span className="flex flex-wrap gap-1">

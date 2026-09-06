@@ -79,3 +79,15 @@ export const SELECT_CONTROL = `${FIELD_INPUT} font-normal`;
 /** The secondary (outline) button for native-form wizards. */
 export const BUTTON_SECONDARY =
   'inline-flex min-h-10 items-center justify-center rounded-md border border-rule-control px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-sunken';
+
+/**
+ * The one separator per context (v3 consolidated plan, package 28): a middot
+ * for inline metadata (event/round/court facts, "Updated · 5 min ago"),
+ * never a slash, bullet, or em dash. Already the established convention
+ * across the entrant tier (`EventRow.tsx`, `MatchCard.tsx`, `NowStrip.tsx`,
+ * `SeasonCalendar.tsx`, `tournament.tsx`, `draw.tsx`, `schedule.tsx`,
+ * `player.tsx`); named here so new call sites reach for the constant
+ * instead of retyping the literal. A stacked doubles pair's "/" join is a
+ * different concern owned by `lib/side.ts`, not this constant.
+ */
+export const INLINE_METADATA_SEPARATOR = ' · ';

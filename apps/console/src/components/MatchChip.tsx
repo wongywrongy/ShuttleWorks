@@ -43,7 +43,7 @@ const STATE_FILL: Record<MatchChipState, string> = {
   scheduled: 'bg-card border-border text-ink-3 hover:brightness-110',
   called: 'bg-status-called-solid border-status-called-border text-status-called-ink hover:brightness-110',
   playing: 'bg-status-live-solid border-status-live-border text-status-live-ink hover:brightness-110',
-  done: 'bg-surface-band border-border/60 text-muted-foreground hover:brightness-110',
+  done: 'bg-surface-band border-rule-soft text-muted-foreground hover:brightness-110',
 };
 
 export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

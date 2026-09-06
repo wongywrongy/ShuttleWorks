@@ -171,7 +171,7 @@ export function EventsControl({
         );
         const isOpen = open.has(cat.id);
         return (
-          <div key={cat.id} className="border-b border-border/60 last:border-b-0">
+          <div key={cat.id} className="border-b border-rule-soft last:border-b-0">
             <button
               type="button"
               onClick={() => toggle(cat.id)}

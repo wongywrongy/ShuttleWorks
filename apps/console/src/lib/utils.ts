@@ -99,3 +99,18 @@ export const INTERACTIVE_BASE_QUIET =
   "active:opacity-80 " +
   "disabled:cursor-not-allowed disabled:opacity-60 " +
   "select-none"
+
+/**
+ * The one separator per context (v3 consolidated plan, package 28): a middot
+ * for inline metadata ("Updated 2h ago · Meet"), never a slash, bullet, or
+ * em dash. Pairs of names/sides are the documented exception and stay owned
+ * by the side authority (`platform/domain/sides.ts`), not this constant.
+ */
+export const INLINE_METADATA_SEPARATOR = " · "
+
+/**
+ * The separator for a navigation breadcrumb or an inline "go to" action
+ * affordance ("Open ›"). Never used for inline metadata — see
+ * INLINE_METADATA_SEPARATOR above.
+ */
+export const BREADCRUMB_SEPARATOR = "›"
