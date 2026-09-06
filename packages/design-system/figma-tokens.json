@@ -1417,10 +1417,6 @@
       }
     },
     "text": {
-      "3xs": {
-        "$type": "dimension",
-        "$value": "0.625rem"
-      },
       "2xs": {
         "$type": "dimension",
         "$value": "0.6875rem"
