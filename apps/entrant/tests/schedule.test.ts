@@ -130,7 +130,10 @@ async function render(
 describe("Schedule / Live", () => {
   it("renders a mobile-readable match card with explicit state and timezone", async () => {
     const html = await render();
-    expect(html).toContain("Schedule / Live");
+    // Plan §4: the page title matches its navigation destination ("Schedule"),
+    // not a slash-assembled compound.
+    expect(html).toMatch(/<h1[^>]*id="schedule-title"[^>]*>\s*Schedule\s*<\/h1>/);
+    expect(html).not.toContain("Schedule / Live");
     expect(html).toContain("Live now");
     expect(html).toContain("Ada Lovelace");
     expect(html).toContain("Grace Hopper");

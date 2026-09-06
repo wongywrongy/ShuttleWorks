@@ -639,7 +639,7 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
             id="schedule-title"
             className="type-display text-2xl tracking-[-0.02em] text-foreground"
           >
-            Schedule / Live
+            Schedule
           </h1>
           <p className="text-sm text-muted-foreground">
             Find matches by day, time, or court in tournament time (
