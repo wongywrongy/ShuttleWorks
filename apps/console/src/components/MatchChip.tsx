@@ -142,9 +142,17 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         ) : null}
       </span>
       {showSides && sideA != null && sideB != null && (
-        <span className="mt-0.5 break-words text-xs leading-tight">
-          {sideA} <span className="text-muted-foreground">v</span> {sideB}
-        </span>
+        <>
+          {/* D14/match-card §3.1: stacked, one side per line — never a
+           *  joined "sideA v sideB" string — even at chip density. The
+           *  accessible name still carries the "versus" phrasing (§3.2)
+           *  for anyone not reading the two visible lines. */}
+          <span aria-hidden="true" className="mt-0.5 flex flex-col leading-tight">
+            <span className="break-words text-xs">{sideA}</span>
+            <span className="break-words text-xs">{sideB}</span>
+          </span>
+          <span className="sr-only">{`${sideA} versus ${sideB}`}</span>
+        </>
       )}
       {children}
     </button>

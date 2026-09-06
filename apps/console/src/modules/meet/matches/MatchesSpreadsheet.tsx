@@ -219,7 +219,8 @@ export function MatchesSpreadsheet({
 
     const sideLabel = (ids: string[]) => {
       const labels = ids.map((id) => playerById.get(id)?.name || id);
-      return labels.length > 0 ? labels.join(' / ') : 'No players';
+      // match-card contract §2.1/§2.4 — "To be decided", never "No players".
+      return labels.length > 0 ? labels.join(' / ') : 'To be decided';
     };
 
     const model: MatchInspectorModel = {
@@ -595,7 +596,10 @@ function PlayerCellSummary({
       className={`${MEET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed`}
     >
       {named.length === 0 ? (
-        <span className="text-xs italic text-muted-foreground">No players</span>
+        // match-card contract §2.1/§2.4: an unresolved side never renders
+        // "No players" — the fixed label for a slot with no claim at all is
+        // "To be decided" (same word `sides.ts`'s `undetermined` kind uses).
+        <span className="text-xs italic text-muted-foreground">To be decided</span>
       ) : (
         named.map((p, i) => (
           <span key={p.id} className="inline-flex items-baseline">

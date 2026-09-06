@@ -35,7 +35,14 @@ import {
   type BracketMatchStatus,
   type MatchInspectorModel,
 } from '../../components/control-plane';
-import { formatSideName } from '../../lib/names';
+import {
+  formatSideCondensed,
+  formatSideLines,
+  resolveFeederReference,
+  sideFromWire,
+  sideSummaryText,
+  type Side,
+} from '../../platform/domain/sides';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { formatMatchIdentity } from '../../platform/domain/matchIdentity';
@@ -153,35 +160,69 @@ export function BracketMatchesTab({
     return out;
   }, [data.events, data.play_units, labelById]);
 
-  const resolveSide = (ids: string[] | null): string => {
-    if (!ids || ids.length === 0) return 'TBD';
-    return ids.map((id) => participantById.get(id)?.name ?? id).join(' / ');
+  // D14/D17 — the one side formatter (`platform/domain/sides.ts`), never a
+  // hand-rolled split/join. `sideOf` builds a `Side` from the operator wire's
+  // structured `sides` (package 10a) when present, falling back to the
+  // legacy `side_a`/`side_b` ids + `slot_a`/`slot_b` shape for an older
+  // cached payload — same fallback contract the DTO comment documents.
+  //
+  // A feeder-less empty slot resolves to `undetermined` ("To be decided",
+  // match-card §2.1) rather than `bye` — `sideFromWire`/this fallback both
+  // read a feeder-less empty slot as "waiting", never as a claim this list
+  // cannot verify (BMAT-4): a real bye is only ever signalled by the
+  // backend's own `bye` kind on `pu.sides`.
+  const legacySide = (
+    ids: string[] | null,
+    slot: PlayUnitDTO['slot_a'],
+  ): Side => {
+    if (ids && ids.length > 0) {
+      return {
+        persons: ids.map((id) => ({ id, name: participantById.get(id)?.name ?? id })),
+        unresolved: null,
+        seed: null,
+        participantKey: ids.length === 1 ? ids[0] : null,
+      };
+    }
+    if (slot?.participant_id) {
+      const name = participantById.get(slot.participant_id)?.name ?? slot.participant_id;
+      return {
+        persons: [{ id: slot.participant_id, name }],
+        unresolved: null,
+        seed: null,
+        participantKey: slot.participant_id,
+      };
+    }
+    if (slot?.feeder_play_unit_id) {
+      return {
+        persons: [],
+        unresolved: {
+          kind: slot.feeder_take === 'loser' ? 'loser_of' : 'winner_of',
+          reference: slot.feeder_play_unit_id,
+        },
+        seed: null,
+        participantKey: null,
+      };
+    }
+    return { persons: [], unresolved: { kind: 'undetermined' }, seed: null, participantKey: null };
   };
 
-  // Render form of a side. Real names take the BWF presentation
-  // ("NAKAMURA Kei / TRAN Vincent"); exports keep the raw `resolveSide`
-  // projection.
-  //
-  // An unresolved slot says WHAT it is waiting for — "Winner of QF1" —
-  // rather than a bare italic "TBD" (BMAT-4). The provenance was already
-  // computed and already shown in the ops queue and the detail pane; this
-  // list was the one place that dropped it and printed a placeholder.
-  //
-  // ONLY when a feeder exists. `sideLabel` reads a feeder-less empty slot
-  // as "Bye", which is right for a real bye and a lie for a round the draw
-  // has not built yet — and this list cannot tell those apart. No feeder,
-  // no claim: it stays "TBD".
-  const renderSide = (ids: string[] | null, slot: PlayUnitDTO['slot_a']) => {
-    if (ids && ids.length > 0) return formatSideName(resolveSide(ids));
-    if (!slot?.feeder_play_unit_id) {
-      return <span className="text-xs italic text-muted-foreground">TBD</span>;
-    }
-    const nameById = Object.fromEntries(
-      [...participantById.entries()].map(([id, p]) => [id, p.name]),
-    );
+  const sideOf = (pu: PlayUnitDTO, side: 'A' | 'B'): Side => {
+    const wire = pu.sides?.[side === 'A' ? 0 : 1];
+    const raw = wire
+      ? sideFromWire(wire)
+      : legacySide(side === 'A' ? pu.side_a : pu.side_b, side === 'A' ? pu.slot_a : pu.slot_b);
+    return resolveFeederReference(raw, labelById);
+  };
+
+  // Render form of a side: real names take the operator's stored
+  // presentation, one side per condensed line; an unresolved side renders
+  // its fixed §2.1 label ("Winner of QF1", "To be decided", "Bye"…) in the
+  // same muted-italic treatment the list has always used for a placeholder.
+  const renderSide = (sideModel: Side) => {
+    if (sideModel.persons.length > 0) return formatSideCondensed(sideModel);
     return (
       <span className="text-xs italic text-muted-foreground">
-        {sideLabel(ids, slot, nameById, shortLabelById)}
+        {formatSideLines(sideModel)[0]}
       </span>
     );
   };
@@ -194,24 +235,57 @@ export function BracketMatchesTab({
   ) => {
     const result = resultByPu.get(pu.id);
     const sets = result?.score?.sets ?? [];
-    const ids = side === 'A' ? pu.side_a : pu.side_b;
-    const slot = side === 'A' ? pu.slot_a : pu.slot_b;
+    const sideModel = sideOf(pu, side);
+    // §2.7 rule 4 / §3.5: the match winner comes from the recorded outcome
+    // (`winner_side`), never from counting sets — retirement/walkover
+    // contradict the point totals by construction, and `winner_side` is only
+    // ever set once a result exists (never on an unfinished match).
     const winner = result?.winner_side === side;
     return (
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className={winner ? 'font-semibold text-foreground' : undefined}>
-          {renderSide(ids, slot)}
+      <div className="flex min-h-0 min-w-0 items-center justify-between gap-2">
+        <span
+          className={`min-w-0 break-words ${winner ? 'font-semibold text-foreground' : ''}`}
+          title={sideSummaryText(sideModel)}
+        >
+          {renderSide(sideModel)}
+          {winner ? <span className="sr-only"> Winner</span> : null}
         </span>
+        {/* §3.4 — the ledger collapses entirely (no cell, no reserved width)
+         *  when there is nothing to show. */}
         {sets.length > 0 ? (
           <span
             data-testid={`bracket-match-row-score-${side.toLowerCase()}-${pu.id}`}
-            className={`shrink-0 tabular-nums ${winner ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+            className="shrink-0 tabular-nums text-muted-foreground"
           >
-            {[0, 1, 2].map((index) => (
-              <span key={index} aria-label={sets[index] ? `Game ${index + 1} score` : `Game ${index + 1} not recorded`} className="ml-2 inline-block w-6 text-right">
-                {sets[index] ? (side === 'A' ? sets[index].sideA : sets[index].sideB) : null}
-              </span>
-            ))}
+            {[0, 1, 2].map((index) => {
+              const set = sets[index];
+              if (!set) {
+                return (
+                  <span
+                    key={index}
+                    aria-label={`Game ${index + 1} not recorded`}
+                    className="ml-2 inline-block w-6 text-right"
+                  />
+                );
+              }
+              // §2.7 rule 3 — per-game emphasis is independent of the match
+              // winner: a recorded set is complete by construction (this
+              // surface only ever sees a FINISHED result's sets, never a
+              // live in-progress score), so its own two numbers, not the
+              // match outcome, decide which one is bold.
+              const gameWinner =
+                set.sideA === set.sideB ? null : set.sideA > set.sideB ? 'A' : 'B';
+              const value = side === 'A' ? set.sideA : set.sideB;
+              return (
+                <span
+                  key={index}
+                  aria-label={`Game ${index + 1} score`}
+                  className={`ml-2 inline-block w-6 text-right ${gameWinner === side ? 'font-semibold text-foreground' : ''}`}
+                >
+                  {value}
+                </span>
+              );
+            })}
           </span>
         ) : null}
       </div>
@@ -276,8 +350,8 @@ export function BracketMatchesTab({
               pu.id,
               ev.id,
               ev.discipline,
-              resolveSide(pu.side_a),
-              resolveSide(pu.side_b),
+              formatSideCondensed(sideOf(pu, 'A')),
+              formatSideCondensed(sideOf(pu, 'B')),
             ]
               .join(' ')
               .toLowerCase();
@@ -301,8 +375,8 @@ export function BracketMatchesTab({
       discipline: disciplineLabel(ev.discipline),
       n,
       match: labelById.get(pu.id) ?? pu.id,
-      sideA: resolveSide(pu.side_a),
-      sideB: resolveSide(pu.side_b),
+      sideA: formatSideCondensed(sideOf(pu, 'A')),
+      sideB: formatSideCondensed(sideOf(pu, 'B')),
       status: STATUS_LABEL[statusOf(pu.id)],
     })),
   );
@@ -314,11 +388,11 @@ export function BracketMatchesTab({
       render: (_value, { pu }) => <span className="font-semibold text-foreground sw-num" title={pu.id}>{shortLabelById.get(pu.id) ?? pu.id}</span>,
     },
     {
-      id: 'sideA', label: BRACKET_MATCH_LIST_COLUMNS[2].label, accessor: ({ pu }) => resolveSide(pu.side_a), className: BRACKET_MATCH_CELL.side,
+      id: 'sideA', label: BRACKET_MATCH_LIST_COLUMNS[2].label, accessor: ({ pu }) => formatSideCondensed(sideOf(pu, 'A')), className: BRACKET_MATCH_CELL.side,
       render: (_value, { pu }) => renderScoredSide(pu, 'A'),
     },
     {
-      id: 'sideB', label: BRACKET_MATCH_LIST_COLUMNS[3].label, accessor: ({ pu }) => resolveSide(pu.side_b), className: BRACKET_MATCH_CELL.side,
+      id: 'sideB', label: BRACKET_MATCH_LIST_COLUMNS[3].label, accessor: ({ pu }) => formatSideCondensed(sideOf(pu, 'B')), className: BRACKET_MATCH_CELL.side,
       render: (_value, { pu }) => renderScoredSide(pu, 'B'),
     },
     {
@@ -345,6 +419,7 @@ export function BracketMatchesTab({
       mobile: true,
       render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null,
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [labelById, resultByPu, shortLabelById]);
 
   const selected = selectedId
@@ -363,17 +438,8 @@ export function BracketMatchesTab({
     if (!identity) return null;
     const assignment = assignmentByPu.get(selected.id);
     const result = resultByPu.get(selected.id) ?? null;
-    const sideValue = (ids: string[] | null, slot: PlayUnitDTO['slot_a']) => {
-      if (ids && ids.length > 0) {
-        return ids.map((id) => participantById.get(id)?.name ?? id).join(' / ');
-      }
-      if (slot.feeder_play_unit_id || slot.participant_id) {
-        return sideLabel(ids, slot, participantNameById, labelById);
-      }
-      return 'TBD';
-    };
-    const sideA = sideValue(selected.side_a, selected.slot_a);
-    const sideB = sideValue(selected.side_b, selected.slot_b);
+    const sideA = formatSideCondensed(sideOf(selected, 'A'));
+    const sideB = formatSideCondensed(sideOf(selected, 'B'));
     const winner = result?.winner_side === 'A'
       ? sideA
       : result?.winner_side === 'B'
@@ -418,6 +484,7 @@ export function BracketMatchesTab({
           }
         : null,
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     assignmentByPu,
     data,

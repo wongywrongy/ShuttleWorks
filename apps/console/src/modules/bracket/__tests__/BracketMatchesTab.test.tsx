@@ -7,7 +7,9 @@
  * Pins the shared banded-list grammar: per-group `#` numbering that
  * restarts on each event AND stays stable under search (numbers are
  * assigned before filtering), friendly play-unit codes ("MS SF1"),
- * status-column tones, and Meet-style muted-italic TBD placeholders.
+ * status-column tones, and muted-italic unresolved-side placeholders in
+ * the match-card contract's fixed §2.1 vocabulary ("To be decided",
+ * never "TBD").
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -194,9 +196,12 @@ describe('<BracketMatchesTab />', () => {
     expect(screen.getByText('Done').className).not.toContain('bg-status-');
   });
 
-  it('renders unresolved sides as a muted-italic TBD placeholder (Meet placeholder grammar)', () => {
+  it('renders unresolved sides as a muted-italic placeholder in the fixed §2.1 vocabulary', () => {
+    // v3-10c / match-card contract §2.1, §2.4: an unresolved side never
+    // renders "TBD" — the fixed label for a slot with no claim at all is
+    // "To be decided".
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    const tbds = screen.getAllByText('TBD');
+    const tbds = screen.getAllByText('To be decided');
     expect(tbds).toHaveLength(4); // two finals × two sides
     for (const el of tbds) {
       expect(el.className).toContain('italic');
@@ -212,11 +217,11 @@ describe('<BracketMatchesTab />', () => {
     expect(completed).not.toHaveTextContent('Waiting on draw');
   });
 
-  it('names the feeder on an unresolved side instead of printing TBD (BMAT-4)', () => {
+  it('names the feeder on an unresolved side instead of printing a bare placeholder (BMAT-4)', () => {
     const data = makeRichData();
     // The MS final waits on the MS semi. Production draws always carry this
     // link; the base fixture omits it, which is why the row above still
-    // reads TBD.
+    // reads "To be decided".
     const finalPu = data.play_units.find((p) => p.id === 'pu-ms-3')!;
     finalPu.slot_a = { participant_id: null, feeder_play_unit_id: 'pu-ms-1' };
     renderWithRouter(<BracketMatchesTab data={data} />);
@@ -225,7 +230,7 @@ describe('<BracketMatchesTab />', () => {
     // The other side has no feeder, so it must NOT claim anything — a
     // feeder-less empty slot reads as "Bye" in sideLabel, which would be a
     // lie for a round the draw has not built yet.
-    expect(screen.getAllByText('TBD')).toHaveLength(3);
+    expect(screen.getAllByText('To be decided')).toHaveLength(3);
     expect(screen.queryByText('Bye')).not.toBeInTheDocument();
   });
 
@@ -423,5 +428,70 @@ describe('<BracketMatchesTab /> — export', () => {
       target: { value: 'zzzz' },
     });
     expect(screen.getByTestId('bracket-export-matches')).toBeDisabled();
+  });
+});
+
+/* v3-10c / match-card contract §2.7, §3.4, §3.5 — per-game emphasis is
+ * independent of the match winner, the ledger only appears when there are
+ * scores, and the winner mark carries a text equivalent. */
+describe('<BracketMatchesTab /> — score ledger and winner mark', () => {
+  function dataWithScoredResult() {
+    const data = makeRichData();
+    const result = data.results.find((r) => r.play_unit_id === 'pu-ms-1')!;
+    // Side A loses game 1 but wins games 2 and 3 — the match winner (A,
+    // from `winner_side`) must NOT decide game 1's emphasis.
+    result.score = {
+      sets: [
+        { sideA: 15, sideB: 21 },
+        { sideA: 21, sideB: 18 },
+        { sideA: 21, sideB: 19 },
+      ],
+    };
+    return data;
+  }
+
+  it('emphasises each game from its own score, not from the match winner', () => {
+    renderWithRouter(<BracketMatchesTab data={dataWithScoredResult()} />);
+    const gameA1 = screen.getByLabelText('Game 1 score', {
+      selector: '[data-testid="bracket-match-row-score-a-pu-ms-1"] span',
+    });
+    const gameB1 = screen.getByLabelText('Game 1 score', {
+      selector: '[data-testid="bracket-match-row-score-b-pu-ms-1"] span',
+    });
+    // Game 1: B scored higher (21 > 15) — B's number is bold, A's is not,
+    // even though A is the recorded match winner.
+    expect(gameA1.className).not.toContain('font-semibold');
+    expect(gameB1.className).toContain('font-semibold');
+
+    const gameA2 = screen.getAllByLabelText('Game 2 score', {
+      selector: '[data-testid="bracket-match-row-score-a-pu-ms-1"] span',
+    })[0];
+    const gameB2 = screen.getAllByLabelText('Game 2 score', {
+      selector: '[data-testid="bracket-match-row-score-b-pu-ms-1"] span',
+    })[0];
+    // Game 2: A scored higher (21 > 18) — A's number is bold this time.
+    expect(gameA2.className).toContain('font-semibold');
+    expect(gameB2.className).not.toContain('font-semibold');
+  });
+
+  it('carries a text-equivalent winner mark on the recorded winner only', () => {
+    renderWithRouter(<BracketMatchesTab data={dataWithScoredResult()} />);
+    const row = screen.getByTestId('bracket-match-row-pu-ms-1');
+    // Side A (the recorded winner) gets the visually-hidden "Winner" text;
+    // side B does not.
+    expect(within(row).getByText('Winner', { selector: '.sr-only' })).toBeInTheDocument();
+    expect(within(row).getAllByText('Winner', { selector: '.sr-only' })).toHaveLength(1);
+  });
+
+  it('renders no ledger cell at all for an unscored row (collapse, not padding)', () => {
+    renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
+    // pu-ms-1 has a result but no `score` in the base fixture — no game
+    // cells, no reserved width, nothing `aria-hidden` filling the space.
+    expect(
+      screen.queryByTestId('bracket-match-row-score-a-pu-ms-1'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('bracket-match-row-score-b-pu-ms-1'),
+    ).not.toBeInTheDocument();
   });
 });

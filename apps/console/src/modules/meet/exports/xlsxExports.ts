@@ -14,6 +14,7 @@ import { indexById } from '../../../lib/indexById';
 import { isDoublesCode } from '../../../lib/doubles';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { meetMatchIdentityFromStored } from '../../../platform/domain/matchIdentity';
+import { formatSideLines, meetSideFromIds } from '../../../platform/domain/sides';
 import {
   applyRangeStyle,
   downloadXlsx,
@@ -193,7 +194,11 @@ const EVENT_ORDER_MATCHES = ['MS', 'WS', 'MD', 'WD', 'XD'] as const;
 
 function sideNamesAmp(ids: string[] | undefined, playerById: Map<string, PlayerDTO>): string {
   if (!ids || ids.length === 0) return '';
-  return ids.map((id) => playerById.get(id)?.name ?? id).join(' & ');
+  // D14 — names come from `sides.ts`'s one authority, not a hand-rolled
+  // `.map(...).join(' & ')`; the export keeps its own '&' separator.
+  const nameById: Record<string, string> = {};
+  for (const id of ids) nameById[id] = playerById.get(id)?.name ?? id;
+  return formatSideLines(meetSideFromIds(ids, nameById)).join(' & ');
 }
 
 function sideSchool(

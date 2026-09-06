@@ -190,9 +190,11 @@ describe('<MatchesSpreadsheet />', () => {
   });
 
   it('renders an empty side as a muted-italic reading, not an add control', () => {
+    // v3-10c / match-card contract §2.1/§2.4: an unresolved side reads "To
+    // be decided", never "No players".
     renderSheet();
     const row = screen.getByTestId('match-row-m10');
-    const placeholder = within(row).getByText('No players');
+    const placeholder = within(row).getByText('To be decided');
     expect(placeholder.tagName).toBe('SPAN');
     expect(placeholder.className).toContain('italic');
     expect(placeholder.className).toContain('text-muted-foreground');
