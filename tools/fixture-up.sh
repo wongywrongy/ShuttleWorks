@@ -166,6 +166,21 @@ if [[ "${APPLY_DEFECTS}" == "1" ]]; then
   PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
     "${REPO_ROOT}/tools/fixture-defects.py" \
     --base-url "${API_URL}" --fixture "${FIXTURE_JSON}"
+
+  # Direct-ORM pass (work package 01b): reconstructs the four bracket
+  # court/scheduling states no HTTP write path can produce (debt-log
+  # V3-01-2). Deliberately run with uvicorn still up, against the same
+  # SQLite file: WAL journal mode (already enabled for every file-backed
+  # engine by apps/api/src/db/session.py) lets this short, single-transaction
+  # writer complete without blocking or being blocked by the running API,
+  # and every read that follows (below, and in the console/entrant tiers)
+  # goes through a fresh per-request session, so there is no in-process
+  # cache to go stale. See tools/fixture-defects-db.py's module docstring
+  # for exactly which of the four states are genuine writes vs. states this
+  # fixture already contains naturally.
+  "${PYTHON_BIN}" "${REPO_ROOT}/tools/fixture-defects-db.py" \
+    --database "${DATABASE_PATH}" --fixture "${FIXTURE_JSON}"
+
   PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
     "${REPO_ROOT}/tests/e2e/check-fixture-defects.py" \
     --base-url "${API_URL}" --fixture "${FIXTURE_JSON}"

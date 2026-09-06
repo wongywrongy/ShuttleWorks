@@ -40,17 +40,20 @@ one, though nothing else in this repo expects that).
 | API | `http://127.0.0.1:8600` | Same process both tiers talk to |
 | Manifest | printed path, e.g. `/tmp/shuttleworks-fixture.XXXXXX/fixture.json` | Every id, credential and base URL below |
 
-`fixture.json` carries (at minimum): `taipeiTid`, `koreaTid`, `koreaSlug`,
-`displayToken`, `viewerEmail`/`viewerPassword` (a real viewer-role
-membership on Taipei), `apiBaseUrl`, `consoleBaseUrl`, `entrantBaseUrl`, and
-a `defects` object naming exactly what the post-seed pass changed (below).
+`fixture.json` carries (at minimum): `taipeiTid`, `taipeiSlug`, `koreaTid`,
+`koreaSlug`, `displayToken`, `viewerEmail`/`viewerPassword` (a real
+viewer-role membership on Taipei), `apiBaseUrl`, `consoleBaseUrl`,
+`entrantBaseUrl`, a `defects` object naming what the HTTP post-seed pass
+changed, and a `dbDefects` object naming what the direct-ORM pass changed
+(both below).
 
 ## The reconstructed operational states
 
 A pristine BWF-history seed looks like a demo, not a live event. After the
-canonical counts are seeded and verified, `tools/fixture-defects.py` runs an
-idempotent pass through public HTTP APIs only (no direct database writes)
-that reconstructs three states worth reviewing both tiers against:
+canonical counts are seeded and verified, two post-seed passes run:
+
+**`tools/fixture-defects.py`** — idempotent, through public HTTP APIs only
+(no direct database writes) — reconstructs three states on Korea (T030):
 
 - **An incomplete doubles pair.** A real entrant submitted a single-player
   men's-doubles entry on Korea (T030) with a partner invited by email who
@@ -61,22 +64,50 @@ that reconstructs three states worth reviewing both tiers against:
   `resultsPublished` stays `false` (results simply don't exist yet for an
   upcoming tournament) — a partially-open publication state.
 
-Four more states the v3 plan's code map originally proposed — a two-court
-"double current" bracket conflict, an approved slot with no court, a
-scheduled match with a court but no time, and a round scheduled before its
-feeder round resolves — turned out to have **no reachable write path**
-through the product's supported API once actually tried against a running
-instance (every route that could move a bracket assignment enforces "both
-fields or neither" and "the predecessor must be resolved first", and the
-one escape hatch that bypasses the same-court guard writes to a table a
-bracket workspace never populates). See `tools/fixture-defects.py`'s module
-docstring for the full trace, and `docs/reference/debt-log.md`'s "work
-package 01" entries for what a fix would need. This is a real, currently
-unreproducible gap — not a limitation of the fixture script.
+**`tools/fixture-defects-db.py`** (work package 01b) — idempotent, directly
+through the SQLAlchemy models in `apps/api/src/db/models.py`, run against
+the same SQLite file while the API stays up — reconstructs four more states
+on Taipei (T029) that have no HTTP write path at all: a bracket-kind
+workspace's write invariants (`bracket/application.py`'s same-court guard,
+`BracketAssignIn`/`BracketPinIn`'s "both fields or neither" rule, and
+`_require_resolved_play_unit`) sit in front of every supported bracket
+write, so these are reconstructed as a legacy import or a hand-patched
+database might produce them, not exercised as a real product path:
 
-Re-running `tools/fixture-defects.py` against an already-defected database
-is a no-op; `tests/e2e/check-fixture-defects.py` asserts all three states by
-reading back through the same API.
+- **A double-current court conflict, on two different courts.** A second,
+  different, resolved-but-unplayed play unit given the SAME court and
+  "currently playing" clock as an already-live match, on each of two
+  courts — the public schedule and the console's own Overview panel both
+  suppress the court to `null`/"disputed" for both matches sharing it.
+- **An R16 (or later) unit scheduled while its R32 feeder has no result.**
+  Verified this is already this fixture's DEFAULT state for most of the
+  bracket (the whole draw is scheduled up front, independent of round
+  resolution — only `POST /bracket/assign` enforces resolution) — the
+  script searches for a naturally-occurring instance before ever writing
+  one.
+- **An approved slot with no court.** Also already this fixture's default
+  state for any not-yet-live scheduled play unit (the public schedule only
+  ever shows a court for a CURRENTLY LIVE claim) — again found, not forced.
+- **A match with a court but no scheduled time.** The one state actually
+  forced with a write: a `matches` row with `court_id` set and `time_slot`
+  left `None` — the only place in the data model this specific
+  Optional/Optional combination genuinely exists. Verified this does NOT
+  fully reach the public schedule as "a court and no time": `scheduledTime`
+  there is derived purely from the play unit's own pre-existing bracket
+  plan slot, which already exists for virtually every unit regardless of
+  this write, so the observable result is "a court and a (pre-existing)
+  time". The storage-level state is real; there is no read surface on a
+  bracket-kind workspace that can show a genuinely timeless court.
+
+See `tools/fixture-defects-db.py`'s module docstring for the full
+investigation (including exactly which of the four states needed a write
+vs. were already present), and `docs/reference/debt-log.md`'s "work package
+01" entries for the decisions still open.
+
+Re-running either script against an already-defected database is a no-op;
+`tests/e2e/check-fixture-defects.py` asserts all seven states by reading
+back through the same public API (the bracket GET and the public schedule
+`GET /e/api/page/{slug}/matches`) — never by reading the database directly.
 
 ## Capturing surface books against it
 
