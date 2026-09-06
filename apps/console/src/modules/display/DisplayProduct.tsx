@@ -91,7 +91,7 @@ export function DisplayProduct() {
       </div>
       {displayLinkError ? (
         <p role="status" className="border-t border-border bg-muted/30 px-4 py-2 text-center text-xs text-muted-foreground">
-          A workspace owner can enable the venue display link in Publish.
+          A workspace owner can enable the venue board link in Publish.
         </p>
       ) : null}
     </div>

@@ -5,6 +5,7 @@ import { SectionCard, PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { apiClient } from '../../api/client';
 import type { InviteRole, InviteSummaryDTO } from '../../api/dto';
+import { useAuth } from '../../context/AuthContext';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
 import { PublicationSettings } from './PublicationSettings';
 import { TEXT_MUTED_2XS } from '../../lib/utils'
@@ -57,6 +58,14 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
   const showInvites = scope === 'all' || scope === 'team';
   const origin = window.location.origin;
 
+  // V3-OC25.1 / package 18: offer "send by email" only where the server can
+  // actually deliver one. Local mode's console backend only logs the
+  // message (no operator ever receives it); cloud mode without SMTP
+  // configured is the same situation. Link mode always works — it is the
+  // fallback in both branches below.
+  const { authMode, user } = useAuth();
+  const canEmailInvite = authMode === 'cloud' && !!user?.emailConfigured;
+
   // Public display link is a CAPABILITY link (SP-CLOUD-2): minted server-side,
   // owner-gated, revocable by rotation. Non-owners get a 404 from the mint
   // endpoint — hide the section rather than showing a link we can't produce.
@@ -69,12 +78,14 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
 
   const [invites, setInvites] = useState<InviteSummaryDTO[] | null>(null);
   // Same class as the Entries desk (2026-08-10 browser pass): a rejected read
-  // became `[]` and rendered "No invite links yet." An owner reading that
-  // mints a second invite for someone who already has one.
+  // became `[]` and rendered as an empty list. An owner reading that mints a
+  // second invite for someone who already has one.
   const [invitesFailed, setInvitesFailed] = useState(false);
   const [role, setRole] = useState<InviteRole>('operator');
   const [email, setEmail] = useState('');
-  const [inviteMode, setInviteMode] = useState<'email' | 'link'>('email');
+  const [inviteMode, setInviteMode] = useState<'email' | 'link'>(
+    canEmailInvite ? 'email' : 'link',
+  );
   const [actionError, setActionError] = useState<string | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
@@ -162,7 +173,7 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
       const t = await apiClient.rotateDisplayToken(tid);
       setDisplayToken(t.token);
     } catch {
-      setActionError('The display link could not be replaced. Retry when connected.');
+      setActionError('The venue board link could not be replaced. Retry when connected.');
     } finally {
       setRotating(false);
     }
@@ -200,20 +211,21 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
   }
 
   const now = Date.now();
+  // Package 16: one board name everywhere — "Venue board". The composed
+  // Displays page (`WorkspaceShellSurface`'s `publish/displays` pane) already
+  // titles itself once via `DisplayConfig`'s own heading directly above this
+  // component, so this scope renders no second heading/intro for the same
+  // page (V3-OC22.2 — no repeated "public display link" headings).
   const heading = scope === 'site'
     ? 'Public site'
-    : scope === 'links'
-      ? 'Display link'
-      : scope === 'team'
-        ? 'Team access'
-        : 'Links and access';
+    : scope === 'team'
+      ? 'Team access'
+      : 'Links and access';
   const intro = scope === 'site'
     ? 'Choose which tournament information is public.'
-    : scope === 'links'
-      ? 'Manage view-only display links and revoke access deliberately.'
-      : scope === 'team'
-        ? 'Invite operators and control their workspace access.'
-        : 'Public links and collaborator access are separate. Share each deliberately.';
+    : scope === 'team'
+      ? 'Invite operators and control their workspace access.'
+      : 'Public links and collaborator access are separate.';
 
   if (scope === 'site') return <PublicationSettings key={tid} tid={tid} />;
 
@@ -221,28 +233,30 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
     <div>
       {!online && <p role="status" className="mb-4 text-sm text-muted-foreground">Offline. Link and invitation changes require a connection and are not queued.</p>}
       {actionError && <p role="alert" className="mb-4 text-sm text-destructive">{actionError}</p>}
-      <div className="pb-4">
-        <h2 className="text-base font-semibold tracking-tight text-foreground">{heading}</h2>
-        <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
-          {intro}
-        </p>
-      </div>
+      {scope !== 'links' && (
+        <div className="pb-4">
+          <h2 className="text-base font-semibold tracking-tight text-foreground">{heading}</h2>
+          <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
+            {intro}
+          </p>
+        </div>
+      )}
 
       {/* Public display link — read-only, separate from collaborator invites.
           Hidden entirely when the caller isn't the owner (mint 404s). */}
-      {showDisplay && displayLoadError && <div role="alert" className="mb-4 text-sm"><p>The display link could not be loaded.</p><Button variant="outline" size="sm" onClick={() => setDisplayAttempt((value) => value + 1)}>Retry display link</Button></div>}
+      {showDisplay && displayLoadError && <div role="alert" className="mb-4 text-sm"><p>The board link could not be loaded.</p><Button variant="outline" size="sm" onClick={() => setDisplayAttempt((value) => value + 1)}>Retry board link</Button></div>}
       {showDisplay && !displayTokenDenied && !displayLoadError && (
-        <SectionCard eyebrow="PUBLIC DISPLAY LINK" testId="sharing-public">
+        <SectionCard eyebrow="BOARD LINK" testId="sharing-public">
           <p className="mb-2 text-xs text-muted-foreground">
-            Anyone with this link can view the read-only venue display: no sign-in required.
+            Anyone with this link can view the board.
           </p>
           <div className="flex items-center gap-2">
-            <label htmlFor="public-display-link" className="text-xs font-medium text-foreground">Public display link</label>
+            <label htmlFor="public-display-link" className="text-xs font-medium text-foreground">Venue board link</label>
             <input
               id="public-display-link"
               readOnly
               value={displayLink ?? 'Loading…'}
-              aria-label="Public display link"
+              aria-label="Venue board link"
               className="min-w-0 flex-1 rounded border border-border bg-muted/30 px-2 py-1.5 font-mono text-xs text-foreground"
             />
             {/* xs (28px) matches the row's input + the app's control scale —
@@ -275,24 +289,24 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
               onBlur={confirmRotate.reset}
               aria-label={
                 confirmRotate.armed
-                  ? 'Confirm revoking and replacing the public display link'
-                  : 'Revoke and replace the public display link'
+                  ? 'Confirm replacing the venue board link'
+                  : 'Replace the venue board link'
               }
             >
               {rotating
                 ? 'Replacing…'
                 : confirmRotate.armed
-                  ? 'Confirm: revoke and replace'
-                  : 'Revoke and replace link'}
+                  ? 'Confirm: replace link'
+                  : 'Replace link'}
             </Button>
-            {/* The re-share consequence lives in the ARMED state, where the
-                decision is being made — not as resting text warning about an
-                action nobody has taken (WSS-2, WSM-1's principle). At rest
-                the line only says what the button does. */}
+            {/* Package 16 (V3-OC22.2): the consequence next to the control is
+                the plan's exact sentence, always visible — not conditional
+                resting-state reassurance. The armed state adds only the
+                cancel affordance, never a second, different claim about what
+                Replace does. */}
             <p className={TEXT_MUTED_2XS}>
-              {confirmRotate.armed
-                ? 'Every venue display goes blank until you re-share the new link. Press Escape to cancel.'
-                : 'Revokes the current link immediately and issues a new one.'}
+              Replacing the link stops the old link from working.
+              {confirmRotate.armed ? ' Every venue display goes blank until you re-share the new one. Press Escape to cancel.' : ''}
             </p>
           </div>
         </SectionCard>
@@ -300,17 +314,26 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
 
       {showSite && <PublicationSettings key={tid} tid={tid} />}
 
-      {/* Collaborator invite links. */}
-      {showInvites && <SectionCard eyebrow="COLLABORATOR INVITES" testId="sharing-invites">
+      {/* Invitations. V3-OC25.1: "Invitations" everywhere in this section
+          (not "COLLABORATOR INVITES" over a list described in terms of
+          links), and the delivery choice is only offered where the server
+          can act on it — see `canEmailInvite` above. */}
+      {showInvites && <SectionCard eyebrow="INVITATIONS" testId="sharing-invites">
         <p className="mb-2 text-xs text-muted-foreground">
           Invite people to view or operate this workspace with the selected role. Revoke a link any time.
         </p>
-        <fieldset className="mb-4 space-y-2 text-sm">
-          <legend className="mb-2 font-medium">Invitation delivery</legend>
-          <label className="flex items-center gap-2"><input type="radio" name="invite-mode" checked={inviteMode === 'email'} onChange={() => setInviteMode('email')} />Send by email</label>
-          <label className="flex items-center gap-2"><input type="radio" name="invite-mode" checked={inviteMode === 'link'} onChange={() => setInviteMode('link')} />Create a link to share</label>
-          <p className="text-muted-foreground">{inviteMode === 'email' ? 'The invitation is emailed to this address. The link grants the selected role to a signed-in person who accepts it.' : 'Anyone who receives this link can sign in and accept the selected role. Share it only with people you intend to give access.'}</p>
-        </fieldset>
+        {canEmailInvite ? (
+          <fieldset className="mb-4 space-y-2 text-sm">
+            <legend className="mb-2 font-medium">Invitation delivery</legend>
+            <label className="flex items-center gap-2"><input type="radio" name="invite-mode" checked={inviteMode === 'email'} onChange={() => setInviteMode('email')} />Send by email</label>
+            <label className="flex items-center gap-2"><input type="radio" name="invite-mode" checked={inviteMode === 'link'} onChange={() => setInviteMode('link')} />Create a link to share</label>
+            <p className="text-muted-foreground">{inviteMode === 'email' ? 'The invitation is emailed to this address. The link grants the selected role to a signed-in person who accepts it.' : 'Anyone who receives this link can sign in and accept the selected role. Share it only with people you intend to give access.'}</p>
+          </fieldset>
+        ) : (
+          <p className="mb-4 text-xs text-muted-foreground">
+            Anyone who receives this link can sign in and accept the selected role. Share it only with people you intend to give access.
+          </p>
+        )}
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-foreground">Role</span>
           <Select
@@ -348,7 +371,9 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
           ) : invites === null ? (
             <li className="p-3 text-sm text-muted-foreground">Loading…</li>
           ) : invites.length === 0 ? (
-            <li className="p-3 text-sm text-muted-foreground">No invite links yet.</li>
+            <li className="p-3 text-sm text-muted-foreground">
+              {inviteMode === 'email' ? 'No invitations sent yet.' : 'No invitation links created yet.'}
+            </li>
           ) : (
             invites.map((inv) => {
               const status = inviteStatus(inv, now);

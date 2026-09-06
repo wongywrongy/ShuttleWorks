@@ -459,9 +459,10 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
   const tvDisplayMode: 'auto' | 'grid' | 'list' = storedMode === 'strip' ? 'auto' : storedMode;
 
   // ---- TV sizing + accent knobs (per-tournament) -----------------------
-  // Shared with DisplayPreview — see publicDisplay/tvSizing.ts for the
-  // single source of truth (previously duplicated verbatim in both
-  // files; extracted as part of task 7 to remove that drift risk).
+  // See publicDisplay/tvSizing.ts for the single source of truth
+  // (previously duplicated verbatim across board renderers; extracted as
+  // part of task 7 to remove that drift risk. The sample-data DisplayPreview
+  // swatch that also shared it was dead code, removed in package 16).
   const tvAccent = resolveTvAccent(config.tvAccent);
   const tvCardSize = config.tvCardSize ?? 'auto';
   const tvShowScores = config.tvShowScores !== false;

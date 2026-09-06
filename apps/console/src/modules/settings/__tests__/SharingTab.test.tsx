@@ -3,6 +3,16 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { SharingTab } from '../SharingTab';
 import { apiClient } from '../../../api/client';
 vi.mock('../../../hooks/useCanEdit', () => ({ useCanEdit: () => true }));
+// Cloud + a configured mail backend by default, so the existing email-mode
+// coverage below is unaffected; V3-OC25.1's capability-gating tests
+// override this per case.
+const mockUseAuth = vi.fn((): { authMode: 'local' | 'cloud'; user: { emailConfigured: boolean } } => ({
+  authMode: 'cloud',
+  user: { emailConfigured: true },
+}));
+vi.mock('../../../context/AuthContext', () => ({
+  useAuth: () => mockUseAuth(),
+}));
 
 vi.mock('../../../api/client', () => ({
   apiClient: {
@@ -57,7 +67,7 @@ describe('SharingTab', () => {
 
   it('shows the capability display link fetched from getDisplayToken', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Public display link') as HTMLInputElement;
+    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('/display?token=tok-abc'));
     expect(apiClient.getDisplayToken).toHaveBeenCalledWith('t1');
     expect(input.value).not.toContain('?id=');
@@ -70,27 +80,27 @@ describe('SharingTab', () => {
    * outside that row. */
   it('Rotate link does NOT rotate on the first click: it arms', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Public display link') as HTMLInputElement;
+    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('tok-abc'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Revoke and replace the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
 
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
     expect(input.value).toContain('tok-abc');
     // Armed state names the consequence rather than repeating the label.
     expect(
-      screen.getByRole('button', { name: 'Confirm revoking and replacing the public display link' }),
+      screen.getByRole('button', { name: 'Confirm replacing the venue board link' }),
     ).toBeInTheDocument();
   });
 
   it('Rotate link swaps in the new token on the confirming second click', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Public display link') as HTMLInputElement;
+    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('tok-abc'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Revoke and replace the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Confirm revoking and replacing the public display link' }),
+      screen.getByRole('button', { name: 'Confirm replacing the venue board link' }),
     );
 
     await waitFor(() => expect(input.value).toContain('/display?token=tok-new'));
@@ -101,15 +111,15 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        (screen.getByLabelText('Public display link') as HTMLInputElement).value,
+        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
       ).toContain('tok-abc'),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Revoke and replace the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
     fireEvent.keyDown(window, { key: 'Escape' });
 
     expect(
-      screen.getByRole('button', { name: 'Revoke and replace the public display link' }),
+      screen.getByRole('button', { name: 'Replace the venue board link' }),
     ).toBeInTheDocument();
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
   });
@@ -118,7 +128,7 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        (screen.getByLabelText('Public display link') as HTMLInputElement).value,
+        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
       ).toContain('tok-abc'),
     );
 
@@ -128,8 +138,34 @@ describe('SharingTab', () => {
     const safeRow = screen.getByRole('button', { name: 'Copy' }).parentElement!;
     expect(within(safeRow).getByRole('button', { name: 'Open fullscreen' })).toBeInTheDocument();
     expect(
-      within(safeRow).queryByRole('button', { name: /rotate/i }),
+      within(safeRow).queryByRole('button', { name: /replace/i }),
     ).toBeNull();
+  });
+
+  // Package 16 (V3-OC22.2): the consequence next to Replace is the plan's
+  // exact sentence, present at rest (not only once armed), with no
+  // "deliberately" and no admonition.
+  it('states the replace consequence next to the control, at rest', async () => {
+    render(<SharingTab tid="t1" />);
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
+      ).toContain('tok-abc'),
+    );
+    const replaceButton = screen.getByRole('button', { name: 'Replace the venue board link' });
+    expect(replaceButton.parentElement).toHaveTextContent(
+      'Replacing the link stops the old link from working.',
+    );
+    expect(screen.queryByText(/deliberately/i)).toBeNull();
+  });
+
+  // Package 16 (V3-OC22.2): scope="links" is composed directly under
+  // `DisplayConfig`'s own "Venue board" heading on `/publish/displays` — it
+  // must not render a second page heading for the same board.
+  it('scope="links" renders no page heading of its own (DisplayConfig owns it)', async () => {
+    render(<SharingTab tid="t1" scope="links" />);
+    await screen.findByLabelText('Venue board link');
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
   });
 
   it('hides the public display section when the token fetch fails (not owner)', async () => {
@@ -148,7 +184,7 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     const pub = screen.getByTestId('sharing-public');
     expect(pub).toHaveTextContent(/anyone with this link/i);
-    expect(within(pub).getByLabelText('Public display link')).toBeInTheDocument();
+    expect(within(pub).getByLabelText('Venue board link')).toBeInTheDocument();
     const inv = screen.getByTestId('sharing-invites');
     expect(within(inv).getByText(/operate this workspace/i)).toBeInTheDocument();
     expect(within(inv).getByRole('button', { name: 'Send invitation' })).toBeInTheDocument();
@@ -226,7 +262,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
 
   it('is absent when the workspace has no entry page', async () => {
     render(<SharingTab tid="t1" />);
-    await screen.findByLabelText('Public display link');
+    await screen.findByLabelText('Venue board link');
     expect(screen.queryByTestId('sharing-publication')).toBeNull();
   });
 
@@ -303,7 +339,7 @@ describe('SharingTab — a failed read is not an empty invite list', () => {
   it('NEGATIVE CONTROL: a real (empty) list still reads as empty', async () => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
     render(<SharingTab tid="t1" />);
-    expect(await screen.findByText(/no invite links yet/i)).toBeInTheDocument();
+    expect(await screen.findByText('No invitations sent yet.')).toBeInTheDocument();
     expect(screen.queryByTestId('invites-load-error')).toBeNull();
   });
 });
@@ -354,5 +390,49 @@ describe('publication transaction outcomes', () => {
     expect(apiClient.patchEntryPagePublication).not.toHaveBeenCalled();
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     fireEvent(window, new Event('online'));
+  });
+});
+
+describe('V3-OC25.1: invitation mode matches what the server actually does', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
+    vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
+      token: 'tok-abc',
+      url: '/display?token=tok-abc',
+    } as never);
+    vi.mocked(apiClient.getEntryPage).mockRejectedValue(
+      Object.assign(new Error('404'), { response: { status: 404 } }),
+    );
+  });
+
+  it('local mode offers no email choice: link-only, with the link empty-state copy', async () => {
+    mockUseAuth.mockReturnValue({ authMode: 'local', user: { emailConfigured: false } });
+    render(<SharingTab tid="t1" />);
+    expect(screen.queryByLabelText('Send by email')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Invite email')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create share link' })).toBeInTheDocument();
+    expect(await screen.findByText('No invitation links created yet.')).toBeInTheDocument();
+  });
+
+  it('cloud mode without a configured mail backend also stays link-only', async () => {
+    mockUseAuth.mockReturnValue({ authMode: 'cloud', user: { emailConfigured: false } });
+    render(<SharingTab tid="t1" />);
+    expect(screen.queryByLabelText('Send by email')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create share link' })).toBeInTheDocument();
+  });
+
+  it('cloud mode with mail configured offers the choice, and empty-state text follows it', async () => {
+    mockUseAuth.mockReturnValue({ authMode: 'cloud', user: { emailConfigured: true } });
+    render(<SharingTab tid="t1" />);
+    expect(screen.getByLabelText('Send by email')).toBeInTheDocument();
+    expect(await screen.findByText('No invitations sent yet.')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    expect(await screen.findByText('No invitation links created yet.')).toBeInTheDocument();
+  });
+
+  it('uses "Invitations" as the section heading, not "Collaborator invites"', () => {
+    mockUseAuth.mockReturnValue({ authMode: 'cloud', user: { emailConfigured: true } });
+    render(<SharingTab tid="t1" />);
+    expect(within(screen.getByTestId('sharing-invites')).getByText('INVITATIONS')).toBeInTheDocument();
   });
 });

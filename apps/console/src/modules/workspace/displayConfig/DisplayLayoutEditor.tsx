@@ -24,10 +24,11 @@
  * `standingsMode` is written here AND consumed by `MeetDisplayPage` (Task 9
  * wired the panel-vs-rotate rendering there — see its standings-placement
  * section + `publicDisplay/standingsLayout.ts`). `BracketDisplayPage` never
- * reads it (courts/standings rendering is meet-only). Note this editor's own
- * `DisplayPreview` swatch still does NOT render standings (fixed
- * courts-only sample fixture — see that file's doc comment) — an
- * intentional preview-fidelity gap, not a bug.
+ * reads it (courts/standings rendering is meet-only). Package 16 removed the
+ * sample-data `DisplayPreview` swatch this editor used to sit beside — it
+ * was dead code (never mounted) and its fixed courts-only sample fixture
+ * could not have shown standings anyway; `DisplayConfig`'s "Preview
+ * fullscreen" action now opens the real published board instead.
  *
  * ---- Court order + hide (task 7) ------------------------------------
  * Below the tv* rows, a "Court order and visibility" list drives

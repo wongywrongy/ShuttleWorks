@@ -1,7 +1,8 @@
 /**
- * Publish → Displays keeps module-owned board settings beside a real preview
- * of the minted public capability projection. Meet-only layout controls stay
- * gated to Meet; the public preview remains available to bracket workspaces.
+ * Publish → Displays: module-owned board sources, board layout controls, and
+ * an explicit "Preview fullscreen" action that opens the real published
+ * board — no inline iframe, no sample-data swatch (package 16; supersedes
+ * V3-OC22.1's "widen the tiny preview" treatment).
  */
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -23,7 +24,8 @@ const MEET_OFF: WorkspaceModule[] = [
 ];
 
 // The public link is minted server-side (`/tournaments/{id}/display-token`),
-// the same seam Settings → Sharing uses — so every render here needs it stubbed.
+// the same seam Sharing (scope="links") uses — so every render here needs it
+// stubbed.
 const TOKEN_DTO = { token: 'cap-tok', url: '/display?token=cap-tok' };
 
 afterEach(() => {
@@ -45,30 +47,32 @@ beforeEach(() => {
   });
 });
 
-describe('<DisplayConfig /> — Board layout + Preview mount', () => {
-  it('shows Board layout + Preview when Meet is enabled', () => {
+describe('<DisplayConfig /> — Board sources + Preview fullscreen + Board layout', () => {
+  it('shows Board layout when Meet is enabled', () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(screen.getByRole('heading', { name: 'Board layout' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Preview' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Display mode' })).toBeInTheDocument();
-    expect(screen.getByTestId('display-preview-frame')).toBeInTheDocument();
   });
 
-  it('keeps the published preview for a bracket-only workspace while hiding Meet-only controls', async () => {
+  it('never renders an inline preview iframe or a sample-data swatch', async () => {
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
+    await screen.findByRole('link', { name: /preview fullscreen/i });
+    expect(screen.queryByTestId('display-preview-iframe')).toBeNull();
+    expect(screen.queryByTestId('display-preview-frame')).toBeNull();
+    expect(screen.queryByTestId('display-preview-caption')).toBeNull();
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
+  it('keeps the Preview fullscreen action for a bracket-only workspace while hiding Meet-only controls', async () => {
     render(<DisplayConfig tid="t1" modules={BRACKET_ONLY} />, { wrapper: MemoryRouter });
     expect(screen.queryByRole('heading', { name: 'Board layout' })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Preview' })).toBeInTheDocument();
-    expect(await screen.findByTestId('display-preview-iframe')).toHaveAttribute(
-      'src',
-      `${window.location.origin}/display?token=cap-tok`,
-    );
+    const link = await screen.findByRole('link', { name: /preview fullscreen/i });
+    expect(link).toHaveAttribute('href', `${window.location.origin}/display?token=cap-tok`);
   });
 
-  it('renders Board sources + Public link with explicit module state', () => {
+  it('renders Board sources with explicit module state', () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(screen.getByRole('heading', { name: 'Board sources' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Public link' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Public display URL')).toBeInTheDocument();
     expect(screen.getByText('Enabled')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
   });
@@ -80,35 +84,55 @@ describe('<DisplayConfig /> — Board layout + Preview mount', () => {
     expect(screen.getAllByRole('link', { name: 'Modules →' })).toHaveLength(2);
   });
 
-  // The link on this tab used to be `${origin}/display?id=<uuid>` under the
-  // caption "Anyone with the link can watch, with no sign-in." That route is
-  // viewer-gated: signed out it 401s, the board says the link "has been turned
-  // off or never existed", and the client blames an expired session that never
-  // existed. The real public link is the capability token.
-  it('shows the minted ?token= capability link, never the viewer-gated ?id= URL', async () => {
+  // The preview action targets the minted ?token= capability link, never the
+  // old viewer-gated `?id=` URL (that route 401s for a signed-out venue TV).
+  it('targets the minted ?token= capability URL for the configured board, never the viewer-gated ?id= URL', async () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
-    const field = screen.getByLabelText('Public display URL') as HTMLInputElement;
+    const link = await screen.findByRole('link', { name: /preview fullscreen/i });
     await waitFor(() =>
-      expect(field.value).toBe(`${window.location.origin}/display?token=cap-tok`),
+      expect(link).toHaveAttribute('href', `${window.location.origin}/display?token=cap-tok`),
     );
-    expect(field.value).not.toContain('?id=');
+    expect(link.getAttribute('href')).not.toContain('?id=');
+    expect(link).toHaveAttribute('target', '_blank');
     expect(apiClient.getDisplayToken).toHaveBeenCalledWith('t1');
   });
 
-  it('says what to do instead of handing over a URL when no link can be minted', async () => {
-    vi.spyOn(apiClient, 'getDisplayToken').mockRejectedValue(new Error('404'));
+  // Opening the action does not touch the configuration page's own state —
+  // it is a plain new-window link, so the surface underneath is never
+  // unmounted and there is nothing to "return" to but what was already there.
+  it('leaves the configuration page state untouched after the preview action is present', async () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
-    expect(await screen.findByTestId('display-link-unavailable')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Public display URL')).toBeNull();
+    await screen.findByRole('link', { name: /preview fullscreen/i });
+    expect(screen.getByRole('heading', { name: 'Board sources' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Board layout' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Display mode' })).toBeInTheDocument();
   });
 
-  it('uses the minted capability URL for the inline preview, never the viewer-gated route', async () => {
+  it('shows the reason and no action when no board link can be minted (not an owner)', async () => {
+    vi.spyOn(apiClient, 'getDisplayToken').mockRejectedValue(
+      Object.assign(new Error('403'), { status: 403 }),
+    );
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
-    const preview = screen.getByTestId('display-preview-frame');
-    const iframe = await screen.findByTestId('display-preview-iframe');
-    expect(preview).toHaveAttribute('aria-label', 'Published venue board preview');
-    expect(iframe).toHaveAttribute('src', `${window.location.origin}/display?token=cap-tok`);
-    expect(iframe).not.toHaveAttribute('src', expect.stringContaining('?id='));
-    expect(apiClient.getDisplayToken).toHaveBeenCalledTimes(1);
+    expect(await screen.findByTestId('display-link-unavailable')).toHaveTextContent(
+      'No venue board link yet. Only a workspace owner can create one.',
+    );
+    expect(screen.queryByRole('link', { name: /preview fullscreen/i })).toBeNull();
+  });
+
+  it('shows a reason and a create/retry action on a genuine load failure', async () => {
+    const spy = vi
+      .spyOn(apiClient, 'getDisplayToken')
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(TOKEN_DTO);
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
+    const errorBlock = await screen.findByTestId('display-link-error');
+    expect(errorBlock).toHaveTextContent('The venue board link could not be loaded.');
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    retry.click();
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('link', { name: /preview fullscreen/i })).toHaveAttribute(
+      'href',
+      `${window.location.origin}/display?token=cap-tok`,
+    );
   });
 });

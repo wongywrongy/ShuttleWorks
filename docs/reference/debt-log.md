@@ -108,6 +108,14 @@ Debt found delivering work package 15 (`docs/audits/v3-consolidated/plan.md` §5
 | --- | --- | --- |
 | V3-15-1 | **V3-OC13.2's acceptance also asks for distinct field-validation vs. image-fetch-failure messages** on the Setup → Public information logo/banner preview. This package only wired the fetch-failure half (a "could not be loaded" message plus a "Retry preview" action, replacing the old ambiguous "Preview unavailable. Check the address before saving."); there is no URL-syntax validation on the Regulations/Logo/Banner link fields to produce a genuinely distinct "this address is not a valid link" message. Adding that validation is a small form-behavior change, not a copy fix, and was left out of this package's copy/state-only scope. | S |
 
+### Work package 16 — venue-board publishing
+
+Debt found delivering work package 16 (`docs/audits/v3-consolidated/plan.md` §3 "Remove the tiny board preview instead of widening it", §4 "Destructive/recovery copy"/"Buttons and links", V3-OC22.1/22.2). Full account in `docs/audits/v3-consolidated/reports/16-venue-board.md` and `docs/audits/v3-consolidated/ledger/16-strings.md`.
+
+| # | What | Size |
+| --- | --- | --- |
+| V3-16-1 | **`WorkspaceShellSurface.tsx`'s `case 'display-config':` switch branch (renders `DisplayConfig` alone, without `SharingTab`) is dead code.** The only nav entry mapping to that segment is `publish/displays`, which the component's earlier `location.pathname.includes('/publish/')` check intercepts before the switch ever runs — confirmed by grep, no other route reaches this case. Not removed here: it is a routing-logic cleanup outside this package's Displays-composition scope, and deleting a switch case is a different class of change than the copy/structure work done. | S |
+
 ---
 
 Debt found delivering work package 22 (`docs/audits/v3-consolidated/plan.md` §4 "Organizer content", V3-PE15.1). Full account in `docs/audits/v3-consolidated/reports/22-regulations-closed.md` and `docs/audits/v3-consolidated/ledger/22-strings.md`.
