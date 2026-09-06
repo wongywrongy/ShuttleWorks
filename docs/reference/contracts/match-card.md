@@ -209,7 +209,7 @@ renderer never synthesises a ledger to fill space.
 ### 2.4 Missing values are omitted, never placeheld
 
 This is the rule the entrant tier breaks today
-(`apps/entrant/app/components/MatchCard.tsx:76–82` plus the unconditional
+(`apps/entrant/app/components/MatchCard.tsx:76-82` plus the unconditional
 `showAssignmentPlaceholders: true` at `routes/schedule.tsx:183`). Restating
 state-and-formatting §3.2 in card terms:
 
@@ -579,7 +579,7 @@ completion, not which score is larger**; and **contrast is tested separately fro
 
 ### 6.1 Package 11 — entrant tier
 
-New: `apps/entrant/tests/matchCard.contract.render.test.tsx`, driving every MC fixture through
+New: `apps/entrant/tests/matchCard.contract.render.test.ts`, driving every MC fixture through
 `card`, `canvas` and `bracket-node`.
 
 | Assertion | Fixtures |
@@ -601,6 +601,7 @@ New: `apps/entrant/tests/matchCard.contract.render.test.tsx`, driving every MC f
 
 ### 6.2 Package 10 — console operator surfaces
 
+<!-- docs-paths-ignore-next-line: proposed test file per this contract, not yet created (package 10 leaves it open; console match-card coverage today lives in control-plane/__tests__/ per-component tests) -->
 New: `apps/console/src/components/control-plane/__tests__/matchCardContract.test.tsx` plus
 per-module cases in the Bracket and Meet match tests.
 

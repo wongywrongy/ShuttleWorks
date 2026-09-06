@@ -80,7 +80,7 @@ Two rules follow from plan §3's "Match state Live vs On court" ruling:
 
 | Tier | Module | Note |
 | --- | --- | --- |
-| Backend derivation | **new** `apps/api/src/workspaces/lifecycle.py` | Lifts `_entries_phase` / play-state fall-through out of `workspace_signals.py` so both the signals DTO and the public site projection call one function. |
+| Backend derivation | **new** `workspaces/lifecycle.py` | Lifts `_entries_phase` / play-state fall-through out of `workspace_signals.py` so both the signals DTO and the public site projection call one function. |
 | Console labels | **new** `apps/console/src/platform/domain/lifecycle.ts` | State set + `lifecycleLabel()`. |
 | Entrant labels | `apps/entrant/app/lib/phase.ts` (**becomes authority**) | Already the tier's single speller; gains `entries_review`/`setup` collapsing to *Entries closed*. |
 
@@ -157,16 +157,16 @@ Ruling constraints applied here:
 | D4 | `apps/api/src/display/display.py` legacy `started` in `/match-states` | redirects to authority | 04 |
 | D5 | `apps/console/src/lib/stateWords.ts` | becomes authority | 09 |
 | D5 | `apps/console/src/components/control-plane/matchStatus.tsx` `STATUS_LABEL` | redirects to authority — it already imports `STATE_WORD`; its four-value `MatchListStatus` becomes a documented **view-local projection** of the canonical set, named as such | 10 |
-| D5 | `apps/console/src/modules/operations/plan/PlanCallList.tsx:22–27` literal `'Playing'` | deleted (use *On court*) | 03 |
+| D5 | `apps/console/src/modules/operations/plan/PlanCallList.tsx:22-27` literal `'Playing'` | deleted (use *On court*) | 03 |
 | D5 | `apps/console/src/modules/operations/UnifiedOpsList.tsx:127` own vocabulary | deleted | 03 |
 | D5 | `apps/console/src/modules/display/bracketDisplay/BracketLiveView.tsx:48` | redirects to authority | 17 |
-| D5 | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx:259–270` band words | redirects to authority | 17 |
-| D5 | `apps/console/src/components/LiveStatusPill.tsx:29` | redirects to authority | 17 |
+| D5 | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx:259-270` band words | redirects to authority | 17 |
+| D5 | `apps/console/src/modules/display/publicDisplay/LiveStatusPill.tsx:29` | redirects to authority | 17 |
 | D5 | `apps/console/src/modules/operations/runtime/runMachine.ts` `RUN_STATUS_LABEL` | redirects to authority | 03 |
 | D6 | `apps/entrant/app/components/MatchCard.tsx:90` three-way `stateLabel` | deleted; call `scheduleStateLabel` | 11 |
-| D6 | `apps/entrant/app/lib/schedule.types.ts:72–91` | becomes authority (entrant) | 11 |
-| D7 | `apps/api/src/entries/entries_site.py:2409` and `:2316–2323` unknown → `scheduled` | deleted; unknown yields "state omitted" per 2.2 | 04 |
-| D20 | `match_state.py:174–178`, `workspace_signals.py:568–570`, `runModel.ts:174–182,120`, `MeetDisplayPage.tsx:165–167` `called` in/out of occupancy | redirects to authority — two named predicates (§4.3) replace four ad-hoc rules | 03, 04 |
+| D6 | `apps/entrant/app/lib/schedule.types.ts:72-91` | becomes authority (entrant) | 11 |
+| D7 | `apps/api/src/entries/entries_site.py:2409` and `:2316-2323` unknown → `scheduled` | deleted; unknown yields "state omitted" per 2.2 | 04 |
+| D20 | `match_state.py:174-178`, `workspace_signals.py:568-570`, `runModel.ts:174-182,120`, `MeetDisplayPage.tsx:165-167` `called` in/out of occupancy | redirects to authority — two named predicates (§4.3) replace four ad-hoc rules | 03, 04 |
 
 ---
 
@@ -210,7 +210,7 @@ This is where the current tier lies, and the rules are absolute.
 | Court withheld because the court is disputed (§4) | Operator sees the dispute (§4). | The court is omitted and the schedule state is unchanged. A disputed court is never published as a court. |
 
 ::: danger The rule this replaces
-`apps/entrant/app/components/MatchCard.tsx:76–82` renders `'Date to be confirmed'`, `'Time not
+`apps/entrant/app/components/MatchCard.tsx:76-82` renders `'Date to be confirmed'`, `'Time not
 assigned'` and `'Court information unavailable'` as *footer content*, switched on by
 `showAssignmentPlaceholders: true`, which `apps/entrant/app/routes/schedule.tsx:183` sets
 unconditionally. Line 90 then labels the same match **"Scheduled"**. An unscheduled, uncourted match
@@ -230,9 +230,9 @@ missing value is **omission plus one honest state word**, never a row of placeho
 
 | D | Site | Verdict | Package |
 | --- | --- | --- | --- |
-| D9 | `apps/entrant/app/components/MatchCard.tsx:76–82` placeholder footer | deleted | 04, 11 |
+| D9 | `apps/entrant/app/components/MatchCard.tsx:76-82` placeholder footer | deleted | 04, 11 |
 | D9 | `apps/entrant/app/routes/schedule.tsx:183` `showAssignmentPlaceholders: true` | deleted (the whole flag goes) | 04 |
-| D9 | `apps/entrant/app/routes/schedule.tsx:136–138` `"Court pending"` | deleted | 04 |
+| D9 | `apps/entrant/app/routes/schedule.tsx:136-138` `"Court pending"` | deleted | 04 |
 | D9 | `apps/console/src/hooks/useLiveOperations.ts:298` `'00:00'` fallback | deleted — render "Not scheduled" | 03 |
 | D10 | `entries_site.py:420 _hhmm_plus`, `:1012 _slot_time`, `workspace_signals.py:238 _slot_time_label` | redirect to authority (`shared/schedule_slots.py`) | 04 |
 | D10 | `apps/console/src/lib/time.ts:51 slotToTime` | becomes authority (console) | 03 |
@@ -331,7 +331,7 @@ failure than showing it without a court.
 | Tier | Module | Note |
 | --- | --- | --- |
 | Backend | **new** `apps/api/src/shared/court_occupancy.py` | `occupiesCourtNow` / `holdsCourtCommitment`, `deriveCourtStates(matches) -> {courtId: free\|occupied\|disputed}`, `deriveDisputes(matches) -> CourtDispute[]`, and the `courtsFree` / `disputedCourts` counts. `shared/` because Operations, Workspaces, Entries and Display all need it. |
-| Backend write guard | `apps/api/src/operations/match_state.py` `assert_court_available` (**becomes authority** for the *write* rejection) | Keeps rejecting a second `playing` match; its predicate comes from `shared/court_occupancy.py`. The duplicate inline copy in `repositories/local.py:2469–2504` is deleted. |
+| Backend write guard | `apps/api/src/operations/match_state.py` `assert_court_available` (**becomes authority** for the *write* rejection) | Keeps rejecting a second `playing` match; its predicate comes from `shared/court_occupancy.py`. The duplicate inline copy in `repositories/local.py:2469-2504` is deleted. |
 | Console | **new** `apps/console/src/platform/domain/courtOccupancy.ts` | The console twin. `runModel.ts` and `courtLanes.ts` both call it. |
 | Console surfacing | `apps/console/src/modules/operations/run/RunSurface.tsx` | Renders disputes from the derived list, not from the command-rejection store. |
 
@@ -339,18 +339,18 @@ failure than showing it without a court.
 
 | D | Site | Verdict | Package |
 | --- | --- | --- | --- |
-| D1 | `apps/api/src/operations/match_state.py:164–194` `assert_court_available` | becomes authority (write guard); predicate redirects | 03 |
-| D1 | `apps/api/src/repositories/local.py:2469–2504` inline duplicate | deleted | 03 |
-| D1 | `apps/console/src/modules/operations/runtime/runModel.ts:118–124` | redirects to authority | 03 |
-| D1 | `apps/console/src/modules/display/publicDisplay/courtLanes.ts:43–62, 92–101` | redirects to authority | 04 |
-| D1 | `apps/console/src/modules/display/MeetDisplayPage.tsx:151–169` own detector | deleted | 04 |
-| D1 | `apps/api/src/entries/entries_site.py:2058–2095` `_merge_live_bracket_courts` | redirects to authority; withhold rule restated per C2 | 04 |
+| D1 | `apps/api/src/operations/match_state.py:164-194` `assert_court_available` | becomes authority (write guard); predicate redirects | 03 |
+| D1 | `apps/api/src/repositories/local.py:2469-2504` inline duplicate | deleted | 03 |
+| D1 | `apps/console/src/modules/operations/runtime/runModel.ts:118-124` | redirects to authority | 03 |
+| D1 | `apps/console/src/modules/display/publicDisplay/courtLanes.ts:43-62, 92-101` | redirects to authority | 04 |
+| D1 | `apps/console/src/modules/display/MeetDisplayPage.tsx:151-169` own detector | deleted | 04 |
+| D1 | `apps/api/src/entries/entries_site.py:2058-2095` `_merge_live_bracket_courts` | redirects to authority; withhold rule restated per C2 | 04 |
 | D2 | `apps/api/src/workspaces/workspace_signals.py:370, 501` conflict-blind `courtsFree` | redirects to authority | 03 |
-| D2 | `apps/console/src/modules/operations/runtime/runModel.ts:280–286` comment claiming unification | deleted — the comment is false and the code it describes is being replaced | 03 |
+| D2 | `apps/console/src/modules/operations/runtime/runModel.ts:280-286` comment claiming unification | deleted — the comment is false and the code it describes is being replaced | 03 |
 | D3 | `runModel.ts:275` disputed court counted as two playing matches | redirects to authority; `playing` becomes a court count with a sibling `disputedCourts` | 03 |
-| D18 | `apps/console/src/modules/operations/run/RunSurface.tsx:148–166, 446–481` banners from rejected commands | redirects to authority — rejections stay as *toasts for the action*, disputes become *assignments* | 03 |
+| D18 | `apps/console/src/modules/operations/run/RunSurface.tsx:148-166, 446-481` banners from rejected commands | redirects to authority — rejections stay as *toasts for the action*, disputes become *assignments* | 03 |
 | D18 | `apps/console/src/modules/operations/run/RunCourtGrid.tsx:176` lane-state banner | redirects to authority | 03 |
-| D19 | `apps/console/src/modules/display/publicDisplay/courtLanes.ts:9–29` public vs operator "now" | **kept as a documented view-local rule** — the board's "now" window is deliberately wider than the desk's so a court does not blink empty between matches. The *rule* moves into the authority module as a named, parameterised window (`nowWindow: 'desk' \| 'board'`) so it is a documented option rather than an undocumented divergence. | 04, 17 |
+| D19 | `apps/console/src/modules/display/publicDisplay/courtLanes.ts:9-29` public vs operator "now" | **kept as a documented view-local rule** — the board's "now" window is deliberately wider than the desk's so a court does not blink empty between matches. The *rule* moves into the authority module as a named, parameterised window (`nowWindow: 'desk' \| 'board'`) so it is a documented option rather than an undocumented divergence. | 04, 17 |
 | — | `apps/api/src/operations/conflict_metrics.py` process-local counter | kept as a documented view-local rule (it is a metric, not a state source); gains a docstring saying so | 03 |
 
 ---
@@ -420,16 +420,16 @@ only when set. Confirm before packages 09/13.
 
 | Tier | Module | Note |
 | --- | --- | --- |
-| Scoring rules | **new** `packages/scheduler-core/scheduler_core/domain/scoring.py` **or** `apps/api/src/shared/sport/scoring.py` | `apps/api/src/shared/sport/` already exists and is exactly "cross-domain sport rules" per `.importlinter`; **recommendation: put it there**, since game completion is a rule about a sport, not about the solver. |
+| Scoring rules | **new** `domain/scoring.py` (in `packages/scheduler-core/scheduler_core/`) **or** `shared/sport/scoring.py` | `apps/api/src/shared/sport/` already exists and is exactly "cross-domain sport rules" per `.importlinter`; **recommendation: put it there**, since game completion is a rule about a sport, not about the solver. |
 | Backend outcome | `apps/api/src/operations/match_state.py` + the result record | `retired` is a status; `walkover` / `cancelled` / `no_result` are result fields. The projection to a single public outcome word lives in `shared/match_vocabulary.py` (§2.3). |
-| Console | **new** `apps/console/src/platform/domain/score.ts` | `gameState(game, rules)`, `gameWinner(game, rules)`, `matchOutcome(match)`. No component computes a winner. |
-| Entrant | **new** `apps/entrant/app/lib/score.ts` | The tier twin; `MatchCard`'s `side.winner` prop stops being a per-side boolean and becomes derived per game plus a match-level outcome. |
+| Console | **new** `platform/domain/score.ts` | `gameState(game, rules)`, `gameWinner(game, rules)`, `matchOutcome(match)`. No component computes a winner. |
+| Entrant | **new** `lib/score.ts` (entrant) | The tier twin; `MatchCard`'s `side.winner` prop stops being a per-side boolean and becomes derived per game plus a match-level outcome. |
 
 ### 5.4 Implementation delta
 
 | Site | Verdict | Package |
 | --- | --- | --- |
-| `apps/entrant/app/components/MatchCard.tsx:60–68` per-game cell emphasis keyed on `side.winner` (match winner) | redirects to authority — emphasis becomes per-game | 09, 11 |
+| `apps/entrant/app/components/MatchCard.tsx:60-68` per-game cell emphasis keyed on `side.winner` (match winner) | redirects to authority — emphasis becomes per-game | 09, 11 |
 | `apps/entrant/app/components/MatchCard.tsx` empty `<span>` per game column when `score?.[set] === undefined` | deleted — collapse the ledger | 09, 11 |
 | `apps/console/src/modules/bracket/` and `meet/matches/` score cells | redirect to authority | 10 |
 | `apps/console/src/modules/display/bracketDisplay/bracketDisplayData.ts` score shaping | redirects to authority | 17 |
@@ -480,15 +480,16 @@ prints `TBD`.
 | `undetermined` | "To be decided" | "To be decided" |
 
 **Pair labels are never assembled or parsed from slash strings.** Seven builders, two separators and
-four different unresolved fallbacks exist today (D14); `apps/console/src/lib/names.ts:21–57` splits
+four different unresolved fallbacks exist today (D14); `lib/names.ts:21-57` splits
 on `' / '` or `' & '` and *always rejoins with `' / '`*, so a side that arrived as `A & B` leaves as
-`A / B` (D15). That round-trip is deleted, not standardised.
+`A / B` (D15). That round-trip is deleted, not standardised — `lib/names.ts` and its test were
+retired in the Wave 2 debt sweep, and the pre-joined-string shim now lives in `platform/domain/sides.ts`.
 
 **One formatter per tier** renders a side:
 
 | Tier | Formatter | Renders |
 | --- | --- | --- |
-| Console | **new** `apps/console/src/platform/domain/side.ts` → `renderSide(side, {density})` | Returns *structured lines*, one person per line at normal density (plan §4: "one participant per line within a pair"); a single condensed line only for the board density, where it uses the board's own rule. Never returns a joined string for the general case. |
+| Console | **new** `platform/domain/side.ts` → `renderSide(side, {density})` | Returns *structured lines*, one person per line at normal density (plan §4: "one participant per line within a pair"); a single condensed line only for the board density, where it uses the board's own rule. Never returns a joined string for the general case. |
 | Entrant | `apps/entrant/app/components/PersonGroup.tsx` (**becomes authority**) | Already renders `persons[]` as elements with a rendered `/` separator element rather than a string. `PersonRef.tsx` stays "the only React component permitted to render a person's public name". |
 
 **The accessible inline phrase.** Plan §3 adapts "Remove `vs` everywhere": remove it where stacked
@@ -526,33 +527,33 @@ one speller, replacing four spellings (D16).
 | --- | --- | --- |
 | Backend person projection | `apps/api/src/entries/entries_site.py:_person_ref` (**becomes authority**) | Already the single mint for a public person reference; its `TBD` default label changes to the §6.2 wording and the `label` parameter carries the unresolved kind. |
 | Backend side projection | **new** `apps/api/src/shared/sides.py` | Builds the structured `Side` including `unresolved`; replaces `_side_names` and `team_name` string minting for wire purposes. |
-| Backend round labels | **new** `apps/api/src/shared/round_labels.py` | One speller; absorbs `workspace_signals.py:270–321` and `entries_site.py:743–766`. |
+| Backend round labels | **new** `shared/round_labels.py` | One speller; absorbs `workspace_signals.py:270-321` and `entries_site.py:743-766`. |
 | Console identity | `apps/console/src/platform/domain/matchIdentity.ts` (**becomes authority**) | Unchanged in role; gains the round-label speller other sites redirect to. |
-| Console sides | **new** `apps/console/src/platform/domain/side.ts` | See above. |
+| Console sides | **new** `platform/domain/side.ts` | See above. |
 | Entrant | `PersonRef.tsx` / `PersonGroup.tsx` (**become authority**) + **new** `apps/entrant/app/lib/side.ts` for `sideSummaryPhrase` | |
 
 ### 6.4 Implementation delta
 
 | D | Site | Verdict | Package |
 | --- | --- | --- | --- |
-| D14 | `apps/api/src/workspaces/workspace_signals.py:324–328 _side_names` | redirects to authority | 03 |
+| D14 | `apps/api/src/workspaces/workspace_signals.py:324-328 _side_names` | redirects to authority | 03 |
 | D14 | `apps/api/src/bracket/io/export_schedule.py:219` | **kept as a documented view-local rule** — an export file format, not a UI string; it calls the authority for the names and applies its own file separator | 10 |
 | D14 | `apps/api/src/entries/entries.py::team_name` | kept as authority for the *stored* participant name; must not be used for wire side rendering | 04 |
-| D14 | `apps/console/src/modules/bracket/bracketLabels.ts:152–192` | redirects to authority | 10 |
-| D14 | `apps/console/src/modules/operations/opsBlock.ts:36–38` | redirects to authority | 03 |
-| D14 | `apps/console/src/modules/display/bracketDisplay/bracketDisplayData.ts:16–33` (`'–'` fallback) | redirects to authority | 17 |
-| D14 | `apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:220–231` (`'No players'`) | redirects to authority | 10 |
-| D14 | `apps/console/src/modules/bracket/BracketRunControls.tsx:64–65` | redirects to authority | 10 |
+| D14 | `apps/console/src/modules/bracket/bracketLabels.ts:152-192` | redirects to authority | 10 |
+| D14 | `apps/console/src/modules/operations/opsBlock.ts:36-38` | redirects to authority | 03 |
+| D14 | `apps/console/src/modules/display/bracketDisplay/bracketDisplayData.ts:16-33` (`'–'` fallback) | redirects to authority | 17 |
+| D14 | `apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:220-231` (`'No players'`) | redirects to authority | 10 |
+| D14 | `apps/console/src/modules/bracket/BracketRunControls.tsx:64-65` | redirects to authority | 10 |
 | D14 | `apps/entrant/app/components/MatchCard.tsx:85` slash-joined aria label | deleted; call `sideSummaryPhrase` | 11 |
-| D14 | `apps/console/src/modules/display/publicDisplay/helpers.ts:30–43 formatPlayers` (`' & '`, `'TBD'`) | redirects to authority (board density) | 17 |
-| D14 | `apps/console/src/modules/operations/plan/MoveMatchDialog.tsx:205–208`, `plan/ScheduleDiffView.tsx:461` | redirect to authority | 03 |
-| D14 | `apps/console/src/modules/meet/exports/xlsxExports.ts:147, 194–208` | kept as a documented view-local rule (export format, as above) | 10 |
-| D15 | `apps/console/src/lib/names.ts:21–57` split/rejoin | deleted | 10 |
+| D14 | `apps/console/src/modules/display/publicDisplay/helpers.ts:30-43 formatPlayers` (`' & '`, `'TBD'`) | redirects to authority (board density) | 17 |
+| D14 | `apps/console/src/modules/operations/plan/MoveMatchDialog.tsx:205-208`, `plan/ScheduleDiffView.tsx:461` | redirect to authority | 03 |
+| D14 | `apps/console/src/modules/meet/exports/xlsxExports.ts:147, 194-208` | kept as a documented view-local rule (export format, as above) | 10 |
+| D15 | `lib/names.ts:21-57` split/rejoin | deleted — retired in the Wave 2 debt sweep, ahead of package 10; superseded by `platform/domain/sides.ts` | 10 |
 | D15 | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx:313` feeding `' & '` | deleted | 17 |
-| D15 | `apps/console/src/modules/bracket/bracketMigration.ts:41–53` split-decode | kept as a documented view-local rule — it is a one-way **migration** reader of legacy stored strings, explicitly not a rendering path; gains a docstring saying so | 10 |
-| D16 | `workspace_signals.py:270–321`, `entries_site.py:743–766`, `bracketDisplayData.ts:97` | redirect to authority | 03, 04, 17 |
+| D15 | `apps/console/src/modules/bracket/bracketMigration.ts:41-53` split-decode | kept as a documented view-local rule — it is a one-way **migration** reader of legacy stored strings, explicitly not a rendering path; gains a docstring saying so | 10 |
+| D16 | `workspace_signals.py:270-321`, `entries_site.py:743-766`, `bracketDisplayData.ts:97` | redirect to authority | 03, 04, 17 |
 | D16 | `apps/console/src/platform/domain/matchIdentity.ts` | becomes authority | 10 |
-| D17 | `apps/console/src/platform/domain/match.ts:52–53` pre-joined side strings | **becomes structured** — the console adopts the entrant tier's `persons[]` shape; this is the largest single change in this contract | 10 |
+| D17 | `apps/console/src/platform/domain/match.ts:52-53` pre-joined side strings | **becomes structured** — the console adopts the entrant tier's `persons[]` shape; this is the largest single change in this contract | 10 |
 
 ::: tip Ruled — C4 (confirmed 2026-09-06)
 D17 requires the console's operator match model to carry structured sides, which touches the Meet
@@ -610,7 +611,7 @@ contexts above are explicit enough that locale order is never load-bearing.
 
 | Tier | Module | Note |
 | --- | --- | --- |
-| Console | **new** `apps/console/src/lib/formatDateTime.ts` | The named contexts above, tournament-tz-aware. Absorbs `lib/timeFormatters.ts:12–16 formatIsoClock` and generalises `lib/timezoneLocal.ts:17–35` (today the only tz-aware pair, used in Setup only). |
+| Console | **new** `apps/console/src/lib/formatDateTime.ts` | The named contexts above, tournament-tz-aware. Absorbs `lib/timeFormatters.ts:12-16 formatIsoClock` and generalises `lib/timezoneLocal.ts:17-35` (today the only tz-aware pair, used in Setup only). |
 | Entrant | `apps/entrant/app/lib/format.ts` (**becomes authority**) | Already has the tz-aware `formatMomentInZone`; the named contexts are added there and the UTC-only helpers become thin wrappers over it. |
 | Backend | `apps/api/src/shared/schedule_slots.py` (§3.3) | Slot→wall-clock only. The backend does not format prose. |
 
@@ -618,15 +619,15 @@ contexts above are explicit enough that locale order is never load-bearing.
 
 | D | Site | Verdict | Package |
 | --- | --- | --- | --- |
-| D11 | `apps/entrant/app/lib/schedule.types.ts:103–112 scheduleDateLabel` hardcoded UTC | redirects to authority | 11 |
-| D11 | `apps/entrant/app/routes/schedule.tsx:221–230 monthLabel` | redirects to authority | 11 |
-| D11 | `apps/entrant/app/lib/format.ts:36–40 formatDateLong` UTC-only | redirects to authority | 11 |
-| D11 | `apps/entrant/app/lib/format.ts:58–72 formatMomentInZone` | becomes authority (entrant) | 11 |
-| D11 | `apps/console/src/lib/timezoneLocal.ts:17–35` | becomes authority (generalised into `formatDateTime.ts`) | 07 |
+| D11 | `apps/entrant/app/lib/schedule.types.ts:103-112 scheduleDateLabel` hardcoded UTC | redirects to authority | 11 |
+| D11 | `apps/entrant/app/routes/schedule.tsx:221-230 monthLabel` | redirects to authority | 11 |
+| D11 | `apps/entrant/app/lib/format.ts:36-40 formatDateLong` UTC-only | redirects to authority | 11 |
+| D11 | `apps/entrant/app/lib/format.ts:58-72 formatMomentInZone` | becomes authority (entrant) | 11 |
+| D11 | `apps/console/src/lib/timezoneLocal.ts:17-35` | becomes authority (generalised into `formatDateTime.ts`) | 07 |
 | D12 | `format.ts:55, 60`; `schedule.tsx:206`; `schedule.types.ts:105` raw ISO in prose | deleted | 11 |
-| D13 | `apps/console/src/lib/timeFormatters.ts:12–16` | redirects to authority | 07 |
-| D13 | `useLiveOperations.ts:298`, `settings/PeopleAccessTab.tsx:25–29`, `SyncBackupsTab.tsx:25–46`, `SharingTab.tsx:27`, `hub/WorkspaceRow.tsx:84`, `workspace/overview/railRows.ts:37`, `plan/SolverProgressLog.tsx:156`, `components/SyncHealthIndicator.tsx:22` inline `toLocale*` | redirect to authority | 07, 12, 18, 19, 20 |
-| D13 | `display/publicDisplay/helpers.ts:19–20` (forces UTC), `MeetDisplayPage.tsx:122, 530–535`, `BracketDisplayPage.tsx:59, 135–138` | redirect to authority — the board renders the **tournament** timezone, which is the venue's | 17 |
+| D13 | `apps/console/src/lib/timeFormatters.ts:12-16` | redirects to authority | 07 |
+| D13 | `useLiveOperations.ts:298`, `settings/PeopleAccessTab.tsx:25-29`, `SyncBackupsTab.tsx:25-46`, `SharingTab.tsx:27`, `hub/WorkspaceRow.tsx:84`, `workspace/overview/railRows.ts:37`, `plan/SolverProgressLog.tsx:156`, `components/SyncHealthIndicator.tsx:22` inline `toLocale*` | redirect to authority | 07, 12, 18, 19, 20 |
+| D13 | `display/publicDisplay/helpers.ts:19-20` (forces UTC), `MeetDisplayPage.tsx:122, 530-535`, `BracketDisplayPage.tsx:59, 135-138` | redirect to authority — the board renders the **tournament** timezone, which is the venue's | 17 |
 | — | `apps/api/src/entries/entries_site.py:420 _hhmm_plus`, `workspace_signals.py:238 _slot_time_label` | redirect to `shared/schedule_slots.py` | 04 |
 | — | `scheduledTime` as a naive venue-local `"HH:MM"` printed verbatim | **kept as a documented view-local rule** — the wire field is deliberately a wall-clock string in the tournament timezone, which is the right representation for a venue schedule; the contract is that it is **always** paired with `timeZone` and is never parsed as an instant | 04 |
 
@@ -682,7 +683,7 @@ false cloud-durability claim plan §1 package 19 exists to remove. Confirm befor
 
 | Tier | Module | Note |
 | --- | --- | --- |
-| Console durability | **new** `apps/console/src/platform/domain/durability.ts` | The four states, the mapping from queue status, and the labels. |
+| Console durability | **new** `platform/domain/durability.ts` | The four states, the mapping from queue status, and the labels. |
 | Console freshness | `apps/console/src/components/SyncHealthIndicator.tsx` `deriveSyncHealth` (**becomes authority**) | Unchanged; documented as *read freshness*, not durability. |
 | Queue storage | `apps/console/src/lib/commandQueue.ts` + `lib/bracketCommandQueue.ts` | Storage only; no labels. |
 
@@ -749,24 +750,24 @@ claim that staff are already resolving it unless that is a confirmed venue proce
 | D | Site | Verdict | Package |
 | --- | --- | --- | --- |
 | D8 | `entries_site.py:2408` `called` → `live` when results off | deleted | 04, 15 |
-| D7 | `entries_site.py:2409`, `:2316–2323` unknown → `scheduled` | deleted (see §2.4) | 04 |
+| D7 | `entries_site.py:2409`, `:2316-2323` unknown → `scheduled` | deleted (see §2.4) | 04 |
 | D17 | `entries_site.py` structured `persons[]` | becomes authority — the console adopts this shape, not the reverse | 04, 10 |
-| — | `entries_json.py:296, 374, 574–600`; `entries_me.py:171–200` twins | redirect to authority | 04 |
-| — | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx:302–309` "Two current matches claim this court." | redirects to authority; operator wording is *Needs resolution*, public/board wording is **"Court assignment unavailable."** | 17 |
+| — | `entries_json.py:296, 374, 574-600`; `entries_me.py:171-200` twins | redirect to authority | 04 |
+| — | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx:302-309` "Two current matches claim this court." | redirects to authority; operator wording is *Needs resolution*, public/board wording is **"Court assignment unavailable."** | 17 |
 
 ---
 
 ## Verification of the code map
 
 The following were re-read in the tree at `f5ccfcef` before this page was written, and the code map's
-claim confirmed: D1 (`match_state.py:164–194` `assert_court_available`, `playing` only), D2/D3
-(`runModel.ts:265–296` counts matches as `playing` while excluding conflicted lanes from
-`courtsFree`; `workspace_signals.py:345–375` computes `courtsFree` from `busy_courts` with no
+claim confirmed: D1 (`match_state.py:164-194` `assert_court_available`, `playing` only), D2/D3
+(`runModel.ts:265-296` counts matches as `playing` while excluding conflicted lanes from
+`courtsFree`; `workspace_signals.py:345-375` computes `courtsFree` from `busy_courts` with no
 conflict notion), D5 (`stateWords.ts` and `matchStatus.tsx` both claiming a canonical role), D6
-(`MatchCard.tsx:90` three-way vs `schedule.types.ts:72–91` eight-way), D7/D8
-(`entries_site.py:2401–2409`), D9 (`MatchCard.tsx:74–78`), D11/D12
-(`schedule.types.ts:103–112`, UTC hardcoded), D15 (`names.ts` split-and-rejoin), D20
-(`workspace_signals.py:563–570` `_IN_PLAY` excludes `called`, with a comment explaining why, against
+(`MatchCard.tsx:90` three-way vs `schedule.types.ts:72-91` eight-way), D7/D8
+(`entries_site.py:2401-2409`), D9 (`MatchCard.tsx:74-78`), D11/D12
+(`schedule.types.ts:103-112`, UTC hardcoded), D15 (`names.ts` split-and-rejoin), D20
+(`workspace_signals.py:563-570` `_IN_PLAY` excludes `called`, with a comment explaining why, against
 `match_state.py`'s `LOCKED_STATUSES` which includes it).
 
 Two refinements to the map were found: `workspace_signals.py`'s `_IN_PLAY` is
@@ -797,32 +798,32 @@ event-type branches; and test **game completion**, not which score is larger.
 | Operational truth | `apps/console/src/modules/operations/__tests__/runSummaryBand.test.tsx` (extend) | The band never renders a disputed court as free **or** as two playing matches | 03 |
 | Operational truth | `tests/backend/unit/test_court_dispute_resolution.py` | Resolving a dispute through the command path is idempotent under a repeated idempotency key, and the dispute stops being derived afterwards | 03 |
 | Operational truth | `apps/console/src/lib/__tests__/commandQueue.offlineConflict.test.ts` | A dispute resolution queued offline replays once on reconnect and surfaces `attention` on a 409 | 03, 19 |
-| Operational truth | `tests/backend/unit/test_display_public.py` (extend) | Board and public schedule report the same court states as the operator signals for one fixture | 04 |
-| Scheduling | `tests/backend/unit/test_public_schedule_api.py` (extend) | A match with no approved slot is published with public state `time_tbc`; the string "Scheduled" appears nowhere in its projection | 04 |
-| Scheduling | `tests/backend/unit/test_public_schedule_api.py` (extend) | An approved slot with an unresolved second side is published as `scheduled` with its time | 04 |
+| Operational truth | `tests/backend/test_display_public.py` (extend) | Board and public schedule report the same court states as the operator signals for one fixture | 04 |
+| Scheduling | `tests/backend/test_public_schedule_api.py` (extend) | A match with no approved slot is published with public state `time_tbc`; the string "Scheduled" appears nowhere in its projection | 04 |
+| Scheduling | `tests/backend/test_public_schedule_api.py` (extend) | An approved slot with an unresolved second side is published as `scheduled` with its time | 04 |
 | Scheduling | `apps/entrant/tests/scheduleState.test.ts` | `MatchCard` renders no time, date or court line when the corresponding field is null — no `Time not assigned`, `Date to be confirmed`, `Court information unavailable`, `Court pending` anywhere in the tree | 04, 11 |
 | Scheduling | `tests/backend/unit/test_slot_formatting.py` | `shared/schedule_slots.py` reproduces the exact outputs of the three replaced helpers over a slot/interval matrix including a midnight crossing | 04 |
-| Scheduling | `apps/console/src/modules/operations/__tests__/planScheduleState.test.tsx` | Plan, public Schedule, Round and board show the same schedule state for each of: approved slot, missing time, missing court, unresolved predecessor | 03, 04 |
-| Match layout | `apps/entrant/tests/matchCard.layout.test.tsx` | Singles, doubles, unequal and long names, and an incomplete pair each render one person per line with no clipped or overlapping text and a reachable full name | 09, 11 |
-| Match layout | `apps/console/src/modules/operations/__tests__/matchRowLayout.test.tsx` | Game columns align across rows for 1/3/5-game configurations; each score cell is associated with a named side | 10 |
-| Match layout | `apps/entrant/tests/matchCard.emptyLedger.test.tsx` | With no games recorded the ledger contributes no cells, no reserved width and no winner mark to the DOM | 09, 11 |
-| Match outcome | `apps/console/src/platform/domain/__tests__/score.test.ts` | A game leading 15–12 under `pointsPerSet: 21` has no winner; 21–19 does; 20–19 with `deuceEnabled` does not | 09, 10 |
-| Match outcome | `apps/console/src/platform/domain/__tests__/score.test.ts` | The losing side of a completed match retains per-game emphasis on the game it won | 09, 10 |
-| Match outcome | `apps/entrant/tests/matchCard.outcome.test.tsx` | A retirement shows the partial ledger, the word *Retired*, and the winner mark on the side the **outcome** names, not the side with more points | 09, 11 |
-| Match outcome | `apps/entrant/tests/matchCard.outcome.test.tsx` | No winner mark exists in the DOM while the match outcome is `in_play`; when present the mark has an accessible text equivalent | 09, 11 |
-| Public permissions | `tests/backend/unit/test_entries_site_api.py` (extend) | With results off, a `called` match is published as `called` — never `live` — and an unknown status is omitted rather than coerced to `scheduled` | 04, 15 |
-| Public permissions | `tests/backend/unit/test_entries_site_api.py` (extend) | Entrants-off yields `resolution='dead'` with `label='Player not published'` and no field outside the `PublicPersonIdentityDTO` allowlist, signed-out and authorized alike | 15 |
+| Scheduling | `__tests__/planScheduleState.test.tsx` (operations) | Plan, public Schedule, Round and board show the same schedule state for each of: approved slot, missing time, missing court, unresolved predecessor | 03, 04 |
+| Match layout | `matchCard.layout.test.tsx` (entrant) | Singles, doubles, unequal and long names, and an incomplete pair each render one person per line with no clipped or overlapping text and a reachable full name | 09, 11 |
+| Match layout | `__tests__/matchRowLayout.test.tsx` (operations) | Game columns align across rows for 1/3/5-game configurations; each score cell is associated with a named side | 10 |
+| Match layout | `matchCard.emptyLedger.test.tsx` (entrant) | With no games recorded the ledger contributes no cells, no reserved width and no winner mark to the DOM | 09, 11 |
+| Match outcome | `platform/domain/__tests__/score.test.ts` | A game leading 15–12 under `pointsPerSet: 21` has no winner; 21–19 does; 20–19 with `deuceEnabled` does not | 09, 10 |
+| Match outcome | `platform/domain/__tests__/score.test.ts` | The losing side of a completed match retains per-game emphasis on the game it won | 09, 10 |
+| Match outcome | `matchCard.outcome.test.tsx` (entrant) | A retirement shows the partial ledger, the word *Retired*, and the winner mark on the side the **outcome** names, not the side with more points | 09, 11 |
+| Match outcome | `matchCard.outcome.test.tsx` (entrant) | No winner mark exists in the DOM while the match outcome is `in_play`; when present the mark has an accessible text equivalent | 09, 11 |
+| Public permissions | `tests/backend/test_entries_site_api.py` (extend) | With results off, a `called` match is published as `called` — never `live` — and an unknown status is omitted rather than coerced to `scheduled` | 04, 15 |
+| Public permissions | `tests/backend/test_entries_site_api.py` (extend) | Entrants-off yields `resolution='dead'` with `label='Player not published'` and no field outside the `PublicPersonIdentityDTO` allowlist, signed-out and authorized alike | 15 |
 | Public permissions | `apps/entrant/tests/publicUniversality.test.ts` (extend) | Every rendered person name in the tier originates from `PersonRef`; no component joins names into a string | 11, 15 |
-| Recovery | `apps/console/src/hooks/__tests__/useTournamentBackups.test.ts` | Two recovery points are distinguishable by origin and sequence when one has no timestamp; neither is given an invented time | 19 |
-| Recovery | `apps/console/src/platform/domain/__tests__/durability.test.ts` | Queue statuses map to exactly the four durability words; a local commit never yields *Synced* | 19 |
+| Recovery | `hooks/__tests__/useTournamentBackups.test.ts` | Two recovery points are distinguishable by origin and sequence when one has no timestamp; neither is given an invented time | 19 |
+| Recovery | `platform/domain/__tests__/durability.test.ts` | Queue statuses map to exactly the four durability words; a local commit never yields *Synced* | 19 |
 | Account journeys | `tests/e2e/` (existing entrant journey specs, extend) | Sign-up, valid/expired confirmation, resend, valid reset, weak password and accepted/unavailable invitation each reach their actual destination with context preserved | 23, 24 |
 | Copy | `apps/console/src/lib/__tests__/stateWords.test.ts` | The canonical word set contains no match state spelled *Live*; `playing` is *On court* | 09 |
 | Copy | `tests/backend/unit/test_match_vocabulary.py` | The legacy alias map is total and bidirectional over the canonical set, `retired` included | 03 |
 | Copy | `apps/entrant/tests/schedule.test.ts` (extend) | Every rendered state string comes from `scheduleStateLabel`; no literal state word exists in a component | 11 |
-| Accessibility | `apps/entrant/tests/matchCard.a11y.test.tsx` | The match's accessible name is `"{sideA} versus {sideB}"` built from the structured side, joins partners with "and", and never contains a slash | 11, 26 |
+| Accessibility | `matchCard.a11y.test.tsx` (entrant) | The match's accessible name is `"{sideA} versus {sideB}"` built from the structured side, joins partners with "and", and never contains a slash | 11, 26 |
 | Accessibility | `apps/console/src/modules/operations/__tests__/conflictAssignment.a11y.test.tsx` | A dispute is a focusable, keyboard-operable assignment with named actions — not a banner | 03, 26 |
-| Responsive / signage | `apps/entrant/tests/matchCard.responsive.test.tsx` | At 320 px a doubles card keeps both sides distinguishable and no name is truncated without a reachable full value; no fixed-height assertion is used | 11, 26 |
-| Responsive / signage | `apps/console/src/modules/display/__tests__/boardDensity.test.tsx` | The board renders an explicit side separator so two stacked names cannot read as one pair, and its conflict copy is exactly "Court assignment unavailable." | 17 |
+| Responsive / signage | `matchCard.responsive.test.tsx` (entrant) | At 320 px a doubles card keeps both sides distinguishable and no name is truncated without a reachable full value; no fixed-height assertion is used | 11, 26 |
+| Responsive / signage | `__tests__/boardDensity.test.tsx` (display) | The board renders an explicit side separator so two stacked names cannot read as one pair, and its conflict copy is exactly "Court assignment unavailable." | 17 |
 
 ---
 
