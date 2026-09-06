@@ -567,6 +567,13 @@ export interface TournamentSetupDTO {
   sections: SetupSectionStateDTO[];
 }
 
+export interface TournamentActivityFieldChangeDTO {
+  key: string;
+  label: string;
+  old?: unknown;
+  new?: unknown;
+}
+
 export interface TournamentActivityEntryDTO {
   id: string;
   occurredAt: string;
@@ -575,10 +582,13 @@ export interface TournamentActivityEntryDTO {
   action: string;
   target: string;
   summary: string;
+  fields: TournamentActivityFieldChangeDTO[];
+  payloadHash?: string | null;
 }
 
 export interface TournamentActivityFeedDTO {
   entries: TournamentActivityEntryDTO[];
+  retentionLimit: number;
 }
 
 // ---- Proposal pipeline (two-phase commit) -------------------------------

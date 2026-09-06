@@ -66,7 +66,37 @@ const GENERATED_DRAW: TournamentDTO = {
   ],
 };
 
+const SCHEDULED_DRAW: TournamentDTO = {
+  ...GENERATED_DRAW,
+  start_time: '09:00',
+  interval_minutes: 30,
+  assignments: [
+    {
+      play_unit_id: 'm1',
+      slot_id: 2,
+      court_id: 5,
+      duration_slots: 1,
+      actual_start_slot: null,
+      actual_end_slot: null,
+      started: false,
+      finished: false,
+    },
+  ],
+};
+
 describe('DrawView', () => {
+  it('never shows the raw slot index on a draw card (V3-OC16.1)', () => {
+    renderDrawView(<DrawView data={SCHEDULED_DRAW} eventId="MS" onChange={vi.fn()} refresh={async () => {}} />);
+
+    // "slot 52 · court 5" is replaced by a real time + court; the reference
+    // (m1's identity chip) stays as the secondary label.
+    expect(screen.queryByText(/slot \d+/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/10:00 · Court 5/).length).toBeGreaterThan(0);
+    // m3 has no assignment at all — "Not scheduled", never "–".
+    expect(screen.getAllByText('Not scheduled').length).toBeGreaterThan(0);
+  });
+
+
   it('renders a composed empty state when the selected event has no generated draw', () => {
     renderDrawView(<DrawView data={NO_DRAW} eventId="MS" onChange={vi.fn()} refresh={async () => {}} />);
 

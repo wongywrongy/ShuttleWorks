@@ -18,6 +18,16 @@ import type { components } from './dto.generated';
 
 export type WinnerSide = "A" | "B" | "none";
 
+// Package 10a (v3 consolidated plan) — the structured side pair, aliased
+// from the generated OpenAPI types (same rationale as the standings rows
+// above: a generated alias cannot drift). ``shared__sides__SideDTO`` is the
+// qualified name openapi-typescript assigned because ``entries_site.py``
+// already declares an unrelated ``SideDTO`` (the public draw-node's bye /
+// feeder shape) — the two are NOT the same contract; do not conflate them.
+export type PersonRefDTO = components['schemas']['PersonRefDTO'];
+export type UnresolvedSideDTO = components['schemas']['UnresolvedSideDTO'];
+export type SideDTO = components['schemas']['shared__sides__SideDTO'];
+
 export interface Participant {
   id: string;
   name: string;
@@ -77,12 +87,20 @@ export interface PlayUnitDTO {
   event_id: string;
   round_index: number;
   match_index: number;
+  /** @deprecated Package 10a: prefer `sides` — it also carries the
+   *  unresolved reason (bye / winner_of / loser_of / undetermined), which
+   *  `side_a`/`side_b` alone cannot express without re-deriving it from
+   *  `slot_a`/`slot_b`. Kept for one release. */
   side_a: string[] | null;
   side_b: string[] | null;
   duration_slots: number;
   dependencies: string[];
   slot_a: BracketSlotDTO;
   slot_b: BracketSlotDTO;
+  /** The structured side pair, `[a, b]` — see `shared/sides.py`. Absent on
+   *  an older cached payload; callers fall back to `slot_a`/`slot_b` +
+   *  `side_a`/`side_b` when so. */
+  sides?: SideDTO[];
   /** Optimistic-concurrency token echoed back as ``seen_version`` when
    *  recording a result (SP-F3). Optional for older fixtures; the backend
    *  always serializes it (defaults to 1 for a freshly generated match). */

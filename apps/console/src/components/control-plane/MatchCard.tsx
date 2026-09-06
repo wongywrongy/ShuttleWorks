@@ -223,7 +223,7 @@ export function ResultSides({
   railA,
   railB,
   sets = [],
-  winner = null,
+  winner,
   reasonSide = null,
   reason = null,
   meta,
@@ -237,13 +237,18 @@ export function ResultSides({
   railA?: ReactNode;
   railB?: ReactNode;
   sets?: SetPair[];
-  winner?: 'A' | 'B' | null;
+  /** The authoritative match winner (match-card contract §3.5): comes from
+   *  `outcome.winner`, NEVER from counting `sets` — a retirement or a
+   *  walkover can contradict the point totals by construction. `null` while
+   *  the match is unfinished; the caller must not fall back to
+   *  `setsWinner(sets)` (deleted from this component). */
+  winner: 'A' | 'B' | null;
   reasonSide?: 'A' | 'B' | null;
   reason?: MatchReason | null;
   meta?: ReactNode;
   'data-testid'?: string;
 }) {
-  const won = winner ?? setsWinner(sets);
+  const won = winner;
   return (
     <div data-testid={testId} className="min-w-0">
       <div className="flex flex-col divide-y divide-border/60">
@@ -279,7 +284,7 @@ export function MatchCard({
   chipA,
   chipB,
   sets = [],
-  winner = null,
+  winner,
   reasonSide = null,
   reason = null,
   meta,
@@ -292,9 +297,11 @@ export function MatchCard({
   chipA?: ReactNode;
   chipB?: ReactNode;
   sets?: SetPair[];
-  /** Explicit winner when the caller knows it (bracket `winner_side`);
-   *  falls back to counting sets. */
-  winner?: 'A' | 'B' | null;
+  /** The authoritative match winner (match-card contract §3.5): comes from
+   *  `outcome.winner`, NEVER from counting `sets` (`winner ?? setsWinner(sets)`
+   *  is deleted — a retirement or walkover can contradict the point totals
+   *  by construction). `null` while `outcome.kind === 'in_play'`. */
+  winner: 'A' | 'B' | null;
   /** Which side the `reason` badge attaches to (the affected side). */
   reasonSide?: 'A' | 'B' | null;
   reason?: MatchReason | null;
@@ -302,7 +309,7 @@ export function MatchCard({
   className?: string;
   'data-testid'?: string;
 }) {
-  const won = winner ?? setsWinner(sets);
+  const won = winner;
   return (
     <div data-testid={testId} className={`min-w-0 ${className}`}>
       <CardSide

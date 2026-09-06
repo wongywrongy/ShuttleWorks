@@ -17,6 +17,12 @@ import {
   type MatchIdentity,
 } from '../../platform/domain/matchIdentity';
 import { descriptorFor } from './formatRegistry';
+import {
+  formatSideCondensed,
+  meetSideFromIds,
+  resolveFeederReference,
+  type Side,
+} from '../../platform/domain/sides';
 
 /** Round-of-K stage name, derived from how many rounds remain to the final.
  *  0 ⇒ Final, 1 ⇒ SF, 2 ⇒ QF, n≥3 ⇒ R16/R32/R64… (round of 2^(n+1)). */
@@ -153,6 +159,37 @@ export function teamName(a: string, b: string): string {
   return `${a} / ${b}`;
 }
 
+/** The legacy (`side`/`slot`) shape as the console's one `Side` — package
+ *  10b, D14: this is the single builder every legacy `sideLabel` caller now
+ *  routes through, so a future package can swap the source (the wire's own
+ *  `sides`, package 10a) without touching a second heuristic. */
+function sideFromLegacy(
+  side: string[] | null,
+  slot: {
+    participant_id: string | null;
+    feeder_play_unit_id: string | null;
+    feeder_take?: 'loser' | null;
+  },
+  nameById: Record<string, string>,
+): Side {
+  if (side && side.length > 0) return meetSideFromIds(side, nameById);
+  if (slot.participant_id === '__BYE__' || slot.participant_id === null) {
+    if (slot.feeder_play_unit_id) {
+      return {
+        persons: [],
+        unresolved: {
+          kind: slot.feeder_take === 'loser' ? 'loser_of' : 'winner_of',
+          reference: slot.feeder_play_unit_id,
+        },
+        seed: null,
+        participantKey: null,
+      };
+    }
+    return { persons: [], unresolved: { kind: 'bye' }, seed: null, participantKey: null };
+  }
+  return meetSideFromIds([slot.participant_id], nameById);
+}
+
 export function sideLabel(
   side: string[] | null,
   slot: {
@@ -166,18 +203,9 @@ export function sideLabel(
    *  of the raw id "Winner of MS-R0-1". Omit → raw id (legacy). */
   labelById?: ReadonlyMap<string, string>,
 ): string {
-  if (side && side.length > 0) {
-    return side.map((id) => nameById[id] ?? id).join(' / ');
-  }
-  if (slot.participant_id === '__BYE__' || slot.participant_id === null) {
-    if (slot.feeder_play_unit_id) {
-      const feeder = labelById?.get(slot.feeder_play_unit_id) ?? slot.feeder_play_unit_id;
-      const take = slot.feeder_take === 'loser' ? 'Loser' : 'Winner';
-      return `${take} of ${feeder}`;
-    }
-    return 'Bye';
-  }
-  return nameById[slot.participant_id] ?? slot.participant_id;
+  const built = sideFromLegacy(side, slot, nameById);
+  const resolved = labelById ? resolveFeederReference(built, labelById) : built;
+  return formatSideCondensed(resolved);
 }
 
 export function playUnitSideLabels(

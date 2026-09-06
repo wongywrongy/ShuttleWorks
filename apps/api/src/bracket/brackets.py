@@ -49,6 +49,7 @@ from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 from shared.sport.badminton import schedule_config_for_bracket
+from shared.sides import SideDTO, bye_side, resolved_side, undetermined_side, winner_of_side
 from core.dependencies import (
     AuthUser,
     get_current_user,
@@ -284,12 +285,21 @@ class PlayUnitOut(BaseModel):
     event_id: str
     round_index: int
     match_index: int
+    # DEPRECATED (package 10a, v3 consolidated plan): resolved participant ids
+    # per side, kept for one release for callers that have not moved to
+    # ``sides`` below. Prefer ``sides`` — it also carries the unresolved
+    # reason (bye / winner_of / loser_of / undetermined) ``side_a``/``side_b``
+    # cannot express without the caller re-deriving it from ``slot_a``/
+    # ``slot_b`` (state-and-formatting contract §6, D17).
     side_a: Optional[List[str]] = None
     side_b: Optional[List[str]] = None
     duration_slots: int
     dependencies: List[str] = []
     slot_a: BracketSlotOut
     slot_b: BracketSlotOut
+    # The structured side pair — see ``shared/sides.py``. Always exactly two
+    # entries, ``[side_a, side_b]``, once populated by ``_play_unit_out``.
+    sides: List[SideDTO] = Field(default_factory=list)
     # Segment id for multi-segment formats ('W', 'L', 'GF', 'P5_8', …) —
     # from the unit's metadata; None for single-bracket formats (se/rr).
     segment: Optional[str] = None
@@ -1218,6 +1228,33 @@ def _slot_out(slot: BracketSlot) -> BracketSlotOut:
     )
 
 
+def _bracket_side(
+    slot: BracketSlot,
+    participants: Dict[str, Participant],
+) -> SideDTO:
+    """One side of a play unit, structured (shared/sides.py, package 10a).
+
+    Mirrors the console's ``sideLabel`` (``modules/bracket/bracketLabels.ts``)
+    exactly, so the two stay in lockstep until the console redirects to this
+    field: a resolved ``participant_id`` wins; otherwise a feeder play unit
+    means "winner/loser of"; otherwise it's a structural bye.
+    """
+    participant_id = slot.participant_id
+    if participant_id and participant_id != "__BYE__":
+        participant = participants.get(participant_id)
+        if participant is not None:
+            metadata = participant.metadata if isinstance(participant.metadata, dict) else {}
+            return resolved_side(
+                id=participant.id,
+                name=participant.name,
+                seed=metadata.get("seed"),
+            )
+        return undetermined_side()
+    if slot.feeder_play_unit_id:
+        return winner_of_side(slot.feeder_play_unit_id, loser=slot.feeder_take == "loser")
+    return bye_side()
+
+
 def _play_unit_out(
     session: BracketSession,
     draw: Draw,
@@ -1234,6 +1271,10 @@ def _play_unit_out(
         match_index=match_index,
         side_a=list(play_unit.side_a) if play_unit.side_a else None,
         side_b=list(play_unit.side_b) if play_unit.side_b else None,
+        sides=[
+            _bracket_side(slot_a, session.state.participants),
+            _bracket_side(slot_b, session.state.participants),
+        ],
         duration_slots=play_unit.expected_duration_slots or 1,
         dependencies=list(play_unit.dependencies),
         slot_a=_slot_out(slot_a),

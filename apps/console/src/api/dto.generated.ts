@@ -3643,11 +3643,38 @@ export interface components {
             target: string;
             /** Summary */
             summary: string;
+            /** Fields */
+            fields?: components["schemas"]["ActivityFieldChange"][];
+            /** Payloadhash */
+            payloadHash?: string | null;
         };
         /** ActivityFeed */
         ActivityFeed: {
             /** Entries */
             entries: components["schemas"]["ActivityEntry"][];
+            /**
+             * Retentionlimit
+             * @default 200
+             */
+            retentionLimit: number;
+        };
+        /**
+         * ActivityFieldChange
+         * @description One changed field, named and valued for an operator (ruling R2).
+         *
+         *     ``old``/``new`` are whatever JSON-safe value the section payload
+         *     carries for that key (``model_dump(mode="json")``) — never redacted,
+         *     since everything here was already operator-visible before the change.
+         */
+        ActivityFieldChange: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Old */
+            old?: unknown | null;
+            /** New */
+            new?: unknown | null;
         };
         /**
          * Advisory

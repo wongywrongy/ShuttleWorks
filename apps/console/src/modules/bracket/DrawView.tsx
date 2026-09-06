@@ -29,6 +29,7 @@ import { bwfPositions } from "./bwf";
 import { descriptorFor } from "./formatRegistry";
 import { StandingsTable } from "./StandingsTable";
 import { EYEBROW_CLASS } from "../../lib/utils";
+import { formatBracketSlot, type BracketSlotContext } from "./formatBracketSlot";
 import { buildPlayUnitLabels } from "./bracketLabels";
 import { ACCENT_PRESS } from '../../lib/utils';
 
@@ -367,6 +368,7 @@ function BracketView({
                             nameById={nameById}
                             result={resultByPu[puId]}
                             assignment={assignmentByPu[puId]}
+                            slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                             final={isFinal}
                             seeding={editing && col.roundIndex === 0}
                             selectedPos={selectedPos}
@@ -1299,6 +1301,7 @@ function SegmentedBracketView({
                                 nameById={nameById}
                                 result={resultByPu[m.puId]}
                                 assignment={assignmentByPu[m.puId]}
+                                slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                                 final={isFinalCol}
                                 scoringFormat={scoringFormat}
                                 setsToWin={setsToWin}
@@ -1329,6 +1332,7 @@ function BracketCell({
   nameById,
   result,
   assignment,
+  slotContext,
   final = false,
   seeding = false,
   selectedPos = null,
@@ -1344,6 +1348,10 @@ function BracketCell({
   nameById: Record<string, string>;
   result: ResultDTO | undefined;
   assignment: AssignmentDTO | undefined;
+  /** Tournament-timezone wall-clock inputs for the assigned slot (match-card
+   *  contract §4.3 / V3-OC16.1): the caption shows a real time + court, not
+   *  the raw slot index. Optional only for callers mid-migration. */
+  slotContext?: BracketSlotContext;
   /** Final-round cell — carries the accent ring + glow (the draw's hero). */
   final?: boolean;
   /** Round-0 cell in seeding-edit mode: sides swap instead of recording. */
@@ -1401,9 +1409,26 @@ function BracketCell({
       <div className="flex justify-between text-xs text-text-secondary sw-num">
         <span>{identityLabel}</span>
         <span>
+          {/* V3-OC16.1: the slot index is never user-facing — never
+              "slot 52", and never `formatBracketSlot`'s "Slot N" fallback
+              either (that fallback is for schedule-setup chrome with no
+              start time at all; showing it here would just relabel the
+              same raw index). A real tournament-timezone time when the
+              bracket has a start time to derive one from; the court alone
+              when it does not; "Not scheduled" with no assignment at all.
+              The match reference stays the caption's other half, unchanged
+              (secondary identity, never removed). */}
           {assignment
-            ? `slot ${assignment.slot_id} · court ${assignment.court_id}`
-            : "–"}
+            ? (() => {
+                const time =
+                  slotContext?.start_time
+                    ? formatBracketSlot(assignment.slot_id, slotContext)
+                    : null;
+                return time
+                  ? `${time} · Court ${assignment.court_id}`
+                  : `Court ${assignment.court_id}`;
+              })()
+            : "Not scheduled"}
         </span>
       </div>
       <Side
@@ -1675,6 +1700,7 @@ function RoundRobinView({
                   nameById={nameById}
                   result={result}
                   assignment={assignment}
+                  slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                   scoringFormat={scoringFormat}
                   setsToWin={setsToWin}
                   onResult={(winner, sets) => {
@@ -1862,6 +1888,7 @@ function SwissView({
                     nameById={nameById}
                     result={resultByPu[puId]}
                     assignment={assignment}
+                    slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                     scoringFormat={scoringFormat}
                     setsToWin={setsToWin}
                     onResult={(winner, sets) => {

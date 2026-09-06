@@ -9,6 +9,17 @@ import { STATE_WORD } from '../../lib/stateWords';
 import { StatusPill } from '../StatusPill';
 import { EYEBROW_CLASS } from '../../lib/utils';
 
+/**
+ * A documented VIEW-LOCAL PROJECTION of the canonical match-state set
+ * (state-and-formatting contract §2.1, D5) — not a second vocabulary. It
+ * collapses `scheduled`/`called`/`playing` into `live` for the tally strips'
+ * four-bucket density; `STATUS_LABEL` below still sources every WORD from
+ * `stateWords.ts` (the one authority), so no literal state string is ever
+ * spelled here. `live` in THIS type means "not yet finished, already
+ * underway or about to be" for tally purposes — it is not the canonical
+ * `playing` state, which reads "On court" everywhere a single match's own
+ * state is shown (match-card contract §3.3).
+ */
 export type MatchListStatus = 'done' | 'live' | 'ready' | 'pending';
 
 /** @deprecated Use MatchListStatus — kept so bracket call sites read naturally during migration. */

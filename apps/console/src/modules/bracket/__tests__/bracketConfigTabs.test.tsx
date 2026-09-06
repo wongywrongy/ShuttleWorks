@@ -174,7 +174,7 @@ describe('Bracket Configuration — one merged surface', () => {
 
     expect(screen.getAllByRole('button', { name: /^Save/i })).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Badminton games' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Game scores' }));
     expect(setConfig).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Save engine settings/i }));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());
