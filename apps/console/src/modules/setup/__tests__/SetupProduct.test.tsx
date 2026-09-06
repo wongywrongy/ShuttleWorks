@@ -156,15 +156,15 @@ describe('SetupProduct', () => {
     renderSetup('/tournaments/t1/setup/dates');
     // Both named courts render as checkboxes, checked for the session that
     // uses them — no comma-separated free text, no repeated helper string.
-    const mainCourtRow1 = await screen.findByLabelText('Main court — Courts for row 1');
-    const court2Row1 = screen.getByLabelText('Court 2 — Courts for row 1');
+    const mainCourtRow1 = await screen.findByLabelText('Main court: Courts for row 1');
+    const court2Row1 = screen.getByLabelText('Court 2: Courts for row 1');
     expect(mainCourtRow1).toBeChecked();
     expect(court2Row1).toBeChecked();
     // A session referencing a court that no longer exists in Venue shows no
     // checkbox checked for it (it cannot be selected), but is left alone —
     // untouched checkboxes never clobber a value they cannot represent.
-    expect(screen.getByLabelText('Main court — Courts for row 2')).not.toBeChecked();
-    expect(screen.getByLabelText('Court 2 — Courts for row 2')).not.toBeChecked();
+    expect(screen.getByLabelText('Main court: Courts for row 2')).not.toBeChecked();
+    expect(screen.getByLabelText('Court 2: Courts for row 2')).not.toBeChecked();
     // Touch an unrelated field to make the draft dirty (Save starts disabled
     // with "No changes") without altering either session's court selection.
     fireEvent.change(screen.getByLabelText('Name for row 1'), { target: { value: 'Day 1 (final)' } });
