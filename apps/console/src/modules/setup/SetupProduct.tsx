@@ -400,7 +400,7 @@ function SectionEditor({
           />
           <FieldRow
             label="Partner instructions"
-            hint="An internal note — not shown to entrants yet, and not enforced. Payment and approval requirements are the switches below."
+            hint="An internal note. Not shown to entrants yet, and not enforced. Payment and approval requirements are the switches below."
             value={textOf(data, 'partnerRules')}
             onChange={(e) => onChange('partnerRules', e.target.value)}
             last

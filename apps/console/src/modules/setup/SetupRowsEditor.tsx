@@ -192,7 +192,7 @@ export function SetupRowsEditor({
                                       : selected.filter((value) => value !== option.value);
                                     patchRow(index, listColumn.field, next);
                                   }}
-                                  aria-label={`${option.label} — ${listColumn.label} for row ${index + 1}`}
+                                  aria-label={`${option.label}: ${listColumn.label} for row ${index + 1}`}
                                   className="h-4 w-4 rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
                                 />
                                 {option.label}
