@@ -1,6 +1,7 @@
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
-import { liveMatches } from './bracketDisplayData';
+import { liveMatches, UNDETERMINED_SIDE_LABEL } from './bracketDisplayData';
 import { STATE_WORD } from '../../../lib/stateWords';
+import { COURT_ASSIGNMENT_UNAVAILABLE } from '../publicDisplay/helpers';
 
 /** Read-only "what's playing now" view for the bracket TV — the bracket
  *  analog of the meet display's CourtsView. Oversized match cards, one per
@@ -33,7 +34,9 @@ export function BracketLiveView({
         const courtRows = rows.filter((row) => row.court === court);
         const current = courtRows.find((row) => row.status === 'on-court');
         const conflict = courtRows.filter((row) => row.status === 'conflict');
-        const next = courtRows.find((row) => row.status === 'next' && row.sideA !== '–' && row.sideB !== '–');
+        const next = courtRows.find(
+          (row) => row.status === 'next' && row.sideA !== UNDETERMINED_SIDE_LABEL && row.sideB !== UNDETERMINED_SIDE_LABEL,
+        );
         return <div
           key={court}
           className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5"
@@ -62,7 +65,7 @@ export function BracketLiveView({
               {/* Exactly one sentence, the public label restated (contract
                   §4.1) — never "the tournament desk is resolving…", never an
                   instruction to announce anything (V3-OC24.1). */}
-              <p className="font-semibold text-status-warning">Court assignment unavailable.</p>
+              <p className="font-semibold text-status-warning">{COURT_ASSIGNMENT_UNAVAILABLE}</p>
             </div>
           ) : current || next ? (
             <div className="flex flex-col gap-1.5">

@@ -15,7 +15,8 @@ import { useFullscreen } from '../publicDisplay/useFullscreen';
 import { FullscreenButton } from '../publicDisplay/FullscreenButton';
 import { BoardSwitch } from '../publicDisplay/BoardSwitch';
 import { LiveStatusPill } from '../publicDisplay/LiveStatusPill';
-import { STALE_CAPTION } from '../publicDisplay/freshness';
+import { staleCaption, STALE_MS } from '../publicDisplay/freshness';
+import { formatDateTime } from '../../../lib/formatDateTime';
 import { useBracketDisplaySync } from './useBracketDisplaySync';
 import { isComplete } from './bracketDisplayData';
 import { BracketLiveView } from './BracketLiveView';
@@ -30,6 +31,14 @@ const VIEWS: { id: BracketView; label: string }[] = [
   { id: 'draw', label: 'Draw' },
   { id: 'results', label: 'Results' },
 ];
+
+/** See `MeetDisplayPage.tsx`'s identical constant for the full rationale:
+ *  no tournament timezone reaches this page's wire data today
+ *  (`BracketTournamentDTO` carries no `timeZone` field either), so the
+ *  board falls back to UTC and LABELS it rather than silently formatting
+ *  in the viewer's own browser zone (state-and-formatting §7.2, D13,
+ *  V3-OC24.2). */
+const BOARD_TIME_ZONE = 'UTC';
 
 /** `hybrid` — this workspace also runs a Meet, so the header carries a switch
  *  back to that board (see `PublicDisplayPage` for why the two boards stay
@@ -56,11 +65,9 @@ export function BracketDisplayPage({ hybrid = false, preview = false }: { hybrid
     return () => window.clearInterval(t);
   }, []);
 
-  const currentTime = now.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  // `clock_with_zone` (state-and-formatting §7.1), tournament-tz-aware —
+  // see BOARD_TIME_ZONE's doc comment above for why that is 'UTC', labeled.
+  const currentTime = formatDateTime(now.toISOString(), 'clock_with_zone', BOARD_TIME_ZONE);
 
   // Event selection for the draw/results views — default to the first event.
   const eventParam = searchParams.get('event');
@@ -120,7 +127,15 @@ export function BracketDisplayPage({ hybrid = false, preview = false }: { hybrid
           ) : null}
         </div>
         <div className="flex items-center gap-3">
-          <span className="tabular-nums text-base text-muted-foreground">{currentTime}</span>
+          {/* Signage clock floor: >= 40px (match-card contract §4.4,
+              initial target pending package 27's physical validation).
+              `text-5xl` is 48px. This header is otherwise a slim single-row
+              bar; the visual fit of a 48px clock next to the view tabs is
+              exactly the kind of thing the physical validation pass should
+              confirm or push back on. */}
+          <time dateTime={now.toISOString()} className="tabular-nums text-5xl text-muted-foreground">
+            {currentTime}
+          </time>
           <LiveStatusPill status={freshness} />
           <SyncHealthIndicator
             lastSyncedAt={lastSyncedAt}
@@ -129,17 +144,19 @@ export function BracketDisplayPage({ hybrid = false, preview = false }: { hybrid
             nowMs={now.getTime()}
           />
           {lastSyncedAt ? (
-            <span
+            // `datetime` (date + clock, tournament tz) rather than a bare
+            // time-of-day — V3-OC24.2's exact finding was an unlabeled,
+            // date-less "Updated 04:07 AM" that a board left running
+            // overnight cannot interpret across midnight.
+            <time
               data-testid="display-last-updated"
+              dateTime={formatDateTime(new Date(lastSyncedAt).toISOString(), 'diagnostic') ?? undefined}
               className="whitespace-nowrap text-xs text-muted-foreground"
-              title={`Last updated ${new Date(lastSyncedAt).toLocaleString()}`}
+              title={`Last updated ${formatDateTime(new Date(lastSyncedAt).toISOString(), 'deadline', BOARD_TIME_ZONE)}`}
             >
               Updated{' '}
-              {new Date(lastSyncedAt).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
+              {formatDateTime(new Date(lastSyncedAt).toISOString(), 'datetime', BOARD_TIME_ZONE)}
+            </time>
           ) : null}
           {preview ? <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} /> : null}
         </div>
@@ -150,7 +167,9 @@ export function BracketDisplayPage({ hybrid = false, preview = false }: { hybrid
           caption, no red/alarm styling. */}
       {freshness === 'stale' && data && (
         <div className="border-b border-border bg-muted/30 px-4 py-1.5 text-center text-sm text-muted-foreground">
-          {STALE_CAPTION}
+          {/* V3-OC24.2: says HOW old, not a fixed "a few minutes" — see
+              MeetDisplayPage.tsx's identical treatment. */}
+          {staleCaption(lastSyncedAt ? now.getTime() - lastSyncedAt : STALE_MS)}
         </div>
       )}
 

@@ -191,15 +191,14 @@
     --density-badge-h:      22px;
 
     /* ----- Type ladder px (11/12/13/14/16/18/24; 3xs retired) ------------ */
-    /* --text-3xs (10px) is RETIRED (v3 consolidated plan, package 07,
-       ruling R1): 12px (--text-xs) is the product's caption floor — nothing
-       that carries words renders smaller. The variable and the Tailwind
-       `text-3xs` utility stay defined only because `modules/display/**` is
-       owned by a concurrent workstream mid-edit at the time of this pass and
-       still calls it; every other consumer has moved to `--text-xs`. Remove
-       both once display's remaining `text-3xs` usages are gone — tracked in
-       debt-log.md under "v3 consolidated plan". Do not add new usages. */
-    --text-3xs:  0.625rem;  /* 10px — DEPRECATED, see above */
+    /* --text-3xs (10px) is REMOVED (v3 consolidated plan, package 07 ruling
+       R1, closed by package 17): 12px (--text-xs) is the product's caption
+       floor — nothing that carries words renders smaller. The variable and
+       the Tailwind `text-3xs` utility stayed defined only while
+       `modules/display/**`'s two call sites (`LiveStatusPill.tsx`,
+       `CourtsView.tsx`) still used it; package 17 moved both to --text-xs
+       and dropped the two `captionFloorContract.test.ts` allowlist rows for
+       them (debt-log.md V3-07-1, now resolved). Do not add new usages. */
     --text-2xs:  0.6875rem; /* 11px — numeric tabular data in dense tables
                                ONLY (v3 consolidated plan R1); every caption
                                made of words uses --text-xs (12px floor).   */

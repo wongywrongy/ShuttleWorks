@@ -18,9 +18,9 @@
  */
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
 import { formatElapsed } from '../../../lib/timeFormatters';
-import { sideSurnameLine } from '../../../lib/names';
 import { STATE_WORD } from '../../../lib/stateWords';
-import { formatPlayers, isCourtClosedNow } from './helpers';
+import { formatPlayers, sideLines, isCourtClosedNow, COURT_ASSIGNMENT_UNAVAILABLE } from './helpers';
+import { resolveSignageNameSize } from './tvSizing';
 import {
   formatMatchIdentity,
   meetMatchIdentityFromStored,
@@ -128,7 +128,7 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
                 // Contract §4.1's exact public label (V3-OC24.1) — never
                 // "the tournament desk is resolving…", never an
                 // announcement instruction.
-                <span className="text-status-warning font-semibold">Court assignment unavailable.</span>
+                <span className="text-status-warning font-semibold">{COURT_ASSIGNMENT_UNAVAILABLE}</span>
               ) : match ? (
                 <>
                   <span className="font-medium">{sideA}</span>
@@ -246,6 +246,12 @@ function CourtCard({
   const { courtId, match, state, status, conflictMatches, nextMatch, nextStartTime, laterMatch, laterStartTime } = row;
   const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
   const code = match ? getMatchCode(match) : null;
+  // The on-court match's own names, at the signage floor (>= 48px) —
+  // separate from `playerSize` (used below for the idle/closed state
+  // words), which stays at the smaller shared `tvSizing` tier so it does
+  // not also inflate `BracketResultsView`'s historical results rows. See
+  // `resolveSignageNameSize`'s doc comment.
+  const signageNameSize = resolveSignageNameSize(cardHeightPx);
   const sets = tvShowScores && status === 'active' ? state?.sets ?? [] : [];
   // No per-set breakdown but an aggregate exists → show it as one score
   // column per side, so a score-carrying match never renders scoreless.
@@ -268,9 +274,15 @@ function CourtCard({
       : conflictMatches?.length
         // Contract §4.1's exact public label for a disputed court
         // (V3-OC24.1) — never "Conflict", never an announcement
-        // instruction.
+        // instruction. The band is a short state word, not the full
+        // sentence — no trailing period, matching STATE_WORD's other
+        // one-word entries.
         ? { cls: 'bg-status-warning/20 text-status-warning', word: 'Court assignment unavailable' }
-        : { cls: 'bg-muted text-muted-foreground', word: STATE_WORD.free };
+        // Contract §4.1: the PUBLIC label for a free court is "Court free",
+        // distinct from the operator's "Free" (`STATE_WORD.free`, still used
+        // by the Run desk's own court grid) — the board is a different
+        // audience with its own word, not a shared vocabulary entry.
+        : { cls: 'bg-muted text-muted-foreground', word: 'Court free' };
 
   return (
     <div
@@ -308,7 +320,7 @@ function CourtCard({
                 (contract §4.1, C2) — never an instruction to announce
                 anything (V3-OC24.1). Both claiming matches stay named
                 below; only the court field itself is withheld. */}
-            <p className="font-semibold">Court assignment unavailable.</p>
+            <p className="font-semibold">{COURT_ASSIGNMENT_UNAVAILABLE}</p>
             <p className="sw-num text-xs text-muted-foreground">
               {conflictMatches.map((item, index) => `${index ? ' · ' : ''}${getMatchCode(item)}`)}
             </p>
@@ -316,16 +328,16 @@ function CourtCard({
         ) : match ? (
           <>
             <SideScoreRow
-              name={sideSurnameLine(formatPlayers(match.sideA, playerNames), ' & ')}
+              lines={sideLines(match.sideA, playerNames)}
               scores={scoresA}
               others={scoresB}
-              playerSize={playerSize}
+              playerSize={signageNameSize}
             />
             <SideScoreRow
-              name={sideSurnameLine(formatPlayers(match.sideB, playerNames), ' & ')}
+              lines={sideLines(match.sideB, playerNames)}
               scores={scoresB}
               others={scoresA}
-              playerSize={playerSize}
+              playerSize={signageNameSize}
             />
             {/* What this court does NEXT, on the card itself (TV-3). The ETA
                 was already derived and already shown on FREE cards; a
@@ -343,9 +355,11 @@ function CourtCard({
           </>
         ) : nextMatch ? (
           <NextUp
+            nextCode={getMatchCode(nextMatch)}
             nextStartTime={nextStartTime}
             nextSideA={formatPlayers(nextMatch.sideA, playerNames)}
             nextSideB={formatPlayers(nextMatch.sideB, playerNames)}
+            laterCode={laterMatch ? getMatchCode(laterMatch) : undefined}
             laterStartTime={laterStartTime}
             laterSideA={laterMatch ? formatPlayers(laterMatch.sideA, playerNames) : undefined}
             laterSideB={laterMatch ? formatPlayers(laterMatch.sideB, playerNames) : undefined}
@@ -360,25 +374,33 @@ function CourtCard({
 }
 
 /**
- * One side of the board card: a single line of surnames with the side's
- * per-set scores right-aligned (TV-1). A decided set's winning number takes
- * the live hue; the set in progress (the last one) stays full ink.
+ * One side of the board card: one line PER PARTICIPANT (match-card contract
+ * §3.1 — a doubles pair is never joined onto one line at signage density),
+ * with the side's per-set scores right-aligned (TV-1). A decided set's
+ * winning number takes the live hue; the set in progress (the last one)
+ * stays full ink.
  *
  * The score columns are the DOMINANT element (TV-2 / ruling R-C): two rows of
  * them own roughly 38% of the card's height budget, sized a step and a half
  * above the names, because a score is the one thing a spectator crosses a
- * hall to read. The slot renders empty today for meet matches — the wire
- * carries no per-set data and there is no live score entry in the domain — and
- * it is laid out anyway, so a future score-relay app lights it up without
- * redesigning the card.
+ * hall to read.
+ *
+ * The score lane is COLLAPSED, not reserved, when `scores` is empty
+ * (match-card contract §3.4 — "no cell, no reserved width... no invisible
+ * winner mark"). It used to always render a `w-9` placeholder span so a
+ * future score-relay app could "light it up without redesigning the card";
+ * that traded an honest absence for a permanent blank column on every meet
+ * board today, which is exactly the padded-ledger anti-pattern the contract
+ * rejects. A future score-relay feature can re-add the lane once it has
+ * real scores to put in it.
  */
 function SideScoreRow({
-  name,
+  lines,
   scores,
   others,
   playerSize,
 }: {
-  name: string;
+  lines: string[];
   scores: number[];
   others: number[];
   playerSize: string;
@@ -387,30 +409,33 @@ function SideScoreRow({
   return (
     <div className="flex min-h-[30px] items-center gap-2">
       <span
-        className={`${playerSize} min-w-0 flex-1 break-words font-semibold leading-tight text-foreground`}
+        className={`${playerSize} min-w-0 flex-1 font-semibold leading-tight text-foreground`}
       >
-        {name}
-      </span>
-      {/* Reserved even when empty — the lane is part of the card, not a
-          conditional. Two of these stack to the score block's budget. */}
-      <span className="flex shrink-0 items-center gap-1.5">
-        {scores.length === 0 ? <span aria-hidden className="w-9" /> : null}
-        {scores.map((v, i) => (
-          <span
-            key={i}
-            title={`Set ${i + 1}`}
-            className={`w-9 shrink-0 text-right text-3xl font-bold leading-none tabular-nums ${
-              i === last
-                ? 'text-foreground'
-                : v > (others[i] ?? 0)
-                  ? 'text-status-live'
-                  : 'text-muted-foreground'
-            }`}
-          >
-            {v}
+        {lines.map((line, i) => (
+          <span key={i} className="block break-words">
+            {line}
           </span>
         ))}
       </span>
+      {scores.length > 0 ? (
+        <span className="flex shrink-0 items-center gap-1.5">
+          {scores.map((v, i) => (
+            <span
+              key={i}
+              title={`Set ${i + 1}`}
+              className={`w-9 shrink-0 text-right text-3xl font-bold leading-none tabular-nums ${
+                i === last
+                  ? 'text-foreground'
+                  : v > (others[i] ?? 0)
+                    ? 'text-status-live'
+                    : 'text-muted-foreground'
+              }`}
+            >
+              {v}
+            </span>
+          ))}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -421,19 +446,33 @@ function SideScoreRow({
  * de-emphasized "~time" suffix, never the headline (that was the drifting
  * wall-clock bug this replaces). Later renders only when a second upcoming
  * match exists on this court, and is visually quieter than Next.
+ *
+ * Carries the match reference (`nextCode`/`laterCode`) alongside the label —
+ * match-card contract §3.6: the identity chip is required on the board and
+ * on every compact variant, so two same-named participants (or the same
+ * pairing appearing twice in the day) stay distinguishable, and "next:
+ * R32·1" resolves to a visible labelled match rather than just two names.
+ *
+ * The "vs" between the two sides is the visible side separator this line is
+ * required to carry (match-card §3.2) — sides are printed inline here, never
+ * stacked, so there is no risk of two names reading as one doubles pair.
  */
 function NextUp({
+  nextCode,
   nextStartTime,
   nextSideA,
   nextSideB,
+  laterCode,
   laterStartTime,
   laterSideA,
   laterSideB,
   isFullscreen,
 }: {
+  nextCode: string;
   nextStartTime?: string;
   nextSideA: string;
   nextSideB: string;
+  laterCode?: string;
   laterStartTime?: string;
   laterSideA?: string;
   laterSideB?: string;
@@ -445,7 +484,7 @@ function NextUp({
         <span
           className={`${isFullscreen ? 'text-xs' : 'text-2xs'} font-semibold uppercase tracking-[0.08em]`}
         >
-          Next
+          Next <span className="sw-num normal-case tracking-normal">{nextCode}</span>
           {nextStartTime && (
             <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground">
               ~{nextStartTime}
@@ -461,9 +500,9 @@ function NextUp({
       {laterSideA && laterSideB && (
         <div className="flex flex-col gap-0.5">
           <span
-            className={`${isFullscreen ? 'text-2xs' : 'text-3xs'} font-semibold uppercase tracking-[0.08em] text-muted-foreground`}
+            className={`${isFullscreen ? 'text-2xs' : 'text-xs'} font-semibold uppercase tracking-[0.08em] text-muted-foreground`}
           >
-            Later
+            Later {laterCode && <span className="sw-num normal-case tracking-normal">{laterCode}</span>}
             {laterStartTime && (
               <span className="ml-1 font-normal normal-case tracking-normal">
                 ~{laterStartTime}

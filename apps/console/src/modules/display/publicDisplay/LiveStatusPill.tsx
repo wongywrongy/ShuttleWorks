@@ -35,7 +35,11 @@ export function LiveStatusPill({ status }: LiveStatusPillProps) {
         : 'Results may be out of date';
   return (
     <span
-      className={`inline-flex h-badge items-center whitespace-nowrap rounded-xs border px-2 text-3xs font-semibold uppercase leading-none tracking-[0.06em] ${styles}`}
+      // `text-xs` (12px), not `text-3xs` — this is a word caption
+      // ("Live"/"Delayed"/"Out of date"), and the caption floor is 12px
+      // (v3 consolidated plan, package 07, ruling R1; V3-07-1). `text-3xs`
+      // is fully retired as of package 17 — see debt-log.md.
+      className={`inline-flex h-badge items-center whitespace-nowrap rounded-xs border px-2 text-xs font-semibold uppercase leading-none tracking-[0.06em] ${styles}`}
       title={quietTitle}
       data-testid="tv-live-status"
       role="status"

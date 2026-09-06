@@ -93,25 +93,17 @@ const BANNED = /\btext-(?:3xs\b|\[10px\]|\[11px\])/g;
  * Deliberate exceptions, each with a reason. A file/pattern pair here must
  * still occur in the file (checked below) or it is stale.
  *
- *  - `modules/display/**`: owned by a concurrent v3-consolidated workstream
- *    mid-edit at the time of this pass (package 07's scope explicitly
- *    excludes it). Its remaining `text-3xs` calls are tracked as debt.
  *  - `ShuttleWorksMark.tsx`: the brand monogram tile is a single
  *    `aria-hidden` decorative glyph inside a 22px square, not a caption
  *    made of words — a logo's internal proportions are a brand decision,
  *    not typography this ruling addresses.
+ *
+ * `modules/display/**`'s two `text-3xs` call sites (V3-07-1) were closed by
+ * package 17 (v3 consolidated plan) — both moved to `text-xs` and the
+ * variable/Tailwind step were removed from tokens.css / tailwind-preset.js.
+ * See debt-log.md.
  */
 const ALLOWED: readonly { file: string; pattern: string; why: string }[] = [
-  {
-    file: 'apps/console/src/modules/display/publicDisplay/LiveStatusPill.tsx',
-    pattern: 'text-3xs',
-    why: 'owned by a concurrent workstream outside package 07 scope; debt-log.md',
-  },
-  {
-    file: 'apps/console/src/modules/display/publicDisplay/CourtsView.tsx',
-    pattern: 'text-3xs',
-    why: 'owned by a concurrent workstream outside package 07 scope; debt-log.md',
-  },
   {
     file: 'apps/console/src/components/ShuttleWorksMark.tsx',
     pattern: 'text-[10px]',

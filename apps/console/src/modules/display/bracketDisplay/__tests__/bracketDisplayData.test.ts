@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { liveMatches, sideLabel } from '../bracketDisplayData';
-import type { BracketTournamentDTO } from '../../../../api/bracketDto';
+import { liveMatches, sideLabel, UNDETERMINED_SIDE_LABEL } from '../bracketDisplayData';
+import type { BracketTournamentDTO, PlayUnitDTO } from '../../../../api/bracketDto';
 
 export const data = {
   participants: [
@@ -108,5 +108,32 @@ describe('bracketDisplayData', () => {
     );
     const rows = liveMatches(value);
     expect(rows.filter((row) => row.court === 1).map((row) => row.status)).toEqual(['conflict', 'conflict']);
+  });
+
+  // D14 (v3 consolidated plan, package 17): sideLabel used to return a raw
+  // '–' for an unfilled slot with no direct member ids — one of the four
+  // banned unresolved fallbacks (state-and-formatting §6.2). It now
+  // redirects to the sides.ts authority's fixed "To be decided" label.
+  it('labels an unfilled slot with no direct members "To be decided", never a raw dash', () => {
+    const unfilled: PlayUnitDTO = {
+      ...data.play_units[0],
+      id: 'u-unfilled',
+      side_a: null,
+      side_b: null,
+      slot_a: { participant_id: null, feeder_play_unit_id: null },
+      slot_b: { participant_id: null, feeder_play_unit_id: null },
+    };
+    expect(sideLabel(unfilled, 'a', data.participants)).toBe(UNDETERMINED_SIDE_LABEL);
+    expect(sideLabel(unfilled, 'a', data.participants)).not.toBe('–');
+  });
+
+  it('condenses a resolved doubles pair to one "/"-joined line, never "&"', () => {
+    const doubles: PlayUnitDTO = {
+      ...data.play_units[0],
+      id: 'u-doubles',
+      side_a: ['p1', 'p2'],
+      slot_a: { participant_id: null, feeder_play_unit_id: null },
+    };
+    expect(sideLabel(doubles, 'a', data.participants)).toBe('Alice / Bob');
   });
 });

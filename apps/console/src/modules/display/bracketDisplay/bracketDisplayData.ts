@@ -8,28 +8,50 @@ import type {
   PlayUnitDTO,
   Participant,
 } from '../../../api/bracketDto';
+import { formatSideCondensed, type Side } from '../../../platform/domain/sides';
 
-/** Resolve a play-unit side to a participant display name. Prefers the
- *  direct slot participant id, falls back to the resolved member ids
- *  (`side_a`/`side_b`), and returns an em dash when the slot is still a
- *  feeder / unfilled. */
+/** The one participant-per-line label the "To be decided" sentinel a board
+ *  reader (`isImminentMatch` below) matches against. Kept as a named export
+ *  so a caller never has to spell the sides.ts label text itself. */
+export const UNDETERMINED_SIDE_LABEL = 'To be decided';
+
+/** Build a `Side` (match-card contract §2.1 / state-and-formatting §6.1)
+ *  from a bracket play-unit's slot/direct participant ids. A resolved slot
+ *  participant wins over the direct member list; an unfilled slot with no
+ *  direct members is `undetermined` — never a raw `'–'` (D14). */
+function sideFromPlayUnit(
+  pu: PlayUnitDTO,
+  side: 'a' | 'b',
+  participants: Participant[],
+): Side {
+  const slot = side === 'a' ? pu.slot_a : pu.slot_b;
+  const direct = side === 'a' ? pu.side_a : pu.side_b;
+  if (slot.participant_id) {
+    const p = participants.find((x) => x.id === slot.participant_id);
+    if (p) {
+      return { persons: [{ id: p.id, name: p.name }], unresolved: null, seed: null, participantKey: p.id };
+    }
+  }
+  if (direct && direct.length) {
+    return {
+      persons: direct.map((id) => ({ id, name: participants.find((x) => x.id === id)?.name ?? id })),
+      unresolved: null,
+      seed: null,
+      participantKey: direct.join('|'),
+    };
+  }
+  return { persons: [], unresolved: { kind: 'undetermined' }, seed: null, participantKey: null };
+}
+
+/** Resolve a play-unit side to a display string at the board's CONDENSED
+ *  density (match-card §3.2): one line, ' / '-joined, using the fixed
+ *  unresolved-side label ("To be decided") rather than a raw em dash. */
 export function sideLabel(
   pu: PlayUnitDTO,
   side: 'a' | 'b',
   participants: Participant[],
 ): string {
-  const slot = side === 'a' ? pu.slot_a : pu.slot_b;
-  const direct = side === 'a' ? pu.side_a : pu.side_b;
-  if (slot.participant_id) {
-    const p = participants.find((x) => x.id === slot.participant_id);
-    if (p) return p.name;
-  }
-  if (direct && direct.length) {
-    return direct
-      .map((id) => participants.find((x) => x.id === id)?.name ?? id)
-      .join(' / ');
-  }
-  return '–';
+  return formatSideCondensed(sideFromPlayUnit(pu, side, participants));
 }
 
 export interface LiveRow {

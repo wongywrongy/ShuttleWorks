@@ -30,7 +30,8 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
 import { formatSlotTime } from '../../lib/time';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
-import { STALE_CAPTION } from './publicDisplay/freshness';
+import { staleCaption, STALE_MS } from './publicDisplay/freshness';
+import { formatDateTime } from '../../lib/formatDateTime';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
@@ -64,6 +65,21 @@ import { formatMatchIdentity, meetMatchIdentityFromStored } from '../../platform
 
 /** How long the NOW CALLING strip holds before the board moves on. */
 const NOW_CALLING_DWELL_MS = 8_000;
+
+/**
+ * The board is supposed to render the TOURNAMENT timezone (state-and-
+ * formatting contract §7.1/§7.4, D13, V3-OC24.2), never the viewer's own
+ * browser zone — a board in one hall and a phone checking it from another
+ * time zone must read the same clock. No timezone reaches this page's wire
+ * data today: neither `TournamentConfig` (the `config` this page hydrates)
+ * nor `ScheduleDTO` carries a `timeZone` field, unlike `TournamentSummaryDTO`
+ * (which the in-shell Settings tabs read separately). Falling back to UTC
+ * and LABELING it (§7.2's documented fallback: "14:30 UTC", never a silent
+ * local-time assumption) is the honest behavior until that field is wired
+ * through the display projection — see docs/audits/v3-consolidated/reports/
+ * 17-signage.md and debt-log.md for the follow-up.
+ */
+const BOARD_TIME_ZONE = 'UTC';
 
 function getMatchCode(match: { id: string; eventRank?: string | null; matchNumber?: number | null }): string {
   const identity = meetMatchIdentityFromStored({
@@ -125,11 +141,10 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
   // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
 
-  const currentTime = now.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  // `clock_with_zone` (state-and-formatting §7.1): time-of-day + zone
+  // abbreviation, tournament-tz-aware — see BOARD_TIME_ZONE's doc comment
+  // for why that is 'UTC', labeled, rather than the browser's own zone.
+  const currentTime = formatDateTime(now.toISOString(), 'clock_with_zone', BOARD_TIME_ZONE);
 
   const playerNames = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
@@ -552,17 +567,21 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
               nowMs={now.getTime()}
             />
             {lastSyncedAt ? (
-              <span
+              // `datetime` (date + clock, tournament tz) rather than the
+              // bare time-of-day this used to render: V3-OC24.2's exact
+              // finding was "Updated 04:07 AM" with no date, unreadable
+              // across midnight on a board left running overnight. The
+              // machine-readable `diagnostic` ISO value goes on `<time>`
+              // per state-and-formatting §7.1.
+              <time
                 data-testid="display-last-updated"
+                dateTime={formatDateTime(new Date(lastSyncedAt).toISOString(), 'diagnostic') ?? undefined}
                 className="whitespace-nowrap text-xs text-muted-foreground"
-                title={`Last updated ${new Date(lastSyncedAt).toLocaleString()}`}
+                title={`Last updated ${formatDateTime(new Date(lastSyncedAt).toISOString(), 'deadline', BOARD_TIME_ZONE)}`}
               >
                 Updated{' '}
-                {new Date(lastSyncedAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
+                {formatDateTime(new Date(lastSyncedAt).toISOString(), 'datetime', BOARD_TIME_ZONE)}
+              </time>
             ) : null}
           </div>
           {/* Venue render keeps the clock and nothing else (TV-8): nobody is
@@ -599,7 +618,12 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
                   they showed. */}
               {hybrid ? <BoardSwitch to="bracket" /> : null}
             </div>
-            <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
+            {/* Signage clock floor: >= 40px (match-card contract §4.4,
+                initial target pending package 27's physical validation).
+                `text-5xl` is 48px, comfortably clearing it. */}
+            <time dateTime={now.toISOString()} className="tabular-nums text-5xl text-muted-foreground">
+              {currentTime}
+            </time>
             {preview ? <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} /> : null}
           </div>
         </div>
@@ -642,7 +666,13 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
             {view === 'courts' && (
               <>
                 {freshness === 'stale' && (
-                  <div className="mb-4 text-center text-base text-muted-foreground">{STALE_CAPTION}</div>
+                  <div className="mb-4 text-center text-base text-muted-foreground">
+                    {/* V3-OC24.2: says HOW old, not a fixed "a few minutes"
+                        regardless of actual age. `lastSyncedAt` is non-null
+                        whenever freshness is 'stale' (useDisplaySync only
+                        derives 'stale' from an aged successful sync). */}
+                    {staleCaption(lastSyncedAt ? now.getTime() - lastSyncedAt : STALE_MS)}
+                  </div>
                 )}
                 <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>{courtsViewNode}</div>
               </>

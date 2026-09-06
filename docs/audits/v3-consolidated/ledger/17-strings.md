@@ -1,0 +1,37 @@
+# Ledger — package 17 (signage density — court, names, time, scores)
+
+Columns per plan §4: string key/file:line · surface · state · current text · verdict · final text · factual prerequisite · finding IDs · evidence.
+
+## Board vocabulary
+
+| string key/file:line | surface | state | current text | verdict | final text | factual prerequisite | finding IDs | evidence |
+|---|---|---|---|---|---|---|---|---|
+| `CourtsView.tsx` card band, free court | Board — court card | `status === 'empty'`, no conflict | `STATE_WORD.free` → "Free" | change | `"Court free"` (a board-local literal, not `STATE_WORD.free`) | state-and-formatting contract §4.1 table: operator label "Free", **public label "Court free"** — the two audiences use different words for the same state, so the board must not share the operator's `STATE_WORD.free` | contract §4.1 | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx` |
+| `CourtsView.tsx` list/card conflict copy (×3), `BracketLiveView.tsx` conflict copy (×1) | Board — disputed court | `conflictMatches?.length` / `conflict.length > 1` | four separately-typed copies of `"Court assignment unavailable."` | keep (de-duplicated) | same text, now sourced from one exported constant `COURT_ASSIGNMENT_UNAVAILABLE` (`publicDisplay/helpers.ts`) so the two boards can never drift apart | V3-OC24.1 (already ruled by package 04b; this package only removes the duplication risk) | `apps/console/src/modules/display/publicDisplay/helpers.ts`, `CourtsView.tsx`, `bracketDisplay/BracketLiveView.tsx` |
+| `bracketDisplayData.ts` `sideLabel` unfilled-slot fallback | Board — bracket live/results | slot has no `participant_id` and no direct members | `'–'` (raw em dash) | change | `"To be decided"` (exported as `UNDETERMINED_SIDE_LABEL`), via the `sides.ts` authority's `undetermined` label | D14 — one of the four banned unresolved-side fallbacks (state-and-formatting §6.2) | `apps/console/src/modules/display/bracketDisplay/bracketDisplayData.ts` |
+| `helpers.ts` `formatPlayers` empty-ids fallback | Board — meet courts/schedule | `!ids \|\| ids.length === 0` | `'TBD'` | change | `"To be decided"`, via the `sides.ts` authority | D14 | `apps/console/src/modules/display/publicDisplay/helpers.ts` |
+| `helpers.ts` / `CourtsView.tsx` side join | Board — meet courts/schedule/Next preview | doubles side | `' & '` (with a `sideSurnameLine(..., ' & ')` re-split at `CourtsView.tsx:313` that then rejoined with `' / '`) | change | `' / '` everywhere, built directly from the structured `Side`, never a joined-then-resplit string | D14/D15 — "the CourtsView.tsx:313 ' & ' → sideSurnameLine round-trip is deleted" | `apps/console/src/modules/display/publicDisplay/helpers.ts`, `CourtsView.tsx` |
+
+## Signage layout / structure (not strings, recorded because they change what a reader sees)
+
+| Site | Before | After | Why |
+|---|---|---|---|
+| `CourtsView.tsx` `SideScoreRow` | one line per side (partners joined into a single string) | one line **per participant** (`sideLines()` → one `<span class="block">` per name/label) | match-card contract §3.1: "one participant per line within a pair" — a doubles pair must never be joined onto one line at signage density |
+| `CourtsView.tsx` `SideScoreRow` score lane | always rendered a `w-9` placeholder `<span>` when `scores.length === 0` (reserved width, no value) | score lane **not rendered at all** when there is no score | match-card contract §3.4: "no cell, no reserved width... no invisible winner mark" when the ledger is empty |
+| `CourtsView.tsx` `NextUp` (idle-court preview) | sides only, no match reference | adds `nextCode`/`laterCode` (the match's own reference, e.g. "C2") next to the "Next"/"Later" label | match-card contract §3.6: the identity chip is required on the board and every compact variant, so "next: R32·1" resolves to a specific match |
+| `publicDisplay/tvSizing.ts` — new `resolveSignageNameSize` | on-court names sized 16/24/30/36px (`resolveCardSizeClasses().playerSize`, `sm`/`md`/`lg`/`xl`) | on-court names sized 48/60/60/72px, a **separate** scale from the shared `playerSize` (which still feeds `BracketResultsView`'s results rows and the idle-state words, unaffected) | match-card contract §3.0/§4.4: names ≥ 48px at the board's default density (plan §3 "Board names at 30 px" — rejected as validation, not as a figure) |
+| Header clock (`MeetDisplayPage.tsx`, `BracketDisplayPage.tsx`) | `text-2xl` (24px) / `text-base` (16px) | `text-5xl` (48px), wrapped in `<time dateTime=…>` | match-card contract §4.4: clock ≥ 40px |
+| `LiveStatusPill.tsx`, `CourtsView.tsx` "Later" label | `text-3xs` (10px) | `text-xs` (12px) | v3 plan package 07 ruling R1 (caption floor); closes debt-log V3-07-1 |
+
+## Time / freshness
+
+| string key/file:line | surface | state | current text | verdict | final text | factual prerequisite | finding IDs | evidence |
+|---|---|---|---|---|---|---|---|---|
+| `MeetDisplayPage.tsx`/`BracketDisplayPage.tsx` header clock | Board header | any | `now.toLocaleTimeString('en-US', {hour, minute, hour12})` — **browser** locale/zone | change | `formatDateTime(now.toISOString(), 'clock_with_zone', BOARD_TIME_ZONE)` — e.g. `"2:30 PM UTC"` | `formatDateTime.ts` authority (package 20); no tournament timezone reaches the board wire today, so `BOARD_TIME_ZONE = 'UTC'`, honestly labeled per §7.2 | D13 | `apps/console/src/modules/display/MeetDisplayPage.tsx`, `bracketDisplay/BracketDisplayPage.tsx` |
+| `MeetDisplayPage.tsx`/`BracketDisplayPage.tsx` "Updated" label | Board header | `lastSyncedAt` present | `Updated {new Date(lastSyncedAt).toLocaleTimeString([], {hour, minute})}` — bare time-of-day, no date, browser zone; `title` used `.toLocaleString()` | change | `Updated {formatDateTime(iso, 'datetime', BOARD_TIME_ZONE)}` (date + time; zone stated once nearby by the header clock, contract §4.2) inside a `<time dateTime={diagnostic ISO}>`; `title` uses the `deadline` context (date + zoned clock) | V3-OC24.2 — "Updated 04:07 AM" with no date/zone was unreadable across midnight | `MeetDisplayPage.tsx`, `bracketDisplay/BracketDisplayPage.tsx` |
+| `freshness.ts` `STALE_CAPTION` | Board — stale state | `freshness === 'stale'` | fixed string `"Results may be a few minutes behind."` regardless of actual age | change | `staleCaption(ageMs)` function: `"Results may be {N} minute(s) behind."`, computed from `now - lastSyncedAt`, floored at 1 minute | V3-OC24.2 — "the Out of date state must say how old the data is" | `apps/console/src/modules/display/publicDisplay/freshness.ts`, both display pages |
+
+## Notes / debt
+
+- **The tournament timezone does not reach the board's wire data.** `TournamentConfig`, `ScheduleDTO` and `BracketTournamentDTO` (the shapes `useDisplaySync`/`useBracketDisplaySync` hydrate) carry no `timeZone` field — only `TournamentSummaryDTO` does, and nothing in the standalone `/display` route fetches that summary. `BOARD_TIME_ZONE = 'UTC'` is therefore the honest, *labeled* fallback the state-and-formatting contract §7.2 explicitly sanctions ("Timezone unknown → Fall back to UTC and label it"), not a silent local-time assumption — but it is not the tournament's *actual* venue zone. See the package 17 report's debt section for the follow-up needed to wire a real zone through.
+- **`STATE_WORD.free` is intentionally left at "Free"** — it still serves the operator's own Run court grid (`RunCourtGrid.tsx`), which correctly uses the operator-audience word from contract §4.1's table. Only the board's own literal changed.

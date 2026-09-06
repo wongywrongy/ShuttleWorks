@@ -58,6 +58,27 @@ export function resolveCardSizeClasses(cardHeightPx: number): CardSizeClasses {
   return { courtNumSize: courtNum, eventCodeSize: eventCode, playerSize: player, cardPadX: padX };
 }
 
+/**
+ * The on-court match's PARTICIPANT NAMES, at the match-card contract's
+ * signage floor (§3.0 / §4.4, plan §3 "Board names at 30 px" — Reject as
+ * validation): >= 48px at the board's default density. This is
+ * deliberately a SEPARATE scale from `resolveCardSizeClasses().playerSize`
+ * — that function's `player` tier also feeds `BracketResultsView`'s
+ * historical results rows and the idle "Court free"/"Court closed" labels,
+ * none of which this floor is about, and naively raising the shared tier
+ * inverted `BracketResultsView`'s intentional hierarchy (a normal result
+ * row became bigger than the champion headline above it). `text-5xl`
+ * (48px) is the FLOOR tier, not a target to shrink toward. Still an
+ * initial target pending package 27's physical validation — see
+ * docs/audits/v3-consolidated/reports/17-signage.md.
+ */
+export function resolveSignageNameSize(cardHeightPx: number): string {
+  if (cardHeightPx >= 160) return 'text-7xl';
+  if (cardHeightPx >= 120) return 'text-6xl';
+  if (cardHeightPx >= 96) return 'text-6xl';
+  return 'text-5xl';
+}
+
 // Tailwind safelist won't pick up dynamic class names so we keep the
 // literal strings; lookup beats a 4-deep ternary at the callsite.
 const GRID_COLS: Record<1 | 2 | 3 | 4, string> = {
