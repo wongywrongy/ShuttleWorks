@@ -40,6 +40,7 @@ references a longer source, it names the file rather than duplicating it.
 | [0026](/explanation/decisions/0026-sp-figma-2-program-rulings) | SP-FIGMA-2 program rulings: three Figma files, no product token mode, public name format, cut list ruled item by item | Proposed (2026-09-03) |
 | [0027](/explanation/decisions/0027-curated-data-components) | The curated Claude Design library is the visual source for the shared data components: Card, StatusPill, Badge, Avatar | Accepted (2026-09-04) |
 | [0028](/explanation/decisions/0028-entrant-site-port) | The public entrant site takes the curated Claude Design mock: four tournament tabs, webfonts on the public tier, key dates as rows | Accepted (2026-09-04) |
+| [0029](/explanation/decisions/0029-state-and-formatting-contract) | One state and formatting authority per domain: nine domains, explicit missing-data rules, no global enum | Proposed (2026-09-06) |
 
 ## Format
 
