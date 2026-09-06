@@ -20,9 +20,17 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 | 05 false claims | P0 | done (focused gates) · see git log | reports/05-false-claims.md, ledger/05-strings.md |
 | 06 contrast + hierarchy | P0 | done (focused gates) · see git log | reports/06-contrast.md |
 | 09 MatchCard spec | P0 | done · ce78d426 | docs/reference/contracts/match-card.md, reports/09-matchcard-spec.md |
-| 07 typography/spacing/states | P1 | in progress | — |
-| 04b display consolidation | P0 | in progress | — |
-| 08, 10–28 | — | not started | — |
+| 07 typography/spacing/states | P1 | done · 26f8e3f2 | reports/07-typography.md |
+| 08 controls + form states | P1 | in progress | — |
+| 10 operator match rows + bracket | P0 | in progress (10a→10b) | — |
+| 11 public match/round/bracket | P0 | in progress | — |
+| 19 backup/restore/sync | P0 | in progress | — |
+| 04b display consolidation | P0 | done · see git log | reports/04b-display.md |
+| 12–18, 20–28 | — | not started | — |
+
+## Plan gates
+
+- **Gate A** (plan §2: counts, assignments, published times, privacy and consequential messages agree on one fixture; computed contrast verified; unknown behaviour has a named verification task): packages 01–06 and 04b are committed. Publication/privacy same-fixture assertions are package 15 (not started) — Gate A is provisionally met pending 15 and a same-fixture recapture (package 27).
 
 ## Gate log
 
