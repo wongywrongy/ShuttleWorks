@@ -21,16 +21,20 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 | 06 contrast + hierarchy | P0 | done (focused gates) · see git log | reports/06-contrast.md |
 | 09 MatchCard spec | P0 | done · ce78d426 | docs/reference/contracts/match-card.md, reports/09-matchcard-spec.md |
 | 07 typography/spacing/states | P1 | done · 26f8e3f2 | reports/07-typography.md |
-| 08 controls + form states | P1 | in progress | — |
-| 10 operator match rows + bracket | P0 | in progress (10a→10b) | — |
-| 11 public match/round/bracket | P0 | in progress | — |
-| 19 backup/restore/sync | P0 | in progress | — |
+| 08 controls + form states | P1 | done · see git log | reports/08-controls.md, ledger/08-strings.md |
+| 10 operator match rows + bracket | P0 | 10a + part of 10b done · 97449c07; 10c (result inventory, V3-OC17.1) in progress | reports/10-operator-match-rows.md |
+| 11 public match/round/bracket | P0 | done · e729500a | reports/11-public-match-views.md, ledger/11-strings.md |
+| 19 backup/restore/sync | P0 | done · see git log | reports/19-backups.md, ledger/19-strings.md |
 | 04b display consolidation | P0 | done · see git log | reports/04b-display.md |
-| 12–18, 20–28 | — | not started | — |
+| 15 publication + privacy | P0 | done · see git log | reports/15-publication-privacy.md |
+| 12, 13, 14, 18, 20, 22, 23 | — | in progress | — |
+| 16 venue-board publishing | P1 | in progress | — |
+| 21 public discovery/overview/directory | P1 | in progress | — |
+| 17, 24–28 | — | not started (17 waits on 16; 24 on 23; 25–28 are Phase D) | — |
 
 ## Plan gates
 
-- **Gate A** (plan §2: counts, assignments, published times, privacy and consequential messages agree on one fixture; computed contrast verified; unknown behaviour has a named verification task): packages 01–06 and 04b are committed. Publication/privacy same-fixture assertions are package 15 (not started) — Gate A is provisionally met pending 15 and a same-fixture recapture (package 27).
+- **Gate A** (plan §2: counts, assignments, published times, privacy and consequential messages agree on one fixture; computed contrast verified; unknown behaviour has a named verification task): packages 01–06 and 04b are committed. Publication/privacy same-fixture assertions are package 15 (not started) — Gate A met on the assertions side (package 15 matrix committed); the same-fixture recapture is package 27.
 
 ## Gate log
 
