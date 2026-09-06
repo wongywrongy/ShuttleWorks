@@ -2083,6 +2083,18 @@ class Entry(Base):
     partner_accepted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Whether the mailed invite actually sent (V3-PE37.1 / package 05 debt
+    # "Partner-invite delivery failure has no entrant-facing recovery
+    # path"). ``entries_json._send_partner_invite`` already returned a real
+    # bool (ruling R4); the gap this column closes is that the outcome was
+    # logged for an operator and never reached the nominating entrant. NULL
+    # means no invite was ever attempted on this row (most entries); it is
+    # never backfilled for rows written before this column existed, because
+    # "unknown" and "failed" are different facts and only one of them is
+    # true here.
+    partner_invite_mail_sent: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
 
     # ---- publication ---------------------------------------------------
     # Absent from the public entrant list; still fully entered (Q4/I6). The

@@ -6185,6 +6185,11 @@ export interface components {
             /** Resultbadge */
             resultBadge?: string | null;
             partner?: components["schemas"]["PersonReferenceDTO"] | null;
+            /**
+             * Partnerinvitemailfailed
+             * @default false
+             */
+            partnerInviteMailFailed: boolean;
         };
         /** MyTournamentCardDTO */
         MyTournamentCardDTO: {

@@ -50,6 +50,16 @@ Verifies, per plan §6:
       re-checked here with a live call; see the inline comment on why.)
   (8) An invalid/expired-shaped reset token is refused without changing the
       password (the current, just-reset password still works afterward).
+  (9) V3-PE17: a SIGNED-IN, already-verified entrant submits an entry to a
+      real open event and reaches a real, account-scoped receipt — the
+      "entries closed" fixture state package 22 owns never let this
+      succeed before, so this is the first time it is proven for real
+      rather than only against a closed window.
+  (10) V3-PE18: a freshly SIGNED-UP account (unverified at signup, then
+      verified through a real mailed link, exactly like journey (3)) can
+      submit the SAME open event and reach its own receipt too — the two
+      journeys the plan named as never established (plan.md §6 "Account
+      journeys", rows PE17/PE18) are both driven end-to-end here.
 
 Run standalone against a fixture API:
 
@@ -104,6 +114,88 @@ def _wait_for_mail_token(log_path: Path, to: str, kind: str, *, timeout_s: float
             return last_token
         time.sleep(0.25)
     raise AssertionError(f"no {kind} token mailed to {to} found in {log_path} within {timeout_s}s")
+
+
+def _open_entry_page(base_url: str) -> tuple[str, str]:
+    """Stand up one real workspace with an open, singles entry event over
+    the real operator HTTP API (never the ORM directly) — an operator
+    client, entirely separate from the entrant `client` the rest of this
+    script drives, on its own cookie jar. Returns ``(slug, event_id)``.
+    """
+    admin = SimClient(base_url)
+    try:
+        admin.register(_fresh_email("operator"), "an operator password 12")
+        tournament = admin.create_tournament("V3-PE17-18 Open")
+        tid = tournament["id"]
+        slug = f"pe17-18-open-{secrets.token_hex(4)}"
+        admin.request(
+            "PUT",
+            f"/tournaments/{tid}/entry-page",
+            json={"slug": slug, "isOpen": True},
+            expect={200},
+        )
+        # `_resolve` (entries_public.py) refuses `audience == "private"` (the
+        # PUT's own default) with the SAME uniform 404 as an unknown slug —
+        # a real reader needs `unlisted`/`public`, not just `isOpen`.
+        admin.request(
+            "PATCH",
+            f"/tournaments/{tid}/entry-page/publication",
+            json={"audience": "public"},
+            expect={200},
+        )
+        event = admin._json(
+            "POST",
+            f"/tournaments/{tid}/entry-events",
+            json={"code": "MS", "discipline": "Men's Singles", "entryType": "singles"},
+            expect={201},
+        )
+        return slug, event["id"]
+    finally:
+        admin.close()
+
+
+def _submit_and_confirm_receipt(client: SimClient, slug: str, event_id: str) -> list[str]:
+    """The shared assertion behind checks (9) and (10): submit one entry to
+    the open event above as whoever `client`'s jar is currently signed in
+    as, follow the 303 to the receipt route's own submission id, and read
+    it back through the account-scoped receipt route — the same two calls
+    `enter.tsx`'s form post and `receipt.js`'s `loadReceipt` make for real.
+    """
+    problems: list[str] = []
+    page = client.request("GET", f"/e/api/page/{slug}", expect={200}).json()
+    form_csrf = page["viewer"]["formCsrf"]
+    if not page["viewer"]["signedIn"] or not form_csrf:
+        problems.append(
+            "submission setup: the page projection did not see this account as "
+            "signed in with a form token"
+        )
+        return problems
+
+    submit = client.request(
+        "POST",
+        f"/e/api/submit/{slug}",
+        data={
+            "playerName": "Riley Park",
+            "gender": "F",
+            "events": [f"0:{event_id}"],
+            "acknowledged": "on",
+            "_csrf": form_csrf,
+        },
+        expect={303},
+    )
+    location = submit.headers.get("location", "")
+    match = re.search(r"/receipt/([0-9a-f-]{36})", location)
+    if match is None:
+        problems.append(f"submission did not answer a receipt Location: {location!r}")
+        return problems
+    submission_id = match.group(1)
+
+    receipt = client.request(
+        "GET", f"/e/api/me/submissions/{submission_id}", expect={200}
+    ).json()
+    if receipt.get("submissionId") != submission_id or not receipt.get("events"):
+        problems.append(f"the account-scoped receipt did not read back the submission: {receipt}")
+    return problems
 
 
 def check(base_url: str, api_log: Path) -> list[str]:
@@ -318,6 +410,74 @@ def check(base_url: str, api_log: Path) -> list[str]:
         if still_new_password.status_code != 200:
             problems.append("(8) a refused reset attempt somehow changed the password")
 
+        # ---- (9)/(10) V3-PE17/PE18: real entry submission, open window ------
+        slug, event_id = _open_entry_page(base_url)
+
+        # (9) V3-PE17 — an already-verified, SIGNED-IN entrant.
+        signed_in_client = SimClient(base_url)
+        try:
+            signed_in_email = _fresh_email("pe17-signed-in")
+            signed_in_password = "a perfectly fine signed in password 3"
+            signed_in_client.request(
+                "POST",
+                "/e/account/signup",
+                json={
+                    "email": signed_in_email,
+                    "password": signed_in_password,
+                    "turnstileToken": _DUMMY_TURNSTILE_TOKEN,
+                },
+                expect={202},
+            )
+            pe17_verify_token = _wait_for_mail_token(api_log, signed_in_email, "verify")
+            signed_in_client.request(
+                "POST", "/e/account/verify", json={"token": pe17_verify_token}, expect={204}
+            )
+            signed_in_client.request(
+                "POST",
+                "/e/account/login",
+                json={"email": signed_in_email, "password": signed_in_password},
+                expect={200},
+            )
+            signed_in_client._prove_csrf()  # noqa: SLF001 — see the header note above
+            problems.extend(
+                f"(9) {p}" for p in _submit_and_confirm_receipt(signed_in_client, slug, event_id)
+            )
+        finally:
+            signed_in_client.close()
+
+        # (10) V3-PE18 — a freshly SIGNED-UP account, verified, entering for
+        # the first time in the same request flow as the account's creation.
+        new_account_client = SimClient(base_url)
+        try:
+            new_account_email = _fresh_email("pe18-new-account")
+            new_account_password = "a perfectly fine new account password 5"
+            new_account_client.request(
+                "POST",
+                "/e/account/signup",
+                json={
+                    "email": new_account_email,
+                    "password": new_account_password,
+                    "turnstileToken": _DUMMY_TURNSTILE_TOKEN,
+                },
+                expect={202},
+            )
+            pe18_verify_token = _wait_for_mail_token(api_log, new_account_email, "verify")
+            new_account_client.request(
+                "POST", "/e/account/verify", json={"token": pe18_verify_token}, expect={204}
+            )
+            new_account_client.request(
+                "POST",
+                "/e/account/login",
+                json={"email": new_account_email, "password": new_account_password},
+                expect={200},
+            )
+            new_account_client._prove_csrf()  # noqa: SLF001
+            problems.extend(
+                f"(10) {p}" for p in _submit_and_confirm_receipt(new_account_client, slug, event_id)
+            )
+        finally:
+            new_account_client.close()
+
     except ApiError as exc:  # pragma: no cover - surfaced as a finding, not swallowed
         problems.append(f"unexpected API response: {exc}")
     finally:
@@ -339,7 +499,8 @@ def main() -> int:
     print(
         "account journeys (1) signup, (2) non-enumeration, (3) verify/replay, "
         "(4) login oracle, (5) reset non-enumeration, (6) weak-password/token-survival, "
-        "(7) session revocation, (8) invalid-token safety: verified"
+        "(7) session revocation, (8) invalid-token safety, (9) V3-PE17 signed-in entry "
+        "submission, (10) V3-PE18 new-account entry submission: verified"
     )
     return 0
 

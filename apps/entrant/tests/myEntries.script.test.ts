@@ -44,6 +44,7 @@ function line(over: Partial<MyEntryLine> = {}): MyEntryLine {
     canWithdraw: true,
     resultBadge: null,
     partner: null,
+    partnerInviteMailFailed: false,
     ...over,
   };
 }
@@ -202,6 +203,30 @@ describe('the DOM render', () => {
     expect(root.textContent).toContain("MS · Men's Singles · Ada Chen");
     // The un-partnered line carries no stray "with".
     expect(root.textContent).not.toContain('Ada Chen with Sam Ali with');
+  });
+
+  it('reports a failed partner invite honestly, with no fake resend action (V3-PE37.1)', () => {
+    const root = mount();
+    render(root, {
+      tournaments: [
+        card({ events: [line({ eventCode: 'XD', partnerInviteMailFailed: true })] }),
+      ],
+    });
+    expect(root.textContent).toContain(
+      'The invitation email to your partner could not be sent. Let them know directly.',
+    );
+    // No invented "resend" or "share this link" affordance: the token is
+    // only ever stored hashed (I5), so there is no link left to offer.
+    expect(root.textContent).not.toMatch(/resend/i);
+    expect(root.textContent).not.toMatch(/share.*link/i);
+  });
+
+  it('says nothing when the invite mail outcome is unknown or fine', () => {
+    const root = mount();
+    render(root, {
+      tournaments: [card({ events: [line({ partnerInviteMailFailed: false })] })],
+    });
+    expect(root.textContent).not.toContain('could not be sent');
   });
 
   it('footer carries a receipt link and the withdrawal deadline when present (E2)', () => {

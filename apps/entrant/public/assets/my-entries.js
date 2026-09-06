@@ -288,6 +288,21 @@ function cardEl(doc, card, emailVerified) {
         el(doc, 'span', `${CHIP} border-rule-control text-muted-foreground`, own),
       );
     }
+    if (line.partnerInviteMailFailed) {
+      // V3-PE37.1: an honest statement, not a fake recovery action. The
+      // invite token is only ever stored hashed (invariant I5), so there is
+      // no link left to re-share, and no resend route exists — the truthful
+      // thing to say is what happened and what the entrant can still do
+      // about it themselves.
+      row.appendChild(
+        el(
+          doc,
+          'span',
+          'w-full text-xs text-status-attention',
+          'The invitation email to your partner could not be sent. Let them know directly.',
+        ),
+      );
+    }
     if (line.resultBadge) {
       row.appendChild(
         el(doc, 'span', `${CHIP} border-status-done text-status-done`, line.resultBadge),

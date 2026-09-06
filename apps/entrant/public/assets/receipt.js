@@ -342,7 +342,10 @@ export async function loadReceipt(root, fetchImpl = fetch) {
       renderMessage(
         root,
         "Sign in to view the full receipt",
-        "The reference is safe. Sign in with the account that submitted this entry to see its events, partner, fee, and payment state.",
+        // V3-PE39.1: no unverifiable safety claim ("the reference is safe"
+        // has no user-actionable meaning); state the one thing that is
+        // true and actionable instead.
+        "Sign in with the account used for this entry to view its details and payment status.",
         {
           href: `/e/login?next=${encodeURIComponent(next)}`,
           label: "Sign in and return",

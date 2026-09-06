@@ -390,6 +390,10 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
             # widening is the STOP-approved ruling this exact-set exists to
             # force; both directions in test_partner_names_on_the_own_card.
             "partner",
+            # V3-PE37.1: whether THIS line's partner invite is durably known
+            # to have failed to send — an honest account-scoped fact, never
+            # widening what the projection discloses.
+            "partnerInviteMailFailed",
         }
         for line in card["events"]
     )

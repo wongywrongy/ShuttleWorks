@@ -23,7 +23,10 @@ export async function loadPartnerAccepted(root, fetchImpl = fetch) {
   const entryId = root.dataset.entryId ?? '';
   const heading = doc.querySelector('#partner-accepted-title');
   if (!entryId) {
-    root.replaceChildren(text(doc, 'We could not verify this accepted entry. Open My entries to check its status.'));
+    // V3-PE36.1: "accepted" is not a word this branch has earned — the
+    // heading it sits under already says only "update", and this sentence
+    // must not smuggle a success claim back in underneath it.
+    root.replaceChildren(text(doc, "We couldn't confirm whether your invitation was accepted. Check My entries for its status."));
     return;
   }
   try {
@@ -40,7 +43,7 @@ export async function loadPartnerAccepted(root, fetchImpl = fetch) {
     const partner = partnerIdentity ? personRefModel({ identity: partnerIdentity }).text : '';
     const player = playerIdentity ? personRefModel({ identity: playerIdentity }).text : '';
     if (!found || !partner || !player) {
-      root.replaceChildren(text(doc, 'We could not verify the accepted partner entry. Open My entries to check its status.'));
+      root.replaceChildren(text(doc, "We couldn't confirm whether your invitation was accepted. Check My entries for its status."));
       return;
     }
     if (heading) heading.textContent = 'Entry accepted';
@@ -48,7 +51,7 @@ export async function loadPartnerAccepted(root, fetchImpl = fetch) {
     const discipline = found.event.discipline || 'Doubles';
     root.replaceChildren(text(doc, `${tournament} · ${discipline}: ${player} with ${partner}.`));
   } catch {
-    root.replaceChildren(text(doc, 'We could not verify the accepted partner entry. Open My entries to check its status.'));
+    root.replaceChildren(text(doc, "We couldn't confirm whether your invitation was accepted. Check My entries for its status."));
   }
 }
 

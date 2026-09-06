@@ -35,6 +35,17 @@ describe('accepted partner verification', () => {
     const missing = mount('missing')!;
     await loadPartnerAccepted(missing, vi.fn(async () => new Response(JSON.stringify(entries), { status: 200 })));
     expect(document.querySelector('#partner-accepted-title')?.textContent).toBe('Partner invitation update');
-    expect(missing.textContent).toContain('could not verify');
+    // V3-PE36.1: no success term ("accepted", "verified") for an unverified
+    // outcome — the heading stays "update" and the body says only that the
+    // outcome could not be confirmed.
+    expect(missing.textContent).toContain("couldn't confirm whether your invitation was accepted");
+  });
+
+  it('never claims acceptance when there is no entry id to check at all (V3-PE36.1)', async () => {
+    document.body.innerHTML = '<h1 id="partner-accepted-title">Partner invitation update</h1><div id="details" />';
+    const root = document.querySelector<HTMLElement>('#details')!;
+    await loadPartnerAccepted(root, vi.fn());
+    expect(document.querySelector('#partner-accepted-title')?.textContent).toBe('Partner invitation update');
+    expect(root.textContent).toContain("couldn't confirm whether your invitation was accepted");
   });
 });

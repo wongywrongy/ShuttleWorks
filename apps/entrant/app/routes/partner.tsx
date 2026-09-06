@@ -138,6 +138,16 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
   }
 
   if (failed) {
+    // V3-PE37.1: the action must match the stated remedy. Only the
+    // `unverified` case is actually resolved by an account step; `verify.tsx`
+    // (package 23's file, out of this package's scope) does not accept a
+    // `next=` destination, so the link honestly says only what it does —
+    // confirming the address — rather than promising a return this route
+    // cannot keep. `retry` names a real thing to retry — the invitation
+    // itself. The default (`unusable`) case tells the reader to ask for a
+    // new link; "Sign in" answered a different question, so it is replaced
+    // by the same honest return action the dead-invite state above offers.
+    const returnTo = `/e/partner/${encodeURIComponent(token)}`;
     return (
       <PlayShell>
         <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
@@ -150,9 +160,24 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
                   ? 'The tournament is temporarily unavailable for changes. Try again shortly.'
                   : 'This invitation is no longer usable. Ask the person who invited you to send a new one.'}
             </Notice>
-            <Button asChild variant="outline" className="justify-self-start">
-              <a href={failureReason === 'unverified' ? '/e/verify' : '/e/login'}>{failureReason === 'unverified' ? 'Verify your email' : 'Sign in'}</a>
-            </Button>
+            {failureReason === 'unverified' ? (
+              <Button asChild variant="outline" className="justify-self-start">
+                <a href="/e/verify">Verify your email</a>
+              </Button>
+            ) : failureReason === 'retry' ? (
+              <Button asChild variant="outline" className="justify-self-start">
+                <a href={returnTo}>Try again</a>
+              </Button>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <a href="/e/">Browse tournaments</a>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a href="/e/me/entries">Check My entries</a>
+                </Button>
+              </div>
+            )}
           </div>
         </main>
       </PlayShell>
@@ -160,11 +185,17 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
   }
 
   if (!invite) {
-    // One message for every dead invite — see the module note.
+    // One message for every dead invite — see the module note. V3-PE35.1:
+    // the API cannot distinguish "never existed" from "already accepted"
+    // (deliberately — see the module docstring), so the copy claims neither
+    // expiry nor acceptance; it states what IS true (this link answers
+    // nothing) and offers both the honest next step and a safe way to check
+    // an already-accepted invitation without claiming that is what happened.
     return (
       <MessagePage
         heading="Invitation unavailable"
-        body="Invitations expire, and each one can be accepted once. Ask whoever invited you to send a new one."
+        body="This invitation is unavailable. Ask your partner to send a new one."
+        secondaryAction={{ href: '/e/me/entries', label: 'Check My entries' }}
       />
     );
   }

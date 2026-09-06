@@ -115,7 +115,12 @@ describe("receipt DOM", () => {
     await loadReceipt(root, fetchImpl);
 
     const link = root.querySelector("a");
-    expect(root.textContent).toContain("The reference is safe");
+    // V3-PE39.1: no unverifiable "the reference is safe" claim — the
+    // gate states only what is true and actionable.
+    expect(root.textContent).toContain(
+      "Sign in with the account used for this entry to view its details and payment status.",
+    );
+    expect(root.textContent).not.toContain("The reference is safe");
     expect(root.textContent).toContain("Account access");
     expect(link?.getAttribute("href")).toContain("/e/login?next=");
     expect(decodeURIComponent(link?.getAttribute("href") ?? "")).toContain(

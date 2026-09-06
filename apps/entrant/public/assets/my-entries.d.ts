@@ -23,6 +23,9 @@ export interface MyEntryLine {
   resultBadge: string | null;
   /** §3.1: the accepted doubles partner, or null. */
   partner: PersonReferenceDTO | null;
+  /** V3-PE37.1: true only when this line's partner invite is durably known
+   *  to have failed to send (`Entry.partner_invite_mail_sent is False`). */
+  partnerInviteMailFailed: boolean;
 }
 
 export interface MyTournamentCard {

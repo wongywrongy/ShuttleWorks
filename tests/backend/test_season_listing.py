@@ -13,7 +13,8 @@ CSRF = {"X-ShuttleWorks-CSRF": "1"}
 
 ROW_KEYS = {
     "slug", "name", "organizer", "venueName", "date", "eventCount",
-    "status", "closesInDays", "drawsPublished", "winnersPublished",
+    "status", "closesInDays", "closesAt", "timeZone", "locality",
+    "drawsPublished", "winnersPublished",
 }
 
 
@@ -39,18 +40,21 @@ def season(client):
     next_month = (now + timedelta(days=30)).date().isoformat()
 
     def make(session, slug, tournament_date, *, draws=False, results=False,
-             closes=None, is_open=True, with_event=True):
+             closes=None, is_open=True, with_event=True, venue_address=None,
+             time_zone=None):
         tid = client.post(
             "/tournaments", json={"name": slug.replace("-", " ").title()},
             headers=CSRF,
         ).json()["id"]
         t = session.get(Tournament, uuid.UUID(tid))
         t.tournament_date = tournament_date
+        if time_zone is not None:
+            t.time_zone = time_zone
         session.add(EntryPage(
             tournament_id=uuid.UUID(tid), slug=slug, is_open=is_open,
             audience="public",
-            venue_name=f"{slug} hall", draws_published=draws,
-            results_published=results,
+            venue_name=f"{slug} hall", venue_address=venue_address,
+            draws_published=draws, results_published=results,
         ))
         if with_event:
             session.add(EntryEvent(
@@ -61,7 +65,11 @@ def season(client):
 
     session = SessionLocal()
     try:
-        make(session, "case-open", next_month, closes=now + timedelta(days=5))
+        make(
+            session, "case-open", next_month, closes=now + timedelta(days=5),
+            venue_address="4 Kingsway, London, United Kingdom",
+            time_zone="Europe/London",
+        )
         make(session, "case-closed", next_month, closes=now - timedelta(days=1))
         make(session, "case-live", today, draws=True)
         make(session, "case-quiet-live", today)
@@ -86,6 +94,17 @@ def test_every_enum_case_computes_serverside(client, season):
     rows = rows_by_slug(client.get("/e/api/pages").json())
     assert rows["case-open"]["status"] == "entries_open"
     assert rows["case-open"]["closesInDays"] == 5
+    # V3-PE01.2/PE01.3: the exact deadline instant, the tournament's own
+    # zone, and a best-effort locality out of the free-text venue address.
+    assert rows["case-open"]["closesAt"] is not None
+    assert rows["case-open"]["timeZone"] == "Europe/London"
+    assert rows["case-open"]["locality"] == "London, United Kingdom"
+    # A closed row has no open-event deadline to count down to, so no exact
+    # instant either — never a stale or invented one.
+    assert rows["case-closed"]["closesAt"] is None
+    # No address was given for this row (`make`'s default) — a heuristic
+    # over free text must omit, never guess, when it has nothing to parse.
+    assert rows["case-closed"]["locality"] is None
     assert rows["case-closed"]["status"] == "entries_closed"
     assert rows["case-live"]["status"] == "in_progress_live"
     assert rows["case-quiet-live"]["status"] == "in_progress"

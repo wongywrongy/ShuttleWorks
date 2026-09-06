@@ -88,6 +88,12 @@ class MyEntryLineDTO(BaseModel):
     # or None. Acceptance is the own-view's whole gate (playing doubles
     # together is mutual visibility); the name, never the nominated email.
     partner: Optional[PersonReferenceDTO] = None
+    # V3-PE37.1: true only when THIS entry nominated a partner and the mail
+    # attempt is durably known to have failed (`Entry.partner_invite_mail_sent
+    # is False`). `None`/unattempted and "sent fine" both read `False` here —
+    # there is nothing recoverable to say about either, and the entrant
+    # never sees a claim this account cannot back with a real outcome.
+    partnerInviteMailFailed: bool = False
 
 
 class MyTournamentCardDTO(BaseModel):
@@ -470,6 +476,7 @@ def my_entries(
                     canWithdraw=can_withdraw,
                     resultBadge=event_badges.get(roster_id(entry.entry_player_id)),
                     partner=partner_ref_by_entry.get(entry.id),
+                    partnerInviteMailFailed=entry.partner_invite_mail_sent is False,
                 )
             )
         lines.sort(key=lambda line: (_ref_name(line.player), line.eventCode))

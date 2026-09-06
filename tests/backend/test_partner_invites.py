@@ -751,6 +751,130 @@ def test_the_invite_mail_names_the_inviter_and_the_event_and_nothing_more(
     assert world["tid"] not in body
 
 
+# ---- the invite mail outcome reaches the entrant (V3-PE37.1) -------------
+#
+# Package 05 gave `_send_partner_invite` a real bool (R4); this closes the
+# debt-log gap that outcome never reached anybody but an operator's log.
+# These go through the REAL HTTP submit route, not `_nominate`'s direct
+# service call — the persistence this proves lives in the route
+# (`entries_json.submit_entry_json`), one level above `create_submission`.
+
+
+def _form_token(client, slug):
+    return client.get(f"/e/api/page/{slug}").json()["viewer"]["formCsrf"]
+
+
+def _submit_with_partner(client, world, *, partner_email):
+    return client.post(
+        "/e/api/submit/pairs-open",
+        data={
+            "playerName": "Alex Kim",
+            "gender": "M",
+            "events": [f"0:{world['xd']}"],
+            f"partner:0:{world['xd']}": partner_email,
+            "acknowledged": "on",
+            "_csrf": _form_token(client, "pairs-open"),
+        },
+        headers=CSRF,
+        follow_redirects=False,
+    )
+
+
+def test_a_sent_invite_records_success_and_reaches_my_entries(
+    client, world, mailbox
+):
+    _verified_entrant(client, mailbox, "alex@example.com")
+    r = _submit_with_partner(client, world, partner_email="sam@example.com")
+    assert r.status_code == 303, r.text
+
+    from db.models import Entry
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        entry = session.query(Entry).filter(
+            Entry.tournament_id == uuid.UUID(world["tid"]),
+            Entry.partner_email == "sam@example.com",
+        ).one()
+        assert entry.partner_invite_mail_sent is True
+    finally:
+        session.close()
+
+    mine = client.get("/e/api/me/entries").json()
+    line = mine["tournaments"][0]["events"][0]
+    assert line["partnerInviteMailFailed"] is False
+
+
+def test_a_failed_invite_is_recorded_and_reported_honestly(
+    client, world, mailbox, monkeypatch
+):
+    _verified_entrant(client, mailbox, "alex@example.com")
+
+    # Fail only the partner invite's send — a real SMTP outage would fail
+    # every mail attempt, but the account's own verification mail must
+    # already have gone out above for this test to reach the submission at
+    # all, so the failure is scoped to the address this test cares about.
+    import core.email
+
+    def _boom(*, to, subject, body):
+        if to == "sam@example.com":
+            raise RuntimeError("smtp is down")
+        return mailbox.append((to, subject, body))
+
+    monkeypatch.setattr(core.email, "send_email", _boom)
+
+    r = _submit_with_partner(client, world, partner_email="sam@example.com")
+    # The submission itself must not fail because a mail server did — see
+    # `_send_partner_invite`'s own docstring.
+    assert r.status_code == 303, r.text
+
+    from db.models import Entry
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        entry = session.query(Entry).filter(
+            Entry.tournament_id == uuid.UUID(world["tid"]),
+            Entry.partner_email == "sam@example.com",
+        ).one()
+        assert entry.partner_invite_mail_sent is False
+    finally:
+        session.close()
+
+    mine = client.get("/e/api/me/entries").json()
+    line = mine["tournaments"][0]["events"][0]
+    # V3-PE37.1: the entrant now learns the truth from their own account
+    # view — not only from an operator's log.
+    assert line["partnerInviteMailFailed"] is True
+
+
+def test_an_entry_with_no_invite_attempt_never_claims_a_failure(
+    client, world, mailbox
+):
+    """A singles entry (no invite minted at all) must read as `False`, not
+    as an unknown-is-suspicious `True` — `partner_invite_mail_sent` stays
+    `NULL` and the DTO's fail-calm default (`is False`) covers it the same
+    way an outright success does."""
+    _verified_entrant(client, mailbox, "alex@example.com")
+    r = client.post(
+        "/e/api/submit/pairs-open",
+        data={
+            "playerName": "Alex Kim",
+            "gender": "M",
+            "events": [f"0:{world['ms']}"],
+            "acknowledged": "on",
+            "_csrf": _form_token(client, "pairs-open"),
+        },
+        headers=CSRF,
+        follow_redirects=False,
+    )
+    assert r.status_code == 303, r.text
+
+    mine = client.get("/e/api/me/entries").json()
+    line = mine["tournaments"][0]["events"][0]
+    assert line["partnerInviteMailFailed"] is False
+
+
 # ---- the names reach the projections (SP-P7 delta, §3.1/§3.3) -------------
 #
 # E3 shipped the pairing and SP-P7 shipped the surfaces, and neither ever
