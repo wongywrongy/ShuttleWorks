@@ -267,6 +267,63 @@ def test_matches_route_is_explicitly_public_by_design():
     assert ("GET", "/e/api/page/{slug}/matches") in PUBLIC_BY_DESIGN
 
 
+def test_unknown_status_is_never_coerced_to_scheduled(tmp_path, monkeypatch):
+    """D7 / contract §2.2: an unrecognised persisted status yields no public
+    state at all — never a positive "scheduled" reading."""
+    session, repo = _seed(tmp_path, monkeypatch, published=True)
+    try:
+        from db.models import MatchState
+
+        state = session.query(MatchState).filter(MatchState.match_id == "m-live").one()
+        state.status = "bogus-legacy-value"
+        session.commit()
+        result, _ = _call(repo)
+        item = next(item for item in result.items if item.matchKey == "meet:m-live")
+        assert item.status is None
+        # Omitted from state facets — a spectator cannot filter by a state
+        # that was never coerced into existence.
+        assert None not in result.facets.states
+    finally:
+        session.close()
+
+
+def test_called_publishes_as_called_never_live_with_results_off(tmp_path, monkeypatch):
+    """D8 / contract §9.1: ``called`` must not be published as ``live``, and
+    turning results off must not synthesise a play state for any other
+    status either — it only hides the score."""
+    session, repo = _seed(tmp_path, monkeypatch, published=False)
+    try:
+        from db.models import EntryPage, MatchState
+
+        state = session.query(MatchState).filter(MatchState.match_id == "m-live").one()
+        state.status = "called"
+        page = session.query(EntryPage).filter(EntryPage.slug == "schedule-open").one()
+        page.draws_published = True
+        page.results_published = False
+        session.commit()
+        result, _ = _call(repo)
+        called_item = next(item for item in result.items if item.matchKey == "meet:m-live")
+        assert called_item.status == "called"
+
+        # A genuinely playing match still reads as "live" with results off —
+        # results-off hides scores, not match progression.
+        state.status = "playing"
+        session.commit()
+        result, _ = _call(repo)
+        playing_item = next(item for item in result.items if item.matchKey == "meet:m-live")
+        assert playing_item.status == "live"
+
+        # And a finished match still reads "completed" (no score attached).
+        state.status = "finished"
+        session.commit()
+        result, _ = _call(repo)
+        finished_item = next(item for item in result.items if item.matchKey == "meet:m-live")
+        assert finished_item.status == "completed"
+        assert finished_item.score is None
+    finally:
+        session.close()
+
+
 def test_planned_court_is_not_public_until_operations_assigns_it(tmp_path, monkeypatch):
     session, repo = _seed(tmp_path, monkeypatch, published=True)
     try:

@@ -161,7 +161,6 @@ function nodeToMatch(
     courtLabel: node.courtLabel,
     sourceUrl: node.sourceUrl,
     sourceRef: node.sourceRef,
-    showAssignmentPlaceholders: true,
   };
 }
 

@@ -17,6 +17,8 @@ import { formatDateLong } from "../lib/format";
 import { chipState, tournamentPhase, visibleTabs } from "../lib/phase";
 import {
   SCHEDULE_STATES,
+  schedulePublicState,
+  schedulePublicStateLabel,
   scheduleDateLabel,
   scheduleStateLabel,
   type ScheduleDayFacetDTO,
@@ -79,6 +81,11 @@ function parseFilters(request: Request): ScheduleFilters {
     organization: organization === "court" ? "court" : "time",
   };
 }
+/** "124 matches" / "1 match" — a count always carries its noun (V3-PE09.3):
+ * a bare number glued to a date reads as part of the date, not a count. */
+function dayMatchCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "match" : "matches"}`;
+}
 function matchesPath(slug: string, filters: ScheduleFilters): string {
   const params = new URLSearchParams();
   if (filters.day) params.set("day", filters.day);
@@ -133,8 +140,15 @@ export const meta: Route.MetaFunction = ({ data }) =>
     ? [{ title: "Schedule not found" }]
     : [{ title: `Schedule · ${data.page.tournament.name ?? "Tournament"}` }];
 
+/**
+ * "By court" groups matches under their assigned court; a match with no
+ * approved court cannot go in a real court's queue, so it gets its own
+ * honestly-named bucket instead of the banned per-card placeholder wording
+ * (contract §3.2 forbids "Court pending" as a per-card court line, but a
+ * group still needs some label for the matches it cannot yet place).
+ */
 function matchCourt(match: ScheduleMatchDTO): string {
-  return match.court === null ? "Court pending" : `Court ${match.court}`;
+  return match.court === null ? "Court to be confirmed" : `Court ${match.court}`;
 }
 function isCompleted(match: ScheduleMatchDTO): boolean {
   return (
@@ -151,7 +165,10 @@ function gamesWon(score: number[][], side: 0 | 1): number {
  * Every name flows through the card's PersonGroup / PersonRef seam; this
  * adapter only reshapes the wire DTO and never reads an identity.
  */
-function scheduleToMatch(match: ScheduleMatchDTO): MatchCardData {
+function scheduleToMatch(
+  match: ScheduleMatchDTO,
+  options: { showDate: boolean } = { showDate: true },
+): MatchCardData {
   const decided = isCompleted(match);
   const winnerIndex =
     decided && match.score?.length
@@ -178,16 +195,33 @@ function scheduleToMatch(match: ScheduleMatchDTO): MatchCardData {
     decided,
     status: match.status,
     scheduledTime: match.scheduledTime,
-    playedOn: match.scheduledDate,
+    // Contract §3.2: no raw ISO date in card prose (D12) and no repeated
+    // date on a card already inside a day-scoped context (V3-PE09.3) — the
+    // day nav or heading already states it there. Elsewhere, a human date
+    // label from the same authority the day heading uses, never the ISO
+    // string verbatim.
+    playedOn:
+      options.showDate && match.scheduledDate
+        ? scheduleDateLabel(match.scheduledDate)
+        : null,
     court: match.court,
     updatedAt: match.updatedAt,
-    showAssignmentPlaceholders: true,
   };
 }
 /** `EYEBROW` recoloured in the live tone (kept literal for the Tailwind scan). */
 const LIVE_EYEBROW = "text-xs font-bold uppercase tracking-[0.06em] text-status-live";
-function ScheduleMatchCard({ match, slug }: { match: ScheduleMatchDTO; slug: string }) {
-  return <MatchCard match={scheduleToMatch(match)} variant="card" slug={slug} />;
+function ScheduleMatchCard({
+  match,
+  slug,
+  showDate = true,
+}: {
+  match: ScheduleMatchDTO;
+  slug: string;
+  showDate?: boolean;
+}) {
+  return (
+    <MatchCard match={scheduleToMatch(match, { showDate })} variant="card" slug={slug} />
+  );
 }
 
 function dayDistance(a: string, b: string): number {
@@ -259,10 +293,9 @@ function DayNavigation({
       <SegmentedNav
         label="Schedule days"
         segments={days.map((day) => ({
-          label: scheduleDateLabel(day.day),
+          label: `${scheduleDateLabel(day.day)} · ${dayMatchCountLabel(day.count)}`,
           href: matchesPath(slug, { ...filters, day: day.day, page: 1 }),
           current: Boolean(filters.day) && day.day === filters.day,
-          count: day.count,
         }))}
       />
     );
@@ -296,7 +329,9 @@ function DayNavigation({
                   className={`text-sm underline-offset-4 hover:underline ${active ? "font-semibold text-foreground" : "text-muted-foreground"}`}
                 >
                   {scheduleDateLabel(day.day)}{" "}
-                  <span className="tabular-nums">({day.count})</span>
+                  <span className="tabular-nums">
+                    ({dayMatchCountLabel(day.count)})
+                  </span>
                 </a>
               );
             })}
@@ -434,9 +469,11 @@ function OrganizationSwitch({
 function LiveBand({
   slug,
   matches,
+  showDate,
 }: {
   slug: string;
   matches: ScheduleMatchDTO[];
+  showDate: boolean;
 }) {
   if (!matches.length) return null;
   return (
@@ -452,7 +489,7 @@ function LiveBand({
       </p>
       <div className="mt-3 grid gap-4 md:grid-cols-2">
         {matches.map((match) => (
-          <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} />
+          <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} showDate={showDate} />
         ))}
       </div>
     </section>
@@ -461,13 +498,16 @@ function LiveBand({
 function ByTime({
   slug,
   matches,
+  showDate,
 }: {
   slug: string;
   matches: ScheduleMatchDTO[];
+  showDate: boolean;
 }) {
   const groups = new Map<string, ScheduleMatchDTO[]>();
   matches.forEach((match) => {
-    const key = match.scheduledTime ?? "Time pending";
+    const key =
+      match.scheduledTime ?? schedulePublicStateLabel(schedulePublicState(match));
     groups.set(key, [...(groups.get(key) ?? []), match]);
   });
   return (
@@ -479,7 +519,7 @@ function ByTime({
           </h2>
           <div className="mt-3 grid gap-4 md:grid-cols-2">
             {group.map((match) => (
-              <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} />
+              <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} showDate={showDate} />
             ))}
           </div>
         </section>
@@ -504,9 +544,11 @@ function queueLabel(
 function ByCourt({
   slug,
   matches,
+  showDate,
 }: {
   slug: string;
   matches: ScheduleMatchDTO[];
+  showDate: boolean;
 }) {
   const queues = new Map<string, ScheduleMatchDTO[]>();
   [...matches]
@@ -532,7 +574,7 @@ function ByCourt({
                     {queueLabel(match, queue, index)}
                   </p>
                 ) : null}
-                <ScheduleMatchCard match={match} slug={slug} />
+                <ScheduleMatchCard match={match} slug={slug} showDate={showDate} />
               </div>
             ))}
           </div>
@@ -635,7 +677,7 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
               />
             </div>
             {showNow ? (
-              <LiveBand slug={slug} matches={live} />
+              <LiveBand slug={slug} matches={live} showDate={!filters.day} />
             ) : null}
             {matches.items.length === 0 ? (
               <EmptyState
@@ -659,11 +701,12 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                     : ""}
                 </p>
                 {filters.organization === "court" ? (
-                  <ByCourt slug={slug} matches={matches.items} />
+                  <ByCourt slug={slug} matches={matches.items} showDate={!filters.day} />
                 ) : (
                   <ByTime
                     slug={slug}
                     matches={showNow ? matches.items.filter((match) => match.status !== "live") : matches.items}
+                    showDate={!filters.day}
                   />
                 )}
                 {previous || next ? (

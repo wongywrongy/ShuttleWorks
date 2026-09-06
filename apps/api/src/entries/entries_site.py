@@ -58,6 +58,7 @@ from db.models import (
     Tournament,
 )
 from repositories import LocalRepository, get_repository
+from shared.schedule_slots import add_minutes_wrapping, slot_time_from_start
 
 router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
 
@@ -418,12 +419,14 @@ def _alphabetic_name_key(name: str) -> str:
 
 
 def _hhmm_plus(day_start: str, minutes: int) -> str:
-    """``dayStart`` + N minutes, wrapping midnight — mirrors the frontend's
-    ``slotToTime`` (lib/time.ts) so the public page and the operator's
-    schedule can never disagree about a start time."""
-    h, m = day_start.split(":")
-    total = (int(h) * 60 + int(m) + minutes) % (24 * 60)
-    return f"{total // 60:02d}:{total % 60:02d}"
+    """``dayStart`` + N minutes, wrapping midnight.
+
+    Redirects to ``shared/schedule_slots.py`` (D10) — the single authority
+    shared with ``workspace_signals.py`` and, transitively, the console's
+    ``slotToTime`` — so the public page and the operator's schedule can
+    never disagree about a start time.
+    """
+    return add_minutes_wrapping(day_start, minutes)
 
 
 # ---- DTOs -----------------------------------------------------------------
@@ -654,7 +657,9 @@ class PlayerMatchDTO(BaseModel):
     playedOn: Optional[str] = None
     localTime: Optional[str] = None
     courtLabel: Optional[str] = None
-    status: str = "scheduled"
+    # ``None`` means the persisted status is unrecognised (contract §2.2);
+    # never coerced to "scheduled" (D7).
+    status: Optional[str] = None
     durationMinutes: Optional[int] = None
     updatedAt: Optional[str] = None
 
@@ -680,9 +685,14 @@ class ScheduleMatchDTO(BaseModel):
     eventCode: str
     discipline: Optional[str] = None
     roundLabel: Optional[str] = None
-    status: Literal[
-        "scheduled", "called", "live", "delayed", "completed", "walkover", "retired", "cancelled"
-    ] = "scheduled"
+    # ``None`` means the persisted status is unrecognised — the match is
+    # omitted from state facets and rendered with no state chip (contract
+    # §2.2); it is never coerced to ``scheduled`` (D7).
+    status: Optional[
+        Literal[
+            "scheduled", "called", "live", "delayed", "completed", "walkover", "retired", "cancelled"
+        ]
+    ] = None
     scheduledDate: Optional[str] = None
     scheduledTime: Optional[str] = None
     court: Optional[int] = None
@@ -1011,12 +1021,14 @@ def _bracket_indexes(payload):
 
 def _slot_time(payload, slot_id: Optional[int]) -> Optional[str]:
     """Venue-local start for a bracket slot. ``start_time`` names the day's
-    first slot; ``interval_minutes`` is the grid."""
-    if slot_id is None or payload.start_time is None:
+    first slot; ``interval_minutes`` is the grid.
+
+    Redirects to ``shared/schedule_slots.py`` (D10).
+    """
+    if payload.start_time is None:
         return None
-    minutes = slot_id * payload.interval_minutes
     base = payload.start_time
-    return _hhmm_plus(f"{base.hour:02d}:{base.minute:02d}", minutes)
+    return slot_time_from_start(base.hour, base.minute, slot_id, payload.interval_minutes)
 
 
 def _event_or_404(payload, draw_key: str):
@@ -2038,10 +2050,12 @@ def _meet_matches(
                 playedOn=None,
                 localTime=None,
                 courtLabel=None,
+                # Same D7/D8 fix as ``_meet_public_status``: never coerce an
+                # unrecognised status to "scheduled", and never upgrade
+                # "called" to "live" — results-off hides scores, not state.
                 status=(
                     "completed" if finished
-                    else "live" if state is not None and state.status in {"playing", "called"}
-                    else "scheduled"
+                    else _meet_public_status(state.status if state is not None else "scheduled")
                 ),
                 durationMinutes=(
                     int(assignment.get("durationSlots", 1)) * interval
@@ -2355,6 +2369,30 @@ def _bracket_schedule_matches(
     return out
 
 
+def _meet_public_status(raw_state: Optional[str]) -> Optional[str]:
+    """Map a persisted (or legacy) Meet match status to the public wire status.
+
+    Two rules from contract §9.1, fixed here (D7, D8):
+
+    - **Never coerce an unrecognised status to ``scheduled``.** An unknown
+      value yields ``None`` — the caller omits the match from state facets
+      and renders no state chip (§2.2). This is the mechanism that used to
+      let a cancelled match reappear as an upcoming one.
+    - **``called`` must not be published as ``live``,** and results-off must
+      not synthesise a play state at all: turning results off hides scores,
+      not match progression, so this mapping does not consult the
+      results-publication flag. Only the score/ledger is gated by it,
+      downstream in the caller.
+    """
+    if raw_state == "playing":
+        return "live"
+    if raw_state == "finished":
+        return "completed"
+    if raw_state in {"retired", "called", "delayed", "cancelled", "scheduled"}:
+        return raw_state
+    return None
+
+
 def _meet_schedule_matches(
     tournament: Tournament,
     *,
@@ -2400,14 +2438,7 @@ def _meet_schedule_matches(
         match_id = match["id"]
         state_row = states.get(match_id)
         raw_state = state_row.status if state_row is not None else "scheduled"
-        if results_on:
-            state = {
-                "playing": "live",
-                "finished": "completed",
-                "retired": "retired",
-            }.get(raw_state, raw_state if raw_state in {"called", "delayed", "cancelled"} else "scheduled")
-        else:
-            state = "live" if raw_state in {"playing", "called"} else "scheduled"
+        state = _meet_public_status(raw_state)
         assignment = assignments.get(match_id)
         scheduled = None
         if assignment and isinstance(day_start, str) and isinstance(interval, int) and isinstance(assignment.get("slotId"), int):
@@ -2579,7 +2610,10 @@ def schedule_matches(
         days=[ScheduleDayFacetDTO(day=value, count=day_counts[value]) for value in sorted(day_counts)],
         events=sorted({m.eventCode for m in facets_source if m.eventCode}),
         courts=sorted({m.court for m in facets_source if m.court is not None}),
-        states=sorted({m.status for m in facets_source}),
+        # An unrecognised status is omitted here (contract §2.2) — a
+        # spectator cannot filter by a state that was never coerced into
+        # existence.
+        states=sorted({m.status for m in facets_source if m.status is not None}),
     )
     total = len(matches)
     start = (page - 1) * page_size

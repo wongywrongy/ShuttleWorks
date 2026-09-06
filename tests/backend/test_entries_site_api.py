@@ -693,6 +693,92 @@ def test_the_tree_renders_rounds_seeds_schedule_and_placeholders(client, bracket
     assert [side["feederTake"] for side in final["sides"]] == ["winner", "winner"]
 
 
+def test_approved_slot_with_unresolved_predecessor_still_reads_scheduled(
+    client, bracket_page
+):
+    """Contract §3.1: a pending participant does not make a slot pending. A
+    match whose second side is "Winner of QF1" and whose slot is approved
+    is publicly Scheduled with its time (V3-PE09.2: the reverse — showing
+    "Scheduled" with no approved time at all — is the actual defect)."""
+    slug = bracket_page["slug"]
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    items = {item["matchKey"]: item for item in body["items"]}
+    sf1 = items["MS:MS-R0-0"]
+    assert sf1["status"] == "scheduled"
+    assert sf1["scheduledTime"] == "10:30"
+    assert sf1["court"] == 1
+
+    final = items["MS:MS-R1-0"]
+    assert final["status"] == "scheduled"
+    # The final has no approved slot yet — the "scheduled" wire status here
+    # is a *match*-state default (nobody's called it, nobody's played it),
+    # not a schedule-domain claim; the schedule domain's own answer is
+    # carried separately in scheduledTime, which the entrant tier's
+    # ``schedulePublicState`` reads to say "Time to be confirmed".
+    assert final["scheduledTime"] is None
+    assert [side["placeholder"] for side in final["sides"]] == [
+        "Winner of SF 1",
+        "Winner of SF 2",
+    ]
+
+
+def test_courts_reach_live_bracket_matches_assigned_directly(client, bracket_page):
+    """V3-PE09.1: a directly-assigned match that is then started must
+    publish its real court, not withhold it."""
+    tid, slug = bracket_page["tid"], bracket_page["slug"]
+    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
+    rounds = _units_by_round(state)
+    sf0 = rounds[0][0]
+    r = client.post(
+        f"/tournaments/{tid}/bracket/match-action",
+        json={"id": str(uuid.uuid4()), "play_unit_id": sf0["id"], "action": "start"},
+        headers=CSRF,
+    )
+    assert r.status_code == 200, r.text
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    item = next(item for item in body["items"] if item["matchKey"] == f"MS:{sf0['id']}")
+    assert item["status"] == "live"
+    assert item["court"] == 1
+
+
+def test_courts_reach_live_bracket_matches_assigned_via_solver_commit(client):
+    """V3-PE09.1 root cause investigation: a match started straight off a
+    solver-committed round (never touching the direct /assign endpoint,
+    which is how a normal "schedule next round" flow plays out) must still
+    publish its court — the ``_merge_live_bracket_courts`` fallback in
+    ``_schedule_runtime_snapshot`` is exactly the mechanism that backfills
+    it from the bracket session's own assignment when Operations has not
+    (yet) materialized a Match row for this play unit."""
+    tid = _make_workspace(client, draws_published=True, entrants_published=True)
+    ada = _seed_person(tid, "Ada Chen", "Riverside BC")
+    bo = _seed_person(tid, "Bo Lee", "Northside SC")
+    participants = [
+        {"id": f"entry-{ada}", "name": "Ada Chen", "seed": 1},
+        {"id": f"entry-{bo}", "name": "Bo Lee", "seed": 2},
+        {"id": "P3", "name": "Cass Doe"},
+        {"id": "P4", "name": "Dev Roy"},
+    ]
+    state = _se4_bracket(client, tid, participants)
+    slug = "draws-open"
+    sf0 = _units_by_round(state)[0][0]
+    committed = client.post(
+        f"/tournaments/{tid}/bracket/schedule-next/commit",
+        json={"assignments": [{"play_unit_id": sf0["id"], "slot_id": 3, "court_id": 1}]},
+        headers=CSRF,
+    )
+    assert committed.status_code == 200, committed.text
+    started = client.post(
+        f"/tournaments/{tid}/bracket/match-action",
+        json={"id": str(uuid.uuid4()), "play_unit_id": sf0["id"], "action": "start"},
+        headers=CSRF,
+    )
+    assert started.status_code == 200, started.text
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    item = next(item for item in body["items"] if item["matchKey"] == f"MS:{sf0['id']}")
+    assert item["status"] == "live"
+    assert item["court"] == 1
+
+
 def test_results_off_hides_scores_and_resolved_advancement(client, bracket_page):
     """§7's core trap. A recorded semifinal must not reach the public draw
     in ANY form while results are unpublished — no score, no winner mark,

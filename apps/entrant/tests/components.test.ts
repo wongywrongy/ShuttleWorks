@@ -940,7 +940,11 @@ describe('MatchCard', () => {
     updatedAt: null,
   };
 
-  it('does not render an empty footer for an internal demo source', () => {
+  it('suppresses the source link for an internal demo source, but still states the honest schedule time', () => {
+    // Contract §3.2: a missing time always reads "Time to be confirmed" —
+    // unconditionally, not behind a placeholder flag — so the footer is
+    // never truly empty for an unscheduled match; only the source link is
+    // demo-suppressed here.
     const html = renderToStaticMarkup(h(MatchCard, {
       match: {
         ...match,
@@ -949,11 +953,12 @@ describe('MatchCard', () => {
       },
       slug: 'spring-open',
     }));
-    expect(html).not.toContain('<footer');
+    expect(html).toContain('<footer');
+    expect(html).toContain('Time to be confirmed');
     expect(html).not.toContain('Match source');
   });
 
-  it('renders a public source without a leading separator when it is the only footer item', () => {
+  it('renders a public source with a leading separator when other footer content exists', () => {
     const html = renderToStaticMarkup(h(MatchCard, {
       match: {
         ...match,
@@ -964,16 +969,50 @@ describe('MatchCard', () => {
     }));
     expect(html).toContain('<footer');
     expect(html).toContain('Match source');
-    expect(html).not.toContain('<span aria-hidden="true"> · </span>');
+    expect(html).toContain('<span aria-hidden="true"> · </span>');
   });
 
-  it('uses neutral copy when public court information is unavailable', () => {
+  it('never renders a placeholder apology: missing time is "Time to be confirmed" and a missing court line is omitted entirely', () => {
+    // D9: the old `showAssignmentPlaceholders` flag and its three footer
+    // apologies ("Date to be confirmed", "Time not assigned", "Court
+    // information unavailable") are deleted outright.
+    const html = renderToStaticMarkup(h(MatchCard, { match, slug: 'spring-open' }));
+    expect(html).toContain('Time to be confirmed');
+    expect(html).not.toContain('Time not assigned');
+    expect(html).not.toContain('Date to be confirmed');
+    expect(html).not.toContain('Court information unavailable');
+    expect(html).not.toContain('Court not assigned');
+    expect(html).not.toContain('Court pending');
+    // No court line at all when the court is unknown.
+    expect(html).not.toContain('Court ');
+  });
+
+  it('omits only the court line when the time is approved but the court is not', () => {
     const html = renderToStaticMarkup(h(MatchCard, {
-      match: { ...match, showAssignmentPlaceholders: true },
+      match: { ...match, scheduledTime: '09:00' },
       slug: 'spring-open',
     }));
-    expect(html).toContain('Court information unavailable');
-    expect(html).not.toContain('Court not assigned');
+    expect(html).toContain('09:00');
+    expect(html).not.toContain('Time to be confirmed');
+    expect(html).not.toContain('Court ');
+  });
+
+  it('renders the approved court once the court is known', () => {
+    const html = renderToStaticMarkup(h(MatchCard, {
+      match: { ...match, scheduledTime: '09:00', court: 3 },
+      slug: 'spring-open',
+    }));
+    expect(html).toContain('Court 3');
+  });
+
+  it('renders no state chip for an unrecognised status', () => {
+    const html = renderToStaticMarkup(h(MatchCard, {
+      match: { ...match, status: null },
+      slug: 'spring-open',
+    }));
+    expect(html).not.toContain('Scheduled');
+    expect(html).not.toContain('Live');
+    expect(html).not.toContain('Completed');
   });
 });
 

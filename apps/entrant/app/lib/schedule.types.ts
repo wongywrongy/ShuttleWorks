@@ -29,7 +29,12 @@ export interface ScheduleMatchDTO {
   eventCode: string;
   discipline: string | null;
   roundLabel: string | null;
-  status: ScheduleState;
+  /**
+   * ``null`` means the persisted status was unrecognised (contract §2.2):
+   * the match is omitted from state facets and rendered with no state
+   * chip. Never coerced to "scheduled" server-side (D7).
+   */
+  status: ScheduleState | null;
   scheduledDate: string | null;
   scheduledTime: string | null;
   court: number | null;
@@ -69,14 +74,21 @@ export const SCHEDULE_STATES: readonly ScheduleState[] = Object.freeze([
   "cancelled",
 ]);
 
-export function scheduleStateLabel(state: ScheduleState): string {
+/**
+ * The tier's one match-state speller (contract §2.3). ``null`` — an
+ * unrecognised persisted status — renders no chip at all (§2.2); callers
+ * must not fall back to a guessed word.
+ */
+export function scheduleStateLabel(
+  state: ScheduleState | null | undefined,
+): string | null {
   switch (state) {
     case "scheduled":
       return "Scheduled";
     case "called":
       return "Called";
     case "live":
-      return "Live now";
+      return "On court";
     case "delayed":
       return "Delayed";
     case "completed":
@@ -87,7 +99,31 @@ export function scheduleStateLabel(state: ScheduleState): string {
       return "Retired";
     case "cancelled":
       return "Cancelled";
+    case null:
+    case undefined:
+      return null;
   }
+}
+
+/**
+ * The **schedule** domain's public state (contract §3.1) — distinct from
+ * match state. Exactly two public strings exist, ever: "Scheduled" when an
+ * approved time exists (independent of whether a side is still pending —
+ * a match with an approved 14:00 slot and an unresolved "Winner of QF1"
+ * side is still "Scheduled · 14:00"), and "Time to be confirmed" when it
+ * does not. A solver proposal is not an approved slot; only a value the
+ * wire already carries as the match's published time counts.
+ */
+export type SchedulePublicState = "scheduled" | "time_tbc";
+
+export function schedulePublicState(match: {
+  scheduledTime: string | null;
+}): SchedulePublicState {
+  return match.scheduledTime !== null ? "scheduled" : "time_tbc";
+}
+
+export function schedulePublicStateLabel(state: SchedulePublicState): string {
+  return state === "scheduled" ? "Scheduled" : "Time to be confirmed";
 }
 
 /** A server timestamp older than this should be explained to a spectator. */
