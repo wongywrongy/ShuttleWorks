@@ -28,19 +28,27 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 | 04b display consolidation | P0 | done · see git log | reports/04b-display.md |
 | 15 publication + privacy | P0 | done · see git log | reports/15-publication-privacy.md |
 | 12 hub/overview/Plan/Live | P1 | done · 854a885d | reports/12-hub-overview-plan-live.md |
-| 13 setup | P1 | done · 74969629 | reports/13-setup.md |
+| 13 setup | P1 | done · 74969629 + 05f93392 (timezone fix) | reports/13-setup.md |
 | 14 roster/draw index/empty | P1 | done · 91d4acfc | reports/14-roster-draws-empty.md |
+| 17 signage | P1 | done · 65a5084b (physical validation → 27b) | reports/17-signage.md |
+| 18 account/team/tools/settings | P1 | done · f1736964 | reports/18-account-team-tools.md |
 | 20 activity history | P1 | done · 74969629 | reports/20-activity.md |
+| 21 public discovery/overview/directory | P1 | done · 3dde74cf + 8e07b9ea | reports/21-public-discovery.md |
 | 22 regulations/closed entries | P1 | done · 5f25f761 | reports/22-regulations-closed.md |
-| 18, 21, 23 | — | in progress | — |
-| 17 signage | P1 | in progress | — |
+| 23 account journeys | P0 | done · c5a73f48 | reports/23-account-journeys.md, evidence/account-journeys.md |
+| 24 invitations/My entries/receipts | P0 | done · 8e07b9ea (short reference format → debt V3-24-1) | reports/24-invitations-entries-receipts.md |
+| 25 every-string ledger | P1 | done · bd2d6e58 + 25b (zero unreviewed) | ledger/LEDGER.md, reports/25*.md |
+| 26 accessibility + responsive | P1 | 26a done · 0e789a20; 26b (entrant) in progress | reports/26a-console-a11y.md |
+| 27 evidence + recapture | P0 | 27a closure record · 0e3a60f8; 27b recapture not started | closure.md |
+| 28 consistency + brand seam | P2 | done · 51d4b3cf | reports/28-consistency.md |
 | 16 venue-board publishing | P1 | done · ae9a07d3 | reports/16-venue-board.md |
 
-| 24–28 | — | not started (24 waits on 23; 25–28 are Phase D) | — |
 
 ## Plan gates
 
 - **Gate A** (plan §2: counts, assignments, published times, privacy and consequential messages agree on one fixture; computed contrast verified; unknown behaviour has a named verification task): packages 01–06 and 04b are committed. Publication/privacy same-fixture assertions are package 15 (not started) — - **Gate B** (plan §2: singles, doubles, incomplete pair, unresolved predecessor, no scores, live game, completed match and exceptional outcomes render correctly; long names identifiable): packages 09, 10, 11 committed with the MC-01…MC-13 fixtures asserted on both tiers; the visual non-overlap check at the supported widths and 200% zoom is package 27's recapture. Provisionally met.
+
+- **Gate C** (plan §2: an operator can configure, publish, run, recover and review a tournament; a public visitor can find a match and an entrant can complete the supported account/entry journey; Display never performs operational resolution): packages 12–24 committed with per-finding tests; the journey script proves sign-up → verify → enter → receipt and reset; Display projects only. Provisionally met pending the 27b recapture.
 
 Gate A met on the assertions side (package 15 matrix committed); the same-fixture recapture is package 27.
 
@@ -48,6 +56,7 @@ Gate A met on the assertions side (package 15 matrix committed); the same-fixtur
 
 (append: date · command · result)
 
+- 2026-09-06 · HEAD d08f1bb3 (packages 01–28 except 26b/27b) · console 256 files / 2260 tests, tsc, eslint, depcruise; entrant 53 files / 967 tests, typecheck, lint; ruff; import-linter 15/15; pytest 2419 passed / 72 skipped after registering the pkg 24 allow-list flag; figma-tokens regenerated. Two stale console browser-contract expectations fixed (Venue board link label; Korea readiness — a real timezone bug in pkg 13's session-window check).
 - 2026-09-06 · HEAD 6f347dd9 (packages 01, 02, 03, 04a, 05, 06, 09) · full gate: console 235 files / 2072 tests, tsc, eslint, depcruise 0 errors; entrant 51 files / 897 tests, typecheck, lint; ruff clean; import-linter 15/15; pytest 2383 passed / 72 skipped (run on a detached worktree of HEAD because agents were mid-edit in the main tree).
 - 2026-09-06 · baseline f5ccfcef · `make check` equivalent: console eslint/tsc/vitest/depcruise green; entrant eslint/typecheck/vitest 885 green; ruff clean; import-linter 15/15 kept; pytest 2323 passed / 72 skipped.
 - 2026-09-06 · package 03 (conflict recovery + counts) · `.venv/bin/pytest tests/backend -n auto` 2380 passed/72 skipped; `.venv/bin/ruff check apps/api/src tests/backend` clean; `lint-imports` 15/15 kept; `npm --prefix apps/console run test:run` 235 files / 2072 tests passed; `npx tsc -b apps/console` clean; `npm run lint:scheduler` 0 errors/134 pre-existing warnings; `npm run depcruise` 0 errors/16 pre-existing warnings; `make generate-api` diffed and accepted. See reports/03-conflicts.md.
